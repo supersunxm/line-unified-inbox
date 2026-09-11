@@ -445,6 +445,19 @@ class AppLocalizationsTh extends AppLocalizations {
   String get filmBrandRequired => 'กรุณาเลือกหรือระบุยี่ห้อโทรศัพท์ก่อนบันทึก';
 
   @override
+  String get onlineSource => 'แหล่งที่มาออนไลน์';
+
+  @override
+  String get selectOnlineSource => 'เลือกแหล่งที่มาออนไลน์';
+
+  @override
+  String get customOnlineSource => 'ระบุแหล่งที่มาออนไลน์อื่น';
+
+  @override
+  String get onlineSourceRequired =>
+      'กรุณาเลือกหรือระบุแหล่งที่มาออนไลน์ก่อนบันทึก';
+
+  @override
   String get interestLevel => 'ระดับความสนใจ';
 
   @override

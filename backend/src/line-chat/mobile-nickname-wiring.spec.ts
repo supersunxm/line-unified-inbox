@@ -205,6 +205,7 @@ test("MobileConversationsService.updateCustomerSalesInfo with status ONLINE crea
 
   const result = await mobileService.updateCustomerSalesInfo(user, conversationRecord.id, {
     status: "ONLINE",
+    onlineSource: "TikTok",
   });
 
   assert.ok(result);
@@ -217,5 +218,5 @@ test("MobileConversationsService.updateCustomerSalesInfo with status ONLINE crea
   assert.equal(job.conversationId, conversationRecord.id);
   assert.equal(job.lineOfficialAccountId, "oa-test-1");
   assert.equal(job.lineChatUserId, "Ud8d5af30ddca3ed4237e157d5d73c2f1");
-  assert.equal(job.nickname, "Online", "Nickname for ONLINE status must be 'Online'");
+  assert.match(job.nickname, /^TikTok \d{2}\/\d{2}$/);
 });

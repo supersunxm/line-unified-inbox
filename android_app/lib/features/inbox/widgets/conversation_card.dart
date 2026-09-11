@@ -344,6 +344,10 @@ class _SalesSummary extends StatelessWidget {
         summary!.isFilm && summary!.filmBrand?.trim().isNotEmpty == true
             ? '🛡️ ${summary!.filmBrand!.trim()}'
             : null;
+    final onlineSourceLabel =
+        summary!.isOnline && summary!.onlineSource?.trim().isNotEmpty == true
+            ? '🌐 ${summary!.onlineSource!.trim()}'
+            : null;
     return Padding(
       padding: const EdgeInsets.only(top: 2),
       child: Wrap(
@@ -367,6 +371,16 @@ class _SalesSummary extends StatelessWidget {
                       fontSize: 10.5,
                     ),
               ),
+            ),
+          if (onlineSourceLabel != null)
+            Text(
+              onlineSourceLabel,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: AppColors.textSecondary,
+                    fontWeight: FontWeight.w600,
+                  ),
             ),
           if (filmLabel != null)
             Text(

@@ -101,6 +101,7 @@ void test("legacy purchase provenance still falls back to purchased before moder
 void test("Online sales status is preserved without purchase-only fields", () => {
   const sales = buildCustomerSalesInformation({
     customerSalesStatus: "ONLINE",
+    onlineSource: "  TikTok  ",
     interestLevel: "HOT",
     sourceChannels: ["STORE"],
     isInstallment: true,
@@ -109,6 +110,7 @@ void test("Online sales status is preserved without purchase-only fields", () =>
   });
 
   assert.equal(sales.status, "ONLINE");
+  assert.equal(sales.onlineSource, "TikTok");
   assert.equal(sales.interestLevel, null);
   assert.deepEqual(sales.purchaseChannel, []);
   assert.equal(sales.paymentMethod, null);

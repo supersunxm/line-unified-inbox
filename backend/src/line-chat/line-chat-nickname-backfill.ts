@@ -26,6 +26,7 @@ export interface BackfillConversationInput {
   displayName: string;
   customerSalesStatus: CustomerSalesStatus | null;
   filmBrand: string | null;
+  onlineSource?: string | null;
   paymentMethod: PaymentMethodType | null;
   salesRecordedAt: Date | null;
   lineChatUserId: string | null;
@@ -116,6 +117,7 @@ export function classifyBackfillConversation(
   const targetNickname = buildLineChatNickname({
     status,
     filmBrand: conversation.filmBrand,
+    onlineSource: conversation.onlineSource,
     paymentMethod: conversation.paymentMethod,
     recordedAt: conversation.salesRecordedAt,
     products: conversation.salesProducts.map((product) => ({
@@ -241,6 +243,7 @@ export async function loadPilotBackfillPlan(
       lineOfficialAccountId: true,
       customerSalesStatus: true,
       filmBrand: true,
+      onlineSource: true,
       paymentMethod: true,
       salesRecordedAt: true,
       lineChatUserId: true,
@@ -269,6 +272,7 @@ export async function loadPilotBackfillPlan(
     displayName: conversation.customer.displayName,
     customerSalesStatus: conversation.customerSalesStatus,
     filmBrand: conversation.filmBrand,
+    onlineSource: conversation.onlineSource,
     paymentMethod: conversation.paymentMethod,
     salesRecordedAt: conversation.salesRecordedAt,
     lineChatUserId: conversation.lineChatUserId,

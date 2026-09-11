@@ -17,6 +17,7 @@ type SalesStatusOption = "ONLINE" | "INTERESTED" | "PURCHASED" | "FILM" | "";
 type PaymentOption = "CASH" | "INSTALLMENT";
 
 const filmBrandOptions = ["OPPO", "iPhone", "Samsung", "vivo", "Xiaomi", "HONOR", "realme", "Other"] as const;
+const onlineSourceOptions = ["TikTok", "Facebook", "Instagram", "LINE", "Website", "Other"] as const;
 
 export function CustomerSalesTagEditor({
   conversationId,
@@ -32,15 +33,17 @@ export function CustomerSalesTagEditor({
   const [selectedProductModelId, setSelectedProductModelId] = useState<string>("");
   const [customModelName, setCustomModelName] = useState<string>("");
   const [filmBrand, setFilmBrand] = useState<string>("");
+  const [onlineSource, setOnlineSource] = useState<string>("");
   const [isSaving, setIsSaving] = useState(false);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
   // Sync state during render whenever conversationId or salesInfo changes
-  const currentKey = `${conversationId}:${salesInfo?.status ?? ""}:${salesInfo?.filmBrand ?? ""}:${salesInfo?.paymentMethod ?? ""}:${salesInfo?.products?.[0]?.model?.id ?? ""}`;
+  const currentKey = `${conversationId}:${salesInfo?.status ?? ""}:${salesInfo?.filmBrand ?? ""}:${salesInfo?.onlineSource ?? ""}:${salesInfo?.paymentMethod ?? ""}:${salesInfo?.products?.[0]?.model?.id ?? ""}`;
   if (prevKey !== currentKey) {
     setPrevKey(currentKey);
     setStatus(salesInfo?.status ?? "");
     setFilmBrand(salesInfo?.filmBrand?.trim() ?? "");
+    setOnlineSource(salesInfo?.onlineSource?.trim() ?? "");
     setPaymentMethod(salesInfo?.paymentMethod === "INSTALLMENT" ? "INSTALLMENT" : "CASH");
     const firstProduct = salesInfo?.products?.[0];
     if (firstProduct) {
@@ -75,6 +78,19 @@ export function CustomerSalesTagEditor({
           return;
         }
         payload.filmBrand = normalizedBrand;
+      }
+
+      if (status === "ONLINE") {
+        const normalizedSource = onlineSource.trim();
+        if (!normalizedSource) {
+          setFeedback({
+            type: "error",
+            message: language === "th" ? "กรุณาเลือกหรือระบุแหล่งที่มาออนไลน์ก่อนบันทึก" : language === "zh" ? "保存前请选择或输入线上来源。" : "Select or enter an online source before saving.",
+          });
+          setIsSaving(false);
+          return;
+        }
+        payload.onlineSource = normalizedSource;
       }
 
       if (status === "PURCHASED") {
@@ -164,6 +180,7 @@ export function CustomerSalesTagEditor({
               onClick={() => {
                 setStatus(value);
                 if (value !== "FILM") setFilmBrand("");
+                if (value !== "ONLINE") setOnlineSource("");
               }}
               className={`rounded-[var(--app-radius-sm)] py-1.5 px-2 text-xs font-semibold transition-all text-center focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--app-accent)] disabled:opacity-50 disabled:cursor-not-allowed ${
                 isSelected
@@ -253,6 +270,35 @@ export function CustomerSalesTagEditor({
               />
             )}
           </div>
+        </div>
+      )}
+
+      {status === "ONLINE" && (
+        <div data-online-source-fields className="mb-3 space-y-2.5 rounded-[var(--app-radius-md)] bg-[var(--app-surface-subtle)] p-2.5 border border-[var(--app-border-subtle)]">
+          <label className="block text-[11px] font-semibold text-[var(--app-text-secondary)] mb-1">
+            {language === "th" ? "แหล่งที่มาออนไลน์" : language === "zh" ? "线上来源" : "Online Source"}
+          </label>
+          <select
+            data-online-source-select
+            value={onlineSourceOptions.includes(onlineSource as (typeof onlineSourceOptions)[number]) ? onlineSource : onlineSource ? "Other" : ""}
+            disabled={disabled || isSaving}
+            onChange={(e) => setOnlineSource(e.target.value === "Other" ? "" : e.target.value)}
+            className="w-full rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface)] px-2.5 py-1 text-xs text-[var(--app-text-primary)] outline-none focus:ring-1 focus:ring-[var(--app-accent)] disabled:opacity-50"
+          >
+            <option value="">{language === "th" ? "-- เลือกแหล่งที่มา --" : language === "zh" ? "-- 选择来源 --" : "-- Select Source --"}</option>
+            {onlineSourceOptions.map((source) => <option key={source} value={source}>{source}</option>)}
+          </select>
+          {(!onlineSourceOptions.includes(onlineSource as (typeof onlineSourceOptions)[number]) || onlineSource === "") && (
+            <input
+              type="text"
+              data-custom-online-source-input
+              placeholder={language === "th" ? "ระบุแหล่งที่มาอื่น" : language === "zh" ? "输入其他来源" : "Enter another source"}
+              value={onlineSource}
+              disabled={disabled || isSaving}
+              onChange={(e) => setOnlineSource(e.target.value)}
+              className="w-full rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface)] px-2.5 py-1 text-xs text-[var(--app-text-primary)] outline-none focus:ring-1 focus:ring-[var(--app-accent)] disabled:opacity-50"
+            />
+          )}
         </div>
       )}
 

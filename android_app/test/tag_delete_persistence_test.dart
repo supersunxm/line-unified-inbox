@@ -18,6 +18,7 @@ class _DeleteFakeRepository extends ConversationRepository {
     String id, {
     Object? status = const Object(),
     Object? filmBrand = const Object(),
+    Object? onlineSource = const Object(),
     Object? interestLevel = const Object(),
     Object? purchaseChannel = const Object(),
     Object? paymentMethod = const Object(),

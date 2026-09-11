@@ -72,6 +72,7 @@ class _FakeTagRepository extends ConversationRepository {
     String id, {
     Object? status = const Object(),
     Object? filmBrand = const Object(),
+    Object? onlineSource = const Object(),
     Object? interestLevel = const Object(),
     Object? purchaseChannel = const Object(),
     Object? paymentMethod = const Object(),
@@ -81,6 +82,7 @@ class _FakeTagRepository extends ConversationRepository {
     currentSales = CustomerSalesInformation(
       status: status is String ? status : 'INTERESTED',
       filmBrand: filmBrand is String ? filmBrand : null,
+      onlineSource: onlineSource is String ? onlineSource : null,
       interestLevel: interestLevel is String ? interestLevel : null,
       purchaseChannel: purchaseChannel is List
           ? purchaseChannel.whereType<String>().toList()
@@ -209,11 +211,24 @@ void main() {
     }
 
     Future<void> selectAndSave(String status) async {
+      await tester.tap(find.text(status));
+      await tester.pumpAndSettle();
+      if (status == 'Online') {
+        final confirmButton =
+            find.widgetWithText(FilledButton, 'Confirm selection');
+        expect(tester.widget<FilledButton>(confirmButton).onPressed, isNull);
+        await tester.tap(find.byType(DropdownButtonFormField<String>));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('TikTok').last);
+        await tester.pumpAndSettle();
+        await tester.tap(confirmButton);
+        await tester.pumpAndSettle();
+        return;
+      }
       final confirmation = status == 'Purchased' &&
               repository.currentSales?.status == 'INTERESTED'
           ? 'Confirm Purchase'
           : 'Confirm Save';
-      await tester.tap(find.text(status));
       await tester.tap(find.text('Save'));
       await tester.pumpAndSettle();
       await tester.tap(find.text(confirmation).last);
@@ -223,6 +238,7 @@ void main() {
     await openSheet();
     await selectAndSave('Online');
     expect(repository.currentSales?.status, 'ONLINE');
+    expect(repository.currentSales?.onlineSource, 'TikTok');
     expect(repository.currentSales?.interestLevel, isNull);
     expect(repository.currentSales?.purchaseChannel, isEmpty);
     expect(repository.currentSales?.paymentMethod, isNull);
@@ -234,6 +250,137 @@ void main() {
     await openSheet();
     await selectAndSave('Purchased');
     expect(repository.currentSales?.status, 'PURCHASED');
+  });
+
+  testWidgets('ONLINE Other requires a non-blank custom source',
+      (tester) async {
+    tester.view.physicalSize = const Size(1080, 2200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final repository = _FakeTagRepository();
+    await tester.pumpWidget(MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: Scaffold(
+        body: ConversationTagsSheet(
+          conversationId: 'conversation-online-other',
+          repository: repository,
+          initialTags: const ConversationTags(),
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Online'));
+    await tester.pumpAndSettle();
+    final confirmButton =
+        find.widgetWithText(FilledButton, 'Confirm selection');
+    await tester.tap(find.byType(DropdownButtonFormField<String>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Other').last);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('online-source-custom')), findsOneWidget);
+    expect(tester.widget<FilledButton>(confirmButton).onPressed, isNull);
+    expect(repository.saveCallCount, 0);
+
+    await tester.enterText(
+        find.byKey(const ValueKey('online-source-custom')), 'Lemon8');
+    await tester.pumpAndSettle();
+    expect(tester.widget<FilledButton>(confirmButton).onPressed, isNotNull);
+    await tester.tap(confirmButton);
+    await tester.pumpAndSettle();
+
+    expect(repository.currentSales?.status, 'ONLINE');
+    expect(repository.currentSales?.onlineSource, 'Lemon8');
+  });
+
+  testWidgets('closing an unconfirmed ONLINE draft preserves persisted state',
+      (tester) async {
+    tester.view.physicalSize = const Size(1080, 2200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    const savedOnline = CustomerSalesInformation(
+      status: 'ONLINE',
+      onlineSource: 'TikTok',
+      purchaseChannel: [],
+      products: [],
+    );
+    final repository = _FakeTagRepository(initialSales: savedOnline);
+    await tester.pumpWidget(MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: Scaffold(
+        body: ConversationTagsSheet(
+          conversationId: 'conversation-online-close',
+          repository: repository,
+          initialTags: const ConversationTags(),
+          initialSalesInfo: savedOnline,
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byType(DropdownButtonFormField<String>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Facebook').last);
+    await tester.pumpAndSettle();
+    expect(repository.saveCallCount, 0);
+
+    await tester.tap(find.byIcon(Icons.close).first);
+    await tester.pumpAndSettle();
+
+    expect(repository.saveCallCount, 0);
+    expect(repository.currentSales?.status, 'ONLINE');
+    expect(repository.currentSales?.onlineSource, 'TikTok');
+  });
+
+  testWidgets('ONLINE confirmation prevents double submit while saving',
+      (tester) async {
+    tester.view.physicalSize = const Size(1080, 2200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final repository = _FakeTagRepository()..holdNextSave = true;
+    await tester.pumpWidget(MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: Scaffold(
+        body: ConversationTagsSheet(
+          conversationId: 'conversation-online-double-submit',
+          repository: repository,
+          initialTags: const ConversationTags(),
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Online'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(DropdownButtonFormField<String>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('TikTok').last);
+    await tester.pumpAndSettle();
+
+    final confirmButton =
+        find.widgetWithText(FilledButton, 'Confirm selection');
+    await tester.tap(confirmButton);
+    await tester.pump();
+    expect(repository.saveCallCount, 1);
+    expect(tester.widget<FilledButton>(confirmButton).onPressed, isNull);
+
+    await tester.tap(confirmButton);
+    expect(repository.saveCallCount, 1);
+
+    repository.completePendingSave();
+    await tester.pumpAndSettle();
+    expect(repository.currentSales?.status, 'ONLINE');
+    expect(repository.currentSales?.onlineSource, 'TikTok');
   });
 
   testWidgets(
@@ -445,13 +592,16 @@ void main() {
     expect(find.text('OPPO'), findsOneWidget);
     await tester.tap(find.text('Online'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Save'));
+    await tester.tap(find.byType(DropdownButtonFormField<String>));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Confirm Save'));
+    await tester.tap(find.text('TikTok').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Confirm selection'));
     await tester.pumpAndSettle();
 
     expect(repository.currentSales?.status, 'ONLINE');
     expect(repository.currentSales?.filmBrand, isNull);
+    expect(repository.currentSales?.onlineSource, 'TikTok');
   });
 
   testWidgets(

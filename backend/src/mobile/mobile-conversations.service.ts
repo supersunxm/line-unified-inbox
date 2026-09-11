@@ -91,6 +91,7 @@ export class MobileConversationsService {
           owner: { select: { id: true, displayName: true, isActive: true, status: true, role: true, canAccessAllStores: true, memberships: { where: { status: "ACTIVE", store: { isActive: true, archivedAt: null } }, select: { storeId: true } } } },
           customerSalesStatus: true,
           filmBrand: true,
+          onlineSource: true,
           interestLevel: true,
           salesProducts: {
             select: {
@@ -120,6 +121,7 @@ export class MobileConversationsService {
           customerSalesSummary: {
             status: item.customerSalesStatus,
             filmBrand: item.filmBrand ?? null,
+            onlineSource: item.onlineSource ?? null,
             interestLevel: item.interestLevel,
             products: (item.salesProducts ?? []).map((product) => ({
               modelName: product.customProductName?.trim() || product.productModel?.name || "Product",
@@ -161,6 +163,7 @@ export class MobileConversationsService {
         isInstallment: true,
         customerSalesStatus: true,
         filmBrand: true,
+        onlineSource: true,
         interestLevel: true,
         paymentMethod: true,
         productRelationship: true,
@@ -481,6 +484,7 @@ export class MobileConversationsService {
           id: true,
           customerSalesStatus: true,
           filmBrand: true,
+          onlineSource: true,
           salesRecordedAt: true,
           interestLevel: true,
           paymentMethod: true,
@@ -517,6 +521,7 @@ export class MobileConversationsService {
             throw new BadRequestException("filmBrand is required when status is FILM");
           }
           conversationUpdate.filmBrand = filmBrand;
+          conversationUpdate.onlineSource = null;
           conversationUpdate.interestLevel = null;
           conversationUpdate.sourceChannels = [];
           conversationUpdate.paymentMethod = null;
@@ -527,13 +532,23 @@ export class MobileConversationsService {
           conversationUpdate.filmBrand = null;
         }
         if (dto.status === CustomerSalesStatus.ONLINE) {
+          const onlineSource = dto.onlineSource?.trim();
+          if (!onlineSource) {
+            throw new BadRequestException("onlineSource is required when status is ONLINE");
+          }
+          conversationUpdate.onlineSource = onlineSource;
           // Online is an inquiry state, not a confirmed purchase. Clear
           // purchase-only fields even when older clients omit them.
           conversationUpdate.interestLevel = null;
           conversationUpdate.sourceChannels = [];
           conversationUpdate.paymentMethod = null;
           conversationUpdate.isInstallment = false;
+        } else if (dto.status !== CustomerSalesStatus.FILM) {
+          conversationUpdate.onlineSource = null;
         }
+      }
+      if (dto.onlineSource != null && dto.status !== CustomerSalesStatus.ONLINE) {
+        throw new BadRequestException("onlineSource is only valid when status is ONLINE");
       }
       if (dto.interestLevel !== undefined) {
         conversationUpdate.interestLevel = dto.status === "PURCHASED" || dto.status === "ONLINE" || dto.status === CustomerSalesStatus.FILM ? null : dto.interestLevel;
@@ -765,6 +780,7 @@ function decodeCursor(value: string): { sentAt: Date; id: string } | null { try 
 function compactSalesSummary(information: {
   status?: string | null;
   filmBrand?: string | null;
+  onlineSource?: string | null;
   interestLevel?: string | null;
   products?: readonly { model?: { name?: string | null } | null; customProductName?: string | null; quantity?: number | null }[] | null;
 } | null | undefined) {
@@ -778,6 +794,7 @@ function compactSalesSummary(information: {
   return {
     status: information.status ?? null,
     filmBrand: information.filmBrand ?? null,
+    onlineSource: information.onlineSource ?? null,
     interestLevel: information.interestLevel ?? null,
     products,
   };

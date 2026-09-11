@@ -450,6 +450,19 @@ class AppLocalizationsEn extends AppLocalizations {
       'Select or enter a phone brand before saving.';
 
   @override
+  String get onlineSource => 'Online Source';
+
+  @override
+  String get selectOnlineSource => 'Select online source';
+
+  @override
+  String get customOnlineSource => 'Custom online source';
+
+  @override
+  String get onlineSourceRequired =>
+      'Select or enter an online source before saving.';
+
+  @override
   String get interestLevel => 'Interest Level';
 
   @override

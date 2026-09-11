@@ -59,6 +59,7 @@ void test("mobile list returns customer picture and compact sales summary withou
   assert.deepEqual(result.items[0]?.customerSalesSummary, {
     status: "INTERESTED",
     filmBrand: null,
+    onlineSource: null,
     interestLevel: "HOT",
     products: [
       { modelName: "OPPO Reno16", quantity: 1 },

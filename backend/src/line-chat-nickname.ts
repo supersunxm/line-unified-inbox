@@ -3,6 +3,7 @@ export const MAX_LINE_CHAT_NICKNAME_LENGTH = 20;
 export type LineChatNicknameInput = {
   status?: "ONLINE" | "INTERESTED" | "PURCHASED" | "FILM" | null;
   filmBrand?: string | null;
+  onlineSource?: string | null;
   paymentMethod?: "CASH" | "INSTALLMENT" | "CREDIT_CARD" | "OTHER" | null;
   recordedAt?: Date | string | null;
   products?: readonly {
@@ -21,8 +22,22 @@ function conciseModelName(value: string): string {
   return value.trim().replace(/^OPPO\s+/i, "");
 }
 
+function sanitizeNicknameSegment(value: string): string {
+  const withoutControls = value
+    .split("")
+    .filter((character) => {
+      const code = character.charCodeAt(0);
+      return !(code <= 0x1f || (code >= 0x7f && code <= 0x9f));
+    })
+    .join("");
+  return withoutControls
+    .replace(/[\\/]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function compactFilmBrandToFit(rawBrand: string, suffix: string): string {
-  const brand = rawBrand.trim().replace(/\s+/g, " ").replaceAll("/", "");
+  const brand = rawBrand.trim();
   if (`Film/${brand}${suffix}`.length <= MAX_LINE_CHAT_NICKNAME_LENGTH) {
     return brand;
   }
@@ -37,6 +52,24 @@ function compactFilmBrandToFit(rawBrand: string, suffix: string): string {
     MAX_LINE_CHAT_NICKNAME_LENGTH - "Film/".length - suffix.length,
   );
   return withoutSpaces.slice(0, brandBudget);
+}
+
+function compactOnlineSourceToFit(rawSource: string, suffix: string): string {
+  const source = sanitizeNicknameSegment(rawSource);
+  if (`${source} ${suffix}`.length <= MAX_LINE_CHAT_NICKNAME_LENGTH) {
+    return source;
+  }
+
+  const withoutSpaces = source.replace(/\s+/g, "");
+  if (`${withoutSpaces} ${suffix}`.length <= MAX_LINE_CHAT_NICKNAME_LENGTH) {
+    return withoutSpaces;
+  }
+
+  const sourceBudget = Math.max(
+    0,
+    MAX_LINE_CHAT_NICKNAME_LENGTH - 1 - suffix.length,
+  );
+  return withoutSpaces.slice(0, sourceBudget);
 }
 
 /**
@@ -104,7 +137,7 @@ export function compactModelNameToFit(
  * Builds the nickname that should be mirrored to LINE Official Account chat.
  *
  * Business rules:
- * - ONLINE -> "Online"
+ * - ONLINE with a source -> "<source> <MM/YY>"; legacy ONLINE without a source -> "Online"
  * - PURCHASED -> "<compactModel> <สด|ผ่อน> <MM/YY>"
  * - FILM -> "Film/<compactBrand>/<MM/YY>"
  * - Other states do not change the LINE nickname.
@@ -116,7 +149,23 @@ export function compactModelNameToFit(
  * or another UTC runtime cannot shift saves around a month boundary.
  */
 export function buildLineChatNickname(input: LineChatNicknameInput): string | null {
-  if (input.status === "ONLINE") return "Online";
+  if (input.status === "ONLINE") {
+    const onlineSource = input.onlineSource?.trim();
+    if (!onlineSource) return "Online";
+
+    if (!input.recordedAt) return null;
+    const recordedAt = input.recordedAt instanceof Date ? input.recordedAt : new Date(input.recordedAt);
+    if (Number.isNaN(recordedAt.getTime())) return null;
+
+    const parts = BANGKOK_MONTH_YEAR.formatToParts(recordedAt);
+    const month = parts.find((part) => part.type === "month")?.value;
+    const year = parts.find((part) => part.type === "year")?.value;
+    if (!month || !year) return null;
+
+    const suffix = `${month}/${year}`;
+    const compactSource = compactOnlineSourceToFit(onlineSource, suffix);
+    return compactSource ? `${compactSource} ${suffix}` : null;
+  }
   if (input.status === "FILM") {
     const filmBrand = input.filmBrand?.trim();
     if (!filmBrand) return null;

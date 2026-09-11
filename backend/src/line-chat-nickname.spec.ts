@@ -10,6 +10,42 @@ void test("online status maps to Online", () => {
   assert.equal(buildLineChatNickname({ status: "ONLINE" }), "Online");
 });
 
+void test("online source nickname uses Bangkok sales month/year", () => {
+  assert.equal(
+    buildLineChatNickname({
+      status: "ONLINE",
+      onlineSource: "TikTok",
+      recordedAt: "2026-08-31T17:30:00.000Z",
+    }),
+    "TikTok 09/26",
+  );
+  assert.equal(
+    buildLineChatNickname({
+      status: "ONLINE",
+      onlineSource: "Facebook",
+      recordedAt: "2026-08-31T17:30:00.000Z",
+    }),
+    "Facebook 09/26",
+  );
+  assert.equal(
+    buildLineChatNickname({ status: "ONLINE", onlineSource: "TikTok" }),
+    null,
+  );
+});
+
+void test("long custom online sources compact only the source and preserve MM/YY", () => {
+  const result = buildLineChatNickname({
+    status: "ONLINE",
+    onlineSource: "Very Long / Source\u0007Name",
+    recordedAt: "2026-09-01T12:00:00+07:00",
+  });
+
+  assert.equal(result, "VeryLongSource 09/26");
+  assert.ok(result.length <= MAX_LINE_CHAT_NICKNAME_LENGTH);
+  assert.ok(result.endsWith(" 09/26"));
+  assert.ok(!result.includes("/Source"));
+});
+
 void test("film status uses the brand and Bangkok sales month/year", () => {
   const result = buildLineChatNickname({
     status: "FILM",

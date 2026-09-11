@@ -941,6 +941,30 @@ abstract class AppLocalizations {
   /// **'Select or enter a phone brand before saving.'**
   String get filmBrandRequired;
 
+  /// No description provided for @onlineSource.
+  ///
+  /// In en, this message translates to:
+  /// **'Online Source'**
+  String get onlineSource;
+
+  /// No description provided for @selectOnlineSource.
+  ///
+  /// In en, this message translates to:
+  /// **'Select online source'**
+  String get selectOnlineSource;
+
+  /// No description provided for @customOnlineSource.
+  ///
+  /// In en, this message translates to:
+  /// **'Custom online source'**
+  String get customOnlineSource;
+
+  /// No description provided for @onlineSourceRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Select or enter an online source before saving.'**
+  String get onlineSourceRequired;
+
   /// No description provided for @interestLevel.
   ///
   /// In en, this message translates to:

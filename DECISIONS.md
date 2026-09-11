@@ -2281,3 +2281,11 @@ Keep `StoreMaster.tiktokProfileUrl` as the only persisted TikTok profile URL. Po
 
 - The backend is compiled as CommonJS without TypeScript `esModuleInterop`; `exceljs` exposes `Workbook` as a named CommonJS export in the Railway runtime. Use `import * as ExcelJS from "exceljs"` so the production workbook path resolves identically to the local test path.
 - This is a runtime-compatibility fix only. It does not change the export schema, Customer Voice versioning, authorization boundary, database schema, worker flag, or production data behavior.
+
+## 2026-09-11: Structured ONLINE source selection
+
+- Keep `Conversation.sourceChannels` unchanged. It is an existing `ConversationSourceChannel[]` purchase-provenance field whose allowed values are `STORE` and `ONLINE`; it is not a safe representation for exactly one ONLINE acquisition source or arbitrary custom text.
+- Add nullable `Conversation.onlineSource` for the ONLINE-specific value. New ONLINE writes require a trimmed non-blank source, while `Other` stores the custom source text. The service clears `onlineSource` for FILM, INTERESTED, PURCHASED, and empty status transitions. The additive migration does not rewrite historical conversations.
+- Treat `onlineSource = null` on a legacy ONLINE record as a compatibility state. The API exposes it as null, the app allows staff to choose a source before any new save, and the nickname queue/backfill emits the existing literal `Online` until the record is explicitly saved with a source.
+- Reuse the FILM confirmation pattern for ONLINE: source selection and custom text are draft-only; the full-width confirmation CTA is disabled until valid, saves through the existing repository endpoint, disables during the request, and closes only after a successful server response. Close/back discards the draft.
+- Build source nicknames from persisted `salesRecordedAt`, formatted in `Asia/Bangkok`, as `<Source> <MM/YY>`. Remove slash/control characters and compact/truncate only the source segment so the date suffix remains intact and the LINE nickname stays at or below 20 characters. The existing queue/latest-wins/retry/rollout architecture remains the single synchronization path.

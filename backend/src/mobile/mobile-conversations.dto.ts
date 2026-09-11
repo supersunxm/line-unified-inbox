@@ -67,6 +67,12 @@ export class UpdateCustomerSalesInformationDto {
   @IsNotEmpty()
   @Matches(/\S/)
   filmBrand?: string | null;
+  @ValidateIf((dto: UpdateCustomerSalesInformationDto) => dto.status === CustomerSalesStatus.ONLINE || dto.onlineSource != null)
+  @IsString()
+  @MaxLength(100)
+  @IsNotEmpty()
+  @Matches(/\S/)
+  onlineSource?: string | null;
   @IsOptional() @IsEnum(CustomerInterestLevel) interestLevel?: CustomerInterestLevel | null;
   @IsOptional() @ArrayMaxSize(2) @IsEnum(ConversationSourceChannel, { each: true }) purchaseChannel?: ConversationSourceChannel[];
   @IsOptional() @IsEnum(PaymentMethodType) paymentMethod?: PaymentMethodType | null;

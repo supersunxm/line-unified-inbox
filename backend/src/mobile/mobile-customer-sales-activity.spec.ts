@@ -182,13 +182,100 @@ void test("customer sales info persists Online and clears purchase-only fields",
   const service = new MobileConversationsService(prisma as never, { assertConversationAccess: async () => "store-1" } as never, {} as never);
   (service as unknown as { get: () => Promise<unknown> }).get = async () => ({ id: "conversation-online" });
 
-  await service.updateCustomerSalesInfo(user, "conversation-online", { status: "ONLINE" });
+  await service.updateCustomerSalesInfo(user, "conversation-online", {
+    status: "ONLINE",
+    onlineSource: "TikTok",
+  });
 
   assert.equal(conversationUpdate?.customerSalesStatus, "ONLINE");
+  assert.equal(conversationUpdate?.onlineSource, "TikTok");
   assert.equal(conversationUpdate?.interestLevel, null);
   assert.deepEqual(conversationUpdate?.sourceChannels, []);
   assert.equal(conversationUpdate?.paymentMethod, null);
   assert.equal(conversationUpdate?.isInstallment, false);
+});
+
+void test("customer sales info rejects a new ONLINE save without a source", async () => {
+  let updateCalled = false;
+  const tx = {
+    conversation: {
+      findUnique: async () => ({
+        id: "conversation-online-required",
+        customerSalesStatus: null,
+        onlineSource: null,
+        salesRecordedAt: null,
+        interestLevel: null,
+        paymentMethod: null,
+        sourceChannels: [],
+        isInstallment: false,
+        products: [],
+        salesProducts: [],
+      }),
+      update: async () => {
+        updateCalled = true;
+        return {};
+      },
+    },
+    activityHistory: { create: async () => ({}) },
+  };
+  const prisma = {
+    $transaction: async (callback: (client: typeof tx) => Promise<unknown>) => callback(tx),
+  };
+  const service = new MobileConversationsService(
+    prisma as never,
+    { assertConversationAccess: async () => "store-1" } as never,
+    {} as never,
+  );
+
+  await assert.rejects(
+    service.updateCustomerSalesInfo({ id: "user-1" } as never, "conversation-online-required", {
+      status: "ONLINE",
+    }),
+    /onlineSource is required when status is ONLINE/,
+  );
+  assert.equal(updateCalled, false);
+});
+
+void test("changing away from ONLINE clears the structured source", async () => {
+  let conversationUpdate: Record<string, unknown> | undefined;
+  const tx = {
+    conversation: {
+      findUnique: async () => ({
+        id: "conversation-online-clear",
+        customerSalesStatus: "ONLINE",
+        onlineSource: "TikTok",
+        salesRecordedAt: new Date("2026-08-31T17:30:00.000Z"),
+        interestLevel: null,
+        paymentMethod: null,
+        sourceChannels: [],
+        isInstallment: false,
+        products: [],
+        salesProducts: [],
+      }),
+      update: async (args: { data: Record<string, unknown> }) => {
+        conversationUpdate = args.data;
+        return {};
+      },
+    },
+    activityHistory: { create: async () => ({}) },
+  };
+  const prisma = {
+    $transaction: async (callback: (client: typeof tx) => Promise<unknown>) => callback(tx),
+  };
+  const service = new MobileConversationsService(
+    prisma as never,
+    { assertConversationAccess: async () => "store-1" } as never,
+    {} as never,
+  );
+  (service as unknown as { get: () => Promise<unknown> }).get = async () => ({ id: "conversation-online-clear" });
+
+  await service.updateCustomerSalesInfo({ id: "user-1" } as never, "conversation-online-clear", {
+    status: "INTERESTED",
+    interestLevel: "WARM",
+  });
+
+  assert.equal(conversationUpdate?.customerSalesStatus, "INTERESTED");
+  assert.equal(conversationUpdate?.onlineSource, null);
 });
 
 void test("customer sales info persists Film with a brand and clears non-Film fields", async () => {
@@ -338,7 +425,10 @@ void test("updateCustomerSalesInfo calls nicknameQueue.enqueueSalesSync after tr
   );
   (service as unknown as { get: () => Promise<unknown> }).get = async () => ({ id: "conv-queue-test" });
 
-  const result = await service.updateCustomerSalesInfo(user, "conv-queue-test", { status: "ONLINE" });
+  const result = await service.updateCustomerSalesInfo(user, "conv-queue-test", {
+    status: "ONLINE",
+    onlineSource: "TikTok",
+  });
 
   assert.equal(result.id, "conv-queue-test");
   assert.equal(enqueuedConversationId, "conv-queue-test");
@@ -381,7 +471,10 @@ void test("updateCustomerSalesInfo succeeds even if nicknameQueue throws an unex
   );
   (service as unknown as { get: () => Promise<unknown> }).get = async () => ({ id: "conv-queue-err-test" });
 
-  const result = await service.updateCustomerSalesInfo(user, "conv-queue-err-test", { status: "ONLINE" });
+  const result = await service.updateCustomerSalesInfo(user, "conv-queue-err-test", {
+    status: "ONLINE",
+    onlineSource: "TikTok",
+  });
 
   assert.equal(result.id, "conv-queue-err-test");
 });

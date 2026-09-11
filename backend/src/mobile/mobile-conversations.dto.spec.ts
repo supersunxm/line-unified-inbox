@@ -16,9 +16,26 @@ void test("FILM API validation requires a non-blank brand", async () => {
   assert.ok(errors.some((error) => error.property === "filmBrand"));
 });
 
-void test("non-FILM API payloads do not require a film brand", async () => {
+void test("ONLINE API validation requires a non-blank source", async () => {
   const dto = plainToInstance(UpdateCustomerSalesInformationDto, {
     status: CustomerSalesStatus.ONLINE,
+  });
+
+  const errors = await validate(dto);
+  assert.ok(errors.some((error) => error.property === "onlineSource"));
+
+  const blankDto = plainToInstance(UpdateCustomerSalesInformationDto, {
+    status: CustomerSalesStatus.ONLINE,
+    onlineSource: "   ",
+  });
+  const blankErrors = await validate(blankDto);
+  assert.ok(blankErrors.some((error) => error.property === "onlineSource"));
+});
+
+void test("ONLINE API validation accepts a predefined source", async () => {
+  const dto = plainToInstance(UpdateCustomerSalesInformationDto, {
+    status: CustomerSalesStatus.ONLINE,
+    onlineSource: "TikTok",
   });
 
   assert.deepEqual(await validate(dto), []);

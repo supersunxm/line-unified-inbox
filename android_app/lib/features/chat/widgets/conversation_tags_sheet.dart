@@ -41,6 +41,15 @@ const _filmBrandOptions = <String>[
   'Other',
 ];
 
+const _onlineSourceOptions = <String>[
+  'TikTok',
+  'Facebook',
+  'Instagram',
+  'LINE',
+  'Website',
+  'Other',
+];
+
 class ConversationTagsBar extends StatelessWidget {
   const ConversationTagsBar({
     super.key,
@@ -65,6 +74,7 @@ class ConversationTagsBar extends StatelessWidget {
             sales.purchaseChannel.isNotEmpty ||
             sales.paymentMethod != null ||
             sales.filmBrand?.trim().isNotEmpty == true ||
+            sales.onlineSource?.trim().isNotEmpty == true ||
             sales.products.isNotEmpty);
     final hasProvenance = hasSalesData &&
         (sales.recordedBy?.trim().isNotEmpty == true ||
@@ -175,6 +185,11 @@ class ConversationTagsBar extends StatelessWidget {
                               sales.filmBrand?.trim().isNotEmpty == true)
                             _SmallBadge(
                               text: '📱 ${sales.filmBrand!.trim()}',
+                            ),
+                          if (sales.isOnline &&
+                              sales.onlineSource?.trim().isNotEmpty == true)
+                            _SmallBadge(
+                              text: '🌐 ${sales.onlineSource!.trim()}',
                             ),
                           if (sales.isInterested && sales.interestLevel != null)
                             _SmallBadge(
@@ -372,6 +387,7 @@ class _SalesSnapshot {
   const _SalesSnapshot({
     required this.status,
     required this.filmBrand,
+    required this.onlineSource,
     required this.interestLevel,
     required this.sourceChannels,
     required this.paymentMethod,
@@ -380,6 +396,7 @@ class _SalesSnapshot {
 
   final String? status;
   final String? filmBrand;
+  final String? onlineSource;
   final String? interestLevel;
   final Set<String> sourceChannels;
   final String? paymentMethod;
@@ -389,6 +406,7 @@ class _SalesSnapshot {
 class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
   String? _status;
   String? _filmBrand;
+  String? _onlineSource;
   String? _interestLevel;
   late Set<String> _sourceChannels;
   String? _paymentMethod;
@@ -396,6 +414,7 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
 
   final _searchController = TextEditingController();
   final _filmBrandController = TextEditingController();
+  final _onlineSourceController = TextEditingController();
   List<ProductSelectorItem> _catalogProducts = const [];
   List<ProductVariantSelectorItem> _catalogVariants = const [];
   ProductSelectorItem? _draftProduct;
@@ -411,12 +430,27 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
           ? null
           : 'Other';
 
+  String? get _selectedOnlineSourceOption =>
+      _onlineSourceOptions.contains(_onlineSource)
+          ? _onlineSource
+          : _onlineSource == null
+              ? null
+              : 'Other';
+
   bool get _hasValidFilmBrand {
     if (_status != 'FILM') return false;
     if (_selectedFilmBrandOption == 'Other') {
       return _filmBrandController.text.trim().isNotEmpty;
     }
     return _filmBrand?.trim().isNotEmpty == true;
+  }
+
+  bool get _hasValidOnlineSource {
+    if (_status != 'ONLINE') return false;
+    if (_selectedOnlineSourceOption == 'Other') {
+      return _onlineSourceController.text.trim().isNotEmpty;
+    }
+    return _onlineSource?.trim().isNotEmpty == true;
   }
 
   bool _loadingProducts = false;
@@ -496,11 +530,17 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
             sales.purchaseChannel.isNotEmpty ||
             sales.paymentMethod != null ||
             sales.filmBrand?.trim().isNotEmpty == true ||
+            sales.onlineSource?.trim().isNotEmpty == true ||
             sales.products.isNotEmpty)) {
       _status = sales.status;
       _filmBrand = sales.filmBrand?.trim();
       if (_filmBrand != null && !_filmBrandOptions.contains(_filmBrand)) {
         _filmBrandController.text = _filmBrand!;
+      }
+      _onlineSource = sales.onlineSource?.trim();
+      if (_onlineSource != null &&
+          !_onlineSourceOptions.contains(_onlineSource)) {
+        _onlineSourceController.text = _onlineSource!;
       }
       _interestLevel = sales.interestLevel;
       _sourceChannels = sales.purchaseChannel.toSet();
@@ -536,6 +576,7 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
     } else {
       _status = null;
       _filmBrand = null;
+      _onlineSource = null;
       _sourceChannels = <String>{};
       _paymentMethod = null;
       _selectedProducts = [];
@@ -547,12 +588,14 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
   void dispose() {
     _searchController.dispose();
     _filmBrandController.dispose();
+    _onlineSourceController.dispose();
     super.dispose();
   }
 
   _SalesSnapshot _snapshot() => _SalesSnapshot(
         status: _status,
         filmBrand: _filmBrand,
+        onlineSource: _onlineSource,
         interestLevel: _interestLevel,
         sourceChannels: Set<String>.from(_sourceChannels),
         paymentMethod: _paymentMethod,
@@ -562,10 +605,15 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
   void _restore(_SalesSnapshot snapshot) {
     _status = snapshot.status;
     _filmBrand = snapshot.filmBrand;
+    _onlineSource = snapshot.onlineSource;
     _filmBrandController.text =
         _filmBrandOptions.contains(_filmBrand) || _filmBrand == null
             ? ''
             : _filmBrand!;
+    _onlineSourceController.text =
+        _onlineSourceOptions.contains(_onlineSource) || _onlineSource == null
+            ? ''
+            : _onlineSource!;
     _interestLevel = snapshot.interestLevel;
     _sourceChannels = Set<String>.from(snapshot.sourceChannels);
     _paymentMethod = snapshot.paymentMethod;
@@ -596,10 +644,15 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
     final sales = detail.customerSalesInformation;
     _status = sales?.status;
     _filmBrand = sales?.filmBrand?.trim();
+    _onlineSource = sales?.onlineSource?.trim();
     _filmBrandController.text =
         _filmBrandOptions.contains(_filmBrand) || _filmBrand == null
             ? ''
             : _filmBrand!;
+    _onlineSourceController.text =
+        _onlineSourceOptions.contains(_onlineSource) || _onlineSource == null
+            ? ''
+            : _onlineSource!;
     _interestLevel = sales?.interestLevel;
     _sourceChannels = sales?.purchaseChannel.toSet() ?? <String>{};
     _paymentMethod = sales?.paymentMethod;
@@ -623,6 +676,11 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
         widget.conversationId,
         status: _status,
         filmBrand: _status == 'FILM' ? _filmBrand?.trim() : null,
+        onlineSource: _status == 'ONLINE'
+            ? (_selectedOnlineSourceOption == 'Other'
+                ? _onlineSourceController.text.trim()
+                : _onlineSource?.trim())
+            : null,
         interestLevel: _status == 'INTERESTED' ? _interestLevel : null,
         purchaseChannel: _status == 'PURCHASED' ? _sourceChannels.toList() : [],
         paymentMethod: _status == 'PURCHASED' ? _paymentMethod : null,
@@ -649,7 +707,7 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
 
   Future<void> _closeSheet() async {
     if (_saving) return;
-    if (_status == 'FILM') {
+    if (_status == 'FILM' || _status == 'ONLINE') {
       if (mounted) Navigator.of(context).pop(_lastSavedDetail);
       return;
     }
@@ -898,6 +956,8 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
       if (status == null) {
         _filmBrand = null;
         _filmBrandController.clear();
+        _onlineSource = null;
+        _onlineSourceController.clear();
         _interestLevel = null;
         _sourceChannels.clear();
         _paymentMethod = null;
@@ -906,6 +966,8 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
       } else if (status == 'INTERESTED') {
         _filmBrand = null;
         _filmBrandController.clear();
+        _onlineSource = null;
+        _onlineSourceController.clear();
         _sourceChannels.clear();
         _paymentMethod = null;
         _selectedProducts = _selectedProducts
@@ -947,6 +1009,8 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
       } else if (status == 'PURCHASED') {
         _filmBrand = null;
         _filmBrandController.clear();
+        _onlineSource = null;
+        _onlineSourceController.clear();
         _interestLevel = null;
         _selectedProducts = _selectedProducts
             .map((product) => CustomerSalesProductItem(
@@ -964,6 +1028,8 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                 ))
             .toList();
       } else if (status == 'FILM') {
+        _onlineSource = null;
+        _onlineSourceController.clear();
         _interestLevel = null;
         _sourceChannels.clear();
         _paymentMethod = null;
@@ -989,6 +1055,21 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
     });
   }
 
+  void _setOnlineSource(String? source) {
+    setState(() {
+      _onlineSource = source;
+      _onlineSourceController.clear();
+      _dirty = true;
+    });
+  }
+
+  void _setCustomOnlineSource(String value) {
+    setState(() {
+      _onlineSource = value;
+      _dirty = true;
+    });
+  }
+
   Future<void> _clearAll() async {
     if (_saving) return;
     final previous = _snapshot();
@@ -996,6 +1077,8 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
       _status = null;
       _filmBrand = null;
       _filmBrandController.clear();
+      _onlineSource = null;
+      _onlineSourceController.clear();
       _interestLevel = null;
       _sourceChannels = <String>{};
       _paymentMethod = null;
@@ -1010,6 +1093,10 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
     final l10n = appLocalizations(context);
     if (_status == 'FILM' && !_hasValidFilmBrand) {
       setState(() => _error = l10n.filmBrandRequired);
+      return;
+    }
+    if (_status == 'ONLINE' && !_hasValidOnlineSource) {
+      setState(() => _error = l10n.onlineSourceRequired);
       return;
     }
     final isConverting =
@@ -1050,9 +1137,14 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
     await _persist(closeAfter: true);
   }
 
+  Future<void> _confirmOnlineSelection() async {
+    if (_saving || !_hasValidOnlineSource) return;
+    await _persist(closeAfter: true);
+  }
+
   Future<void> _handleBack(bool didPop, Object? result) async {
     if (didPop || _saving) return;
-    if (_status == 'FILM') {
+    if (_status == 'FILM' || _status == 'ONLINE') {
       if (mounted) Navigator.of(context).pop(_lastSavedDetail);
       return;
     }
@@ -1118,9 +1210,10 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                               )
                             : Text(l10n.save),
                       );
-                      final headerSaveButton = _status == 'FILM'
-                          ? const SizedBox.shrink()
-                          : saveButton;
+                      final headerSaveButton =
+                          _status == 'FILM' || _status == 'ONLINE'
+                              ? const SizedBox.shrink()
+                              : saveButton;
 
                       if (compactHeader) {
                         return Column(
@@ -1246,6 +1339,52 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                       ),
                     ),
                   const SizedBox(height: AppSpacing.lg),
+                  if (_status == 'ONLINE') ...[
+                    Text(l10n.onlineSource,
+                        style: Theme.of(context).textTheme.titleMedium),
+                    const SizedBox(height: AppSpacing.xs),
+                    DropdownButtonFormField<String>(
+                      key: ValueKey<String?>(_selectedOnlineSourceOption),
+                      isExpanded: true,
+                      initialValue: _selectedOnlineSourceOption,
+                      decoration: InputDecoration(
+                        border: const OutlineInputBorder(),
+                        hintText: l10n.selectOnlineSource,
+                      ),
+                      items: _onlineSourceOptions
+                          .map((source) => DropdownMenuItem<String>(
+                                value: source,
+                                child: Text(source == 'Other'
+                                    ? l10n.paymentOther
+                                    : source),
+                              ))
+                          .toList(growable: false),
+                      onChanged: _saving ? null : _setOnlineSource,
+                    ),
+                    if (_selectedOnlineSourceOption == 'Other') ...[
+                      const SizedBox(height: AppSpacing.sm),
+                      TextField(
+                        key: const ValueKey('online-source-custom'),
+                        controller: _onlineSourceController,
+                        decoration: InputDecoration(
+                          border: const OutlineInputBorder(),
+                          labelText: l10n.customOnlineSource,
+                        ),
+                        onChanged: _setCustomOnlineSource,
+                        enabled: !_saving,
+                      ),
+                    ],
+                    if (_error == l10n.onlineSourceRequired)
+                      Padding(
+                        padding: const EdgeInsets.only(top: AppSpacing.xs),
+                        child: Text(
+                          l10n.onlineSourceRequired,
+                          style: TextStyle(
+                              color: Theme.of(context).colorScheme.error),
+                        ),
+                      ),
+                    const SizedBox(height: AppSpacing.lg),
+                  ],
                   if (_status == 'FILM') ...[
                     Text(l10n.filmBrand,
                         style: Theme.of(context).textTheme.titleMedium),
@@ -1486,14 +1625,19 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                     }),
                     if (_showProductPicker) _buildProductPicker(context),
                   ],
-                  if (_status == 'FILM') ...[
+                  if (_status == 'FILM' || _status == 'ONLINE') ...[
                     const SizedBox(height: AppSpacing.lg),
                     SizedBox(
                       width: double.infinity,
                       child: FilledButton.icon(
-                        onPressed: _saving || !_hasValidFilmBrand
+                        onPressed: _saving ||
+                                (_status == 'FILM'
+                                    ? !_hasValidFilmBrand
+                                    : !_hasValidOnlineSource)
                             ? null
-                            : _confirmFilmSelection,
+                            : (_status == 'FILM'
+                                ? _confirmFilmSelection
+                                : _confirmOnlineSelection),
                         icon: _saving
                             ? const SizedBox(
                                 width: 18,

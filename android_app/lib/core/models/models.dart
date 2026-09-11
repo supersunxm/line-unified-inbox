@@ -337,17 +337,20 @@ class CustomerSalesSummary {
   const CustomerSalesSummary(
       {this.status,
       this.filmBrand,
+      this.onlineSource,
       this.interestLevel,
       this.products = const []});
 
   final String? status;
   final String? filmBrand;
+  final String? onlineSource;
   final String? interestLevel;
   final List<CustomerSalesSummaryProduct> products;
 
   bool get isEmpty =>
       (status == null || status!.trim().isEmpty) &&
       (filmBrand == null || filmBrand!.trim().isEmpty) &&
+      (onlineSource == null || onlineSource!.trim().isEmpty) &&
       products.isEmpty;
 
   bool get isOnline => status == 'ONLINE';
@@ -367,10 +370,12 @@ class CustomerSalesSummary {
         : const <CustomerSalesSummaryProduct>[];
     final status = json['status'] as String?;
     final filmBrand = json['filmBrand'] as String?;
+    final onlineSource = json['onlineSource'] as String?;
     final interestLevel = json['interestLevel'] as String?;
     final summary = CustomerSalesSummary(
       status: status,
       filmBrand: filmBrand,
+      onlineSource: onlineSource,
       interestLevel: interestLevel,
       products: products,
     );
@@ -380,12 +385,14 @@ class CustomerSalesSummary {
   static CustomerSalesSummary? fromData({
     required String? status,
     String? filmBrand,
+    String? onlineSource,
     String? interestLevel,
     Iterable<CustomerSalesSummaryProduct> products = const [],
   }) {
     final summary = CustomerSalesSummary(
       status: status,
       filmBrand: filmBrand,
+      onlineSource: onlineSource,
       interestLevel: interestLevel,
       products: products.toList(growable: false),
     );
@@ -397,12 +404,13 @@ class CustomerSalesSummary {
       other is CustomerSalesSummary &&
       other.status == status &&
       other.filmBrand == filmBrand &&
+      other.onlineSource == onlineSource &&
       other.interestLevel == interestLevel &&
       _listEquals(other.products, products);
 
   @override
-  int get hashCode =>
-      Object.hash(status, filmBrand, interestLevel, Object.hashAll(products));
+  int get hashCode => Object.hash(
+      status, filmBrand, onlineSource, interestLevel, Object.hashAll(products));
 
   static bool _listEquals(List<CustomerSalesSummaryProduct> left,
       List<CustomerSalesSummaryProduct> right) {

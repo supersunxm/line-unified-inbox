@@ -56,6 +56,7 @@ export type ConversationContractSalesProduct = {
 export type CustomerSalesInformationContract = {
   status: "ONLINE" | "INTERESTED" | "PURCHASED" | "FILM" | null;
   filmBrand: string | null;
+  onlineSource: string | null;
   interestLevel: "HOT" | "WARM" | "COLD" | null;
   purchaseChannel: string[];
   paymentMethod: "CASH" | "INSTALLMENT" | "CREDIT_CARD" | "OTHER" | null;
@@ -137,6 +138,7 @@ export function normalizeProductDisplayName(name: string): string {
 export function buildCustomerSalesInformation(input: {
   customerSalesStatus?: string | null;
   filmBrand?: string | null;
+  onlineSource?: string | null;
   interestLevel?: string | null;
   sourceChannels?: readonly string[] | null;
   paymentMethod?: string | null;
@@ -254,6 +256,7 @@ export function buildCustomerSalesInformation(input: {
   return {
     status,
     filmBrand: status === "FILM" ? input.filmBrand?.trim() || null : null,
+    onlineSource: status === "ONLINE" ? input.onlineSource?.trim() || null : null,
     interestLevel,
     purchaseChannel,
     paymentMethod,

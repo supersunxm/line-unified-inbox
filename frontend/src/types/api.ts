@@ -5,6 +5,7 @@ export type ApiBmReplyStatus = "NOT_REPLIED" | "NOTIFIED_BM" | "REPLIED";
 export type ApiCustomerSalesInformation = {
   status: "ONLINE" | "INTERESTED" | "PURCHASED" | "FILM" | null;
   filmBrand: string | null;
+  onlineSource?: string | null;
   interestLevel: "HOT" | "WARM" | "COLD" | null;
   purchaseChannel: string[];
   paymentMethod: "CASH" | "INSTALLMENT" | "CREDIT_CARD" | "OTHER" | null;
@@ -25,6 +26,7 @@ export type ApiCustomerSalesInformation = {
 export type UpdateCustomerSalesInfoInput = {
   status?: "ONLINE" | "INTERESTED" | "PURCHASED" | "FILM" | null;
   filmBrand?: string | null;
+  onlineSource?: string | null;
   interestLevel?: "HOT" | "WARM" | "COLD" | null;
   purchaseChannel?: Array<"ONLINE" | "STORE">;
   paymentMethod?: "CASH" | "INSTALLMENT" | "CREDIT_CARD" | "OTHER" | null;

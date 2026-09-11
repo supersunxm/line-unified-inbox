@@ -864,6 +864,7 @@ model Conversation {
   purchaseRecordedAt    DateTime?
   customerSalesStatus   CustomerSalesStatus?
   filmBrand             String?
+  onlineSource          String?
   interestLevel         CustomerInterestLevel?
   paymentMethod         PaymentMethodType?
   salesRecordedById     String?

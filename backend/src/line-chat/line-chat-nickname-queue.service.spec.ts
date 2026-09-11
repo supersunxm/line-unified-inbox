@@ -3,7 +3,7 @@ import test from "node:test";
 import { LineChatNicknameQueueService } from "./line-chat-nickname-queue.service";
 import { LineChatNicknameSyncJobStatus, CustomerSalesStatus, PaymentMethodType } from "@prisma/client";
 
-void test("enqueueSalesSync creates Online job when status is ONLINE", async () => {
+void test("enqueueSalesSync creates a source-based Online job", async () => {
   const createdJobs: Array<Record<string, unknown>> = [];
   const supersededJobs: Array<Record<string, unknown>> = [];
 
@@ -21,8 +21,9 @@ void test("enqueueSalesSync creates Online job when status is ONLINE", async () 
           lineChatSession: { id: "sess-1", sessionKey: "profile-a", status: "ACTIVE" },
         },
         customerSalesStatus: CustomerSalesStatus.ONLINE,
+        onlineSource: "TikTok",
         paymentMethod: null,
-        salesRecordedAt: new Date("2026-08-31T10:00:00.000Z"),
+        salesRecordedAt: new Date("2026-08-31T17:30:00.000Z"),
         salesProducts: [],
       }),
     },
@@ -42,11 +43,11 @@ void test("enqueueSalesSync creates Online job when status is ONLINE", async () 
   const result = await service.enqueueSalesSync("conv-1");
 
   assert.equal(result.enqueued, true);
-  assert.equal(result.nickname, "Online");
+  assert.equal(result.nickname, "TikTok 09/26");
   assert.equal(result.jobId, "job-1");
   assert.equal(result.supersededCount, 1);
   assert.equal(createdJobs.length, 1);
-  assert.equal(createdJobs[0].nickname, "Online");
+  assert.equal(createdJobs[0].nickname, "TikTok 09/26");
   assert.equal(createdJobs[0].lineChatUserId, "Ud8d5af30ddca3ed4237e157d5d73c2f1");
   assert.equal(createdJobs[0].status, LineChatNicknameSyncJobStatus.PENDING);
 });

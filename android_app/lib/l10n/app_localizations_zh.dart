@@ -443,6 +443,18 @@ class AppLocalizationsZh extends AppLocalizations {
   String get filmBrandRequired => '保存前请选择或输入手机品牌。';
 
   @override
+  String get onlineSource => '线上来源';
+
+  @override
+  String get selectOnlineSource => '选择线上来源';
+
+  @override
+  String get customOnlineSource => '自定义线上来源';
+
+  @override
+  String get onlineSourceRequired => '保存前请选择或输入线上来源。';
+
+  @override
   String get interestLevel => '意向程度';
 
   @override
@@ -1447,6 +1459,18 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
 
   @override
   String get filmBrandRequired => '保存前请选择或输入手机品牌。';
+
+  @override
+  String get onlineSource => '线上来源';
+
+  @override
+  String get selectOnlineSource => '选择线上来源';
+
+  @override
+  String get customOnlineSource => '自定义线上来源';
+
+  @override
+  String get onlineSourceRequired => '保存前请选择或输入线上来源。';
 
   @override
   String get interestLevel => '意向程度';

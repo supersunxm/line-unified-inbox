@@ -79,6 +79,7 @@ class CustomerSalesInformation {
   const CustomerSalesInformation({
     this.status,
     this.filmBrand,
+    this.onlineSource,
     this.interestLevel,
     required this.purchaseChannel,
     this.paymentMethod,
@@ -89,6 +90,7 @@ class CustomerSalesInformation {
 
   final String? status;
   final String? filmBrand;
+  final String? onlineSource;
   final String? interestLevel;
   final List<String> purchaseChannel;
   final String? paymentMethod;
@@ -108,6 +110,7 @@ class CustomerSalesInformation {
     return CustomerSalesInformation(
       status: json['status'] as String?,
       filmBrand: json['filmBrand'] as String?,
+      onlineSource: json['onlineSource'] as String?,
       interestLevel: json['interestLevel'] as String?,
       purchaseChannel: (json['purchaseChannel'] as List<dynamic>? ?? [])
           .whereType<String>()
@@ -480,6 +483,7 @@ class ConversationRepository {
     String id, {
     Object? status = _unset,
     Object? filmBrand = _unset,
+    Object? onlineSource = _unset,
     Object? interestLevel = _unset,
     Object? purchaseChannel = _unset,
     Object? paymentMethod = _unset,
@@ -488,6 +492,7 @@ class ConversationRepository {
     final body = <String, dynamic>{};
     if (!identical(status, _unset)) body['status'] = status;
     if (!identical(filmBrand, _unset)) body['filmBrand'] = filmBrand;
+    if (!identical(onlineSource, _unset)) body['onlineSource'] = onlineSource;
     if (!identical(interestLevel, _unset)) {
       body['interestLevel'] = interestLevel;
     }

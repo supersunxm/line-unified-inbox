@@ -13,6 +13,7 @@ test("api.ts declares updateCustomerSalesInfo calling PATCH /mobile/conversation
   assert.match(typesCode, /export type UpdateCustomerSalesInfoInput = \{/);
   assert.match(typesCode, /status\?: "ONLINE" \| "INTERESTED" \| "PURCHASED" \| "FILM" \| null;/);
   assert.match(typesCode, /filmBrand\?: string \| null;/);
+  assert.match(typesCode, /onlineSource\?: string \| null;/);
   assert.match(typesCode, /paymentMethod\?: "CASH" \| "INSTALLMENT" \| "CREDIT_CARD" \| "OTHER" \| null;/);
 });
 
@@ -26,11 +27,14 @@ test("CustomerSalesTagEditor renders required status options (ONLINE, INTERESTED
   assert.match(editorCode, /"PURCHASED"/);
   assert.match(editorCode, /"FILM"/);
   assert.match(editorCode, /data-film-brand-select/);
+  assert.match(editorCode, /data-online-source-select/);
 });
 
-test("CustomerSalesTagEditor creates ONLINE save payload { status: 'ONLINE' }", () => {
+test("CustomerSalesTagEditor validates and sends the structured ONLINE source", () => {
   const saveBlock = editorCode.slice(editorCode.indexOf("const handleSave"), editorCode.indexOf("return ("));
-  assert.match(saveBlock, /const payload:\s*UpdateCustomerSalesInfoInput\s*=\s*\{\s*status,?\s*\};/);
+  assert.match(saveBlock, /if \(status === "ONLINE"\) \{/);
+  assert.match(saveBlock, /payload\.onlineSource = normalizedSource;/);
+  assert.match(editorCode, /data-custom-online-source-input/);
 });
 
 test("CustomerSalesTagEditor creates INTERESTED save payload { status: 'INTERESTED' }", () => {
