@@ -11,6 +11,7 @@ export const CUSTOMER_VOICE_TOPIC_LABELS = [
   "Gift / Freebie",
   "Trade-in",
   "Store Location / Opening Hours",
+  "Store Contact",
   "Reservation / Order",
   "After-sales / Repair",
   "Complaint",
@@ -50,6 +51,7 @@ const TOPIC_ALIASES: Record<string, CustomerVoiceTopic> = {
   "gift freebie": "Gift / Freebie",
   "trade in": "Trade-in",
   "store location opening hours": "Store Location / Opening Hours",
+  "store contact": "Store Contact",
   "reservation order": "Reservation / Order",
   "after sales repair": "After-sales / Repair",
   complaint: "Complaint",
@@ -58,11 +60,13 @@ const TOPIC_ALIASES: Record<string, CustomerVoiceTopic> = {
   other: "Other",
 };
 
-const EXTRA_RULES: ReadonlyArray<{ topic: CustomerVoiceTopic; keywords: readonly string[] }> = [
+const EXTRA_RULES: ReadonlyArray<{ topic: CustomerVoiceTopic; keywords: readonly string[]; patterns?: readonly RegExp[] }> = [
   { topic: "Gift / Freebie", keywords: ["ของแถม", "ของฟรี", "ของสมนาคุณ", "gift", "freebie"] },
   { topic: "Store Location / Opening Hours", keywords: ["สาขา", "อยู่ที่ไหน", "เปิดกี่โมง", "location", "opening hours", "where are you"] },
+  { topic: "Store Contact", keywords: ["เบอร์ติดต่อ", "เบอร์โทร", "โทรหาร้าน", "contact store", "store phone"], patterns: [/(?:ขอ|มี|ส่ง)?\s*(?:เบอร์|หมายเลข)(?:โทร|ติดต่อ)?|(?:โทร|ติดต่อ)(?:กลับ|หา|ร้าน|สาขา|ทางไหน|อย่างไร|ยังไง)/u] },
   { topic: "Reservation / Order", keywords: ["จอง", "สั่งซื้อ", "reserve", "order", "pre-order", "preorder"] },
-  { topic: "Product Information", keywords: ["สเปค", "รายละเอียด", "ฟีเจอร์", "spec", "feature", "ข้อมูลรุ่น", "มีอะไรบ้าง"] },
+  { topic: "Product Information", keywords: ["สเปค", "รายละเอียด", "ฟีเจอร์", "spec", "feature", "ข้อมูลรุ่น", "รุ่นไหน", "รุ่นอะไร", "มือถือรุ่น", "โทรศัพท์รุ่น"], patterns: [/(?:มือถือ|โทรศัพท์|เครื่อง|รุ่น)\s*(?:รุ่น)?\s*(?:ไหน|อะไร|ใด|นี้)|(?:มี|ขาย|แนะนำ)\s*(?:มือถือ|โทรศัพท์|เครื่อง|รุ่น)/u] },
+  { topic: "Installment / Payment", keywords: ["ดาวน์", "ค่างวด", "กี่งวด", "สินเชื่อ", "down payment", "payment plan"], patterns: [/บัตร(?:อะไร|ไหน)|(?:ใช้|รับ|จ่าย|รูด)(?:ผ่าน|ด้วย)?\s*บัตร|เครดิต(?!บูโร)/u] },
 ];
 
 const TOPIC_PRIORITY: Record<CustomerVoiceTopic, number> = {
@@ -77,6 +81,7 @@ const TOPIC_PRIORITY: Record<CustomerVoiceTopic, number> = {
   "Trade-in": 45,
   "Gift / Freebie": 40,
   "Store Location / Opening Hours": 30,
+  "Store Contact": 30,
   Greeting: 10,
   Other: 0,
 };
@@ -96,7 +101,7 @@ export function inferCustomerVoiceTopics(text: string): CustomerVoiceTopic[] {
   const inferred = topicRules
     .filter(({ keywords }) => keywords.some((keyword) => normalized.includes(keyword.toLocaleLowerCase())))
     .map(({ name }) => canonicalizeCustomerVoiceTopic(name))
-    .concat(EXTRA_RULES.filter(({ keywords }) => keywords.some((keyword) => normalized.includes(keyword.toLocaleLowerCase()))).map(({ topic }) => topic));
+    .concat(EXTRA_RULES.filter(({ keywords, patterns }) => keywords.some((keyword) => normalized.includes(keyword.toLocaleLowerCase())) || patterns?.some((pattern) => pattern.test(normalized))).map(({ topic }) => topic));
   return [...new Set(inferred.filter((topic): topic is CustomerVoiceTopic => topic !== null))]
     .sort((left, right) => TOPIC_PRIORITY[right] - TOPIC_PRIORITY[left] || left.localeCompare(right));
 }
@@ -112,10 +117,11 @@ export function deriveCustomerVoiceIntent(text: string, topics: readonly Custome
   if (topicSet.has("After-sales / Repair")) return "AFTER_SALES";
   if (/(พร้อมซื้อ|ซื้อเลย|เอารุ่น|สั่งซื้อ|จอง|รับเครื่อง|buy now|ready to buy|order now)/u.test(normalized)) return "READY_TO_BUY";
   if (topicSet.has("Stock Availability")) return "STOCK_CHECK";
-  if (topicSet.has("Installment / Payment")) return "PAYMENT_INQUIRY";
   if (topicSet.has("Product Information") && /(เทียบ|ต่างกัน|compare|difference|对比|区别)/u.test(normalized)) return "PRODUCT_COMPARISON";
   if (topicSet.has("Price Inquiry")) return "PRICE_CHECK";
+  if (topicSet.has("Installment / Payment")) return "PAYMENT_INQUIRY";
   if (topicSet.has("Product Information") || hasProduct) return "INFORMATION";
+  if (topicSet.has("Store Location / Opening Hours") || topicSet.has("Store Contact")) return "INFORMATION";
   if (topicSet.has("Promotion") || topicSet.has("Trade-in") || topicSet.has("Reservation / Order") || topicSet.has("Gift / Freebie")) return "PURCHASE_CONSIDERATION";
   if (topicSet.has("Greeting") || topicSet.has("Other")) return "GENERAL";
   return null;

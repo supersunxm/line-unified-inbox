@@ -13,7 +13,7 @@ test("Store 360 loads Customer Voice with the selected period and previous compa
   assert.match(viewCode, /api\.storeInsightsCustomerVoice\(activeStoreId, \{ from, to, \.\.\.compare \}\)/);
   assert.match(viewCode, /customerVoiceRequestId/);
   assert.match(viewCode, /if \(requestId === customerVoiceRequestId\.current\) setCustomerVoice\(value\)/);
-  assert.match(viewCode, /<CustomerVoicePanel data=\{customerVoice\}/);
+  assert.match(viewCode, /<CustomerVoicePanel data=\{customerVoice\} loading=\{customerVoiceLoading\} error=\{customerVoiceError\}/);
 });
 
 test("Customer Voice has honest no-analysis UI and real coverage/ranked values", () => {
@@ -24,6 +24,8 @@ test("Customer Voice has honest no-analysis UI and real coverage/ranked values",
   assert.match(panelCode, /data\.topProducts/);
   assert.match(panelCode, /onTopicSelect\(item\.label\)/);
   assert.doesNotMatch(panelCode, /mock|faker|Math\.random/);
+  assert.match(panelCode, /Customer Voice is temporarily unavailable/);
+  assert.match(viewCode, /setCustomerVoiceError/);
 });
 
 test("Customer Voice topic clicks use the existing Conversation Explorer query", () => {
