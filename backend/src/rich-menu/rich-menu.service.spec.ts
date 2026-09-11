@@ -133,6 +133,9 @@ void test("evaluateReadiness marks store BLOCKED only if template uses {{store.g
   const mockTemplateWithMaps = {
     id: "tmpl-maps",
     name: "Template With Maps",
+    imageUrl: "https://lineoppo.click/messages/media/public?key=line-media/outbound/rich-menu/image.png",
+    width: 2500,
+    height: 1686,
     areasJson: [
       { id: "a1", bounds: { x: 0, y: 0, width: 1250, height: 562 }, actionType: "URI", actionData: "{{store.googleMapsUrl}}" },
       { id: "a2", bounds: { x: 1250, y: 0, width: 1250, height: 562 }, actionType: "MESSAGE", actionData: "Help" },
@@ -143,6 +146,9 @@ void test("evaluateReadiness marks store BLOCKED only if template uses {{store.g
   const mockTemplateNoMaps = {
     id: "tmpl-nomaps",
     name: "Template Without Maps",
+    imageUrl: "https://lineoppo.click/messages/media/public?key=line-media/outbound/rich-menu/image.png",
+    width: 2500,
+    height: 1686,
     areasJson: [
       { id: "a1", bounds: { x: 0, y: 0, width: 1250, height: 562 }, actionType: "MESSAGE", actionData: "Menu 1" },
       { id: "a2", bounds: { x: 1250, y: 0, width: 1250, height: 562 }, actionType: "MESSAGE", actionData: "Menu 2" },
@@ -155,7 +161,9 @@ void test("evaluateReadiness marks store BLOCKED only if template uses {{store.g
       id: "oa-ready",
       name: "Store Ready",
       accountType: "STORE",
+      isActive: true,
       archivedAt: null,
+      encryptedChannelAccessToken: "enc-ready",
       store: {
         id: "s1",
         name: "Store 1",
@@ -166,7 +174,9 @@ void test("evaluateReadiness marks store BLOCKED only if template uses {{store.g
       id: "oa-missing-maps",
       name: "Store Missing Maps",
       accountType: "STORE",
+      isActive: true,
       archivedAt: null,
+      encryptedChannelAccessToken: "enc-missing",
       store: {
         id: "s2",
         name: "Store 2",
@@ -177,7 +187,9 @@ void test("evaluateReadiness marks store BLOCKED only if template uses {{store.g
       id: "oa-invalid-maps",
       name: "Store Invalid Maps",
       accountType: "STORE",
+      isActive: true,
       archivedAt: null,
+      encryptedChannelAccessToken: "enc-invalid",
       store: {
         id: "s3",
         name: "Store 3",
@@ -210,11 +222,12 @@ void test("evaluateReadiness marks store BLOCKED only if template uses {{store.g
 
   const missingItem = evalWithMaps.items.find((i) => i.lineOfficialAccountId === "oa-missing-maps");
   assert.equal(missingItem?.readinessStatus, "BLOCKED");
-  assert.equal(missingItem?.readinessReason, "Missing Google Maps URL");
+  assert.equal(missingItem?.readinessReason, "ไม่มี Google Maps URL");
+  assert.deepEqual(missingItem?.readinessReasons, ["ไม่มี Google Maps URL"]);
 
   const invalidItem = evalWithMaps.items.find((i) => i.lineOfficialAccountId === "oa-invalid-maps");
   assert.equal(invalidItem?.readinessStatus, "BLOCKED");
-  assert.equal(invalidItem?.readinessReason, "Invalid Google Maps URL");
+  assert.equal(invalidItem?.readinessReason, "Google Maps URL ไม่ถูกต้อง");
 
   // 2. Evaluate template without maps (all 3 stores should be READY!)
   currentTemplate = mockTemplateNoMaps;
@@ -222,6 +235,54 @@ void test("evaluateReadiness marks store BLOCKED only if template uses {{store.g
   assert.equal(evalNoMaps.summary.total, 3);
   assert.equal(evalNoMaps.summary.ready, 3);
   assert.equal(evalNoMaps.summary.blocked, 0);
+});
+
+void test("publishOneStore uses shared preflight and records all missing URL reasons before LINE", async () => {
+  let recordedReasons: string[] = [];
+  const prisma = {
+    richMenuTemplate: {
+      findUnique: async () => ({
+        id: "tmpl-links",
+        name: "Links",
+        imageUrl: "https://lineoppo.click/messages/media/public?key=line-media/outbound/rich-menu/image.png",
+        width: 2500,
+        height: 1686,
+        selected: true,
+        chatBarText: "Menu",
+        version: 1,
+        areasJson: [
+          { id: "maps", bounds: { x: 0, y: 0, width: 1250, height: 843 }, actionType: "URI", actionData: "{{store.googleMapsUrl}}" },
+          { id: "tiktok", bounds: { x: 1250, y: 0, width: 1250, height: 843 }, actionType: "URI", actionData: "{{store.tiktokUrl}}" },
+        ],
+        assignments: [],
+      }),
+    },
+    lineOfficialAccount: {
+      findUnique: async () => ({
+        id: "oa-links",
+        name: "Links OA",
+        accountType: "STORE",
+        isActive: true,
+        archivedAt: null,
+        encryptedChannelAccessToken: "encrypted-token",
+        store: {
+          id: "store-links",
+          name: "Links Store",
+          storeMaster: { externalStoreId: "L001", googleMapsUrl: null, tiktokProfileUrl: null },
+        },
+      }),
+    },
+  } as any;
+
+  const service = new RichMenuService(prisma, {} as any, {} as any);
+  (service as any).recordSkippedAttempt = async (_params: unknown, reasons: string | string[]) => {
+    recordedReasons = Array.isArray(reasons) ? reasons : [reasons];
+    return { status: "SKIPPED" };
+  };
+
+  await service.publishOneStore({ templateId: "tmpl-links", lineOfficialAccountId: "oa-links" });
+
+  assert.deepEqual(recordedReasons, ["ไม่มี Google Maps URL", "ไม่มี TikTok URL"]);
 });
 
 void test("RichMenuPublishNoopAdapter throws fail-safe error and publishes no rich menus", async () => {

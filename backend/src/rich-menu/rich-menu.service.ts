@@ -39,6 +39,11 @@ import {
   normalizeAutoResponseMessages,
 } from "../auto-response/auto-response.utils";
 import {
+  buildRichMenuStoreVariableContext,
+  collectRichMenuPreflightReasons,
+  getRichMenuReferencedAutoResponseRuleIds,
+} from "./rich-menu-validation";
+import {
   ClearDefaultRichMenuResult,
   CreateRichMenuTemplateDto,
   generatePresetAreas,
@@ -500,7 +505,9 @@ export class RichMenuService {
       tiktokProfileUrl: targetOa.store.storeMaster?.tiktokProfileUrl ?? null,
     };
 
-    const areas = (template.areasJson as unknown as RichMenuArea[]) || [];
+    const areas = Array.isArray(template.areasJson)
+      ? (template.areasJson as unknown as RichMenuArea[])
+      : [];
     const usedVariablesSet = new Set<string>();
     const resolvedAreas: RichMenuPreviewResolvedArea[] = [];
     let isTemplateBlocked = false;
@@ -678,17 +685,9 @@ export class RichMenuService {
         : [];
     const ruleMap = new Map(referencedRules.map((r) => [r.id, r]));
 
-    let globalAutoResponseBlockReason: string | null = null;
     for (const rid of autoResponseRuleIds) {
       const rule = ruleMap.get(rid);
-      if (!rule) {
-        globalAutoResponseBlockReason = "Auto-response rule not found";
-        break;
-      }
-      if (rule.status !== "ACTIVE") {
-        globalAutoResponseBlockReason = `Auto-response '${rule.name}' is not active`;
-        break;
-      }
+      if (!rule) continue;
       const ruleMessages = normalizeAutoResponseMessages(rule);
       for (const msg of ruleMessages) {
         if (msg.type === "TEXT" && msg.textTemplate) {
@@ -699,14 +698,9 @@ export class RichMenuService {
     }
 
     const usedVariables = Array.from(usedVariablesSet);
-    const requiresGoogleMaps =
-      usedVariables.includes("store.googleMapsUrl") ||
-      usedVariables.includes("googleMapsUrl");
-
     const storeOas = await this.prisma.lineOfficialAccount.findMany({
       where: {
         accountType: "STORE",
-        archivedAt: null,
       },
       include: {
         store: {
@@ -728,22 +722,13 @@ export class RichMenuService {
     const items: RichMenuStoreReadinessItem[] = storeOas.map((oa) => {
       const storeMaster = oa.store?.storeMaster;
       const mapsUrl = storeMaster?.googleMapsUrl ?? null;
-      let readinessStatus: "READY" | "BLOCKED" = "READY";
-      let readinessReason: string | null = null;
-
-      if (globalAutoResponseBlockReason) {
-        readinessStatus = "BLOCKED";
-        readinessReason = globalAutoResponseBlockReason;
-      } else if (requiresGoogleMaps) {
-        const mapsReadiness = getStoreGoogleMapsReadiness(mapsUrl);
-        if (mapsReadiness.status === "MISSING") {
-          readinessStatus = "BLOCKED";
-          readinessReason = "Missing Google Maps URL";
-        } else if (mapsReadiness.status === "INVALID") {
-          readinessStatus = "BLOCKED";
-          readinessReason = "Invalid Google Maps URL";
-        }
-      }
+      const readinessReasons = collectRichMenuPreflightReasons({
+        template,
+        targetOa: oa,
+        autoResponseRules: referencedRules,
+      });
+      const readinessStatus: "READY" | "BLOCKED" = readinessReasons.length > 0 ? "BLOCKED" : "READY";
+      const readinessReason = readinessReasons[0] ?? null;
 
       if (readinessStatus === "READY") {
         readyCount++;
@@ -792,6 +777,7 @@ export class RichMenuService {
         googleMapsUrl: mapsUrl,
         readinessStatus,
         readinessReason,
+        readinessReasons,
         selected: isSelected,
         publishStatus,
         publishedRichMenuId,
@@ -841,15 +827,7 @@ export class RichMenuService {
       return this.recordSkippedAttempt(params, "Template changed after this publishing job was created");
     }
 
-    if (!template.imageUrl) {
-      return this.recordSkippedAttempt(params, "Template has no image uploaded");
-    }
-
     const areas = (template.areasJson as unknown as RichMenuArea[]) || [];
-    const areaValidation = validateRichMenuAreas(areas, template.width, template.height);
-    if (!areaValidation.valid) {
-      return this.recordSkippedAttempt(params, `Invalid area layout: ${areaValidation.errors.join("; ")}`);
-    }
 
     // 2. Fetch LINE Official Account & Store
     const targetOa = await this.prisma.lineOfficialAccount.findUnique({
@@ -861,24 +839,28 @@ export class RichMenuService {
       },
     });
 
-    if (!targetOa) {
-      return this.recordSkippedAttempt(params, "Target store LINE Official Account not found");
+    const referencedRuleIds = getRichMenuReferencedAutoResponseRuleIds(areas);
+    const referencedRules =
+      referencedRuleIds.length > 0
+        ? await this.prisma.autoResponseRule.findMany({
+            where: { id: { in: referencedRuleIds } },
+          })
+        : [];
+    const ruleMap = new Map(referencedRules.map((rule) => [rule.id, rule]));
+
+    const preflightReasons = collectRichMenuPreflightReasons({
+      template,
+      targetOa,
+      autoResponseRules: referencedRules,
+    });
+    if (preflightReasons.length > 0) {
+      return this.recordSkippedAttempt(params, preflightReasons);
     }
 
-    if (targetOa.accountType === "HEAD_OFFICE") {
-      return this.recordSkippedAttempt(params, "Cannot publish rich menu to Head Office account. Only STORE accounts are supported.");
-    }
-
-    if (!targetOa.isActive || targetOa.archivedAt) {
-      return this.recordSkippedAttempt(params, "Target LINE OA is disabled or archived");
-    }
-
-    if (!targetOa.encryptedChannelAccessToken) {
-      return this.recordSkippedAttempt(params, "Target LINE OA has no channel access token configured");
-    }
-
-    if (!targetOa.store) {
-      return this.recordSkippedAttempt(params, "Target LINE OA is not linked to a store");
+    // The shared preflight above guarantees these values. Keep defensive checks so a
+    // future data-source change cannot accidentally call LINE with an incomplete target.
+    if (!targetOa || !targetOa.store || !targetOa.encryptedChannelAccessToken) {
+      return this.recordSkippedAttempt(params, ["ข้อมูลสำหรับ publish ไม่ครบ"]);
     }
 
     let assignment = template.assignments?.[0];
@@ -896,15 +878,7 @@ export class RichMenuService {
     }
 
     // 3. Live Dynamic Store Master Variable Resolution
-    const storeMaster = targetOa.store.storeMaster;
-    const storeContext: StoreVariableContext = {
-      storeName: targetOa.store.name,
-      externalStoreId: storeMaster?.externalStoreId ?? null,
-      accountName: targetOa.name,
-      googleMapsUrl: storeMaster?.googleMapsUrl ?? null,
-      tiktokUsername: storeMaster?.tiktokUsername ?? null,
-      tiktokProfileUrl: storeMaster?.tiktokProfileUrl ?? null,
-    };
+    const storeContext = buildRichMenuStoreVariableContext(targetOa);
 
     const resolvedAreas: Array<{
       bounds: { x: number; y: number; width: number; height: number };
@@ -923,41 +897,12 @@ export class RichMenuService {
             : area.actionData?.trim());
 
         if (!ruleId) {
-          return this.recordSkippedAttempt(params, "Cannot publish: Area is missing Auto-response rule selection");
+          return this.recordSkippedAttempt(params, "พื้นที่ Rich Menu ยังไม่ได้เลือก Auto-response");
         }
 
-        const rule = await this.prisma.autoResponseRule.findUnique({
-          where: { id: ruleId },
-        });
-
+        const rule = ruleMap.get(ruleId);
         if (!rule) {
-          return this.recordSkippedAttempt(params, `Cannot publish: Auto-response rule '${ruleId}' was not found`);
-        }
-
-        if (rule.status !== "ACTIVE") {
-          return this.recordSkippedAttempt(params, `Cannot publish: Auto-response rule '${rule.name}' is not active (${rule.status.toLowerCase()})`);
-        }
-
-        const ruleMessages = normalizeAutoResponseMessages(rule);
-        for (const msg of ruleMessages) {
-          if (msg.type === "TEXT" && msg.textTemplate) {
-            const ruleVars = extractTemplateVariables(msg.textTemplate);
-            const resolvedRuleText = resolveTemplateVariables(msg.textTemplate, storeContext);
-            const remainingMatches = resolvedRuleText.match(/\{\{\s*([a-zA-Z0-9_.]+)\s*\}\}/g);
-            if (remainingMatches && remainingMatches.length > 0) {
-              return this.recordSkippedAttempt(params, `Cannot publish: Auto-response rule '${rule.name}' contains unresolved variables: ${remainingMatches.join(", ")}`);
-            }
-
-            const ruleNeedsMaps =
-              ruleVars.includes("store.googleMapsUrl") ||
-              ruleVars.includes("googleMapsUrl");
-
-            if (ruleNeedsMaps) {
-              if (!storeMaster?.googleMapsUrl || !isValidGoogleMapsUrl(storeMaster.googleMapsUrl)) {
-                return this.recordSkippedAttempt(params, `Cannot publish: Store '${targetOa.store?.name}' is missing a valid Google Maps URL required by Auto-response '${rule.name}'`);
-              }
-            }
-          }
+          return this.recordSkippedAttempt(params, [`ไม่พบ Auto-response rule "${ruleId}"`]);
         }
 
         resolvedAreas.push({
@@ -971,23 +916,6 @@ export class RichMenuService {
       }
 
       const resolved = resolveTemplateVariables(area.actionData, storeContext);
-      if (area.actionType === "URI") {
-        const containsMapsVar = area.actionData.includes("{{store.googleMapsUrl}}") || area.actionData.includes("{{googleMapsUrl}}");
-        if (containsMapsVar) {
-          if (!storeMaster?.googleMapsUrl) {
-            return this.recordSkippedAttempt(params, "Cannot publish: Store Master is missing Google Maps URL");
-          }
-          if (!isValidGoogleMapsUrl(storeMaster.googleMapsUrl)) {
-            return this.recordSkippedAttempt(params, "Cannot publish: Store Master has invalid Google Maps URL");
-          }
-        } else if (!/^https?:\/\//i.test(resolved)) {
-          return this.recordSkippedAttempt(params, `Cannot publish: invalid URI schema '${resolved}' (must start with https:// or http://)`);
-        }
-      } else if (area.actionType === "MESSAGE") {
-        if (!resolved.trim()) {
-          return this.recordSkippedAttempt(params, "Cannot publish: message action text resolved to empty");
-        }
-      }
 
       resolvedAreas.push({
         bounds: area.bounds,
@@ -1031,9 +959,12 @@ export class RichMenuService {
     };
 
     // 5. Retrieve Stored Image Bytes
+    if (!template.imageUrl) {
+      return this.recordSkippedAttempt(params, "Rich Menu template ไม่มีรูปภาพ", "IMAGE_RETRIEVAL");
+    }
     const objectKey = extractMediaObjectKey(template.imageUrl);
     if (!objectKey) {
-      return this.recordSkippedAttempt(params, "Invalid template image URL or object key");
+      return this.recordSkippedAttempt(params, "Invalid template image URL or object key", "IMAGE_RETRIEVAL");
     }
 
     let imageBuffer: Buffer;
@@ -1043,15 +974,23 @@ export class RichMenuService {
       imageBuffer = stored.body;
       mimeType = stored.contentType || (objectKey.endsWith(".jpg") || objectKey.endsWith(".jpeg") ? "image/jpeg" : "image/png");
     } catch (err: any) {
-      return this.recordSkippedAttempt(params, `Failed to retrieve template image from storage: ${err?.message || "unknown"}`);
+      return this.recordSkippedAttempt(
+        params,
+        `Failed to retrieve template image from storage: ${err?.message || "unknown"}`,
+        "IMAGE_RETRIEVAL",
+      );
     }
 
     // 6. Decrypt OA channel access token
     let token: string;
+    const encryptedChannelAccessToken = targetOa.encryptedChannelAccessToken;
+    if (!encryptedChannelAccessToken) {
+      return this.recordSkippedAttempt(params, "LINE OA ไม่มี Channel Access Token");
+    }
     try {
-      token = this.encryption.decrypt(targetOa.encryptedChannelAccessToken);
+      token = this.encryption.decrypt(encryptedChannelAccessToken);
     } catch {
-      return this.recordSkippedAttempt(params, "Failed to decrypt LINE OA credentials");
+      return this.recordSkippedAttempt(params, "Failed to decrypt LINE OA credentials", "CREDENTIALS");
     }
 
     // 7. Get or Create Attempt record
@@ -1106,15 +1045,18 @@ export class RichMenuService {
 
     // 8. Execute LINE Publishing Stages
     let lineRichMenuId: string | null = null;
+    let currentErrorStage = "VALIDATING";
 
     try {
       // Stage A: Validate Rich Menu Structure on LINE
+      currentErrorStage = "VALIDATING";
       const validation = await this.publishAdapter.validateRichMenu(token, linePayload);
       if (!validation.valid) {
         throw new BadRequestException(`LINE validation failed: ${validation.message || "Invalid rich menu structure"}`);
       }
 
       // Stage B: Detect Previous Default on LINE
+      currentErrorStage = "DETECTING_DEFAULT";
       let prevDefault: { richMenuId: string | null; source: "MESSAGING_API" | "OTHER_OR_MANAGER" | "NONE" };
       try {
         prevDefault = await this.publishAdapter.getDefaultRichMenu(token);
@@ -1132,6 +1074,7 @@ export class RichMenuService {
       });
 
       // Stage C: Create Rich Menu on LINE
+      currentErrorStage = "CREATING";
       const createRes = await this.publishAdapter.createRichMenu(token, linePayload);
       lineRichMenuId = createRes.richMenuId;
 
@@ -1144,6 +1087,7 @@ export class RichMenuService {
       });
 
       // Stage D: Upload Image Content to LINE
+      currentErrorStage = "IMAGE_UPLOADING";
       try {
         await this.publishAdapter.uploadRichMenuImage(token, lineRichMenuId, imageBuffer, mimeType);
       } catch (imgErr: any) {
@@ -1180,6 +1124,7 @@ export class RichMenuService {
       }
 
       // Stage E: Set Default Rich Menu
+      currentErrorStage = "SETTING_DEFAULT";
       await this.prisma.richMenuPublishAttempt.update({
         where: { id: attemptRecord.id },
         data: { status: RichMenuPublishStatus.SETTING_DEFAULT },
@@ -1214,6 +1159,7 @@ export class RichMenuService {
       }
 
       // Stage F: Verify Active Default
+      currentErrorStage = "VERIFYING";
       await this.prisma.richMenuPublishAttempt.update({
         where: { id: attemptRecord.id },
         data: { status: RichMenuPublishStatus.VERIFYING },
@@ -1262,6 +1208,7 @@ export class RichMenuService {
         where: { id: attemptRecord.id },
         data: {
           status: RichMenuPublishStatus.FAILED,
+          errorStage: currentErrorStage,
           errorMessage: errorMsg,
           completedAt: new Date(),
         },
@@ -1285,16 +1232,22 @@ export class RichMenuService {
     }
   }
 
-  private async recordSkippedAttempt(params: PublishStoreParams, reason: string): Promise<PublishAttemptResponseDto> {
+  private async recordSkippedAttempt(
+    params: PublishStoreParams,
+    reason: string | string[],
+    errorStage = "PREFLIGHT",
+  ): Promise<PublishAttemptResponseDto> {
     const { templateId, lineOfficialAccountId, actorUserId, jobId, attemptId, expectedTemplateVersion } = params;
+    const errorMessage = Array.isArray(reason) ? reason.join("\n") : reason;
 
-    let attempt: any;
+    let attempt: Prisma.RichMenuPublishAttemptGetPayload<{}>;
     if (attemptId) {
       attempt = await this.prisma.richMenuPublishAttempt.update({
         where: { id: attemptId },
         data: {
           status: RichMenuPublishStatus.SKIPPED,
-          errorMessage: reason,
+          errorStage,
+          errorMessage,
           completedAt: new Date(),
         },
       });
@@ -1309,7 +1262,8 @@ export class RichMenuService {
           templateVersion: expectedTemplateVersion || 1,
           lineOfficialAccountId,
           status: RichMenuPublishStatus.SKIPPED,
-          errorMessage: reason,
+          errorStage,
+          errorMessage,
           attemptNumber: totalAttempts + 1,
           createdByUserId: actorUserId || null,
           completedAt: new Date(),
@@ -1363,21 +1317,11 @@ export class RichMenuService {
 
   // Phase 2B Bulk Job Creation
   async createBulkPublishJob(templateId: string, dto: PublishBulkDto, user: AuthUser): Promise<PublishJobResponseDto> {
-    const maxTargets = parseInt(
-      process.env.RICH_MENU_MAX_BULK_TARGETS || process.env.RICH_MENU_BULK_MAX_TARGETS || "5",
-      10,
-    );
     const rawIds = dto.lineOfficialAccountIds || [];
     const requestedIds = Array.from(new Set(rawIds.map((id) => id?.trim()).filter(Boolean)));
 
     if (requestedIds.length === 0) {
       throw new BadRequestException("At least one store must be selected for bulk publishing");
-    }
-
-    if (requestedIds.length > maxTargets) {
-      throw new BadRequestException(
-        `ขณะนี้สามารถเผยแพร่ได้สูงสุด ${maxTargets} ร้านต่อครั้ง (Bulk publishing currently supports up to ${maxTargets} stores per job)`,
-      );
     }
 
     // Verify Template
@@ -1670,10 +1614,6 @@ export class RichMenuService {
   }
 
   async getPublishCapabilities(): Promise<PublishCapabilitiesDto> {
-    const maxTargets = parseInt(
-      process.env.RICH_MENU_MAX_BULK_TARGETS || process.env.RICH_MENU_BULK_MAX_TARGETS || "5",
-      10,
-    );
     const concurrency = Math.min(
       parseInt(
         process.env.RICH_MENU_PUBLISH_CONCURRENCY || process.env.RICH_MENU_BULK_CONCURRENCY || "2",
@@ -1698,7 +1638,6 @@ export class RichMenuService {
 
     return {
       bulkEnabled: true,
-      maxTargets,
       concurrency,
       workerReady,
       lastWorkerHeartbeatAt,

@@ -104,7 +104,10 @@ export class LineRichMenuClientService implements ILineRichMenuClient {
           const retryAfterHeader = response.headers.get("Retry-After");
           const retryAfterSeconds = retryAfterHeader ? parseInt(retryAfterHeader, 10) : undefined;
           const errText = await this.extractErrorMessage(response, `LINE image upload returned HTTP ${response.status}`);
-          const err = new BadGatewayException(`LINE image upload failed: ${errText}`);
+          const transientLabel = response.status === 429
+            ? "LINE API 429 — Too Many Requests"
+            : `LINE API 5xx — Server error (HTTP ${response.status})`;
+          const err = new BadGatewayException(`${transientLabel}: ${errText}`);
           (err as any).status = response.status;
           (err as any).retryAfterSeconds = !isNaN(retryAfterSeconds!) ? retryAfterSeconds : undefined;
           throw err;
@@ -117,6 +120,9 @@ export class LineRichMenuClientService implements ILineRichMenuClient {
         }
       } catch (err: any) {
         if (err instanceof BadGatewayException) throw err;
+        if (err?.name === "AbortError") {
+          throw new BadGatewayException("LINE API timeout");
+        }
         throw new BadGatewayException(`LINE image upload failed: ${err?.message || "network error"}`);
       } finally {
         clearTimeout(timeout);
@@ -250,7 +256,10 @@ export class LineRichMenuClientService implements ILineRichMenuClient {
       if (response.status === 429 || (response.status >= 500 && response.status <= 504)) {
         const retryAfterHeader = response.headers.get("Retry-After");
         const retryAfterSeconds = retryAfterHeader ? parseInt(retryAfterHeader, 10) : undefined;
-        const err = new BadGatewayException(`LINE API returned HTTP ${response.status}`);
+        const transientLabel = response.status === 429
+          ? "LINE API 429 — Too Many Requests"
+          : `LINE API 5xx — Server error (HTTP ${response.status})`;
+        const err = new BadGatewayException(transientLabel);
         (err as any).status = response.status;
         (err as any).retryAfterSeconds = !isNaN(retryAfterSeconds!) ? retryAfterSeconds : undefined;
         throw err;
@@ -259,6 +268,9 @@ export class LineRichMenuClientService implements ILineRichMenuClient {
       return response;
     } catch (err: any) {
       if (err instanceof BadGatewayException) throw err;
+      if (err?.name === "AbortError") {
+        throw new BadGatewayException("LINE API timeout");
+      }
       throw new BadGatewayException(`LINE request failed: ${err?.message || "network error"}`);
     } finally {
       clearTimeout(timeout);
