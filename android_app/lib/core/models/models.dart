@@ -23,8 +23,8 @@ String normalizeProductDisplayName(String value) {
         index++;
       }
 
-      final followedByG = index < tokens.length &&
-          tokens[index].toUpperCase() == 'G';
+      final followedByG =
+          index < tokens.length && tokens[index].toUpperCase() == 'G';
       if (followedByG) {
         // In a malformed model such as "A 5 5 G" or "Reno 1 6 5 G",
         // the final digit belongs to the network generation. Everything before
@@ -72,8 +72,8 @@ String? normalizeProductCapacity(String? value) {
       .trim();
   if (normalized.isEmpty) return null;
   final compact = normalized.replaceAll(' ', '');
-  final match = RegExp(r'^(\d+)(?:GB)?$', caseSensitive: false)
-      .firstMatch(compact);
+  final match =
+      RegExp(r'^(\d+)(?:GB)?$', caseSensitive: false).firstMatch(compact);
   return match == null ? normalized : match[1];
 }
 
@@ -233,6 +233,7 @@ class ConversationSummary {
   final String? preview;
   final DateTime? sentAt;
   final ConversationOwner? owner;
+
   /// Legacy API responses omit this field; keeping the compatibility default
   /// preserves the existing unassigned presentation until the backend sends
   /// the explicit tracking state.
@@ -334,18 +335,25 @@ class CustomerSalesSummaryProduct {
 
 class CustomerSalesSummary {
   const CustomerSalesSummary(
-      {this.status, this.interestLevel, this.products = const []});
+      {this.status,
+      this.filmBrand,
+      this.interestLevel,
+      this.products = const []});
 
   final String? status;
+  final String? filmBrand;
   final String? interestLevel;
   final List<CustomerSalesSummaryProduct> products;
 
   bool get isEmpty =>
-      (status == null || status!.trim().isEmpty) && products.isEmpty;
+      (status == null || status!.trim().isEmpty) &&
+      (filmBrand == null || filmBrand!.trim().isEmpty) &&
+      products.isEmpty;
 
   bool get isOnline => status == 'ONLINE';
   bool get isInterested => status == 'INTERESTED';
   bool get isPurchased => status == 'PURCHASED';
+  bool get isFilm => status == 'FILM';
 
   static CustomerSalesSummary? fromJson(Map<String, dynamic>? json) {
     if (json == null) return null;
@@ -358,9 +366,11 @@ class CustomerSalesSummary {
             .toList(growable: false)
         : const <CustomerSalesSummaryProduct>[];
     final status = json['status'] as String?;
+    final filmBrand = json['filmBrand'] as String?;
     final interestLevel = json['interestLevel'] as String?;
     final summary = CustomerSalesSummary(
       status: status,
+      filmBrand: filmBrand,
       interestLevel: interestLevel,
       products: products,
     );
@@ -369,11 +379,13 @@ class CustomerSalesSummary {
 
   static CustomerSalesSummary? fromData({
     required String? status,
+    String? filmBrand,
     String? interestLevel,
     Iterable<CustomerSalesSummaryProduct> products = const [],
   }) {
     final summary = CustomerSalesSummary(
       status: status,
+      filmBrand: filmBrand,
       interestLevel: interestLevel,
       products: products.toList(growable: false),
     );
@@ -384,12 +396,13 @@ class CustomerSalesSummary {
   bool operator ==(Object other) =>
       other is CustomerSalesSummary &&
       other.status == status &&
+      other.filmBrand == filmBrand &&
       other.interestLevel == interestLevel &&
       _listEquals(other.products, products);
 
   @override
   int get hashCode =>
-      Object.hash(status, interestLevel, Object.hashAll(products));
+      Object.hash(status, filmBrand, interestLevel, Object.hashAll(products));
 
   static bool _listEquals(List<CustomerSalesSummaryProduct> left,
       List<CustomerSalesSummaryProduct> right) {
@@ -1182,7 +1195,8 @@ class SummaryProduct {
 
   factory SummaryProduct.fromJson(Map<String, dynamic> json) => SummaryProduct(
         productId: json['productId'] as String? ?? '',
-        productName: normalizeProductDisplayName(json['productName'] as String? ?? ''),
+        productName:
+            normalizeProductDisplayName(json['productName'] as String? ?? ''),
         count: _intValue(json['count']),
       );
 }
@@ -1201,7 +1215,8 @@ class SummaryVariant {
   final int count;
 
   factory SummaryVariant.fromJson(Map<String, dynamic> json) => SummaryVariant(
-        productName: normalizeProductDisplayName(json['productName'] as String? ?? ''),
+        productName:
+            normalizeProductDisplayName(json['productName'] as String? ?? ''),
         ram: normalizeProductCapacity(json['ram'] as String?),
         rom: normalizeProductCapacity(json['rom'] as String?),
         color: (json['color'] as String?)?.trim(),

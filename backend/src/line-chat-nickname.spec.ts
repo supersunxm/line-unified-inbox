@@ -10,6 +10,33 @@ void test("online status maps to Online", () => {
   assert.equal(buildLineChatNickname({ status: "ONLINE" }), "Online");
 });
 
+void test("film status uses the brand and Bangkok sales month/year", () => {
+  const result = buildLineChatNickname({
+    status: "FILM",
+    filmBrand: "Samsung",
+    recordedAt: "2026-08-31T17:30:00.000Z",
+  });
+  assert.equal(result, "Film/Samsung/09/26");
+  assert.ok(result.length <= MAX_LINE_CHAT_NICKNAME_LENGTH);
+});
+
+void test("film nickname preserves its prefix and date while compacting a long custom brand", () => {
+  const result = buildLineChatNickname({
+    status: "FILM",
+    filmBrand: "Other Very Long Custom Phone Brand",
+    recordedAt: "2026-09-01T12:00:00+07:00",
+  });
+  assert.equal(result, "Film/OtherVery/09/26");
+  assert.ok(result.length <= MAX_LINE_CHAT_NICKNAME_LENGTH);
+  assert.ok(result.startsWith("Film/"));
+  assert.ok(result.endsWith("/09/26"));
+});
+
+void test("film status does not produce a nickname without a brand or recorded date", () => {
+  assert.equal(buildLineChatNickname({ status: "FILM", recordedAt: "2026-09-01T12:00:00+07:00" }), null);
+  assert.equal(buildLineChatNickname({ status: "FILM", filmBrand: "OPPO" }), null);
+});
+
 void test("cash purchase uses model, สด, and recorded month/year", () => {
   const result = buildLineChatNickname({
     status: "PURCHASED",

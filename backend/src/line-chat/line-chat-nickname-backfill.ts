@@ -14,15 +14,18 @@ export const PILOT_STORE_CODE = "28375";
 export type BackfillClassification =
   | "WOULD_ENQUEUE_ONLINE"
   | "WOULD_ENQUEUE_PURCHASED"
+  | "WOULD_ENQUEUE_FILM"
   | "SKIP_INTERESTED"
   | "SKIP_MISSING_LINE_CHAT_USER_ID"
   | "SKIP_INCOMPLETE_PURCHASE_DATA"
+  | "SKIP_INCOMPLETE_FILM_DATA"
   | "SKIP_NO_NICKNAME_NEEDED";
 
 export interface BackfillConversationInput {
   id: string;
   displayName: string;
   customerSalesStatus: CustomerSalesStatus | null;
+  filmBrand: string | null;
   paymentMethod: PaymentMethodType | null;
   salesRecordedAt: Date | null;
   lineChatUserId: string | null;
@@ -45,12 +48,13 @@ export interface BackfillSummary {
   totalConversations: number;
   onlineCount: number;
   purchasedCount: number;
+  filmCount: number;
   interestedCount: number;
   withLineChatUserId: number;
   missingLineChatUserId: number;
   wouldEnqueueCount: number;
   skippedCount: number;
-  skippedByReason: Record<Exclude<BackfillClassification, "WOULD_ENQUEUE_ONLINE" | "WOULD_ENQUEUE_PURCHASED">, number>;
+  skippedByReason: Record<Exclude<BackfillClassification, "WOULD_ENQUEUE_ONLINE" | "WOULD_ENQUEUE_PURCHASED" | "WOULD_ENQUEUE_FILM">, number>;
 }
 
 export interface PilotBackfillPlan {
@@ -85,6 +89,7 @@ const SKIP_CLASSIFICATIONS = [
   "SKIP_INTERESTED",
   "SKIP_MISSING_LINE_CHAT_USER_ID",
   "SKIP_INCOMPLETE_PURCHASE_DATA",
+  "SKIP_INCOMPLETE_FILM_DATA",
   "SKIP_NO_NICKNAME_NEEDED",
 ] as const;
 
@@ -110,6 +115,7 @@ export function classifyBackfillConversation(
   const status = conversation.customerSalesStatus;
   const targetNickname = buildLineChatNickname({
     status,
+    filmBrand: conversation.filmBrand,
     paymentMethod: conversation.paymentMethod,
     recordedAt: conversation.salesRecordedAt,
     products: conversation.salesProducts.map((product) => ({
@@ -122,7 +128,9 @@ export function classifyBackfillConversation(
   let classification: BackfillClassification;
   if (status === CustomerSalesStatus.INTERESTED) {
     classification = "SKIP_INTERESTED";
-  } else if (status !== CustomerSalesStatus.ONLINE && status !== CustomerSalesStatus.PURCHASED) {
+  } else if (status === CustomerSalesStatus.FILM && !targetNickname) {
+    classification = "SKIP_INCOMPLETE_FILM_DATA";
+  } else if (status !== CustomerSalesStatus.ONLINE && status !== CustomerSalesStatus.PURCHASED && status !== CustomerSalesStatus.FILM) {
     classification = "SKIP_NO_NICKNAME_NEEDED";
   } else if (status === CustomerSalesStatus.PURCHASED && !targetNickname) {
     classification = "SKIP_INCOMPLETE_PURCHASE_DATA";
@@ -131,7 +139,9 @@ export function classifyBackfillConversation(
   } else {
     classification = status === CustomerSalesStatus.ONLINE
       ? "WOULD_ENQUEUE_ONLINE"
-      : "WOULD_ENQUEUE_PURCHASED";
+      : status === CustomerSalesStatus.PURCHASED
+        ? "WOULD_ENQUEUE_PURCHASED"
+        : "WOULD_ENQUEUE_FILM";
   }
 
   return {
@@ -149,6 +159,7 @@ export function summarizeBackfill(rows: readonly BackfillPlanRow[]): BackfillSum
     SKIP_INTERESTED: 0,
     SKIP_MISSING_LINE_CHAT_USER_ID: 0,
     SKIP_INCOMPLETE_PURCHASE_DATA: 0,
+    SKIP_INCOMPLETE_FILM_DATA: 0,
     SKIP_NO_NICKNAME_NEEDED: 0,
   };
 
@@ -163,6 +174,7 @@ export function summarizeBackfill(rows: readonly BackfillPlanRow[]): BackfillSum
     totalConversations: rows.length,
     onlineCount: rows.filter((row) => row.salesStatus === CustomerSalesStatus.ONLINE).length,
     purchasedCount: rows.filter((row) => row.salesStatus === CustomerSalesStatus.PURCHASED).length,
+    filmCount: rows.filter((row) => row.salesStatus === CustomerSalesStatus.FILM).length,
     interestedCount: rows.filter((row) => row.salesStatus === CustomerSalesStatus.INTERESTED).length,
     withLineChatUserId: rows.filter((row) => row.lineChatUserIdPresent).length,
     missingLineChatUserId: rows.filter((row) => !row.lineChatUserIdPresent).length,
@@ -228,6 +240,7 @@ export async function loadPilotBackfillPlan(
       id: true,
       lineOfficialAccountId: true,
       customerSalesStatus: true,
+      filmBrand: true,
       paymentMethod: true,
       salesRecordedAt: true,
       lineChatUserId: true,
@@ -255,6 +268,7 @@ export async function loadPilotBackfillPlan(
     id: conversation.id,
     displayName: conversation.customer.displayName,
     customerSalesStatus: conversation.customerSalesStatus,
+    filmBrand: conversation.filmBrand,
     paymentMethod: conversation.paymentMethod,
     salesRecordedAt: conversation.salesRecordedAt,
     lineChatUserId: conversation.lineChatUserId,
@@ -334,6 +348,7 @@ export function formatPilotBackfillReport(plan: PilotBackfillPlan, apply: boolea
     `Total conversations       : ${summary.totalConversations}`,
     `ONLINE                   : ${summary.onlineCount}`,
     `PURCHASED                : ${summary.purchasedCount}`,
+    `FILM                     : ${summary.filmCount}`,
     `INTERESTED               : ${summary.interestedCount}`,
     `With lineChatUserId      : ${summary.withLineChatUserId}`,
     `Missing lineChatUserId   : ${summary.missingLineChatUserId}`,
@@ -342,6 +357,7 @@ export function formatPilotBackfillReport(plan: PilotBackfillPlan, apply: boolea
     `  SKIP_INTERESTED        : ${summary.skippedByReason.SKIP_INTERESTED}`,
     `  SKIP_MISSING_LINE_CHAT_USER_ID: ${summary.skippedByReason.SKIP_MISSING_LINE_CHAT_USER_ID}`,
     `  SKIP_INCOMPLETE_PURCHASE: ${summary.skippedByReason.SKIP_INCOMPLETE_PURCHASE_DATA}`,
+    `  SKIP_INCOMPLETE_FILM_DATA: ${summary.skippedByReason.SKIP_INCOMPLETE_FILM_DATA}`,
     `  SKIP_NO_NICKNAME_NEEDED: ${summary.skippedByReason.SKIP_NO_NICKNAME_NEEDED}`,
     "---------------------------------------------------------------",
     "conversationId | displayName | salesStatus | targetNickname | lineChatUserId? | classification",

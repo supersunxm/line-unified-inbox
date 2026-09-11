@@ -460,6 +460,7 @@ class _InboxPageState extends State<InboxPage> {
     final sales = detail.customerSalesInformation;
     return CustomerSalesSummary.fromData(
       status: sales?.status,
+      filmBrand: sales?.filmBrand,
       interestLevel: sales?.interestLevel,
       products: sales?.products.map((product) => CustomerSalesSummaryProduct(
                 modelName: product.modelName,

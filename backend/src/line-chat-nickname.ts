@@ -1,7 +1,8 @@
 export const MAX_LINE_CHAT_NICKNAME_LENGTH = 20;
 
 export type LineChatNicknameInput = {
-  status?: "ONLINE" | "INTERESTED" | "PURCHASED" | null;
+  status?: "ONLINE" | "INTERESTED" | "PURCHASED" | "FILM" | null;
+  filmBrand?: string | null;
   paymentMethod?: "CASH" | "INSTALLMENT" | "CREDIT_CARD" | "OTHER" | null;
   recordedAt?: Date | string | null;
   products?: readonly {
@@ -18,6 +19,24 @@ const BANGKOK_MONTH_YEAR = new Intl.DateTimeFormat("en-GB", {
 
 function conciseModelName(value: string): string {
   return value.trim().replace(/^OPPO\s+/i, "");
+}
+
+function compactFilmBrandToFit(rawBrand: string, suffix: string): string {
+  const brand = rawBrand.trim().replace(/\s+/g, " ").replaceAll("/", "");
+  if (`Film/${brand}${suffix}`.length <= MAX_LINE_CHAT_NICKNAME_LENGTH) {
+    return brand;
+  }
+
+  const withoutSpaces = brand.replaceAll(" ", "");
+  if (`Film/${withoutSpaces}${suffix}`.length <= MAX_LINE_CHAT_NICKNAME_LENGTH) {
+    return withoutSpaces;
+  }
+
+  const brandBudget = Math.max(
+    0,
+    MAX_LINE_CHAT_NICKNAME_LENGTH - "Film/".length - suffix.length,
+  );
+  return withoutSpaces.slice(0, brandBudget);
 }
 
 /**
@@ -87,9 +106,10 @@ export function compactModelNameToFit(
  * Business rules:
  * - ONLINE -> "Online"
  * - PURCHASED -> "<compactModel> <สด|ผ่อน> <MM/YY>"
+ * - FILM -> "Film/<compactBrand>/<MM/YY>"
  * - Other states do not change the LINE nickname.
- * - Guarantees output length <= 20 characters while preserving model identity,
- *   payment method (สด/ผ่อน), and month/year (MM/YY).
+ * - Guarantees output length <= 20 characters while preserving the status
+ *   prefix and month/year; only the model or brand segment may be compacted.
  *
  * The purchase date is the persisted sales record timestamp, not the client
  * clock. Month/year is rendered in the Thailand business timezone so Railway
@@ -97,6 +117,23 @@ export function compactModelNameToFit(
  */
 export function buildLineChatNickname(input: LineChatNicknameInput): string | null {
   if (input.status === "ONLINE") return "Online";
+  if (input.status === "FILM") {
+    const filmBrand = input.filmBrand?.trim();
+    if (!filmBrand) return null;
+
+    if (!input.recordedAt) return null;
+    const recordedAt = input.recordedAt instanceof Date ? input.recordedAt : new Date(input.recordedAt);
+    if (Number.isNaN(recordedAt.getTime())) return null;
+
+    const parts = BANGKOK_MONTH_YEAR.formatToParts(recordedAt);
+    const month = parts.find((part) => part.type === "month")?.value;
+    const year = parts.find((part) => part.type === "year")?.value;
+    if (!month || !year) return null;
+
+    const suffix = `/${month}/${year}`;
+    const compactBrand = compactFilmBrandToFit(filmBrand, suffix);
+    return compactBrand ? `Film/${compactBrand}${suffix}` : null;
+  }
   if (input.status !== "PURCHASED") return null;
 
   const firstProduct = input.products?.[0];

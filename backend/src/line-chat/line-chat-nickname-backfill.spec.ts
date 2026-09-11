@@ -27,6 +27,7 @@ function conversation(
     id: "conversation-1",
     displayName: "Test Customer",
     customerSalesStatus: CustomerSalesStatus.ONLINE,
+    filmBrand: null,
     paymentMethod: null,
     salesRecordedAt: null,
     lineChatUserId: "Uchat_user_1",
@@ -49,6 +50,7 @@ function readOnlyPrisma(conversations: readonly BackfillConversationInput[]): Pr
     id: item.id,
     lineOfficialAccountId: "oa-28375",
     customerSalesStatus: item.customerSalesStatus,
+    filmBrand: item.filmBrand,
     paymentMethod: item.paymentMethod,
     salesRecordedAt: item.salesRecordedAt,
     lineChatUserId: item.lineChatUserId,
@@ -100,6 +102,28 @@ test("historical PURCHASED INSTALLMENT targets model plus Thai payment label", (
 
   assert.equal(row.classification, "WOULD_ENQUEUE_PURCHASED");
   assert.equal(row.targetNickname, "Reno14Pro ผ่อน 08/26");
+});
+
+test("historical FILM classification targets Film brand nickname", () => {
+  const row = classifyBackfillConversation(conversation({
+    customerSalesStatus: CustomerSalesStatus.FILM,
+    filmBrand: "Samsung",
+    salesRecordedAt: new Date("2026-08-31T17:30:00.000Z"),
+  }));
+
+  assert.equal(row.classification, "WOULD_ENQUEUE_FILM");
+  assert.equal(row.targetNickname, "Film/Samsung/09/26");
+});
+
+test("historical FILM without a brand is skipped as incomplete", () => {
+  const row = classifyBackfillConversation(conversation({
+    customerSalesStatus: CustomerSalesStatus.FILM,
+    filmBrand: null,
+    salesRecordedAt: new Date("2026-08-31T17:30:00.000Z"),
+  }));
+
+  assert.equal(row.classification, "SKIP_INCOMPLETE_FILM_DATA");
+  assert.equal(row.targetNickname, null);
 });
 
 test("INTERESTED and no sales status are skipped without nickname changes", () => {

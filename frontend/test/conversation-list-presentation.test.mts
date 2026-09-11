@@ -79,6 +79,22 @@ test("getBmCustomerSalesTags renders the ONLINE customer status", () => {
   ]);
 });
 
+test("getBmCustomerSalesTags renders the FILM status and brand without purchase fields", () => {
+  const tags = getBmCustomerSalesTags({
+    status: "FILM",
+    filmBrand: "Samsung",
+    interestLevel: null,
+    purchaseChannel: null,
+    paymentMethod: null,
+    products: [],
+  });
+  assert.deepEqual(tags.map(({ kind, label }) => ({ kind, label })), [
+    { kind: "salesStatus", label: "FILM" },
+    { kind: "filmBrand", label: "Samsung" },
+  ]);
+  assert.match(getBmTagChipClass(tags[0]), /violet/);
+});
+
 test("getBmCustomerSalesTags generates PURCHASED with model, variant, store channel, and payment method", () => {
   const sales: ApiCustomerSalesInformation = {
     status: "PURCHASED",

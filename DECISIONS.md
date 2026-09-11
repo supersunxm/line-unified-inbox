@@ -2248,3 +2248,11 @@ Keep `StoreMaster.tiktokProfileUrl` as the only persisted TikTok profile URL. Po
 - `customer-voice-rules-v1` identifies the original 25-row pilot output. The refined deterministic ruleset is explicitly `customer-voice-rules-v2`; historical rows are not renamed or overwritten.
 - Version-aware worker/backfill selection considers only the deployed current version for normal idempotency. A v1-only conversation is therefore eligible for an intentional v2 reprocess, while an unchanged v2 checkpoint is skipped unless a newer inbound message exists.
 - Keep the existing `(conversationId, analysisVersion)` uniqueness model. It intentionally retains v1 and v2 provenance as separate version rows during reprocessing; no schema migration or destructive cleanup is required. Store Insights and Customer Voice aggregation consume the current v2 version.
+
+## 2026-09-11: FILM customer tagging and LINE nickname sync
+
+- Model FILM as a dedicated `CustomerSalesStatus` enum value and `Conversation.filmBrand` field. Do not overload ONLINE or PURCHASED, so existing sales semantics and reporting remain stable.
+- Require one non-blank brand for FILM. The backend is authoritative: a FILM update clears interest, source channels, payment/installment fields, products, and purchase provenance; switching to any other status clears `filmBrand`. The UI mirrors those rules and reconciles its draft from the server response.
+- Keep the existing nickname queue, latest-wins deduplication, retries, and rollout gates. FILM nickname construction is `Film/<Brand>/MM/YY`, using persisted `salesRecordedAt` formatted in `Asia/Bangkok`; only the brand segment may be whitespace-compacted or truncated to preserve the `Film/` prefix, date suffix, and 20-character limit.
+- Extend historical nickname classification and chat mapping to include FILM, while skipping incomplete historical rows. This keeps backfill behavior explicit and preserves the existing ONLINE/PURCHASED paths.
+- Use an additive Prisma migration for the enum value and nullable brand column. Local deployment remains blocked by the unrelated recorded failed Google Review migration, so no migration recovery or production schema change was attempted in this task.

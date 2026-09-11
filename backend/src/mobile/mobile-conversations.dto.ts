@@ -1,6 +1,6 @@
 import { BmReplyStatus, ConversationSourceChannel, CustomerInterestLevel, CustomerSalesStatus, PaymentMethodType, ProductGroup } from "@prisma/client";
 import { Type } from "class-transformer";
-import { ArrayMaxSize, IsArray, IsBoolean, IsEnum, IsIn, IsInt, IsOptional, IsString, IsUUID, Matches, Max, MaxLength, Min, ValidateNested } from "class-validator";
+import { ArrayMaxSize, IsArray, IsBoolean, IsEnum, IsIn, IsInt, IsNotEmpty, IsOptional, IsString, IsUUID, Matches, Max, MaxLength, Min, ValidateIf, ValidateNested } from "class-validator";
 
 export class MobileConversationQueryDto {
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) page = 1;
@@ -61,6 +61,12 @@ export class SalesProductItemDto {
 
 export class UpdateCustomerSalesInformationDto {
   @IsOptional() @IsEnum(CustomerSalesStatus) status?: CustomerSalesStatus | null;
+  @ValidateIf((dto: UpdateCustomerSalesInformationDto) => dto.status === CustomerSalesStatus.FILM || dto.filmBrand != null)
+  @IsString()
+  @MaxLength(100)
+  @IsNotEmpty()
+  @Matches(/\S/)
+  filmBrand?: string | null;
   @IsOptional() @IsEnum(CustomerInterestLevel) interestLevel?: CustomerInterestLevel | null;
   @IsOptional() @ArrayMaxSize(2) @IsEnum(ConversationSourceChannel, { each: true }) purchaseChannel?: ConversationSourceChannel[];
   @IsOptional() @IsEnum(PaymentMethodType) paymentMethod?: PaymentMethodType | null;

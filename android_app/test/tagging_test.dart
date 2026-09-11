@@ -55,6 +55,7 @@ class _FakeTagRepository extends ConversationRepository {
   Future<ConversationDetail> updateCustomerSalesInfo(
     String id, {
     Object? status = const Object(),
+    Object? filmBrand = const Object(),
     Object? interestLevel = const Object(),
     Object? purchaseChannel = const Object(),
     Object? paymentMethod = const Object(),
@@ -63,6 +64,7 @@ class _FakeTagRepository extends ConversationRepository {
     saveCallCount++;
     currentSales = CustomerSalesInformation(
       status: status is String ? status : 'INTERESTED',
+      filmBrand: filmBrand is String ? filmBrand : null,
       interestLevel: interestLevel is String ? interestLevel : null,
       purchaseChannel: purchaseChannel is List
           ? purchaseChannel.whereType<String>().toList()
@@ -210,6 +212,100 @@ void main() {
     await openSheet();
     await selectAndSave('Purchased');
     expect(repository.currentSales?.status, 'PURCHASED');
+  });
+
+  testWidgets(
+      'CRM sales sheet requires a brand for Film and persists Film data',
+      (tester) async {
+    tester.view.physicalSize = const Size(1080, 2200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final repository = _FakeTagRepository();
+    await tester.pumpWidget(MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: Scaffold(
+        body: ConversationTagsSheet(
+          conversationId: 'conversation-film',
+          repository: repository,
+          initialTags: const ConversationTags(),
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Film'));
+    await tester.pumpAndSettle();
+    expect(find.text('Phone Brand'), findsOneWidget);
+    expect(find.text('+ Add Product'), findsNothing);
+    expect(find.text('Purchase Channel'), findsNothing);
+
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    expect(find.text('Select or enter a phone brand before saving.'),
+        findsAtLeastNWidgets(1));
+    expect(repository.saveCallCount, 0);
+
+    final filmBrandSelector = find.byType(DropdownButtonFormField<String>);
+    await tester.tap(filmBrandSelector);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Samsung').last);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    expect(find.text('🛡️ Film'), findsOneWidget);
+    await tester.tap(find.text('Confirm Save'));
+    await tester.pumpAndSettle();
+
+    expect(repository.currentSales?.status, 'FILM');
+    expect(repository.currentSales?.filmBrand, 'Samsung');
+    expect(repository.currentSales?.interestLevel, isNull);
+    expect(repository.currentSales?.purchaseChannel, isEmpty);
+    expect(repository.currentSales?.paymentMethod, isNull);
+    expect(repository.currentSales?.products, isEmpty);
+  });
+
+  testWidgets('changing away from Film clears the selected brand',
+      (tester) async {
+    tester.view.physicalSize = const Size(1080, 2200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final repository = _FakeTagRepository();
+    const savedFilm = CustomerSalesInformation(
+      status: 'FILM',
+      filmBrand: 'OPPO',
+      purchaseChannel: [],
+      products: [],
+    );
+    await tester.pumpWidget(MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: Scaffold(
+        body: ConversationTagsSheet(
+          conversationId: 'conversation-film-switch',
+          repository: repository,
+          initialTags: const ConversationTags(),
+          initialSalesInfo: savedFilm,
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    expect(find.text('OPPO'), findsOneWidget);
+    await tester.tap(find.text('Online'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Confirm Save'));
+    await tester.pumpAndSettle();
+
+    expect(repository.currentSales?.status, 'ONLINE');
+    expect(repository.currentSales?.filmBrand, isNull);
   });
 
   testWidgets(

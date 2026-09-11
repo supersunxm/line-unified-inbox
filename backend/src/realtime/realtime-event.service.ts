@@ -23,6 +23,7 @@ export type RealtimeEvent = {
     customerPictureUrl?: string | null;
     customerSalesSummary?: {
       status: string | null;
+      filmBrand: string | null;
       interestLevel: string | null;
       products: Array<{ modelName: string; quantity: number }>;
     } | null;

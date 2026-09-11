@@ -31,6 +31,7 @@ class _ProductPickerRepository extends ConversationRepository {
   Future<ConversationDetail> updateCustomerSalesInfo(
     String id, {
     Object? status = const Object(),
+    Object? filmBrand = const Object(),
     Object? interestLevel = const Object(),
     Object? purchaseChannel = const Object(),
     Object? paymentMethod = const Object(),

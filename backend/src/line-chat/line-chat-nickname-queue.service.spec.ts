@@ -51,6 +51,45 @@ void test("enqueueSalesSync creates Online job when status is ONLINE", async () 
   assert.equal(createdJobs[0].status, LineChatNicknameSyncJobStatus.PENDING);
 });
 
+void test("enqueueSalesSync creates a Film job with the structured brand", async () => {
+  const createdJobs: Array<Record<string, unknown>> = [];
+  const prisma = {
+    conversation: {
+      findUnique: async () => ({
+        id: "conv-film",
+        lineOfficialAccountId: "oa-1",
+        lineChatUserId: "Uchat_user_film",
+        lineOfficialAccount: {
+          id: "oa-1",
+          chatBotId: "U092441d025f688e389d25779dd8debf4",
+          lineChatSessionId: "sess-1",
+          lineChatNicknameSyncEnabled: true,
+          lineChatSession: { id: "sess-1", sessionKey: "profile-a", status: "ACTIVE" },
+        },
+        customerSalesStatus: CustomerSalesStatus.FILM,
+        filmBrand: "Samsung",
+        paymentMethod: null,
+        salesRecordedAt: new Date("2026-08-31T17:30:00.000Z"),
+        salesProducts: [],
+      }),
+    },
+    lineChatNicknameSyncJob: {
+      updateMany: async () => ({ count: 0 }),
+      create: async (args: { data: Record<string, unknown> }) => {
+        createdJobs.push(args.data);
+        return { id: "job-film", ...args.data };
+      },
+    },
+  };
+
+  const service = new LineChatNicknameQueueService(prisma as never);
+  const result = await service.enqueueSalesSync("conv-film");
+
+  assert.equal(result.enqueued, true);
+  assert.equal(result.nickname, "Film/Samsung/09/26");
+  assert.equal(createdJobs[0]?.nickname, "Film/Samsung/09/26");
+});
+
 void test("enqueueSalesSync creates Cash purchase nickname job with Bangkok MM/YY", async () => {
   const createdJobs: Array<Record<string, unknown>> = [];
 
@@ -524,4 +563,3 @@ void test("enqueueSalesSync: Existing mapped customer bypasses resolver check an
   assert.equal(result.enqueued, true);
   assert.equal(createdJob?.lineChatUserId, "U_already_mapped_chat_user");
 });
-

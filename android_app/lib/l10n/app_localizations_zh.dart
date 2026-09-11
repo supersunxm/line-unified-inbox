@@ -428,6 +428,21 @@ class AppLocalizationsZh extends AppLocalizations {
   String get statusPurchased => '已购买';
 
   @override
+  String get statusFilm => '贴膜';
+
+  @override
+  String get filmBrand => '手机品牌';
+
+  @override
+  String get selectFilmBrand => '选择手机品牌';
+
+  @override
+  String get customFilmBrand => '自定义手机品牌';
+
+  @override
+  String get filmBrandRequired => '保存前请选择或输入手机品牌。';
+
+  @override
   String get interestLevel => '意向程度';
 
   @override
@@ -1414,6 +1429,21 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
 
   @override
   String get statusPurchased => '已购买';
+
+  @override
+  String get statusFilm => '贴膜';
+
+  @override
+  String get filmBrand => '手机品牌';
+
+  @override
+  String get selectFilmBrand => '选择手机品牌';
+
+  @override
+  String get customFilmBrand => '自定义手机品牌';
+
+  @override
+  String get filmBrandRequired => '保存前请选择或输入手机品牌。';
 
   @override
   String get interestLevel => '意向程度';

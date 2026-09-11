@@ -90,6 +90,7 @@ export class MobileConversationsService {
           store: { select: { id: true, name: true, code: true } },
           owner: { select: { id: true, displayName: true, isActive: true, status: true, role: true, canAccessAllStores: true, memberships: { where: { status: "ACTIVE", store: { isActive: true, archivedAt: null } }, select: { storeId: true } } } },
           customerSalesStatus: true,
+          filmBrand: true,
           interestLevel: true,
           salesProducts: {
             select: {
@@ -118,6 +119,7 @@ export class MobileConversationsService {
           ownerTracked: (item._count?.messages ?? 0) > 0,
           customerSalesSummary: {
             status: item.customerSalesStatus,
+            filmBrand: item.filmBrand ?? null,
             interestLevel: item.interestLevel,
             products: (item.salesProducts ?? []).map((product) => ({
               modelName: product.customProductName?.trim() || product.productModel?.name || "Product",
@@ -158,6 +160,7 @@ export class MobileConversationsService {
         sourceChannels: true,
         isInstallment: true,
         customerSalesStatus: true,
+        filmBrand: true,
         interestLevel: true,
         paymentMethod: true,
         productRelationship: true,
@@ -477,6 +480,7 @@ export class MobileConversationsService {
         select: {
           id: true,
           customerSalesStatus: true,
+          filmBrand: true,
           salesRecordedAt: true,
           interestLevel: true,
           paymentMethod: true,
@@ -507,6 +511,21 @@ export class MobileConversationsService {
 
       if (dto.status !== undefined) {
         conversationUpdate.customerSalesStatus = dto.status;
+        if (dto.status === CustomerSalesStatus.FILM) {
+          const filmBrand = dto.filmBrand?.trim();
+          if (!filmBrand) {
+            throw new BadRequestException("filmBrand is required when status is FILM");
+          }
+          conversationUpdate.filmBrand = filmBrand;
+          conversationUpdate.interestLevel = null;
+          conversationUpdate.sourceChannels = [];
+          conversationUpdate.paymentMethod = null;
+          conversationUpdate.isInstallment = false;
+        } else {
+          // Film is a distinct tagging flow. Changing to any other status
+          // removes its brand rather than carrying it into another state.
+          conversationUpdate.filmBrand = null;
+        }
         if (dto.status === CustomerSalesStatus.ONLINE) {
           // Online is an inquiry state, not a confirmed purchase. Clear
           // purchase-only fields even when older clients omit them.
@@ -517,27 +536,32 @@ export class MobileConversationsService {
         }
       }
       if (dto.interestLevel !== undefined) {
-        conversationUpdate.interestLevel = dto.status === "PURCHASED" || dto.status === "ONLINE" ? null : dto.interestLevel;
+        conversationUpdate.interestLevel = dto.status === "PURCHASED" || dto.status === "ONLINE" || dto.status === CustomerSalesStatus.FILM ? null : dto.interestLevel;
       }
       if (dto.purchaseChannel !== undefined) {
-        conversationUpdate.sourceChannels = dto.status === "ONLINE" ? [] : dto.purchaseChannel;
+        conversationUpdate.sourceChannels = dto.status === "ONLINE" || dto.status === CustomerSalesStatus.FILM ? [] : dto.purchaseChannel;
       }
       if (dto.paymentMethod !== undefined) {
-        conversationUpdate.paymentMethod = dto.status === "ONLINE" ? null : dto.paymentMethod;
-        conversationUpdate.isInstallment = dto.status === "ONLINE" ? false : dto.paymentMethod === "INSTALLMENT";
+        conversationUpdate.paymentMethod = dto.status === "ONLINE" || dto.status === CustomerSalesStatus.FILM ? null : dto.paymentMethod;
+        conversationUpdate.isInstallment = dto.status === "ONLINE" || dto.status === CustomerSalesStatus.FILM ? false : dto.paymentMethod === "INSTALLMENT";
       }
 
       conversationUpdate.salesRecordedAt = recordedAt;
       conversationUpdate.salesRecordedBy = { connect: { id: user.id } };
-      conversationUpdate.purchaseRecordedAt = recordedAt;
-      conversationUpdate.purchaseRecordedBy = { connect: { id: user.id } };
+      if (dto.status === CustomerSalesStatus.FILM) {
+        conversationUpdate.purchaseRecordedAt = null;
+        conversationUpdate.purchaseRecordedBy = { disconnect: true };
+      } else {
+        conversationUpdate.purchaseRecordedAt = recordedAt;
+        conversationUpdate.purchaseRecordedBy = { connect: { id: user.id } };
+      }
 
       await tx.conversation.update({
         where: { id: conversationId },
         data: conversationUpdate,
       });
 
-      if (dto.products !== undefined) {
+      if (dto.products !== undefined || dto.status === CustomerSalesStatus.FILM) {
         const validatedProducts: Array<{
           productModelId: string;
           productVariantId: string | null;
@@ -549,7 +573,7 @@ export class MobileConversationsService {
           status: CustomerSalesStatus;
         }> = [];
 
-        for (const p of dto.products) {
+        for (const p of dto.status === CustomerSalesStatus.FILM ? [] : dto.products ?? []) {
           const model = await tx.productModel.findFirst({
             where: { id: p.productModelId, isActive: true },
             select: { id: true, name: true },
@@ -635,9 +659,9 @@ export class MobileConversationsService {
       }
 
       const nextPurchase = purchaseSnapshot({
-        sourceChannels: dto.status === CustomerSalesStatus.ONLINE ? [] : dto.purchaseChannel ?? conversation.sourceChannels ?? [],
-        isInstallment: dto.status === CustomerSalesStatus.ONLINE ? false : dto.paymentMethod === "INSTALLMENT" || (conversation.isInstallment ?? false),
-        products: dto.products ? dto.products.map((p) => ({ productModelId: p.productModelId, productVariantId: p.productVariantId ?? null })) : (conversation.products ?? []),
+        sourceChannels: dto.status === CustomerSalesStatus.ONLINE || dto.status === CustomerSalesStatus.FILM ? [] : dto.purchaseChannel ?? conversation.sourceChannels ?? [],
+        isInstallment: dto.status === CustomerSalesStatus.ONLINE || dto.status === CustomerSalesStatus.FILM ? false : dto.paymentMethod === "INSTALLMENT" || (conversation.isInstallment ?? false),
+        products: dto.status === CustomerSalesStatus.FILM ? [] : dto.products ? dto.products.map((p) => ({ productModelId: p.productModelId, productVariantId: p.productVariantId ?? null })) : (conversation.products ?? []),
       });
 
       const isConversion = conversation.customerSalesStatus === CustomerSalesStatus.INTERESTED && dto.status === CustomerSalesStatus.PURCHASED;
@@ -653,11 +677,13 @@ export class MobileConversationsService {
             ? "Converted from Interested lead to Purchased customer"
             : dto.status === "PURCHASED"
               ? "Purchase information updated"
-              : "Customer sales information updated",
+              : dto.status === CustomerSalesStatus.FILM
+                ? "Film customer information updated"
+                : "Customer sales information updated",
           createdByUserId: user.id,
           createdByName: user.displayName?.trim() || user.email,
           metadata: {
-            category: dto.status === "PURCHASED" ? "PURCHASE_INFORMATION" : "CUSTOMER_SALES_INFO",
+            category: dto.status === "PURCHASED" ? "PURCHASE_INFORMATION" : dto.status === CustomerSalesStatus.FILM ? "FILM_INFORMATION" : "CUSTOMER_SALES_INFO",
             oldValue: previousPurchase,
             newValue: nextPurchase,
             status: dto.status,
@@ -738,6 +764,7 @@ function decodeCursor(value: string): { sentAt: Date; id: string } | null { try 
 
 function compactSalesSummary(information: {
   status?: string | null;
+  filmBrand?: string | null;
   interestLevel?: string | null;
   products?: readonly { model?: { name?: string | null } | null; customProductName?: string | null; quantity?: number | null }[] | null;
 } | null | undefined) {
@@ -750,6 +777,7 @@ function compactSalesSummary(information: {
   if (!information.status && products.length === 0) return null;
   return {
     status: information.status ?? null,
+    filmBrand: information.filmBrand ?? null,
     interestLevel: information.interestLevel ?? null,
     products,
   };
