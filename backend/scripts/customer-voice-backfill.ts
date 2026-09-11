@@ -3,6 +3,7 @@ import type { PrismaService } from "../src/prisma.service";
 import { bangkokDateRangeToUtcBounds } from "../src/follower-insights/date-utils";
 import { CustomerVoiceService } from "../src/store-insights/customer-voice.service";
 import { CUSTOMER_VOICE_ANALYSIS_VERSION } from "../src/store-insights/customer-voice-taxonomy";
+import { shouldAnalyzeCustomerVoiceConversation } from "../src/store-insights/customer-voice-versioning";
 
 const prisma = new PrismaClient();
 
@@ -62,7 +63,7 @@ async function main() {
       },
       customerVoiceAnalyses: {
         where: { analysisVersion: CUSTOMER_VOICE_ANALYSIS_VERSION },
-        select: { lastAnalyzedMessageAt: true },
+        select: { analysisVersion: true, lastAnalyzedMessageAt: true },
       },
     },
     orderBy: [{ latestMessageAt: "asc" }, { id: "asc" }],
@@ -70,8 +71,7 @@ async function main() {
   });
   const pending = scanned.filter((candidate) => {
     const latestInbound = candidate.messages[0]?.sentAt;
-    const lastAnalyzed = candidate.customerVoiceAnalyses[0]?.lastAnalyzedMessageAt;
-    return !lastAnalyzed || !latestInbound || latestInbound > lastAnalyzed;
+    return shouldAnalyzeCustomerVoiceConversation(latestInbound, candidate.customerVoiceAnalyses[0], CUSTOMER_VOICE_ANALYSIS_VERSION);
   });
   const candidates = pending.slice(0, limit);
   if (dryRun) {

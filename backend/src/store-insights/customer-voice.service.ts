@@ -217,7 +217,7 @@ function toRow(row: { source: CustomerVoiceAnalysisSource; primaryTopic: string 
 }
 
 function modelNameForAnalysis(draft: CustomerVoiceAnalysisDraft): string {
-  return draft.source === CustomerVoiceAnalysisSource.AI_CLASSIFIED ? "ai" : "rules-v1";
+  return draft.source === CustomerVoiceAnalysisSource.AI_CLASSIFIED ? "ai" : CUSTOMER_VOICE_ANALYSIS_VERSION.replace("customer-voice-", "");
 }
 
 @Injectable()

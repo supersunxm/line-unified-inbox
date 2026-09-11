@@ -2235,3 +2235,9 @@ Keep `StoreMaster.tiktokProfileUrl` as the only persisted TikTok profile URL. Po
 - Keep the existing compact intent enum. Use `INFORMATION` for store-contact/product-information topics and retain topic priority when multiple deterministic signals coexist; do not introduce purchase scoring or Phase 2B semantics.
 - Model product family versus exact model without a schema migration: if an exact MODEL and FAMILY match share the same Product Series, report the exact model only. Report the family only when no exact model is recognized. Existing product catalog rows remain unchanged.
 - Continue treating persisted ConversationTopic as a read-only hint with `EXISTING_TOPIC`/`MIXED_ENRICHED` provenance. This refinement performs aggregate-only dry runs against the existing pilot cohort and does not update its 25 persisted rows.
+
+## 2026-09-11: Version refined Customer Voice rules as v2
+
+- `customer-voice-rules-v1` identifies the original 25-row pilot output. The refined deterministic ruleset is explicitly `customer-voice-rules-v2`; historical rows are not renamed or overwritten.
+- Version-aware worker/backfill selection considers only the deployed current version for normal idempotency. A v1-only conversation is therefore eligible for an intentional v2 reprocess, while an unchanged v2 checkpoint is skipped unless a newer inbound message exists.
+- Keep the existing `(conversationId, analysisVersion)` uniqueness model. It intentionally retains v1 and v2 provenance as separate version rows during reprocessing; no schema migration or destructive cleanup is required. Store Insights and Customer Voice aggregation consume the current v2 version.

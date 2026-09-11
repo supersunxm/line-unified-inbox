@@ -1,6 +1,7 @@
 import { topicRules } from "../classification/topic-rules";
 
-export const CUSTOMER_VOICE_ANALYSIS_VERSION = "customer-voice-rules-v1" as const;
+/** Current deterministic ruleset. Historical v1 rows remain identifiable and immutable. */
+export const CUSTOMER_VOICE_ANALYSIS_VERSION = "customer-voice-rules-v2" as const;
 
 export const CUSTOMER_VOICE_TOPIC_LABELS = [
   "Price Inquiry",
