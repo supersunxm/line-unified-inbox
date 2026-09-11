@@ -2276,3 +2276,8 @@ Keep `StoreMaster.tiktokProfileUrl` as the only persisted TikTok profile URL. Po
 - Use the next distinct Android release `1.1.19+39` so the FILM artifact does not collide with the existing `1.1.18` download filename. Keep the change limited to Android release readiness.
 - Preserve the Gradle signing gate. A missing `android/key.properties` or private keystore must block signed builds; the explicit `ciUnsignedRelease` path is verification-only and must not be published as the production download artifact.
 - Resolve this machine's Flutter JDK mismatch through Flutter configuration to the installed Temurin JDK 17. Keep the `android.newDsl=true` compatibility override command-scoped for this build environment; do not change app or backend source to conceal the signing blocker.
+
+## 2026-09-11: Store 360 Export uses a namespace import for ExcelJS
+
+- The backend is compiled as CommonJS without TypeScript `esModuleInterop`; `exceljs` exposes `Workbook` as a named CommonJS export in the Railway runtime. Use `import * as ExcelJS from "exceljs"` so the production workbook path resolves identically to the local test path.
+- This is a runtime-compatibility fix only. It does not change the export schema, Customer Voice versioning, authorization boundary, database schema, worker flag, or production data behavior.

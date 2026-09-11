@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { MessageDirection, Prisma } from "@prisma/client";
-import ExcelJS from "exceljs";
+import * as ExcelJS from "exceljs";
 import { createHash } from "node:crypto";
 import type { AuthUser } from "../auth/auth.guard";
 import { StoreAccessService } from "../auth/store-access.service";
