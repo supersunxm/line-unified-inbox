@@ -911,6 +911,36 @@ abstract class AppLocalizations {
   /// **'Purchased'**
   String get statusPurchased;
 
+  /// No description provided for @statusFilm.
+  ///
+  /// In en, this message translates to:
+  /// **'Film'**
+  String get statusFilm;
+
+  /// No description provided for @filmBrand.
+  ///
+  /// In en, this message translates to:
+  /// **'Phone Brand'**
+  String get filmBrand;
+
+  /// No description provided for @selectFilmBrand.
+  ///
+  /// In en, this message translates to:
+  /// **'Select phone brand'**
+  String get selectFilmBrand;
+
+  /// No description provided for @customFilmBrand.
+  ///
+  /// In en, this message translates to:
+  /// **'Custom phone brand'**
+  String get customFilmBrand;
+
+  /// No description provided for @filmBrandRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Select or enter a phone brand before saving.'**
+  String get filmBrandRequired;
+
   /// No description provided for @interestLevel.
   ///
   /// In en, this message translates to:

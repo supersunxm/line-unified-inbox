@@ -54,7 +54,8 @@ export type ConversationContractSalesProduct = {
 };
 
 export type CustomerSalesInformationContract = {
-  status: "ONLINE" | "INTERESTED" | "PURCHASED" | null;
+  status: "ONLINE" | "INTERESTED" | "PURCHASED" | "FILM" | null;
+  filmBrand: string | null;
   interestLevel: "HOT" | "WARM" | "COLD" | null;
   purchaseChannel: string[];
   paymentMethod: "CASH" | "INSTALLMENT" | "CREDIT_CARD" | "OTHER" | null;
@@ -69,7 +70,7 @@ export type CustomerSalesInformationContract = {
     rom: string | null;
     color: string | null;
     quantity: number;
-    status: "ONLINE" | "INTERESTED" | "PURCHASED";
+    status: "ONLINE" | "INTERESTED" | "PURCHASED" | "FILM";
   }>;
   recordedBy: string | null;
   recordedAt: string | null;
@@ -135,6 +136,7 @@ export function normalizeProductDisplayName(name: string): string {
 
 export function buildCustomerSalesInformation(input: {
   customerSalesStatus?: string | null;
+  filmBrand?: string | null;
   interestLevel?: string | null;
   sourceChannels?: readonly string[] | null;
   paymentMethod?: string | null;
@@ -157,14 +159,14 @@ export function buildCustomerSalesInformation(input: {
     input.isInstallment === true ||
     (input.sourceChannels?.length ?? 0) > 0;
   const status =
-    (input.customerSalesStatus as "ONLINE" | "INTERESTED" | "PURCHASED" | null | undefined) ??
+    (input.customerSalesStatus as "ONLINE" | "INTERESTED" | "PURCHASED" | "FILM" | null | undefined) ??
     (!hasModernSalesRecord && hasLegacyPurchaseSignal ? "PURCHASED" : null);
 
-  const interestLevel = status === "ONLINE"
+  const interestLevel = status === "ONLINE" || status === "FILM"
     ? null
     : (input.interestLevel as "HOT" | "WARM" | "COLD") || null;
   const purchaseChannel = status === "PURCHASED" ? [...(input.sourceChannels ?? [])] : [];
-  const paymentMethod = status === "ONLINE"
+  const paymentMethod = status === "ONLINE" || status === "FILM"
     ? null
     : (input.paymentMethod as "CASH" | "INSTALLMENT" | "CREDIT_CARD" | "OTHER") ||
       (status === "PURCHASED" && input.isInstallment ? "INSTALLMENT" : null);
@@ -179,7 +181,7 @@ export function buildCustomerSalesInformation(input: {
 
   let productsList: CustomerSalesInformationContract["products"] = [];
 
-  if (input.salesProducts && input.salesProducts.length > 0) {
+  if (status !== "FILM" && input.salesProducts && input.salesProducts.length > 0) {
     productsList = input.salesProducts
       .filter((sp) => sp.productModel)
       .map((sp) => {
@@ -217,10 +219,10 @@ export function buildCustomerSalesInformation(input: {
           rom: sp.rom ?? pVariant?.rom ?? null,
           color: sp.color ?? pVariant?.color ?? null,
           quantity: sp.quantity ?? 1,
-          status: (sp.status as "ONLINE" | "INTERESTED" | "PURCHASED") || status || "INTERESTED",
+          status: (sp.status as "ONLINE" | "INTERESTED" | "PURCHASED" | "FILM") || status || "INTERESTED",
         };
       });
-  } else if (input.products) {
+  } else if (status !== "FILM" && input.products) {
     const manualProducts = input.products.filter((p) => p.source === "MANUAL" && p.productModel);
     productsList = manualProducts.map((p) => ({
       id: p.productModel!.id,
@@ -251,6 +253,7 @@ export function buildCustomerSalesInformation(input: {
 
   return {
     status,
+    filmBrand: status === "FILM" ? input.filmBrand?.trim() || null : null,
     interestLevel,
     purchaseChannel,
     paymentMethod,
@@ -262,6 +265,7 @@ export function buildCustomerSalesInformation(input: {
 
 export function buildPurchaseInformation(input: {
   customerSalesStatus?: string | null;
+  filmBrand?: string | null;
   salesProducts?: readonly ConversationContractSalesProduct[] | null;
   sourceChannels?: readonly string[] | null;
   isInstallment?: boolean | null;
@@ -285,6 +289,16 @@ export function buildPurchaseInformation(input: {
   const recordState = hasValidRecordedAt ? "VERIFIED" : hasLegacyManualData ? "LEGACY_MANUAL" : "NONE";
 
   const salesInfo = buildCustomerSalesInformation(input);
+  if (salesInfo.status === "FILM") {
+    return {
+      recordState: "NONE",
+      purchaseChannel: [],
+      paymentMethod: null,
+      products: [],
+      recordedBy: null,
+      recordedAt: null,
+    };
+  }
   const verifiedProducts = hasValidRecordedAt ? salesInfo.products : [];
 
   return {

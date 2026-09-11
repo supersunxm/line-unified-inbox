@@ -27,6 +27,7 @@ void main() {
     ('ONLINE', '🌐 Online'),
     ('INTERESTED', '🎯 Interested'),
     ('PURCHASED', '🛍️ Purchased'),
+    ('FILM', '🛡️ Film'),
   ]) {
     testWidgets('conversation card renders $status sales tag', (tester) async {
       await tester.pumpWidget(_app(ConversationCard(

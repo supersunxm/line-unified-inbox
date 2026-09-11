@@ -191,6 +191,114 @@ void test("customer sales info persists Online and clears purchase-only fields",
   assert.equal(conversationUpdate?.isInstallment, false);
 });
 
+void test("customer sales info persists Film with a brand and clears non-Film fields", async () => {
+  let conversationUpdate: Record<string, unknown> | undefined;
+  let salesDeleteCount = 0;
+  let manualDeleteCount = 0;
+  let activity: { data: Record<string, unknown> } | undefined;
+  const tx = {
+    conversation: {
+      findUnique: async () => ({
+        id: "conversation-film",
+        customerSalesStatus: "PURCHASED",
+        filmBrand: null,
+        salesRecordedAt: new Date("2026-08-19T02:00:00.000Z"),
+        interestLevel: "HOT",
+        paymentMethod: "INSTALLMENT",
+        sourceChannels: ["STORE"],
+        isInstallment: true,
+        products: [{ productModelId: "model-1", productVariantId: null }],
+        salesProducts: [{ id: "sp-1", productModelId: "model-1", productVariantId: null, quantity: 1, status: "PURCHASED" }],
+      }),
+      update: async (args: { data: Record<string, unknown> }) => {
+        conversationUpdate = args.data;
+        return {};
+      },
+    },
+    conversationSalesProduct: {
+      deleteMany: async () => {
+        salesDeleteCount++;
+        return {};
+      },
+      createMany: async () => ({}),
+    },
+    conversationProduct: {
+      deleteMany: async () => {
+        manualDeleteCount++;
+        return {};
+      },
+      create: async () => ({}),
+    },
+    activityHistory: {
+      create: async (args: { data: Record<string, unknown> }) => {
+        activity = args;
+        return {};
+      },
+    },
+  };
+  const prisma = {
+    $transaction: async (callback: (client: typeof tx) => Promise<unknown>) => callback(tx),
+  };
+  const service = new MobileConversationsService(prisma as never, { assertConversationAccess: async () => "store-1" } as never, {} as never);
+  (service as unknown as { get: () => Promise<unknown> }).get = async () => ({ id: "conversation-film" });
+
+  await service.updateCustomerSalesInfo(user, "conversation-film", {
+    status: "FILM",
+    filmBrand: " Samsung ",
+    interestLevel: "HOT",
+    purchaseChannel: ["STORE"],
+    paymentMethod: "INSTALLMENT",
+    products: [],
+  });
+
+  assert.equal(conversationUpdate?.customerSalesStatus, "FILM");
+  assert.equal(conversationUpdate?.filmBrand, "Samsung");
+  assert.equal(conversationUpdate?.interestLevel, null);
+  assert.deepEqual(conversationUpdate?.sourceChannels, []);
+  assert.equal(conversationUpdate?.paymentMethod, null);
+  assert.equal(conversationUpdate?.isInstallment, false);
+  assert.equal(conversationUpdate?.purchaseRecordedAt, null);
+  assert.deepEqual(conversationUpdate?.purchaseRecordedBy, { disconnect: true });
+  assert.equal(salesDeleteCount, 1);
+  assert.equal(manualDeleteCount, 1);
+  assert.equal(activity?.data.actionType, "CUSTOMER_SALES_INFO_UPDATED");
+  assert.equal(activity?.data.description, "Film customer information updated");
+  assert.equal((activity?.data.metadata as { category?: string } | undefined)?.category, "FILM_INFORMATION");
+});
+
+void test("customer sales info rejects Film without a non-empty brand", async () => {
+  let conversationUpdateCalled = false;
+  const tx = {
+    conversation: {
+      findUnique: async () => ({
+        id: "conversation-film-invalid",
+        customerSalesStatus: null,
+        filmBrand: null,
+        salesRecordedAt: null,
+        interestLevel: null,
+        paymentMethod: null,
+        sourceChannels: [],
+        isInstallment: false,
+        products: [],
+        salesProducts: [],
+      }),
+      update: async () => {
+        conversationUpdateCalled = true;
+        return {};
+      },
+    },
+  };
+  const prisma = {
+    $transaction: async (callback: (client: typeof tx) => Promise<unknown>) => callback(tx),
+  };
+  const service = new MobileConversationsService(prisma as never, { assertConversationAccess: async () => "store-1" } as never, {} as never);
+  await assert.rejects(
+    () => service.updateCustomerSalesInfo(user, "conversation-film-invalid", { status: "FILM", filmBrand: "   " }),
+    /filmBrand is required when status is FILM/,
+  );
+  assert.equal(conversationUpdateCalled, false);
+});
+
 void test("updateCustomerSalesInfo calls nicknameQueue.enqueueSalesSync after transaction succeeds", async () => {
   let enqueuedConversationId: string | undefined;
   const tx = {

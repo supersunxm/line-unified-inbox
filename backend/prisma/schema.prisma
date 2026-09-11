@@ -44,6 +44,7 @@ enum CustomerSalesStatus {
   ONLINE
   INTERESTED
   PURCHASED
+  FILM
 }
 
 enum CustomerInterestLevel {
@@ -862,6 +863,7 @@ model Conversation {
   purchaseRecordedById  String?
   purchaseRecordedAt    DateTime?
   customerSalesStatus   CustomerSalesStatus?
+  filmBrand             String?
   interestLevel         CustomerInterestLevel?
   paymentMethod         PaymentMethodType?
   salesRecordedById     String?

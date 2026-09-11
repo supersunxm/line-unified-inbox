@@ -430,6 +430,21 @@ class AppLocalizationsTh extends AppLocalizations {
   String get statusPurchased => 'ซื้อแล้ว';
 
   @override
+  String get statusFilm => 'ติดฟิล์ม';
+
+  @override
+  String get filmBrand => 'ยี่ห้อโทรศัพท์';
+
+  @override
+  String get selectFilmBrand => 'เลือกยี่ห้อโทรศัพท์';
+
+  @override
+  String get customFilmBrand => 'ระบุยี่ห้อโทรศัพท์';
+
+  @override
+  String get filmBrandRequired => 'กรุณาเลือกหรือระบุยี่ห้อโทรศัพท์ก่อนบันทึก';
+
+  @override
   String get interestLevel => 'ระดับความสนใจ';
 
   @override

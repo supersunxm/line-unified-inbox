@@ -78,6 +78,7 @@ class CustomerSalesProductItem {
 class CustomerSalesInformation {
   const CustomerSalesInformation({
     this.status,
+    this.filmBrand,
     this.interestLevel,
     required this.purchaseChannel,
     this.paymentMethod,
@@ -87,6 +88,7 @@ class CustomerSalesInformation {
   });
 
   final String? status;
+  final String? filmBrand;
   final String? interestLevel;
   final List<String> purchaseChannel;
   final String? paymentMethod;
@@ -98,12 +100,14 @@ class CustomerSalesInformation {
   bool get isOnline => status == 'ONLINE';
   bool get isInterested => status == 'INTERESTED';
   bool get isPurchased => status == 'PURCHASED';
+  bool get isFilm => status == 'FILM';
 
   static CustomerSalesInformation? fromJson(Map<String, dynamic>? json) {
     if (json == null) return null;
     final rawProducts = json['products'];
     return CustomerSalesInformation(
       status: json['status'] as String?,
+      filmBrand: json['filmBrand'] as String?,
       interestLevel: json['interestLevel'] as String?,
       purchaseChannel: (json['purchaseChannel'] as List<dynamic>? ?? [])
           .whereType<String>()
@@ -475,6 +479,7 @@ class ConversationRepository {
   Future<ConversationDetail> updateCustomerSalesInfo(
     String id, {
     Object? status = _unset,
+    Object? filmBrand = _unset,
     Object? interestLevel = _unset,
     Object? purchaseChannel = _unset,
     Object? paymentMethod = _unset,
@@ -482,6 +487,7 @@ class ConversationRepository {
   }) async {
     final body = <String, dynamic>{};
     if (!identical(status, _unset)) body['status'] = status;
+    if (!identical(filmBrand, _unset)) body['filmBrand'] = filmBrand;
     if (!identical(interestLevel, _unset)) {
       body['interestLevel'] = interestLevel;
     }

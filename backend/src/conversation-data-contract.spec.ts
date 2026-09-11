@@ -114,6 +114,40 @@ void test("Online sales status is preserved without purchase-only fields", () =>
   assert.equal(sales.paymentMethod, null);
 });
 
+void test("Film sales status exposes the brand and never exposes purchase fields", () => {
+  const sales = buildCustomerSalesInformation({
+    customerSalesStatus: "FILM",
+    filmBrand: "Samsung",
+    interestLevel: "HOT",
+    sourceChannels: ["STORE"],
+    isInstallment: true,
+    paymentMethod: "INSTALLMENT",
+    salesProducts: [{
+      id: "sales-product-1",
+      productModelId: "model-1",
+      productVariantId: null,
+      productModel: { id: "model-1", name: "Fake Product", productSeries: null },
+      productVariant: null,
+      quantity: 1,
+      status: "FILM",
+    }],
+    salesRecordedBy: { displayName: "BM Tester" },
+    salesRecordedAt: new Date("2026-09-01T03:00:00.000Z"),
+  });
+
+  assert.equal(sales.status, "FILM");
+  assert.equal(sales.filmBrand, "Samsung");
+  assert.equal(sales.interestLevel, null);
+  assert.deepEqual(sales.purchaseChannel, []);
+  assert.equal(sales.paymentMethod, null);
+  assert.deepEqual(sales.products, []);
+  assert.equal(buildPurchaseInformation({
+    customerSalesStatus: "FILM",
+    filmBrand: "Samsung",
+    salesRecordedAt: new Date("2026-09-01T03:00:00.000Z"),
+  }).recordState, "NONE");
+});
+
 void test("spaced catalog model tokens are normalized only for display", () => {
   assert.equal(normalizeProductDisplayName("OPPO Reno 1 6 5 G"), "OPPO Reno 16 5G");
   assert.equal(normalizeProductDisplayName("OPPO Reno 16 5G"), "OPPO Reno 16 5G");

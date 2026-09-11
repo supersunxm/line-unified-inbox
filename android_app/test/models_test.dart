@@ -3,6 +3,24 @@ import 'package:line_oa_chat_hub/core/models/models.dart';
 import 'package:line_oa_chat_hub/features/inbox/conversation_repository.dart';
 
 void main() {
+  test('customer sales information parses FILM brand from API JSON', () {
+    final info = CustomerSalesInformation.fromJson({
+      'status': 'FILM',
+      'filmBrand': 'Samsung',
+      'interestLevel': null,
+      'purchaseChannel': <String>[],
+      'paymentMethod': null,
+      'products': <dynamic>[],
+      'recordedAt': '2026-09-01T03:00:00.000Z',
+    });
+
+    expect(info?.isFilm, isTrue);
+    expect(info?.filmBrand, 'Samsung');
+    expect(info?.purchaseChannel, isEmpty);
+    expect(info?.paymentMethod, isNull);
+    expect(info?.products, isEmpty);
+  });
+
   test('conversation summary maps unread badge and preview', () {
     final item = ConversationSummary.fromJson({
       'id': 'conversation-1',

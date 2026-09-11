@@ -20,6 +20,7 @@ const RELEVANT_STATUSES = new Set<CustomerSalesStatus>([
   CustomerSalesStatus.ONLINE,
   CustomerSalesStatus.PURCHASED,
   CustomerSalesStatus.INTERESTED,
+  CustomerSalesStatus.FILM,
 ]);
 const MATCH_TIMESTAMP_TOLERANCE_MS = 2 * 60 * 1000;
 
@@ -402,7 +403,7 @@ export function buildPilotMappingPlan(
         candidateChatUserId: null,
         confidence: "NO_MATCH",
         signals: [],
-        reason: "Conversation is not an ONLINE, PURCHASED, or INTERESTED historical tag.",
+        reason: "Conversation is not an ONLINE, PURCHASED, INTERESTED, or FILM historical tag.",
         alreadyMapped: false,
       };
     }

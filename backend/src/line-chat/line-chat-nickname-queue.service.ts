@@ -45,6 +45,7 @@ export class LineChatNicknameQueueService {
           lineOfficialAccountId: true,
           lineChatUserId: true,
           customerSalesStatus: true,
+          filmBrand: true,
           paymentMethod: true,
           salesRecordedAt: true,
           store: {
@@ -117,6 +118,7 @@ export class LineChatNicknameQueueService {
 
       const nickname = buildLineChatNickname({
         status: conversation.customerSalesStatus,
+        filmBrand: conversation.filmBrand,
         paymentMethod: conversation.paymentMethod,
         recordedAt: conversation.salesRecordedAt,
         products: (conversation.salesProducts || []).map((sp) => ({

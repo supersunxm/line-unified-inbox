@@ -30,6 +30,17 @@ String _getCategoryIcon(String? category, [String? modelName]) {
   return '📦';
 }
 
+const _filmBrandOptions = <String>[
+  'OPPO',
+  'iPhone',
+  'Samsung',
+  'vivo',
+  'Xiaomi',
+  'HONOR',
+  'realme',
+  'Other',
+];
+
 class ConversationTagsBar extends StatelessWidget {
   const ConversationTagsBar({
     super.key,
@@ -53,6 +64,7 @@ class ConversationTagsBar extends StatelessWidget {
             sales.interestLevel != null ||
             sales.purchaseChannel.isNotEmpty ||
             sales.paymentMethod != null ||
+            sales.filmBrand?.trim().isNotEmpty == true ||
             sales.products.isNotEmpty);
     final hasProvenance = hasSalesData &&
         (sales.recordedBy?.trim().isNotEmpty == true ||
@@ -99,12 +111,17 @@ class ConversationTagsBar extends StatelessWidget {
                 child: Icon(
                   sales?.isPurchased == true
                       ? Icons.shopping_bag_outlined
-                      : sales?.isOnline == true
-                          ? Icons.language_outlined
-                          : Icons.flag_outlined,
+                      : sales?.isFilm == true
+                          ? Icons.shield_outlined
+                          : sales?.isOnline == true
+                              ? Icons.language_outlined
+                              : Icons.flag_outlined,
                   size: 18,
-                  color:
-                      sales?.isPurchased == true ? Colors.green : Colors.blue,
+                  color: sales?.isPurchased == true
+                      ? Colors.green
+                      : sales?.isFilm == true
+                          ? Colors.deepPurple
+                          : Colors.blue,
                 ),
               ),
               const SizedBox(width: AppSpacing.sm),
@@ -130,23 +147,34 @@ class ConversationTagsBar extends StatelessWidget {
                               decoration: BoxDecoration(
                                 color: sales.isPurchased
                                     ? Colors.green.withAlpha(35)
-                                    : Colors.blue.withAlpha(35),
+                                    : sales.isFilm
+                                        ? Colors.deepPurple.withAlpha(35)
+                                        : Colors.blue.withAlpha(35),
                                 borderRadius: BorderRadius.circular(6),
                               ),
                               child: Text(
                                 sales.isPurchased
                                     ? '🛍️ ${appLocalizations(context).statusPurchased}'
-                                    : sales.isOnline
-                                        ? '🌐 ${appLocalizations(context).statusOnline}'
-                                        : '🎯 ${appLocalizations(context).statusInterested}',
+                                    : sales.isFilm
+                                        ? '🛡️ ${appLocalizations(context).statusFilm}'
+                                        : sales.isOnline
+                                            ? '🌐 ${appLocalizations(context).statusOnline}'
+                                            : '🎯 ${appLocalizations(context).statusInterested}',
                                 style: TextStyle(
                                   fontSize: 12,
                                   fontWeight: FontWeight.bold,
                                   color: sales.isPurchased
                                       ? Colors.green.shade800
-                                      : Colors.blue.shade800,
+                                      : sales.isFilm
+                                          ? Colors.deepPurple.shade800
+                                          : Colors.blue.shade800,
                                 ),
                               ),
+                            ),
+                          if (sales.isFilm &&
+                              sales.filmBrand?.trim().isNotEmpty == true)
+                            _SmallBadge(
+                              text: '📱 ${sales.filmBrand!.trim()}',
                             ),
                           if (sales.isInterested && sales.interestLevel != null)
                             _SmallBadge(
@@ -343,6 +371,7 @@ class ConversationTagsSheet extends StatefulWidget {
 class _SalesSnapshot {
   const _SalesSnapshot({
     required this.status,
+    required this.filmBrand,
     required this.interestLevel,
     required this.sourceChannels,
     required this.paymentMethod,
@@ -350,6 +379,7 @@ class _SalesSnapshot {
   });
 
   final String? status;
+  final String? filmBrand;
   final String? interestLevel;
   final Set<String> sourceChannels;
   final String? paymentMethod;
@@ -358,12 +388,14 @@ class _SalesSnapshot {
 
 class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
   String? _status;
+  String? _filmBrand;
   String? _interestLevel;
   late Set<String> _sourceChannels;
   String? _paymentMethod;
   late List<CustomerSalesProductItem> _selectedProducts;
 
   final _searchController = TextEditingController();
+  final _filmBrandController = TextEditingController();
   List<ProductSelectorItem> _catalogProducts = const [];
   List<ProductVariantSelectorItem> _catalogVariants = const [];
   ProductSelectorItem? _draftProduct;
@@ -372,6 +404,12 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
   String _productSearchQuery = '';
   ProductPickerCategory _productCategory = ProductPickerCategory.all;
   ProductPickerSeries _productSeries = ProductPickerSeries.all;
+
+  String? get _selectedFilmBrandOption => _filmBrandOptions.contains(_filmBrand)
+      ? _filmBrand
+      : _filmBrand == null
+          ? null
+          : 'Other';
 
   bool _loadingProducts = false;
   bool _loadingVariants = false;
@@ -449,8 +487,13 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
             sales.interestLevel != null ||
             sales.purchaseChannel.isNotEmpty ||
             sales.paymentMethod != null ||
+            sales.filmBrand?.trim().isNotEmpty == true ||
             sales.products.isNotEmpty)) {
       _status = sales.status;
+      _filmBrand = sales.filmBrand?.trim();
+      if (_filmBrand != null && !_filmBrandOptions.contains(_filmBrand)) {
+        _filmBrandController.text = _filmBrand!;
+      }
       _interestLevel = sales.interestLevel;
       _sourceChannels = sales.purchaseChannel.toSet();
       _paymentMethod = sales.paymentMethod;
@@ -484,6 +527,7 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
             ];
     } else {
       _status = null;
+      _filmBrand = null;
       _sourceChannels = <String>{};
       _paymentMethod = null;
       _selectedProducts = [];
@@ -494,11 +538,13 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
   @override
   void dispose() {
     _searchController.dispose();
+    _filmBrandController.dispose();
     super.dispose();
   }
 
   _SalesSnapshot _snapshot() => _SalesSnapshot(
         status: _status,
+        filmBrand: _filmBrand,
         interestLevel: _interestLevel,
         sourceChannels: Set<String>.from(_sourceChannels),
         paymentMethod: _paymentMethod,
@@ -507,6 +553,11 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
 
   void _restore(_SalesSnapshot snapshot) {
     _status = snapshot.status;
+    _filmBrand = snapshot.filmBrand;
+    _filmBrandController.text =
+        _filmBrandOptions.contains(_filmBrand) || _filmBrand == null
+            ? ''
+            : _filmBrand!;
     _interestLevel = snapshot.interestLevel;
     _sourceChannels = Set<String>.from(snapshot.sourceChannels);
     _paymentMethod = snapshot.paymentMethod;
@@ -536,6 +587,11 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
   void _applyServerDetail(ConversationDetail detail) {
     final sales = detail.customerSalesInformation;
     _status = sales?.status;
+    _filmBrand = sales?.filmBrand?.trim();
+    _filmBrandController.text =
+        _filmBrandOptions.contains(_filmBrand) || _filmBrand == null
+            ? ''
+            : _filmBrand!;
     _interestLevel = sales?.interestLevel;
     _sourceChannels = sales?.purchaseChannel.toSet() ?? <String>{};
     _paymentMethod = sales?.paymentMethod;
@@ -558,6 +614,7 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
       final detail = await widget.repository.updateCustomerSalesInfo(
         widget.conversationId,
         status: _status,
+        filmBrand: _status == 'FILM' ? _filmBrand?.trim() : null,
         interestLevel: _status == 'INTERESTED' ? _interestLevel : null,
         purchaseChannel: _status == 'PURCHASED' ? _sourceChannels.toList() : [],
         paymentMethod: _status == 'PURCHASED' ? _paymentMethod : null,
@@ -827,12 +884,16 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
     setState(() {
       _status = status;
       if (status == null) {
+        _filmBrand = null;
+        _filmBrandController.clear();
         _interestLevel = null;
         _sourceChannels.clear();
         _paymentMethod = null;
         _selectedProducts = [];
         _showProductPicker = false;
       } else if (status == 'INTERESTED') {
+        _filmBrand = null;
+        _filmBrandController.clear();
         _sourceChannels.clear();
         _paymentMethod = null;
         _selectedProducts = _selectedProducts
@@ -851,6 +912,8 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                 ))
             .toList();
       } else if (status == 'ONLINE') {
+        _filmBrand = null;
+        _filmBrandController.clear();
         _interestLevel = null;
         _sourceChannels.clear();
         _paymentMethod = null;
@@ -869,7 +932,9 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                   status: 'ONLINE',
                 ))
             .toList();
-      } else {
+      } else if (status == 'PURCHASED') {
+        _filmBrand = null;
+        _filmBrandController.clear();
         _interestLevel = null;
         _selectedProducts = _selectedProducts
             .map((product) => CustomerSalesProductItem(
@@ -886,7 +951,28 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                   status: 'PURCHASED',
                 ))
             .toList();
+      } else if (status == 'FILM') {
+        _interestLevel = null;
+        _sourceChannels.clear();
+        _paymentMethod = null;
+        _selectedProducts = [];
+        _showProductPicker = false;
       }
+      _dirty = true;
+    });
+  }
+
+  void _setFilmBrand(String? brand) {
+    setState(() {
+      _filmBrand = brand;
+      if (brand != 'Other') _filmBrandController.clear();
+      _dirty = true;
+    });
+  }
+
+  void _setCustomFilmBrand(String value) {
+    setState(() {
+      _filmBrand = value;
       _dirty = true;
     });
   }
@@ -896,6 +982,8 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
     final previous = _snapshot();
     setState(() {
       _status = null;
+      _filmBrand = null;
+      _filmBrandController.clear();
       _interestLevel = null;
       _sourceChannels = <String>{};
       _paymentMethod = null;
@@ -908,6 +996,10 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
 
   Future<void> _promptSaveConfirmation() async {
     final l10n = appLocalizations(context);
+    if (_status == 'FILM' && _filmBrand?.trim().isNotEmpty != true) {
+      setState(() => _error = l10n.filmBrandRequired);
+      return;
+    }
     final isConverting =
         widget.initialSalesInfo?.isInterested == true && _status == 'PURCHASED';
     final confirmed = await showDialog<bool>(
@@ -920,9 +1012,11 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
               ? l10n.noCustomerSalesInfo
               : _status == 'PURCHASED'
                   ? '🛍️ ${l10n.statusPurchased}'
-                  : _status == 'ONLINE'
-                      ? '🌐 ${l10n.statusOnline}'
-                      : '🎯 ${l10n.statusInterested}',
+                  : _status == 'FILM'
+                      ? '🛡️ ${l10n.statusFilm}'
+                      : _status == 'ONLINE'
+                          ? '🌐 ${l10n.statusOnline}'
+                          : '🎯 ${l10n.statusInterested}',
         ),
         actions: [
           TextButton(
@@ -1102,6 +1196,11 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                           label: Text(l10n.statusPurchased),
                           icon: const Icon(Icons.shopping_bag_outlined),
                         ),
+                        ButtonSegment(
+                          value: 'FILM',
+                          label: Text(l10n.statusFilm),
+                          icon: const Icon(Icons.shield_outlined),
+                        ),
                       ],
                       emptySelectionAllowed: true,
                       selected: statusSelection,
@@ -1123,6 +1222,51 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                       ),
                     ),
                   const SizedBox(height: AppSpacing.lg),
+                  if (_status == 'FILM') ...[
+                    Text(l10n.filmBrand,
+                        style: Theme.of(context).textTheme.titleMedium),
+                    const SizedBox(height: AppSpacing.xs),
+                    DropdownButtonFormField<String>(
+                      key: ValueKey<String?>(_selectedFilmBrandOption),
+                      isExpanded: true,
+                      initialValue: _selectedFilmBrandOption,
+                      decoration: InputDecoration(
+                        border: const OutlineInputBorder(),
+                        hintText: l10n.selectFilmBrand,
+                      ),
+                      items: _filmBrandOptions
+                          .map((brand) => DropdownMenuItem<String>(
+                                value: brand,
+                                child: Text(brand),
+                              ))
+                          .toList(growable: false),
+                      onChanged: _saving ? null : _setFilmBrand,
+                    ),
+                    if (_selectedFilmBrandOption == 'Other') ...[
+                      const SizedBox(height: AppSpacing.sm),
+                      TextField(
+                        key: const ValueKey('film-brand-custom'),
+                        controller: _filmBrandController,
+                        textCapitalization: TextCapitalization.words,
+                        decoration: InputDecoration(
+                          border: const OutlineInputBorder(),
+                          labelText: l10n.customFilmBrand,
+                        ),
+                        onChanged: _setCustomFilmBrand,
+                        enabled: !_saving,
+                      ),
+                    ],
+                    if (_error == l10n.filmBrandRequired)
+                      Padding(
+                        padding: const EdgeInsets.only(top: AppSpacing.xs),
+                        child: Text(
+                          l10n.filmBrandRequired,
+                          style: TextStyle(
+                              color: Theme.of(context).colorScheme.error),
+                        ),
+                      ),
+                    const SizedBox(height: AppSpacing.lg),
+                  ],
                   if (_status == 'INTERESTED') ...[
                     Text(l10n.interestLevel,
                         style: Theme.of(context).textTheme.titleMedium),
@@ -1209,111 +1353,115 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                     ),
                     const SizedBox(height: AppSpacing.lg),
                   ],
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        _status == 'PURCHASED'
-                            ? l10n.productsPurchased
-                            : l10n.productsInterested,
-                        style: Theme.of(context)
-                            .textTheme
-                            .titleMedium
-                            ?.copyWith(fontWeight: FontWeight.bold),
-                      ),
-                      if (!_showProductPicker)
-                        OutlinedButton.icon(
-                          onPressed: _saving ? null : _openAddProduct,
-                          icon: const Icon(Icons.add, size: 16),
-                          label: Text(l10n.addProduct),
+                  if (_status != 'FILM') ...[
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          _status == 'PURCHASED'
+                              ? l10n.productsPurchased
+                              : l10n.productsInterested,
+                          style: Theme.of(context)
+                              .textTheme
+                              .titleMedium
+                              ?.copyWith(fontWeight: FontWeight.bold),
                         ),
-                    ],
-                  ),
-                  const SizedBox(height: AppSpacing.xs),
-                  if (_selectedProducts.isEmpty && !_showProductPicker)
-                    Padding(
-                      padding:
-                          const EdgeInsets.symmetric(vertical: AppSpacing.md),
-                      child: Text(
-                        l10n.noCustomerSalesInfo,
-                        style: Theme.of(context)
-                            .textTheme
-                            .bodyMedium
-                            ?.copyWith(color: Theme.of(context).hintColor),
-                      ),
+                        if (!_showProductPicker)
+                          OutlinedButton.icon(
+                            onPressed: _saving ? null : _openAddProduct,
+                            icon: const Icon(Icons.add, size: 16),
+                            label: Text(l10n.addProduct),
+                          ),
+                      ],
                     ),
-                  ..._selectedProducts.asMap().entries.map((entry) {
-                    final index = entry.key;
-                    final product = entry.value;
-                    final variantText = product.variantLabel;
-                    final icon =
-                        _getCategoryIcon(product.category, product.modelName);
-                    return Card(
-                      margin: const EdgeInsets.only(bottom: AppSpacing.sm),
-                      child: Padding(
-                        padding: const EdgeInsets.all(AppSpacing.sm),
-                        child: Row(
-                          children: [
-                            Text(icon, style: const TextStyle(fontSize: 22)),
-                            const SizedBox(width: AppSpacing.sm),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    product.modelName,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .titleSmall
-                                        ?.copyWith(fontWeight: FontWeight.bold),
-                                  ),
-                                  if ((product.seriesName?.isNotEmpty ??
-                                          false) ||
-                                      (product.category?.isNotEmpty ?? false))
-                                    Text(
-                                      [product.seriesName, product.category]
-                                          .whereType<String>()
-                                          .where((value) => value.isNotEmpty)
-                                          .join(' · '),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  if (variantText.isNotEmpty)
-                                    Text(
-                                      variantText,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                ],
-                              ),
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.remove, size: 16),
-                              onPressed: _saving
-                                  ? null
-                                  : () => _updateQuantity(index, -1),
-                            ),
-                            Text('${product.quantity}'),
-                            IconButton(
-                              icon: const Icon(Icons.add, size: 16),
-                              onPressed: _saving
-                                  ? null
-                                  : () => _updateQuantity(index, 1),
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.delete_outline,
-                                  color: Colors.redAccent, size: 20),
-                              onPressed:
-                                  _saving ? null : () => _removeProduct(index),
-                            ),
-                          ],
+                    const SizedBox(height: AppSpacing.xs),
+                    if (_selectedProducts.isEmpty && !_showProductPicker)
+                      Padding(
+                        padding:
+                            const EdgeInsets.symmetric(vertical: AppSpacing.md),
+                        child: Text(
+                          l10n.noCustomerSalesInfo,
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodyMedium
+                              ?.copyWith(color: Theme.of(context).hintColor),
                         ),
                       ),
-                    );
-                  }),
-                  if (_showProductPicker) _buildProductPicker(context),
+                    ..._selectedProducts.asMap().entries.map((entry) {
+                      final index = entry.key;
+                      final product = entry.value;
+                      final variantText = product.variantLabel;
+                      final icon =
+                          _getCategoryIcon(product.category, product.modelName);
+                      return Card(
+                        margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+                        child: Padding(
+                          padding: const EdgeInsets.all(AppSpacing.sm),
+                          child: Row(
+                            children: [
+                              Text(icon, style: const TextStyle(fontSize: 22)),
+                              const SizedBox(width: AppSpacing.sm),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      product.modelName,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleSmall
+                                          ?.copyWith(
+                                              fontWeight: FontWeight.bold),
+                                    ),
+                                    if ((product.seriesName?.isNotEmpty ??
+                                            false) ||
+                                        (product.category?.isNotEmpty ?? false))
+                                      Text(
+                                        [product.seriesName, product.category]
+                                            .whereType<String>()
+                                            .where((value) => value.isNotEmpty)
+                                            .join(' · '),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    if (variantText.isNotEmpty)
+                                      Text(
+                                        variantText,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                  ],
+                                ),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.remove, size: 16),
+                                onPressed: _saving
+                                    ? null
+                                    : () => _updateQuantity(index, -1),
+                              ),
+                              Text('${product.quantity}'),
+                              IconButton(
+                                icon: const Icon(Icons.add, size: 16),
+                                onPressed: _saving
+                                    ? null
+                                    : () => _updateQuantity(index, 1),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.delete_outline,
+                                    color: Colors.redAccent, size: 20),
+                                onPressed: _saving
+                                    ? null
+                                    : () => _removeProduct(index),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    }),
+                    if (_showProductPicker) _buildProductPicker(context),
+                  ],
                   if (_error != null)
                     Padding(
                       padding: const EdgeInsets.only(top: AppSpacing.sm),

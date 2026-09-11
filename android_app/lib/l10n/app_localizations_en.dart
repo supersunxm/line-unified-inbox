@@ -434,6 +434,22 @@ class AppLocalizationsEn extends AppLocalizations {
   String get statusPurchased => 'Purchased';
 
   @override
+  String get statusFilm => 'Film';
+
+  @override
+  String get filmBrand => 'Phone Brand';
+
+  @override
+  String get selectFilmBrand => 'Select phone brand';
+
+  @override
+  String get customFilmBrand => 'Custom phone brand';
+
+  @override
+  String get filmBrandRequired =>
+      'Select or enter a phone brand before saving.';
+
+  @override
   String get interestLevel => 'Interest Level';
 
   @override

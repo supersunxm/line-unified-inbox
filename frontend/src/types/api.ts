@@ -3,7 +3,8 @@ export type ApiPriority = "LOW" | "NORMAL" | "HIGH" | "CRITICAL";
 export type ApiBmReplyStatus = "NOT_REPLIED" | "NOTIFIED_BM" | "REPLIED";
 
 export type ApiCustomerSalesInformation = {
-  status: "ONLINE" | "INTERESTED" | "PURCHASED" | null;
+  status: "ONLINE" | "INTERESTED" | "PURCHASED" | "FILM" | null;
+  filmBrand: string | null;
   interestLevel: "HOT" | "WARM" | "COLD" | null;
   purchaseChannel: string[];
   paymentMethod: "CASH" | "INSTALLMENT" | "CREDIT_CARD" | "OTHER" | null;
@@ -13,7 +14,7 @@ export type ApiCustomerSalesInformation = {
     variant: { id: string; ram: string | null; rom: string | null; color: string | null } | null;
     customProductName: string | null;
     quantity: number;
-    status: "ONLINE" | "INTERESTED" | "PURCHASED";
+    status: "ONLINE" | "INTERESTED" | "PURCHASED" | "FILM";
   }>;
   recordedBy: string | null;
   recordedAt: string | null;
@@ -22,7 +23,8 @@ export type ApiCustomerSalesInformation = {
 
 
 export type UpdateCustomerSalesInfoInput = {
-  status?: "ONLINE" | "INTERESTED" | "PURCHASED" | null;
+  status?: "ONLINE" | "INTERESTED" | "PURCHASED" | "FILM" | null;
+  filmBrand?: string | null;
   interestLevel?: "HOT" | "WARM" | "COLD" | null;
   purchaseChannel?: Array<"ONLINE" | "STORE">;
   paymentMethod?: "CASH" | "INSTALLMENT" | "CREDIT_CARD" | "OTHER" | null;
@@ -31,7 +33,7 @@ export type UpdateCustomerSalesInfoInput = {
     productVariantId?: string | null;
     customProductName?: string | null;
     quantity?: number;
-    status?: "ONLINE" | "INTERESTED" | "PURCHASED";
+    status?: "ONLINE" | "INTERESTED" | "PURCHASED" | "FILM";
   }>;
 };
 

@@ -25,6 +25,7 @@ export function getConversationListTitle(
 
 export type BmCustomerTagKind =
   | "salesStatus"
+  | "filmBrand"
   | "interestLevel"
   | "productModel"
   | "productVariant"
@@ -36,7 +37,7 @@ export type BmCustomerTagKind =
 export type BmCustomerTag = {
   kind: BmCustomerTagKind;
   label: string;
-  rawStatus?: "ONLINE" | "INTERESTED" | "PURCHASED" | null;
+  rawStatus?: "ONLINE" | "INTERESTED" | "PURCHASED" | "FILM" | null;
   rawInterestLevel?: "HOT" | "WARM" | "COLD" | null;
 };
 
@@ -86,7 +87,7 @@ export function getBmCustomerSalesTags(
           color?: string | null;
           customProductName?: string | null;
           quantity?: number;
-          status?: "ONLINE" | "INTERESTED" | "PURCHASED";
+          status?: "ONLINE" | "INTERESTED" | "PURCHASED" | "FILM";
         }> | null;
       })
     | null,
@@ -94,12 +95,19 @@ export function getBmCustomerSalesTags(
   if (!sales) return [];
   const tags: BmCustomerTag[] = [];
 
-  // 1. ONLINE, INTERESTED, or PURCHASED
-  if (sales.status === "ONLINE" || sales.status === "INTERESTED" || sales.status === "PURCHASED") {
+  // 1. ONLINE, INTERESTED, PURCHASED, or FILM
+  if (sales.status === "ONLINE" || sales.status === "INTERESTED" || sales.status === "PURCHASED" || sales.status === "FILM") {
     tags.push({
       kind: "salesStatus",
       label: sales.status,
       rawStatus: sales.status,
+    });
+  }
+
+  if (sales.status === "FILM" && sales.filmBrand?.trim()) {
+    tags.push({
+      kind: "filmBrand",
+      label: sales.filmBrand.trim(),
     });
   }
 
@@ -202,7 +210,11 @@ export function getBmTagChipClass(tag: BmCustomerTag): string {
     case "salesStatus":
       return tag.rawStatus === "PURCHASED"
         ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-200 border border-emerald-200/60 dark:border-emerald-800/40 font-semibold"
+        : tag.rawStatus === "FILM"
+          ? "bg-violet-100 text-violet-800 dark:bg-violet-950/60 dark:text-violet-200 border border-violet-200/60 dark:border-violet-800/40 font-semibold"
         : "bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-200 border border-blue-200/60 dark:border-blue-800/40 font-semibold";
+    case "filmBrand":
+      return "bg-violet-50 text-violet-800 dark:bg-violet-950/40 dark:text-violet-200 border border-violet-200/60 dark:border-violet-800/40 font-semibold";
     case "interestLevel":
       if (tag.rawInterestLevel === "HOT") {
         return "bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-200 border border-rose-200/60 dark:border-rose-800/40 font-semibold";

@@ -11,11 +11,12 @@ test("api.ts declares updateCustomerSalesInfo calling PATCH /mobile/conversation
   assert.match(apiCode, /updateCustomerSalesInfo:\s*\(id:\s*string,\s*input:\s*UpdateCustomerSalesInfoInput\)\s*=>/);
   assert.match(apiCode, /request<ApiConversation>\(`\/mobile\/conversations\/\$\{encodeURIComponent\(id\)\}\/customer-sales-info`,\s*\{\s*method:\s*"PATCH"/);
   assert.match(typesCode, /export type UpdateCustomerSalesInfoInput = \{/);
-  assert.match(typesCode, /status\?: "ONLINE" \| "INTERESTED" \| "PURCHASED" \| null;/);
+  assert.match(typesCode, /status\?: "ONLINE" \| "INTERESTED" \| "PURCHASED" \| "FILM" \| null;/);
+  assert.match(typesCode, /filmBrand\?: string \| null;/);
   assert.match(typesCode, /paymentMethod\?: "CASH" \| "INSTALLMENT" \| "CREDIT_CARD" \| "OTHER" \| null;/);
 });
 
-test("CustomerSalesTagEditor renders required status options (ONLINE, INTERESTED, PURCHASED)", () => {
+test("CustomerSalesTagEditor renders required status options (ONLINE, INTERESTED, PURCHASED, FILM)", () => {
   assert.match(editorCode, /data-customer-sales-editor/);
   assert.match(editorCode, /data-sales-tag-section/);
   assert.match(editorCode, /data-sales-status-options/);
@@ -23,6 +24,8 @@ test("CustomerSalesTagEditor renders required status options (ONLINE, INTERESTED
   assert.match(editorCode, /"ONLINE"/);
   assert.match(editorCode, /"INTERESTED"/);
   assert.match(editorCode, /"PURCHASED"/);
+  assert.match(editorCode, /"FILM"/);
+  assert.match(editorCode, /data-film-brand-select/);
 });
 
 test("CustomerSalesTagEditor creates ONLINE save payload { status: 'ONLINE' }", () => {
@@ -112,4 +115,3 @@ test("page.tsx safely guards topics, aiInsight, and collections when topics is u
   const noTopicDetected = !partialConversation?.aiInsight?.topics?.length && !partialConversation?.topics?.some(({ source }) => source === "RULE");
   assert.equal(noTopicDetected, true);
 });
-

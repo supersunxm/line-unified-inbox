@@ -13,8 +13,10 @@ export interface CustomerSalesTagEditorProps {
   language?: "th" | "en" | "zh";
 }
 
-type SalesStatusOption = "ONLINE" | "INTERESTED" | "PURCHASED" | "";
+type SalesStatusOption = "ONLINE" | "INTERESTED" | "PURCHASED" | "FILM" | "";
 type PaymentOption = "CASH" | "INSTALLMENT";
+
+const filmBrandOptions = ["OPPO", "iPhone", "Samsung", "vivo", "Xiaomi", "HONOR", "realme", "Other"] as const;
 
 export function CustomerSalesTagEditor({
   conversationId,
@@ -29,14 +31,16 @@ export function CustomerSalesTagEditor({
   const [paymentMethod, setPaymentMethod] = useState<PaymentOption>("CASH");
   const [selectedProductModelId, setSelectedProductModelId] = useState<string>("");
   const [customModelName, setCustomModelName] = useState<string>("");
+  const [filmBrand, setFilmBrand] = useState<string>("");
   const [isSaving, setIsSaving] = useState(false);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
   // Sync state during render whenever conversationId or salesInfo changes
-  const currentKey = `${conversationId}:${salesInfo?.status ?? ""}:${salesInfo?.paymentMethod ?? ""}:${salesInfo?.products?.[0]?.model?.id ?? ""}`;
+  const currentKey = `${conversationId}:${salesInfo?.status ?? ""}:${salesInfo?.filmBrand ?? ""}:${salesInfo?.paymentMethod ?? ""}:${salesInfo?.products?.[0]?.model?.id ?? ""}`;
   if (prevKey !== currentKey) {
     setPrevKey(currentKey);
     setStatus(salesInfo?.status ?? "");
+    setFilmBrand(salesInfo?.filmBrand?.trim() ?? "");
     setPaymentMethod(salesInfo?.paymentMethod === "INSTALLMENT" ? "INSTALLMENT" : "CASH");
     const firstProduct = salesInfo?.products?.[0];
     if (firstProduct) {
@@ -59,6 +63,19 @@ export function CustomerSalesTagEditor({
       const payload: UpdateCustomerSalesInfoInput = {
         status,
       };
+
+      if (status === "FILM") {
+        const normalizedBrand = filmBrand.trim();
+        if (!normalizedBrand) {
+          setFeedback({
+            type: "error",
+            message: language === "th" ? "กรุณาเลือกหรือระบุยี่ห้อโทรศัพท์ก่อนบันทึก" : "Select or enter a phone brand before saving.",
+          });
+          setIsSaving(false);
+          return;
+        }
+        payload.filmBrand = normalizedBrand;
+      }
 
       if (status === "PURCHASED") {
         payload.paymentMethod = paymentMethod;
@@ -117,7 +134,9 @@ export function CustomerSalesTagEditor({
                 ? "bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-200"
                 : salesInfo.status === "INTERESTED"
                   ? "bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-200"
-                  : "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-200"
+                  : salesInfo.status === "PURCHASED"
+                    ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-200"
+                    : "bg-violet-100 text-violet-800 dark:bg-violet-950/60 dark:text-violet-200"
             }`}
           >
             {salesInfo.status}
@@ -126,12 +145,13 @@ export function CustomerSalesTagEditor({
       </div>
 
       {/* Status Buttons */}
-      <div className="grid grid-cols-3 gap-1.5 mb-3" data-sales-status-options>
+      <div className="grid grid-cols-4 gap-1.5 mb-3" data-sales-status-options>
         {(
           [
             ["ONLINE", "Online", "bg-blue-600 hover:bg-blue-700 text-white"],
             ["INTERESTED", "Interested", "bg-amber-600 hover:bg-amber-700 text-white"],
             ["PURCHASED", "Purchased", "bg-emerald-600 hover:bg-emerald-700 text-white"],
+            ["FILM", "Film", "bg-violet-600 hover:bg-violet-700 text-white"],
           ] as const
         ).map(([value, label, activeClasses]) => {
           const isSelected = status === value;
@@ -141,7 +161,10 @@ export function CustomerSalesTagEditor({
               type="button"
               data-sales-status-button={value}
               disabled={disabled || isSaving}
-              onClick={() => setStatus(value)}
+              onClick={() => {
+                setStatus(value);
+                if (value !== "FILM") setFilmBrand("");
+              }}
               className={`rounded-[var(--app-radius-sm)] py-1.5 px-2 text-xs font-semibold transition-all text-center focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--app-accent)] disabled:opacity-50 disabled:cursor-not-allowed ${
                 isSelected
                   ? activeClasses
@@ -230,6 +253,35 @@ export function CustomerSalesTagEditor({
               />
             )}
           </div>
+        </div>
+      )}
+
+      {status === "FILM" && (
+        <div data-film-fields className="mb-3 space-y-2.5 rounded-[var(--app-radius-md)] bg-[var(--app-surface-subtle)] p-2.5 border border-[var(--app-border-subtle)]">
+          <label className="block text-[11px] font-semibold text-[var(--app-text-secondary)] mb-1">
+            {language === "th" ? "ยี่ห้อโทรศัพท์" : language === "zh" ? "手机品牌" : "Phone Brand"}
+          </label>
+          <select
+            data-film-brand-select
+            value={filmBrandOptions.includes(filmBrand as (typeof filmBrandOptions)[number]) ? filmBrand : filmBrand ? "Other" : ""}
+            disabled={disabled || isSaving}
+            onChange={(e) => setFilmBrand(e.target.value === "Other" ? "" : e.target.value)}
+            className="w-full rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface)] px-2.5 py-1 text-xs text-[var(--app-text-primary)] outline-none focus:ring-1 focus:ring-[var(--app-accent)] disabled:opacity-50"
+          >
+            <option value="">{language === "th" ? "-- เลือกยี่ห้อ --" : language === "zh" ? "-- 选择品牌 --" : "-- Select Brand --"}</option>
+            {filmBrandOptions.map((brand) => <option key={brand} value={brand}>{brand}</option>)}
+          </select>
+          {(!filmBrandOptions.includes(filmBrand as (typeof filmBrandOptions)[number]) || filmBrand === "") && (
+            <input
+              type="text"
+              data-custom-film-brand-input
+              placeholder={language === "th" ? "ระบุยี่ห้ออื่น" : language === "zh" ? "输入其他品牌" : "Enter another brand"}
+              value={filmBrand}
+              disabled={disabled || isSaving}
+              onChange={(e) => setFilmBrand(e.target.value)}
+              className="w-full rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface)] px-2.5 py-1 text-xs text-[var(--app-text-primary)] outline-none focus:ring-1 focus:ring-[var(--app-accent)] disabled:opacity-50"
+            />
+          )}
         </div>
       )}
 

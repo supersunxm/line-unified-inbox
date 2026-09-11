@@ -254,6 +254,7 @@ class _SalesStatusBadge extends StatelessWidget {
       'ONLINE' => '🌐 ${appLocalizations(context).statusOnline}',
       'INTERESTED' => '🎯 ${appLocalizations(context).statusInterested}',
       'PURCHASED' => '🛍️ ${appLocalizations(context).statusPurchased}',
+      'FILM' => '🛡️ ${appLocalizations(context).statusFilm}',
       _ => null,
     };
     if (status == null) return const SizedBox.shrink();
@@ -283,8 +284,24 @@ class _ProductSummary extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (summary == null || summary!.products.isEmpty) {
+    if (summary == null || (summary!.products.isEmpty && !summary!.isFilm)) {
       return const SizedBox.shrink();
+    }
+    if (summary!.isFilm) {
+      final brand = summary!.filmBrand?.trim();
+      if (brand?.isEmpty != false) return const SizedBox.shrink();
+      return Padding(
+        padding: const EdgeInsets.only(top: 1),
+        child: Text(
+          '🛡️ $brand',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: AppColors.textSecondary,
+                fontWeight: FontWeight.w600,
+              ),
+        ),
+      );
     }
     final first = summary!.products.first;
     final productLabel =
@@ -316,12 +333,17 @@ class _SalesSummary extends StatelessWidget {
       'ONLINE' => '🌐 ${appLocalizations(context).statusOnline}',
       'INTERESTED' => '🎯 ${appLocalizations(context).statusInterested}',
       'PURCHASED' => '🛍️ ${appLocalizations(context).statusPurchased}',
+      'FILM' => '🛡️ ${appLocalizations(context).statusFilm}',
       _ => null,
     };
     final first = summary!.products.isEmpty ? null : summary!.products.first;
     final productLabel = first == null
         ? null
         : '📱 ${first.modelName}${first.quantity > 1 ? ' ×${first.quantity}' : ''}${summary!.products.length > 1 ? ' +${summary!.products.length - 1}' : ''}';
+    final filmLabel =
+        summary!.isFilm && summary!.filmBrand?.trim().isNotEmpty == true
+            ? '🛡️ ${summary!.filmBrand!.trim()}'
+            : null;
     return Padding(
       padding: const EdgeInsets.only(top: 2),
       child: Wrap(
@@ -345,6 +367,16 @@ class _SalesSummary extends StatelessWidget {
                       fontSize: 10.5,
                     ),
               ),
+            ),
+          if (filmLabel != null)
+            Text(
+              filmLabel,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: AppColors.textSecondary,
+                    fontWeight: FontWeight.w600,
+                  ),
             ),
           if (productLabel != null)
             ConstrainedBox(
