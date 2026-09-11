@@ -2262,3 +2262,9 @@ Keep `StoreMaster.tiktokProfileUrl` as the only persisted TikTok profile URL. Po
 - Keep the existing nickname queue, latest-wins deduplication, retries, and rollout gates. FILM nickname construction is `Film/<Brand>/MM/YY`, using persisted `salesRecordedAt` formatted in `Asia/Bangkok`; only the brand segment may be whitespace-compacted or truncated to preserve the `Film/` prefix, date suffix, and 20-character limit.
 - Extend historical nickname classification and chat mapping to include FILM, while skipping incomplete historical rows. This keeps backfill behavior explicit and preserves the existing ONLINE/PURCHASED paths.
 - Use an additive Prisma migration for the enum value and nullable brand column. Local deployment remains blocked by the unrelated recorded failed Google Review migration, so no migration recovery or production schema change was attempted in this task.
+
+## 2026-09-11: Android FILM release uses 1.1.19+39 without publishing unsigned APK
+
+- Use the next distinct Android release `1.1.19+39` so the FILM artifact does not collide with the existing `1.1.18` download filename. Keep the change limited to Android release readiness.
+- Preserve the Gradle signing gate. A missing `android/key.properties` or private keystore must block signed builds; the explicit `ciUnsignedRelease` path is verification-only and must not be published as the production download artifact.
+- Resolve this machine's Flutter JDK mismatch through Flutter configuration to the installed Temurin JDK 17. Keep the `android.newDsl=true` compatibility override command-scoped for this build environment; do not change app or backend source to conceal the signing blocker.
