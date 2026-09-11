@@ -17,9 +17,9 @@
   - Full backend/frontend lint: retains unrelated repository-baseline violations; changed-file lint remains clean.
   - Local runtime smoke: frontend `/`, `/store-360`, and `/api/health` returned **200**; backend production startup compiled and registered Store Insights routes, then stopped at the expected missing local `DATABASE_URL`/Prisma configuration boundary. No production database was accessed.
 - **Reconciliation**: Checkpoint `d64d07c` was cherry-picked cleanly onto latest main and amended to use the canonical Customer Voice version in its test fixture; final candidate commit is `1713f5f` with no conflicts.
-- **Local State**: No migration, worker enablement, ConversationAnalytics write, production access, merge, or deployment was performed. The candidate is clean and ready to push only `feat/store-360-export`.
+- **Local State**: No migration, worker enablement, ConversationAnalytics write, production access, merge, or deployment was performed. The candidate is clean and pushed only to `origin/feat/store-360-export`.
 - **Blockers**: Authenticated DB-backed export smoke remains **NOT VERIFIED** because no safe local database was available. Production deployment is intentionally out of scope.
-- **Next Action**: Push only `feat/store-360-export`, then stop for main-integration review.
+- **Next Action**: Stop for main-integration review. Do not merge or deploy from this task.
 
 # 2026-09-11: Remove Rich Menu Bulk Store Selection Cap [COMPLETED & VERIFIED]
 - **Current Task**: Remove the user-facing five-store selection limit from Phase 2B Rich Menu bulk publishing while preserving durable jobs, readiness validation, progress persistence, retry scope, and bounded LINE API concurrency.
