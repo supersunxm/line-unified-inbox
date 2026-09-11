@@ -7,12 +7,16 @@ import {
 } from "./line-messaging.service";
 import { LineChatManagerMessageRelayService } from "../line-chat/line-chat-manager-message-relay.service";
 
-const CENTRAL_WORLD_STORE_NAME = "OPPO Central World";
+const CENTRAL_WORLD_STORE_NAMES = new Set([
+  "OPPO Central World",
+  "OBS Central World FL.4 By OPPO",
+]);
 const MANAGER_DELIVERY_NOT_VERIFIED_MESSAGE =
   "ยังยืนยันการส่งจาก LINE OA Manager ไม่ได้ จึงไม่บันทึกข้อความว่าส่งสำเร็จ";
 
 function isCentralWorldManagerVerificationGap(input: LineTextInput, error: unknown): boolean {
-  return input.context?.storeName?.trim() === CENTRAL_WORLD_STORE_NAME
+  const storeName = input.context?.storeName?.trim() ?? "";
+  return CENTRAL_WORLD_STORE_NAMES.has(storeName)
     && error instanceof Error
     && error.message.includes(MANAGER_DELIVERY_NOT_VERIFIED_MESSAGE);
 }
