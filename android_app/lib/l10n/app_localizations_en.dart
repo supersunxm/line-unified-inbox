@@ -471,6 +471,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get confirmSave => 'Confirm Save';
 
   @override
+  String get confirmFilmSelection => 'Confirm selection';
+
+  @override
   String get confirmPurchase => 'Confirm Purchase';
 
   @override

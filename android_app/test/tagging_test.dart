@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:line_oa_chat_hub/core/models/models.dart';
@@ -8,12 +10,26 @@ import 'package:line_oa_chat_hub/features/inbox/conversation_repository.dart';
 import 'package:line_oa_chat_hub/l10n/app_localizations.dart';
 
 class _FakeTagRepository extends ConversationRepository {
-  _FakeTagRepository() : super(ApiClient(TokenStore()));
+  _FakeTagRepository({CustomerSalesInformation? initialSales})
+      : super(ApiClient(TokenStore())) {
+    currentSales = initialSales;
+  }
 
   CustomerSalesInformation? currentSales;
   bool failNextVariants = false;
+  bool holdNextSave = false;
+  Completer<ConversationDetail>? pendingSave;
+  ConversationDetail? pendingResponse;
   final List<String> variantCalls = [];
   int saveCallCount = 0;
+
+  void completePendingSave() {
+    final completer = pendingSave;
+    if (completer == null) return;
+    pendingSave = null;
+    completer.complete(pendingResponse);
+    pendingResponse = null;
+  }
 
   @override
   Future<List<ProductSelectorItem>> fetchProducts(
@@ -74,13 +90,19 @@ class _FakeTagRepository extends ConversationRepository {
           ? products.whereType<CustomerSalesProductItem>().toList()
           : [],
     );
-    return ConversationDetail(
+    final detail = ConversationDetail(
       id: id,
       customerName: 'Customer',
       storeName: 'Store',
       messages: const [],
       customerSalesInformation: currentSales,
     );
+    if (!holdNextSave) return detail;
+    holdNextSave = false;
+    pendingResponse = detail;
+    final completer = Completer<ConversationDetail>();
+    pendingSave = completer;
+    return completer.future;
   }
 }
 
@@ -242,10 +264,9 @@ void main() {
     expect(find.text('+ Add Product'), findsNothing);
     expect(find.text('Purchase Channel'), findsNothing);
 
-    await tester.tap(find.text('Save'));
-    await tester.pumpAndSettle();
-    expect(find.text('Select or enter a phone brand before saving.'),
-        findsAtLeastNWidgets(1));
+    final confirmButton =
+        find.widgetWithText(FilledButton, 'Confirm selection');
+    expect(tester.widget<FilledButton>(confirmButton).onPressed, isNull);
     expect(repository.saveCallCount, 0);
 
     final filmBrandSelector = find.byType(DropdownButtonFormField<String>);
@@ -254,10 +275,9 @@ void main() {
     await tester.tap(find.text('Samsung').last);
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Save'));
-    await tester.pumpAndSettle();
-    expect(find.text('🛡️ Film'), findsOneWidget);
-    await tester.tap(find.text('Confirm Save'));
+    expect(tester.widget<FilledButton>(confirmButton).onPressed, isNotNull);
+    expect(repository.saveCallCount, 0);
+    await tester.tap(confirmButton);
     await tester.pumpAndSettle();
 
     expect(repository.currentSales?.status, 'FILM');
@@ -266,6 +286,132 @@ void main() {
     expect(repository.currentSales?.purchaseChannel, isEmpty);
     expect(repository.currentSales?.paymentMethod, isNull);
     expect(repository.currentSales?.products, isEmpty);
+  });
+
+  testWidgets('FILM Other requires non-blank custom brand before confirming',
+      (tester) async {
+    tester.view.physicalSize = const Size(1080, 2200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final repository = _FakeTagRepository();
+    await tester.pumpWidget(MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: Scaffold(
+        body: ConversationTagsSheet(
+          conversationId: 'conversation-film-other',
+          repository: repository,
+          initialTags: const ConversationTags(),
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Film'));
+    await tester.pumpAndSettle();
+    final confirmButton =
+        find.widgetWithText(FilledButton, 'Confirm selection');
+
+    await tester.tap(find.byType(DropdownButtonFormField<String>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Other').last);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('film-brand-custom')), findsOneWidget);
+    expect(tester.widget<FilledButton>(confirmButton).onPressed, isNull);
+
+    await tester.enterText(
+        find.byKey(const ValueKey('film-brand-custom')), 'Nubia');
+    await tester.pumpAndSettle();
+    expect(tester.widget<FilledButton>(confirmButton).onPressed, isNotNull);
+    expect(repository.saveCallCount, 0);
+  });
+
+  testWidgets('closing an unconfirmed FILM draft preserves persisted state',
+      (tester) async {
+    tester.view.physicalSize = const Size(1080, 2200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    const savedFilm = CustomerSalesInformation(
+      status: 'FILM',
+      filmBrand: 'OPPO',
+      purchaseChannel: [],
+      products: [],
+    );
+    final repository = _FakeTagRepository(initialSales: savedFilm);
+    await tester.pumpWidget(MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: Scaffold(
+        body: ConversationTagsSheet(
+          conversationId: 'conversation-film-close',
+          repository: repository,
+          initialTags: const ConversationTags(),
+          initialSalesInfo: savedFilm,
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byType(DropdownButtonFormField<String>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Samsung').last);
+    await tester.pumpAndSettle();
+    expect(repository.saveCallCount, 0);
+
+    await tester.tap(find.byIcon(Icons.close).first);
+    await tester.pumpAndSettle();
+
+    expect(repository.saveCallCount, 0);
+    expect(repository.currentSales?.status, 'FILM');
+    expect(repository.currentSales?.filmBrand, 'OPPO');
+  });
+
+  testWidgets('FILM confirmation prevents double submit while saving',
+      (tester) async {
+    tester.view.physicalSize = const Size(1080, 2200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final repository = _FakeTagRepository()..holdNextSave = true;
+    await tester.pumpWidget(MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: Scaffold(
+        body: ConversationTagsSheet(
+          conversationId: 'conversation-film-double-submit',
+          repository: repository,
+          initialTags: const ConversationTags(),
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Film'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(DropdownButtonFormField<String>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Samsung').last);
+    await tester.pumpAndSettle();
+
+    final confirmButton =
+        find.widgetWithText(FilledButton, 'Confirm selection');
+    await tester.tap(confirmButton);
+    await tester.pump();
+    expect(repository.saveCallCount, 1);
+    expect(tester.widget<FilledButton>(confirmButton).onPressed, isNull);
+
+    await tester.tap(confirmButton);
+    expect(repository.saveCallCount, 1);
+
+    repository.completePendingSave();
+    await tester.pumpAndSettle();
+    expect(repository.currentSales?.status, 'FILM');
+    expect(repository.currentSales?.filmBrand, 'Samsung');
   });
 
   testWidgets('changing away from Film clears the selected brand',

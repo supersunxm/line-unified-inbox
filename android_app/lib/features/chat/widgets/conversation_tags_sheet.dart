@@ -411,6 +411,14 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
           ? null
           : 'Other';
 
+  bool get _hasValidFilmBrand {
+    if (_status != 'FILM') return false;
+    if (_selectedFilmBrandOption == 'Other') {
+      return _filmBrandController.text.trim().isNotEmpty;
+    }
+    return _filmBrand?.trim().isNotEmpty == true;
+  }
+
   bool _loadingProducts = false;
   bool _loadingVariants = false;
   bool _saving = false;
@@ -641,6 +649,10 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
 
   Future<void> _closeSheet() async {
     if (_saving) return;
+    if (_status == 'FILM') {
+      if (mounted) Navigator.of(context).pop(_lastSavedDetail);
+      return;
+    }
     if (_dirty) {
       await _persist(closeAfter: true);
       return;
@@ -965,7 +977,7 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
   void _setFilmBrand(String? brand) {
     setState(() {
       _filmBrand = brand;
-      if (brand != 'Other') _filmBrandController.clear();
+      _filmBrandController.clear();
       _dirty = true;
     });
   }
@@ -996,7 +1008,7 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
 
   Future<void> _promptSaveConfirmation() async {
     final l10n = appLocalizations(context);
-    if (_status == 'FILM' && _filmBrand?.trim().isNotEmpty != true) {
+    if (_status == 'FILM' && !_hasValidFilmBrand) {
       setState(() => _error = l10n.filmBrandRequired);
       return;
     }
@@ -1033,8 +1045,17 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
     if (confirmed == true) await _persist(closeAfter: true);
   }
 
+  Future<void> _confirmFilmSelection() async {
+    if (_saving || !_hasValidFilmBrand) return;
+    await _persist(closeAfter: true);
+  }
+
   Future<void> _handleBack(bool didPop, Object? result) async {
     if (didPop || _saving) return;
+    if (_status == 'FILM') {
+      if (mounted) Navigator.of(context).pop(_lastSavedDetail);
+      return;
+    }
     if (_dirty) {
       await _persist(closeAfter: true);
     } else if (mounted) {
@@ -1097,6 +1118,9 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                               )
                             : Text(l10n.save),
                       );
+                      final headerSaveButton = _status == 'FILM'
+                          ? const SizedBox.shrink()
+                          : saveButton;
 
                       if (compactHeader) {
                         return Column(
@@ -1115,7 +1139,7 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                               children: [
                                 clearButton,
                                 const SizedBox(width: AppSpacing.xs),
-                                saveButton,
+                                headerSaveButton,
                               ],
                             ),
                           ],
@@ -1129,7 +1153,7 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                           Expanded(child: title),
                           clearButton,
                           const SizedBox(width: AppSpacing.xs),
-                          saveButton,
+                          headerSaveButton,
                         ],
                       );
                     },
@@ -1461,6 +1485,27 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                       );
                     }),
                     if (_showProductPicker) _buildProductPicker(context),
+                  ],
+                  if (_status == 'FILM') ...[
+                    const SizedBox(height: AppSpacing.lg),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                        onPressed: _saving || !_hasValidFilmBrand
+                            ? null
+                            : _confirmFilmSelection,
+                        icon: _saving
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.check),
+                        label: Text(l10n.confirmFilmSelection),
+                      ),
+                    ),
                   ],
                   if (_error != null)
                     Padding(

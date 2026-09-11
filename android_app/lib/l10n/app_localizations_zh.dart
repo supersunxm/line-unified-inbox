@@ -464,6 +464,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get confirmSave => '确认保存';
 
   @override
+  String get confirmFilmSelection => '确认选择';
+
+  @override
   String get confirmPurchase => '确认购买';
 
   @override
@@ -1465,6 +1468,9 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
 
   @override
   String get confirmSave => '确认保存';
+
+  @override
+  String get confirmFilmSelection => '确认选择';
 
   @override
   String get confirmPurchase => '确认购买';

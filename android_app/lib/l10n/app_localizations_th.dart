@@ -466,6 +466,9 @@ class AppLocalizationsTh extends AppLocalizations {
   String get confirmSave => 'ยืนยันการบันทึก';
 
   @override
+  String get confirmFilmSelection => 'ยืนยันการเลือก';
+
+  @override
   String get confirmPurchase => 'ยืนยันการซื้อ';
 
   @override

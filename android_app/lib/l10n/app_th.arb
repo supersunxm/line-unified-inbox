@@ -148,6 +148,7 @@
   "interestNotSpecified": "ยังไม่ระบุ",
   "confirmCustomerInfo": "ยืนยันข้อมูลลูกค้า",
   "confirmSave": "ยืนยันการบันทึก",
+  "confirmFilmSelection": "ยืนยันการเลือก",
   "confirmPurchase": "ยืนยันการซื้อ",
   "convertToPurchased": "เปลี่ยนเป็นลูกค้าที่ซื้อแล้ว",
   "customerInfoSaved": "บันทึกข้อมูลลูกค้าสำเร็จ",

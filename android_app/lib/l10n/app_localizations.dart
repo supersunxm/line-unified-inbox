@@ -983,6 +983,12 @@ abstract class AppLocalizations {
   /// **'Confirm Save'**
   String get confirmSave;
 
+  /// No description provided for @confirmFilmSelection.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm selection'**
+  String get confirmFilmSelection;
+
   /// No description provided for @confirmPurchase.
   ///
   /// In en, this message translates to:

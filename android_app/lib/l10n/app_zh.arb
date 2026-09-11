@@ -148,6 +148,7 @@
   "interestNotSpecified": "未指定",
   "confirmCustomerInfo": "确认客户信息",
   "confirmSave": "确认保存",
+  "confirmFilmSelection": "确认选择",
   "confirmPurchase": "确认购买",
   "convertToPurchased": "转为已购买",
   "customerInfoSaved": "客户销售信息已保存",
