@@ -7,6 +7,14 @@ import { buildCustomerVoiceAnalysis } from "./customer-voice-analyzer";
 
 const models: MatchableModel[] = [
   {
+    id: "reno-family",
+    name: "OPPO Reno Series",
+    classificationLevel: "FAMILY",
+    priority: 1,
+    aliases: [{ alias: "Reno", safety: "SAFE_EXACT", priority: 0 }],
+    productSeries: { name: "Reno", productGroup: "SMARTPHONE" },
+  },
+  {
     id: "reno-16",
     name: "OPPO Reno16",
     classificationLevel: "MODEL",
@@ -65,4 +73,32 @@ test("existing topic aliases map to canonical analytics categories", () => {
   assert.equal(result.primaryTopic, "Installment / Payment");
   assert.deepEqual(result.secondaryTopics, ["Product Information"]);
   assert.equal(result.source, CustomerVoiceAnalysisSource.EXISTING_TOPIC);
+});
+
+test("pilot gap phrases are classified conservatively without treating acknowledgements as signals", () => {
+  const payment = buildCustomerVoiceAnalysis([inbound("m-1", "สอบถามเงินดาวน์ค่ะ ขอบคุณ")], [], []);
+  assert.equal(payment.primaryTopic, "Installment / Payment");
+  assert.equal(payment.intent, "PAYMENT_INQUIRY");
+
+  const contact = buildCustomerVoiceAnalysis([inbound("m-2", "ขอเบอร์ติดต่อร้านค่ะ")], [], []);
+  assert.equal(contact.primaryTopic, "Store Contact");
+  assert.equal(contact.intent, "INFORMATION");
+
+  const productQuestion = buildCustomerVoiceAnalysis([inbound("m-3", "มีรุ่นไหนบ้างคะ")], [], []);
+  assert.equal(productQuestion.primaryTopic, "Product Information");
+  assert.equal(productQuestion.intent, "INFORMATION");
+
+  const acknowledgement = buildCustomerVoiceAnalysis([inbound("m-4", "ขอบคุณค่ะ")], [], []);
+  assert.equal(acknowledgement.source, CustomerVoiceAnalysisSource.UNCLASSIFIED);
+
+  assert.equal(buildCustomerVoiceAnalysis([inbound("m-5", "ใช้บัตรอะไรได้บ้าง")], [], []).intent, "PAYMENT_INQUIRY");
+  assert.equal(buildCustomerVoiceAnalysis([inbound("m-6", "ให้ทางร้านโทรกลับได้ไหม")], [], []).primaryTopic, "Store Contact");
+  assert.equal(buildCustomerVoiceAnalysis([inbound("m-7", "แนะนำมือถือหน่อยค่ะ")], [], []).primaryTopic, "Product Information");
+});
+
+test("an exact product model suppresses its redundant family match", () => {
+  const message = inbound("m-1", "สนใจ OPPO Reno16");
+  const matches = matchProducts([{ id: message.id, text: message.originalText, sentAt: message.sentAt }], models);
+  const result = buildCustomerVoiceAnalysis([message], [], matches);
+  assert.deepEqual(result.productMentions, ["OPPO Reno16"]);
 });

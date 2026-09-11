@@ -1,3 +1,23 @@
+# 2026-09-11: Remove Rich Menu Bulk Store Selection Cap [COMPLETED & VERIFIED]
+- **Current Task**: Remove the user-facing five-store selection limit from Phase 2B Rich Menu bulk publishing while preserving durable jobs, readiness validation, progress persistence, retry scope, and bounded LINE API concurrency.
+- **Findings**:
+  - The old cap was enforced by the Rich Menu frontend selection toggle/select-all logic, localized copy, publish eligibility/modal copy, the backend bulk-job validator, and the `/publish-capabilities` `maxTargets` field.
+  - Readiness is loaded as the full store dataset; table search/filtering is client-side and does not paginate the selection source.
+  - The worker already uses persisted attempts and bounded concurrency (default 2, maximum 5), independent of selection size.
+- **Completed Work**:
+  - Removed the selection cap and all Rich Menu five-store limit copy from Thai, English, and Chinese UI dictionaries.
+  - Select-all now selects every READY, not-currently-published store in the full readiness dataset; stale selections are pruned on readiness refresh, and publish requests are rebuilt from currently eligible rows.
+  - Removed backend target-count rejection and `maxTargets` capability metadata; duplicate IDs remain deduplicated and existing active/store/token/readiness validation remains in place.
+  - Added generated 143-store coverage, duplicate-ID coverage, blocked-store selection assertions, worker partial-failure continuation coverage, and preserved retry-only-failed coverage.
+- **Checks Run**:
+  - Rich Menu backend spec: **29/29 passed**.
+  - Frontend test suite: **563/563 passed**.
+  - Frontend and backend production builds: **passed**.
+  - Runtime smoke: backend `/health` **200**, frontend `/` **200**, `/rich-menus` **200**, unauthenticated Rich Menu capabilities **401**; startup logs registered the Rich Menu routes and worker.
+  - `git diff --check`: **passed**.
+  - Full lint/typecheck and full backend suite retain unrelated repository-baseline failures; Docker/PostgreSQL is unavailable for DB-backed authenticated verification.
+- **Next Action**: Review the scoped diff; no commit, migration, or deployment was performed.
+
 # 2026-09-10: Store 360 Phase 1 Production Readiness [COMPLETED & VERIFIED]
 - **Current Task**: Validate and refine the Store 360 Phase 1 implementation against the existing data model without starting Phase 2 AI features.
 - **Audit Completed**:
@@ -4488,3 +4508,13 @@ Verification passed: frontend TypeScript, zero-warning ESLint, 173/173 tests, an
 - Added an explicit `bangkokDateRangeToUtcBounds` half-open range helper. Store 360 and Customer Voice now use Bangkok calendar midnights converted to UTC; response lookup retains the existing report-end-plus-24-hour SLA window. The generic `toUtcDateForDb` remains unchanged for non-reporting callers.
 - Boundary coverage includes Bangkok midnight inclusion/exclusion, one-day, month/year boundaries, invalid/reversed ranges, comparison periods, and a response inside the corrected +24-hour SLA window. No database migration, production write, backfill, worker enablement, AI call, or deployment is part of this task.
 - Next action: complete affected tests/builds and read-only pilot-store metric cross-check, then commit and push this fix branch only. Do not merge, deploy, or resume the persisted pilot.
+
+# Current task: Customer Voice pilot refinement (2026-09-11)
+
+- Diagnosed the production `Opening Store 360…` hang after authorization: the client view repeated `api.me()` with `api.stores()` in an unbounded `Promise.all`; rejection was stored in an error state hidden behind the `!authUser` loading guard, and the one-shot ref plus effect cleanup could suppress a valid completion/retry. Added a 15-second bounded bootstrap, visible retry state, authorized-store URL validation/fallback, and tests for valid/missing/unauthorized stores and timeout behavior.
+- Isolated Customer Voice request failures inside the Customer Voice panel so they cannot block or replace Phase 1 metrics. Phase 1 bootstrap and summary remain independent of Customer Voice availability.
+- Reviewed only the existing 25 production pilot analyses. The sanitized 10-row gap split was eight missing-rule candidates, one uncovered phrase, and one acknowledgement-only conversation. Added conservative, evidence-backed payment, store-contact, and product-question patterns; acknowledgements remain unclassified.
+- Product reporting now keeps exact matched models and suppresses a redundant family-level match from the same Product Series. Persisted `ConversationTopic` remains read-only and retains explicit existing/mixed provenance.
+- Aggregate-only production dry-run against exactly the existing 25 rows improved classified coverage from 15/25 (60%) to 19/25 (76%), with four newly classified payment cases and six still unresolved. One existing `Other`/`GENERAL` case becomes payment; two multi-topic payment intents become the higher-priority `PRICE_CHECK`; three redundant family mentions are suppressed. No production row was inserted or updated; no raw customer content or identifiers were returned.
+- Verification passed: focused Customer Voice backend tests 11/11, all frontend tests 563/563, scoped backend/frontend ESLint, Prisma validate/generate, backend/frontend production builds, local backend startup with worker disabled, local `/health` and `/health/readiness` 200, `/store-360` 200, unauthenticated Customer Voice 401, and diff whitespace checks. The existing Docker-backed database required the backend smoke test to run outside the filesystem sandbox; startup then completed cleanly.
+- Production safety readback remains 25 analytics rows in one store, zero rows with AI provider provenance, and worker disabled. No commit, push, deployment, worker enablement, AI call, or additional persisted batch was performed. Next action: review these uncommitted changes; do not reprocess the 25 rows until separately authorized.

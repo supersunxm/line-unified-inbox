@@ -11,6 +11,7 @@ import { UnifiedPeriodPicker } from "@/components/date-range/unified-period-pick
 import { useAppLanguage } from "../language";
 import { StoreSearchCombobox } from "./store-search-combobox";
 import { CustomerVoicePanel } from "./customer-voice-panel";
+import { resolveAuthorizedStoreId, withStore360Timeout } from "./store-360-bootstrap";
 
 type Preset = "7d" | "30d" | "month" | "custom";
 type ComparisonMode = "previous" | "none";
@@ -178,13 +179,17 @@ export function Store360View() {
   const [loading, setLoading] = useState(true);
   const [conversationLoading, setConversationLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [bootstrapError, setBootstrapError] = useState<string | null>(null);
+  const [bootstrapAttempt, setBootstrapAttempt] = useState(0);
+  const [bootstrapComplete, setBootstrapComplete] = useState(false);
+  const [customerVoiceError, setCustomerVoiceError] = useState<string | null>(null);
   const [searchText, setSearchText] = useState("");
-  const bootstrapped = useRef(false);
+  const initialSelection = useRef({ storeId, from, to });
   const summaryRequestId = useRef(0);
   const customerVoiceRequestId = useRef(0);
   const conversationsRequestId = useRef(0);
 
-  const activeStoreId = storeId || stores[0]?.id || "";
+  const activeStoreId = bootstrapComplete ? storeId || stores[0]?.id || "" : "";
   const updateUrl = useCallback((nextStoreId: string, nextFrom: string, nextTo: string) => {
     const params = new URLSearchParams();
     if (nextStoreId) params.set("storeId", nextStoreId);
@@ -194,24 +199,25 @@ export function Store360View() {
   }, [router]);
 
   useEffect(() => {
-    if (bootstrapped.current) return;
-    bootstrapped.current = true;
     let active = true;
-    void Promise.all([api.me(), api.stores()])
+    void withStore360Timeout(Promise.all([api.me(), api.stores()]))
       .then(([user, storeRows]) => {
         if (!active) return;
+        const authorizedStores = storeRows ?? [];
+        const resolvedStoreId = resolveAuthorizedStoreId(initialSelection.current.storeId, authorizedStores);
         setAuthUser(user as AuthUser);
-        setStores(storeRows ?? []);
-        if (!storeId && storeRows[0]) {
-          setStoreId(storeRows[0].id);
-          updateUrl(storeRows[0].id, from, to);
+        setStores(authorizedStores);
+        setStoreId(resolvedStoreId);
+        setBootstrapComplete(true);
+        if (resolvedStoreId !== initialSelection.current.storeId) {
+          updateUrl(resolvedStoreId, initialSelection.current.from, initialSelection.current.to);
         }
       })
       .catch((reason: unknown) => {
-        if (active) setError(reason instanceof Error ? reason.message : "Unable to load authorized stores");
+        if (active) setBootstrapError(reason instanceof Error ? reason.message : "Unable to load authorized stores");
       });
     return () => { active = false; };
-  }, [from, initialRange.from, initialRange.to, storeId, to, updateUrl]);
+  }, [bootstrapAttempt, updateUrl]);
 
   const loadSummary = useCallback(async () => {
     if (!activeStoreId) { setLoading(false); return; }
@@ -260,13 +266,14 @@ export function Store360View() {
     if (!activeStoreId) { setCustomerVoiceLoading(false); return; }
     const requestId = ++customerVoiceRequestId.current;
     setCustomerVoiceLoading(true);
+    setCustomerVoiceError(null);
     setCustomerVoice(null);
     try {
       const compare = comparisonMode === "previous" ? comparisonFor(from, to) : {};
       const value = await api.storeInsightsCustomerVoice(activeStoreId, { from, to, ...compare });
       if (requestId === customerVoiceRequestId.current) setCustomerVoice(value);
     } catch (reason) {
-      if (requestId === customerVoiceRequestId.current) setError(reason instanceof Error ? reason.message : "Unable to load Customer Voice");
+      if (requestId === customerVoiceRequestId.current) setCustomerVoiceError(reason instanceof Error ? reason.message : "Unable to load Customer Voice");
     } finally {
       if (requestId === customerVoiceRequestId.current) setCustomerVoiceLoading(false);
     }
@@ -333,7 +340,8 @@ export function Store360View() {
     return q ? conversations.filter((item) => item.customer.displayName.toLocaleLowerCase().includes(q) || item.salesProduct?.toLocaleLowerCase().includes(q)) : conversations;
   }, [conversations, searchText]);
 
-  if (!authUser) return <main className="flex min-h-screen items-center justify-center bg-[var(--app-bg)] text-sm text-[var(--app-text-secondary)]">Opening Store 360…</main>;
+  if (bootstrapError) return <main className="flex min-h-screen items-center justify-center bg-[var(--app-bg)] p-6"><div className={`${surfaceClass()} max-w-md p-6 text-center`}><h1 className="text-base font-semibold text-[var(--app-text-primary)]">Unable to open Store 360</h1><p className="mt-2 text-sm text-[var(--app-text-secondary)]">{bootstrapError}</p><button type="button" onClick={() => { setBootstrapError(null); setBootstrapAttempt((value) => value + 1); }} className="mt-4 rounded-lg bg-[var(--app-accent)] px-4 py-2 text-sm font-semibold text-white">Try again</button></div></main>;
+  if (!bootstrapComplete || !authUser) return <main className="flex min-h-screen items-center justify-center bg-[var(--app-bg)] text-sm text-[var(--app-text-secondary)]">Opening Store 360…</main>;
 
   return (
     <AppShell currentSection="store-360" authUser={authUser} language={language} changeLanguage={setLanguage} searchText={searchText} setSearchText={setSearchText} logout={logout} isLoading={loading} apiError={error} loadApplicationData={() => { void loadSummary(); void loadCustomerVoice(); }} text={{ appName: "OPPO LINE OA Monitor", searchPlaceholder: "Search customers, stores, or messages" }}>
@@ -355,7 +363,7 @@ export function Store360View() {
 
           <section className={`${surfaceClass()} p-5 sm:p-6`}><SectionTitle title="Response performance" description="SLA buckets use the same first-inbound → first-valid-human-response definition as the KPI row." /><ResponseBars summary={summary} /></section>
 
-          <CustomerVoicePanel data={customerVoice} loading={customerVoiceLoading} selectedTopic={customerVoiceTopic} onTopicSelect={selectCustomerVoiceTopic} />
+          <CustomerVoicePanel data={customerVoice} loading={customerVoiceLoading} error={customerVoiceError} selectedTopic={customerVoiceTopic} onTopicSelect={selectCustomerVoiceTopic} />
 
           <section className={`${surfaceClass()} p-5 sm:p-6`}><SectionTitle title="Who responded" description="Only staff identities connected to real outbound messages are included." /><ResponderTable responders={responders} />{responders.length === 0 && <p className="mt-3 text-xs text-[var(--app-text-tertiary)]">Unknown responders are retained in the conversation explorer; no attributable staff rows are available for this period.</p>}</section>
 

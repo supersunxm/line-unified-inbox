@@ -1,5 +1,11 @@
 # Architecture & Design Decisions
 
+## Rich Menu selection is unbounded; worker execution remains bounded (2026-09-11)
+
+- Remove the five-store user-facing selection and request cap from Rich Menu Phase 2B. The selected target set is the deduplicated set of currently READY, not-currently-published store LINE OA IDs returned by the full readiness dataset; UI filtering must not restrict select-all behavior.
+- Keep the durable `RichMenuPublishJob` / `RichMenuPublishAttempt` architecture, server-side persisted progress, per-store isolation, and retry-only-failed semantics unchanged. The initial request creates the job and attempts; it does not wait for LINE API publishing.
+- Treat selection size and execution concurrency as separate controls. The worker continues to process attempts in bounded batches with the existing default concurrency of 2 and hard ceiling of 5, avoiding simultaneous 100+ LINE API requests without imposing a user-facing target maximum.
+
 ## Store Locator Production-Readiness: provider-neutral events and fail-closed LINE CTAs (2026-09-10)
 
 - Keep `/store-locator` on the existing `GET /public/stores` contract and the active `StoreMaster` source. The existing `/stores` internal route and its authentication boundary remain untouched.
@@ -671,7 +677,7 @@
 - **Job-Attempt Hierarchy**: Bulk publishing creates a parent `RichMenuPublishJob` linked to $N$ individual `RichMenuPublishAttempt` rows. This maintains per-store granular audit history, rollback capabilities, and individual retry records while providing an aggregate lifecycle (`PENDING` $\to$ `RUNNING` $\to$ `COMPLETED` / `COMPLETED_WITH_ERRORS` / `CANCELLED` / `FAILED`).
 - **Atomic Queue Claiming**: Queue processing utilizes a transactional `UPDATE ... WHERE status = 'PENDING'` claim pattern to ensure that distributed workers never double-claim or process overlapping jobs.
 - **Worker Heartbeat & Capabilities Detection**: Background workers continuously record a heartbeat in `RichMenuWorkerHeartbeat`. The `/publish-capabilities` endpoint evaluates worker freshness ($< 60$ seconds) to inform the frontend if queue processing is operational.
-- **Bounded Concurrency & Batch Limits**: Concurrency is strictly bounded at both the worker pool level (default 2, maximum 5 concurrent LINE API requests via `p-limit`) and batch submission level (default 5 stores per job, configurable up to 10), guarding against LINE Messaging API rate limiting (`429`) and connection saturation.
+- **Bounded Concurrency**: Concurrency is strictly bounded at the worker pool level (default 2, maximum 5 concurrent LINE API requests), guarding against LINE Messaging API rate limiting (`429`) and connection saturation. The former submission batch limit was removed by the 2026-09-11 unbounded-selection decision; selection size is not an execution-concurrency control.
 - **Exponential Backoff on Transient LINE Failures**: `LineRichMenuClientService.withRetry()` wraps HTTP calls with jittered exponential backoff for status codes 429 and 5xx, while immediately failing fast on 400 Bad Request client errors.
 - **Dual-Checkbox Frontend State**: Store selection in `RichMenusView` is cleanly decoupled into two independent sets: `assignedOaIds` (stores bound to the template) and `publishSelectedOaIds` (explicit target subset for the upcoming publish job).
 - **Graceful Cancellation & Granular Retry**: Cancelling a job immediately marks pending attempts as `CANCELLED` or `SKIPPED` while in-flight operations finish safely. A dedicated `retryFailed()` action spawns a scoped child job targeting only failed stores without re-publishing already successful stores.
@@ -2220,3 +2226,12 @@ Keep `StoreMaster.tiktokProfileUrl` as the only persisted TikTok profile URL. Po
 - Treat Store 360 `from`/`to` values as inclusive Bangkok calendar dates and convert them to a UTC half-open database range: Bangkok midnight at the start of `from`, through Bangkok midnight on the day after `to`.
 - Centralize this contract in `bangkokDateRangeToUtcBounds` and use it for Store Insights, Customer Voice aggregation, comparison periods, and the controlled Customer Voice backfill. Keep `toUtcDateForDb` unchanged because other date-only features may intentionally use UTC-calendar semantics.
 - Continue extending only the response lookup window by 24 hours after the corrected reporting end. This changes timestamp boundaries, not KPI definitions, eligibility scope, or persistence behavior.
+
+## 2026-09-11: Customer Voice pilot refinement remains deterministic and reversible
+
+- Bound Store 360's client bootstrap and render a visible retryable failure instead of hiding bootstrap rejection behind the opening screen. Validate a URL-backed store ID against the authorized store payload and fall back to the first authorized store; never issue Store Insights requests for an unauthorized or unresolved URL store.
+- Keep Customer Voice loading and errors subordinate to Store 360 Phase 1. A failed Customer Voice request renders an isolated panel state while KPIs, response performance, responders, sales, and Conversation Explorer continue to use their own request lifecycle.
+- Add deterministic phrases only where the sanitized 25-row pilot supports them. Preserve genuinely non-informative acknowledgements as unclassified and leave ambiguous remaining gaps unresolved rather than broadening keywords until they create false positives.
+- Keep the existing compact intent enum. Use `INFORMATION` for store-contact/product-information topics and retain topic priority when multiple deterministic signals coexist; do not introduce purchase scoring or Phase 2B semantics.
+- Model product family versus exact model without a schema migration: if an exact MODEL and FAMILY match share the same Product Series, report the exact model only. Report the family only when no exact model is recognized. Existing product catalog rows remain unchanged.
+- Continue treating persisted ConversationTopic as a read-only hint with `EXISTING_TOPIC`/`MIXED_ENRICHED` provenance. This refinement performs aggregate-only dry runs against the existing pilot cohort and does not update its 25 persisted rows.

@@ -51,6 +51,14 @@ function summaryText(primaryTopic: CustomerVoiceTopic | null, intent: CustomerVo
   return signals.length > 0 ? `Customer voice signals: ${signals.join("; ")}.` : null;
 }
 
+export function normalizeCustomerVoiceProductMatches(productMatches: readonly ProductMatch[]): ProductMatch[] {
+  const exactSeries = new Set(productMatches
+    .filter(({ model }) => model.classificationLevel === "MODEL")
+    .map(({ model }) => model.productSeries?.name)
+    .filter((name): name is string => Boolean(name)));
+  return productMatches.filter(({ model }) => model.classificationLevel !== "FAMILY" || !model.productSeries?.name || !exactSeries.has(model.productSeries.name));
+}
+
 export function buildCustomerVoiceAnalysis(
   messages: readonly CustomerVoiceInboundMessage[],
   existingTopics: readonly CustomerVoiceExistingTopic[],
@@ -59,7 +67,8 @@ export function buildCustomerVoiceAnalysis(
   const text = messages.map(({ originalText }) => originalText.trim()).filter(Boolean).join(" ");
   const existing = uniqueTopics(existingTopics.map(({ name }) => canonicalizeCustomerVoiceTopic(name)));
   const inferred = inferCustomerVoiceTopics(text);
-  const productMentions = [...new Set(productMatches.map(({ model }) => model.name).filter(Boolean))];
+  const normalizedProductMatches = normalizeCustomerVoiceProductMatches(productMatches);
+  const productMentions = [...new Set(normalizedProductMatches.map(({ model }) => model.name).filter(Boolean))];
   const inferredWithProduct = productMentions.length > 0 && !inferred.includes("Product Information")
     ? [...inferred, "Product Information" as const]
     : inferred;
@@ -80,7 +89,7 @@ export function buildCustomerVoiceAnalysis(
     ? average([
       ...existingTopics.flatMap(({ confidence: value }) => typeof value === "number" && Number.isFinite(value) ? [Math.max(0, Math.min(1, value))] : []),
       ...inferredWithProduct.map(() => 0.85),
-      ...productMatches.map(({ confidence: value }) => Math.max(0, Math.min(1, value))),
+      ...normalizedProductMatches.map(({ confidence: value }) => Math.max(0, Math.min(1, value))),
       ...(existing.length > 0 && inferredWithProduct.length === 0 && productMatches.length === 0 ? [0.75] : []),
     ])
     : null;
@@ -92,7 +101,7 @@ export function buildCustomerVoiceAnalysis(
     secondaryTopics,
     intent,
     productMentions,
-    rawProductMentions: [...new Set(productMatches.map(({ matchedPhrase }) => matchedPhrase).filter(Boolean))],
+    rawProductMentions: [...new Set(normalizedProductMatches.map(({ matchedPhrase }) => matchedPhrase).filter(Boolean))],
     confidence,
     summary: summaryText(primaryTopic, intent, productMentions),
     inputMessageCount: messages.length,
