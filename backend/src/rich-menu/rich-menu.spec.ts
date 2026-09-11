@@ -862,7 +862,11 @@ test("RichMenuService.rollbackPublish: restores previous default or clears defau
   assert.deepEqual(publishedLineCalls, ["setDefault:richmenu-previous-default"]);
 });
 
-test("RichMenuService.createBulkPublishJob: enforces max targets limit and creates queued job with pending attempts", async () => {
+test("RichMenuService.createBulkPublishJob: accepts large selections and deduplicates target IDs", async () => {
+  const targetIds = Array.from({ length: 143 }, (_, index) => `oa-${index + 1}`);
+  const createdAttempts: any[] = [];
+  let createdJob: any = null;
+
   const mockPrisma = {
     richMenuTemplate: {
       findUnique: async () => ({
@@ -870,24 +874,28 @@ test("RichMenuService.createBulkPublishJob: enforces max targets limit and creat
         name: "Promo Menu",
         version: 1,
         imageUrl: "https://lineoppo.click/messages/media/public?key=line-media%2Foutbound%2Frich-menu%2Fimg.jpg&expires=999&signature=sig",
-        assignments: [
-          { id: "asgn-1", lineOfficialAccountId: "oa-1" },
-          { id: "asgn-2", lineOfficialAccountId: "oa-2" },
-          { id: "asgn-3", lineOfficialAccountId: "oa-3" },
-        ],
+        assignments: [],
       }),
     },
     lineOfficialAccount: {
-      findMany: async (args: any) => [
-        { id: "oa-1", name: "OA 1", accountType: "STORE", isActive: true, archivedAt: null, encryptedChannelAccessToken: "tok-1", store: { id: "s-1", name: "Store 1" } },
-        { id: "oa-2", name: "OA 2", accountType: "STORE", isActive: true, archivedAt: null, encryptedChannelAccessToken: "tok-2", store: { id: "s-2", name: "Store 2" } },
-        { id: "oa-3", name: "OA 3", accountType: "STORE", isActive: true, archivedAt: null, encryptedChannelAccessToken: "tok-3", store: { id: "s-3", name: "Store 3" } },
-      ],
+      findMany: async (args: any) =>
+        args.where.id.in.map((id: string, index: number) => ({
+          id,
+          name: `OA ${index + 1}`,
+          accountType: "STORE",
+          isActive: true,
+          archivedAt: null,
+          encryptedChannelAccessToken: `tok-${index + 1}`,
+          store: { id: `s-${index + 1}`, name: `Store ${index + 1}` },
+        })),
     },
     $transaction: async (fn: any) => {
-      return fn({
+      const result = await fn({
         richMenuPublishJob: {
-          create: async (args: any) => ({ id: "job-100", ...args.data }),
+          create: async (args: any) => {
+            createdJob = { id: "job-large", ...args.data };
+            return createdJob;
+          },
         },
         richMenuStoreAssignment: {
           upsert: async (args: any) => ({
@@ -896,29 +904,17 @@ test("RichMenuService.createBulkPublishJob: enforces max targets limit and creat
           }),
         },
         richMenuPublishAttempt: {
-          create: async (args: any) => ({ id: `att-${args.data.lineOfficialAccountId}`, ...args.data }),
+          create: async (args: any) => {
+            createdAttempts.push(args.data);
+            return { id: `att-${args.data.lineOfficialAccountId}`, ...args.data };
+          },
         },
       });
+      return result;
     },
     richMenuPublishJob: {
       findUnique: async () => ({
-        id: "job-100",
-        templateId: "tpl-1",
-        templateVersion: 1,
-        status: "QUEUED",
-        totalCount: 3,
-        pendingCount: 3,
-        processingCount: 0,
-        publishedCount: 0,
-        failedCount: 0,
-        skippedCount: 0,
-        cancelledCount: 0,
-        createdByUserId: "admin-1",
-        startedAt: null,
-        completedAt: null,
-        cancelRequestedAt: null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
+        ...createdJob,
         attempts: [],
       }),
     },
@@ -926,29 +922,20 @@ test("RichMenuService.createBulkPublishJob: enforces max targets limit and creat
 
   const service = new RichMenuService(mockPrisma, {} as any, {} as any, {} as any);
 
-  // 1. Max target rejection (> 5)
-  process.env.RICH_MENU_BULK_MAX_TARGETS = "5";
-  await assert.rejects(
-    async () => {
-      await service.createBulkPublishJob(
-        "tpl-1",
-        { lineOfficialAccountIds: ["oa-1", "oa-2", "oa-3", "oa-4", "oa-5", "oa-6"] },
-        { id: "admin-1" } as any,
-      );
-    },
-    { message: /ขณะนี้สามารถเผยแพร่ได้สูงสุด 5 ร้านต่อครั้ง/ },
-  );
-
-  // 2. Successful creation of 3 stores
   const jobRes = await service.createBulkPublishJob(
     "tpl-1",
-    { lineOfficialAccountIds: ["oa-1", "oa-2", "oa-3", "oa-1"] }, // duplicate oa-1 deduplicated
+    { lineOfficialAccountIds: [...targetIds, targetIds[0], targetIds[1]] },
     { id: "admin-1" } as any,
   );
 
-  assert.equal(jobRes.id, "job-100");
+  assert.equal(jobRes.id, "job-large");
   assert.equal(jobRes.status, "QUEUED");
-  assert.equal(jobRes.totalCount, 3);
+  assert.equal(jobRes.totalCount, targetIds.length);
+  assert.equal(createdAttempts.length, targetIds.length);
+  assert.deepEqual(
+    createdAttempts.map((attempt) => attempt.lineOfficialAccountId),
+    targetIds,
+  );
 });
 
 test("RichMenuService.createBulkPublishJob: automatically creates/upserts missing assignments in transaction", async () => {
@@ -1154,6 +1141,68 @@ test("RichMenuPublishWorkerService: records heartbeat and processes pending jobs
   assert.equal(jobFinalizedStatus, "COMPLETED");
 });
 
+test("RichMenuPublishWorkerService: one failed store does not stop the remaining attempts", async () => {
+  let finalStatus = "";
+  const processedStores: string[] = [];
+
+  const mockPrisma = {
+    richMenuPublishJob: {
+      findFirst: async () => ({
+        id: "job-partial",
+        templateId: "tpl-1",
+        templateVersion: 1,
+        status: "QUEUED",
+        totalCount: 3,
+        createdByUserId: "admin-1",
+      }),
+      findUnique: async () => ({
+        id: "job-partial",
+        templateId: "tpl-1",
+        templateVersion: 1,
+        status: "RUNNING",
+        totalCount: 3,
+        createdByUserId: "admin-1",
+        attempts: [
+          { status: "PUBLISHED" },
+          { status: "FAILED" },
+          { status: "PUBLISHED" },
+        ],
+      }),
+      update: async (args: any) => {
+        if (args.data.status === "COMPLETED_WITH_ERRORS") finalStatus = args.data.status;
+      },
+    },
+    richMenuPublishAttempt: {
+      findMany: async (args: any) => {
+        if (args.where.status === "PENDING") {
+          return [
+            { id: "att-1", lineOfficialAccountId: "oa-1", status: "PENDING" },
+            { id: "att-2", lineOfficialAccountId: "oa-failed", status: "PENDING" },
+            { id: "att-3", lineOfficialAccountId: "oa-3", status: "PENDING" },
+          ];
+        }
+        return [{ status: "PUBLISHED" }, { status: "FAILED" }, { status: "PUBLISHED" }];
+      },
+      updateMany: async () => ({ count: 1 }),
+    },
+  } as any;
+
+  const mockRichMenuService = {
+    publishOneStore: async (params: any) => {
+      processedStores.push(params.lineOfficialAccountId);
+      if (params.lineOfficialAccountId === "oa-failed") throw new Error("LINE rejected this store");
+      return { id: params.attemptId, status: "PUBLISHED" } as any;
+    },
+  } as any;
+
+  const worker = new RichMenuPublishWorkerService(mockPrisma, mockRichMenuService);
+  const processedCount = await worker.processQueueCycle();
+
+  assert.equal(processedCount, 3);
+  assert.deepEqual(processedStores, ["oa-1", "oa-failed", "oa-3"]);
+  assert.equal(finalStatus, "COMPLETED_WITH_ERRORS");
+});
+
 test("RichMenuService.cancelPublishJob: cancels pending attempts and marks job cancelled", async () => {
   let pendingCancelled = false;
   let jobStatus = "RUNNING";
@@ -1293,7 +1342,6 @@ test("RichMenuService.getPublishCapabilities: returns worker readiness status fr
 
   const caps = await service.getPublishCapabilities();
   assert.equal(caps.bulkEnabled, true);
-  assert.equal(caps.maxTargets, 5);
   assert.equal(caps.concurrency, 2);
   assert.equal(caps.workerReady, true);
   assert.equal(caps.lastWorkerHeartbeatAt, freshDate.toISOString());
@@ -1444,6 +1492,15 @@ test("RichMenuService: rejects publishing when referenced auto-response rule is 
         status: "INACTIVE",
         textTemplate: "Inactive promo text",
       }),
+      findMany: async () => [
+        {
+          id: "rule-inactive-456",
+          name: "Old Promo",
+          status: "INACTIVE",
+          textTemplate: "Inactive promo text",
+          contentJson: null,
+        },
+      ],
     },
     lineOfficialAccount: {
       findUnique: async () => ({
@@ -1471,8 +1528,8 @@ test("RichMenuService: rejects publishing when referenced auto-response rule is 
   } as any;
 
   const service = new RichMenuService(mockPrisma, {} as any, {} as any, {} as any);
-  (service as any).recordSkippedAttempt = async (_params: any, reason: string) => {
-    recordedSkippedReason = reason;
+  (service as any).recordSkippedAttempt = async (_params: any, reason: string | string[]) => {
+    recordedSkippedReason = Array.isArray(reason) ? reason.join("\n") : reason;
     return { status: "SKIPPED", reason };
   };
 
@@ -1482,7 +1539,7 @@ test("RichMenuService: rejects publishing when referenced auto-response rule is 
     actorUserId: "admin-1",
   });
 
-  assert.match(recordedSkippedReason, /Auto-response rule 'Old Promo' is not active/);
+  assert.match(recordedSkippedReason, /Auto-response "Old Promo" ยังไม่ได้เปิดใช้งาน/);
 });
 
 test("RichMenuService.clearDefaultRichMenu: full lifecycle, captures previous ID, calls DELETE once, verifies 404, writes audit", async () => {

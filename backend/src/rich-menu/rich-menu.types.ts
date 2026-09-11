@@ -64,7 +64,6 @@ export type PublishBulkDto = {
 
 export type PublishCapabilitiesDto = {
   bulkEnabled: boolean;
-  maxTargets: number;
   concurrency: number;
   workerReady: boolean;
   lastWorkerHeartbeatAt: string | null;
@@ -179,6 +178,7 @@ export type RichMenuStoreReadinessItem = {
   googleMapsUrl: string | null;
   readinessStatus: "READY" | "BLOCKED";
   readinessReason: string | null;
+  readinessReasons: string[];
   selected: boolean;
   publishStatus?: string;
   publishedRichMenuId?: string | null;
@@ -430,6 +430,10 @@ export function validateRichMenuAreas(
 
   areas.forEach((area, index) => {
     const prefix = `Area ${index + 1}`;
+    if (!area || typeof area !== "object") {
+      errors.push(`${prefix}: area definition is invalid.`);
+      return;
+    }
     if (!area.bounds) {
       errors.push(`${prefix}: Missing bounds.`);
       return;
