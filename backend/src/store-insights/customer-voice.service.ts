@@ -3,12 +3,13 @@ import { CustomerVoiceAnalysisSource, CustomerVoiceIntent, MessageDirection, Pri
 import type { AuthUser } from "../auth/auth.guard";
 import { StoreAccessService } from "../auth/store-access.service";
 import { automaticCatalogAliasesForModel, storedProductAliasSafety } from "../classification/product-catalog";
-import { matchProducts, type MatchableModel } from "../classification/product-matcher";
+import type { MatchableModel } from "../classification/product-matcher";
 import { bangkokDateRangeToUtcBounds, getOffsetBangkokDateString, getTodayBangkokDateString } from "../follower-insights/date-utils";
 import { PrismaService } from "../prisma.service";
 import {
   buildCustomerVoiceAnalysis,
   isUsableCustomerVoiceAnalysis,
+  matchCustomerVoiceProducts,
   type CustomerVoiceAnalysisDraft,
 } from "./customer-voice-analyzer";
 import {
@@ -259,10 +260,7 @@ export class CustomerVoiceService {
 
     const productModels = models ?? await this.loadProductModels();
     const inboundMessages = conversation.messages;
-    const productMatches = matchProducts(
-      inboundMessages.map((message) => ({ id: message.id, text: message.originalText, sentAt: message.sentAt })),
-      productModels,
-    );
+    const productMatches = matchCustomerVoiceProducts(inboundMessages, productModels);
     const draft = buildCustomerVoiceAnalysis(
       inboundMessages,
       conversation.topics.map(({ topic, confidence }) => ({ name: topic.name, confidence })),

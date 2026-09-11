@@ -4525,3 +4525,17 @@ Verification passed: frontend TypeScript, zero-warning ESLint, 173/173 tests, an
 - Added explicit version-aware eligibility checks for the worker/backfill path: a v1 checkpoint is eligible for intentional v2 processing, an unchanged v2 checkpoint is skipped, and a newer inbound message makes the current-version checkpoint eligible again.
 - The existing compound `(conversationId, analysisVersion)` uniqueness remains unchanged, so v2 reprocessing preserves v1 history and creates/updates the v2 version row. Store Insights and Customer Voice aggregation already filter the current v2 source of truth.
 - Added provenance assertions for v2 persistence, `rules-v2` model metadata, null model provider, and no AI metadata, plus focused versioning tests. No production rows, deployment, worker, AI call, or backfill was performed.
+
+# Current task: Customer Voice ruleset v3 design (2026-09-11)
+
+- Used the original 25-row pilot and the prior 50-row v2 holdout as a read-only design corpus. The prior holdout's sanitized gap signatures showed reusable Thai retail phrasing gaps and a small number of safe product-boundary normalization gaps; no new canonical taxonomy category was justified.
+- Implemented `customer-voice-rules-v3` in an isolated worktree from `origin/main` (`b2d1478`). v3 keeps v1/v2 provenance immutable, tightens product-information rules to require product context, adds conservative stock/store/service/trade-in/payment phrasing, preserves greeting and acknowledgement precision, and normalizes safe Thai OPPO brand/model boundaries for Customer Voice matching only.
+- Added focused tests for reusable patterns, topic precedence, Thai product normalization, v3 persistence metadata, and v1/v2-to-v3 version eligibility. No migration, production write, worker enablement, AI call, deployment, commit, or push has occurred.
+- Next action: run the 75-conversation design-corpus regression and a newly stratified 50-conversation untouched v3 holdout. Do not persist holdout rows until the evaluation is reviewed separately.
+
+# Current task: Customer Voice ruleset v3 evaluation complete (2026-09-11)
+
+- The 75-conversation design regression produced 21/25 classified on the original pilot and 37/50 on the prior holdout, with zero classification losses and zero clearly incorrect v3 results. The fresh 50-conversation holdout was selected from the remaining 113 conversations with zero overlap and classified 43/50 (86%); all seven misses were meaningful rather than non-informative acknowledgements.
+- Product recognition on the fresh holdout was 16/50, improving from 14/50 under v2 on the same selection. v3 retained exact-model-over-family suppression, added two safe Reno-family recoveries, and left generic OPPO/device mentions unresolved rather than guessing a model.
+- Production remained unchanged throughout the evaluation: ConversationAnalytics stayed at 50 rows (25 v1, 25 v2, 0 v3), worker disabled, external AI calls 0, and no conversation/message/topic/ProductModel writes. No deployment, commit, or push was performed.
+- Focused v3 backend/versioning tests pass 19/19; scoped ESLint, backend build, Prisma validate/generate, and diff checks pass. Recommendation remains to review the uncommitted candidate before any checkpoint or v3 persistence authorization.

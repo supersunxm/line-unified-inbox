@@ -1,5 +1,5 @@
 import { CustomerVoiceAnalysisSource } from "@prisma/client";
-import type { ProductMatch } from "../classification/product-matcher";
+import { matchProducts, type MatchableModel, type ProductMatch } from "../classification/product-matcher";
 import {
   canonicalizeCustomerVoiceTopic,
   choosePrimaryCustomerVoiceTopic,
@@ -14,6 +14,51 @@ export type CustomerVoiceInboundMessage = {
   originalText: string;
   sentAt: Date;
 };
+
+/** Normalize safe Thai brand/model boundaries only for Customer Voice matching. */
+export function normalizeCustomerVoiceProductText(value: string): string {
+  return value
+    .normalize("NFKC")
+    .replace(/(ออปโป้?|ออปโป)(?=[\p{L}\p{N}])/giu, "$1 ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function normalizeCustomerVoiceProductMessages(messages: readonly CustomerVoiceInboundMessage[]): CustomerVoiceInboundMessage[] {
+  return messages.map((message) => ({ ...message, originalText: normalizeCustomerVoiceProductText(message.originalText) }));
+}
+
+/**
+ * Keep family-only recovery narrow: bare Reno-family language is accepted only
+ * with a retail/business cue and only when the active product master has the
+ * canonical family model. Generic OPPO/device mentions must not invent a model.
+ */
+export function matchCustomerVoiceProducts(messages: readonly CustomerVoiceInboundMessage[], models: readonly MatchableModel[]): ProductMatch[] {
+  const normalizedMessages = normalizeCustomerVoiceProductMessages(messages);
+  const matches = matchProducts(
+    normalizedMessages.map((message) => ({ id: message.id, text: message.originalText, sentAt: message.sentAt })),
+    [...models],
+  );
+  if (matches.length > 0) return matches;
+
+  const text = normalizedMessages.map(({ originalText }) => originalText).join(" ");
+  const hasRenoFamilyCue = /(?:\breno\b|รีโน|เรโน)/iu.test(text);
+  const hasBusinessCue = /(?:ราคา|เท่าไหร่|ผ่อน|โปร|มีของ|สต็อก|รายละเอียด|รุ่น|สนใจ|เปรียบเทียบ|price|installment|promotion|stock)/iu.test(text);
+  if (!hasRenoFamilyCue || !hasBusinessCue) return matches;
+
+  const family = models.find(({ name, classificationLevel, productSeries }) =>
+    name === "OPPO Reno Series" && classificationLevel === "FAMILY" && productSeries?.name === "Reno Series",
+  );
+  const sourceMessage = normalizedMessages.find(({ originalText }) => /(?:\breno\b|รีโน|เรโน)/iu.test(originalText));
+  if (!family || !sourceMessage) return matches;
+  return [{
+    model: family,
+    confidence: 0.88,
+    matchedPhrase: sourceMessage.originalText.match(/(?:\breno\b|รีโน|เรโน)/iu)?.[0] ?? "Reno",
+    detectionMethod: "SERIES_MATCH",
+    sourceMessageId: sourceMessage.id,
+  }];
+}
 
 export type CustomerVoiceExistingTopic = {
   name: string;

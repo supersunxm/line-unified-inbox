@@ -3,7 +3,7 @@ import test from "node:test";
 import { CustomerVoiceAnalysisSource } from "@prisma/client";
 import { automaticCatalogAliases } from "../classification/product-catalog";
 import { matchProducts, type MatchableModel } from "../classification/product-matcher";
-import { buildCustomerVoiceAnalysis } from "./customer-voice-analyzer";
+import { buildCustomerVoiceAnalysis, matchCustomerVoiceProducts, normalizeCustomerVoiceProductText } from "./customer-voice-analyzer";
 
 const models: MatchableModel[] = [
   {
@@ -101,4 +101,30 @@ test("an exact product model suppresses its redundant family match", () => {
   const matches = matchProducts([{ id: message.id, text: message.originalText, sentAt: message.sentAt }], models);
   const result = buildCustomerVoiceAnalysis([message], [], matches);
   assert.deepEqual(result.productMentions, ["OPPO Reno16"]);
+});
+
+test("v3 recognizes reusable Thai retail phrasing without classifying bare acknowledgements", () => {
+  assert.equal(buildCustomerVoiceAnalysis([inbound("m-1", "ยังมีเครื่องพร้อมส่งไหมคะ")], [], []).primaryTopic, "Stock Availability");
+  assert.equal(buildCustomerVoiceAnalysis([inbound("m-2", "ขอรายละเอียดเพิ่มเติมของรุ่นนี้ค่ะ")], [], []).primaryTopic, "Product Information");
+  assert.equal(buildCustomerVoiceAnalysis([inbound("m-3", "ร้านอยู่ตรงไหน เปิดกี่โมงคะ")], [], []).primaryTopic, "Store Location / Opening Hours");
+  assert.equal(buildCustomerVoiceAnalysis([inbound("m-4", "สนใจรุ่นนี้ อยากได้ข้อมูลค่ะ")], [], []).intent, "PURCHASE_CONSIDERATION");
+  assert.equal(buildCustomerVoiceAnalysis([inbound("m-5", "ขอบคุณค่ะ")], [], []).source, CustomerVoiceAnalysisSource.UNCLASSIFIED);
+});
+
+test("v3 preserves topic precedence for meaningful business needs", () => {
+  const result = buildCustomerVoiceAnalysis([inbound("m-1", "ราคาเท่าไหร่ ผ่อนเดือนละเท่าไหร่")], [], []);
+  assert.equal(result.primaryTopic, "Installment / Payment");
+  assert.deepEqual(result.secondaryTopics, ["Price Inquiry"]);
+});
+
+test("v3 normalizes Thai brand/model boundaries for matching without inventing a model", () => {
+  assert.equal(normalizeCustomerVoiceProductText("ออปโป้รีโน16"), "ออปโป้ รีโน16");
+  assert.equal(normalizeCustomerVoiceProductText("ออปโป้ Reno16"), "ออปโป้ Reno16");
+});
+
+test("v3 recovers a Reno family only for a business-context phrase", () => {
+  const family = { id: "reno-family", name: "OPPO Reno Series", classificationLevel: "FAMILY", priority: 1, aliases: [{ alias: "reno", safety: "REVIEW_REQUIRED", priority: 0 }], productSeries: { name: "Reno Series", productGroup: "SMARTPHONE" } } as const;
+  const business = matchCustomerVoiceProducts([inbound("m-1", "สนใจ Reno ราคาเท่าไหร่")], [family]);
+  assert.equal(business[0]?.model.name, "OPPO Reno Series");
+  assert.equal(matchCustomerVoiceProducts([inbound("m-2", "Reno")], [family]).length, 0);
 });

@@ -2241,3 +2241,17 @@ Keep `StoreMaster.tiktokProfileUrl` as the only persisted TikTok profile URL. Po
 - `customer-voice-rules-v1` identifies the original 25-row pilot output. The refined deterministic ruleset is explicitly `customer-voice-rules-v2`; historical rows are not renamed or overwritten.
 - Version-aware worker/backfill selection considers only the deployed current version for normal idempotency. A v1-only conversation is therefore eligible for an intentional v2 reprocess, while an unchanged v2 checkpoint is skipped unless a newer inbound message exists.
 - Keep the existing `(conversationId, analysisVersion)` uniqueness model. It intentionally retains v1 and v2 provenance as separate version rows during reprocessing; no schema migration or destructive cleanup is required. Store Insights and Customer Voice aggregation consume the current v2 version.
+
+## 2026-09-11: Customer Voice ruleset v3 remains conservative and versioned
+
+- Use `customer-voice-rules-v3` for the new deterministic behavior. Existing v1/v2 rows remain historical and immutable; current consumers follow the shared version constant and will consume v3 only after v3 rows are intentionally persisted.
+- Keep the canonical topic set compact. The design corpus did not justify a new category; reusable Thai retail phrasing maps to existing Stock Availability, Product Information, Store Location / Opening Hours, Store Contact, After-sales / Repair, Trade-in, Reservation / Order, Installment / Payment, and Price Inquiry topics.
+- Raise Installment / Payment precedence above Price Inquiry only when both signals are present, keep Stock/After-sales/Complaint dominant, and keep Greeting below every meaningful business signal. Strong explicit purchase phrases may produce READY_TO_BUY; interest language alone produces at most PURCHASE_CONSIDERATION when paired with product information.
+- Normalize only safe Thai OPPO brand/model boundaries in the Customer Voice matching input. Do not invent a specific model from generic OPPO/device language, do not mutate ProductModel rows, and retain exact-model-over-family suppression.
+- Evaluate v3 first on the 75-row design corpus, then on a deterministic 50-row holdout from the remaining 113 untouched eligible conversations. No v3 production persistence, worker enablement, AI provider, backfill, or Phase 2B behavior is part of this design step.
+
+## 2026-09-11: v3 holdout remains dry-run only
+
+- The fresh holdout is the first unbiased v3 validation set and must not be added to the design corpus or persisted in this step. Its 86% deterministic coverage and zero false-positive findings support the direction, while seven meaningful misses remain for future refinement.
+- Treat the v3 product result as improved but bounded: exact models remain authoritative, Reno family recovery requires business context and an active canonical family model, and generic OPPO/device language remains unresolved. Do not broaden this into model inference or ProductModel writes.
+- Keep the production version ledger unchanged. v1/v2 rows remain untouched, v3 rows remain at zero, and any future v3 persistence requires a separate checkpoint/deployment authorization.

@@ -3,10 +3,11 @@ import test from "node:test";
 import { shouldAnalyzeCustomerVoiceConversation } from "./customer-voice-versioning";
 
 const lastAnalyzed = new Date("2026-09-10T10:00:00.000Z");
-const currentVersion = "customer-voice-rules-v2";
+const currentVersion = "customer-voice-rules-v3";
 
-test("a historical v1 checkpoint is eligible for intentional v2 processing", () => {
+test("historical v1 and v2 checkpoints are eligible for intentional v3 processing", () => {
   assert.equal(shouldAnalyzeCustomerVoiceConversation(lastAnalyzed, { analysisVersion: "customer-voice-rules-v1", lastAnalyzedMessageAt: lastAnalyzed }, currentVersion), true);
+  assert.equal(shouldAnalyzeCustomerVoiceConversation(lastAnalyzed, { analysisVersion: "customer-voice-rules-v2", lastAnalyzedMessageAt: lastAnalyzed }, currentVersion), true);
 });
 
 test("a missing current-version checkpoint is eligible for processing", () => {
