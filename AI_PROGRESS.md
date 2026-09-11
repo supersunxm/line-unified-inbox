@@ -4596,3 +4596,12 @@ Verification passed: frontend TypeScript, zero-warning ESLint, 173/173 tests, an
 - Verification passed: Prisma generate, Prisma validate with a local placeholder `DATABASE_URL`, backend production build, changed-backend ESLint, focused backend tests **88/88**, focused tagging Flutter tests **24/24**, Flutter analyze, full Flutter tests **234/234**, frontend tests **568/568**, frontend production build, and `git diff --check`.
 - Full backend suite completed **1,887/1,894 passed**; the seven failures are unrelated existing Line Chat composer/health/manager and Store Master sync baseline failures. No production database, migration deploy, merge, push, or release was performed.
 - Next action: review and commit this isolated candidate only; do not merge or release yet.
+
+# Current task: Structured ONLINE source selection and compact status selector (2026-09-11)
+
+- Rebased the ONLINE source-selection candidate onto latest `origin/main` (`718cf21411542261fd83f1eb2c5b712e401d5d0a`). The only rebase conflicts were append-only `AI_PROGRESS.md` and `DECISIONS.md` sections; upstream Store 360 code and notes were preserved.
+- Replaced the customer-sales status `SegmentedButton` with a content-sized, horizontally scrollable `ChoiceChip` row. Labels are one-line/non-wrapping, selected chips show a check icon, tap targets remain padded, and the existing empty-selection and status callback/save behavior is unchanged.
+- Added widget coverage for selecting all four statuses without persisting drafts, narrow 360 px one-line labels, horizontal scroll extent/gesture, and no status-selector overflow. Existing ONLINE/FILM/PURCHASED/INTERESTED tagging coverage remains in the focused suite.
+- Verification passed after the refinement: Flutter analyze, focused status/ONLINE tests **29/29**, full Flutter tests **236/236**, Prisma generate/validate, focused backend tests **88/88**, backend build, frontend tests **568/568**, frontend production build, and diff checks. Full backend remains **1,887/1,894 passed** with the same seven unrelated baseline failures.
+- No production database or migration action has been taken yet. The additive `onlineSource` migration remains pending until backend deployment is explicitly verified; no P3009 repair or data backfill is allowed.
+- Next action: commit and push the feature branch, integrate into main, deploy/verify backend first, then prepare the Android release workflow and signed APK.

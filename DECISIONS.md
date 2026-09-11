@@ -2289,3 +2289,9 @@ Keep `StoreMaster.tiktokProfileUrl` as the only persisted TikTok profile URL. Po
 - Treat `onlineSource = null` on a legacy ONLINE record as a compatibility state. The API exposes it as null, the app allows staff to choose a source before any new save, and the nickname queue/backfill emits the existing literal `Online` until the record is explicitly saved with a source.
 - Reuse the FILM confirmation pattern for ONLINE: source selection and custom text are draft-only; the full-width confirmation CTA is disabled until valid, saves through the existing repository endpoint, disables during the request, and closes only after a successful server response. Close/back discards the draft.
 - Build source nicknames from persisted `salesRecordedAt`, formatted in `Asia/Bangkok`, as `<Source> <MM/YY>`. Remove slash/control characters and compact/truncate only the source segment so the date suffix remains intact and the LINE nickname stays at or below 20 characters. The existing queue/latest-wins/retry/rollout architecture remains the single synchronization path.
+
+## 2026-09-11: Customer-sales status selector uses compact horizontal chips
+
+- Keep the four existing status values and callbacks unchanged, but replace the equal-width `SegmentedButton` with a horizontally scrollable `ChoiceChip` row. Content-sized chips avoid Thai wrapping while preserving all labels and the existing ability to clear the selection.
+- Use one-line text, compact density, semantic status icons for unselected chips, and a check icon plus primary-container styling for the selected chip. Keep the padded Material tap target and avoid fixed widths so narrow Android screens scroll rather than overflow.
+- Limit this refinement to the customer-sales status section and its widget tests. ONLINE source validation, persistence, nickname logic, API contracts, and all unrelated web/backend features remain unchanged.

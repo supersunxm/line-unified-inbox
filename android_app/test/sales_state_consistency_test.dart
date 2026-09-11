@@ -27,6 +27,8 @@ class _StateFakeRepository extends ConversationRepository {
     saveCallCount++;
     currentSales = CustomerSalesInformation(
       status: status is String ? status : null,
+      filmBrand: filmBrand is String ? filmBrand : null,
+      onlineSource: onlineSource is String ? onlineSource : null,
       interestLevel: interestLevel is String ? interestLevel : null,
       purchaseChannel: purchaseChannel is List
           ? purchaseChannel.whereType<String>().toList()
@@ -136,10 +138,12 @@ void main() {
     expect(repository.currentSales?.paymentMethod, isNull);
     expect(repository.currentSales?.products, isEmpty);
 
-    final statusControl = tester.widget<SegmentedButton<String>>(
-      find.byType(SegmentedButton<String>),
-    );
-    expect(statusControl.selected, isEmpty);
+    for (final value in ['ONLINE', 'INTERESTED', 'PURCHASED', 'FILM']) {
+      final chip = tester.widget<ChoiceChip>(
+        find.byKey(ValueKey('customer-status-chip-$value')),
+      );
+      expect(chip.selected, isFalse);
+    }
   });
 
   testWidgets('an untouched conversation can remain without sales status',
@@ -152,11 +156,78 @@ void main() {
     final repository = _StateFakeRepository();
     await tester.pumpWidget(_host(repository: repository));
     await tester.pumpAndSettle();
-
-    final statusControl = tester.widget<SegmentedButton<String>>(
-      find.byType(SegmentedButton<String>),
-    );
-    expect(statusControl.selected, isEmpty);
+    for (final value in ['ONLINE', 'INTERESTED', 'PURCHASED', 'FILM']) {
+      final chip = tester.widget<ChoiceChip>(
+        find.byKey(ValueKey('customer-status-chip-$value')),
+      );
+      expect(chip.selected, isFalse);
+    }
     expect(repository.saveCallCount, 0);
+  });
+
+  testWidgets('compact status chips select each status without saving drafts',
+      (tester) async {
+    tester.view.physicalSize = const Size(1080, 2200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final repository = _StateFakeRepository();
+    await tester.pumpWidget(_host(repository: repository));
+    await tester.pumpAndSettle();
+
+    for (final value in ['ONLINE', 'INTERESTED', 'PURCHASED', 'FILM']) {
+      await tester.tap(find.byKey(ValueKey('customer-status-chip-$value')));
+      await tester.pumpAndSettle();
+
+      for (final candidate in ['ONLINE', 'INTERESTED', 'PURCHASED', 'FILM']) {
+        final chip = tester.widget<ChoiceChip>(
+          find.byKey(ValueKey('customer-status-chip-$candidate')),
+        );
+        expect(chip.selected, candidate == value);
+      }
+    }
+
+    expect(repository.saveCallCount, 0);
+  });
+
+  testWidgets('compact status chips stay one line and scroll on narrow screens',
+      (tester) async {
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final repository = _StateFakeRepository();
+    const sales = CustomerSalesInformation(
+      status: 'FILM',
+      filmBrand: 'OPPO',
+      purchaseChannel: [],
+      products: [],
+    );
+    await tester.pumpWidget(_host(repository: repository, sales: sales));
+    await tester.pumpAndSettle();
+
+    final selector = find.byKey(const ValueKey('customer-status-selector'));
+    final scrollable = find.descendant(
+      of: selector,
+      matching: find.byType(Scrollable),
+    );
+    expect(scrollable, findsOneWidget);
+    final scrollState = tester.state<ScrollableState>(scrollable);
+    expect(scrollState.position.axis, Axis.horizontal);
+    expect(scrollState.position.maxScrollExtent, greaterThan(0));
+
+    for (final label in ['Online', 'Interested', 'Purchased', 'Film']) {
+      final labelText = tester.widget<Text>(find.text(label));
+      expect(labelText.maxLines, 1);
+      expect(labelText.softWrap, isFalse);
+    }
+
+    final startOffset = scrollState.position.pixels;
+    await tester.drag(selector, const Offset(-120, 0));
+    await tester.pumpAndSettle();
+    expect(scrollState.position.pixels, greaterThan(startOffset));
+    expect(tester.takeException(), isNull);
   });
 }

@@ -1159,7 +1159,6 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
   Widget build(BuildContext context) {
     final l10n = appLocalizations(context);
     final isExistingInterested = widget.initialSalesInfo?.isInterested == true;
-    final statusSelection = _status == null ? <String>{} : <String>{_status!};
 
     return PopScope(
       canPop: !_saving && !_dirty,
@@ -1294,37 +1293,40 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                         ?.copyWith(fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: AppSpacing.xs),
-                  SizedBox(
-                    width: double.infinity,
-                    child: SegmentedButton<String>(
-                      segments: [
-                        ButtonSegment(
+                  SingleChildScrollView(
+                    key: const ValueKey('customer-status-selector'),
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _buildStatusChip(
+                          context,
                           value: 'ONLINE',
-                          label: Text(l10n.statusOnline),
-                          icon: const Icon(Icons.language_outlined),
+                          label: l10n.statusOnline,
+                          icon: Icons.language_outlined,
                         ),
-                        ButtonSegment(
+                        const SizedBox(width: AppSpacing.xs),
+                        _buildStatusChip(
+                          context,
                           value: 'INTERESTED',
-                          label: Text(l10n.statusInterested),
-                          icon: const Icon(Icons.flag_outlined),
+                          label: l10n.statusInterested,
+                          icon: Icons.flag_outlined,
                         ),
-                        ButtonSegment(
+                        const SizedBox(width: AppSpacing.xs),
+                        _buildStatusChip(
+                          context,
                           value: 'PURCHASED',
-                          label: Text(l10n.statusPurchased),
-                          icon: const Icon(Icons.shopping_bag_outlined),
+                          label: l10n.statusPurchased,
+                          icon: Icons.shopping_bag_outlined,
                         ),
-                        ButtonSegment(
+                        const SizedBox(width: AppSpacing.xs),
+                        _buildStatusChip(
+                          context,
                           value: 'FILM',
-                          label: Text(l10n.statusFilm),
-                          icon: const Icon(Icons.shield_outlined),
+                          label: l10n.statusFilm,
+                          icon: Icons.shield_outlined,
                         ),
                       ],
-                      emptySelectionAllowed: true,
-                      selected: statusSelection,
-                      onSelectionChanged: _saving
-                          ? null
-                          : (selection) => _setStatus(
-                              selection.isEmpty ? null : selection.first),
                     ),
                   ),
                   if (_status == null)
@@ -1677,6 +1679,49 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
         selected: selected,
         onSelected: _saving ? null : onSelected,
       );
+
+  ChoiceChip _buildStatusChip(
+    BuildContext context, {
+    required String value,
+    required String label,
+    required IconData icon,
+  }) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    final selected = _status == value;
+    return ChoiceChip(
+      key: ValueKey<String>('customer-status-chip-$value'),
+      avatar: Icon(
+        selected ? Icons.check : icon,
+        size: 17,
+        color: selected ? colors.onPrimaryContainer : colors.onSurfaceVariant,
+      ),
+      label: Text(
+        label,
+        maxLines: 1,
+        softWrap: false,
+      ),
+      selected: selected,
+      showCheckmark: false,
+      labelPadding: const EdgeInsets.symmetric(horizontal: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      visualDensity: const VisualDensity(horizontal: -1, vertical: -2),
+      materialTapTargetSize: MaterialTapTargetSize.padded,
+      backgroundColor: colors.surfaceContainerHighest,
+      selectedColor: colors.primaryContainer,
+      side: BorderSide(
+        color: selected ? colors.primary : colors.outlineVariant,
+        width: selected ? 1.5 : 1,
+      ),
+      labelStyle: TextStyle(
+        color: selected ? colors.onPrimaryContainer : colors.onSurface,
+        fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+      ),
+      onSelected: _saving
+          ? null
+          : (isSelected) => _setStatus(isSelected ? value : null),
+    );
+  }
 
   FilterChip _filter(
           String label, bool selected, ValueChanged<bool> onSelected) =>
