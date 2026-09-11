@@ -1,3 +1,26 @@
+# 2026-09-11: Store 360 Export [RECONCILED & VERIFIED]
+- **Current Task**: Reconcile the local Store 360 XLSX export feature onto the fetched latest `origin/main`, verify the candidate locally, and checkpoint it on the export-only branch without merging or deploying.
+- **Isolation**: Initial export base was `058553c2c38f477a2ddae68b7c4c59c8039e4584`; fetched latest `origin/main` is `d28fa662a251e759a68c9580384bb9694392866f`. The clean candidate is `/private/tmp/store-360-export-integration` on `feat/store-360-export`.
+- **Completed Work**:
+  - Added an authenticated `POST /store-insights/export` endpoint with explicit store IDs, Bangkok timezone validation, a 10-store request cap, and no data writes.
+  - Reused Store 360 snapshots and existing response, sales, follower, human-responder, and canonical current Customer Voice definitions to generate `Summary`, `Conversations`, `Customer Voice`, and `Responders` worksheets.
+  - Added a Store 360 UI export control that defaults to the currently selected store, permits up to 10 authorized stores, respects the active date range, shows a loading state, blocks duplicate clicks, and reports failures.
+  - Excluded customer identity fields, LINE IDs, phone numbers, raw message text/payloads, access tokens, and secrets; conversation references are one-way hashed values.
+- **Checks Run**:
+  - Reconciled backend Store 360/export/authorization/Customer Voice tests: **40/40 passed**, including single-store, seven-store, authorization-before-read, Bangkok boundaries, current-version-only Customer Voice, privacy, responder attribution, empty data, validation, and XLSX headers.
+  - Targeted frontend Store 360 tests: **13/13 passed**; full frontend tests: **568/568 passed** on latest main.
+  - Changed-file ESLint checks: **passed** for all changed backend and frontend source/tests.
+  - Backend and frontend production builds: **passed**; `/store-360` is present in the generated frontend routes.
+  - `git diff --check`: **passed**, including the untracked implementation/test files.
+  - Frontend `tsc --noEmit`: retains unrelated baseline errors in Google Review KPI, Line Chat Health, AI test fixtures, conversation-list fixtures, TikTok fixtures, and other existing files; no changed Store 360/export file was reported.
+  - Full backend test suite: **1,889 total, 1,882 passed, 7 unrelated baseline failures** in line-chat composer/health/manager areas and store-master sync; no Store 360/export failure.
+  - Full backend/frontend lint: retains unrelated repository-baseline violations; changed-file lint remains clean.
+  - Local runtime smoke: frontend `/`, `/store-360`, and `/api/health` returned **200**; backend production startup compiled and registered Store Insights routes, then stopped at the expected missing local `DATABASE_URL`/Prisma configuration boundary. No production database was accessed.
+- **Reconciliation**: Checkpoint `d64d07c` was cherry-picked cleanly onto latest main and amended to use the canonical Customer Voice version in its test fixture; final candidate commit is `1713f5f` with no conflicts.
+- **Local State**: No migration, worker enablement, ConversationAnalytics write, production access, merge, or deployment was performed. The candidate is clean and ready to push only `feat/store-360-export`.
+- **Blockers**: Authenticated DB-backed export smoke remains **NOT VERIFIED** because no safe local database was available. Production deployment is intentionally out of scope.
+- **Next Action**: Push only `feat/store-360-export`, then stop for main-integration review.
+
 # 2026-09-11: Remove Rich Menu Bulk Store Selection Cap [COMPLETED & VERIFIED]
 - **Current Task**: Remove the user-facing five-store selection limit from Phase 2B Rich Menu bulk publishing while preserving durable jobs, readiness validation, progress persistence, retry scope, and bounded LINE API concurrency.
 - **Findings**:

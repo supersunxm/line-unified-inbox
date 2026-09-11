@@ -178,6 +178,30 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+async function requestBlob(path: string, init?: RequestInit): Promise<{ blob: Blob; filename: string | null }> {
+  const isBrowser = typeof window !== "undefined";
+  const requestUrl = isBrowser ? `/api-backend${path}` : `${API_BASE_URL}${path}`;
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (init?.headers) Object.assign(headers, init.headers);
+  let response: Response;
+  try {
+    response = await fetch(requestUrl, { ...init, credentials: "include", headers });
+  } catch {
+    throw new ApiError("Unable to reach the data service.", 0);
+  }
+  if (!response.ok) {
+    let message = `API request failed (${response.status})`;
+    try {
+      const body = await response.json() as { message?: string | string[] };
+      if (body.message) message = Array.isArray(body.message) ? body.message.join(", ") : body.message;
+    } catch { }
+    throw new ApiError(message, response.status);
+  }
+  const contentDisposition = response.headers.get("Content-Disposition");
+  const filename = contentDisposition?.match(/filename="([^"]+)"/i)?.[1] ?? contentDisposition?.match(/filename=([^;]+)/i)?.[1]?.trim() ?? null;
+  return { blob: await response.blob(), filename };
+}
+
 async function download(path: string) {
   const isBrowser = typeof window !== "undefined";
   const requestUrl = isBrowser
@@ -454,6 +478,8 @@ export const api = {
     const qs = query.toString();
     return request<StoreInsightsConversationResponse>(`/store-insights/${encodeURIComponent(storeId)}/conversations${qs ? `?${qs}` : ""}`);
   },
+  storeInsightsExport: (input: { storeIds: string[]; startDate: string; endDate: string; timezone: "Asia/Bangkok" }) =>
+    requestBlob("/store-insights/export", { method: "POST", body: JSON.stringify(input) }),
   friendSourceLinks: (filters?: FriendSourceLinksFilters) => {
     const query = new URLSearchParams();
     if (filters) {
