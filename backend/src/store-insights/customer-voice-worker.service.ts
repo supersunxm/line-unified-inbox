@@ -3,6 +3,7 @@ import { MessageDirection, Prisma } from "@prisma/client";
 import { PrismaService } from "../prisma.service";
 import { CUSTOMER_VOICE_ANALYSIS_VERSION } from "./customer-voice-taxonomy";
 import { CustomerVoiceService } from "./customer-voice.service";
+import { shouldAnalyzeCustomerVoiceConversation } from "./customer-voice-versioning";
 
 function boolEnv(key: string, fallback: boolean): boolean {
   const value = process.env[key];
@@ -30,7 +31,7 @@ const candidateSelect = {
   },
   customerVoiceAnalyses: {
     where: { analysisVersion: CUSTOMER_VOICE_ANALYSIS_VERSION },
-    select: { lastAnalyzedMessageAt: true },
+    select: { analysisVersion: true, lastAnalyzedMessageAt: true },
   },
 } satisfies Prisma.ConversationSelect;
 
@@ -81,8 +82,7 @@ export class CustomerVoiceWorkerService implements OnModuleInit, OnModuleDestroy
       for (const candidate of candidates) {
         if (this.stopping) break;
         const latestMessageAt = candidate.messages[0]?.sentAt ?? null;
-        const lastAnalyzedMessageAt = candidate.customerVoiceAnalyses[0]?.lastAnalyzedMessageAt ?? null;
-        if (lastAnalyzedMessageAt && latestMessageAt && latestMessageAt <= lastAnalyzedMessageAt) continue;
+        if (!shouldAnalyzeCustomerVoiceConversation(latestMessageAt, candidate.customerVoiceAnalyses[0], CUSTOMER_VOICE_ANALYSIS_VERSION)) continue;
         await this.customerVoice.analyzeConversation(candidate.id, models);
         processed++;
       }

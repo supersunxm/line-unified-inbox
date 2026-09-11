@@ -106,5 +106,12 @@ test("analysis upsert is idempotent and never writes ConversationTopic rows", as
   await service.analyzeConversation("conversation-1", [{ id: "model-1", name: "OPPO Reno16", classificationLevel: "MODEL", priority: 1, aliases: [{ alias: "Reno16", safety: "SAFE_EXACT", priority: 0 }], productSeries: { name: "Reno", productGroup: "SMARTPHONE" } }]);
   assert.equal(upserts.length, 2);
   assert.deepEqual((upserts[0] as { where: unknown }).where, { conversationId_analysisVersion: { conversationId: "conversation-1", analysisVersion: CUSTOMER_VOICE_ANALYSIS_VERSION } });
+  const firstUpsert = upserts[0] as { create: { analysisVersion: string; modelProvider: string | null; modelName: string }; update: { modelProvider: string | null; modelName: string } };
+  assert.equal(CUSTOMER_VOICE_ANALYSIS_VERSION, "customer-voice-rules-v2");
+  assert.equal(firstUpsert.create.analysisVersion, "customer-voice-rules-v2");
+  assert.equal(firstUpsert.create.modelProvider, null);
+  assert.equal(firstUpsert.create.modelName, "rules-v2");
+  assert.equal(firstUpsert.update.modelProvider, null);
+  assert.equal(firstUpsert.update.modelName, "rules-v2");
   assert.equal(JSON.stringify(upserts).includes("conversationTopic"), false);
 });
