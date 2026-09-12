@@ -26,6 +26,7 @@
     "line-chat:mapping:import": "tsx --env-file=.env scripts/import-line-chat-mappings.ts",
     "store-master:import": "tsx --env-file=.env scripts/store-master.ts import",
     "store-master:validate": "tsx --env-file=.env scripts/store-master.ts validate",
+    "store-master:preview": "tsx --env-file=.env src/store-master/store-master-sync-once.cli.ts --preview",
     "store-master:sync-connected-line-oa": "tsx --env-file=.env scripts/sync-connected-line-oa-store-master.ts",
     "tiktok:sync-daily-metrics": "tsx scripts/sync-tiktok-daily-metrics.ts",
     "tiktok:public-profile-probe": "tsx scripts/tiktok-public-profile-probe.ts",

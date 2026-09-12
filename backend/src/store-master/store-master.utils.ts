@@ -12,6 +12,8 @@ export type ParsedMasterRow = {
   province: string | null;
   region: string | null;
   sourceRowNumber: number;
+  isActive: boolean;
+  sourceStatus: "ACTIVE" | "CLOSED";
   dataQualityStatus: "COMPLETE" | "MISSING_STORE_ID" | "INVALID_MANAGER_URL" | "INCOMPLETE";
 };
 
@@ -171,6 +173,8 @@ export function parseStoreMasterCsv(csv: string): ParsedMasterRow[] {
     const lineManagerUrl = at(row, "URLS");
     const province = at(row, "Province / จังหวัด", "Province จังหวัด");
     const region = at(row, "Region / ภูมิภาค", "Region ภูมิภาค");
+    const rawStatus = at(row, "Status")?.toLocaleUpperCase();
+    const sourceStatus = rawStatus === "CLOSED" ? "CLOSED" : "ACTIVE";
 
     // Column I (TikTok Username) & Column J (TikTok Profile URL)
     const rawTikTokUsername = at(
@@ -237,6 +241,8 @@ export function parseStoreMasterCsv(csv: string): ParsedMasterRow[] {
       province,
       region,
       sourceRowNumber: index + 2,
+      isActive: sourceStatus === "ACTIVE",
+      sourceStatus,
       dataQualityStatus,
     };
   });

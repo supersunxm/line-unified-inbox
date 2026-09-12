@@ -13,12 +13,12 @@ void test("re-import updates the stable Store ID and TikTok fields instead of cr
       Promise.resolve(
         records.find((item) => item.externalStoreId === where.externalStoreId) ?? null
       ),
-    update: ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
+    updateMany: ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
       const record = records.find((item) => item.id === where.id)!;
       Object.assign(record, data);
-      return Promise.resolve(record);
+      return Promise.resolve({ count: 1 });
     },
-    upsert: ({ create }: { create: Record<string, unknown> }) => {
+    create: ({ data: create }: { data: Record<string, unknown> }) => {
       const record = { id: `master-${records.length + 1}`, createdAt: new Date(), ...create };
       records.push(record);
       return Promise.resolve(record);
@@ -51,12 +51,12 @@ void test("re-import updates the stable Store ID and TikTok fields instead of cr
 void test("validation detects missing, duplicate, and mismatched TikTok account entries", async () => {
   const records: Array<Record<string, unknown>> = [];
   const model = {
-    update: ({ where, data }: any) => {
+    updateMany: ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
       const record = records.find((item) => item.id === where.id)!;
       Object.assign(record, data);
-      return Promise.resolve(record);
+      return Promise.resolve({ count: 1 });
     },
-    upsert: ({ create }: any) => {
+    create: ({ data: create }: { data: Record<string, unknown> }) => {
       const record = { id: `master-${records.length + 1}`, createdAt: new Date(), ...create };
       records.push(record);
       return Promise.resolve(record);
@@ -85,12 +85,12 @@ void test("validation detects missing, duplicate, and mismatched TikTok account 
 void test("importCsv persists googleMapsUrl and validation counts invalidGoogleMapsUrls and missingGoogleMapsUrls", async () => {
   const records: Array<Record<string, unknown>> = [];
   const model = {
-    update: ({ where, data }: any) => {
+    updateMany: ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
       const record = records.find((item) => item.id === where.id)!;
       Object.assign(record, data);
-      return Promise.resolve(record);
+      return Promise.resolve({ count: 1 });
     },
-    upsert: ({ create }: any) => {
+    create: ({ data: create }: { data: Record<string, unknown> }) => {
       const record = { id: `master-${records.length + 1}`, createdAt: new Date(), ...create };
       records.push(record);
       return Promise.resolve(record);

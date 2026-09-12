@@ -624,7 +624,7 @@ model StoreMaster {
   tikTokPublicProfiles     TikTokPublicProfile[]
   tikTokPublicDailyMetrics TikTokPublicDailyMetric[]
 
-  @@unique([source, sourceRowNumber])
+  @@index([source, sourceRowNumber])
   @@index([normalizedAccountName])
   @@index([externalStoreId])
   @@index([lineId])

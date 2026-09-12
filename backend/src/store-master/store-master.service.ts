@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import { StoreMasterDataQualityStatus } from "@prisma/client";
+import { Prisma, StoreMasterDataQualityStatus } from "@prisma/client";
 import { PrismaService } from "../prisma.service";
 import {
   extractTikTokUsernameFromUrl,
@@ -13,6 +13,16 @@ import {
 } from "./store-master.utils";
 import { syncConnectedLineOaMetadata } from "./sync-connected-line-oa";
 import { getStoreGoogleMapsReadiness } from "./template-variable-resolver";
+
+type MasterRecord = Prisma.StoreMasterGetPayload<Record<string, never>>;
+type ParsedRows = ReturnType<typeof parseStoreMasterCsv>;
+
+type ImportAction = {
+  kind: "CREATE" | "UPDATE" | "UNCHANGED";
+  row: ParsedRows[number];
+  existing: MasterRecord | null;
+  data: Prisma.StoreMasterUncheckedCreateInput;
+};
 
 @Injectable()
 export class StoreMasterService {
@@ -41,23 +51,81 @@ export class StoreMasterService {
     }
   }
 
-  async importCsv(csv: string, source = "GOOGLE_SHEET") {
-    const parsed = parseStoreMasterCsv(csv);
-    // Store ID is the canonical cross-system key. Never import a source that can
-    // resolve one Store ID to more than one master row.
-    this.assertUniqueStoreIds(parsed);
+  private buildImportData(
+    row: ParsedRows[number],
+    existingRow: MasterRecord | null,
+    source: string,
+    duplicateNames: Set<string>,
+  ): Prisma.StoreMasterUncheckedCreateInput {
+    let storeName = row.storeName;
+    let accountName = row.accountName;
+    let normalizedAccountName = row.normalizedAccountName;
+    const tiktokUsername = row.tiktokUsername ?? existingRow?.tiktokUsername ?? null;
+    const tiktokProfileUrl = row.tiktokProfileUrl ?? existingRow?.tiktokProfileUrl ?? null;
+    const googleMapsUrl = row.googleMapsUrl ?? existingRow?.googleMapsUrl ?? null;
 
+    if (!storeName && existingRow?.storeName) storeName = existingRow.storeName;
+    if (!accountName) {
+      if (existingRow?.accountName) {
+        accountName = existingRow.accountName;
+        normalizedAccountName = existingRow.normalizedAccountName;
+      } else if (storeName) {
+        accountName = storeName;
+        normalizedAccountName = normalizeSearchText(storeName);
+      }
+    }
+
+    const incomplete = !storeName || !accountName;
+    let dataQualityStatus: StoreMasterDataQualityStatus;
+    if (incomplete) dataQualityStatus = "INCOMPLETE";
+    else if (!row.externalStoreId) dataQualityStatus = "MISSING_STORE_ID";
+    else if (!isValidManagerUrl(row.lineManagerUrl)) dataQualityStatus = "INVALID_MANAGER_URL";
+    else if (duplicateNames.has(normalizedAccountName)) dataQualityStatus = "DUPLICATE_ACCOUNT_NAME";
+    else dataQualityStatus = "COMPLETE";
+
+    return {
+      externalStoreId: row.externalStoreId,
+      storeName,
+      accountName,
+      normalizedAccountName,
+      lineOaLink: row.lineOaLink,
+      lineId: row.lineId,
+      lineManagerUrl: row.lineManagerUrl,
+      tiktokUsername,
+      tiktokProfileUrl,
+      googleMapsUrl,
+      province: row.province,
+      region: row.region ?? regionFromProvince(row.province),
+      source,
+      sourceRowNumber: row.sourceRowNumber,
+      sourceUpdatedAt: new Date(),
+      dataQualityStatus,
+      isActive: row.isActive,
+    };
+  }
+
+  private comparableMaster(data: Prisma.StoreMasterUncheckedCreateInput) {
+    const stable: Record<string, unknown> = { ...data };
+    delete stable.id;
+    delete stable.createdAt;
+    delete stable.updatedAt;
+    delete stable.sourceUpdatedAt;
+    return stable;
+  }
+
+  async previewCsv(csv: string, source = "GOOGLE_SHEET") {
+    const parsed = parseStoreMasterCsv(csv);
+    this.assertUniqueStoreIds(parsed);
     const existingMasters = await this.prisma.storeMaster.findMany({
-      where: { isActive: true },
+      where: { source },
       orderBy: { createdAt: "asc" },
     });
-    const masterByExternalId = new Map<string, (typeof existingMasters)[0]>();
-    const masterBySourceRow = new Map<number, (typeof existingMasters)[0]>();
-    for (const m of existingMasters) {
-      if (m.externalStoreId && !masterByExternalId.has(m.externalStoreId))
-        masterByExternalId.set(m.externalStoreId, m);
-      if (m.sourceRowNumber && !masterBySourceRow.has(m.sourceRowNumber))
-        masterBySourceRow.set(m.sourceRowNumber, m);
+    const byExternalId = new Map<string, MasterRecord[]>();
+    for (const master of existingMasters) {
+      if (!master.externalStoreId) continue;
+      const matches = byExternalId.get(master.externalStoreId) ?? [];
+      matches.push(master);
+      byExternalId.set(master.externalStoreId, matches);
     }
     const duplicateNames = new Set(
       parsed
@@ -65,105 +133,98 @@ export class StoreMasterService {
         .filter((name, index, all) => name && name !== "ref" && all.indexOf(name) !== index)
     );
 
-    await this.prisma.$transaction(
-      async (tx) => {
-        for (const row of parsed) {
-          const { sourceRowNumber, ...values } = row;
-          const stableId = row.externalStoreId
-            ? masterByExternalId.get(row.externalStoreId)?.id
-            : null;
-          const existingRow = stableId
-            ? masterByExternalId.get(row.externalStoreId!)
-            : masterBySourceRow.get(sourceRowNumber);
-
-          let storeName = row.storeName;
-          let accountName = row.accountName;
-          let normalizedAccountName = row.normalizedAccountName;
-          let tiktokUsername = row.tiktokUsername;
-          let tiktokProfileUrl = row.tiktokProfileUrl;
-          let googleMapsUrl = row.googleMapsUrl;
-
-          if (
-            (storeName === "#REF!" || !storeName) &&
-            existingRow?.storeName &&
-            existingRow.storeName !== "#REF!"
-          ) {
-            storeName = existingRow.storeName;
-          }
-          if (accountName === "#REF!" || !accountName) {
-            if (existingRow?.accountName && existingRow.accountName !== "#REF!") {
-              accountName = existingRow.accountName;
-              normalizedAccountName = existingRow.normalizedAccountName;
-            } else if (storeName && storeName !== "#REF!") {
-              accountName = storeName;
-              normalizedAccountName = normalizeSearchText(storeName);
-            }
-          }
-
-          if (
-            !tiktokUsername &&
-            existingRow?.tiktokUsername &&
-            existingRow.tiktokUsername !== "#REF!"
-          ) {
-            tiktokUsername = existingRow.tiktokUsername;
-          }
-
-          if (
-            !tiktokProfileUrl &&
-            existingRow?.tiktokProfileUrl &&
-            existingRow.tiktokProfileUrl !== "#REF!"
-          ) {
-            tiktokProfileUrl = existingRow.tiktokProfileUrl;
-          }
-
-          if (
-            !googleMapsUrl &&
-            existingRow?.googleMapsUrl &&
-            existingRow.googleMapsUrl !== "#REF!"
-          ) {
-            googleMapsUrl = existingRow.googleMapsUrl;
-          }
-
-          const incomplete =
-            !storeName || storeName === "#REF!" || !accountName || accountName === "#REF!";
-          let dataQualityStatus: StoreMasterDataQualityStatus;
-          if (incomplete) dataQualityStatus = "INCOMPLETE";
-          else if (!row.externalStoreId) dataQualityStatus = "MISSING_STORE_ID";
-          else if (!isValidManagerUrl(row.lineManagerUrl)) dataQualityStatus = "INVALID_MANAGER_URL";
-          else if (duplicateNames.has(normalizedAccountName)) dataQualityStatus = "DUPLICATE_ACCOUNT_NAME";
-          else dataQualityStatus = "COMPLETE";
-
-          const data = {
-            ...values,
-            storeName,
-            accountName,
-            normalizedAccountName,
-            tiktokUsername,
-            tiktokProfileUrl,
-            googleMapsUrl,
-            region: row.region ?? regionFromProvince(row.province),
-            dataQualityStatus,
-            isActive: true,
-            sourceUpdatedAt: new Date(),
-          };
-
-          if (stableId) {
-            await tx.storeMaster.update({ where: { id: stableId }, data });
-            continue;
-          }
-          await tx.storeMaster.upsert({
-            where: { source_sourceRowNumber: { source, sourceRowNumber } },
-            create: { ...data, source, sourceRowNumber },
-            update: data,
-          });
+    const actions: ImportAction[] = [];
+    const identityConflicts: Array<Record<string, unknown>> = [];
+    for (const row of parsed) {
+      let existing: MasterRecord | null = null;
+      if (row.externalStoreId) {
+        const matches = byExternalId.get(row.externalStoreId) ?? [];
+        if (matches.length > 1) {
+          identityConflicts.push({ externalStoreId: row.externalStoreId, reason: "MULTIPLE_EXISTING_CANONICAL_MATCHES", masterIds: matches.map(({ id }) => id) });
+          continue;
         }
+        existing = matches[0] ?? null;
+      } else {
+        const matches = existingMasters.filter((master) =>
+          !master.externalStoreId && (
+            (row.lineId && master.lineId === row.lineId) ||
+            (row.normalizedAccountName && master.normalizedAccountName === row.normalizedAccountName)
+          )
+        );
+        if (matches.length !== 1) {
+          identityConflicts.push({ sourceRowNumber: row.sourceRowNumber, reason: matches.length > 1 ? "AMBIGUOUS_LEGACY_IDENTITY" : "UNRESOLVED_LEGACY_IDENTITY" });
+          continue;
+        }
+        existing = matches[0];
+      }
+      const data = this.buildImportData(row, existing, source, duplicateNames);
+      const comparableExisting = existing ? this.comparableMaster(existing) : null;
+      const comparableData = this.comparableMaster(data);
+      const unchanged = comparableExisting !== null && JSON.stringify(comparableExisting) === JSON.stringify(comparableData);
+      actions.push({ kind: existing ? (unchanged ? "UNCHANGED" : "UPDATE") : "CREATE", row, existing, data });
+    }
+
+    const oldRowOverwriteRisks = parsed.flatMap((row) => existingMasters
+      .filter((master) => master.sourceRowNumber === row.sourceRowNumber && master.externalStoreId !== row.externalStoreId)
+      .map((master) => ({ sourceRowNumber: row.sourceRowNumber, incomingExternalStoreId: row.externalStoreId, existingMasterId: master.id, existingExternalStoreId: master.externalStoreId })));
+    const closedActions = actions.filter(({ row }) => !row.isActive);
+    const closedStoreOperationalReview = [];
+    for (const action of closedActions) {
+      if (!action.existing) continue;
+      const stores = await this.prisma.store.findMany({
+        where: { storeMasterId: action.existing.id },
+        select: { id: true, code: true, name: true, isActive: true, archivedAt: true,
+          lineOfficialAccounts: { where: { isActive: true, archivedAt: null }, select: { id: true } },
+          _count: { select: { conversations: true } } },
+      });
+      const operational = stores.filter((store) => store.isActive || store.archivedAt === null || store.lineOfficialAccounts.length > 0 || store._count.conversations > 0);
+      if (operational.length > 0) closedStoreOperationalReview.push({ externalStoreId: action.row.externalStoreId, masterId: action.existing.id, stores: operational });
+    }
+
+    return {
+      parsed,
+      actions,
+      summary: {
+        parsedTotalRows: parsed.length,
+        activeRows: parsed.filter(({ isActive }) => isActive).length,
+        closedRows: parsed.filter(({ isActive }) => !isActive).length,
+        creates: actions.filter(({ kind }) => kind === "CREATE").length,
+        updates: actions.filter(({ kind }) => kind === "UPDATE").length,
+        unchanged: actions.filter(({ kind }) => kind === "UNCHANGED").length,
+        deactivations: actions.filter(({ existing, row }) => Boolean(existing?.isActive && !row.isActive)).length,
+        identityConflicts: identityConflicts.length,
+        duplicateStoreIds: this.duplicateCount(parsed.map(({ externalStoreId }) => externalStoreId)),
+        oldRowOverwriteRisks: oldRowOverwriteRisks.length,
+        closedStoreOperationalReview: closedStoreOperationalReview.length,
       },
-      { maxWait: 15000, timeout: 60000 }
-    );
+      identityConflicts,
+      oldRowOverwriteRisks,
+      closedStoreOperationalReview,
+    };
+  }
+
+  async importCsv(csv: string, source = "GOOGLE_SHEET") {
+    const preview = await this.previewCsv(csv, source);
+    if (preview.identityConflicts.length > 0) throw new Error(`Store Master identity conflicts: ${preview.identityConflicts.length}; no data was changed`);
+    await this.prisma.$transaction(async (tx) => {
+      for (const action of preview.actions) {
+        if (action.kind === "UNCHANGED") continue;
+        if (action.kind === "CREATE") await tx.storeMaster.create({ data: action.data });
+        else {
+          const updated = await tx.storeMaster.updateMany({
+            where: { id: action.existing?.id, externalStoreId: action.row.externalStoreId },
+            data: action.data,
+          });
+          if (updated.count !== 1) {
+            throw new Error(`Store Master identity changed during import for Store ID ${action.row.externalStoreId ?? "legacy"}; no data was changed`);
+          }
+        }
+      }
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 15000, timeout: 60000 });
     return this.validate();
   }
 
-  async importFromConfiguredSource(csvPath?: string) {
+  private async configuredCsv(csvPath?: string) {
     let csv: string;
     if (csvPath) {
       const { readFile } = await import("node:fs/promises");
@@ -180,21 +241,19 @@ export class StoreMasterService {
       if (!response.ok) throw new Error(`Google Sheets export failed (${response.status})`);
       csv = await response.text();
     }
-    return this.importCsv(csv);
+    return csv;
+  }
+
+  async previewFromConfiguredSource(csvPath?: string) {
+    return this.previewCsv(await this.configuredCsv(csvPath));
+  }
+
+  async importFromConfiguredSource(csvPath?: string) {
+    return this.importCsv(await this.configuredCsv(csvPath));
   }
 
   async syncFromGoogleSheet() {
-    const configured = process.env.STORE_MASTER_GOOGLE_SHEET_URL?.trim();
-    if (!configured) throw new Error("STORE_MASTER_GOOGLE_SHEET_URL is not configured");
-    const match = configured.match(/\/spreadsheets\/d\/([^/]+)/u);
-    if (!match) throw new Error("Invalid Google Sheets URL");
-    const configuredGid = configured.match(/[?&#]gid=(\d+)/u)?.[1];
-    const exportUrl = `https://docs.google.com/spreadsheets/d/${match[1]}/export?format=csv${
-      configuredGid ? `&gid=${configuredGid}` : ""
-    }`;
-    const response = await fetch(exportUrl);
-    if (!response.ok) throw new Error(`Google Sheets export failed (${response.status})`);
-    const csv = await response.text();
+    const csv = await this.configuredCsv();
     const parsed = parseStoreMasterCsv(csv);
     const validation = this.validationForRows(parsed);
     if (validation.total === 0)
@@ -207,6 +266,8 @@ export class StoreMasterService {
       throw new Error(
         `Google Sheet validation failed: ${validation.invalidManagerUrls} invalid manager URL(s); no data was changed`
       );
+    const preview = await this.previewCsv(csv, "GOOGLE_SHEET");
+    if (preview.identityConflicts.length > 0) throw new Error(`Store Master identity conflicts: ${preview.identityConflicts.length}; no data was changed`);
     const imported = await this.importCsv(csv, "GOOGLE_SHEET");
     const connectedOaSync = await syncConnectedLineOaMetadata(this.prisma, false);
     return {
@@ -218,6 +279,8 @@ export class StoreMasterService {
       },
       validation,
       import: { validation: imported, failed: 0 },
+      preview: preview.summary,
+      closedStoreOperationalReview: preview.closedStoreOperationalReview,
       connectedOaSync,
     };
   }

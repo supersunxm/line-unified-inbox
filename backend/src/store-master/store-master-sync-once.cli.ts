@@ -51,6 +51,21 @@ async function main() {
     }
 
     const service = new StoreMasterService(prisma);
+    if (process.argv.includes("--preview")) {
+      const preview = await service.previewCsv(csv, "GOOGLE_SHEET");
+      console.log(JSON.stringify({
+        event: "store_master_sync_preview",
+        summary: preview.summary,
+        identityConflicts: preview.identityConflicts,
+        oldRowOverwriteRisks: preview.oldRowOverwriteRisks,
+        closedStoreOperationalReview: preview.closedStoreOperationalReview,
+        expectedStores: preview.parsed
+          .filter((row) => ["17469", "27258", "30280", "30783", "30538", "31749", "30679", "32610", "32983"].includes(row.externalStoreId ?? ""))
+          .map((row) => ({ externalStoreId: row.externalStoreId, storeName: row.storeName, accountName: row.accountName, lineId: row.lineId, sourceRowNumber: row.sourceRowNumber, isActive: row.isActive, dataQualityStatus: row.dataQualityStatus })),
+      }));
+      if (preview.identityConflicts.length > 0) process.exitCode = 1;
+      return;
+    }
     const result = await service.syncFromGoogleSheet();
 
     if (result.validation.duplicateExternalStoreIds > 0) {
