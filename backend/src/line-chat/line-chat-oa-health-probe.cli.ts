@@ -98,9 +98,10 @@ export async function runLineChatOaHealthProbeCli(
           where: { id: args.oaId },
           select: { id: true },
         })
-      : await prisma.lineOfficialAccount.findUnique({
+      : await prisma.lineOfficialAccount.findFirst({
           where: { basicId: args.basicId },
           select: { id: true },
+          orderBy: { updatedAt: "desc" },
         });
 
     if (!oa) {

@@ -11,6 +11,7 @@ function fixture() {
   const prisma = {
     lineOfficialAccount: {
       update: (call: UpdateCall) => { updates.push(call); return Promise.resolve({}); },
+      findUnique: () => Promise.resolve({ id: "oa-1", storeId: "store-1" }),
       findUniqueOrThrow: () => Promise.resolve({ encryptedChannelSecret: null, encryptedChannelAccessToken: null }),
     },
   } as unknown as PrismaService;
@@ -86,7 +87,7 @@ void test("25 sequential and 25 concurrent creates persist unique stable canonic
   };
   const transactionClient = {
     storeMaster: { findUnique: () => Promise.resolve(null) },
-    store: { findUnique: () => Promise.resolve(null), update: () => Promise.resolve({}), create: () => Promise.resolve({ id: "store-1" }) },
+    store: { findUnique: () => Promise.resolve({ id: "store-1", code: null, storeMasterId: null, isActive: true, archivedAt: null }), update: () => Promise.resolve({}), create: () => Promise.resolve({ id: "store-1" }) },
     lineOfficialAccount: { create: ({ data }: { data: Record<string, unknown> }) => Promise.resolve(createRecord(data)) },
   };
   const prisma = {
@@ -122,7 +123,7 @@ void test("create fails without returning an incomplete record when persistence 
   let committed = false;
   const tx = {
     storeMaster: { findUnique: () => Promise.resolve(null) },
-    store: { findUnique: () => Promise.resolve(null), create: () => Promise.resolve({ id: "store-1" }) },
+    store: { findUnique: () => Promise.resolve({ id: "store-1", code: null, storeMasterId: null, isActive: true, archivedAt: null }), create: () => Promise.resolve({ id: "store-1" }) },
     lineOfficialAccount: { create: () => Promise.reject(new Error("database write failed")) },
   };
   const prisma = { $transaction: async (callback: (client: typeof tx) => Promise<unknown>) => { const result = await callback(tx); committed = true; return result; } } as unknown as PrismaService;

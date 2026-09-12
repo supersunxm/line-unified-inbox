@@ -131,9 +131,18 @@ export type MessageTranslationFeedbackResult = {
 
 export class ApiError extends Error {
   readonly status: number;
-  constructor(message: string, status: number) {
+  readonly code?: string;
+  readonly conflicts?: {
+    channelId?: boolean;
+    basicId?: boolean;
+    storeCode?: boolean;
+    destinationId?: boolean;
+  };
+  constructor(message: string, status: number, details?: { code?: string; conflicts?: ApiError["conflicts"] }) {
     super(message);
     this.status = status;
+    this.code = details?.code;
+    this.conflicts = details?.conflicts;
   }
 }
 
@@ -168,8 +177,13 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
   if (!response.ok) {
     let message = `API request failed (${response.status})`;
-    try { const body = await response.json() as { message?: string | string[] }; if (body.message) message = Array.isArray(body.message) ? body.message.join(", ") : body.message; } catch { }
-    const error = new ApiError(message, response.status);
+    let details: { code?: string; conflicts?: ApiError["conflicts"] } | undefined;
+    try {
+      const body = await response.json() as { message?: string | string[]; code?: string; conflicts?: ApiError["conflicts"] };
+      if (body.message) message = Array.isArray(body.message) ? body.message.join(", ") : body.message;
+      details = { code: body.code, conflicts: body.conflicts };
+    } catch { }
+    const error = new ApiError(message, response.status, details);
     if (response.status === 401 && typeof window !== "undefined") {
       window.dispatchEvent(new CustomEvent(AUTH_UNAUTHORIZED_EVENT));
     }

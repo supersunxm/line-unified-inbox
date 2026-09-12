@@ -2300,3 +2300,10 @@ Keep `StoreMaster.tiktokProfileUrl` as the only persisted TikTok profile URL. Po
 
 - Keep the reconciliation tree based on the latest main even when the stale feature branch has no unique code left to apply. Preserve the three newer Line Chat commits and represent the already-integrated ONLINE patch with an empty reconciliation commit rather than replaying or duplicating feature files.
 - Release Android `1.1.21+41` only after the Railway backend is healthy and the additive `onlineSource` migration is confirmed in production. Continue using the existing permanent signing certificate and keep `forceUpdate=false` and the prior minimum-supported policy unchanged.
+
+## 2026-09-12: LINE OA reconnect lifecycle
+
+- Keep uniqueness protection at the database layer, but scope Basic ID, Channel ID, and destination ID indexes to active, non-archived rows. Historical archived rows retain identifiers for auditability without permanently blocking reconnection.
+- Reconnect must resolve Store Master first, reuse an archived Store when its canonical Store code matches, and restore/reuse a retired OA only when it belongs to that target Store. A retired identifier attached to another Store is preserved as history and receives a new operational OA row; historical conversations are never moved based only on a matching Basic ID.
+- Store archive is a single transaction that disables every attached OA before archiving the Store. Store Master search exposes only active operational Store links, so reference data cannot masquerade as an active duplicate.
+- Duplicate responses expose booleans for each conflicting identifier and never include credentials or tokens. Production repair was limited to an atomic replacement of the three identifier indexes; the identified archived OA and its historical data were intentionally left intact.

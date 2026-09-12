@@ -398,6 +398,9 @@ const translations = {
     reenterChannelSecret: "ต้องกรอก Channel Secret ใหม่",
     credentialDecryptionFailed: "ไม่สามารถถอดรหัสข้อมูลเชื่อมต่อได้",
     connectionError: "เกิดข้อผิดพลาด",
+    duplicateBasicId: "LINE ID {value} ถูกใช้งานโดยบัญชีที่มีอยู่ในระบบแล้ว",
+    duplicateChannelId: "Channel ID {value} ถูกใช้งานโดยบัญชีที่มีอยู่ในระบบแล้ว",
+    duplicateStoreCode: "รหัสร้านค้า {value} ถูกใช้งานโดยร้านค้าที่มีอยู่ในระบบแล้ว",
     disabled: "ปิดใช้งาน",
     channelSecret: "Channel Secret",
     accessToken: "Channel Access Token",
@@ -737,6 +740,9 @@ const translations = {
     reenterChannelSecret: "Re-enter Channel Secret",
     credentialDecryptionFailed: "Credential decryption failed",
     connectionError: "Error",
+    duplicateBasicId: "LINE ID {value} is already used by an account in the system",
+    duplicateChannelId: "Channel ID {value} is already used by an account in the system",
+    duplicateStoreCode: "Store code {value} is already used by a store in the system",
     disabled: "Disabled",
     channelSecret: "Channel Secret",
     accessToken: "Channel Access Token",
@@ -1074,6 +1080,9 @@ const translations = {
     reenterChannelSecret: "请重新输入 Channel Secret",
     credentialDecryptionFailed: "凭证解密失败",
     connectionError: "错误",
+    duplicateBasicId: "LINE ID {value} 已被系统中的账户使用",
+    duplicateChannelId: "Channel ID {value} 已被系统中的账户使用",
+    duplicateStoreCode: "门店代码 {value} 已被系统中的门店使用",
     disabled: "已停用",
     channelSecret: "Channel Secret",
     accessToken: "Channel Access Token",
@@ -2605,6 +2614,21 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
     setShowCredentials(false);
   }
 
+  function formatLineOaError(error: unknown) {
+    if (!(error instanceof ApiError) || error.code !== "LINE_ACCOUNT_DUPLICATE") {
+      return error instanceof Error ? error.message : text.connectionError;
+    }
+    const conflicts = error.conflicts ?? {};
+    const messages = [
+      conflicts.channelId && lineOaForm.channelId.trim() ? text.duplicateChannelId.replace("{value}", lineOaForm.channelId.trim()) : null,
+      conflicts.basicId && lineOaForm.basicId?.trim() ? text.duplicateBasicId.replace("{value}", lineOaForm.basicId.trim()) : null,
+      conflicts.storeCode
+        ? text.duplicateStoreCode.replace("{value}", (selectedMaster?.externalStoreId ?? lineOaForm.newStore?.code ?? "—").trim())
+        : null,
+    ].filter((message): message is string => Boolean(message));
+    return messages.length ? messages.join(" · ") : error.message;
+  }
+
   function selectMasterRecord(master: StoreMasterSuggestion) {
     setSelectedMaster(master); setSearchQuery(master.accountName); setMasterSearchState({ status: "idle" }); setMasterActiveIndex(-1);
     setLineOaForm((form) => applyStoreMasterSelection(form, master));
@@ -2647,14 +2671,14 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
         setShowLineOaForm(false);
       }
       resetLineOaForm(); await loadApplicationData(true);
-    } catch (error) { setLineOaError(error instanceof Error ? error.message : text.connectionError); }
+    } catch (error) { setLineOaError(formatLineOaError(error)); }
     finally { lineOaSubmissionInFlight.current = false; setLineOaSubmitting(false); }
   }
 
   async function toggleLineOa(account: LineOfficialAccountResponse) {
     setLineOaSubmitting(true); setLineOaError(null);
     try { await api.setLineOfficialAccountStatus(account.id, !account.isActive); await loadApplicationData(true); }
-    catch (error) { setLineOaError(error instanceof Error ? error.message : text.connectionError); }
+    catch (error) { setLineOaError(formatLineOaError(error)); }
     finally { setLineOaSubmitting(false); }
   }
 

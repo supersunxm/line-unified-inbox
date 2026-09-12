@@ -126,15 +126,12 @@ export class StoreMasterService {
 
           const incomplete =
             !storeName || storeName === "#REF!" || !accountName || accountName === "#REF!";
-          const dataQualityStatus = incomplete
-            ? "INCOMPLETE"
-            : !row.externalStoreId
-            ? "MISSING_STORE_ID"
-            : !isValidManagerUrl(row.lineManagerUrl)
-            ? "INVALID_MANAGER_URL"
-            : duplicateNames.has(normalizedAccountName)
-            ? "DUPLICATE_ACCOUNT_NAME"
-            : "COMPLETE";
+          let dataQualityStatus: StoreMasterDataQualityStatus;
+          if (incomplete) dataQualityStatus = "INCOMPLETE";
+          else if (!row.externalStoreId) dataQualityStatus = "MISSING_STORE_ID";
+          else if (!isValidManagerUrl(row.lineManagerUrl)) dataQualityStatus = "INVALID_MANAGER_URL";
+          else if (duplicateNames.has(normalizedAccountName)) dataQualityStatus = "DUPLICATE_ACCOUNT_NAME";
+          else dataQualityStatus = "COMPLETE";
 
           const data = {
             ...values,
@@ -145,7 +142,7 @@ export class StoreMasterService {
             tiktokProfileUrl,
             googleMapsUrl,
             region: row.region ?? regionFromProvince(row.province),
-            dataQualityStatus: dataQualityStatus as StoreMasterDataQualityStatus,
+            dataQualityStatus,
             isActive: true,
             sourceUpdatedAt: new Date(),
           };
@@ -286,13 +283,13 @@ export class StoreMasterService {
           { normalizedAccountName: { contains: normalized } },
         ],
       },
-      include: { stores: { select: { id: true, name: true } } },
+      include: { stores: { where: { isActive: true, archivedAt: null }, select: { id: true, name: true }, take: 1 } },
       take: 100,
     });
     if (candidates.length < limit) {
       const fuzzyPool = await this.prisma.storeMaster.findMany({
         where: { isActive: true },
-        include: { stores: { select: { id: true, name: true } } },
+        include: { stores: { where: { isActive: true, archivedAt: null }, select: { id: true, name: true }, take: 1 } },
         take: 1000,
       });
       for (const item of fuzzyPool)

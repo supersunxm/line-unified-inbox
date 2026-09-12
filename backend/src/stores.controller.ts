@@ -133,7 +133,15 @@ export class StoresController {
   }
   @Get(":id/deletion-preview") async preview(@Param("id") id: string, @Req() req: AuthRequest) { const { store, relatedCounts, customerRecordsThatWillRemain, customerRecordsThatWillBeDeleted } = await this.deletionPreview(id, req.user); return { storeId: store.id, storeName: store.name, lineOfficialAccountCount: relatedCounts.lineOfficialAccounts, conversationCount: relatedCounts.conversations, messageCount: relatedCounts.messages, noteCount: relatedCounts.notes, activityCount: relatedCounts.activityHistory, customerRecordsThatWillRemain, customerRecordsThatWillBeDeleted }; }
   @Roles(UserRole.ADMIN)
-  @Post(":id/archive") async archive(@Param("id") id: string, @Req() req: AuthRequest) { const { relatedCounts } = await this.deletionPreview(id, req.user); await this.prisma.store.update({ where: { id }, data: { isActive: false, archivedAt: new Date() } }); return { result: "archived" as const, message: "Store archived; historical data was preserved", relatedCounts }; }
+  @Post(":id/archive") async archive(@Param("id") id: string, @Req() req: AuthRequest) {
+    const { relatedCounts } = await this.deletionPreview(id, req.user);
+    const archivedAt = new Date();
+    await this.prisma.$transaction(async (tx) => {
+      await tx.lineOfficialAccount.updateMany({ where: { storeId: id }, data: { isActive: false, archivedAt, connectionStatus: "DISABLED" } });
+      await tx.store.update({ where: { id }, data: { isActive: false, archivedAt } });
+    });
+    return { result: "archived" as const, message: "Store archived with its LINE accounts; historical data was preserved", relatedCounts };
+  }
   @Roles(UserRole.ADMIN)
   @Post(":id/restore") async restore(@Param("id") id: string, @Req() req: AuthRequest) { await this.storeAccess.assertStoreAccess(req.user!, id); await this.findStore(id); await this.prisma.store.update({ where: { id }, data: { isActive: true, archivedAt: null } }); return { result: "restored" as const, message: "Store restored" }; }
   @Roles(UserRole.ADMIN)
@@ -160,6 +168,7 @@ export class StoresController {
         const remaining = await tx.conversation.count({ where: { customerId } });
         if (remaining === 0) await tx.customer.delete({ where: { id: customerId } });
       }
+      await tx.store.update({ where: { id }, data: { storeMasterId: null } });
       await tx.store.delete({ where: { id } });
     });
     return { result: "deleted" as const, message: "Store and related data permanently deleted", relatedCounts };

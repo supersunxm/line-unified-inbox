@@ -576,6 +576,13 @@ export type StoreMasterSuggestion = {
   existingStore: { id: string; name: string } | null;
 };
 
+export type LineOaDuplicateConflicts = {
+  channelId: boolean;
+  basicId: boolean;
+  storeCode: boolean;
+  destinationId?: boolean;
+};
+
 export type LineOaTestResult = {
   status: LineOaConnectionStatus;
   configurationComplete: boolean;

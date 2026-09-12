@@ -26,3 +26,11 @@ test("submit flow has a synchronous duplicate-submission lock and disabled butto
   assert.match(page, /lineOaSubmissionInFlight\.current = true/);
   assert.match(page, /disabled=\{lineOaSubmitting\}[\s\S]*saveConnection/);
 });
+
+test("LINE OA duplicate responses are rendered by the conflicting identifier", () => {
+  const page = readFileSync(new URL("../src/app/page.tsx", import.meta.url), "utf8");
+  assert.match(page, /LINE_ACCOUNT_DUPLICATE/);
+  assert.match(page, /duplicateBasicId/);
+  assert.match(page, /duplicateChannelId/);
+  assert.match(page, /duplicateStoreCode/);
+});

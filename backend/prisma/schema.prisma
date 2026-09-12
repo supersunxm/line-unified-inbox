@@ -650,9 +650,9 @@ model LineOfficialAccount {
   id                          String                             @id @default(uuid())
   webhookKey                  String                             @unique
   name                        String
-  basicId                     String?                            @unique
-  channelId                   String?                            @unique
-  destinationId               String?                            @unique
+  basicId                     String?
+  channelId                   String?
+  destinationId               String?
   encryptedChannelSecret      String?
   encryptedChannelAccessToken String?
   lineChatWorkspaceUrl        String?

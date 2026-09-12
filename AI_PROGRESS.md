@@ -4615,3 +4615,12 @@ Verification passed: frontend TypeScript, zero-warning ESLint, 173/173 tests, an
 - GitHub Actions workflow `34667358841` completed successfully in 8m31s. It verified the signed package, restored the existing signing material, published the APK, generated the AppRelease migration/download metadata, and pushed generated commit `73a3a0f757a19a8b33956a3b35aef867c57503e2`.
 - Railway backend and frontend deployments for the generated release both reached `SUCCESS`. Production `/app/version/android` reports `1.1.21+41`, `forceUpdate=false`, the checksum-backed public URL, and the five requested notes. The migration `20260912090000_release_android_1_1_21` is finished.
 - The public APK returns HTTP 200 with Android MIME type, 60,049,046 bytes, and SHA-256 `30a806e507ca0eaafe452aa65cc002006f483b7c32d37f034f4d9b03b2ec0bd5`. Local `aapt`/`apksigner` verification reports package `click.lineoppo.chat`, version `1.1.21`, versionCode `41`, and certificate SHA-256 `e244a89876388b015bbd10abe39326aab15da2e1ec0fe0d6a8248855126af114`.
+
+# Current task: LINE OA reconnect lifecycle production deployment (2026-09-12)
+
+- Isolated the reconnect lifecycle fix from unrelated FILM work, synchronized it onto `origin/main`, and preserved existing active-account uniqueness requirements.
+- Production diagnosis found archived Basic ID `@tay5614g` on `LineOfficialAccount` `4ec3806a-c8fd-4a71-8274-29bf50517c12`, attached to active Store `23590`; Store Master `12140` remains correctly mapped to Store `631be61f-d3e8-435a-8942-e71c2d1ff332`. The old row was preserved because it contains historical data.
+- Added active-only partial unique indexes, transactional Store archive behavior, reconnect restore/reuse logic, structured duplicate conflicts, active-only Store Master matching, and frontend field-specific error messages. No Channel Secret or Access Token was logged.
+- The production database index repair was applied transactionally before deployment. No production rows were deleted or reassigned. A real credentialed reconnect remains intentionally unperformed until the operator supplies credentials.
+- Focused backend tests 33/33, webhook tests 30/30, frontend tests 566/566, backend/frontend builds, Prisma validation/generation, changed-file lint, security checks, and runtime health checks passed. The full backend suite remains 1,878/1,884 because of six unrelated Line Chat baseline/regression failures.
+- Next action: deploy and verify the backend migration first, then deploy and verify the frontend, followed by the read-only Store `12140` audit.

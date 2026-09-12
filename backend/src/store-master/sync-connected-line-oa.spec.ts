@@ -164,6 +164,10 @@ function fixture() {
         ),
       update: ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
         storeWrites.push({ id: where.id, data });
+        const store = stores.find((candidate) => candidate.id === where.id);
+        if (store) Object.assign(store, data);
+        const connectedAccount = accounts.find((account) => account.store.id === where.id);
+        if (connectedAccount) Object.assign(connectedAccount.store, data);
         return Promise.resolve({});
       },
     },
