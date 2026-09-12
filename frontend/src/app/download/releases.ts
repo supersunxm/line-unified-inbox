@@ -11,6 +11,22 @@ export type AndroidRelease = {
 
 export const androidReleases: AndroidRelease[] = [
   {
+  version: "1.1.21",
+  build: 41,
+  releasedAt: "2026-09-12",
+  releasedAtDisplay: "12 กันยายน 2026",
+  size: "60.0 MB",
+  fileName: "oppo-line-oa-chat-v1.1.21-production.apk",
+  sha256: "30a806e507ca0eaafe452aa65cc002006f483b7c32d37f034f4d9b03b2ec0bd5",
+  notes: [
+    "เพิ่มการเลือกช่องทางสำหรับลูกค้า Online",
+    "รองรับ TikTok, Facebook, Instagram, LINE, Website และช่องทางอื่น",
+    "ชื่อลูกค้าใน LINE จะแสดงช่องทางพร้อมเดือน/ปี เช่น TikTok 09/26",
+    "เพิ่มปุ่มยืนยันก่อนบันทึกข้อมูล Online",
+    "ปรับปรุงความเสถียรของระบบ",
+  ],
+},
+  {
   version: "1.1.20",
   build: 40,
   releasedAt: "2026-09-11",
