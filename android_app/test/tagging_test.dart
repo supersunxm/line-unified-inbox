@@ -1461,4 +1461,117 @@ void main() {
     expect(find.text('Products Interested In'), findsNothing);
     expect(find.text('+ Add Product'), findsNothing);
   });
+
+
+  testWidgets('saved sales summary stays readable on 360px Thai layout',
+      (tester) async {
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1;
+    tester.platformDispatcher.textScaleFactorTestValue = 1.3;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+
+    const sales = CustomerSalesInformation(
+      status: 'PURCHASED',
+      purchaseChannel: ['STORE'],
+      paymentMethod: 'INSTALLMENT',
+      products: [
+        CustomerSalesProductItem(
+          id: 'summary-product',
+          productModelId: 'summary-model',
+          productVariantId: 'summary-variant',
+          modelName: 'OPPO Reno16 Pro 5G',
+          seriesName: 'Reno16',
+          category: 'SMARTPHONE',
+          ram: '12',
+          rom: '512',
+          color: 'Pearl White',
+          quantity: 1,
+          status: 'PURCHASED',
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(MaterialApp(
+      locale: const Locale('th'),
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: Scaffold(
+        body: Column(
+          children: [
+            ConversationTagsBar(
+              customerSalesInformation: sales,
+              onPressed: () {},
+            ),
+            const Expanded(child: SizedBox.shrink()),
+          ],
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.getSize(
+        find.byKey(const ValueKey('conversation-tags-leading-slot')),
+      ).width,
+      20,
+    );
+    expect(
+      tester.getSize(find.byKey(const ValueKey('conversation-tags-content')))
+          .width,
+      greaterThan(220),
+    );
+    final productSummary = tester.widget<Text>(
+      find.textContaining('OPPO Reno16 Pro 5G'),
+    );
+    expect(productSummary.maxLines, 2);
+    expect(productSummary.softWrap, isTrue);
+    expect(productSummary.overflow, TextOverflow.ellipsis);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('successful product save publishes server detail before dismissal',
+      (tester) async {
+    tester.view.physicalSize = const Size(1080, 2200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final repository = _FakeTagRepository();
+    ConversationDetail? published;
+    await tester.pumpWidget(MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: Scaffold(
+        body: ConversationTagsSheet(
+          conversationId: 'conversation-parent-state',
+          repository: repository,
+          initialTags: const ConversationTags(),
+          onSaved: (detail) => published = detail,
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Purchased'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('+ Add Product').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('OPPO Reno16 Pro 5G').last);
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.widgetWithText(ChoiceChip, '○ 12GB RAM · 256GB ROM · Graphite'),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Confirm Selection'));
+    await tester.pumpAndSettle();
+
+    expect(repository.saveCallCount, 1);
+    expect(published?.customerSalesInformation?.status, 'PURCHASED');
+    expect(published?.customerSalesInformation?.products.single.modelName,
+        'OPPO Reno16 Pro 5G');
+    expect(find.text('Tagging'), findsOneWidget);
+  });
+
 }
