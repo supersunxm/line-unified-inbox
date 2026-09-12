@@ -1,5 +1,6 @@
 import '../../core/models/models.dart';
 import '../../core/network/api_client.dart';
+import '../../core/network/api_exception.dart';
 import 'dart:typed_data';
 
 const _unset = Object();
@@ -588,14 +589,66 @@ class ConversationRepository {
         .patch('/mobile/conversations/$id/purchase-information', body: body));
   }
 
+  bool _isAmbiguousSendFailure(ApiException error) {
+    return (error.statusCode == 0 &&
+            (error.code == 'NETWORK_ERROR' ||
+                error.code == 'NETWORK_TIMEOUT')) ||
+        error.statusCode == 502 ||
+        error.statusCode == 503 ||
+        error.statusCode == 504;
+  }
+
+  Future<ChatMessage?> _recoverSentMessage(
+      String conversationId, String idempotencyKey) async {
+    const delays = <Duration>[
+      Duration.zero,
+      Duration(milliseconds: 250),
+      Duration(milliseconds: 750),
+      Duration(milliseconds: 1500),
+      Duration(milliseconds: 3000),
+    ];
+    final expectedExternalId = 'outbound:$idempotencyKey';
+
+    for (final delay in delays) {
+      if (delay != Duration.zero) await Future<void>.delayed(delay);
+      try {
+        final result = await _api.get(
+          '/conversations/$conversationId/messages',
+          query: const {'page': '1', 'pageSize': '50'},
+        );
+        final items = result['items'];
+        if (items is! List) continue;
+        for (final raw in items) {
+          if (raw is! Map) continue;
+          final json = Map<String, dynamic>.from(raw);
+          if (json['externalMessageId'] == expectedExternalId) {
+            return ChatMessage.fromJson(json);
+          }
+        }
+      } catch (_) {
+        // The original send outcome is still authoritative. Reconciliation is
+        // best-effort and must never replace it with a second outbound send.
+      }
+    }
+    return null;
+  }
+
   Future<ChatMessage?> reply(
       String id, String text, String idempotencyKey) async {
-    final result = await _api.post('/mobile/conversations/$id/messages',
-        body: {'text': text, 'idempotencyKey': idempotencyKey});
-    final rawMessage = result['message'];
-    return rawMessage is Map
-        ? ChatMessage.fromJson(Map<String, dynamic>.from(rawMessage))
-        : null;
+    try {
+      final result = await _api.post('/mobile/conversations/$id/messages',
+          body: {'text': text, 'idempotencyKey': idempotencyKey});
+      final rawMessage = result['message'];
+      return rawMessage is Map
+          ? ChatMessage.fromJson(Map<String, dynamic>.from(rawMessage))
+          : null;
+    } on ApiException catch (error) {
+      if (_isAmbiguousSendFailure(error)) {
+        final recovered = await _recoverSentMessage(id, idempotencyKey);
+        if (recovered != null) return recovered;
+      }
+      rethrow;
+    }
   }
 
   Future<Uint8List> media(String url) => _api.getBytes(url);
@@ -603,6 +656,7 @@ class ConversationRepository {
           String id, Uint8List bytes, String filename, String idempotencyKey,
           {String? mimeType}) =>
       _sendImage('/mobile/conversations/$id/images',
+          conversationId: id,
           field: 'image',
           filename: filename,
           mimeType: mimeType,
@@ -613,6 +667,7 @@ class ConversationRepository {
           String id, Uint8List bytes, String filename, String idempotencyKey,
           {String? mimeType}) =>
       _sendImage('/mobile/conversations/$id/videos',
+          conversationId: id,
           field: 'video',
           filename: filename,
           mimeType: mimeType ?? 'video/mp4',
@@ -621,23 +676,33 @@ class ConversationRepository {
           timeout: const Duration(minutes: 2));
 
   Future<ChatMessage?> _sendImage(String path,
-      {required String field,
+      {required String conversationId,
+      required String field,
       required String filename,
       String? mimeType,
       required Uint8List bytes,
       required String idempotencyKey,
       Duration? timeout}) async {
-    final result = await _api.postMultipart(path,
-        field: field,
-        filename: filename,
-        mimeType: mimeType,
-        bytes: bytes,
-        idempotencyKey: idempotencyKey,
-        timeout: timeout);
-    final rawMessage = result['message'];
-    return rawMessage is Map
-        ? ChatMessage.fromJson(Map<String, dynamic>.from(rawMessage))
-        : null;
+    try {
+      final result = await _api.postMultipart(path,
+          field: field,
+          filename: filename,
+          mimeType: mimeType,
+          bytes: bytes,
+          idempotencyKey: idempotencyKey,
+          timeout: timeout);
+      final rawMessage = result['message'];
+      return rawMessage is Map
+          ? ChatMessage.fromJson(Map<String, dynamic>.from(rawMessage))
+          : null;
+    } on ApiException catch (error) {
+      if (_isAmbiguousSendFailure(error)) {
+        final recovered =
+            await _recoverSentMessage(conversationId, idempotencyKey);
+        if (recovered != null) return recovered;
+      }
+      rethrow;
+    }
   }
 
   Future<void> markOpened(String notificationId) async {
