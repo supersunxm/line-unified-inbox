@@ -31,5 +31,18 @@ export default tseslint.config(
       "prefer-const": "off",
     },
   },
+  {
+    files: [
+      "scripts/audit-line-oa-store-integrity.ts",
+      "scripts/repair-line-oa-store-binding.ts",
+    ],
+    languageOptions: {
+      parserOptions: {
+        projectService: false,
+        project: ["./tsconfig.integrity-scripts.json"],
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
+  },
   { ignores: ["dist/**", "node_modules/**"] },
 );

@@ -29,6 +29,7 @@ export class UpdateLineOfficialAccountDto {
   @IsOptional() @IsString() channelSecret?: string;
   @IsOptional() @IsString() channelAccessToken?: string;
   @IsOptional() @IsString() storeId?: string;
+  @IsOptional() @IsString() storeMasterId?: string;
 }
 
 export class UpdateLineOaStatusDto { @IsBoolean() isActive!: boolean; }

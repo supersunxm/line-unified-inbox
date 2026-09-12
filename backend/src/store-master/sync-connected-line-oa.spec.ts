@@ -228,19 +228,40 @@ void test("repairs store name/region/province by Store ID without changing Store
   assert.deepEqual(value.conversationWrites, []);
 });
 
-void test("LINE identity can never move an OA away from an established Store ID", async () => {
+void test("sync refuses a Store-code-vs-Basic-ID identity conflict", async () => {
   const value = fixture();
   value.accounts[0].name = "OPPO The Mall Korat";
   value.accounts[0].basicId = "@korat";
 
-  await syncConnectedLineOaMetadata(value.prisma, false);
+  const report = await syncConnectedLineOaMetadata(value.prisma, false);
 
+  assert.equal(report.identityConflict, 1);
+  assert.deepEqual(report.identityConflicts, [{
+    type: "IDENTITY_CONFLICT",
+    oaId: "oa-12140",
+    currentStoreId: "12140",
+    expectedStoreId: "22057",
+    basicId: "@korat",
+  }]);
   assert.deepEqual(value.accountWrites, []);
   assert.deepEqual(value.conversationWrites, []);
   const writesFor12140 = value.storeWrites.filter((write) => write.id === "store-12140");
-  assert.ok(writesFor12140.length >= 1);
-  assert.equal(writesFor12140[0].data.code, "12140");
-  assert.equal(writesFor12140[0].data.storeMasterId, "master-12140");
+  assert.deepEqual(writesFor12140, []);
+});
+
+void test("sync does not silently overwrite a confirmed conflicting OA mapping", async () => {
+  const value = fixture();
+  value.accounts[0].name = "OPPO BC Suwinthawong";
+  value.accounts[0].basicId = "@333yzqqa";
+
+  const report = await syncConnectedLineOaMetadata(value.prisma, false);
+
+  assert.equal(report.identityConflict, 1);
+  assert.equal(report.identityConflicts[0].expectedStoreId, "23590");
+  assert.equal(value.accounts[0].store.id, "store-12140");
+  assert.deepEqual(value.storeWrites.filter((write) => write.id === "store-12140"), []);
+  assert.deepEqual(value.accountWrites, []);
+  assert.deepEqual(value.conversationWrites, []);
 });
 
 void test("dry run reports metadata repairs without changing any data", async () => {

@@ -17,6 +17,11 @@ export type LineOaDuplicateConflicts = {
   storeCode: boolean;
   destinationId: boolean;
 };
+type StoreMasterIdentityConflicts = {
+  storeId: boolean;
+  basicId: boolean;
+  activeStoreOa: boolean;
+};
 
 @Injectable()
 export class LineOfficialAccountsService {
@@ -26,7 +31,7 @@ export class LineOfficialAccountsService {
     @Optional() @Inject(FollowerInsightsService) private readonly followerInsightsService?: FollowerInsightsService,
   ) {}
 
-  private clean(value?: string) { const result = value?.trim(); return result || undefined; }
+  private clean(value?: string | null) { const result = value?.trim(); return result || undefined; }
   private generateWebhookKey() { return randomBytes(24).toString("base64url"); }
   private webhookConfiguration(webhookKey?: string) {
     const raw = process.env.PUBLIC_WEBHOOK_BASE_URL?.trim();
@@ -172,6 +177,66 @@ export class LineOfficialAccountsService {
     return Object.values(conflicts).some(Boolean);
   }
 
+  private storeMasterIdentityException(conflicts: StoreMasterIdentityConflicts) {
+    return new ConflictException({
+      code: "STORE_MASTER_IDENTITY_MISMATCH",
+      conflicts,
+      message: "The selected Store, LINE Basic ID, and Store Master identity do not agree",
+    });
+  }
+
+  private async assertStoreMasterIdentity(
+    client: Prisma.TransactionClient | PrismaService,
+    input: {
+      master: { externalStoreId: string | null; lineId: string | null };
+      basicId?: string | null;
+      store: { id: string; code: string | null } | null;
+      excludedOaId?: string;
+    },
+  ) {
+    const expectedStoreCode = this.clean(input.master.externalStoreId);
+    const expectedBasicId = this.clean(input.master.lineId)?.toLocaleLowerCase("en-US");
+    const submittedBasicId = this.clean(input.basicId)?.toLocaleLowerCase("en-US");
+    const activeStoreOa = input.store
+      ? await client.lineOfficialAccount.findMany({
+          where: {
+            accountType: "STORE",
+            storeId: input.store.id,
+            isActive: true,
+            archivedAt: null,
+            ...(input.excludedOaId ? { id: { not: input.excludedOaId } } : {}),
+          },
+          select: { id: true },
+          take: 1,
+        })
+      : [];
+    const conflicts: StoreMasterIdentityConflicts = {
+      storeId: Boolean(input.store && expectedStoreCode && this.clean(input.store.code) !== expectedStoreCode),
+      basicId: Boolean(expectedBasicId && submittedBasicId !== expectedBasicId),
+      activeStoreOa: activeStoreOa.length > 0,
+    };
+    if (Object.values(conflicts).some(Boolean)) throw this.storeMasterIdentityException(conflicts);
+  }
+
+  private async hasAnotherActiveStoreOa(
+    client: Prisma.TransactionClient | PrismaService,
+    storeId: string,
+    excludedOaId?: string,
+  ) {
+    const matches = await client.lineOfficialAccount.findMany({
+      where: {
+        accountType: "STORE",
+        storeId,
+        isActive: true,
+        archivedAt: null,
+        ...(excludedOaId ? { id: { not: excludedOaId } } : {}),
+      },
+      select: { id: true },
+      take: 1,
+    });
+    return matches.length > 0;
+  }
+
   private async findActiveDuplicateConflicts(
     client: Prisma.TransactionClient | PrismaService,
     input: { basicId?: string | null; channelId?: string | null; destinationId?: string | null },
@@ -251,6 +316,7 @@ export class LineOfficialAccountsService {
             throw this.duplicateException({ channelId: false, basicId: false, destinationId: false, storeCode: true });
           }
           if (selectedStore && storeWithMatchingCode && selectedStore.id !== storeWithMatchingCode.id) {
+            if (master) throw this.storeMasterIdentityException({ storeId: true, basicId: false, activeStoreOa: false });
             throw this.duplicateException({ channelId: false, basicId: false, destinationId: false, storeCode: true });
           }
           if (!master && !selectedStore && storeWithMatchingCode?.isActive && !storeWithMatchingCode.archivedAt) {
@@ -261,6 +327,15 @@ export class LineOfficialAccountsService {
           const existingTargetStore = masterStore
             ?? selectedStore
             ?? (storeWithMatchingCode && (!storeWithMatchingCode.isActive || Boolean(storeWithMatchingCode.archivedAt)) ? storeWithMatchingCode : null);
+          if (master) {
+            await this.assertStoreMasterIdentity(tx, {
+              master,
+              basicId,
+              store: existingTargetStore ?? storeWithMatchingCode,
+            });
+          } else if (existingTargetStore && dto.isActive && await this.hasAnotherActiveStoreOa(tx, existingTargetStore.id)) {
+            throw this.duplicateException({ channelId: false, basicId: false, destinationId: false, storeCode: true });
+          }
           if (master) {
             if (existingTargetStore?.storeMasterId && existingTargetStore.storeMasterId !== master.id) {
               throw this.duplicateException({ channelId: false, basicId: false, destinationId: false, storeCode: true });
@@ -348,6 +423,12 @@ export class LineOfficialAccountsService {
       } catch (error) {
         if (this.isWebhookKeyCollision(error) && attempt < 2) continue;
         if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+          const target = error.meta?.target;
+          const targetText = Array.isArray(target) ? target.join(",") : typeof target === "string" ? target : "";
+          if (targetText.includes("one_active_store_oa_per_store")) {
+            if (dto.storeMasterId) throw this.storeMasterIdentityException({ storeId: false, basicId: false, activeStoreOa: true });
+            throw this.duplicateException({ channelId: false, basicId: false, destinationId: false, storeCode: true });
+          }
           const inferred = this.conflictsFromPersistenceError(error);
           if (this.hasDuplicate(inferred)) throw this.duplicateException(inferred);
           throw this.duplicateException({
@@ -371,7 +452,10 @@ export class LineOfficialAccountsService {
   }
 
   async update(id: string, dto: UpdateLineOfficialAccountDto) {
-    const current = await this.prisma.lineOfficialAccount.findUnique({ where: { id }, select: { id: true, storeId: true, accountType: true } });
+    const current = await this.prisma.lineOfficialAccount.findUnique({
+      where: { id },
+      select: { id: true, storeId: true, accountType: true, basicId: true, isActive: true, archivedAt: true },
+    });
     if (!current || current.accountType === "HEAD_OFFICE") throw new NotFoundException("LINE Official Account not found");
     try {
       const encryptedChannelSecret = this.clean(dto.channelSecret) ? this.encryption.encrypt(dto.channelSecret!.trim()) : undefined;
@@ -382,21 +466,48 @@ export class LineOfficialAccountsService {
       const basicId = dto.basicId === undefined ? undefined : this.clean(dto.basicId);
       const channelId = this.clean(dto.channelId);
       const destinationId = this.clean(dto.destinationId);
-      const conflicts = await this.findActiveDuplicateConflicts(
-        this.prisma,
-        { basicId, channelId, destinationId },
-        undefined,
-        undefined,
-        id,
-      );
-      if (this.hasDuplicate(conflicts)) throw this.duplicateException(conflicts);
-      await this.prisma.lineOfficialAccount.update({ where: { id }, data: {
-        name: this.clean(dto.name), basicId: dto.basicId === undefined ? undefined : basicId ?? null,
-        channelId, destinationId, storeId: this.clean(dto.storeId),
-        encryptedChannelSecret, encryptedChannelAccessToken,
-        lastConnectionError: null,
-      } });
-      const saved = await this.prisma.lineOfficialAccount.findUniqueOrThrow({ where: { id } });
+      const saved = await this.prisma.$transaction(async (tx) => {
+        const targetStoreId = this.clean(dto.storeId) ?? current.storeId;
+        const targetStore = targetStoreId
+          ? await tx.store.findUnique({ where: { id: targetStoreId }, select: { id: true, code: true } })
+          : null;
+        if (targetStoreId && !targetStore) throw new NotFoundException("Store not found");
+        const master = dto.storeMasterId
+          ? await tx.storeMaster.findUnique({ where: { id: dto.storeMasterId }, select: { id: true, externalStoreId: true, lineId: true } })
+          : null;
+        if (dto.storeMasterId && !master) throw new NotFoundException("Store Master record not found");
+        if (master) {
+          await this.assertStoreMasterIdentity(tx, {
+            master,
+            basicId: dto.basicId === undefined ? current.basicId : basicId,
+            store: targetStore,
+            excludedOaId: id,
+          });
+        } else if (
+          targetStore && current.isActive && !current.archivedAt &&
+          await this.hasAnotherActiveStoreOa(tx, targetStore.id, id)
+        ) {
+          throw this.duplicateException({ channelId: false, basicId: false, destinationId: false, storeCode: true });
+        }
+        const conflicts = await this.findActiveDuplicateConflicts(
+          tx,
+          { basicId, channelId, destinationId },
+          undefined,
+          undefined,
+          id,
+        );
+        if (this.hasDuplicate(conflicts)) throw this.duplicateException(conflicts);
+        await tx.lineOfficialAccount.update({ where: { id }, data: {
+          name: this.clean(dto.name), basicId: dto.basicId === undefined ? undefined : basicId ?? null,
+          channelId, destinationId, storeId: targetStoreId,
+          encryptedChannelSecret, encryptedChannelAccessToken,
+          lastConnectionError: null,
+        } });
+        if (targetStoreId && targetStoreId !== current.storeId) {
+          await tx.conversation.updateMany({ where: { lineOfficialAccountId: id }, data: { storeId: targetStoreId } });
+        }
+        return tx.lineOfficialAccount.findUniqueOrThrow({ where: { id } });
+      });
       if (encryptedChannelSecret) this.encryption.decrypt(saved.encryptedChannelSecret!);
       if (encryptedChannelAccessToken) this.encryption.decrypt(saved.encryptedChannelAccessToken!);
 
@@ -411,6 +522,12 @@ export class LineOfficialAccountsService {
       return this.get(id);
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+        const target = error.meta?.target;
+        const targetText = Array.isArray(target) ? target.join(",") : typeof target === "string" ? target : "";
+        if (targetText.includes("one_active_store_oa_per_store")) {
+          if (dto.storeMasterId) throw this.storeMasterIdentityException({ storeId: false, basicId: false, activeStoreOa: true });
+          throw this.duplicateException({ channelId: false, basicId: false, destinationId: false, storeCode: true });
+        }
         const inferred = this.conflictsFromPersistenceError(error);
         throw this.duplicateException(this.hasDuplicate(inferred) ? inferred : {
           channelId: Boolean(this.clean(dto.channelId)),
@@ -429,6 +546,9 @@ export class LineOfficialAccountsService {
     if (isActive) {
       const conflicts = await this.findActiveDuplicateConflicts(this.prisma, current, undefined, undefined, id);
       if (this.hasDuplicate(conflicts)) throw this.duplicateException(conflicts);
+      if (current.storeId && await this.hasAnotherActiveStoreOa(this.prisma, current.storeId, id)) {
+        throw this.duplicateException({ channelId: false, basicId: false, destinationId: false, storeCode: true });
+      }
     }
     const enabledStatus: LineOaConnectionStatus = this.missingFields({ ...current, isActive: true, archivedAt: null }).length === 0
       ? current.lastWebhookReceivedAt ? "CONNECTED" : "READY"
@@ -496,10 +616,13 @@ export class LineOfficialAccountsService {
   }
 
   async restore(id: string) {
-    const item = await this.prisma.lineOfficialAccount.findUnique({ where: { id }, select: { id: true, accountType: true, basicId: true, channelId: true, destinationId: true } });
+    const item = await this.prisma.lineOfficialAccount.findUnique({ where: { id }, select: { id: true, accountType: true, storeId: true, basicId: true, channelId: true, destinationId: true } });
     if (!item || item.accountType === "HEAD_OFFICE") throw new NotFoundException("LINE Official Account not found");
     const conflicts = await this.findActiveDuplicateConflicts(this.prisma, item, undefined, undefined, id);
     if (this.hasDuplicate(conflicts)) throw this.duplicateException(conflicts);
+    if (item.storeId && await this.hasAnotherActiveStoreOa(this.prisma, item.storeId, id)) {
+      throw this.duplicateException({ channelId: false, basicId: false, destinationId: false, storeCode: true });
+    }
     await this.prisma.lineOfficialAccount.update({ where: { id }, data: { isActive: true, archivedAt: null } });
     return { outcome: "restored" as const, id };
   }

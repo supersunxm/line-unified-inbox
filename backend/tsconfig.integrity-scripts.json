@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true
+  },
+  "include": [
+    "scripts/audit-line-oa-store-integrity.ts",
+    "scripts/repair-line-oa-store-binding.ts"
+  ]
+}

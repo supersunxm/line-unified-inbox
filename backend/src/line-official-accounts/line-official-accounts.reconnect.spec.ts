@@ -241,13 +241,14 @@ function serviceFor(database: FakeDatabase) {
   return new LineOfficialAccountsService(database as unknown as PrismaService, encryption);
 }
 
-async function createFor(database: FakeDatabase, input: { basicId?: string; channelId?: string; storeMasterId?: string } = {}) {
+async function createFor(database: FakeDatabase, input: { basicId?: string; channelId?: string; destinationId?: string; storeMasterId?: string } = {}) {
   const service = serviceFor(database);
   return service.create({
     storeMasterId: input.storeMasterId ?? "master-12140",
     name: "OPPO Central Nakhon.",
-    basicId: input.basicId,
+    basicId: input.basicId ?? "@tay5614g",
     channelId: input.channelId,
+    destinationId: input.destinationId,
     channelSecret: "secret-is-never-logged",
     channelAccessToken: "token-is-never-logged",
     isActive: true,
@@ -268,7 +269,7 @@ test.after(() => {
 
 for (const [label, input] of [
   ["Channel ID", { channelId: "2000000001" }],
-  ["Basic ID", { basicId: "@reconnect" }],
+  ["Basic ID", { basicId: "@tay5614g" }],
   ["store code", {}],
 ] as const) {
   test(`create → delete → reconnect preserves the same ${label}`, async () => {
@@ -289,12 +290,12 @@ for (const [label, input] of [
 test("an archived OA on the same Store is restored instead of creating a duplicate active row", async () => {
   const database = new FakeDatabase();
   const service = serviceFor(database);
-  const first = await createFor(database, { basicId: "@same-store" });
+  const first = await createFor(database, { basicId: "@tay5614g" });
   const stored = database.oas.get(first.id);
   assert.ok(stored);
   stored.conversationCount = 1;
   await service.remove(first.id);
-  const second = await createFor(database, { basicId: "@same-store" });
+  const second = await createFor(database, { basicId: "@tay5614g" });
 
   assert.equal(second.id, first.id);
   assert.equal(database.oas.size, 1);
@@ -302,20 +303,108 @@ test("an archived OA on the same Store is restored instead of creating a duplica
   assert.equal(database.oas.get(first.id)?.archivedAt, null);
 });
 
+test("one Store cannot have two active STORE OAs", async () => {
+  const database = new FakeDatabase();
+  await createFor(database);
+  await assert.rejects(
+    () => createFor(database, { channelId: "different-channel" }),
+    (error: unknown) => {
+      const response = (error as ConflictException).getResponse() as { code: string; conflicts: Record<string, boolean> };
+      assert.equal(response.code, "STORE_MASTER_IDENTITY_MISMATCH");
+      assert.equal(response.conflicts.activeStoreOa, true);
+      return true;
+    },
+  );
+});
+
+test("an archived OA and one active OA may coexist on the same Store", async () => {
+  const database = new FakeDatabase();
+  const service = serviceFor(database);
+  const archived = await createFor(database);
+  database.oas.get(archived.id)!.conversationCount = 1;
+  database.oas.get(archived.id)!.basicId = "@historical-basic-id";
+  await service.remove(archived.id);
+  const active = await createFor(database, { basicId: "@tay5614g", channelId: "new-channel" });
+
+  assert.notEqual(active.id, archived.id);
+  assert.equal(database.oas.size, 2);
+  assert.equal([...database.oas.values()].filter((oa) => oa.isActive && !oa.archivedAt).length, 1);
+});
+
+test("selected StoreMaster Basic ID mismatch is rejected", async () => {
+  const database = new FakeDatabase();
+  await assert.rejects(
+    () => createFor(database, { basicId: "@wrong-basic-id" }),
+    (error: unknown) => {
+      const response = (error as ConflictException).getResponse() as { code: string; conflicts: Record<string, boolean> };
+      assert.equal(response.code, "STORE_MASTER_IDENTITY_MISMATCH");
+      assert.deepEqual(response.conflicts, { storeId: false, basicId: true, activeStoreOa: false });
+      return true;
+    },
+  );
+});
+
+test("selected StoreMaster Store ID mismatch is rejected", async () => {
+  const database = new FakeDatabase();
+  database.stores.set("store-wrong", {
+    id: "store-wrong",
+    name: "Wrong Store",
+    code: "30968",
+    storeMasterId: null,
+    isActive: true,
+    archivedAt: null,
+  });
+  await assert.rejects(
+    () => serviceFor(database).create({
+      storeId: "store-wrong",
+      storeMasterId: "master-12140",
+      name: "OPPO Central Nakhon.",
+      basicId: "@tay5614g",
+      channelSecret: "secret-is-never-logged",
+      channelAccessToken: "token-is-never-logged",
+      isActive: true,
+    }),
+    (error: unknown) => {
+      const response = (error as ConflictException).getResponse() as { code: string; conflicts: Record<string, boolean> };
+      assert.equal(response.code, "STORE_MASTER_IDENTITY_MISMATCH");
+      assert.equal(response.conflicts.storeId, true);
+      return true;
+    },
+  );
+});
+
+test("correct StoreMaster identity succeeds", async () => {
+  const database = new FakeDatabase();
+  const account = await createFor(database);
+  assert.equal(account.basicId, "@tay5614g");
+  assert.equal(account.store.externalStoreId, "12140");
+});
+
 for (const [label, input] of [
   ["Channel ID", { channelId: "2000000002" }],
-  ["Basic ID", { basicId: "@active-duplicate" }],
+  ["Basic ID", { basicId: "@tay5614g" }],
+  ["Destination ID", { destinationId: "destination-duplicate" }],
 ] as const) {
   test(`duplicate active ${label} is rejected with structured conflict details`, async () => {
     const database = new FakeDatabase();
     await createFor(database, input);
     await assert.rejects(
-      () => createFor(database, input),
+      () => serviceFor(database).create({
+        newStore: { name: "Other Store", code: `OTHER-${label}` },
+        name: "Other OA",
+        basicId: input.basicId,
+        channelId: input.channelId,
+        destinationId: input.destinationId,
+        channelSecret: "secret-is-never-logged",
+        channelAccessToken: "token-is-never-logged",
+        isActive: true,
+      }),
       (error: unknown) => {
         assert.equal(error instanceof ConflictException, true);
         const response = (error as ConflictException).getResponse() as { code: string; conflicts: Record<string, boolean> };
         assert.equal(response.code, "LINE_ACCOUNT_DUPLICATE");
-        assert.equal(response.conflicts[label === "Channel ID" ? "channelId" : "basicId"], true);
+        const conflictField = label === "Channel ID" ? "channelId" : label === "Destination ID" ? "destinationId" : "basicId";
+        assert.equal(response.conflicts[conflictField], true);
         return true;
       },
     );
@@ -325,7 +414,7 @@ for (const [label, input] of [
 test("Store archive transactionally disables every attached LINE OA", async () => {
   const database = new FakeDatabase();
   const service = serviceFor(database);
-  await createFor(database, { basicId: "@archive-store" });
+  await createFor(database, { basicId: "@tay5614g" });
   const store = [...database.stores.values()][0];
   assert.ok(store);
   const controller = new StoresController(

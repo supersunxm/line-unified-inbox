@@ -9,6 +9,14 @@ export type StoreMasterSyncReport = {
   failed: number;
   storeMetadataUpdated: number;
   storeIdConflicts: number;
+  identityConflict: number;
+  identityConflicts: Array<{
+    type: "IDENTITY_CONFLICT";
+    oaId: string;
+    currentStoreId: string | null;
+    expectedStoreId: string | null;
+    basicId: string | null;
+  }>;
 };
 
 type StoreTarget = {
@@ -84,6 +92,7 @@ async function reconcileStoreMetadataByStoreId(
   prisma: PrismaClient,
   dryRun: boolean,
   report: StoreMasterSyncReport,
+  blockedStoreIds: ReadonlySet<string>,
 ): Promise<void> {
   const stores = await prisma.store.findMany({
     where: { archivedAt: null },
@@ -108,6 +117,7 @@ async function reconcileStoreMetadataByStoreId(
   });
 
   for (const store of stores) {
+    if (blockedStoreIds.has(store.id)) continue;
     try {
       const currentStoreId = store.code?.trim() || null;
       let master: Pick<StoreMaster, "id" | "externalStoreId" | "storeName" | "region" | "province"> | null = null;
@@ -183,9 +193,9 @@ export async function syncConnectedLineOaMetadata(
     failed: 0,
     storeMetadataUpdated: 0,
     storeIdConflicts: 0,
+    identityConflict: 0,
+    identityConflicts: [],
   };
-
-  await reconcileStoreMetadataByStoreId(prisma, dryRun, report);
 
   const accounts = await prisma.lineOfficialAccount.findMany({
     where: { archivedAt: null, accountType: "STORE", storeId: { not: null } },
@@ -207,34 +217,56 @@ export async function syncConnectedLineOaMetadata(
     },
   });
 
+  const conflictingStoreIds = new Set<string>();
+  for (const account of accounts) {
+    if (!account.store) continue;
+    const currentStoreId = account.store.code?.trim() || null;
+    const linkedMasterStoreId = account.store.storeMaster?.externalStoreId?.trim() || null;
+    const masterByStoreCode = currentStoreId
+      ? await uniqueMasterByExternalStoreId(prisma, currentStoreId)
+      : linkedMasterStoreId
+      ? await uniqueMasterByExternalStoreId(prisma, linkedMasterStoreId)
+      : account.store.storeMasterId
+      ? await prisma.storeMaster.findFirst({ where: { id: account.store.storeMasterId, isActive: true } })
+      : null;
+    const masterByBasicId = await uniqueMasterByLineIdentity(prisma, account.basicId);
+    if (masterByStoreCode && masterByBasicId && masterByStoreCode.id !== masterByBasicId.id) {
+      conflictingStoreIds.add(account.store.id);
+      report.identityConflict++;
+      report.identityConflicts.push({
+        type: "IDENTITY_CONFLICT",
+        oaId: account.id,
+        currentStoreId,
+        expectedStoreId: masterByBasicId.externalStoreId?.trim() || null,
+        basicId: account.basicId?.trim() || null,
+      });
+    }
+  }
+
+  await reconcileStoreMetadataByStoreId(prisma, dryRun, report, conflictingStoreIds);
+
   for (const account of accounts) {
     if (!account.store) continue;
     report.processed++;
+    if (conflictingStoreIds.has(account.store.id)) continue;
 
     try {
       const currentStoreId = account.store.code?.trim() || null;
       const linkedMasterStoreId = account.store.storeMaster?.externalStoreId?.trim() || null;
       const hasCanonicalStoreIdentity = Boolean(currentStoreId);
 
-      let master: StoreMaster | null = null;
-
-      // Same invariant as Store reconciliation: Store ID wins over stale relation.
-      if (currentStoreId) {
-        master = await uniqueMasterByExternalStoreId(prisma, currentStoreId);
-      } else if (account.store.storeMasterId) {
-        master = await prisma.storeMaster.findFirst({
-          where: { id: account.store.storeMasterId, isActive: true },
-        });
-      }
-      if (!master && !currentStoreId && linkedMasterStoreId) {
-        master = await uniqueMasterByExternalStoreId(prisma, linkedMasterStoreId);
-      }
-
-      // LINE identity is a final legacy recovery path only when Store ID is absent.
-      if (!master && !hasCanonicalStoreIdentity) {
-        master = await uniqueMasterByLineIdentity(prisma, account.basicId);
-        if (!master) master = await uniqueMasterByAccountName(prisma, account.name);
-      }
+      // Resolve Store identity and LINE identity independently. Neither is allowed
+      // to silently override the other when both identify different masters.
+      const masterByStoreCode = currentStoreId
+        ? await uniqueMasterByExternalStoreId(prisma, currentStoreId)
+        : linkedMasterStoreId
+        ? await uniqueMasterByExternalStoreId(prisma, linkedMasterStoreId)
+        : account.store.storeMasterId
+        ? await prisma.storeMaster.findFirst({ where: { id: account.store.storeMasterId, isActive: true } })
+        : null;
+      const masterByBasicId = await uniqueMasterByLineIdentity(prisma, account.basicId);
+      let master = masterByStoreCode ?? masterByBasicId;
+      if (!master && !hasCanonicalStoreIdentity) master = await uniqueMasterByAccountName(prisma, account.name);
       if (!master) {
         report.missingStoreMaster++;
         continue;

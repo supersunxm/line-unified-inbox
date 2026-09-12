@@ -8,11 +8,21 @@ type UpdateCall = { where: { id: string }; data: Record<string, unknown> };
 
 function fixture() {
   const updates: UpdateCall[] = [];
-  const prisma = {
+  const tx = {
+    store: { findUnique: () => Promise.resolve({ id: "store-1", code: null }) },
+    storeMaster: { findUnique: () => Promise.resolve(null) },
     lineOfficialAccount: {
       update: (call: UpdateCall) => { updates.push(call); return Promise.resolve({}); },
-      findUnique: () => Promise.resolve({ id: "oa-1", storeId: "store-1" }),
+      findMany: () => Promise.resolve([]),
       findUniqueOrThrow: () => Promise.resolve({ encryptedChannelSecret: null, encryptedChannelAccessToken: null }),
+    },
+    conversation: { updateMany: () => Promise.resolve({ count: 0 }) },
+  };
+  const prisma = {
+    $transaction: (callback: (client: typeof tx) => Promise<unknown>) => callback(tx),
+    lineOfficialAccount: {
+      update: (call: UpdateCall) => { updates.push(call); return Promise.resolve({}); },
+      findUnique: () => Promise.resolve({ id: "oa-1", storeId: "store-1", accountType: "STORE", basicId: null, isActive: true, archivedAt: null }),
     },
   } as unknown as PrismaService;
   const encryption = { encrypt: (value: string) => `encrypted:${value}`, decrypt: () => "decrypted" } as unknown as CredentialEncryptionService;
@@ -27,6 +37,37 @@ void test("normal LINE OA edit does not change the persisted webhook key", async
   const { service, updates } = fixture();
   await service.update("oa-1", { name: "Edited OA" });
   assert.equal(Object.hasOwn(updates[0].data, "webhookKey"), false);
+});
+
+void test("Conversation.storeId follows a confirmed OA rebind transactionally", async () => {
+  const conversationWrites: Array<Record<string, unknown>> = [];
+  const tx = {
+    store: { findUnique: ({ where }: { where: { id: string } }) => Promise.resolve({ id: where.id, code: "23590" }) },
+    storeMaster: { findUnique: () => Promise.resolve({ id: "master-23590", externalStoreId: "23590", lineId: "@333yzqqa" }) },
+    lineOfficialAccount: {
+      findMany: () => Promise.resolve([]),
+      update: () => Promise.resolve({}),
+      findUniqueOrThrow: () => Promise.resolve({ encryptedChannelSecret: null, encryptedChannelAccessToken: null }),
+    },
+    conversation: {
+      updateMany: (call: Record<string, unknown>) => { conversationWrites.push(call); return Promise.resolve({ count: 2 }); },
+    },
+  };
+  const prisma = {
+    lineOfficialAccount: {
+      findUnique: () => Promise.resolve({ id: "oa-1", storeId: "store-30968", accountType: "STORE", basicId: "@333yzqqa", isActive: true, archivedAt: null }),
+    },
+    $transaction: (callback: (client: typeof tx) => Promise<unknown>) => callback(tx),
+  } as unknown as PrismaService;
+  const service = new LineOfficialAccountsService(prisma, { encrypt: (value: string) => value } as unknown as CredentialEncryptionService);
+  (service as unknown as { get: (id: string) => Promise<Record<string, unknown>> }).get = (id) => Promise.resolve({ id });
+
+  await service.update("oa-1", { storeId: "store-23590", storeMasterId: "master-23590" });
+
+  assert.deepEqual(conversationWrites, [{
+    where: { lineOfficialAccountId: "oa-1" },
+    data: { storeId: "store-23590" },
+  }]);
 });
 
 void test("CSV export uses the complete safe list, applies filters, escapes RFC fields, and includes an Excel UTF-8 BOM", async () => {
@@ -87,8 +128,8 @@ void test("25 sequential and 25 concurrent creates persist unique stable canonic
   };
   const transactionClient = {
     storeMaster: { findUnique: () => Promise.resolve(null) },
-    store: { findUnique: () => Promise.resolve({ id: "store-1", code: null, storeMasterId: null, isActive: true, archivedAt: null }), update: () => Promise.resolve({}), create: () => Promise.resolve({ id: "store-1" }) },
-    lineOfficialAccount: { create: ({ data }: { data: Record<string, unknown> }) => Promise.resolve(createRecord(data)) },
+    store: { findUnique: () => Promise.resolve(null), update: () => Promise.resolve({}), create: () => Promise.resolve({ id: `store-${sequence + 1}` }) },
+    lineOfficialAccount: { findMany: () => Promise.resolve([]), create: ({ data }: { data: Record<string, unknown> }) => Promise.resolve(createRecord(data)) },
   };
   const prisma = {
     $transaction: (callback: (tx: typeof transactionClient) => Promise<unknown>) => callback(transactionClient),
@@ -96,7 +137,8 @@ void test("25 sequential and 25 concurrent creates persist unique stable canonic
   } as unknown as PrismaService;
   const encryption = { encrypt: (value: string) => `encrypted:${value}`, decrypt: () => "decrypted" } as unknown as CredentialEncryptionService;
   const service = new LineOfficialAccountsService(prisma, encryption);
-  const create = () => service.create({ storeId: "store-1", name: "OA", channelSecret: "secret", channelAccessToken: "token", isActive: true });
+  let requestedStore = 0;
+  const create = () => service.create({ newStore: { name: "Store", code: `STORE-${requestedStore += 1}` }, name: "OA", channelSecret: "secret", channelAccessToken: "token", isActive: true });
   try {
     const sequential: Array<Awaited<ReturnType<typeof create>>> = [];
     for (let index = 0; index < 25; index += 1) sequential.push(await create());
@@ -124,7 +166,7 @@ void test("create fails without returning an incomplete record when persistence 
   const tx = {
     storeMaster: { findUnique: () => Promise.resolve(null) },
     store: { findUnique: () => Promise.resolve({ id: "store-1", code: null, storeMasterId: null, isActive: true, archivedAt: null }), create: () => Promise.resolve({ id: "store-1" }) },
-    lineOfficialAccount: { create: () => Promise.reject(new Error("database write failed")) },
+    lineOfficialAccount: { findMany: () => Promise.resolve([]), create: () => Promise.reject(new Error("database write failed")) },
   };
   const prisma = { $transaction: async (callback: (client: typeof tx) => Promise<unknown>) => { const result = await callback(tx); committed = true; return result; } } as unknown as PrismaService;
   const service = new LineOfficialAccountsService(prisma, { encrypt: (value: string) => value } as unknown as CredentialEncryptionService);

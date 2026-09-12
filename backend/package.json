@@ -48,6 +48,8 @@
     "customer-voice:backfill": "tsx --env-file=.env scripts/customer-voice-backfill.ts",
     "product:reanalyze": "tsx --env-file=.env scripts/reanalyze-products.ts",
     "line-oa:backfill-webhook-keys": "tsx --env-file=.env scripts/backfill-line-oa-webhook-keys.ts",
+    "line-oa:integrity-audit": "tsx --env-file=.env scripts/audit-line-oa-store-integrity.ts",
+    "line-oa:repair-store-binding": "tsx --env-file=.env scripts/repair-line-oa-store-binding.ts",
     "media:google-drive:oauth": "tsx --env-file=.env scripts/google-drive-oauth-setup.ts",
     "line-chat:login": "tsx src/line-chat/line-chat-login.cli.ts",
     "line-chat:recover-auth": "tsx src/line-chat/line-chat-auth-recovery.cli.ts",
