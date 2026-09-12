@@ -2295,3 +2295,8 @@ Keep `StoreMaster.tiktokProfileUrl` as the only persisted TikTok profile URL. Po
 - Keep the four existing status values and callbacks unchanged, but replace the equal-width `SegmentedButton` with a horizontally scrollable `ChoiceChip` row. Content-sized chips avoid Thai wrapping while preserving all labels and the existing ability to clear the selection.
 - Use one-line text, compact density, semantic status icons for unselected chips, and a check icon plus primary-container styling for the selected chip. Keep the padded Material tap target and avoid fixed widths so narrow Android screens scroll rather than overflow.
 - Limit this refinement to the customer-sales status section and its widget tests. ONLINE source validation, persistence, nickname logic, API contracts, and all unrelated web/backend features remain unchanged.
+
+## 2026-09-12: ONLINE release is gated by backend schema verification
+
+- Keep the reconciliation tree based on the latest main even when the stale feature branch has no unique code left to apply. Preserve the three newer Line Chat commits and represent the already-integrated ONLINE patch with an empty reconciliation commit rather than replaying or duplicating feature files.
+- Release Android `1.1.21+41` only after the Railway backend is healthy and the additive `onlineSource` migration is confirmed in production. Continue using the existing permanent signing certificate and keep `forceUpdate=false` and the prior minimum-supported policy unchanged.
