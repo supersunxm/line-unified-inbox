@@ -24,6 +24,7 @@ type FakeMaster = {
   province: string;
   lineId: string;
   lineManagerUrl: string | null;
+  isActive: boolean;
 };
 
 type FakeOa = {
@@ -63,6 +64,7 @@ class FakeDatabase {
       province: "Nakhon Si Thammarat",
       lineId: "@tay5614g",
       lineManagerUrl: null,
+      isActive: true,
     });
   }
 
@@ -421,6 +423,12 @@ test("Store archive transactionally disables every attached LINE OA", async () =
     database as unknown as PrismaService,
     { getOperationalConversationFilter: async () => ({}) } as never,
     { assertStoreAccess: async () => undefined } as never,
+    {
+      closeStoreFromMaster: async (_client: unknown, _identity: unknown, closedAt = new Date()) => {
+        database.stores.set(store.id, { ...store, isActive: false, archivedAt: closedAt });
+        for (const [id, oa] of database.oas) database.oas.set(id, { ...oa, isActive: false, archivedAt: closedAt, connectionStatus: "DISABLED" });
+      },
+    } as never,
   );
 
   await controller.archive(store.id, { user: { role: "ADMIN" } } as never);
@@ -428,6 +436,27 @@ test("Store archive transactionally disables every attached LINE OA", async () =
   assert.equal(database.stores.get(store.id)?.isActive, false);
   assert.equal(database.oas.get([...database.oas.keys()][0])?.isActive, false);
   assert.ok(database.oas.get([...database.oas.keys()][0])?.archivedAt);
+});
+
+test("new LINE OA connection rejects an inactive StoreMaster with STORE_CLOSED", async () => {
+  const database = new FakeDatabase();
+  const master = database.masters.get("master-12140");
+  assert.ok(master);
+  master.isActive = false;
+  await assert.rejects(
+    () => createFor(database),
+    (error: unknown) => {
+      assert.equal(error instanceof ConflictException, true);
+      assert.deepEqual((error as ConflictException).getResponse(), {
+        code: "STORE_CLOSED",
+        storeCode: "12140",
+        message: "Store 12140 is closed",
+      });
+      return true;
+    },
+  );
+  assert.equal(database.stores.size, 0);
+  assert.equal(database.oas.size, 0);
 });
 
 test("duplicate active store code is rejected when no Store Master target is selected", async () => {

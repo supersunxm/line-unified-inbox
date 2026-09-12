@@ -94,7 +94,7 @@ test("StoresController.list scopes store reads to the authenticated user's activ
 
   await controller.list(undefined, { user: { role: "VIEWER" } } as never);
 
-  assert.deepEqual(capturedWhere, { id: { in: ["s-1"] }, archivedAt: null });
+  assert.deepEqual(capturedWhere, { id: { in: ["s-1"] }, isActive: true, archivedAt: null });
   assert.deepEqual(capturedConversationWhere.store, { archivedAt: null, id: { in: ["s-1"] } });
 });
 

@@ -34,6 +34,7 @@ import {
   StoreVariableContext,
 } from "../store-master/template-variable-resolver";
 import { isValidGoogleMapsUrl } from "../store-master/store-master.utils";
+import { storeClosedException } from "../store-master/store-lifecycle.service";
 import {
   buildAutoResponsePostbackData,
   normalizeAutoResponseMessages,
@@ -318,16 +319,19 @@ export class RichMenuService {
 
     const requestedIds = Array.from(new Set(dto.lineOfficialAccountIds || []));
 
-    const validOas = await this.prisma.lineOfficialAccount.findMany({
+    const requestedOas = await this.prisma.lineOfficialAccount.findMany({
       where: {
         id: { in: requestedIds },
         accountType: "STORE",
-        archivedAt: null,
       },
-      select: { id: true },
+      select: { id: true, isActive: true, archivedAt: true, store: { select: { code: true, isActive: true, archivedAt: true, storeMaster: { select: { isActive: true, externalStoreId: true } } } } },
     });
-
-    const validIds = validOas.map((oa) => oa.id);
+    for (const oa of requestedOas) {
+      if (oa.store?.isActive === false || oa.store?.archivedAt || oa.store?.storeMaster?.isActive === false) {
+        throw storeClosedException(oa.store?.storeMaster?.externalStoreId ?? oa.store?.code ?? null);
+      }
+    }
+    const validIds = requestedOas.filter((oa) => oa.isActive && !oa.archivedAt).map((oa) => oa.id);
 
     await this.prisma.$transaction(async (tx) => {
       await tx.richMenuStoreAssignment.deleteMany({
@@ -701,6 +705,9 @@ export class RichMenuService {
     const storeOas = await this.prisma.lineOfficialAccount.findMany({
       where: {
         accountType: "STORE",
+        isActive: true,
+        archivedAt: null,
+        store: { isActive: true, archivedAt: null, OR: [{ storeMaster: null }, { storeMaster: { isActive: true } }] },
       },
       include: {
         store: {
@@ -1368,6 +1375,9 @@ export class RichMenuService {
       }
       if (oa.accountType === "HEAD_OFFICE") {
         throw new BadRequestException(`Cannot publish to Head Office account '${oa.name}'`);
+      }
+      if (oa.store?.isActive === false || oa.store?.archivedAt || oa.store?.storeMaster?.isActive === false) {
+        throw storeClosedException(oa.store?.storeMaster?.externalStoreId ?? oa.store?.code ?? null);
       }
       if (!oa.isActive || oa.archivedAt) {
         throw new BadRequestException(`Store OA '${oa.name}' is inactive or archived`);

@@ -2320,3 +2320,10 @@ Keep `StoreMaster.tiktokProfileUrl` as the only persisted TikTok profile URL. Po
 - Replace the `(source, sourceRowNumber)` unique key with a non-unique provenance index and a PostgreSQL partial unique index for active `GOOGLE_SHEET` rows with non-null `externalStoreId`. Duplicate source or database identities fail before import; ambiguous legacy rows without a Store ID are skipped rather than allowed to overwrite a canonical record.
 - Treat Sheet `Status` as reference-data lifecycle only: blank/ACTIVE sets StoreMaster active and CLOSED sets it inactive. A CLOSED master produces an operational-review report when linked Stores, OAs, conversations, or dependencies remain; it never cascades archive or deletion into operational records.
 - Deployment-time sync may write only after the same configured-source preview reports zero duplicate Store IDs and zero identity conflicts. The preview must expose creates, updates, unchanged rows, deactivations, old row-position overwrite risks, and CLOSED operational review before release.
+
+## 2026-09-12: CLOSED StoreMaster drives a non-destructive operational lifecycle
+
+- Treat StoreMaster `CLOSED` as authoritative for Store availability. Apply the lifecycle in the same serializable import transaction: set linked Store records inactive/archived, disable and archive active STORE OAs, and block pending delivery/sync work with `STORE_CLOSED` diagnostics.
+- Preserve all identity and historical evidence. Closure never deletes or rewrites credentials, Channel/Destination IDs, webhook keys/events, conversations, messages, Rich Menu assignments/history, or previously archived OAs.
+- Make repeated CLOSED imports idempotent. A later ACTIVE transition restores only the Store; it must never silently reactivate a prior OA or its webhook. Reconnection remains explicit and must pass the existing identity and uniqueness safeguards.
+- Hide closed Stores from operational lists and selectors and reject new LINE OA/Rich Menu operations with the structured `STORE_CLOSED` conflict, while retaining archived/admin inspection paths.

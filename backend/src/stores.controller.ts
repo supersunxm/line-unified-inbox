@@ -6,18 +6,23 @@ import { isPermanentDeleteConfirmed } from "./store-removal-policy";
 import { Roles } from "./auth/auth.decorators";
 import type { AuthRequest } from "./auth/auth.guard";
 import { StoreAccessService } from "./auth/store-access.service";
+import { StoreLifecycleService, storeClosedException } from "./store-master/store-lifecycle.service";
 
 type PermanentDeleteBody = { confirmation?: string };
 
 @Controller("stores")
 export class StoresController {
-  constructor(private readonly prisma: PrismaService, private readonly operations: OperationsService, private readonly storeAccess: StoreAccessService) {}
+  private readonly storeLifecycle: StoreLifecycleService;
+
+  constructor(private readonly prisma: PrismaService, private readonly operations: OperationsService, private readonly storeAccess: StoreAccessService, storeLifecycle?: StoreLifecycleService) {
+    this.storeLifecycle = storeLifecycle ?? new StoreLifecycleService(prisma);
+  }
   @Get() async list(@Query("showArchived") showArchived: string | undefined, @Req() req: AuthRequest) {
     const accessibleStoreIds = await this.storeAccess.accessibleStoreIds(req.user!);
     const storeScope = accessibleStoreIds === null ? {} : { id: { in: accessibleStoreIds } };
     const resetFilter = (await this.operations.getOperationalConversationFilter()) as Prisma.ConversationWhereInput;
     const stores = await this.prisma.store.findMany({
-      where: { ...storeScope, ...(showArchived === "true" && accessibleStoreIds === null ? {} : { archivedAt: null }) },
+      where: { ...storeScope, ...(showArchived === "true" && accessibleStoreIds === null ? {} : { isActive: true, archivedAt: null }) },
       orderBy: { name: "asc" },
       include: {
         _count: { select: { conversations: true, lineOfficialAccounts: true } },
@@ -135,15 +140,14 @@ export class StoresController {
   @Roles(UserRole.ADMIN)
   @Post(":id/archive") async archive(@Param("id") id: string, @Req() req: AuthRequest) {
     const { relatedCounts } = await this.deletionPreview(id, req.user);
-    const archivedAt = new Date();
-    await this.prisma.$transaction(async (tx) => {
-      await tx.lineOfficialAccount.updateMany({ where: { storeId: id }, data: { isActive: false, archivedAt, connectionStatus: "DISABLED" } });
-      await tx.store.update({ where: { id }, data: { isActive: false, archivedAt } });
-    });
+    const store = await this.prisma.store.findUnique({ where: { id }, select: { storeMasterId: true, code: true } });
+    if (!store?.code) throw new BadRequestException("Store code is required for archival");
+    const storeCode = store.code;
+    await this.prisma.$transaction((tx) => this.storeLifecycle.closeStoreFromMaster(tx, { storeMasterId: store.storeMasterId, externalStoreId: storeCode }));
     return { result: "archived" as const, message: "Store archived with its LINE accounts; historical data was preserved", relatedCounts };
   }
   @Roles(UserRole.ADMIN)
-  @Post(":id/restore") async restore(@Param("id") id: string, @Req() req: AuthRequest) { await this.storeAccess.assertStoreAccess(req.user!, id); await this.findStore(id); await this.prisma.store.update({ where: { id }, data: { isActive: true, archivedAt: null } }); return { result: "restored" as const, message: "Store restored" }; }
+  @Post(":id/restore") async restore(@Param("id") id: string, @Req() req: AuthRequest) { await this.storeAccess.assertStoreAccess(req.user!, id); const store = await this.prisma.store.findUnique({ where: { id }, include: { storeMaster: { select: { externalStoreId: true, isActive: true } } } }); if (!store) throw new NotFoundException("Store not found"); if (store.storeMaster?.isActive === false) throw storeClosedException(store.storeMaster.externalStoreId ?? store.code); await this.prisma.store.update({ where: { id }, data: { isActive: true, archivedAt: null } }); return { result: "restored" as const, message: "Store restored" }; }
   @Roles(UserRole.ADMIN)
   @Delete(":id") async remove(@Param("id") id: string, @Query("mode") mode: string | undefined, @Body() body: PermanentDeleteBody, @Req() req: AuthRequest) {
     if (mode !== "permanent") throw new BadRequestException("Choose archive or permanent deletion explicitly");

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { PrismaService } from "../prisma.service";
 import { StoreMasterService } from "./store-master.service";
+import { StoreLifecycleService } from "./store-lifecycle.service";
 
 const header = "STORE ID,STORE NAME,ACCOUNT NAME,Line OA Link,Line ID,URLS,Province / จังหวัด,Region / ภูมิภาค,Status";
 const row = (id: string, name: string, account: string, lineId: string, status = "ACTIVE") =>
@@ -33,7 +34,12 @@ function harness(seed: Array<Record<string, unknown>> = [], operationalStores: A
     store,
     $transaction: (work: (tx: { storeMaster: typeof storeMaster }) => Promise<void>) => work({ storeMaster }),
   } as unknown as PrismaService;
-  return { records, service: new StoreMasterService(prisma), operationalStores };
+  const lifecycleCalls = { closed: [] as string[], reopened: [] as string[] };
+  const lifecycle = {
+    closeStoreFromMaster: async (_client: unknown, identity: { externalStoreId: string }) => { lifecycleCalls.closed.push(identity.externalStoreId); },
+    reopenStoreFromMaster: async (_client: unknown, identity: { externalStoreId: string }) => { lifecycleCalls.reopened.push(identity.externalStoreId); },
+  } as unknown as StoreLifecycleService;
+  return { records, service: new StoreMasterService(prisma, lifecycle), operationalStores, lifecycleCalls };
 }
 
 const existing = (id: string, externalStoreId: string, sourceRowNumber: number, isActive = true) => ({
@@ -79,9 +85,12 @@ void test("CLOSED and reopened rows only toggle StoreMaster activity", async () 
   assert.equal(preview.summary.closedStoreOperationalReview, 1);
   await h.service.importCsv(closedCsv);
   assert.equal(h.records[0].isActive, false);
-  assert.equal(operational[0].isActive, true, "operational Store must not be archived or deactivated");
+  assert.deepEqual(h.lifecycleCalls.closed, ["31749"]);
+  await h.service.importCsv(closedCsv);
+  assert.deepEqual(h.lifecycleCalls.closed, ["31749", "31749"], "repeated CLOSED sync must re-run the idempotent lifecycle");
   await h.service.importCsv(`${header}\n${row("31749", "Central Park", "Central Park", "@31749", "ACTIVE")}`);
   assert.equal(h.records[0].isActive, true);
+  assert.deepEqual(h.lifecycleCalls.reopened, ["31749"]);
 });
 
 void test("incomplete new row with a Store ID is created safely", async () => {

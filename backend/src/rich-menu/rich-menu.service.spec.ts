@@ -304,3 +304,24 @@ void test("RichMenuPublishNoopAdapter throws fail-safe error and publishes no ri
     /Rich Menu publishing is disabled in Phase 1/,
   );
 });
+
+void test("Rich Menu assignment rejects a CLOSED Store before any write", async () => {
+  let transactionCalled = false;
+  const service = new RichMenuService({
+    richMenuTemplate: { findUnique: async () => ({ id: "template-closed" }) },
+    lineOfficialAccount: { findMany: async () => [{
+      id: "oa-closed", isActive: false, archivedAt: new Date(),
+      store: { code: "31749", isActive: false, archivedAt: new Date(), storeMaster: { externalStoreId: "31749", isActive: false } },
+    }] },
+    $transaction: async () => { transactionCalled = true; },
+  } as any);
+  await assert.rejects(
+    () => service.saveAssignments("template-closed", { lineOfficialAccountIds: ["oa-closed"] }, mockAdminUser),
+    (error: unknown) => {
+      const response = (error as { getResponse: () => unknown }).getResponse();
+      assert.deepEqual(response, { code: "STORE_CLOSED", storeCode: "31749", message: "Store 31749 is closed" });
+      return true;
+    },
+  );
+  assert.equal(transactionCalled, false);
+});

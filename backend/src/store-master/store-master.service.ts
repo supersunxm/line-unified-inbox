@@ -13,6 +13,7 @@ import {
 } from "./store-master.utils";
 import { syncConnectedLineOaMetadata } from "./sync-connected-line-oa";
 import { getStoreGoogleMapsReadiness } from "./template-variable-resolver";
+import { StoreLifecycleService } from "./store-lifecycle.service";
 
 type MasterRecord = Prisma.StoreMasterGetPayload<Record<string, never>>;
 type ParsedRows = ReturnType<typeof parseStoreMasterCsv>;
@@ -26,7 +27,11 @@ type ImportAction = {
 
 @Injectable()
 export class StoreMasterService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly lifecycle: StoreLifecycleService;
+
+  constructor(private readonly prisma: PrismaService, lifecycle?: StoreLifecycleService) {
+    this.lifecycle = lifecycle ?? new StoreLifecycleService(prisma);
+  }
 
   private duplicateCount(values: Array<string | null>) {
     const counts = new Map<string, number>();
@@ -208,9 +213,11 @@ export class StoreMasterService {
     if (preview.identityConflicts.length > 0) throw new Error(`Store Master identity conflicts: ${preview.identityConflicts.length}; no data was changed`);
     await this.prisma.$transaction(async (tx) => {
       for (const action of preview.actions) {
-        if (action.kind === "UNCHANGED") continue;
-        if (action.kind === "CREATE") await tx.storeMaster.create({ data: action.data });
-        else {
+        const wasActive = action.existing?.isActive;
+        let storeMasterId = action.existing?.id ?? null;
+        if (action.kind === "CREATE") {
+          storeMasterId = (await tx.storeMaster.create({ data: action.data })).id;
+        } else if (action.kind === "UPDATE") {
           const updated = await tx.storeMaster.updateMany({
             where: { id: action.existing?.id, externalStoreId: action.row.externalStoreId },
             data: action.data,
@@ -218,6 +225,17 @@ export class StoreMasterService {
           if (updated.count !== 1) {
             throw new Error(`Store Master identity changed during import for Store ID ${action.row.externalStoreId ?? "legacy"}; no data was changed`);
           }
+        }
+        if (action.row.externalStoreId && !action.row.isActive) {
+          await this.lifecycle.closeStoreFromMaster(tx, {
+            storeMasterId,
+            externalStoreId: action.row.externalStoreId,
+          });
+        } else if (action.row.externalStoreId && action.existing && wasActive === false) {
+          await this.lifecycle.reopenStoreFromMaster(tx, {
+            storeMasterId,
+            externalStoreId: action.row.externalStoreId,
+          });
         }
       }
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 15000, timeout: 60000 });

@@ -7,6 +7,7 @@ import { CreateLineOfficialAccountDto, ExportLineOfficialAccountsDto, UpdateLine
 import { isValidLineOaUrl } from "../store-master/store-master.utils";
 import { LatestManagerUrlMap, loadLatestManagerUrls, resolveLineOaManagerUrl } from "../store-master/line-oa-manager-url";
 import { getStoreGoogleMapsReadiness } from "../store-master/template-variable-resolver";
+import { storeClosedException } from "../store-master/store-lifecycle.service";
 import { FollowerInsightsService } from "../follower-insights/follower-insights.service";
 
 const safeInclude = { store: { include: { storeMaster: true } }, _count: { select: { conversations: true } } } satisfies Prisma.LineOfficialAccountInclude;
@@ -300,16 +301,19 @@ export class LineOfficialAccountsService {
               })
             : null;
           if (dto.storeMasterId && !master) throw new NotFoundException("Store Master record not found");
+          if (master?.isActive === false) throw storeClosedException(master.externalStoreId);
 
           const selectedStore = dto.storeId
-            ? await tx.store.findUnique({ where: { id: dto.storeId }, select: { id: true, code: true, storeMasterId: true, isActive: true, archivedAt: true } })
+            ? await tx.store.findUnique({ where: { id: dto.storeId }, select: { id: true, code: true, storeMasterId: true, isActive: true, archivedAt: true, storeMaster: { select: { isActive: true, externalStoreId: true } } } })
             : null;
           if (dto.storeId && !selectedStore) throw new NotFoundException("Store not found");
+          if (selectedStore?.storeMaster?.isActive === false) throw storeClosedException(selectedStore.storeMaster.externalStoreId ?? selectedStore.code);
 
           const requestedStoreCode = master?.externalStoreId ?? this.clean(dto.newStore?.code);
           const storeWithMatchingCode = requestedStoreCode
-            ? await tx.store.findUnique({ where: { code: requestedStoreCode }, select: { id: true, code: true, storeMasterId: true, isActive: true, archivedAt: true } })
+            ? await tx.store.findUnique({ where: { code: requestedStoreCode }, select: { id: true, code: true, storeMasterId: true, isActive: true, archivedAt: true, storeMaster: { select: { isActive: true, externalStoreId: true } } } })
             : null;
+          if (storeWithMatchingCode?.storeMaster?.isActive === false) throw storeClosedException(storeWithMatchingCode.storeMaster.externalStoreId ?? storeWithMatchingCode.code);
           const masterStore = master?.stores[0] ?? null;
 
           if (masterStore && storeWithMatchingCode && masterStore.id !== storeWithMatchingCode.id) {
@@ -469,13 +473,15 @@ export class LineOfficialAccountsService {
       const saved = await this.prisma.$transaction(async (tx) => {
         const targetStoreId = this.clean(dto.storeId) ?? current.storeId;
         const targetStore = targetStoreId
-          ? await tx.store.findUnique({ where: { id: targetStoreId }, select: { id: true, code: true } })
+          ? await tx.store.findUnique({ where: { id: targetStoreId }, select: { id: true, code: true, isActive: true, archivedAt: true, storeMaster: { select: { isActive: true, externalStoreId: true } } } })
           : null;
         if (targetStoreId && !targetStore) throw new NotFoundException("Store not found");
+        if (targetStore?.storeMaster?.isActive === false) throw storeClosedException(targetStore.storeMaster.externalStoreId ?? targetStore.code);
         const master = dto.storeMasterId
-          ? await tx.storeMaster.findUnique({ where: { id: dto.storeMasterId }, select: { id: true, externalStoreId: true, lineId: true } })
+          ? await tx.storeMaster.findUnique({ where: { id: dto.storeMasterId }, select: { id: true, externalStoreId: true, lineId: true, isActive: true } })
           : null;
         if (dto.storeMasterId && !master) throw new NotFoundException("Store Master record not found");
+        if (master?.isActive === false) throw storeClosedException(master.externalStoreId);
         if (master) {
           await this.assertStoreMasterIdentity(tx, {
             master,
@@ -616,8 +622,9 @@ export class LineOfficialAccountsService {
   }
 
   async restore(id: string) {
-    const item = await this.prisma.lineOfficialAccount.findUnique({ where: { id }, select: { id: true, accountType: true, storeId: true, basicId: true, channelId: true, destinationId: true } });
+    const item = await this.prisma.lineOfficialAccount.findUnique({ where: { id }, select: { id: true, accountType: true, storeId: true, basicId: true, channelId: true, destinationId: true, store: { select: { code: true, isActive: true, archivedAt: true, storeMaster: { select: { isActive: true, externalStoreId: true } } } } } });
     if (!item || item.accountType === "HEAD_OFFICE") throw new NotFoundException("LINE Official Account not found");
+    if (item.store?.isActive === false || item.store?.archivedAt || item.store?.storeMaster?.isActive === false) throw storeClosedException(item.store?.storeMaster?.externalStoreId ?? item.store?.code ?? null);
     const conflicts = await this.findActiveDuplicateConflicts(this.prisma, item, undefined, undefined, id);
     if (this.hasDuplicate(conflicts)) throw this.duplicateException(conflicts);
     if (item.storeId && await this.hasAnotherActiveStoreOa(this.prisma, item.storeId, id)) {
