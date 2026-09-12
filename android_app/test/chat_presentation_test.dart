@@ -93,7 +93,7 @@ void main() {
         ),
       ),
     ));
-    expect(find.text('Customer Sales Info'), findsOneWidget);
+    expect(find.text('Tagging'), findsOneWidget);
     expect(
       find.byWidgetPredicate(
         (widget) =>

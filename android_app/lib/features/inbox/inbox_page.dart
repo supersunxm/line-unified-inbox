@@ -42,6 +42,7 @@ class _InboxPageState extends State<InboxPage> {
   InboxFilter _selectedFilter = InboxFilter.all;
   int _total = 0;
   int _unreadTotal = 0;
+  InboxMonthlyOverview? _monthlyOverview;
   bool _loading = true;
   bool _loadingMore = false;
   bool _hasMore = true;
@@ -365,6 +366,7 @@ class _InboxPageState extends State<InboxPage> {
       setState(() {
         if (reset) {
           _items.clear();
+          _monthlyOverview = page.monthlyOverview;
         }
         _items.addAll(page.items);
         _total = page.total;
@@ -489,7 +491,12 @@ class _InboxPageState extends State<InboxPage> {
             scopeName: _hqScopeName,
             unreadCount: _unreadTotal,
           ),
-          ConversationOverviewCard(conversations: _items),
+          ConversationOverviewCard(
+            conversations: _items,
+            monthlyTotal: _monthlyOverview?.incomingConversations,
+            monthlyNeedReply: _monthlyOverview?.waitingConversations,
+            monthlyCompleted: _monthlyOverview?.repliedConversations,
+          ),
           InboxFilterBar(
             selected: _selectedFilter,
             hqMode: widget.isHq,

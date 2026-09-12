@@ -416,7 +416,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get purchaseInformation => '购买信息';
 
   @override
-  String get customerSalesInformation => '客户销售信息';
+  String get customerSalesInformation => '标签';
 
   @override
   String get statusOnline => '线上咨询';
@@ -1434,7 +1434,7 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
   String get purchaseInformation => '购买信息';
 
   @override
-  String get customerSalesInformation => '客户销售信息';
+  String get customerSalesInformation => '标签';
 
   @override
   String get statusOnline => '线上咨询';

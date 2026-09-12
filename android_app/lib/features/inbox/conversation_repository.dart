@@ -344,12 +344,46 @@ class ConversationDetail {
   }
 }
 
+class InboxMonthlyOverview {
+  const InboxMonthlyOverview({
+    required this.incomingConversations,
+    required this.waitingConversations,
+    required this.repliedConversations,
+  });
+
+  final int incomingConversations;
+  final int waitingConversations;
+  final int repliedConversations;
+
+  factory InboxMonthlyOverview.fromSummary(Map<String, dynamic> json) {
+    final raw = json['overview'];
+    final overview =
+        raw is Map ? Map<String, dynamic>.from(raw) : <String, dynamic>{};
+
+    int count(String key) {
+      final value = overview[key];
+      return value is num ? value.toInt() : 0;
+    }
+
+    return InboxMonthlyOverview(
+      incomingConversations: count('incomingConversations'),
+      waitingConversations: count('waitingConversations'),
+      repliedConversations: count('repliedConversations'),
+    );
+  }
+}
+
 class InboxPageResult {
-  InboxPageResult(
-      {required this.items, required this.page, required this.total});
+  InboxPageResult({
+    required this.items,
+    required this.page,
+    required this.total,
+    this.monthlyOverview,
+  });
   final List<ConversationSummary> items;
   final int page;
   final int total;
+  final InboxMonthlyOverview? monthlyOverview;
   bool get hasMore => items.isNotEmpty && page * 30 < total;
 }
 
@@ -373,13 +407,30 @@ class ConversationRepository {
         'replyStatusGroup': replyStatusGroup!.trim(),
       if (search?.trim().isNotEmpty == true) 'search': search!.trim(),
     });
+    InboxMonthlyOverview? monthlyOverview;
+    if (page == 1) {
+      try {
+        final now = DateTime.now().toUtc().add(const Duration(hours: 7));
+        final month =
+            '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}';
+        final summary = await _api.get('/mobile/summary/monthly', query: {
+          'month': month,
+        });
+        monthlyOverview = InboxMonthlyOverview.fromSummary(summary);
+      } catch (_) {
+        // Monthly analytics is supplementary. Keep Inbox usable and fall back
+        // to the already-loaded page counters if analytics is unavailable.
+      }
+    }
+
     return InboxPageResult(
         items: (result['items'] as List<dynamic>)
             .map((item) =>
                 ConversationSummary.fromJson(item as Map<String, dynamic>))
             .toList(),
         page: result['page'] as int,
-        total: result['total'] as int);
+        total: result['total'] as int,
+        monthlyOverview: monthlyOverview);
   }
 
   /// Returns the same store scope exposed by Web `/chats`.
