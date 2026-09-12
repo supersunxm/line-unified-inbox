@@ -151,9 +151,24 @@ class _ChatPageState extends State<ChatPage> {
     );
   }
 
+  void _applyConversationTagsDetail(ConversationDetail updated) {
+    final current = _detail;
+    if (!mounted || current == null) return;
+    setState(() => _detail = current.copyWith(
+          tags: updated.tags,
+          customerSalesInformation: updated.customerSalesInformation,
+          purchaseInformation: updated.purchaseInformation,
+          operationalState: updated.operationalState,
+          unreadCount: updated.unreadCount,
+          bmReplyStatus: updated.bmReplyStatus,
+        ));
+  }
+
   Future<void> _showConversationTags() async {
     final detail = _detail;
     if (detail == null || !mounted) return;
+    final wasInterested =
+        detail.customerSalesInformation?.isInterested == true;
     final sheetResult = await ConversationTagsSheet.show(
       context: context,
       conversationId: detail.id,
@@ -161,6 +176,7 @@ class _ChatPageState extends State<ChatPage> {
       initialTags: detail.tags ?? const ConversationTags(),
       initialSalesInfo: detail.customerSalesInformation,
       initialPurchaseInfo: detail.purchaseInformation,
+      onSaved: _applyConversationTagsDetail,
     );
 
     final updated = await resolveConversationTagsDetailAfterDismiss(
@@ -169,20 +185,11 @@ class _ChatPageState extends State<ChatPage> {
     );
     if (!mounted || updated == null || _detail == null) return;
 
-    final wasInterested =
-        _detail?.customerSalesInformation?.isInterested == true;
     final isNowPurchased =
         updated.customerSalesInformation?.isPurchased == true;
     final isConversion = wasInterested && isNowPurchased;
 
-    setState(() => _detail = _detail!.copyWith(
-          tags: updated.tags,
-          customerSalesInformation: updated.customerSalesInformation,
-          purchaseInformation: updated.purchaseInformation,
-          operationalState: updated.operationalState,
-          unreadCount: updated.unreadCount,
-          bmReplyStatus: updated.bmReplyStatus,
-        ));
+    _applyConversationTagsDetail(updated);
 
     // A null sheet result means the route was dismissed with Android Back,
     // drag, or barrier tap. The authoritative refresh above is intentionally

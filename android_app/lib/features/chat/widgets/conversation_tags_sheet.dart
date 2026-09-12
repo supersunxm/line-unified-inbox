@@ -116,28 +116,33 @@ class ConversationTagsBar extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Padding(
-                padding: const EdgeInsets.only(top: 2),
-                child: Icon(
-                  sales?.isPurchased == true
-                      ? Icons.shopping_bag_outlined
-                      : sales?.isFilm == true
-                          ? Icons.shield_outlined
-                          : sales?.isOnline == true
-                              ? Icons.language_outlined
-                              : Icons.flag_outlined,
-                  size: 18,
-                  color: sales?.isPurchased == true
-                      ? Colors.green
-                      : sales?.isFilm == true
-                          ? Colors.deepPurple
-                          : Colors.blue,
+              SizedBox(
+                key: const ValueKey('conversation-tags-leading-slot'),
+                width: 20,
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Icon(
+                    sales?.isPurchased == true
+                        ? Icons.shopping_bag_outlined
+                        : sales?.isFilm == true
+                            ? Icons.shield_outlined
+                            : sales?.isOnline == true
+                                ? Icons.language_outlined
+                                : Icons.flag_outlined,
+                    size: 18,
+                    color: sales?.isPurchased == true
+                        ? Colors.green
+                        : sales?.isFilm == true
+                            ? Colors.deepPurple
+                            : Colors.blue,
+                  ),
                 ),
               ),
               const SizedBox(width: AppSpacing.sm),
               Expanded(
+                key: const ValueKey('conversation-tags-content'),
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     if (isLegacy)
                       Text(
@@ -245,7 +250,8 @@ class ConversationTagsBar extends StatelessWidget {
                                   .textTheme
                                   .bodySmall
                                   ?.copyWith(fontWeight: FontWeight.w500),
-                              maxLines: 1,
+                              maxLines: 2,
+                              softWrap: true,
                               overflow: TextOverflow.ellipsis,
                             ),
                           );
@@ -342,6 +348,7 @@ class ConversationTagsSheet extends StatefulWidget {
     required this.initialTags,
     this.initialSalesInfo,
     this.initialPurchaseInfo,
+    this.onSaved,
   });
 
   final String conversationId;
@@ -349,6 +356,7 @@ class ConversationTagsSheet extends StatefulWidget {
   final ConversationTags initialTags;
   final CustomerSalesInformation? initialSalesInfo;
   final PurchaseInformation? initialPurchaseInfo;
+  final ValueChanged<ConversationDetail>? onSaved;
 
   static Future<ConversationDetail?> show({
     required BuildContext context,
@@ -357,6 +365,7 @@ class ConversationTagsSheet extends StatefulWidget {
     required ConversationTags initialTags,
     CustomerSalesInformation? initialSalesInfo,
     PurchaseInformation? initialPurchaseInfo,
+    ValueChanged<ConversationDetail>? onSaved,
   }) =>
       showModalBottomSheet<ConversationDetail>(
         context: context,
@@ -375,6 +384,7 @@ class ConversationTagsSheet extends StatefulWidget {
             initialTags: initialTags,
             initialSalesInfo: initialSalesInfo,
             initialPurchaseInfo: initialPurchaseInfo,
+            onSaved: onSaved,
           ),
         ),
       );
@@ -691,6 +701,12 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
         _applyServerDetail(detail);
         _saving = false;
       });
+      try {
+        widget.onSaved?.call(detail);
+      } catch (_) {
+        // The server write succeeded; presentation callbacks must not turn it
+        // into a false save failure.
+      }
       if (closeAfter && mounted) Navigator.of(context).pop(detail);
       return true;
     } catch (_) {
