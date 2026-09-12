@@ -7,18 +7,43 @@ import {
 } from "./line-messaging.service";
 import { LineChatManagerMessageRelayService } from "../line-chat/line-chat-manager-message-relay.service";
 
-const CENTRAL_WORLD_STORE_NAMES = new Set([
-  "OPPO Central World",
-  "OBS Central World FL.4 By OPPO",
-]);
-const MANAGER_DELIVERY_NOT_VERIFIED_MESSAGE =
+const MANAGER_TEXT_DELIVERY_NOT_VERIFIED_MESSAGE =
   "ยังยืนยันการส่งจาก LINE OA Manager ไม่ได้ จึงไม่บันทึกข้อความว่าส่งสำเร็จ";
+const MANAGER_IMAGE_DELIVERY_NOT_VERIFIED_MESSAGE =
+  "ยังยืนยันการส่งรูปจาก LINE OA Manager ไม่ได้ จึงไม่บันทึกว่าส่งสำเร็จ";
 
-function isCentralWorldManagerVerificationGap(input: LineTextInput, error: unknown): boolean {
-  const storeName = input.context?.storeName?.trim() ?? "";
-  return CENTRAL_WORLD_STORE_NAMES.has(storeName)
-    && error instanceof Error
-    && error.message.includes(MANAGER_DELIVERY_NOT_VERIFIED_MESSAGE);
+type ManagerMessageType = "TEXT" | "IMAGE";
+
+function isManagerDeliveryVerificationGap(
+  error: unknown,
+  messageType: ManagerMessageType,
+): boolean {
+  if (!(error instanceof Error)) return false;
+  const expectedMessage = messageType === "IMAGE"
+    ? MANAGER_IMAGE_DELIVERY_NOT_VERIFIED_MESSAGE
+    : MANAGER_TEXT_DELIVERY_NOT_VERIFIED_MESSAGE;
+  return error.message.includes(expectedMessage);
+}
+
+function recoverManagerDeliveryVerificationGap(
+  input: LineTextInput | LineImageInput,
+  messageType: ManagerMessageType,
+): PushMessageResult {
+  Logger.warn(JSON.stringify({
+    event: "line_chat_manager_delivery_verification_gap_recovered",
+    conversationId: input.context?.conversationId ?? null,
+    storeId: input.context?.storeId ?? null,
+    storeName: input.context?.storeName ?? null,
+    messageType,
+    recoveryScope: "ALL_MANAGER_RELAY_STORES",
+  }), "PilotAwareLineMessagingService");
+
+  return {
+    requestId: null,
+    acceptedRequestId: null,
+    externalMessageId: null,
+    duplicateAccepted: false,
+  };
 }
 
 /**
@@ -48,30 +73,14 @@ export class PilotAwareLineMessagingService extends LineMessagingService {
         idempotencyKey: input.retryKey,
       });
     } catch (error) {
-      // Emergency recovery for Central World only. Production evidence shows
-      // chat.line.biz accepts the keyboard submit and delivers to the customer,
-      // while its headless DOM does not expose the newly-created outbound bubble
-      // in time for the strict worker verifier. Treat only that exact post-send
-      // ambiguity as accepted so ConversationsService persists the outbound row
-      // and the idempotency key prevents repeated customer sends. Every other
-      // Manager failure still fails closed and never falls back to Push API.
-      if (!isCentralWorldManagerVerificationGap(input, error)) throw error;
-
-      Logger.warn(JSON.stringify({
-        event: "line_chat_manager_delivery_verification_gap_recovered",
-        conversationId: input.context?.conversationId ?? null,
-        storeId: input.context?.storeId ?? null,
-        storeName: input.context?.storeName ?? null,
-        messageType: "TEXT",
-        recoveryScope: "CENTRAL_WORLD_ONLY",
-      }), "PilotAwareLineMessagingService");
-
-      return {
-        requestId: null,
-        acceptedRequestId: null,
-        externalMessageId: null,
-        duplicateAccepted: false,
-      };
+      // This exact worker error is emitted only after a send action was already
+      // performed but the headless DOM could not prove the new outbound bubble
+      // appeared. Treat that narrow post-send ambiguity as accepted for every
+      // Manager-relay store so ConversationsService persists the outbound row.
+      // Pre-send, authentication, mapping, composer, worker, and other transport
+      // failures still fail closed and never fall back to Push API.
+      if (!isManagerDeliveryVerificationGap(error, "TEXT")) throw error;
+      return recoverManagerDeliveryVerificationGap(input, "TEXT");
     }
 
     if (!relay.handled) return super.pushText(input);
@@ -94,11 +103,20 @@ export class PilotAwareLineMessagingService extends LineMessagingService {
   }
 
   override async pushImage(input: LineImageInput): Promise<PushMessageResult> {
-    const relay = await this.managerRelay.relayImage({
-      conversationId: input.context?.conversationId,
-      imageUrl: input.originalContentUrl,
-      idempotencyKey: input.retryKey,
-    });
+    let relay;
+    try {
+      relay = await this.managerRelay.relayImage({
+        conversationId: input.context?.conversationId,
+        imageUrl: input.originalContentUrl,
+        idempotencyKey: input.retryKey,
+      });
+    } catch (error) {
+      // Images have the same post-send ambiguity class. Recover only the exact
+      // worker verification-gap error after the Manager send action; every other
+      // image relay error still fails closed.
+      if (!isManagerDeliveryVerificationGap(error, "IMAGE")) throw error;
+      return recoverManagerDeliveryVerificationGap(input, "IMAGE");
+    }
 
     if (!relay.handled) return super.pushImage(input);
 
