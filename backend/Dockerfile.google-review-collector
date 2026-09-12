@@ -35,5 +35,6 @@ ENV NODE_OPTIONS="--experimental-strip-types"
 ENV GOOGLE_REVIEW_HEADLESS=true
 ENV GOOGLE_REVIEW_PROFILE_DIR=/tmp/google-review-kpi-profile
 
-# Executes exactly ONE collector cycle across active Focus Stores, then exits
-CMD ["node", "scripts/weekly-collector/run-single-cycle.mjs"]
+# Executes exactly ONE collector cycle across active Focus Stores, then exits.
+# xvfb-run is required when GOOGLE_REVIEW_HEADLESS=false so Chromium has an X server.
+CMD ["xvfb-run", "-a", "node", "scripts/weekly-collector/run-single-cycle.mjs"]
