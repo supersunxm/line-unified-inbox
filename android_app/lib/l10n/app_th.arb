@@ -131,7 +131,7 @@
   "conversationTags": "แท็กลูกค้า",
   "customerTags": "แท็กลูกค้า",
   "purchaseInformation": "ข้อมูลการซื้อ",
-  "customerSalesInformation": "ข้อมูลการขาย",
+  "customerSalesInformation": "ติดแท็ก",
   "customerStatus": "สถานะลูกค้า",
   "statusOnline": "Online",
   "statusInterested": "สนใจสินค้า",

@@ -9,18 +9,26 @@ class ConversationOverviewCard extends StatelessWidget {
   const ConversationOverviewCard({
     super.key,
     required this.conversations,
+    this.monthlyTotal,
+    this.monthlyNeedReply,
+    this.monthlyCompleted,
   });
 
   final List<ConversationSummary> conversations;
+  final int? monthlyTotal;
+  final int? monthlyNeedReply;
+  final int? monthlyCompleted;
 
   @override
   Widget build(BuildContext context) {
-    final needReply = conversations
-        .where((item) => isNeedReplyStatus(item.bmReplyStatus))
-        .length;
-    final completed = conversations
-        .where((item) => isCompletedStatus(item.bmReplyStatus))
-        .length;
+    final needReply = monthlyNeedReply ??
+        conversations
+            .where((item) => isNeedReplyStatus(item.bmReplyStatus))
+            .length;
+    final completed = monthlyCompleted ??
+        conversations
+            .where((item) => isCompletedStatus(item.bmReplyStatus))
+            .length;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 3),
@@ -36,7 +44,7 @@ class ConversationOverviewCard extends StatelessWidget {
             Expanded(
               child: _Metric(
                 label: appLocalizations(context).total,
-                value: conversations.length,
+                value: monthlyTotal ?? conversations.length,
                 color: AppColors.textPrimary,
               ),
             ),

@@ -418,7 +418,7 @@ class AppLocalizationsTh extends AppLocalizations {
   String get purchaseInformation => 'ข้อมูลการซื้อ';
 
   @override
-  String get customerSalesInformation => 'ข้อมูลการขาย';
+  String get customerSalesInformation => 'ติดแท็ก';
 
   @override
   String get statusOnline => 'Online';

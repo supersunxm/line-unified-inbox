@@ -1518,7 +1518,7 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                     ),
                     const SizedBox(height: AppSpacing.lg),
                   ],
-                  if (_status != 'FILM') ...[
+                  if (_status != 'FILM' && _status != 'ONLINE') ...[
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [

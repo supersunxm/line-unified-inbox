@@ -131,7 +131,7 @@
   "conversationTags": "客户标签",
   "customerTags": "客户标签",
   "purchaseInformation": "购买信息",
-  "customerSalesInformation": "客户销售信息",
+  "customerSalesInformation": "标签",
   "customerStatus": "客户状态",
   "statusOnline": "线上咨询",
   "statusInterested": "有意向",

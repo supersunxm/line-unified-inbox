@@ -131,7 +131,7 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
-    expect(find.text('Customer Sales Info'), findsOneWidget);
+    expect(find.text('Tagging'), findsOneWidget);
     expect(find.text('Online'), findsOneWidget);
     expect(find.text('Interested'), findsOneWidget);
     expect(find.text('Purchased'), findsOneWidget);
@@ -1426,5 +1426,39 @@ void main() {
     expect(title.maxLines, 2);
     expect(find.byIcon(Icons.radio_button_unchecked), findsOneWidget);
     expect(find.text('Select'), findsNothing);
+  });
+
+  testWidgets('ONLINE tagging hides product controls', (tester) async {
+    tester.view.physicalSize = const Size(1080, 2200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final repository = _FakeTagRepository(
+      initialSales: const CustomerSalesInformation(
+        status: 'ONLINE',
+        onlineSource: 'TikTok',
+        purchaseChannel: [],
+        products: [],
+      ),
+    );
+    await tester.pumpWidget(MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: Scaffold(
+        body: ConversationTagsSheet(
+          conversationId: 'conversation-online',
+          repository: repository,
+          initialTags: const ConversationTags(),
+          initialSalesInfo: repository.currentSales,
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Tagging'), findsOneWidget);
+    expect(find.text('Online Source'), findsOneWidget);
+    expect(find.text('Products Interested In'), findsNothing);
+    expect(find.text('+ Add Product'), findsNothing);
   });
 }

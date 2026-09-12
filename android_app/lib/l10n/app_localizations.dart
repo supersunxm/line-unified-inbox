@@ -890,7 +890,7 @@ abstract class AppLocalizations {
   /// No description provided for @customerSalesInformation.
   ///
   /// In en, this message translates to:
-  /// **'Customer Sales Info'**
+  /// **'Tagging'**
   String get customerSalesInformation;
 
   /// No description provided for @statusOnline.

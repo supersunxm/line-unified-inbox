@@ -422,7 +422,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get purchaseInformation => 'Purchase Information';
 
   @override
-  String get customerSalesInformation => 'Customer Sales Info';
+  String get customerSalesInformation => 'Tagging';
 
   @override
   String get statusOnline => 'Online';
