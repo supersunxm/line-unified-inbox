@@ -503,6 +503,36 @@ export type StoreInsightsConversationResponse = {
   page: number;
   pageSize: number;
 };
+export type StoreInsightsResponseSegment = "all" | "within-15m" | "within-1h" | "within-24h" | "after-24h" | "unanswered";
+export type StoreInsightsResponseSort = "date-desc" | "date-asc" | "response-time-desc" | "response-time-asc";
+export type StoreInsightsResponseCase = StoreInsightsConversation & {
+  firstInboundAt: string;
+  firstResponseAt: string | null;
+  responseBand: Exclude<StoreInsightsResponseSegment, "all">;
+};
+export type StoreInsightsResponseCasesSummary = {
+  totalCases: number;
+  repliedWithin15Minutes: StoreInsightsMetric;
+  repliedWithin1Hour: StoreInsightsMetric;
+  repliedWithin24Hours: StoreInsightsMetric;
+  after24Hours: StoreInsightsMetric;
+  unanswered: StoreInsightsMetric;
+  medianFirstResponseSeconds: number | null;
+  available: boolean;
+  dataQuality: { ambiguousOutboundCount: number; automatedOutboundCount: number };
+};
+export type StoreInsightsResponseCasesResponse = {
+  storeId: string;
+  store: StoreInsightsStore;
+  period: { from: string; to: string; timezone: string };
+  summary: StoreInsightsResponseCasesSummary;
+  items: StoreInsightsResponseCase[];
+  total: number;
+  page: number;
+  pageSize: number;
+  hasNextPage: boolean;
+  responders: StoreInsightsResponder[];
+};
 export type StoreRelatedCounts = { lineOfficialAccounts: number; activeLineOfficialAccounts: number; conversations: number; messages: number; notes: number; activityHistory: number };
 export type StoreDeletionPreview = { storeId: string; storeName: string; lineOfficialAccountCount: number; conversationCount: number; messageCount: number; noteCount: number; activityCount: number; customerRecordsThatWillRemain: number; customerRecordsThatWillBeDeleted: number };
 export type StoreRemovalResult = { result: "deleted" | "archived" | "restored"; message: string; relatedCounts?: StoreRelatedCounts };

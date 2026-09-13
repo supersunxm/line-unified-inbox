@@ -2378,3 +2378,11 @@ Keep `StoreMaster.tiktokProfileUrl` as the only persisted TikTok profile URL. Po
 - Reuse the canonical `html[data-theme]` state and storage key; do not add a Store 360-specific toggle or preference. Store 360 tokens are scoped to `.store360-workspace` so the global shell and other routes keep their existing theme behavior.
 - Preserve the approved light values exactly while adding a dark surface hierarchy and accessible state/chart colors. Replace only Store 360 literal visualization colors that could not follow the theme tokens; data and metric calculations remain unchanged.
 - Use a disposable loopback-only synthetic fixture for visual capture. The capture process writes screenshots outside the repository and does not provide an export route, database connection, worker, AI call, or production endpoint.
+
+## 2026-09-13: Store 360 Response Drill-down
+
+- Add a dedicated read-only response-cases endpoint rather than making the Overview fetch raw conversations. The service builds the endpoint from the existing canonical response cases so each conversation contributes one case and all thresholds retain their current definitions.
+- Keep threshold filters cumulative (`within-1h` includes `within-15m`, and `within-24h` includes both shorter thresholds) while assigning mutually exclusive display bands for evidence rows. `after-24h` and `unanswered` remain explicit operational states.
+- Keep the drill-down URL-backed and server-filtered. Store, Bangkok dates, segment, search, responder, sales-tag, sort, and page are query parameters so links from Overview cards and bars are reproducible and pagination never requires client-side access to unbounded message data.
+- Expose only safe evidence fields and link to the existing `/chats` conversation route for detail. The endpoint does not return raw message text, customer contact fields, AI payloads, or persisted analytics.
+- Use a disposable 127.0.0.1 fixture only for local visual smoke. Review PNGs are stored outside the repository; the fixture has no database or production connection and is removed after capture.

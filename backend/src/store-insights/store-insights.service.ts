@@ -15,6 +15,12 @@ import {
   StoreInsightsPeriod,
   StoreInsightsQueryDto,
   StoreInsightsResponsePerformance,
+  StoreInsightsResponseMetric,
+  StoreInsightsResponseCase,
+  StoreInsightsResponseCasesQueryDto,
+  StoreInsightsResponseCasesSummary,
+  StoreInsightsResponseSegment,
+  StoreInsightsResponseCasesResponse,
   StoreInsightsDailyTrendPoint,
   StoreInsightsResponder,
   StoreInsightsSales,
@@ -287,6 +293,28 @@ function buildResponseCases(conversations: ConversationRow[], period: Pick<Perio
   return { cases, ambiguousOutboundCount, automatedOutboundCount, inboundMessages };
 }
 
+/**
+ * Response bands are mutually exclusive display labels. The query segments
+ * remain cumulative: within-1h includes within-15m, and within-24h includes
+ * within-1h. The canonical response case remains one case per conversation.
+ */
+export function responseBandForDuration(durationSeconds: number | null): Exclude<StoreInsightsResponseSegment, "all"> {
+  if (durationSeconds === null) return "unanswered";
+  if (durationSeconds <= 15 * MINUTE) return "within-15m";
+  if (durationSeconds <= HOUR) return "within-1h";
+  if (durationSeconds <= 24 * HOUR) return "within-24h";
+  return "after-24h";
+}
+
+export function responseCaseMatchesSegment(durationSeconds: number | null, segment: StoreInsightsResponseSegment): boolean {
+  if (segment === "all") return true;
+  if (segment === "unanswered") return durationSeconds === null;
+  if (segment === "within-15m") return durationSeconds !== null && durationSeconds <= 15 * MINUTE;
+  if (segment === "within-1h") return durationSeconds !== null && durationSeconds <= HOUR;
+  if (segment === "within-24h") return durationSeconds !== null && durationSeconds <= 24 * HOUR;
+  return durationSeconds !== null && durationSeconds > 24 * HOUR;
+}
+
 @Injectable()
 export class StoreInsightsService {
   constructor(
@@ -557,6 +585,64 @@ export class StoreInsightsService {
     return { items: all.slice((page - 1) * pageSize, page * pageSize), total: all.length, page, pageSize };
   }
 
+  private responseCasesSummary(snapshot: StoreSnapshot): StoreInsightsResponseCasesSummary {
+    const performance = this.responsePerformance(snapshot);
+    const metric = (count: number): StoreInsightsResponseMetric => ({
+      count,
+      percentage: performance.available && snapshot.cases.length > 0 ? count / snapshot.cases.length : null,
+    });
+    return {
+      totalCases: snapshot.cases.length,
+      repliedWithin15Minutes: performance.repliedWithin15Minutes,
+      repliedWithin1Hour: performance.repliedWithin1Hour,
+      repliedWithin24Hours: performance.repliedWithin24Hours,
+      after24Hours: metric(snapshot.cases.filter((item) => responseCaseMatchesSegment(item.durationSeconds, "after-24h")).length),
+      unanswered: performance.unanswered,
+      medianFirstResponseSeconds: performance.medianFirstResponseSeconds,
+      available: performance.available,
+      dataQuality: performance.dataQuality,
+    };
+  }
+
+  private responseCaseItems(snapshot: StoreSnapshot): StoreInsightsResponseCase[] {
+    const conversationById = new Map(snapshot.conversations.map((conversation) => [conversation.id, conversation]));
+    return snapshot.cases.flatMap((responseCase) => {
+      const conversation = conversationById.get(responseCase.conversationId);
+      if (!conversation) return [];
+      const sales = snapshot.salesByConversation.get(conversation.id)!;
+      return [{
+        id: conversation.id,
+        customer: conversation.customer,
+        topic: formatTopics(conversation),
+        responseStatus: responseCase.durationSeconds === null ? "UNANSWERED" : "REPLIED",
+        responder: responseCase.responderId && responseCase.responderName ? { id: responseCase.responderId, displayName: responseCase.responderName } : null,
+        firstResponseSeconds: responseCase.durationSeconds,
+        salesProduct: sales.productNames.join(", ") || null,
+        salesTagged: sales.tagged,
+        lastActivity: formatDateTime(conversation.latestMessageAt),
+        firstInboundAt: formatDateTime(responseCase.inboundAt),
+        firstResponseAt: responseCase.answeredAt ? formatDateTime(responseCase.answeredAt) : null,
+        responseBand: responseBandForDuration(responseCase.durationSeconds),
+      } satisfies StoreInsightsResponseCase];
+    });
+  }
+
+  private sortResponseCases(items: StoreInsightsResponseCase[], sort: StoreInsightsResponseCasesQueryDto["sort"]): StoreInsightsResponseCase[] {
+    const resolvedSort = sort ?? "date-desc";
+    return [...items].sort((left, right) => {
+      if (resolvedSort === "date-desc" || resolvedSort === "date-asc") {
+        const dateDifference = new Date(left.firstInboundAt).getTime() - new Date(right.firstInboundAt).getTime();
+        if (dateDifference !== 0) return resolvedSort === "date-desc" ? -dateDifference : dateDifference;
+      } else {
+        const leftDuration = left.firstResponseSeconds ?? Number.POSITIVE_INFINITY;
+        const rightDuration = right.firstResponseSeconds ?? Number.POSITIVE_INFINITY;
+        const durationDifference = leftDuration - rightDuration;
+        if (durationDifference !== 0) return resolvedSort === "response-time-desc" ? -durationDifference : durationDifference;
+      }
+      return left.id.localeCompare(right.id);
+    });
+  }
+
   private baseResponse(snapshot: StoreSnapshot) {
     const performance = this.responsePerformance(snapshot);
     const sales = this.sales(snapshot);
@@ -605,6 +691,32 @@ export class StoreInsightsService {
   async getConversations(user: AuthUser, storeId: string, query: StoreInsightsQueryDto = {}) {
     const snapshot = await this.getSnapshot(user, storeId, query);
     return { storeId, period: snapshot.period, ...this.conversations(snapshot, query) };
+  }
+
+  async getResponseCases(user: AuthUser, storeId: string, query: StoreInsightsResponseCasesQueryDto = {}): Promise<StoreInsightsResponseCasesResponse> {
+    const snapshot = await this.getSnapshot(user, storeId, { from: query.from, to: query.to });
+    const normalizedSearch = query.search?.trim().toLocaleLowerCase();
+    const filtered = this.sortResponseCases(this.responseCaseItems(snapshot).filter((item) =>
+      responseCaseMatchesSegment(item.firstResponseSeconds, query.segment ?? "all") &&
+      (!normalizedSearch || [item.customer.displayName, item.topic, item.salesProduct, item.responder?.displayName].some((value) => value?.toLocaleLowerCase().includes(normalizedSearch))) &&
+      (!query.responderId || item.responder?.id === query.responderId) &&
+      (query.salesTagged === undefined || item.salesTagged === query.salesTagged),
+    ), query.sort);
+    const page = query.page ?? 1;
+    const pageSize = query.pageSize ?? 50;
+    const total = filtered.length;
+    return {
+      storeId,
+      store: snapshot.store,
+      period: { from: snapshot.period.from, to: snapshot.period.to, timezone: snapshot.period.timezone },
+      summary: this.responseCasesSummary(snapshot),
+      items: filtered.slice((page - 1) * pageSize, page * pageSize),
+      total,
+      page,
+      pageSize,
+      hasNextPage: page * pageSize < total,
+      responders: this.responders(snapshot),
+    };
   }
 
   private currentCustomerVoiceAnalysis(conversation: ConversationRow): CurrentCustomerVoiceAnalysis | null {

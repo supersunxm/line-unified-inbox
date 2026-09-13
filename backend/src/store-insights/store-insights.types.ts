@@ -5,6 +5,12 @@ const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 export const STORE_INSIGHTS_EXPORT_MAX_STORES = 10;
 
+export const STORE_INSIGHTS_RESPONSE_SEGMENTS = ["all", "within-15m", "within-1h", "within-24h", "after-24h", "unanswered"] as const;
+export type StoreInsightsResponseSegment = typeof STORE_INSIGHTS_RESPONSE_SEGMENTS[number];
+
+export const STORE_INSIGHTS_RESPONSE_SORTS = ["date-desc", "date-asc", "response-time-desc", "response-time-asc"] as const;
+export type StoreInsightsResponseSort = typeof STORE_INSIGHTS_RESPONSE_SORTS[number];
+
 export class StoreInsightsQueryDto {
   @IsOptional()
   @IsString()
@@ -55,6 +61,20 @@ export class StoreInsightsQueryDto {
   @Min(1)
   @Max(100)
   pageSize?: number;
+}
+
+export class StoreInsightsResponseCasesQueryDto extends StoreInsightsQueryDto {
+  @IsOptional()
+  @IsIn([...STORE_INSIGHTS_RESPONSE_SEGMENTS])
+  segment?: StoreInsightsResponseSegment;
+
+  @IsOptional()
+  @IsString()
+  search?: string;
+
+  @IsOptional()
+  @IsIn([...STORE_INSIGHTS_RESPONSE_SORTS])
+  sort?: StoreInsightsResponseSort;
 }
 
 export class StoreInsightsExportDto {
@@ -168,4 +188,38 @@ export type StoreInsightsConversation = {
   salesProduct: string | null;
   salesTagged: boolean;
   lastActivity: string;
+};
+
+export type StoreInsightsResponseCase = StoreInsightsConversation & {
+  firstInboundAt: string;
+  firstResponseAt: string | null;
+  responseBand: Exclude<StoreInsightsResponseSegment, "all">;
+};
+
+export type StoreInsightsResponseCasesSummary = {
+  totalCases: number;
+  repliedWithin15Minutes: StoreInsightsResponseMetric;
+  repliedWithin1Hour: StoreInsightsResponseMetric;
+  repliedWithin24Hours: StoreInsightsResponseMetric;
+  after24Hours: StoreInsightsResponseMetric;
+  unanswered: StoreInsightsResponseMetric;
+  medianFirstResponseSeconds: number | null;
+  available: boolean;
+  dataQuality: {
+    ambiguousOutboundCount: number;
+    automatedOutboundCount: number;
+  };
+};
+
+export type StoreInsightsResponseCasesResponse = {
+  storeId: string;
+  store: StoreInsightsStore;
+  period: StoreInsightsPeriod;
+  summary: StoreInsightsResponseCasesSummary;
+  items: StoreInsightsResponseCase[];
+  total: number;
+  page: number;
+  pageSize: number;
+  hasNextPage: boolean;
+  responders: StoreInsightsResponder[];
 };

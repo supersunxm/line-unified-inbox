@@ -346,3 +346,79 @@ test("store authorization is checked before Store 360 data is read", async () =>
   await assert.rejects(() => service.getSummary(user, "other-store", { from: "2026-09-05", to: "2026-09-05" }), ForbiddenException);
   assert.equal(storeRead, false);
 });
+
+test("response cases reconcile the canonical counts and keep cumulative thresholds explicit", async () => {
+  const { service } = buildService([
+    conversation("c-15m", "customer-15m", "Customer 15m", [
+      message("in-15m", "INBOUND", "2026-09-05T03:00:00.000Z"),
+      message("out-15m", "OUTBOUND", "2026-09-05T03:05:00.000Z", { senderUserId: "staff-1", senderDisplayName: "Staff One" }),
+    ]),
+    conversation("c-1h", "customer-1h", "Customer 1h", [
+      message("in-1h", "INBOUND", "2026-09-05T04:00:00.000Z"),
+      message("out-1h", "OUTBOUND", "2026-09-05T04:30:00.000Z", { senderUserId: "staff-1", senderDisplayName: "Staff One" }),
+    ]),
+    conversation("c-24h", "customer-24h", "Customer 24h", [
+      message("in-24h", "INBOUND", "2026-09-05T05:00:00.000Z"),
+      message("out-24h", "OUTBOUND", "2026-09-05T07:00:00.000Z", { senderUserId: "staff-2", senderDisplayName: "Staff Two" }),
+    ]),
+    conversation("c-after", "customer-after", "Customer After", [
+      message("in-after", "INBOUND", "2026-09-05T06:00:00.000Z"),
+      message("out-after", "OUTBOUND", "2026-09-06T07:00:00.000Z", { senderUserId: "staff-2", senderDisplayName: "Staff Two" }),
+    ]),
+    conversation("c-unanswered", "customer-unanswered", "Customer Unanswered", [message("in-unanswered", "INBOUND", "2026-09-05T08:00:00.000Z")]),
+    conversation("c-bot", "customer-bot", "Customer Bot", [
+      message("in-bot", "INBOUND", "2026-09-05T09:00:00.000Z"),
+      message("out-bot", "OUTBOUND", "2026-09-05T09:01:00.000Z", { senderDisplayName: "Auto Reply Bot" }),
+    ]),
+  ]);
+
+  const all = await service.getResponseCases(user, "store-1", { from: "2026-09-05", to: "2026-09-05", pageSize: 100 });
+  assert.equal(all.total, 6);
+  assert.equal(all.summary.totalCases, 6);
+  assert.equal(all.summary.repliedWithin15Minutes.count, 1);
+  assert.equal(all.summary.repliedWithin1Hour.count, 2);
+  assert.equal(all.summary.repliedWithin24Hours.count, 3);
+  assert.equal(all.summary.after24Hours.count, 1);
+  assert.equal(all.summary.unanswered.count, 2);
+  assert.equal(all.items.find((item) => item.id === "c-after")?.responseBand, "after-24h");
+  assert.equal(all.items.find((item) => item.id === "c-unanswered")?.responseStatus, "UNANSWERED");
+  assert.equal(all.items.find((item) => item.id === "c-after")?.firstResponseAt, "2026-09-06T07:00:00.000Z");
+
+  const withinOneHour = await service.getResponseCases(user, "store-1", { from: "2026-09-05", to: "2026-09-05", segment: "within-1h", pageSize: 100 });
+  const withinTwentyFourHours = await service.getResponseCases(user, "store-1", { from: "2026-09-05", to: "2026-09-05", segment: "within-24h", pageSize: 100 });
+  const unanswered = await service.getResponseCases(user, "store-1", { from: "2026-09-05", to: "2026-09-05", segment: "unanswered", pageSize: 100 });
+  assert.equal(withinOneHour.total, 2, "within 1 hour includes the within 15 minute cases");
+  assert.equal(withinTwentyFourHours.total, 3, "within 24 hours includes the shorter cumulative bands");
+  assert.equal(unanswered.total, all.summary.unanswered.count, "unanswered drill-down reconciles with the overview");
+});
+
+test("response cases apply server-side search, responder, sales, sort, and pagination filters", async () => {
+  const { service } = buildService([
+    conversation("c-a", "customer-a", "Customer A", [
+      message("in-a", "INBOUND", "2026-09-05T03:00:00.000Z"),
+      message("out-a", "OUTBOUND", "2026-09-05T03:10:00.000Z", { senderUserId: "staff-a", senderDisplayName: "Staff A" }),
+    ], { customerSalesStatus: "PURCHASED" }),
+    conversation("c-b", "customer-b", "Customer B", [
+      message("in-b", "INBOUND", "2026-09-05T04:00:00.000Z"),
+      message("out-b", "OUTBOUND", "2026-09-05T05:00:00.000Z", { senderUserId: "staff-b", senderDisplayName: "Staff B" }),
+    ]),
+    conversation("c-c", "customer-c", "Customer C", [message("in-c", "INBOUND", "2026-09-05T06:00:00.000Z")]),
+  ]);
+
+  const result = await service.getResponseCases(user, "store-1", {
+    from: "2026-09-05",
+    to: "2026-09-05",
+    search: "customer a",
+    responderId: "staff-a",
+    salesTagged: true,
+    sort: "response-time-desc",
+    page: 1,
+    pageSize: 1,
+  });
+
+  assert.equal(result.total, 1);
+  assert.equal(result.items.length, 1);
+  assert.equal(result.items[0].id, "c-a");
+  assert.equal(result.hasNextPage, false);
+  assert.equal(result.pageSize, 1);
+});

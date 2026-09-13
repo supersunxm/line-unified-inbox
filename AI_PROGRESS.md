@@ -4693,6 +4693,15 @@ Verification passed: frontend TypeScript, zero-warning ESLint, 173/173 tests, an
 - Captured the final desktop review asset at `/private/tmp/store-360-bi-final-review/store-360-desktop-full-final.png`. Temporary fixture, frontend, and browser processes were stopped and their temporary scripts removed; no commit, push, rebase, reconciliation, deployment, or production mutation was performed.
 - Next action: user visual approval, then reconcile this uncommitted candidate against the newest `origin/main` before any integration decision.
 
+# Current task: Store 360 BI Phase 2A — Response Drill-down (2026-09-13)
+
+- Created isolated worktree `/private/tmp/store-360-response-drilldown` on `feat/store-360-response-drilldown` from `origin/main` at `bb246d60c832407249d1e1eab1d7162e65aee75f`; the primary checkout and other feature worktrees remain untouched.
+- Added the read-only `/store-360/response` route and `/store-insights/:storeId/response-cases` endpoint. The endpoint reuses canonical one-case-per-conversation response logic, Bangkok period boundaries, human/bot attribution, cumulative thresholds, authorization, filtering, deterministic sorting, and pagination.
+- Wired approved Store 360 response KPIs and response bars to URL-backed drill-down segments. The drill-down preserves the global sidebar, semantic light/dark tokens, safe operational evidence fields, existing `/chats` navigation, empty/error/loading states, and responsive layouts.
+- Verified locally with a disposable loopback-only sanitized Robinson Chonburi fixture. No database, production host, worker, AI call, write endpoint, PII, or raw customer message was used. Captured review assets under `/private/tmp/store-360-response-drilldown-review/` in light, dark, unanswered, and mobile-dark states; all are nonblank PNGs and browser console errors were zero.
+- Verification: focused backend Store Insights suite **44/44**, focused frontend Store 360 suite **26/26**, full frontend suite **582/582**, changed-file ESLint pass, backend build pass, frontend production build pass, and `git diff --check` pass. Repository-wide backend lint retains unrelated baseline errors outside the changed Store Insights files.
+- No Customer Voice rules, Customer Voice v4, schema, migrations, workers, metric definitions, production data, deployment, or push changes were made. Next action: user visual review, then reconcile this unpushed checkpoint against the newest `origin/main` before integration.
+
 # Current task: Store 360 — Full Dark Mode Compatibility (2026-09-13)
 
 - Scoped Store 360 semantic surface, text, border, state, chart, product-thumbnail, and avatar tokens to the canonical `data-theme` system. Removed the page-local light inline token override and preserved the approved light palette.
