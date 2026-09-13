@@ -2366,3 +2366,9 @@ Keep `StoreMaster.tiktokProfileUrl` as the only persisted TikTok profile URL. Po
 - Keep the Store 360 page on a dedicated BI shell so its light reference treatment does not alter the global application shell or unrelated routes.
 - Add only a read-only daily aggregation over existing Store Insights data, grouped in Bangkok time and deduplicated at the customer level for daily customer and sales-tagged counts. No schema, worker, AI, analytics persistence, or metric-definition changes are allowed.
 - Use a sanitized loopback fixture only for populated visual review when the local backend is unavailable. Capture review PNGs outside the repository, inspect them for blank output, overflow, PII, raw-message copy, and debug overlays, then remove the fixture/runtime processes while preserving the screenshot artifact.
+
+## 2026-09-13: Store 360 restores the canonical global sidebar
+
+- Route Store 360 through the shared `AppShell`/`AppSidebar` so the application keeps one navigation model. The canonical sidebar already matches `/store-360` and nested Store 360 paths with a pathname-prefix active matcher, so no second Store 360 navigation or manual menu copy is needed.
+- Keep the approved BI header and user identity inside the Store 360 content area while allowing the shared shell header to be hidden for this page. This avoids duplicate title, identity, search, and export chrome without forking the global sidebar behavior.
+- Treat the mobile control-stack change as a layout safeguard only: the existing date picker and Export action stack below the small breakpoint so the BI workspace remains within the viewport. No data, API, metric, Customer Voice, Export, backend, or production behavior changes.

@@ -30,6 +30,7 @@ export interface TopNavigationProps {
   changeLanguage: (lang: Language) => void;
   searchText: string;
   setSearchText: (query: string) => void;
+  showGlobalHeader?: boolean;
   pilotMode?: boolean;
   lastUpdatedAt?: Date | null;
   logout: () => Promise<void> | void;
@@ -188,7 +189,7 @@ function MobileBottomNavigation({ authUser, currentSection, language, changeLang
 }
 
 export function TopNavigation(props: TopNavigationProps) {
-  const { authUser, changeLanguage, currentSection, language, lastUpdatedAt, logout, pilotMode, searchText, setSearchText, text } = props;
+  const { authUser, changeLanguage, currentSection, language, lastUpdatedAt, logout, pilotMode, searchText, setSearchText, showGlobalHeader = true, text } = props;
   const updatedLabel = lastUpdatedAt
     ? `${text.lastUpdated || "Last updated"} ${new Intl.DateTimeFormat(language, { dateStyle: "medium", timeStyle: "short" }).format(lastUpdatedAt)}`
     : (text.lastUpdated || "Last updated");
@@ -213,7 +214,7 @@ export function TopNavigation(props: TopNavigationProps) {
 
       <AppSidebar authUser={authUser} changeLanguage={changeLanguage} currentSection={currentSection} language={language} logout={logout} pilotMode={pilotMode} text={text} />
 
-      <header className="app-header sticky top-0 z-30 flex h-14 min-h-14 min-w-0 items-center gap-3 border-b border-[var(--app-border)] bg-[color:var(--app-surface)]/95 px-4 backdrop-blur-xl sm:px-5">
+      {showGlobalHeader && <header className="app-header sticky top-0 z-30 flex h-14 min-h-14 min-w-0 items-center gap-3 border-b border-[var(--app-border)] bg-[color:var(--app-surface)]/95 px-4 backdrop-blur-xl sm:px-5">
         <div className="flex min-w-0 flex-1 items-center gap-3">
           <Link href={defaultRoute} className={`${focusRing} flex min-w-0 items-center gap-2 rounded-lg md:hidden`}>
             <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[var(--app-accent)] text-[11px] font-bold text-white">O</span>
@@ -234,7 +235,7 @@ export function TopNavigation(props: TopNavigationProps) {
           )}
           {authUser && <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--app-accent)] text-[10px] font-bold text-white md:hidden">{authUser.displayName.charAt(0).toUpperCase()}</span>}
         </div>
-      </header>
+      </header>}
 
       <MobileBottomNavigation authUser={authUser} currentSection={currentSection} language={language} changeLanguage={changeLanguage} logout={logout} />
     </>

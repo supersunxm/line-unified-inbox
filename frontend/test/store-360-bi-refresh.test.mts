@@ -48,5 +48,7 @@ test("Store 360 overview uses a compact conversation preview and responsive load
   assert.match(viewCode, /lg:grid-cols-3/);
   assert.doesNotMatch(viewCode, /type="date"/);
   assert.match(viewCode, /Search conversations, topics, or keywords/);
-  assert.match(viewCode, /Store360Shell/);
+  assert.match(viewCode, /<AppShell currentSection="store-360"/);
+  assert.match(viewCode, /showGlobalHeader=\{false\}/);
+  assert.doesNotMatch(viewCode, /Store360Shell/);
 });

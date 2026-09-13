@@ -4707,3 +4707,13 @@ Verification passed: frontend TypeScript, zero-warning ESLint, 173/173 tests, an
 - Recreated the sanitized Robinson Chonburi fixture (`28375`) through a disposable loopback-only server and captured `/private/tmp/store-360-bi-final-review/store-360-desktop-full-high-fidelity.png`. The image is 1440×1571, nonblank, without horizontal overflow, PII, raw messages, or debug overlays.
 - Verification: full frontend tests **573/573**, Store Insights tests **14/14**, changed-file ESLint, frontend build, backend build, local health, Store 360 route, and `git diff --check` pass. Temporary fixture, frontend, browser, and runtime dependency-link processes were stopped/removed.
 - No commit, push, rebase, reconciliation, deployment, production mutation, worker enablement, or Customer Voice rule change was performed. Next action: user visual approval, then reconcile this uncommitted candidate against the newest `origin/main` before integration.
+
+# Current task: Store 360 — Original Sidebar Restoration (2026-09-13)
+
+- Replaced the dedicated Store 360-only shell with the canonical `AppShell`/`AppSidebar` navigation. The existing global Workspace, Main OA, Tools, Profile, Settings, and Logout structure is reused, and `/store-360` plus `/store-360/*` remain active through the canonical pathname matcher.
+- Kept the approved light BI page, date picker, Export control, authenticated user menu, Store 360 content, APIs, metric logic, Customer Voice, and backend unchanged. Removed only the unused route-specific sidebar implementation.
+- Added a shell-level option to hide the duplicate global header on Store 360 while retaining the canonical sidebar and mobile navigation. Added a narrow mobile control-stack adjustment to prevent the existing date/export controls from overflowing.
+- Local populated review used only a disposable synthetic Robinson Chonburi fixture (`28375`) on loopback. Export dialog opened successfully; Store 360 is the sole active navigation item; no PII, raw messages, debug overlay, production connection, or persistence was used.
+- Verification: focused Store 360/shell/export tests **30/30**, full frontend tests **573/573**, changed-file ESLint pass, frontend production build pass, `git diff --check` pass, and no horizontal overflow at 390px, 768px, 1024px, 1280px, or 1440px review states.
+- Captured `/private/tmp/store-360-bi-final-review/store-360-original-sidebar-review.png` at 1440×1900. No commit, push, rebase, reconciliation, deployment, or production mutation was performed.
+- Next action: user visual approval, then reconcile this uncommitted candidate against the newest `origin/main` before any integration decision.
