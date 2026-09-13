@@ -12,7 +12,7 @@ import {
 const prisma = new PrismaClient();
 const persistentProfileDir = resolveGoogleReviewProfileDir();
 
-async function upsertDailyByReviewDate({
+export async function upsertDailyByReviewDate({
   storeCode,
   storeId,
   storeRating,
@@ -20,8 +20,9 @@ async function upsertDailyByReviewDate({
   weekNumber,
   reviewDate,
   stats,
+  prismaClient = prisma,
 }) {
-  const existingDaily = await prisma.googleReviewDailyKpi.findUnique({
+  const existingDaily = await prismaClient.googleReviewDailyKpi.findUnique({
     where: {
       storeCode_date: {
         storeCode,
@@ -31,7 +32,7 @@ async function upsertDailyByReviewDate({
   });
 
   if (existingDaily) {
-    await prisma.googleReviewDailyKpi.update({
+    await prismaClient.googleReviewDailyKpi.update({
       where: { id: existingDaily.id },
       data: {
         qualifiedReviews: { increment: stats.newQualifiedReviews },
@@ -44,7 +45,7 @@ async function upsertDailyByReviewDate({
     return;
   }
 
-  await prisma.googleReviewDailyKpi.create({
+  await prismaClient.googleReviewDailyKpi.create({
     data: {
       storeCode,
       storeId,
@@ -62,8 +63,8 @@ async function upsertDailyByReviewDate({
   });
 }
 
-async function refreshWeeklyStoreTotal({ storeCode, storeId, storeRating, weekPeriodId, weekNumber }) {
-  const allDailiesForStore = await prisma.googleReviewDailyKpi.findMany({
+export async function refreshWeeklyStoreTotal({ storeCode, storeId, storeRating, weekPeriodId, weekNumber, prismaClient = prisma }) {
+  const allDailiesForStore = await prismaClient.googleReviewDailyKpi.findMany({
     where: {
       storeCode,
       weekPeriodId,
@@ -75,7 +76,7 @@ async function refreshWeeklyStoreTotal({ storeCode, storeId, storeRating, weekPe
   const totalStorePhoto = allDailiesForStore.reduce((acc, d) => acc + d.reviewsWithPhoto, 0);
   const totalStoreWords = allDailiesForStore.reduce((acc, d) => acc + d.reviewsOver15ThaiWords, 0);
 
-  await prisma.googleReviewWeeklyKpi.upsert({
+  await prismaClient.googleReviewWeeklyKpi.upsert({
     where: {
       weekPeriodId_storeCode: {
         weekPeriodId,
@@ -323,16 +324,14 @@ async function main() {
       summary.qualifiedByReviewDate[reviewDate] = (summary.qualifiedByReviewDate[reviewDate] || 0) + stats.newQualifiedReviews;
     }
 
-    if (wroteQualifiedForStore) {
-      const totalStoreQualified = await refreshWeeklyStoreTotal({
-        storeCode,
-        storeId: store?.id || null,
-        storeRating: res.storeRating,
-        weekPeriodId: targetWeekPeriod.id,
-        weekNumber: targetWeekNumber,
-      });
-      console.log(`  Updated Week ${targetWeekNumber} total for ${storeCode} -> ${totalStoreQualified} qualified reviews.`);
-    }
+    const totalStoreQualified = await refreshWeeklyStoreTotal({
+      storeCode,
+      storeId: store?.id || null,
+      storeRating: res.storeRating,
+      weekPeriodId: targetWeekPeriod.id,
+      weekNumber: targetWeekNumber,
+    });
+    console.log(`  Updated Week ${targetWeekNumber} total for ${storeCode} -> ${totalStoreQualified} qualified reviews, storeRating: ${res.storeRating ?? "N/A"}.`);
 
     await page.waitForTimeout(500);
   }
@@ -383,9 +382,11 @@ async function main() {
   console.log(`================================================================================\n`);
 }
 
-main()
-  .catch((err) => {
-    console.error("Fatal error in Continuous Collector Cycle:", err);
-    process.exit(1);
-  })
-  .finally(() => prisma.$disconnect());
+if (process.argv[1] && import.meta.url.endsWith(process.argv[1].replace(/^[A-Za-z]:/, ""))) {
+  main()
+    .catch((err) => {
+      console.error("Fatal error in Continuous Collector Cycle:", err);
+      process.exit(1);
+    })
+    .finally(() => prisma.$disconnect());
+}
