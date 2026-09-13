@@ -337,6 +337,97 @@ html[data-theme="dark"] img {
   color-scheme: dark;
 }
 
+/* Store 360 keeps its approved BI light palette while inheriting the canonical
+   root theme state. These scoped semantic values also support future drill-down
+   pages without introducing a second theme preference. */
+.store360-workspace {
+  --app-bg: #f4f8fa;
+  --app-surface: #ffffff;
+  --app-surface-subtle: #f6fafb;
+  --app-surface-hover: #eef7f3;
+  --app-surface-active: #e4f6ef;
+  --app-border: #d9e4e8;
+  --app-border-subtle: #e8eff1;
+  --app-border-strong: #c2d0d5;
+  --app-text-primary: #0b1738;
+  --app-text-secondary: #40536f;
+  --app-text-tertiary: #718196;
+  --app-text-disabled: #b8c4cb;
+  --app-accent: #009b69;
+  --app-accent-hover: #007f57;
+  --app-accent-soft: #e5f7ef;
+  --app-accent-contrast: #ffffff;
+  --app-success: #079669;
+  --app-success-soft: #e8f8f0;
+  --app-warning: #c97800;
+  --app-warning-soft: #fff6e8;
+  --app-danger: #d92d3f;
+  --app-danger-soft: #fff0f2;
+  --app-info: #2563c7;
+  --app-info-soft: #edf4ff;
+  --app-neutral: #8493a0;
+  --app-neutral-soft: #f1f5f6;
+  --input-background: #ffffff;
+  --app-purple: #6d4aff;
+  --app-purple-soft: #f1edff;
+  --app-insight: #0a7450;
+  --app-insight-soft: #eaf8f1;
+  --app-insight-border: #cfeede;
+  --app-shadow-sm: 0 1px 2px rgb(15 23 42 / 0.04), 0 6px 20px rgb(15 23 42 / 0.035);
+  --app-shadow-elevated: 0 8px 24px rgb(15 23 42 / 0.08), 0 2px 6px rgb(15 23 42 / 0.04);
+  --store360-chart-customers: #64d3a6;
+  --store360-chart-sales: #3c82dc;
+  --store360-chart-reply: #7543f5;
+  --store360-thumb-from: #475569;
+  --store360-thumb-to: #0f172a;
+  --store360-avatar: #2468b5;
+  background: var(--app-bg);
+  color: var(--app-text-primary);
+}
+
+html[data-theme="dark"] .store360-workspace {
+  --app-bg: #0d0f12;
+  --app-surface: #14171d;
+  --app-surface-subtle: #1a1e26;
+  --app-surface-hover: #202530;
+  --app-surface-active: #262d3a;
+  --app-border: #232733;
+  --app-border-subtle: #1b1e27;
+  --app-border-strong: #353b49;
+  --app-text-primary: #f8fafc;
+  --app-text-secondary: #b4c0d0;
+  --app-text-tertiary: #8190a5;
+  --app-text-disabled: #596579;
+  --app-accent: #39d99a;
+  --app-accent-hover: #62e7b0;
+  --app-accent-soft: #103824;
+  --app-accent-contrast: #07140d;
+  --app-success: #5be39a;
+  --app-success-soft: #123322;
+  --app-warning: #ffbd66;
+  --app-warning-soft: #35250f;
+  --app-danger: #ff8179;
+  --app-danger-soft: #351617;
+  --app-info: #70b9ff;
+  --app-info-soft: #102a46;
+  --app-neutral: #aab4c2;
+  --app-neutral-soft: #20252e;
+  --input-background: #171b23;
+  --app-purple: #c084fc;
+  --app-purple-soft: #2b1c40;
+  --app-insight: #86efac;
+  --app-insight-soft: #103623;
+  --app-insight-border: #1d5a3b;
+  --app-shadow-sm: 0 1px 2px rgb(0 0 0 / 0.28), 0 6px 20px rgb(0 0 0 / 0.2);
+  --app-shadow-elevated: 0 8px 24px rgb(0 0 0 / 0.38), 0 2px 6px rgb(0 0 0 / 0.24);
+  --store360-chart-customers: #5be3a4;
+  --store360-chart-sales: #78baff;
+  --store360-chart-reply: #b69cff;
+  --store360-thumb-from: #536174;
+  --store360-thumb-to: #0a0d12;
+  --store360-avatar: #2c6093;
+}
+
 .app-shell {
   background: var(--background);
   color: var(--foreground);

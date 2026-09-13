@@ -2372,3 +2372,9 @@ Keep `StoreMaster.tiktokProfileUrl` as the only persisted TikTok profile URL. Po
 - Route Store 360 through the shared `AppShell`/`AppSidebar` so the application keeps one navigation model. The canonical sidebar already matches `/store-360` and nested Store 360 paths with a pathname-prefix active matcher, so no second Store 360 navigation or manual menu copy is needed.
 - Keep the approved BI header and user identity inside the Store 360 content area while allowing the shared shell header to be hidden for this page. This avoids duplicate title, identity, search, and export chrome without forking the global sidebar behavior.
 - Treat the mobile control-stack change as a layout safeguard only: the existing date picker and Export action stack below the small breakpoint so the BI workspace remains within the viewport. No data, API, metric, Customer Voice, Export, backend, or production behavior changes.
+
+## 2026-09-13: Store 360 dark-mode compatibility
+
+- Reuse the canonical `html[data-theme]` state and storage key; do not add a Store 360-specific toggle or preference. Store 360 tokens are scoped to `.store360-workspace` so the global shell and other routes keep their existing theme behavior.
+- Preserve the approved light values exactly while adding a dark surface hierarchy and accessible state/chart colors. Replace only Store 360 literal visualization colors that could not follow the theme tokens; data and metric calculations remain unchanged.
+- Use a disposable loopback-only synthetic fixture for visual capture. The capture process writes screenshots outside the repository and does not provide an export route, database connection, worker, AI call, or production endpoint.

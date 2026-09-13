@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { CSSProperties, ReactNode } from "react";
+import type { ReactNode } from "react";
 import { AppShell, PageContainer } from "@/components/shell";
 import { api } from "@/lib/api";
 import type { AuthUser } from "@/lib/authorization";
@@ -96,44 +96,6 @@ function formatDateTime(value: string) {
 function surfaceClass(extra = "") {
   return "rounded-2xl border border-[var(--app-border-subtle)] bg-[var(--app-surface)] shadow-[var(--app-shadow-sm)] " + extra;
 }
-
-const biWorkspaceStyle = {
-  color: "var(--app-text-primary)",
-  "--app-bg": "#f4f8fa",
-  "--app-surface": "#ffffff",
-  "--app-surface-subtle": "#f6fafb",
-  "--app-surface-hover": "#eef7f3",
-  "--app-surface-active": "#e4f6ef",
-  "--app-border": "#d9e4e8",
-  "--app-border-subtle": "#e8eff1",
-  "--app-border-strong": "#c2d0d5",
-  "--app-text-primary": "#0b1738",
-  "--app-text-secondary": "#40536f",
-  "--app-text-tertiary": "#718196",
-  "--app-text-disabled": "#b8c4cb",
-  "--app-accent": "#009b69",
-  "--app-accent-hover": "#007f57",
-  "--app-accent-soft": "#e5f7ef",
-  "--app-accent-contrast": "#ffffff",
-  "--app-success": "#079669",
-  "--app-success-soft": "#e8f8f0",
-  "--app-warning": "#c97800",
-  "--app-warning-soft": "#fff6e8",
-  "--app-danger": "#d92d3f",
-  "--app-danger-soft": "#fff0f2",
-  "--app-info": "#2563c7",
-  "--app-info-soft": "#edf4ff",
-  "--app-neutral": "#8493a0",
-  "--app-neutral-soft": "#f1f5f6",
-  "--input-background": "#ffffff",
-  "--app-purple": "#6d4aff",
-  "--app-purple-soft": "#f1edff",
-  "--app-insight": "#0a7450",
-  "--app-insight-soft": "#eaf8f1",
-  "--app-insight-border": "#cfeede",
-  "--app-shadow-sm": "0 1px 2px rgba(15, 23, 42, 0.04), 0 6px 20px rgba(15, 23, 42, 0.035)",
-  "--app-shadow-elevated": "0 8px 24px rgba(15, 23, 42, 0.08), 0 2px 6px rgba(15, 23, 42, 0.04)",
-} as CSSProperties;
 
 function BiIcon({ name, size = 18 }: { name: string; size?: number }) {
   const common = { fill: "none", stroke: "currentColor", strokeWidth: 1.8, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
@@ -254,13 +216,13 @@ function BusinessPerformance({ summary }: { summary: StoreInsightsSummary }) {
   return (
     <section className={surfaceClass("flex min-h-[360px] flex-col p-4 sm:p-5")} aria-labelledby="business-performance-title">
       <SectionHeading title="Business Performance" description="Customer, sales and response trend." action={<span className="rounded-lg border border-[var(--app-border)] bg-[var(--app-surface)] px-2.5 py-1.5 text-[11px] font-semibold text-[var(--app-text-primary)]">Daily⌄</span>} headingId="business-performance-title" />
-      <div className="mt-2 flex flex-1 flex-col"><div className="flex items-start justify-between gap-3"><div><h3 className="text-xs font-semibold text-[var(--app-text-primary)]">Daily activity</h3><p className="mt-1 text-[11px] text-[var(--app-text-tertiary)]">Bangkok time · selected period</p></div><span className="shrink-0 text-[11px] font-medium text-[var(--app-text-tertiary)]">{summary.period.from} → {summary.period.to}</span></div>{!hasTrend ? <div className="mt-4 flex h-44 items-center justify-center rounded-xl bg-[var(--app-surface-subtle)] text-xs text-[var(--app-text-tertiary)]">Daily trend data is not available for this period.</div> : <div className="relative mt-3 h-44 overflow-hidden rounded-xl border border-[var(--app-border-subtle)] bg-[var(--app-surface-subtle)] px-2 pb-1 pt-2 sm:h-48"><svg className="h-full w-full text-[var(--app-text-tertiary)]" viewBox="0 0 656 174" preserveAspectRatio="none" role="img" aria-label="Daily customers, sales-tagged customers, and reply rate trend"><g opacity="0.75">{[50, 95, 140, 160].map((y) => <line key={y} x1="18" x2="638" y1={y} y2={y} stroke="currentColor" strokeOpacity="0.16" strokeWidth="1" />)}</g><g>{trend.map((point, index) => { const x = 18 + index * chartBarStep; const customers = customerHeight(point.customers); const sales = customerHeight(point.salesTaggedCustomers); return <g key={point.date}><rect x={x} y={160 - customers} width={Math.max(3, chartBarStep * 0.46)} height={customers} rx="2" fill="#64d3a6" fillOpacity="0.78"><title>{formatTrendDate(point.date)} · {point.customers.toLocaleString()} customers</title></rect><rect x={x + Math.max(3, chartBarStep * 0.46) * 0.44} y={160 - sales} width={Math.max(2, chartBarStep * 0.24)} height={sales} rx="2" fill="#3c82dc" fillOpacity="0.82"><title>{formatTrendDate(point.date)} · {point.salesTaggedCustomers.toLocaleString()} sales-tagged customers</title></rect></g>; })}</g>{replyPoints && <polyline points={replyPoints} fill="none" stroke="#7543f5" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />}</svg></div>}<div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-[var(--app-text-secondary)]"><span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-[#32b985]" />Customers</span><span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-[#3c82dc]" />Sales-tagged</span><span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-[#7543f5]" />Reply rate (%)</span><span className="ml-auto hidden text-[9px] text-[var(--app-text-tertiary)] sm:inline">{trend.length} days</span></div></div>
+      <div className="mt-2 flex flex-1 flex-col"><div className="flex items-start justify-between gap-3"><div><h3 className="text-xs font-semibold text-[var(--app-text-primary)]">Daily activity</h3><p className="mt-1 text-[11px] text-[var(--app-text-tertiary)]">Bangkok time · selected period</p></div><span className="shrink-0 text-[11px] font-medium text-[var(--app-text-tertiary)]">{summary.period.from} → {summary.period.to}</span></div>{!hasTrend ? <div className="mt-4 flex h-44 items-center justify-center rounded-xl bg-[var(--app-surface-subtle)] text-xs text-[var(--app-text-tertiary)]">Daily trend data is not available for this period.</div> : <div className="relative mt-3 h-44 overflow-hidden rounded-xl border border-[var(--app-border-subtle)] bg-[var(--app-surface-subtle)] px-2 pb-1 pt-2 sm:h-48"><svg className="h-full w-full text-[var(--app-text-tertiary)]" viewBox="0 0 656 174" preserveAspectRatio="none" role="img" aria-label="Daily customers, sales-tagged customers, and reply rate trend"><g opacity="0.75">{[50, 95, 140, 160].map((y) => <line key={y} x1="18" x2="638" y1={y} y2={y} stroke="currentColor" strokeOpacity="0.16" strokeWidth="1" />)}</g><g>{trend.map((point, index) => { const x = 18 + index * chartBarStep; const customers = customerHeight(point.customers); const sales = customerHeight(point.salesTaggedCustomers); return <g key={point.date}><rect x={x} y={160 - customers} width={Math.max(3, chartBarStep * 0.46)} height={customers} rx="2" fill="var(--store360-chart-customers)" fillOpacity="0.78"><title>{formatTrendDate(point.date)} · {point.customers.toLocaleString()} customers</title></rect><rect x={x + Math.max(3, chartBarStep * 0.46) * 0.44} y={160 - sales} width={Math.max(2, chartBarStep * 0.24)} height={sales} rx="2" fill="var(--store360-chart-sales)" fillOpacity="0.82"><title>{formatTrendDate(point.date)} · {point.salesTaggedCustomers.toLocaleString()} sales-tagged customers</title></rect></g>; })}</g>{replyPoints && <polyline points={replyPoints} fill="none" stroke="var(--store360-chart-reply)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />}</svg></div>}<div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-[var(--app-text-secondary)]"><span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-[var(--store360-chart-customers)]" />Customers</span><span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-[var(--store360-chart-sales)]" />Sales-tagged</span><span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-[var(--store360-chart-reply)]" />Reply rate (%)</span><span className="ml-auto hidden text-[9px] text-[var(--app-text-tertiary)] sm:inline">{trend.length} days</span></div></div>
     </section>
   );
 }
 
 function ProductThumb() {
-  return <span className="flex h-8 w-6 shrink-0 items-center justify-center rounded-md bg-gradient-to-b from-slate-700 to-slate-950 text-[8px] text-white shadow-sm" aria-hidden="true">▯</span>;
+  return <span className="flex h-8 w-6 shrink-0 items-center justify-center rounded-md bg-gradient-to-b from-[var(--store360-thumb-from)] to-[var(--store360-thumb-to)] text-[8px] text-white shadow-sm" aria-hidden="true">▯</span>;
 }
 
 function SalesPerformance({ summary }: { summary: StoreInsightsSummary }) {
@@ -307,7 +269,7 @@ function Store360UserMenu({ authUser, language, changeLanguage, logout }: { auth
   return (
     <details className="relative shrink-0">
       <summary className="flex cursor-pointer list-none items-center gap-2 rounded-xl px-2 py-1.5 hover:bg-[var(--app-surface-subtle)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--app-accent)]">
-        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#2468b5] text-xs font-bold text-white">{authUser.displayName.charAt(0).toUpperCase()}</span>
+        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--store360-avatar)] text-xs font-bold text-white">{authUser.displayName.charAt(0).toUpperCase()}</span>
         <span className="hidden text-left sm:block"><span className="block text-xs font-semibold text-[var(--app-text-primary)]">{authUser.displayName}</span><span className="block text-[10px] text-[var(--app-text-tertiary)]">OPPO Thailand</span></span>
         <span className="text-xs text-[var(--app-text-secondary)]">⌄</span>
       </summary>
@@ -403,12 +365,12 @@ export function Store360View() {
   const responders = summary?.responders ?? [];
   const visibleConversations = useMemo(() => { const q = searchText.trim().toLocaleLowerCase(); return q ? conversations.filter((item) => item.customer.displayName.toLocaleLowerCase().includes(q) || item.salesProduct?.toLocaleLowerCase().includes(q)) : conversations; }, [conversations, searchText]);
 
-  if (bootstrapError) return <main style={biWorkspaceStyle} className="flex min-h-screen items-center justify-center bg-[var(--app-bg)] p-6"><div className={surfaceClass("max-w-md p-6 text-center")}><h1 className="text-base font-semibold text-[var(--app-text-primary)]">Unable to open Store 360</h1><p className="mt-2 text-sm text-[var(--app-text-secondary)]">{bootstrapError}</p><button type="button" onClick={() => { setBootstrapError(null); setBootstrapAttempt((value) => value + 1); }} className="mt-4 rounded-xl bg-[var(--app-accent)] px-4 py-2 text-sm font-semibold text-white">Try again</button></div></main>;
-  if (!bootstrapComplete || !authUser) return <main className="flex min-h-screen items-center justify-center bg-[var(--app-bg)] text-sm text-[var(--app-text-secondary)]">Opening Store 360…</main>;
+  if (bootstrapError) return <main className="store360-workspace flex min-h-screen items-center justify-center bg-[var(--app-bg)] p-6"><div className={surfaceClass("max-w-md p-6 text-center")}><h1 className="text-base font-semibold text-[var(--app-text-primary)]">Unable to open Store 360</h1><p className="mt-2 text-sm text-[var(--app-text-secondary)]">{bootstrapError}</p><button type="button" onClick={() => { setBootstrapError(null); setBootstrapAttempt((value) => value + 1); }} className="mt-4 rounded-xl bg-[var(--app-accent)] px-4 py-2 text-sm font-semibold text-white">Try again</button></div></main>;
+  if (!bootstrapComplete || !authUser) return <main className="store360-workspace flex min-h-screen items-center justify-center bg-[var(--app-bg)] text-sm text-[var(--app-text-secondary)]">Opening Store 360…</main>;
 
   return (
     <AppShell currentSection="store-360" authUser={authUser} text={{ appName: "OPPO LINE OA Monitor", searchPlaceholder: "Search customers, stores, or messages" }} language={language} changeLanguage={setLanguage} searchText={searchText} setSearchText={setSearchText} logout={logout} showGlobalHeader={false} isLoading={loading && !summary} apiError={error} loadApplicationData={() => { void loadSummary(); void loadCustomerVoice(); void loadConversations(); }}>
-      <PageContainer variant="wide" className="min-w-0 bg-[var(--app-bg)]" style={biWorkspaceStyle}>
+      <PageContainer variant="wide" className="store360-workspace min-w-0 bg-[var(--app-bg)]">
         {!stores.length && !loading ? <div className={surfaceClass("p-8 text-center text-sm text-[var(--app-text-secondary)]")}>No authorized stores available.</div> : loading && !summary ? <Store360Skeleton /> : summary ? <div className="space-y-5">
           <header className="flex min-w-0 flex-col gap-3 xl:flex-row xl:items-start xl:justify-between"><div className="min-w-0"><p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--app-accent)]">Store 360</p><h1 className="mt-1 text-[30px] font-bold leading-tight tracking-[-0.045em] text-[var(--app-text-primary)]">Store 360</h1><p className="mt-1 text-sm text-[var(--app-text-secondary)]">Turn conversations into business impact</p></div><div className="flex w-full min-w-0 flex-col items-stretch gap-2 sm:flex-row sm:flex-wrap sm:items-center xl:w-auto xl:flex-nowrap xl:justify-end"><UnifiedPeriodPicker key={"store-360-period-picker-" + preset} className="w-full sm:w-auto" dateFrom={from} dateTo={to} language={language} deferQuickRanges showOutsideQuickRanges={false} onApply={applyCustomRange} /><Store360ExportControl stores={stores} selectedStoreId={activeStoreId} startDate={from} endDate={to} language={language} /><Store360UserMenu authUser={authUser} language={language} changeLanguage={setLanguage} logout={logout} /></div></header>
           <section className="grid gap-5 lg:grid-cols-[minmax(280px,0.85fr)_minmax(0,1.45fr)]"><StoreContext summary={summary} stores={stores} activeStoreId={activeStoreId} selectStore={selectStore} from={from} to={to} language={language} /><KeyInsight summary={summary} /></section>

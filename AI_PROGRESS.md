@@ -4693,6 +4693,14 @@ Verification passed: frontend TypeScript, zero-warning ESLint, 173/173 tests, an
 - Captured the final desktop review asset at `/private/tmp/store-360-bi-final-review/store-360-desktop-full-final.png`. Temporary fixture, frontend, and browser processes were stopped and their temporary scripts removed; no commit, push, rebase, reconciliation, deployment, or production mutation was performed.
 - Next action: user visual approval, then reconcile this uncommitted candidate against the newest `origin/main` before any integration decision.
 
+# Current task: Store 360 — Full Dark Mode Compatibility (2026-09-13)
+
+- Scoped Store 360 semantic surface, text, border, state, chart, product-thumbnail, and avatar tokens to the canonical `data-theme` system. Removed the page-local light inline token override and preserved the approved light palette.
+- Verified the sanitized Robinson Chonburi fixture (`28375`) locally only. Captured light, dark, dark Export dialog, and dark mobile PNGs under `/private/tmp/store-360-dark-mode-review/`. No PII, raw messages, debug overlay, backend, production, or persistence changes.
+- Verification: focused Store 360/theme tests **46/46**, full frontend tests **578/578**, changed-file ESLint pass, frontend production build pass, and final screenshot files verified as nonblank PNGs at 1440×1800 and 390×844.
+- No commit, push, rebase, reconciliation, deployment, production mutation, worker enablement, Customer Voice rule change, or metric-logic change was performed.
+- Next action: user review, then reconcile this uncommitted candidate against the newest `origin/main` before any integration decision.
+
 # Current task: Store 360 BI — Final Visual Fix v2 (2026-09-13)
 
 - Reduced Customer Voice to an Overview card: coverage remains readable, each selected tab shows only the top three ranked items, and the existing topic-to-Conversation-Explorer path now has a real `Explore →` anchor. Removed only the redundant Overview footer note; the underlying data and Sales Performance separation remain intact.
