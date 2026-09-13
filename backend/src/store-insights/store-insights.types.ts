@@ -113,6 +113,13 @@ export type StoreInsightsResponseMetric = {
   percentage: number | null;
 };
 
+export type StoreInsightsDailyTrendPoint = {
+  date: string;
+  customers: number;
+  salesTaggedCustomers: number;
+  replyRate: number | null;
+};
+
 export type StoreInsightsResponsePerformance = {
   totalConversations: number;
   repliedWithin15Minutes: StoreInsightsResponseMetric;
@@ -121,6 +128,7 @@ export type StoreInsightsResponsePerformance = {
   unanswered: StoreInsightsResponseMetric;
   medianFirstResponseSeconds: number | null;
   volumeByHour: number[];
+  dailyTrend: StoreInsightsDailyTrendPoint[];
   totalInboundMessages: number;
   available: boolean;
   dataQuality: {

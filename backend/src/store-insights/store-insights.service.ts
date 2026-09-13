@@ -15,6 +15,7 @@ import {
   StoreInsightsPeriod,
   StoreInsightsQueryDto,
   StoreInsightsResponsePerformance,
+  StoreInsightsDailyTrendPoint,
   StoreInsightsResponder,
   StoreInsightsSales,
   StoreInsightsStore,
@@ -170,6 +171,21 @@ function median(values: number[]): number | null {
 
 function bangkokHour(date: Date): number {
   return Number(new Intl.DateTimeFormat("en-US", { timeZone: STORE_INSIGHTS_TIMEZONE, hour: "2-digit", hour12: false }).format(date)) % 24;
+}
+
+function bangkokDate(date: Date): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: STORE_INSIGHTS_TIMEZONE, year: "numeric", month: "2-digit", day: "2-digit" }).format(date);
+}
+
+function dateSequence(from: string, to: string): string[] {
+  const dates: string[] = [];
+  const current = new Date(`${from}T00:00:00Z`);
+  const end = new Date(`${to}T00:00:00Z`);
+  while (current <= end) {
+    dates.push(current.toISOString().slice(0, 10));
+    current.setUTCDate(current.getUTCDate() + 1);
+  }
+  return dates;
 }
 
 function formatDateTime(date: Date): string {
@@ -423,6 +439,25 @@ export class StoreInsightsService {
     const metric = (count: number): { count: number; percentage: number | null } => ({ count, percentage: available && total > 0 ? count / total : null });
     const volumeByHour = new Array<number>(24).fill(0);
     for (const message of snapshot.inboundMessages) volumeByHour[bangkokHour(message.sentAt)]++;
+    const byDate = new Map<string, { customerIds: Set<string>; salesCustomerIds: Set<string>; cases: ResponseCase[] }>();
+    for (const responseCase of snapshot.cases) {
+      const date = bangkokDate(responseCase.inboundAt);
+      const current = byDate.get(date) ?? { customerIds: new Set<string>(), salesCustomerIds: new Set<string>(), cases: [] };
+      current.customerIds.add(responseCase.customerId);
+      if (snapshot.salesByConversation.get(responseCase.conversationId)?.tagged) current.salesCustomerIds.add(responseCase.customerId);
+      current.cases.push(responseCase);
+      byDate.set(date, current);
+    }
+    const dailyTrend: StoreInsightsDailyTrendPoint[] = dateSequence(snapshot.period.from, snapshot.period.to).map((date) => {
+      const current = byDate.get(date) ?? { customerIds: new Set<string>(), salesCustomerIds: new Set<string>(), cases: [] };
+      const dailyAnswered = current.cases.filter((item) => item.durationSeconds !== null && item.durationSeconds <= 24 * HOUR).length;
+      return {
+        date,
+        customers: current.customerIds.size,
+        salesTaggedCustomers: current.salesCustomerIds.size,
+        replyRate: available && current.cases.length > 0 ? dailyAnswered / current.cases.length : null,
+      };
+    });
     return {
       totalConversations: total,
       repliedWithin15Minutes: metric(answered.filter((item) => (item.durationSeconds ?? Infinity) <= 15 * MINUTE).length),
@@ -431,6 +466,7 @@ export class StoreInsightsService {
       unanswered: metric(total - answered.length),
       medianFirstResponseSeconds: available ? median(answered.flatMap((item) => item.durationSeconds === null ? [] : [item.durationSeconds])) : null,
       volumeByHour,
+      dailyTrend,
       totalInboundMessages: snapshot.inboundMessages.length,
       available,
       dataQuality: { ambiguousOutboundCount: snapshot.ambiguousOutboundCount, automatedOutboundCount: snapshot.automatedOutboundCount },

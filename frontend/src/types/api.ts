@@ -399,6 +399,7 @@ export type GoogleMapsReadiness = { status: GoogleMapsReadinessStatus; ready: bo
 
 export type ApiStore = { id: string; storeId?: string | null; name: string; code: string | null; googleMapsUrl?: string | null; googleMapsStatus?: GoogleMapsReadinessStatus; googleMapsStatusReason?: string | null; isActive?: boolean; archivedAt?: string | null; _count?: { conversations: number; lineOfficialAccounts?: number; operationalConversationCount?: number; operationalNotRepliedCount?: number } };
 export type StoreInsightsMetric = { count: number; percentage: number | null };
+export type StoreInsightsDailyTrendPoint = { date: string; customers: number; salesTaggedCustomers: number; replyRate: number | null };
 export type StoreInsightsResponsePerformance = {
   totalConversations: number;
   repliedWithin15Minutes: StoreInsightsMetric;
@@ -407,6 +408,7 @@ export type StoreInsightsResponsePerformance = {
   unanswered: StoreInsightsMetric;
   medianFirstResponseSeconds: number | null;
   volumeByHour: number[];
+  dailyTrend: StoreInsightsDailyTrendPoint[];
   totalInboundMessages: number;
   available: boolean;
   dataQuality: { ambiguousOutboundCount: number; automatedOutboundCount: number };

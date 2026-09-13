@@ -2328,3 +2328,41 @@ Keep `StoreMaster.tiktokProfileUrl` as the only persisted TikTok profile URL. Po
 - Make repeated CLOSED imports idempotent. A later ACTIVE transition restores only the Store; it must never silently reactivate a prior OA or its webhook. Reconnection remains explicit and must pass the existing identity and uniqueness safeguards.
 - Hide closed Stores from operational lists and selectors and reject new LINE OA/Rich Menu operations with the structured `STORE_CLOSED` conflict, while retaining archived/admin inspection paths.
 - Store 31749 required only a Store state transition because its historical OA was already disabled/archived. Preserve the OA's earlier archival timestamp rather than rewriting it during Store closure; this makes repeated CLOSED sync auditable and idempotent.
+
+## 2026-09-13: Store 360 BI UI Refresh — Phase 1
+
+- Reuse the existing Store Insights summary, Customer Voice, conversation, authorized-store, Bangkok period, comparison, and export contracts. This keeps the refresh presentation-only and avoids changing metric definitions, Customer Voice rules, schemas, workers, or persisted analytics.
+- Match the approved BI hierarchy with Business Performance, Customer Voice, and Sales Performance in the third row, followed by Response Performance, Team Performance, and Conversation Explorer in the fourth row. Keep the Conversation Explorer as a compact preview linking to the existing chats workspace.
+- Render only supported data. The service currently provides an inbound `volumeByHour` distribution, not a daily time series, so label that chart honestly. Treat Customer Voice classified/eligible coverage as partial analysis coverage and do not merge Customer Voice product interest with confirmed sales metadata.
+- Show real comparison deltas only when the existing previous-period response includes the corresponding values; otherwise render the existing no-data state. The insight copy is deterministic from the selected period and never hardcodes mockup percentages.
+
+## 2026-09-13: Store 360 BI visual review
+
+- Use a temporary localhost-only fixture outside the repository when the safe local backend is unavailable. Keep the fixture sanitized, read-only, and disposable so it cannot enter production runtime or repository history.
+- Keep Row 3 cards at natural content height with `items-start`; equal grid stretching made the Business Performance chart look empty beneath its supported hourly distribution. Leave subjective theme differences to review because the global shell owns the dark/light preference.
+
+## 2026-09-13: Store 360 BI light workspace alignment
+
+- Scope the approved light BI treatment to the Store 360 page container rather than changing the global theme. The shared `PageContainer` accepts an optional inline style object so page-local semantic tokens cascade through existing Store 360 primitives without affecting navigation or other routes.
+- Define the Store 360 palette with neutral surfaces, navy text, restrained green accents, quiet borders/shadows, and explicit light input/purple category tokens. This keeps the page readable even when the user’s global shell theme is dark and avoids relying on `dark:` utility variants inside the BI canvas.
+- Keep visual chart work truthful: add grid/legend treatment only around the existing `volumeByHour` array and continue labeling it as an hourly distribution in Bangkok time. Do not introduce a daily trend, derived comparison, or new endpoint.
+- Remove the Customer Voice “View all” text affordance because no real destination is currently wired. Existing Export, Store selector, Team details, Conversation Explorer, and topic-filter interactions remain unchanged.
+
+## 2026-09-13: Store 360 BI final density polish
+
+- Keep the Store 360 refresh presentation-only. The pass changes spacing, hierarchy, control presentation, and comparison wording; metric formulas, API contracts, Customer Voice rules, export behavior, backend code, and persisted data remain unchanged.
+- Treat the preset select and `UnifiedPeriodPicker` as complementary controls: the preset chooses the reporting window and the picker displays/edits the actual date range. Removing the old static date text avoids duplicate period controls while preserving custom-range behavior.
+- Use semantic comparison copy for the existing deltas: count changes say `vs previous period`, percentage changes use `pp`, response-time improvements say `faster/slower`, and equal values say `No change`.
+- Preserve the existing hourly Business Performance visualization. Removing only the collapsed flex sizing from its chart container ensures the already-supported `volumeByHour` bars render at the requested density without inventing a daily trend.
+
+## 2026-09-13: Store 360 BI Customer Voice overview density
+
+- Keep the Overview card intentionally shallow: render only the first three items from each existing Customer Voice ranking array and leave the complete response available to the existing data/drill-down paths.
+- Use the existing `Conversation Explorer` heading as the valid `Explore →` destination for the topic tab. Topic rows continue to apply the existing filter; no new endpoint or navigation contract is introduced.
+- Remove redundant explanatory footer copy from the Overview only. Coverage remains explicitly classified versus eligible, and Sales Performance continues to state that Customer Voice product interest is separate from confirmed sales.
+
+## 2026-09-13: Store 360 high-fidelity reference match
+
+- Keep the Store 360 page on a dedicated BI shell so its light reference treatment does not alter the global application shell or unrelated routes.
+- Add only a read-only daily aggregation over existing Store Insights data, grouped in Bangkok time and deduplicated at the customer level for daily customer and sales-tagged counts. No schema, worker, AI, analytics persistence, or metric-definition changes are allowed.
+- Use a sanitized loopback fixture only for populated visual review when the local backend is unavailable. Capture review PNGs outside the repository, inspect them for blank output, overflow, PII, raw-message copy, and debug overlays, then remove the fixture/runtime processes while preserving the screenshot artifact.

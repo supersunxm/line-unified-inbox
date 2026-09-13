@@ -128,6 +128,24 @@ test("uses the Bangkok end boundary and extends the SLA lookup by 24 hours", asy
   assert.deepEqual(calls.messageWhere, { sentAt: { gte: new Date("2026-09-03T17:00:00.000Z"), lt: new Date("2026-09-05T17:00:00.000Z") } });
 });
 
+test("daily trend groups first eligible inbound activity by Bangkok date and keeps sales customers unique", async () => {
+  const { service } = buildService([
+    conversation("c-1", "customer-1", "Customer One", [
+      message("in-1", "INBOUND", "2026-09-04T16:30:00.000Z"),
+      message("out-1", "OUTBOUND", "2026-09-04T16:45:00.000Z", { senderUserId: "staff-1", senderDisplayName: "Staff One" }),
+    ], { customerSalesStatus: "PURCHASED", salesRecordedById: "staff-1" }),
+    conversation("c-2", "customer-1", "Customer One", [message("in-2", "INBOUND", "2026-09-05T02:00:00.000Z")], { customerSalesStatus: "PURCHASED" }),
+    conversation("c-3", "customer-2", "Customer Two", [message("in-3", "INBOUND", "2026-09-05T16:00:00.000Z")]),
+  ]);
+
+  const result = await service.getResponsePerformance(user, "store-1", { from: "2026-09-04", to: "2026-09-05" });
+
+  assert.deepEqual(result.dailyTrend, [
+    { date: "2026-09-04", customers: 1, salesTaggedCustomers: 1, replyRate: 1 },
+    { date: "2026-09-05", customers: 2, salesTaggedCustomers: 1, replyRate: 0 },
+  ]);
+});
+
 test("a human reply after 24 hours is replied but not within the 24-hour SLA", async () => {
   const { service } = buildService([
     conversation("c-late", "customer-1", "Customer", [

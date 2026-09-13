@@ -4655,3 +4655,55 @@ Verification passed: frontend TypeScript, zero-warning ESLint, 173/173 tests, an
 - Final preflight at `2026-09-12T08:54:29Z` matched the reviewed state. Commit `9781aeb` was pushed to `main`; Railway deployment `b971be44-6f52-48a5-a227-4b5e68a92c83` reached SUCCESS, Prisma reported 127 migrations and none pending, and startup/health/readiness were clean.
 - Deployment-time StoreMaster sync transactionally closed Store 31749 at `2026-09-12T08:59:44.715Z`. Its already-archived OA required no state change. Post-readback preserves 22 conversations, 74 messages, 94 webhook events, 16 historical backfill jobs, and zero Rich Menu assignments/attempts; the Store is absent from the active-list predicate.
 - Post-deploy integrity is clean for all identity, Store multiplicity, conversation binding, active identifier duplicate, archived-Store OA, and Store/master checks. Two previously reviewed display-name mismatches remain audit-only. Store 30538's Store/OA binding state is unchanged (active Store, no OA); the standard Sheet sync refreshed only StoreMaster source provenance timestamps.
+
+# Current task: Store 360 BI UI Refresh — Phase 1 (2026-09-13)
+
+- Created isolated worktree `/private/tmp/store-360-bi-refresh` from `origin/main` at `0562ec8` on branch `feat/store-360-bi-refresh`; the main checkout and other feature worktrees remain untouched.
+- Reorganized the existing Store 360 view into the approved BI hierarchy: store context and deterministic insight, six KPI cards, Business Performance, Customer Voice, Sales Performance, Response Performance, Team Performance, and a compact Conversation Explorer. Reused the existing authorized-store selector, Bangkok date picker, comparison requests, Customer Voice endpoint, conversation filters, and Store 360 export control.
+- Kept metric integrity explicit: the backend exposes only `volumeByHour`, so the UI labels the visualization as an hourly Bangkok distribution rather than inventing a daily trend. Customer Voice coverage is shown as classified versus eligible conversations, with product interest kept separate from sales metadata.
+- Added focused UI contract coverage for the hierarchy, responsive layout, current-version coverage wording, no-fabricated trend/comparison values, compact conversation preview, and preserved selector/date/export contracts.
+- Verification: focused Store 360 tests **17/17**, full frontend tests **573/573**, changed-file ESLint pass, normal Turbopack production build pass, local frontend `/api/health` and `/store-360` HTTP 200, and no browser console warnings/errors. Full repository lint and TypeScript checks retain unrelated pre-existing baseline failures; the populated dashboard smoke remains blocked by the unavailable local PostgreSQL/NestJS stack.
+- No backend, schema, Customer Voice rules, worker, production data, migration, deployment, or external AI changes were made. The local populated-dashboard smoke is pending a local PostgreSQL/NestJS stack; Docker is unavailable on this machine.
+- Next action: review this uncommitted isolated candidate, then reconcile against the newest `origin/main` after the separate Customer Voice rollout settles before any integration decision.
+
+# Current task: Store 360 BI — Visual Review (2026-09-13)
+
+- Ran a populated, frontend-only visual review for sanitized Robinson Chonburi context (`28375`) using a temporary localhost fixture outside the repository. The fixture was stopped and removed after review; it had no database, production, external network, PII, raw-message, or LINE-ID access.
+- Reviewed desktop 1440px/1280px, tablet 1024px/768px, and mobile 390px states. No horizontal overflow was observed; controls wrap, KPI cards reorganize, and the compact Team/Conversation Explorer row remains readable.
+- Found and corrected one obvious visual issue: the Row 3 grid now uses `items-start` so Business Performance is not stretched to the taller Customer Voice card, eliminating excessive empty chart space. No data logic or interaction contract changed.
+- Captured populated upper/lower desktop views, Customer Voice Product Interest, Export dialog, tablet, and mobile states inline through the local browser review. Browser console warnings/errors: none. The app remains in the existing dark shell theme, which differs from the light approved mockup but is inherited global shell behavior and was left unchanged.
+- Re-verified after the visual correction: focused Store 360 tests **17/17**, changed-file ESLint, and normal frontend production build pass. Full frontend tests were previously **573/573** and remain unaffected; `git diff --check` remains clean. No commit, push, rebase, deployment, or production mutation was performed.
+- Next action: user visual approval, then reconcile this uncommitted branch against the newest `origin/main` before any commit or integration decision.
+
+# Current task: Store 360 BI — Focused Visual Alignment Pass (2026-09-13)
+
+- Scoped a light BI workspace token set to the Store 360 `PageContainer` only. The global dark shell/sidebar remains unchanged, while the Store 360 canvas, cards, controls, selector popover, insight, and export dialog now use the approved neutral/navy/green visual treatment.
+- Added a small optional `PageContainer` style pass-through used only by Store 360; no unrelated page consumes the new style prop. Removed non-actionable Customer Voice footer affordance and kept the existing real Conversation Explorer and Team details links.
+- Strengthened the supported hourly Business Performance presentation with subtle grid lines, explicit `Bangkok time`/hourly-distribution language, and a compact inbound-message legend. No daily trend, metric formula, API, Customer Voice rule, or sales meaning changed.
+- Rechecked populated sanitized Robinson Chonburi context (`28375`) through a temporary loopback-only fixture. Reviewed 1440px and 1280px desktop, 1024px and 768px tablet, 390px mobile, Customer Voice Product Interest, store selector, and Export dialog states. All audited viewport and main widths matched; browser warnings/errors: none.
+- Verification after the alignment changes: focused Store 360 tests **17/17**, full frontend tests **573/573**, changed-file ESLint pass, frontend production build pass, and `git diff --check` pass. No commit, push, rebase, deployment, or production mutation was performed.
+- Next action: stop/remove the temporary fixture, leave this branch uncommitted for user visual review, then reconcile against the newest `origin/main` before any integration decision.
+
+# Current task: Store 360 BI — Final Density Polish (2026-09-13)
+
+- Applied the requested UI-only density polish: compact Store Context and Key Insight, removed the duplicate static period date, preserved the preset/custom-range picker and Export control, tightened Customer Voice, balanced the Business/CV/Sales row, and humanized comparison copy without changing calculations.
+- Corrected one capture-visible chart rendering issue by removing the collapsing flex growth from the existing `volumeByHour` chart container; the sanitized Robinson fixture now renders the approved inbound bars.
+- Rechecked the populated sanitized Robinson Chonburi context (`28375`) locally at 1440px, 1280px, 1024px, 768px, and 390px. No horizontal overflow, PII, raw messages, or debug overlays were observed.
+- Verification: focused Store 360 tests **11/11**, full frontend tests **573/573**, changed-file ESLint pass, frontend production build pass, and `git diff --check` pass.
+- Captured the final desktop review asset at `/private/tmp/store-360-bi-final-review/store-360-desktop-full-final.png`. Temporary fixture, frontend, and browser processes were stopped and their temporary scripts removed; no commit, push, rebase, reconciliation, deployment, or production mutation was performed.
+- Next action: user visual approval, then reconcile this uncommitted candidate against the newest `origin/main` before any integration decision.
+
+# Current task: Store 360 BI — Final Visual Fix v2 (2026-09-13)
+
+- Reduced Customer Voice to an Overview card: coverage remains readable, each selected tab shows only the top three ranked items, and the existing topic-to-Conversation-Explorer path now has a real `Explore →` anchor. Removed only the redundant Overview footer note; the underlying data and Sales Performance separation remain intact.
+- Final local visual readback: Customer Voice 509.5px, Sales Performance 528.5px, Business Performance 480px; the lower BI row begins at the normal 20px gap after the upper row.
+- Captured `/private/tmp/store-360-bi-final-review/store-360-desktop-full-final-v2.png` from the sanitized Robinson Chonburi fixture (`28375`). No PII, raw messages, debug overlays, backend, production, or persistence changes.
+- Verification: focused Store 360 tests **17/17**, full frontend tests **573/573**, changed-file ESLint pass, frontend production build pass, and `git diff --check` pass. No commit, push, deploy, or rebase.
+- Next action: user visual approval, then reconcile this uncommitted candidate against the newest `origin/main` before any integration decision.
+
+# Current task: Store 360 BI — High-Fidelity Reference Match (2026-09-13)
+
+- Finalized the isolated Store 360 candidate against the approved light BI reference: dedicated Store 360 shell, compact store/insight context, six KPI cards, real daily Bangkok trend aggregation, Customer Voice overview tabs, Sales Performance, Response Performance, Team Performance, Conversation Explorer, and existing Export behavior.
+- Recreated the sanitized Robinson Chonburi fixture (`28375`) through a disposable loopback-only server and captured `/private/tmp/store-360-bi-final-review/store-360-desktop-full-high-fidelity.png`. The image is 1440×1571, nonblank, without horizontal overflow, PII, raw messages, or debug overlays.
+- Verification: full frontend tests **573/573**, Store Insights tests **14/14**, changed-file ESLint, frontend build, backend build, local health, Store 360 route, and `git diff --check` pass. Temporary fixture, frontend, browser, and runtime dependency-link processes were stopped/removed.
+- No commit, push, rebase, reconciliation, deployment, production mutation, worker enablement, or Customer Voice rule change was performed. Next action: user visual approval, then reconcile this uncommitted candidate against the newest `origin/main` before integration.

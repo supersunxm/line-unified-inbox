@@ -48,11 +48,10 @@ test("Store 360 combobox exposes accessible search and keyboard interactions", (
 test("Store 360 keeps URL-backed selection and shared custom date calendar", () => {
   assert.match(viewCode, /<StoreSearchCombobox stores=\{stores\} selectedStoreId=\{activeStoreId\} onSelect=\{selectStore\}/);
   assert.match(viewCode, /setStoreId\(next\);[\s\S]*updateUrl\(next, from, to\);/);
-  assert.match(viewCode, /preset === "custom"/);
-  assert.match(viewCode, /<UnifiedPeriodPicker dateFrom=\{from\} dateTo=\{to\} language=\{language\} defaultOpen=\{customPickerOpen\} deferQuickRanges showOutsideQuickRanges=\{false\}/);
-  assert.doesNotMatch(viewCode, /preset === "custom"[\s\S]*type="date"/);
+  assert.match(viewCode, /<UnifiedPeriodPicker key=\{\"store-360-period-picker-\" \+ preset\}/);
+  assert.match(viewCode, /<UnifiedPeriodPicker[\s\S]*dateFrom=\{from\} dateTo=\{to\} language=\{language\}[\s\S]*deferQuickRanges showOutsideQuickRanges=\{false\}/);
+  assert.doesNotMatch(viewCode, /type="date"/);
   assert.match(viewCode, /const applyCustomRange = \(nextFrom: string, nextTo: string\)/);
-  assert.match(viewCode, /if \(next === "custom"\) \{[\s\S]*setCustomPickerOpen\(true\)/);
   assert.match(viewCode, /comparisonMode === "previous" \? comparisonFor\(from, to\) : \{\}/);
   assert.match(viewCode, /summaryRequestId\.current \+= 1/);
   assert.match(viewCode, /conversationsRequestId\.current \+= 1/);
