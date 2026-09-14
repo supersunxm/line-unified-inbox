@@ -23,7 +23,6 @@ import { FollowerInsightsModule } from "./follower-insights/follower-insights.mo
 import { FriendSourceLinksModule } from "./friend-source-links/friend-source-links.module";
 import { TranslationModule } from "./translation/translation.module";
 import { CustomerIntelligenceService } from "./customer-intelligence.service";
-
 import { DashboardAnalyticsService } from "./dashboard-analytics.service";
 import { DashboardExecutiveService } from "./dashboard-executive.service";
 import { OperationReportService } from "./operation-report.service";
@@ -39,6 +38,7 @@ import { LineMessagingService } from "./line-messaging/line-messaging.service";
 import { PilotAwareLineMessagingService } from "./line-messaging/pilot-aware-line-messaging.service";
 import { MobileConversationsController } from "./mobile/mobile-conversations.controller";
 import { MobileConversationsService } from "./mobile/mobile-conversations.service";
+import { MobilePdfSendService } from "./mobile/mobile-pdf-send.service";
 import { MobileVideoController } from "./mobile/mobile-video.controller";
 import { MobileVideoService } from "./mobile/mobile-video.service";
 import { MobileNotificationsController } from "./mobile/mobile-notifications.controller";
@@ -58,7 +58,6 @@ import { PurchaseAnalyticsService } from "./purchase-analytics.service";
 import { PurchaseBroadcastAudienceService } from "./purchase-broadcast-audience.service";
 import { MessageTrafficController } from "./message-traffic.controller";
 import { MessageTrafficService } from "./message-traffic.service";
-
 import { AppVersionModule } from "./app-version/app-version.module";
 import { RichMenuModule } from "./rich-menu/rich-menu.module";
 import { AutoResponseModule } from "./auto-response/auto-response.module";
@@ -72,6 +71,6 @@ import { StoreInsightsModule } from "./store-insights/store-insights.module";
 @Module({
   imports: [PrismaModule, AuthModule, StoreInsightsModule, RealtimeModule, CredentialsModule, MediaModule, ClassificationModule, LineProfileModule, LineWebhookModule, LineOfficialAccountsModule, StoreMasterModule, FollowerInsightsModule, FriendSourceLinksModule, TranslationModule, OperationsModule, ExecutiveBriefModule, BiAssistantModule, ActionAgentModule, ImpactEngineModule, AiTelemetryModule, OperationalMemoryModule, MassMessageModule, CouponModule, TikTokModule, AppVersionModule, RichMenuModule, AutoResponseModule, GreetingMessageModule, LineChatModule, GoogleReviewKpiModule, PublicStoresModule],
   controllers: [HealthController, MainOaController, StoresController, ConversationsController, ActivityController, DashboardController, DashboardResponseBucketsController, MessageTrafficController, MetadataController, OperationsController, CustomersController, MobileConversationsController, MobileVideoController, MobileNotificationsController, MobileConfigController, MobileProductsController, MonthlySummaryController, PurchaseAnalyticsController],
-  providers: [ConversationsService, { provide: LineMessagingService, useClass: PilotAwareLineMessagingService }, DashboardAnalyticsService, DashboardExecutiveService, OperationReportService, CustomerIntelligenceService, RootCauseService, RecommendationService, MobileConversationsService, MobileVideoService, MobileNotificationsService, MobileConfigService, MonthlySummaryService, PriorityService, PurchaseAnalyticsService, PurchaseBroadcastAudienceService, MessageTrafficService],
+  providers: [ConversationsService, { provide: LineMessagingService, useClass: PilotAwareLineMessagingService }, DashboardAnalyticsService, DashboardExecutiveService, OperationReportService, CustomerIntelligenceService, RootCauseService, RecommendationService, MobileConversationsService, MobilePdfSendService, MobileVideoService, MobileNotificationsService, MobileConfigService, MonthlySummaryService, PriorityService, PurchaseAnalyticsService, PurchaseBroadcastAudienceService, MessageTrafficService],
 })
 export class AppModule {}
