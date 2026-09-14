@@ -197,4 +197,6 @@ jobs:
             backend/prisma/migrations/20260914140000_release_android_1_1_25/migration.sql
           git diff --cached --quiet && exit 0
           git commit -m "chore(android): release 1.1.25+45"
+          git fetch origin main
+          git rebase origin/main
           git push origin HEAD:main
