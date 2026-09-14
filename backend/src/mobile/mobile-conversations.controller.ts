@@ -2,10 +2,11 @@ import { BadRequestException, Body, Controller, Get, Param, Patch, Post, Query, 
 import { FileInterceptor } from "@nestjs/platform-express";
 import type { AuthRequest } from "../auth/auth.guard";
 import { SendConversationMessageDto } from "../dto";
+import { readPdfMaxBytes } from "../media/pdf-media";
 import { PrismaService } from "../prisma.service";
 import { MobileConversationQueryDto, MobileMessageQueryDto, UpdateCustomerSalesInformationDto, UpdateMobileBmReplyStatusDto, UpdateMobileConversationOwnerDto, UpdateMobileConversationTagsDto, UpdateMobilePurchaseInformationDto } from "./mobile-conversations.dto";
 import { MobileConversationsService } from "./mobile-conversations.service";
-import { readPdfMaxBytes } from "../media/pdf-media";
+import { MobilePdfSendService } from "./mobile-pdf-send.service";
 
 const AUTO_REPLY_BOT_DISPLAY_NAME = "Auto Reply Bot";
 
@@ -14,6 +15,7 @@ export class MobileConversationsController {
   constructor(
     private readonly conversations: MobileConversationsService,
     private readonly prisma: PrismaService,
+    private readonly pdfSender: MobilePdfSendService,
   ) {}
 
   @Get()
@@ -43,11 +45,6 @@ export class MobileConversationsController {
           ...item,
           lastMessage: {
             ...lastMessage,
-            // Existing mobile releases prefix every OUTBOUND preview with
-            // "You:". Bot replies are still stored canonically as OUTBOUND;
-            // this mobile-list presentation override prevents staff from
-            // mistaking an automated reply for a human reply without changing
-            // the underlying message direction or chat history.
             direction: "SYSTEM" as const,
             preview: `Bot: ${lastMessage.preview}`,
           },
@@ -94,6 +91,6 @@ export class MobileConversationsController {
   @UseInterceptors(FileInterceptor("pdf", { limits: { fileSize: readPdfMaxBytes() } }))
   sendPdf(@Req() request: AuthRequest, @Param("id") id: string, @UploadedFile() file: { buffer: Buffer; mimetype: string; size: number; originalname?: string } | undefined, @Body("idempotencyKey") idempotencyKey: string) {
     if (!file) throw new BadRequestException("PDF file is required");
-    return this.conversations.sendPdf(request.user!, id, file, idempotencyKey);
+    return this.pdfSender.send(request.user!, id, file, idempotencyKey);
   }
 }
