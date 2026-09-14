@@ -9,9 +9,14 @@ import { LineChatNicknameWorkerService } from "./line-chat-nickname-worker.servi
 import { LineChatManagerMessageRelayWorkerService } from "./line-chat-manager-message-relay-worker.service";
 import { LineChatManagerImageRelayWorkerService } from "./line-chat-manager-image-relay-worker.service";
 import { LineChatNovncRecoveryWorkerService } from "./line-chat-novnc-recovery-worker.service";
+import type { ManagerRelayConversationSnapshot } from "./line-chat-manager-message-relay.service";
 
 const MAX_INTERNAL_BODY_BYTES = 64 * 1024;
 const NOVNC_PROXY_PORT = 6080;
+
+type RelayLoaderTarget = {
+  loadConversation: (id: string) => Promise<unknown>;
+};
 
 function writeJson(response: ServerResponse, statusCode: number, body: unknown): void {
   response.statusCode = statusCode;
@@ -64,6 +69,66 @@ function proxyNovncHttp(request: IncomingMessage, response: ServerResponse, upst
   request.pipe(upstream);
 }
 
+function isRelaySnapshot(value: unknown, expectedConversationId: string): value is ManagerRelayConversationSnapshot {
+  if (!value || typeof value !== "object") return false;
+  const snapshot = value as Partial<ManagerRelayConversationSnapshot>;
+  const oa = snapshot.lineOfficialAccount;
+  const session = oa?.lineChatSession;
+  return snapshot.id === expectedConversationId
+    && typeof snapshot.storeCode === "string"
+    && Boolean(snapshot.storeCode.trim())
+    && typeof snapshot.lineOfficialAccountId === "string"
+    && snapshot.lineOfficialAccountId === oa?.id
+    && typeof oa?.chatBotId === "string"
+    && Boolean(oa.chatBotId.trim())
+    && typeof session?.id === "string"
+    && typeof session?.sessionKey === "string"
+    && Boolean(session.sessionKey.trim());
+}
+
+function snapshotAsRelayConversation(snapshot: ManagerRelayConversationSnapshot): unknown {
+  const oa = snapshot.lineOfficialAccount;
+  return {
+    id: snapshot.id,
+    storeId: snapshot.storeId,
+    lineOfficialAccountId: snapshot.lineOfficialAccountId,
+    lineChatUserId: snapshot.lineChatUserId,
+    store: {
+      code: snapshot.storeCode,
+      storeMaster: null,
+    },
+    lineOfficialAccount: {
+      id: oa.id,
+      name: oa.name,
+      storeId: oa.storeId,
+      accountType: oa.accountType,
+      isActive: oa.isActive,
+      archivedAt: oa.archivedAt ? new Date(oa.archivedAt) : null,
+      chatBotId: oa.chatBotId,
+      lineChatSession: {
+        id: oa.lineChatSession.id,
+        sessionKey: oa.lineChatSession.sessionKey,
+        profilePath: oa.lineChatSession.profilePath,
+        profileStorageKey: oa.lineChatSession.profileStorageKey,
+        status: oa.lineChatSession.status,
+      },
+    },
+  };
+}
+
+function installRelayContextLoader(
+  service: object,
+  contexts: Map<string, ManagerRelayConversationSnapshot>,
+): void {
+  const target = service as RelayLoaderTarget;
+  const originalLoadConversation = target.loadConversation.bind(service);
+  target.loadConversation = async (id: string) => {
+    const snapshot = contexts.get(id);
+    if (snapshot && isRelaySnapshot(snapshot, id)) return snapshotAsRelayConversation(snapshot);
+    return originalLoadConversation(id);
+  };
+}
+
 async function bootstrap() {
   const logger = new Logger("LineChatNicknameWorker");
   const app = await NestFactory.createApplicationContext(LineChatNicknameWorkerModule, {
@@ -74,10 +139,16 @@ async function bootstrap() {
   const textRelay = app.get(LineChatManagerMessageRelayWorkerService);
   const imageRelay = app.get(LineChatManagerImageRelayWorkerService);
   const recovery = app.get(LineChatNovncRecoveryWorkerService);
+  const relayContexts = new Map<string, ManagerRelayConversationSnapshot>();
+  installRelayContextLoader(textRelay, relayContexts);
+  installRelayContextLoader(imageRelay, relayContexts);
+
   const internalSecret = process.env.LINE_CHAT_WORKER_INTERNAL_SECRET?.trim() || "";
   const internalPort = Number(process.env.LINE_CHAT_INTERNAL_PORT || "3002");
 
   const server = createServer(async (request, response) => {
+    let activeRelayContext: ManagerRelayConversationSnapshot | null = null;
+    let activeConversationId = "";
     try {
       const requestUrl = new URL(request.url || "/", "http://line-chat-worker.internal");
       const publicRecovery = recoveryPath(requestUrl);
@@ -129,6 +200,7 @@ async function bootstrap() {
         text?: unknown;
         imageUrl?: unknown;
         idempotencyKey?: unknown;
+        relayContext?: unknown;
       };
       const commonInvalid =
         typeof body.conversationId !== "string"
@@ -143,14 +215,30 @@ async function bootstrap() {
         return;
       }
 
+      activeConversationId = (body.conversationId as string).trim();
+      if (body.relayContext !== undefined) {
+        if (!isRelaySnapshot(body.relayContext, activeConversationId)) {
+          writeJson(response, 400, { success: false, error: "INVALID_RELAY_CONTEXT" });
+          return;
+        }
+        activeRelayContext = body.relayContext;
+        relayContexts.set(activeConversationId, activeRelayContext);
+        logger.log(JSON.stringify({
+          event: "line_chat_relay_context_received",
+          conversationId: activeConversationId,
+          storeCode: activeRelayContext.storeCode,
+          hasLineChatUserId: Boolean(activeRelayContext.lineChatUserId?.trim()),
+        }));
+      }
+
       const result = isTextRelay
         ? await textRelay.relayText({
-            conversationId: (body.conversationId as string).trim(),
+            conversationId: activeConversationId,
             text: body.text as string,
             idempotencyKey: (body.idempotencyKey as string).trim(),
           })
         : await imageRelay.relayImage({
-            conversationId: (body.conversationId as string).trim(),
+            conversationId: activeConversationId,
             imageUrl: (body.imageUrl as string).trim(),
             idempotencyKey: (body.idempotencyKey as string).trim(),
           });
@@ -167,6 +255,10 @@ async function bootstrap() {
         success: false,
         error: message === "REQUEST_TOO_LARGE" ? "REQUEST_TOO_LARGE" : message,
       });
+    } finally {
+      if (activeRelayContext && relayContexts.get(activeConversationId) === activeRelayContext) {
+        relayContexts.delete(activeConversationId);
+      }
     }
   });
 
