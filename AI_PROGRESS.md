@@ -1,3 +1,29 @@
+# 2026-09-14: Android 1.1.27+47 PDF QA candidate [IN PROGRESS]
+- **Current Task**: Review and package the implemented PDF feature as a signed staging/release-candidate APK without activating production build 47.
+- **Review**: The working diff contains PDF support, required progress/decision documentation, the version bump, and the existing artifact-only signing workflow update. `docs/executive-guide/` remains untouched; no credentials, generated artifacts, or signed URLs are included.
+- **Packaging**: Android version is `1.1.27+47`, package remains `click.lineoppo.chat`. The manual `android-production-release.yml` path was converted to an artifact-only QA candidate for this exact version and still restores the existing signing material only from CI secrets.
+- **Repository sync**: `origin/main` was fetched and is newer than the original candidate base by the greeting-targeting commits; the candidate must be rebased before push.
+- **Release boundary**: No production AppRelease activation, force-update, backend deployment, or production release workflow was triggered. The production-configured APK will require the new backend endpoints to be deployed before end-to-end PDF testing against production can work.
+- **Next Action**: Run the final pre-commit checks, commit only the reviewed files, rebase safely onto `origin/main`, push the candidate branch, and manually dispatch the artifact-only signed QA workflow.
+
+# 2026-09-14: End-to-end PDF support for Flutter chat [IMPLEMENTED & VERIFIED]
+- **Current Task**: Add inbound and outbound PDF support to the existing chat system without deployment or release.
+- **Completed Work**:
+  - Added PDF-only validation, bounded LINE content download, correct per-OA token resolution, safe filename metadata, and `PENDING`/`READY`/`FAILED`/`SKIPPED` media handling for inbound file events.
+  - Added authenticated outbound PDF upload, existing object storage integration, stable opaque HTTPS customer document URLs, and LINE Flex/text-link delivery after LINE acceptance.
+  - Added Android PDF document picking through the native system picker, compact chat bubbles, confirmation/send flow, and platform viewer opening without a custom PDF renderer.
+  - Reused existing `Message`/`MessageMedia` and storage abstractions; no schema migration or backend business-logic redesign was needed.
+- **Checks Run**:
+  - Focused backend PDF/media/webhook/controller/messaging/conversation tests: **68/68 passed**.
+  - Full Flutter test suite: **268/268 passed**.
+  - `flutter analyze`: passed with no issues.
+  - Changed backend files ESLint: passed; backend build and Prisma schema validation: passed.
+  - `flutter build apk --debug`: passed.
+  - Full backend test suite: **1,946 passed, 6 pre-existing unrelated failures** in `src/line-chat/*`; no PDF test failed.
+  - Full backend lint remains blocked by the existing unrelated legacy baseline (**721 errors, 2 warnings**); changed files are clean.
+- **Release Boundary**: No deployment, release trigger, push, signing-key change, package-name change, uninstall, or additional UI redesign was performed. The unrelated untracked `docs/executive-guide/` directory remains untouched.
+- **Next Action**: Review and authorize the normal staging/release workflow separately, then install the updated app and perform the planned visual QA/polish pass.
+
 # 2026-09-14: Proactive daily Android update prompt [RELEASED & VERIFIED]
 - **Current Task**: Release the implemented daily update prompt and current Flutter chat UI redesign as Android `1.1.26+46` through the existing CI signing/distribution path, without further UI changes.
 - **Completed Work**:

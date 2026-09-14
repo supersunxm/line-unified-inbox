@@ -5,6 +5,7 @@ import { SendConversationMessageDto } from "../dto";
 import { PrismaService } from "../prisma.service";
 import { MobileConversationQueryDto, MobileMessageQueryDto, UpdateCustomerSalesInformationDto, UpdateMobileBmReplyStatusDto, UpdateMobileConversationOwnerDto, UpdateMobileConversationTagsDto, UpdateMobilePurchaseInformationDto } from "./mobile-conversations.dto";
 import { MobileConversationsService } from "./mobile-conversations.service";
+import { readPdfMaxBytes } from "../media/pdf-media";
 
 const AUTO_REPLY_BOT_DISPLAY_NAME = "Auto Reply Bot";
 
@@ -87,5 +88,12 @@ export class MobileConversationsController {
   sendImage(@Req() request: AuthRequest, @Param("id") id: string, @UploadedFile() file: { buffer: Buffer; mimetype: string; size: number } | undefined, @Body("idempotencyKey") idempotencyKey: string) {
     if (!file) throw new BadRequestException("Image file is required");
     return this.conversations.sendImage(request.user!, id, file, idempotencyKey);
+  }
+
+  @Post(":id/pdfs")
+  @UseInterceptors(FileInterceptor("pdf", { limits: { fileSize: readPdfMaxBytes() } }))
+  sendPdf(@Req() request: AuthRequest, @Param("id") id: string, @UploadedFile() file: { buffer: Buffer; mimetype: string; size: number; originalname?: string } | undefined, @Body("idempotencyKey") idempotencyKey: string) {
+    if (!file) throw new BadRequestException("PDF file is required");
+    return this.conversations.sendPdf(request.user!, id, file, idempotencyKey);
   }
 }

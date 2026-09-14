@@ -1,4 +1,5 @@
 import { BadGatewayException, BadRequestException, HttpException, HttpStatus, Injectable, Logger, ServiceUnavailableException } from "@nestjs/common";
+import { buildPdfFlexMessage } from "./line-pdf-message";
 
 export type PushMessageResult = {
   requestId: string | null;
@@ -19,6 +20,7 @@ export type LinePushDiagnosticContext = {
   channelId?: string;
   messageType?: string;
   imageUrlDomain?: string;
+  fileUrlDomain?: string;
   replyTokenAgeMs?: number;
   replyTokenAgeBucket?: string;
   deliveryMethod?: "REPLY" | "PUSH";
@@ -26,6 +28,7 @@ export type LinePushDiagnosticContext = {
 };
 export type LineImageInput = { accessToken: string; lineUserId: string; originalContentUrl: string; previewImageUrl: string; retryKey: string; context?: LinePushDiagnosticContext };
 export type LineTextInput = { accessToken: string; lineUserId: string; text: string; retryKey: string; context?: LinePushDiagnosticContext };
+export type LinePdfInput = { accessToken: string; lineUserId: string; filename: string; fileSize: number; url: string; retryKey: string; context?: LinePushDiagnosticContext };
 export type LineMulticastInput = { accessToken: string; to: string[]; messages: unknown[]; retryKey: string; context?: LinePushDiagnosticContext };
 export type LineReplyResult = {
   success: boolean;
@@ -38,6 +41,30 @@ function maskIdentifier(val?: string | null): string {
   if (!val) return "none";
   if (val.length <= 8) return "***";
   return `${val.slice(0, 4)}...${val.slice(-4)}`;
+}
+
+type LineErrorBody = { message?: string; details?: Array<{ message?: string; property?: string }> };
+
+function parseLineErrorBody(rawBody: string): LineErrorBody | null {
+  try {
+    const parsed: unknown = JSON.parse(rawBody);
+    if (typeof parsed !== "object" || parsed === null) return null;
+    const record = parsed as { message?: unknown; details?: unknown };
+    const details = Array.isArray(record.details)
+      ? record.details
+          .filter((detail): detail is { message?: unknown; property?: unknown } => typeof detail === "object" && detail !== null)
+          .map((detail) => ({
+            message: typeof detail.message === "string" ? detail.message : undefined,
+            property: typeof detail.property === "string" ? detail.property : undefined,
+          }))
+      : undefined;
+    return {
+      message: typeof record.message === "string" ? record.message : undefined,
+      details,
+    };
+  } catch {
+    return null;
+  }
 }
 
 @Injectable()
@@ -70,6 +97,14 @@ export class LineMessagingService {
     });
   }
 
+  async replyPdfDocument(input: { accessToken: string; replyToken: string; filename: string; fileSize: number; url: string; context?: LinePushDiagnosticContext }): Promise<LineReplyResult> {
+    return this.replyMessages(input.accessToken, input.replyToken, [buildPdfFlexMessage(input)], {
+      ...input.context,
+      messageType: "FILE",
+      fileUrlDomain: new URL(input.url).hostname,
+    });
+  }
+
   async replyMessages(
     accessToken: string,
     replyToken: string,
@@ -89,6 +124,7 @@ export class LineMessagingService {
         channelIdMasked: maskIdentifier(context?.channelId),
         messageType: context?.messageType ?? "UNKNOWN",
         imageUrlDomain: context?.imageUrlDomain ?? null,
+        fileUrlDomain: context?.fileUrlDomain ?? null,
       }),
       "LineMessagingService"
     );
@@ -123,7 +159,7 @@ export class LineMessagingService {
       let errorJson: { message?: string; details?: Array<{ message?: string; property?: string }> } | null = null;
       try {
         rawBody = await response.text();
-        errorJson = JSON.parse(rawBody);
+        errorJson = parseLineErrorBody(rawBody);
       } catch {
         /* ignore */
       }
@@ -215,6 +251,14 @@ export class LineMessagingService {
     });
   }
 
+  async pushPdfDocument(input: LinePdfInput): Promise<PushMessageResult> {
+    return this.pushMessages(input.accessToken, input.lineUserId, [buildPdfFlexMessage(input)], input.retryKey, {
+      ...input.context,
+      messageType: "FILE",
+      fileUrlDomain: new URL(input.url).hostname,
+    });
+  }
+
   async multicast(input: LineMulticastInput): Promise<MulticastMessageResult> {
     if (!input.to.length || input.to.length > 500) {
       throw new BadRequestException("Multicast recipients must be between 1 and 500 users");
@@ -266,7 +310,7 @@ export class LineMessagingService {
       let errorJson: { message?: string; details?: Array<{ message?: string; property?: string }> } | null = null;
       try {
         rawBody = await response.text();
-        errorJson = JSON.parse(rawBody);
+        errorJson = parseLineErrorBody(rawBody);
       } catch {
         /* ignore */
       }
@@ -322,6 +366,7 @@ export class LineMessagingService {
         channelIdMasked: maskIdentifier(context?.channelId),
         messageType: context?.messageType ?? "UNKNOWN",
         imageUrlDomain: context?.imageUrlDomain ?? null,
+        fileUrlDomain: context?.fileUrlDomain ?? null,
       }),
       "LineMessagingService"
     );
@@ -358,7 +403,7 @@ export class LineMessagingService {
       let errorJson: { message?: string; details?: Array<{ message?: string; property?: string }> } | null = null;
       try {
         rawBody = await response.text();
-        errorJson = JSON.parse(rawBody);
+        errorJson = parseLineErrorBody(rawBody);
       } catch {
         /* ignore JSON parse error */
       }
@@ -371,6 +416,7 @@ export class LineMessagingService {
           channelIdMasked: maskIdentifier(context?.channelId),
           messageType: context?.messageType ?? "UNKNOWN",
           imageUrlDomain: context?.imageUrlDomain ?? null,
+          fileUrlDomain: context?.fileUrlDomain ?? null,
           statusCode: response.status,
           errorBody: errorJson || rawBody || "empty",
           requestId: response.headers.get("x-line-request-id"),

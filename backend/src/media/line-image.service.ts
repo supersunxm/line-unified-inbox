@@ -4,6 +4,7 @@ import { CredentialEncryptionService } from "../credentials/credential-encryptio
 import { PrismaService } from "../prisma.service";
 import { MediaStorageService } from "./media-storage";
 import { readMediaStorageEnabled } from "./media-storage.config";
+import { isPdfFilename, isPdfMagicBytes, PDF_MIME_TYPE, readPdfMaxBytes } from "./pdf-media";
 
 const supportedTypes = new Map([
   ["image/jpeg", "jpg"], ["image/png", "png"], ["image/gif", "gif"], ["image/webp", "webp"],
@@ -55,6 +56,49 @@ export class LineImageService {
       await this.prisma.messageMedia.update({ where: { id: mediaId }, data: { processingStatus: "FAILED", errorCode: code, errorMessage: message } });
     }
   }
+
+  async processPdf(mediaId: string, lineOaId: string, providerMessageId: string, occurredAt: Date, fileName?: string, declaredFileSize?: number | null) {
+    if (!isPdfFilename(fileName)) {
+      await this.prisma.messageMedia.update({ where: { id: mediaId }, data: { processingStatus: "SKIPPED", errorCode: "UNSUPPORTED_FILE_TYPE", errorMessage: "Only PDF files are supported" } });
+      return;
+    }
+    if (!readMediaStorageEnabled()) {
+      await this.prisma.messageMedia.update({ where: { id: mediaId }, data: { processingStatus: "SKIPPED", errorCode: "MEDIA_STORAGE_DISABLED", errorMessage: "Inbound media storage is disabled" } });
+      return;
+    }
+    try {
+      const maxBytes = readPdfMaxBytes();
+      if (declaredFileSize != null && declaredFileSize > maxBytes) {
+        throw new MediaProcessingError("MEDIA_TOO_LARGE", "LINE PDF exceeds the configured size limit");
+      }
+      const oa = await this.prisma.lineOfficialAccount.findUnique({ where: { id: lineOaId }, select: { encryptedChannelAccessToken: true } });
+      if (!oa?.encryptedChannelAccessToken) throw new MediaProcessingError("ACCESS_TOKEN_MISSING", "LINE OA access token is not configured");
+      let accessToken: string;
+      try { accessToken = this.encryption.decrypt(oa.encryptedChannelAccessToken); }
+      catch { throw new MediaProcessingError("ACCESS_TOKEN_INVALID", "LINE OA access token could not be decrypted"); }
+
+      const timeoutMs = positiveInteger(process.env.MEDIA_DOWNLOAD_TIMEOUT_MS, 10_000);
+      let response: Response;
+      try {
+        response = await fetch(`https://api-data.line.me/v2/bot/message/${encodeURIComponent(providerMessageId)}/content`, { headers: { authorization: `Bearer ${accessToken}` }, signal: AbortSignal.timeout(timeoutMs) });
+      } catch { throw new MediaProcessingError("LINE_NETWORK_ERROR", "LINE PDF download failed or timed out"); }
+      console.log(`[MediaStorage] LINE PDF download status=${response.status} contentType=${response.headers.get("content-type") ?? "unknown"} contentLength=${response.headers.get("content-length") ?? "unknown"}`);
+      if (!response.ok) throw new MediaProcessingError(`LINE_HTTP_${response.status}`, `LINE PDF download returned HTTP ${response.status}`);
+      const mimeType = response.headers.get("content-type")?.split(";", 1)[0].trim().toLowerCase() ?? "";
+      if (mimeType !== PDF_MIME_TYPE && mimeType !== "application/octet-stream") throw new MediaProcessingError("UNSUPPORTED_MIME_TYPE", "LINE file has an unsupported MIME type");
+      const responseSize = Number(response.headers.get("content-length"));
+      if (Number.isFinite(responseSize) && responseSize > maxBytes) throw new MediaProcessingError("MEDIA_TOO_LARGE", "LINE PDF exceeds the configured size limit");
+      const body = await readLimitedBody(response, maxBytes);
+      if (!isPdfMagicBytes(body)) throw new MediaProcessingError("PDF_SIGNATURE_INVALID", "LINE file is not a valid PDF");
+      const objectKey = objectKeyFor(lineOaId, occurredAt, providerMessageId, "pdf");
+      const stored = await this.storage.put(objectKey, body, PDF_MIME_TYPE) ?? { provider: "legacy", fileId: objectKey, mimeType: PDF_MIME_TYPE, size: body.length };
+      await this.prisma.messageMedia.update({ where: { id: mediaId }, data: { processingStatus: "READY", mimeType: PDF_MIME_TYPE, objectKey: stored.provider === "google-drive" ? null : objectKey, provider: stored.provider, fileId: stored.fileId, fileSize: stored.size, errorCode: null, errorMessage: null } });
+    } catch (error) {
+      const code = error instanceof MediaProcessingError ? error.code : "STORAGE_ERROR";
+      const message = error instanceof Error ? error.message.slice(0, 300) : "PDF processing failed";
+      await this.prisma.messageMedia.update({ where: { id: mediaId }, data: { processingStatus: "FAILED", errorCode: code, errorMessage: message } });
+    }
+  }
 }
 
 function positiveInteger(value: string | undefined, fallback: number) {
@@ -89,3 +133,4 @@ async function readLimitedBody(response: Response, maxBytes: number) {
 
 export const IMAGE_MEDIA_TYPE = MessageType.IMAGE;
 export const VIDEO_MEDIA_TYPE = MessageType.VIDEO;
+export const PDF_MEDIA_TYPE = MessageType.FILE;

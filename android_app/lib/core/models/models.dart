@@ -635,11 +635,13 @@ String? conversationMessagePreview({
       ? 'Sent an image'
       : normalizedType == 'VIDEO'
           ? 'Sent a video'
-          : normalizedType == 'STICKER'
-              ? 'Sent a LINE sticker'
-              : normalizedText?.isNotEmpty == true
-                  ? normalizedText!
-                  : null;
+          : normalizedType == 'FILE'
+              ? 'Sent a PDF'
+              : normalizedType == 'STICKER'
+                  ? 'Sent a LINE sticker'
+                  : normalizedText?.isNotEmpty == true
+                      ? normalizedText!
+                      : null;
   if (content == null) return null;
   return direction?.toUpperCase() == 'OUTBOUND' ? 'You: $content' : content;
 }
@@ -651,6 +653,7 @@ class ChatMessage {
       required this.direction,
       required this.messageType,
       required this.sentAt,
+      this.fileName,
       this.sender,
       this.sticker,
       this.media,
@@ -660,6 +663,7 @@ class ChatMessage {
   final String direction;
   final String messageType;
   final DateTime sentAt;
+  final String? fileName;
   final MessageSender? sender;
   final StickerPresentation? sticker;
   final ChatMedia? media;
@@ -670,6 +674,7 @@ class ChatMessage {
       direction: json['direction'] as String,
       messageType: json['messageType'] as String,
       sentAt: DateTime.parse(json['sentAt'] as String),
+      fileName: json['fileName'] is String ? json['fileName'] as String : null,
       sender: MessageSender.fromJson(json['sender'] as Map<String, dynamic>?),
       sticker: StickerPresentation.fromJson(
           json['sticker'] as Map<String, dynamic>?),
@@ -736,8 +741,11 @@ class ChatMedia {
   final String? url;
   bool get isImage => mimeType?.toLowerCase().startsWith('image/') ?? false;
   bool get isVideo => mimeType?.toLowerCase().startsWith('video/') ?? false;
+  bool get isPdf => mimeType?.toLowerCase() == 'application/pdf';
   bool get ready =>
-      processingStatus == 'READY' && url != null && (isImage || isVideo);
+      processingStatus == 'READY' &&
+      url != null &&
+      (isImage || isVideo || isPdf);
   static ChatMedia? fromJson(Map<String, dynamic>? json) {
     if (json == null) return null;
     final fileSize = json['fileSize'];

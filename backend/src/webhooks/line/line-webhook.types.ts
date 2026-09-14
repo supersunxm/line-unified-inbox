@@ -1,3 +1,5 @@
+import { sanitizePdfFilename } from "../../media/pdf-media";
+
 export type LineSource = {
   type: string;
   userId?: string;
@@ -17,7 +19,7 @@ export type LineMessage =
       keywords?: string[];
       text?: string;
     })
-  | (LineMessageBase & { type: "file"; fileName?: string })
+  | (LineMessageBase & { type: "file"; fileName?: string; fileSize?: number })
   | (LineMessageBase & { type: "location"; title?: string; address?: string; latitude?: number; longitude?: number })
   | LineMessageBase;
 
@@ -57,7 +59,7 @@ export function messagePlaceholder(message: LineMessage): string {
     case "image": return "[Image]";
     case "video": return "[Video]";
     case "audio": return "[Audio]";
-    case "file": return `[File: ${"fileName" in message && message.fileName ? message.fileName : "file"}]`;
+    case "file": return `[File: ${"fileName" in message && message.fileName ? sanitizePdfFilename(message.fileName) : "file"}]`;
     case "location": {
       const details = "title" in message ? message.title || message.address : undefined;
       return `[Location${details ? `: ${details}` : ""}]`;

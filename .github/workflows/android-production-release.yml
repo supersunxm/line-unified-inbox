@@ -1,4 +1,4 @@
-name: Android Production Release
+name: Android Signed QA Candidate
 
 on:
   workflow_dispatch:
@@ -49,7 +49,7 @@ jobs:
           storeFile=../lineoppo-release.jks
           EOF
 
-      - name: Build signed production APK
+      - name: Build signed QA/release-candidate APK
         run: >-
           flutter build apk --release
           --dart-define=APP_ENV=production
@@ -74,8 +74,8 @@ jobs:
           echo "Package ID: $PACKAGE_ID"
           echo "Version: $VERSION_NAME+$VERSION_CODE"
           test "$PACKAGE_ID" = "click.lineoppo.chat"
-          test "$VERSION_NAME" = "1.1.8"
-          test "$VERSION_CODE" = "28"
+          test "$VERSION_NAME" = "1.1.27"
+          test "$VERSION_CODE" = "47"
 
           "$APKSIGNER" verify --verbose --print-certs "$APK" | tee /tmp/apk-signature.txt
           EXPECTED_CERT_SHA256="e244a89876388b015bbd10abe39326aab15da2e1ec0fe0d6a8248855126af114"
@@ -83,13 +83,13 @@ jobs:
           echo "Certificate SHA-256: $ACTUAL_CERT_SHA256"
           test "$ACTUAL_CERT_SHA256" = "$EXPECTED_CERT_SHA256"
 
-      - name: Rename release APK
-        run: cp build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/oppo-line-oa-chat-v1.1.8-production.apk
+      - name: Rename QA candidate APK
+        run: cp build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/oppo-line-oa-chat-v1.1.27-qa.apk
 
       - name: Upload signed APK
         uses: actions/upload-artifact@v4
         with:
-          name: oppo-line-oa-chat-v1.1.8-production
-          path: android_app/build/app/outputs/flutter-apk/oppo-line-oa-chat-v1.1.8-production.apk
+          name: oppo-line-oa-chat-v1.1.27-qa
+          path: android_app/build/app/outputs/flutter-apk/oppo-line-oa-chat-v1.1.27-qa.apk
           if-no-files-found: error
           retention-days: 30

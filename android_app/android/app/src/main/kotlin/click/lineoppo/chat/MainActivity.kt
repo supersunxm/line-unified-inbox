@@ -28,8 +28,10 @@ class MainActivity : FlutterActivity() {
     private val installerChannel = "click.lineoppo.chat/apk_installer"
     private val notificationSettingsChannel = "click.lineoppo.chat/notification_settings"
     private val mediaSaveChannel = "click.lineoppo.chat/media_save"
+    private val pdfChannel = "click.lineoppo.chat/pdf"
     private val apkMimeType = "application/vnd.android.package-archive"
     private val legacyWriteRequestCode = 4101
+    private val pdfPickerRequestCode = 4102
     private var pendingImageBytes: ByteArray? = null
     private var pendingImageName: String? = null
     private var pendingImageMimeType: String? = null
@@ -38,6 +40,7 @@ class MainActivity : FlutterActivity() {
     private var pendingVideoName: String? = null
     private var pendingVideoMimeType: String? = null
     private var pendingVideoResult: MethodChannel.Result? = null
+    private var pendingPdfPickResult: MethodChannel.Result? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -118,6 +121,62 @@ class MainActivity : FlutterActivity() {
                     else -> result.notImplemented()
                 }
             }
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, pdfChannel)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "pickPdf" -> {
+                        if (pendingPdfPickResult != null) {
+                            result.error("PICK_IN_PROGRESS", "Another PDF is being selected", null)
+                        } else {
+                            pendingPdfPickResult = result
+                            try {
+                                startActivityForResult(
+                                    Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                                        addCategory(Intent.CATEGORY_OPENABLE)
+                                        type = "application/pdf"
+                                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                        addFlags(Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
+                                    },
+                                    pdfPickerRequestCode,
+                                )
+                            } catch (_: Exception) {
+                                pendingPdfPickResult = null
+                                result.error("PICKER_UNAVAILABLE", "Unable to open the PDF picker", null)
+                            }
+                        }
+                    }
+                    "openPdf" -> {
+                        val path = call.argument<String>("path")
+                        if (path.isNullOrBlank()) result.error("INVALID_PDF_PATH", "PDF path is missing", null)
+                        else openPdf(path, result)
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+    }
+
+    @Suppress("DEPRECATION")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != pdfPickerRequestCode) return
+        val result = pendingPdfPickResult ?: return
+        pendingPdfPickResult = null
+        if (resultCode != RESULT_OK || data?.data == null) {
+            result.success(null)
+            return
+        }
+        val uri = data.data!!
+        try {
+            val bytes = contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                ?: throw IllegalStateException("Unable to read selected PDF")
+            val fileName = contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                val nameIndex = cursor.getColumnIndex("_display_name")
+                if (nameIndex >= 0 && cursor.moveToFirst()) cursor.getString(nameIndex) else null
+            } ?: uri.lastPathSegment ?: "document.pdf"
+            result.success(mapOf("bytes" to bytes, "fileName" to fileName, "mimeType" to contentResolver.getType(uri)))
+        } catch (_: Exception) {
+            result.error("PDF_READ_FAILED", "Unable to read the selected PDF", null)
+        }
     }
 
     private fun saveImage(
@@ -350,6 +409,39 @@ class MainActivity : FlutterActivity() {
             return
         }
         saveVideo(bytes, name, mimeType, videoResult)
+    }
+
+    private fun openPdf(path: String, result: MethodChannel.Result) {
+        val file = File(path)
+        val cacheRoot = cacheDir.canonicalPath + File.separator
+        val filesRoot = filesDir.canonicalPath + File.separator
+        val canonicalPath = try { file.canonicalPath } catch (_: Exception) {
+            result.error("INVALID_PDF_PATH", "PDF path is invalid", null)
+            return
+        }
+        if (!file.isFile || !file.canRead() || !canonicalPath.lowercase().endsWith(".pdf") ||
+            (!canonicalPath.startsWith(cacheRoot) && !canonicalPath.startsWith(filesRoot))
+        ) {
+            result.error("INVALID_PDF_PATH", "PDF is not in app-scoped storage", null)
+            return
+        }
+        try {
+            val contentUri = FileProvider.getUriForFile(this, "$packageName.fileprovider", file)
+            val openIntent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(contentUri, "application/pdf")
+                clipData = ClipData.newRawUri("PDF", contentUri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            if (openIntent.resolveActivity(packageManager) == null) {
+                result.error("PDF_VIEWER_UNAVAILABLE", "No PDF viewer is installed", null)
+                return
+            }
+            startActivity(openIntent)
+            result.success(true)
+        } catch (_: Exception) {
+            result.error("PDF_VIEWER_UNAVAILABLE", "Unable to open the PDF", null)
+        }
     }
 
     private fun openNotificationSettings(result: MethodChannel.Result) {

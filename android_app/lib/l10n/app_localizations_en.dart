@@ -397,6 +397,30 @@ class AppLocalizationsEn extends AppLocalizations {
   String get attachImage => 'Attach image';
 
   @override
+  String get attachPdf => 'Attach PDF';
+
+  @override
+  String get pdfFile => 'PDF file';
+
+  @override
+  String get openPdf => 'Open PDF';
+
+  @override
+  String get sendPdfQuestion => 'Send PDF?';
+
+  @override
+  String get pdfUnavailable => 'PDF unavailable';
+
+  @override
+  String get pdfViewerUnavailable => 'No PDF viewer is available';
+
+  @override
+  String get pdfOnly => 'Only PDF files are supported';
+
+  @override
+  String get pdfTooLarge => 'PDF files must be 20 MB or smaller';
+
+  @override
   String get takePhoto => 'Take Photo';
 
   @override

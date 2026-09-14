@@ -301,4 +301,32 @@ void main() {
     expect(detail.aiInsight?.topics.single['name'], 'Price Inquiry');
     expect(detail.operationalState?.priority, 'HIGH');
   });
+
+  test('chat model preserves PDF filename and marks ready PDF media usable', () {
+    final message = ChatMessage.fromJson({
+      'id': 'pdf-message',
+      'text': '[PDF: quote.pdf]',
+      'direction': 'OUTBOUND',
+      'messageType': 'FILE',
+      'fileName': 'quote.pdf',
+      'sentAt': '2026-09-14T00:00:00.000Z',
+      'media': {
+        'processingStatus': 'READY',
+        'mimeType': 'application/pdf',
+        'fileSize': 1024,
+        'url': '/messages/pdf-message/media',
+      },
+    });
+    expect(message.fileName, 'quote.pdf');
+    expect(message.media?.isPdf, isTrue);
+    expect(message.media?.ready, isTrue);
+    expect(
+      conversationMessagePreview(
+        text: '[PDF: quote.pdf]',
+        direction: 'INBOUND',
+        messageType: 'FILE',
+      ),
+      'Sent a PDF',
+    );
+  });
 }

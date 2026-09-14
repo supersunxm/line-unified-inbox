@@ -675,6 +675,18 @@ class ConversationRepository {
           idempotencyKey: idempotencyKey,
           timeout: const Duration(minutes: 2));
 
+  Future<ChatMessage?> sendPdf(
+          String id, Uint8List bytes, String filename, String idempotencyKey,
+          {String? mimeType}) =>
+      _sendImage('/mobile/conversations/$id/pdfs',
+          conversationId: id,
+          field: 'pdf',
+          filename: filename,
+          mimeType: mimeType ?? 'application/pdf',
+          bytes: bytes,
+          idempotencyKey: idempotencyKey,
+          timeout: const Duration(minutes: 2));
+
   Future<ChatMessage?> _sendImage(String path,
       {required String conversationId,
       required String field,

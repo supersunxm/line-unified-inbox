@@ -839,6 +839,54 @@ abstract class AppLocalizations {
   /// **'Attach image'**
   String get attachImage;
 
+  /// No description provided for @attachPdf.
+  ///
+  /// In en, this message translates to:
+  /// **'Attach PDF'**
+  String get attachPdf;
+
+  /// No description provided for @pdfFile.
+  ///
+  /// In en, this message translates to:
+  /// **'PDF file'**
+  String get pdfFile;
+
+  /// No description provided for @openPdf.
+  ///
+  /// In en, this message translates to:
+  /// **'Open PDF'**
+  String get openPdf;
+
+  /// No description provided for @sendPdfQuestion.
+  ///
+  /// In en, this message translates to:
+  /// **'Send PDF?'**
+  String get sendPdfQuestion;
+
+  /// No description provided for @pdfUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'PDF unavailable'**
+  String get pdfUnavailable;
+
+  /// No description provided for @pdfViewerUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'No PDF viewer is available'**
+  String get pdfViewerUnavailable;
+
+  /// No description provided for @pdfOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'Only PDF files are supported'**
+  String get pdfOnly;
+
+  /// No description provided for @pdfTooLarge.
+  ///
+  /// In en, this message translates to:
+  /// **'PDF files must be 20 MB or smaller'**
+  String get pdfTooLarge;
+
   /// No description provided for @takePhoto.
   ///
   /// In en, this message translates to:

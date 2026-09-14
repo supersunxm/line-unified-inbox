@@ -212,7 +212,7 @@ export class MobileConversationsService {
           where: cursor ? { OR: [{ sentAt: { lt: cursor.sentAt } }, { sentAt: cursor.sentAt, id: { lt: cursor.id } }] } : undefined,
           orderBy: [{ sentAt: "desc" }, { id: "desc" }],
           take: query.limit + 1,
-          select: { id: true, direction: true, messageType: true, originalText: true, rawPayload: true, sentAt: true, senderUserId: true, senderDisplayName: true, sender: { select: { id: true, displayName: true } }, media: { select: { processingStatus: true, mimeType: true, fileSize: true } } },
+          select: { id: true, direction: true, messageType: true, originalText: true, fileName: true, rawPayload: true, sentAt: true, senderUserId: true, senderDisplayName: true, sender: { select: { id: true, displayName: true } }, media: { select: { processingStatus: true, mimeType: true, fileSize: true } } },
         },
         _count: { select: { messages: { where: ownerTrackingInboundFilter() }, pushNotifications: { where: { userId: user.id, readAt: null } } } },
       },
@@ -288,6 +288,7 @@ export class MobileConversationsService {
         direction: message.direction,
         messageType: message.messageType,
         text: message.originalText,
+        fileName: message.fileName,
         sticker: message.messageType === "STICKER" ? stickerPresentationFromRawPayload(message.rawPayload) : null,
         sentAt: message.sentAt,
         sender: resolveMessageSender(message),
@@ -771,6 +772,12 @@ export class MobileConversationsService {
     this.assertCanReply(user);
     await this.storeAccess.assertConversationAccess(user, conversationId);
     return this.conversations.sendImage(conversationId, file, idempotencyKey, user);
+  }
+
+  async sendPdf(user: AuthUser, conversationId: string, file: { buffer: Buffer; mimetype: string; size: number; originalname?: string }, idempotencyKey: string) {
+    this.assertCanReply(user);
+    await this.storeAccess.assertConversationAccess(user, conversationId);
+    return this.conversations.sendPdf(conversationId, file, idempotencyKey, user);
   }
 }
 
