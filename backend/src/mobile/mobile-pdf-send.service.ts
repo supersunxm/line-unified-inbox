@@ -243,7 +243,7 @@ export class MobilePdfSendService {
   private presentMessage(message: {
     id: string;
     conversationId: string;
-    externalMessageId: string;
+    externalMessageId: string | null;
     direction: MessageDirection;
     messageType: MessageType;
     originalText: string;
