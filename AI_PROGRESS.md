@@ -1,5 +1,5 @@
-# 2026-09-14: Proactive daily Android update prompt [COMPLETED & VERIFIED]
-- **Current Task**: Add a lightweight daily update prompt to the Flutter Android client while reusing the existing `/app/version/android` metadata contract and APK download/install flow. Production deployment remains intentionally out of scope.
+# 2026-09-14: Proactive daily Android update prompt [RELEASED & VERIFIED]
+- **Current Task**: Release the implemented daily update prompt and current Flutter chat UI redesign as Android `1.1.26+46` through the existing CI signing/distribution path, without further UI changes.
 - **Completed Work**:
   - Added an authenticated-main-UI-only, post-frame automatic check after startup restore/login and on resume, gated to users with an available main workspace.
   - Added local-calendar-day suppression for optional prompts using `last_update_prompt_date` and `last_prompted_build_number` in `SharedPreferencesAsync`; a newer release bypasses an older same-day dismissal, while forced updates are never suppressed.
@@ -10,9 +10,11 @@
   - Full Flutter test suite: **256/256 passed**.
   - `flutter analyze`: passed with no issues.
   - `git diff --check`: passed.
-  - Debug APK build: passed; `build/app/outputs/flutter-apk/app-debug.apk` metadata is package `click.lineoppo.chat`, version `1.1.25`, versionCode `45`.
-- **Release Boundary**: No app installation, uninstall, production signing-key action, backend change, publish, or deployment was performed. The unrelated untracked `docs/executive-guide/` directory remains untouched.
-- **Next Action**: Install the authorized build through the normal existing release path when desired, then perform the separate visual QA/polish pass.
+  - CI publisher run **34827881569** passed analysis, all Flutter tests, existing-key restoration, signed APK build, package/version/signer verification, APK publication, release payload validation, and release commit.
+  - Published APK: `1.1.26+46`, package `click.lineoppo.chat`, SHA-256 `30821a68b913edfe7b34f4257b825e0adf9f4b403b7ba17fc3e0904fc0726cf1`; public API and downloaded APK checksum agree.
+  - Railway backend deployment for commit `d862e0f` succeeded; `/app/version/android` reports build 46 active with `forceUpdate=false`, build 45 inactive, and `/health` plus `/health/readiness` return HTTP 200.
+- **Release Boundary**: No uninstall, package/applicationId change, signing-key replacement, backend API/schema change, or additional UI change was made. The unrelated untracked `docs/executive-guide/` directory remains untouched.
+- **Next Action**: Install `1.1.26+46` over the existing Android app, capture screenshots, and perform the separate visual QA/polish pass against the supplied mockup.
 
 # 2026-09-14: Android 1.1.25 migration recovery [COMPLETED & VERIFIED]
 - **Root Cause**: `backend/prisma/migrations/20260914140000_release_android_1_1_25/migration.sql` had one invalid trailing comma in the final PostgreSQL `ARRAY[...]` item, causing production Prisma `P3018` / PostgreSQL `42601`.

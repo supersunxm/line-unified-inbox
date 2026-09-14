@@ -7,6 +7,12 @@
 - Treat metadata and prompt-state failures as non-blocking background failures. A single-flight guard prevents overlapping lifecycle/navigation checks from issuing duplicate metadata requests.
 - Do not add backend schema/API changes, a second updater, signing changes, package-name changes, or UI redesign changes for this feature. Production publication remains a separate authorized release action.
 
+# Android 1.1.26+46 release (2026-09-14)
+
+- Use the established versioned GitHub Actions publisher, restoring the existing permanent Android signing material only from CI secrets. Local signing keys remain absent and no replacement key is created.
+- Publish `1.1.26+46` with package `click.lineoppo.chat`, retain `forceUpdate=false`, deactivate earlier Android releases, and apply the additive `AppRelease` migration through Railway's existing `npx prisma migrate deploy` pre-deploy command.
+- Treat the signed APK's package/version/signer checks, release payload guard, public SHA-256 verification, active AppRelease row, and backend health/readiness checks as the release completion gate. Keep installation and visual QA/polish as a separate follow-up.
+
 # Android 1.1.25+45 uses the existing CI signing and publisher path (2026-09-14)
 
 - Keep the permanent Android keystore outside the repository and restore it only from the existing GitHub Actions secrets used by prior production releases. Do not create, replace, or inspect signing credentials locally.
