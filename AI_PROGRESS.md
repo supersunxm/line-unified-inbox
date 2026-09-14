@@ -1,3 +1,10 @@
+# 2026-09-14: Android 1.1.25 migration recovery [COMPLETED & VERIFIED]
+- **Root Cause**: `backend/prisma/migrations/20260914140000_release_android_1_1_25/migration.sql` had one invalid trailing comma in the final PostgreSQL `ARRAY[...]` item, causing production Prisma `P3018` / PostgreSQL `42601`.
+- **Recovery**: Confirmed the failed row had `applied_steps_count=0`, no finished timestamp, and no build-45 `AppRelease` row. Marked the failed migration rolled back with Prisma's supported `migrate resolve --rolled-back` command, then deployed the one-character SQL correction.
+- **Verification**: Railway deployment `72aef7a5-da64-48c4-82c3-037bf31475e1` applied the migration successfully; current main deployment `7370b90c-05f8-43df-b520-f45aac15d546` is successful and running. `prisma migrate status` reports the schema up to date and `prisma migrate deploy` reports no pending migrations.
+- **Production State**: Android build 45 / version 1.1.25 is active with the expected APK URL and SHA-256; build 44 and earlier Android releases are inactive. `/health` and `/health/readiness` both return HTTP 200.
+- **Checks**: `git diff --check`, Prisma schema validation, backend build, and AppVersionService tests (3/3) passed. The unrelated untracked `docs/executive-guide/` directory remains untouched.
+
 # 2026-09-14: Android 1.1.25+45 release [COMPLETED & VERIFIED]
 - **Current Task**: Release the Flutter chat UI redesign as the next Android update without changing backend behavior, package identity, or signing configuration.
 - **Completed Work**:

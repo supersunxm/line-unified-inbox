@@ -2438,3 +2438,10 @@ Keep `StoreMaster.tiktokProfileUrl` as the only persisted TikTok profile URL. Po
 - Use the established GitHub Actions publisher and its existing permanent signing secrets. Do not create or substitute a local signing key when local signing material is unavailable.
 - Publish the signed APK, `/download` metadata, and additive `AppRelease` migration only after CI analysis, the full Flutter suite, package/version/signer verification, checksum verification, and the release payload checks pass.
 - Keep visual QA and any UI polish separate from this release; install over the existing version 44 app without uninstalling it before the next review pass.
+
+## Android 1.1.25 migration recovery — 2026-09-14
+
+- Treat the failed production migration as a Prisma history recovery, not a schema reset: the failed attempt had zero applied steps and no partial `AppRelease` row.
+- Correct only the invalid trailing comma in the final PostgreSQL text array item. Preserve the release data and existing `ON CONFLICT ("platform", "buildNumber") DO UPDATE` behavior.
+- Use `prisma migrate resolve --rolled-back` only after confirming the failed state and zero-step execution, then let the normal Railway pre-deploy `prisma migrate deploy` apply the corrected migration.
+- Do not delete migration history, reset/recreate the production database, modify Flutter/UI code, or alter the Android artifact.
