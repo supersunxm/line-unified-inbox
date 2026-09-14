@@ -10,9 +10,34 @@ export type ManagerRelayResult =
   | { handled: false }
   | { handled: true; duplicate: boolean; lineChatUserId: string };
 
+export type ManagerRelayConversationSnapshot = {
+  id: string;
+  storeId: string | null;
+  lineOfficialAccountId: string;
+  lineChatUserId: string | null;
+  storeCode: string;
+  lineOfficialAccount: {
+    id: string;
+    name: string;
+    storeId: string | null;
+    accountType: string;
+    isActive: boolean;
+    archivedAt: string | null;
+    chatBotId: string;
+    lineChatSession: {
+      id: string;
+      sessionKey: string;
+      profilePath: string | null;
+      profileStorageKey: string | null;
+      status: LineChatSessionStatus;
+    };
+  };
+};
+
 type RelayConversation = {
   id: string;
   storeId: string | null;
+  lineOfficialAccountId: string;
   lineChatUserId: string | null;
   store: {
     code: string | null;
@@ -27,7 +52,10 @@ type RelayConversation = {
     archivedAt: Date | null;
     chatBotId: string | null;
     lineChatSession: {
+      id: string;
       sessionKey: string;
+      profilePath: string | null;
+      profileStorageKey: string | null;
       status: LineChatSessionStatus;
     } | null;
   };
@@ -90,6 +118,7 @@ export class LineChatManagerMessageRelayService {
     if (!isLineChatManagerRelayStoreEnabled(storeCode)) return { handled: false };
 
     this.assertRelayConfiguration(conversation, storeCode);
+    const relayContext = this.toWorkerSnapshot(conversation, storeCode);
 
     const workerUrl = process.env.LINE_CHAT_WORKER_INTERNAL_URL?.trim().replace(/\/+$/u, "");
     const secret = process.env.LINE_CHAT_WORKER_INTERNAL_SECRET?.trim();
@@ -111,6 +140,7 @@ export class LineChatManagerMessageRelayService {
         body: JSON.stringify({
           conversationId,
           idempotencyKey: input.idempotencyKey,
+          relayContext,
           ...input.payload,
         }),
         signal: controller.signal,
@@ -195,6 +225,7 @@ export class LineChatManagerMessageRelayService {
       select: {
         id: true,
         storeId: true,
+        lineOfficialAccountId: true,
         lineChatUserId: true,
         store: {
           select: {
@@ -213,7 +244,10 @@ export class LineChatManagerMessageRelayService {
             chatBotId: true,
             lineChatSession: {
               select: {
+                id: true,
                 sessionKey: true,
+                profilePath: true,
+                profileStorageKey: true,
                 status: true,
               },
             },
@@ -221,6 +255,37 @@ export class LineChatManagerMessageRelayService {
         },
       },
     }) as Promise<RelayConversation | null>;
+  }
+
+  private toWorkerSnapshot(
+    conversation: RelayConversation,
+    storeCode: string,
+  ): ManagerRelayConversationSnapshot {
+    const oa = conversation.lineOfficialAccount;
+    const session = oa.lineChatSession!;
+    return {
+      id: conversation.id,
+      storeId: conversation.storeId,
+      lineOfficialAccountId: oa.id,
+      lineChatUserId: conversation.lineChatUserId,
+      storeCode,
+      lineOfficialAccount: {
+        id: oa.id,
+        name: oa.name,
+        storeId: oa.storeId,
+        accountType: oa.accountType,
+        isActive: oa.isActive,
+        archivedAt: oa.archivedAt?.toISOString() ?? null,
+        chatBotId: oa.chatBotId!.trim(),
+        lineChatSession: {
+          id: session.id,
+          sessionKey: session.sessionKey,
+          profilePath: session.profilePath,
+          profileStorageKey: session.profileStorageKey,
+          status: session.status,
+        },
+      },
+    };
   }
 
   private assertRelayConfiguration(conversation: RelayConversation, storeCode: string): void {
