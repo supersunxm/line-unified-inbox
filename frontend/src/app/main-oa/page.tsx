@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppShell } from "@/components/shell";
 import { api } from "@/lib/api";
@@ -42,16 +42,6 @@ const mainOaTranslations = {
     webhookInstruction: "LINE Official Account Manager → Messaging API → Webhook URL → เปลี่ยน URL ของ Kaojao → Save จากนั้นส่งข้อความทดสอบ 1 ข้อความเข้าบัญชี OA",
     webhookMissing: "ยังไม่ได้ตั้งค่า PUBLIC_WEBHOOK_BASE_URL ที่ backend กรุณาอย่าเพิ่งสลับ LINE webhook",
     inbox: "กล่องข้อความ",
-    sortBy: "เรียงตาม",
-    sortLatest: "การเคลื่อนไหวล่าสุด",
-    sortPriority: "ความสำคัญ",
-    sortName: "ชื่อลูกค้า",
-    latestDesc: "ใหม่ → เก่า",
-    latestAsc: "เก่า → ใหม่",
-    priorityDesc: "สูง → ต่ำ",
-    priorityAsc: "ต่ำ → สูง",
-    nameDesc: "ฮ → ก",
-    nameAsc: "ก → ฮ",
     noPreview: "ไม่มีตัวอย่างข้อความ",
     replyPlaceholder: "ตอบกลับในนาม Main OA",
     send: "ส่ง",
@@ -87,20 +77,10 @@ const mainOaTranslations = {
     webhookInstruction: "LINE Official Account Manager → Messaging API → Webhook URL → replace the Kaojao URL → Save. Then send one test message to the OA.",
     webhookMissing: "PUBLIC_WEBHOOK_BASE_URL is not configured on the backend. Do not cut over the LINE webhook yet.",
     inbox: "Inbox",
-    sortBy: "Sort by",
-    sortLatest: "Latest activity",
-    sortPriority: "Priority",
-    sortName: "Customer name",
-    latestDesc: "Newest → oldest",
-    latestAsc: "Oldest → newest",
-    priorityDesc: "High → low",
-    priorityAsc: "Low → high",
-    nameDesc: "Z → A",
-    nameAsc: "A → Z",
     noPreview: "No message preview",
     replyPlaceholder: "Reply as Main OA",
     send: "Send",
-    noConversationConnected: "No Main OA conversations yet. After changing the LINE webhook, send a test message to the OA.",
+    noConversationConnected: "No Main OA conversations yet. After changing the LINE webhook, send a test message to this OA.",
     connectToStart: "Connect Main OA to start receiving conversations.",
   },
   zh: {
@@ -132,32 +112,12 @@ const mainOaTranslations = {
     webhookInstruction: "LINE Official Account Manager → Messaging API → Webhook URL → 替换 Kaojao URL → 保存，然后向 OA 发送一条测试消息。",
     webhookMissing: "后端尚未配置 PUBLIC_WEBHOOK_BASE_URL，请暂时不要切换 LINE webhook。",
     inbox: "收件箱",
-    sortBy: "排序",
-    sortLatest: "最近活动",
-    sortPriority: "优先级",
-    sortName: "客户名称",
-    latestDesc: "新 → 旧",
-    latestAsc: "旧 → 新",
-    priorityDesc: "高 → 低",
-    priorityAsc: "低 → 高",
-    nameDesc: "Z → A",
-    nameAsc: "A → Z",
     noPreview: "无消息预览",
     replyPlaceholder: "以 Main OA 身份回复",
     send: "发送",
     noConversationConnected: "目前还没有 Main OA 对话。切换 LINE webhook 后，请向此 OA 发送一条测试消息。",
     connectToStart: "连接 Main OA 后即可开始接收对话。",
   },
-};
-
-type MainOaSortKey = "latest" | "priority" | "name";
-type MainOaSortDirection = "asc" | "desc";
-
-const priorityRank: Record<ApiConversation["priority"], number> = {
-  LOW: 0,
-  NORMAL: 1,
-  HIGH: 2,
-  CRITICAL: 3,
 };
 
 export default function MainOaPage() {
@@ -169,8 +129,6 @@ export default function MainOaPage() {
   const [searchText, setSearchText] = useState("");
   const [items, setItems] = useState<ApiConversation[]>([]);
   const [selected, setSelected] = useState<ApiConversation | null>(null);
-  const [sortKey, setSortKey] = useState<MainOaSortKey>("latest");
-  const [sortDirection, setSortDirection] = useState<MainOaSortDirection>("desc");
   const [error, setError] = useState<string | null>(null);
   const [reply, setReply] = useState("");
   const [accounts, setAccounts] = useState<MainOaAccount[]>([]);
@@ -185,15 +143,9 @@ export default function MainOaPage() {
   const load = useCallback(async () => {
     setError(null);
     try {
-      const firstPage = await api.mainOaConversations({ page: 1, pageSize: 100 });
-      const allItems = [...firstPage.items];
-      for (let page = 2; allItems.length < firstPage.total; page += 1) {
-        const nextPage = await api.mainOaConversations({ page, pageSize: 100 });
-        if (nextPage.items.length === 0) break;
-        allItems.push(...nextPage.items);
-      }
-      setItems(allItems);
-      if (allItems[0]) setSelected(await api.mainOaConversation(allItems[0].id));
+      const result = await api.mainOaConversations({ pageSize: 100 });
+      setItems(result.items);
+      if (result.items[0]) setSelected(await api.mainOaConversation(result.items[0].id));
       else setSelected(null);
     } catch (reason: unknown) {
       setError(reason instanceof Error ? reason.message : t.loadFailed);
@@ -232,32 +184,6 @@ export default function MainOaPage() {
     });
     return () => { cancelled = true; };
   }, [load, loadAccounts, router]);
-
-  const visibleItems = useMemo(() => {
-    const query = searchText.trim().toLocaleLowerCase();
-    const filtered = query
-      ? items.filter((item) => {
-          const preview = item.messages?.[0]?.originalText ?? "";
-          return item.customer.displayName.toLocaleLowerCase().includes(query) || preview.toLocaleLowerCase().includes(query);
-        })
-      : items;
-    const locale = language === "th" ? "th" : language === "zh" ? "zh" : "en";
-    const direction = sortDirection === "asc" ? 1 : -1;
-    return [...filtered].sort((left, right) => {
-      let comparison = 0;
-      if (sortKey === "latest") comparison = new Date(left.latestMessageAt).getTime() - new Date(right.latestMessageAt).getTime();
-      else if (sortKey === "priority") comparison = priorityRank[left.priority] - priorityRank[right.priority];
-      else comparison = left.customer.displayName.localeCompare(right.customer.displayName, locale, { sensitivity: "base", numeric: true });
-      if (comparison !== 0) return comparison * direction;
-      return new Date(right.latestMessageAt).getTime() - new Date(left.latestMessageAt).getTime();
-    });
-  }, [items, language, searchText, sortDirection, sortKey]);
-
-  const sortDirectionLabel = sortKey === "latest"
-    ? (sortDirection === "desc" ? t.latestDesc : t.latestAsc)
-    : sortKey === "priority"
-      ? (sortDirection === "desc" ? t.priorityDesc : t.priorityAsc)
-      : (sortDirection === "desc" ? t.nameDesc : t.nameAsc);
 
   const choose = async (id: string) => {
     try {
@@ -349,36 +275,7 @@ export default function MainOaPage() {
         {setupError && mainAccount && <div role="alert" className="mx-auto mb-3 max-w-7xl rounded-lg bg-[var(--app-danger-soft)] p-3 text-sm text-[var(--app-danger)]">{setupError}</div>}
         {error && <div role="alert" className="mx-auto mb-3 max-w-7xl rounded-lg bg-[var(--app-danger-soft)] p-3 text-sm text-[var(--app-danger)]">{error}</div>}
         <div className="mx-auto grid max-w-7xl overflow-hidden rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] shadow-[var(--app-shadow-sm)] md:grid-cols-[360px_1fr]">
-          <section className="border-r border-[var(--app-border)]">
-            <div className="border-b border-[var(--app-border)] p-3">
-              <div className="mb-2 flex items-center justify-between gap-2">
-                <div className="font-semibold">{t.inbox} <span className="text-[var(--app-text-tertiary)]">({items.length})</span></div>
-                {searchText.trim() && <span className="text-xs text-[var(--app-text-tertiary)]">{visibleItems.length}</span>}
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="shrink-0 text-xs text-[var(--app-text-tertiary)]">{t.sortBy}</span>
-                <select
-                  aria-label={t.sortBy}
-                  value={sortKey}
-                  onChange={(event) => setSortKey(event.target.value as MainOaSortKey)}
-                  className="min-w-0 flex-1 rounded-lg border border-[var(--app-border)] bg-[var(--app-surface)] px-2 py-1.5 text-xs font-medium"
-                >
-                  <option value="latest">{t.sortLatest}</option>
-                  <option value="priority">{t.sortPriority}</option>
-                  <option value="name">{t.sortName}</option>
-                </select>
-                <button
-                  type="button"
-                  onClick={() => setSortDirection((current) => current === "desc" ? "asc" : "desc")}
-                  className="shrink-0 rounded-lg border border-[var(--app-border)] bg-[var(--app-surface)] px-2 py-1.5 text-xs font-medium hover:bg-[var(--app-surface-hover)]"
-                  title={sortDirectionLabel}
-                >
-                  {sortDirectionLabel}
-                </button>
-              </div>
-            </div>
-            {visibleItems.map((item) => <button type="button" key={item.id} onClick={() => void choose(item.id)} className={`block w-full border-b border-[var(--app-border-subtle)] p-4 text-left hover:bg-[var(--app-surface-hover)] ${selected?.id === item.id ? "bg-[var(--app-accent-soft)]" : ""}`}><div className="flex items-center justify-between gap-2"><div className="truncate font-medium">{item.customer.displayName}</div><span className="shrink-0 text-[10px] font-semibold text-[var(--app-text-tertiary)]">{item.priority}</span></div><div className="truncate text-sm text-[var(--app-text-secondary)]">{item.messages?.[0]?.messageType === "STICKER" ? lineStickerLabel(language) : item.messages?.[0]?.originalText ?? t.noPreview}</div></button>)}
-          </section>
+          <section className="border-r border-[var(--app-border)]"><div className="border-b border-[var(--app-border)] p-4 font-semibold">{t.inbox} <span className="text-[var(--app-text-tertiary)]">({items.length})</span></div>{items.map((item) => <button type="button" key={item.id} onClick={() => void choose(item.id)} className={`block w-full border-b border-[var(--app-border-subtle)] p-4 text-left hover:bg-[var(--app-surface-hover)] ${selected?.id === item.id ? "bg-[var(--app-accent-soft)]" : ""}`}><div className="font-medium">{item.customer.displayName}</div><div className="truncate text-sm text-[var(--app-text-secondary)]">{item.messages?.[0]?.messageType === "STICKER" ? lineStickerLabel(language) : item.messages?.[0]?.originalText ?? t.noPreview}</div></button>)}</section>
           <section className="flex min-h-[70vh] flex-col">{selected ? <><div className="border-b border-[var(--app-border)] p-4"><h2 className="font-semibold">{selected.customer.displayName}</h2><p className="text-xs text-[var(--app-text-secondary)]">{selected.lineOfficialAccount.name}</p></div><div className="flex-1 space-y-3 overflow-auto p-5">{[...(selected.messages ?? [])].reverse().map((message) => { const senderName = getMessageSenderName(message); return <div key={message.id} className={`max-w-[75%] rounded-xl p-3 text-sm ${message.direction === "OUTBOUND" ? "ml-auto bg-[var(--app-accent)] text-white" : "bg-[var(--app-surface-subtle)]"}`}>{senderName && <div data-message-sender className="mb-1 text-xs font-semibold opacity-80">{senderName}</div>}{message.messageType === "STICKER" ? <MessageSticker sticker={message.sticker} language={language} /> : message.originalText}</div>; })}</div><div className="flex gap-2 border-t border-[var(--app-border)] p-4"><input value={reply} onChange={(event) => setReply(event.target.value)} placeholder={t.replyPlaceholder} className="flex-1 rounded-lg border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-2"/><button type="button" onClick={() => void send()} className="rounded-lg bg-[var(--app-accent)] px-4 py-2 font-medium text-white">{t.send}</button></div></> : <div className="m-auto p-6 text-[var(--app-text-secondary)]">{mainAccount ? t.noConversationConnected : t.connectToStart}</div>}</section>
         </div>
       </main>

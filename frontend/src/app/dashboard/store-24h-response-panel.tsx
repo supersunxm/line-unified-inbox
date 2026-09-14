@@ -35,6 +35,18 @@ type Props = {
   onOpenStore: (storeId: string) => void;
 };
 
+type SortKey = "storeName" | "within24h" | "over24h" | "pending" | "total" | "responseRate24h";
+type SortDirection = "asc" | "desc";
+
+const defaultDirection: Record<SortKey, SortDirection> = {
+  storeName: "asc",
+  within24h: "desc",
+  over24h: "desc",
+  pending: "desc",
+  total: "desc",
+  responseRate24h: "desc",
+};
+
 function rateLabel(value: number | null) {
   return value === null ? "—" : `${value.toFixed(1)}%`;
 }
@@ -52,6 +64,8 @@ export function Store24hResponsePanel({ getStoreDisplayName, onOpenStore }: Prop
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [sortKey, setSortKey] = useState<SortKey | null>(null);
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -76,13 +90,57 @@ export function Store24hResponsePanel({ getStoreDisplayName, onOpenStore }: Prop
     return () => window.clearTimeout(timer);
   }, [load]);
 
+  const handleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortDirection((current) => (current === "desc" ? "asc" : "desc"));
+      return;
+    }
+    setSortKey(key);
+    setSortDirection(defaultDirection[key]);
+  };
+
+  const sortIndicator = (key: SortKey) => {
+    if (sortKey !== key) return "↕";
+    return sortDirection === "desc" ? "↓" : "↑";
+  };
+
   const rows = useMemo(() => {
     const query = search.trim().toLocaleLowerCase("th");
-    if (!query) return data?.stores ?? [];
-    return (data?.stores ?? []).filter((store) =>
-      getStoreDisplayName(store.storeName).toLocaleLowerCase("th").includes(query),
-    );
-  }, [data, getStoreDisplayName, search]);
+    const filtered = query
+      ? (data?.stores ?? []).filter((store) =>
+          getStoreDisplayName(store.storeName).toLocaleLowerCase("th").includes(query),
+        )
+      : data?.stores ?? [];
+
+    if (!sortKey) return filtered;
+
+    const direction = sortDirection === "asc" ? 1 : -1;
+    return [...filtered].sort((left, right) => {
+      let comparison = 0;
+
+      if (sortKey === "storeName") {
+        comparison = getStoreDisplayName(left.storeName).localeCompare(
+          getStoreDisplayName(right.storeName),
+          "th",
+          { sensitivity: "base", numeric: true },
+        );
+      } else if (sortKey === "responseRate24h") {
+        if (left.responseRate24h === null && right.responseRate24h === null) comparison = 0;
+        else if (left.responseRate24h === null) return 1;
+        else if (right.responseRate24h === null) return -1;
+        else comparison = left.responseRate24h - right.responseRate24h;
+      } else {
+        comparison = left[sortKey] - right[sortKey];
+      }
+
+      if (comparison !== 0) return comparison * direction;
+      return getStoreDisplayName(left.storeName).localeCompare(
+        getStoreDisplayName(right.storeName),
+        "th",
+        { sensitivity: "base", numeric: true },
+      );
+    });
+  }, [data, getStoreDisplayName, search, sortDirection, sortKey]);
 
   const overview = data?.overview;
 
@@ -166,12 +224,36 @@ export function Store24hResponsePanel({ getStoreDisplayName, onOpenStore }: Prop
             <table className="w-full min-w-[760px] border-collapse text-[12px]">
               <thead>
                 <tr className="border-b border-[var(--dash-border)] bg-[var(--dash-bg)] text-[10px] uppercase text-[var(--dash-text-tertiary)]">
-                  <th className="px-3.5 py-2.5 text-left">ร้านค้า</th>
-                  <th className="px-2 py-2.5 text-right">ภายใน 24 ชม.</th>
-                  <th className="px-2 py-2.5 text-right">เกิน 24 ชม.</th>
-                  <th className="px-2 py-2.5 text-right">ยังไม่ตอบ</th>
-                  <th className="px-2 py-2.5 text-right">ทั้งหมด</th>
-                  <th className="px-3.5 py-2.5 text-right">อัตรา 24 ชม.</th>
+                  <th className="px-3.5 py-2.5 text-left">
+                    <button type="button" onClick={() => handleSort("storeName")} className="inline-flex w-full items-center gap-1.5 text-left font-semibold hover:text-[var(--dash-text)]" aria-label="เรียงตามชื่อร้าน">
+                      <span>ร้านค้า</span><span aria-hidden="true">{sortIndicator("storeName")}</span>
+                    </button>
+                  </th>
+                  <th className="px-2 py-2.5 text-right">
+                    <button type="button" onClick={() => handleSort("within24h")} className="inline-flex w-full items-center justify-end gap-1.5 font-semibold hover:text-[var(--dash-text)]" aria-label="เรียงตามจำนวนตอบภายใน 24 ชั่วโมง">
+                      <span>ภายใน 24 ชม.</span><span aria-hidden="true">{sortIndicator("within24h")}</span>
+                    </button>
+                  </th>
+                  <th className="px-2 py-2.5 text-right">
+                    <button type="button" onClick={() => handleSort("over24h")} className="inline-flex w-full items-center justify-end gap-1.5 font-semibold hover:text-[var(--dash-text)]" aria-label="เรียงตามจำนวนตอบเกิน 24 ชั่วโมง">
+                      <span>เกิน 24 ชม.</span><span aria-hidden="true">{sortIndicator("over24h")}</span>
+                    </button>
+                  </th>
+                  <th className="px-2 py-2.5 text-right">
+                    <button type="button" onClick={() => handleSort("pending")} className="inline-flex w-full items-center justify-end gap-1.5 font-semibold hover:text-[var(--dash-text)]" aria-label="เรียงตามจำนวนที่ยังไม่ตอบ">
+                      <span>ยังไม่ตอบ</span><span aria-hidden="true">{sortIndicator("pending")}</span>
+                    </button>
+                  </th>
+                  <th className="px-2 py-2.5 text-right">
+                    <button type="button" onClick={() => handleSort("total")} className="inline-flex w-full items-center justify-end gap-1.5 font-semibold hover:text-[var(--dash-text)]" aria-label="เรียงตามจำนวนทั้งหมด">
+                      <span>ทั้งหมด</span><span aria-hidden="true">{sortIndicator("total")}</span>
+                    </button>
+                  </th>
+                  <th className="px-3.5 py-2.5 text-right">
+                    <button type="button" onClick={() => handleSort("responseRate24h")} className="inline-flex w-full items-center justify-end gap-1.5 font-semibold hover:text-[var(--dash-text)]" aria-label="เรียงตามอัตราตอบกลับภายใน 24 ชั่วโมง">
+                      <span>อัตรา 24 ชม.</span><span aria-hidden="true">{sortIndicator("responseRate24h")}</span>
+                    </button>
+                  </th>
                 </tr>
               </thead>
               <tbody>
