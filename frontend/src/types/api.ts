@@ -463,6 +463,38 @@ export type StoreInsightsCustomerVoice = {
   topIntents: StoreInsightsCustomerVoiceItem[];
   topProducts: StoreInsightsCustomerVoiceItem[];
 };
+export type StoreInsightsCustomerVoiceDimension = "topic" | "intent" | "product";
+export type StoreInsightsCustomerVoiceDistributionItem = { label: string; count: number; percentage: number };
+export type StoreInsightsCustomerVoiceEvidence = {
+  id: string;
+  customer: { displayName: string };
+  topics: string[];
+  intent: string | null;
+  products: string[];
+  salesTagged: boolean;
+  responseStatus: "REPLIED" | "UNANSWERED";
+  responder: { displayName: string } | null;
+  firstInboundAt: string | null;
+  lastActivity: string;
+  source: string;
+  analysisVersion: string;
+  classified: boolean;
+};
+export type StoreInsightsCustomerVoiceDrilldownResponse = {
+  storeId: string;
+  store: StoreInsightsStore;
+  period: { from: string; to: string; timezone: string };
+  analysisVersion: string;
+  dimension: StoreInsightsCustomerVoiceDimension;
+  value: string | null;
+  coverage: StoreInsightsCustomerVoiceCoverage;
+  distribution: StoreInsightsCustomerVoiceDistributionItem[];
+  items: StoreInsightsCustomerVoiceEvidence[];
+  total: number;
+  page: number;
+  pageSize: number;
+  hasNextPage: boolean;
+};
 export type StoreInsightsStore = {
   id: string;
   name: string;

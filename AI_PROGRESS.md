@@ -4711,6 +4711,20 @@ Verification passed: frontend TypeScript, zero-warning ESLint, 173/173 tests, an
 - Captured the final desktop review asset at `/private/tmp/store-360-bi-final-review/store-360-desktop-full-final.png`. Temporary fixture, frontend, and browser processes were stopped and their temporary scripts removed; no commit, push, rebase, reconciliation, deployment, or production mutation was performed.
 - Next action: user visual approval, then reconcile this uncommitted candidate against the newest `origin/main` before any integration decision.
 
+# Current task: Store 360 BI Phase 2B — Customer Voice Drill-down (2026-09-14)
+
+- Added the read-only current-version Customer Voice drill-down endpoint and responsive URL-backed `/store-360/customer-voice` route, including safe evidence, dimension filters, unclassified inspection, pagination, and links from the approved Overview.
+- Verification passed: focused Store 360 tests 26/26, full frontend tests 582/582, Store Insights backend tests 46/46, changed-file ESLint, frontend build, backend build, and `git diff --check`.
+- Safety audit passed: no classifier, metric, schema, migration, worker, production, or persistence changes; no production calls or writes were made.
+- Local HTTP health/functional smoke remains unavailable because port 3000 is owned by an unrelated process and port 3001 is down; no unrelated process was stopped and no fallback port was used.
+- Next action: reconcile this local checkpoint against the newest `origin/main` before any integration, authenticated smoke, push, or deployment.
+
+# Current task: Store 360 BI Phase 2B — Customer Voice Drill-down (2026-09-14)
+
+- Started a new isolated worktree `/private/tmp/store-360-customer-voice-drilldown` on `feat/store-360-customer-voice-drilldown` from fetched `origin/main` at `4595cae21fc538795e2f98e570e6c3ba7b1cc7d1`.
+- Existing Customer Voice summary, current-version constant, Bangkok eligibility boundaries, approved Overview card, and Phase 2A response architecture were inspected before editing.
+- Next action: add the read-only current-version Customer Voice drill-down endpoint, URL-backed responsive route, focused regression coverage, then run the required local checks.
+
 # Current task: Store 360 BI Phase 2A — Response Drill-down (2026-09-13)
 
 - Created isolated worktree `/private/tmp/store-360-response-drilldown` on `feat/store-360-response-drilldown` from `origin/main` at `bb246d60c832407249d1e1eab1d7162e65aee75f`; the primary checkout and other feature worktrees remain untouched.

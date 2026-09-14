@@ -11,6 +11,12 @@ export type StoreInsightsResponseSegment = typeof STORE_INSIGHTS_RESPONSE_SEGMEN
 export const STORE_INSIGHTS_RESPONSE_SORTS = ["date-desc", "date-asc", "response-time-desc", "response-time-asc"] as const;
 export type StoreInsightsResponseSort = typeof STORE_INSIGHTS_RESPONSE_SORTS[number];
 
+export const STORE_INSIGHTS_CUSTOMER_VOICE_DIMENSIONS = ["topic", "intent", "product"] as const;
+export type StoreInsightsCustomerVoiceDimension = typeof STORE_INSIGHTS_CUSTOMER_VOICE_DIMENSIONS[number];
+
+export const STORE_INSIGHTS_CUSTOMER_VOICE_SORTS = ["date-desc", "date-asc"] as const;
+export type StoreInsightsCustomerVoiceSort = typeof STORE_INSIGHTS_CUSTOMER_VOICE_SORTS[number];
+
 export class StoreInsightsQueryDto {
   @IsOptional()
   @IsString()
@@ -75,6 +81,29 @@ export class StoreInsightsResponseCasesQueryDto extends StoreInsightsQueryDto {
   @IsOptional()
   @IsIn([...STORE_INSIGHTS_RESPONSE_SORTS])
   sort?: StoreInsightsResponseSort;
+}
+
+export class StoreInsightsCustomerVoiceDrilldownQueryDto extends StoreInsightsQueryDto {
+  @IsOptional()
+  @IsIn([...STORE_INSIGHTS_CUSTOMER_VOICE_DIMENSIONS])
+  dimension?: StoreInsightsCustomerVoiceDimension;
+
+  @IsOptional()
+  @IsString()
+  value?: string;
+
+  @IsOptional()
+  @IsString()
+  search?: string;
+
+  @IsOptional()
+  @IsIn([...STORE_INSIGHTS_CUSTOMER_VOICE_SORTS])
+  sort?: StoreInsightsCustomerVoiceSort;
+
+  @IsOptional()
+  @Transform(({ value }: { value: unknown }) => (value === "true" ? true : value === "false" ? false : value))
+  @IsIn([true, false])
+  unclassified?: boolean;
 }
 
 export class StoreInsightsExportDto {
@@ -222,4 +251,54 @@ export type StoreInsightsResponseCasesResponse = {
   pageSize: number;
   hasNextPage: boolean;
   responders: StoreInsightsResponder[];
+};
+
+export type StoreInsightsCustomerVoiceDistributionItem = {
+  label: string;
+  count: number;
+  percentage: number;
+};
+
+export type StoreInsightsCustomerVoiceEvidence = {
+  id: string;
+  customer: { displayName: string };
+  topics: string[];
+  intent: string | null;
+  products: string[];
+  salesTagged: boolean;
+  responseStatus: "REPLIED" | "UNANSWERED";
+  responder: { displayName: string } | null;
+  firstInboundAt: string | null;
+  lastActivity: string;
+  source: string;
+  analysisVersion: string;
+  classified: boolean;
+};
+
+export type StoreInsightsCustomerVoiceDrilldownResponse = {
+  storeId: string;
+  store: StoreInsightsStore;
+  period: StoreInsightsPeriod;
+  analysisVersion: string;
+  dimension: StoreInsightsCustomerVoiceDimension;
+  value: string | null;
+  coverage: {
+    totalConversations: number;
+    analysisRows: number;
+    analyzedConversations: number;
+    classifiedConversations: number;
+    unclassifiedConversations: number;
+    persistedTopicConversations: number;
+    ruleEnrichedConversations: number;
+    aiEnrichedConversations: number;
+    lowConfidenceConversations: number;
+    analyzedPercentage: number | null;
+    classifiedPercentage: number | null;
+  };
+  distribution: StoreInsightsCustomerVoiceDistributionItem[];
+  items: StoreInsightsCustomerVoiceEvidence[];
+  total: number;
+  page: number;
+  pageSize: number;
+  hasNextPage: boolean;
 };

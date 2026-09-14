@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Param, Post, Query, Req, Res } from "@nestjs/common";
 import type { Response } from "express";
 import type { AuthRequest } from "../auth/auth.guard";
-import { StoreInsightsExportDto, StoreInsightsQueryDto, StoreInsightsResponseCasesQueryDto } from "./store-insights.types";
+import { StoreInsightsCustomerVoiceDrilldownQueryDto, StoreInsightsExportDto, StoreInsightsQueryDto, StoreInsightsResponseCasesQueryDto } from "./store-insights.types";
 import { CustomerVoiceService } from "./customer-voice.service";
 import { StoreInsightsService } from "./store-insights.service";
 
@@ -51,5 +51,10 @@ export class StoreInsightsController {
   @Get(":storeId/customer-voice")
   customerVoiceSummary(@Req() request: AuthRequest, @Param("storeId") storeId: string, @Query() query: StoreInsightsQueryDto) {
     return this.customerVoice.getCustomerVoice(request.user!, storeId, query);
+  }
+
+  @Get(":storeId/customer-voice/cases")
+  customerVoiceCases(@Req() request: AuthRequest, @Param("storeId") storeId: string, @Query() query: StoreInsightsCustomerVoiceDrilldownQueryDto) {
+    return this.customerVoice.getCustomerVoiceDrilldown(request.user!, storeId, query);
   }
 }

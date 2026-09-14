@@ -2392,3 +2392,14 @@ Keep `StoreMaster.tiktokProfileUrl` as the only persisted TikTok profile URL. Po
 - Keep the drill-down URL-backed and server-filtered. Store, Bangkok dates, segment, search, responder, sales-tag, sort, and page are query parameters so links from Overview cards and bars are reproducible and pagination never requires client-side access to unbounded message data.
 - Expose only safe evidence fields and link to the existing `/chats` conversation route for detail. The endpoint does not return raw message text, customer contact fields, AI payloads, or persisted analytics.
 - Use a disposable 127.0.0.1 fixture only for local visual smoke. Review PNGs are stored outside the repository; the fixture has no database or production connection and is removed after capture.
+
+## 2026-09-14: Store 360 Customer Voice drill-down
+
+- Keep the existing `/store-insights/:storeId/customer-voice` summary response unchanged and add a separate read-only `/store-insights/:storeId/customer-voice/cases` endpoint for evidence. This avoids coupling the approved Overview fetch to paginated drill-down data.
+- Build drill-down evidence from eligible STORE conversations with the exact `CUSTOMER_VOICE_ANALYSIS_VERSION` relation filter. Historical analytics rows are neither selected nor aggregated, and missing current-version rows remain visible as unclassified.
+- Reuse the existing Store 360 authorization boundary and Bangkok period helper semantics. The endpoint returns only display-safe customer labels, current Customer Voice fields, response status, sales-tag status, timestamps, provenance, and the operational conversation key needed by the existing `/chats` route; it never returns message text or raw payloads.
+
+## 2026-09-14: Phase 2B verification boundary
+
+- Keep this work as a local checkpoint only. The fetched base was `origin/main` at `4595cae21fc538795e2f98e570e6c3ba7b1cc7d1`; reconciliation must wait until the next integration window so a newer `origin/main` can be used.
+- Treat unavailable local HTTP smoke as an environment constraint: port 3000 belongs to an unrelated process and port 3001 has no service. Do not kill that process, choose a fallback port, or contact production to compensate.

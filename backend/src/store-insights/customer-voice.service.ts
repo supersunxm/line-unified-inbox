@@ -17,10 +17,19 @@ import {
   canonicalizeCustomerVoiceTopic,
   type CustomerVoiceTopic,
 } from "./customer-voice-taxonomy";
-import type { StoreInsightsQueryDto, StoreInsightsPeriod } from "./store-insights.types";
+import type {
+  StoreInsightsCustomerVoiceDimension,
+  StoreInsightsCustomerVoiceDrilldownQueryDto,
+  StoreInsightsCustomerVoiceDrilldownResponse,
+  StoreInsightsPeriod,
+  StoreInsightsQueryDto,
+  StoreInsightsStore,
+} from "./store-insights.types";
 
 const MAX_PERIOD_DAYS = 90;
 const TIMEZONE = "Asia/Bangkok" as const;
+const RESPONSE_EVALUATION_WINDOW_MS = 24 * 60 * 60 * 1000;
+const AUTO_REPLY_BOT_DISPLAY_NAME = "Auto Reply Bot";
 
 type PeriodBounds = StoreInsightsPeriod & { start: Date; end: Date };
 
@@ -217,6 +226,113 @@ function toRow(row: { source: CustomerVoiceAnalysisSource; primaryTopic: string 
   return row;
 }
 
+const customerVoiceDrilldownSelect = {
+  id: true,
+  latestMessageAt: true,
+  customer: { select: { displayName: true } },
+  messages: {
+    where: { sentAt: {} },
+    orderBy: [{ sentAt: "asc" as const }, { id: "asc" as const }],
+    select: {
+      id: true,
+      direction: true,
+      sentAt: true,
+      senderUserId: true,
+      senderDisplayName: true,
+      sender: { select: { displayName: true } },
+    },
+  },
+  customerSalesStatus: true,
+  sourceChannels: true,
+  isInstallment: true,
+  paymentMethod: true,
+  purchaseRecordedAt: true,
+  purchaseRecordedById: true,
+  salesRecordedAt: true,
+  salesRecordedById: true,
+  salesProducts: { select: { customProductName: true, productModel: { select: { name: true } } } },
+  products: { where: { source: "MANUAL" }, select: { productModel: { select: { name: true } } } },
+  customerVoiceAnalyses: {
+    where: { analysisVersion: CUSTOMER_VOICE_ANALYSIS_VERSION },
+    select: { analysisVersion: true, source: true, primaryTopic: true, secondaryTopics: true, intent: true, productMentions: true, confidence: true, modelProvider: true },
+  },
+} satisfies Prisma.ConversationSelect;
+
+type CustomerVoiceDrilldownConversation = Prisma.ConversationGetPayload<{ select: typeof customerVoiceDrilldownSelect }>;
+
+function customerVoiceLabels(row: CustomerVoiceAnalysisRow, dimension: StoreInsightsCustomerVoiceDimension): string[] {
+  if (dimension === "intent") return row.intent ? [row.intent] : [];
+  if (dimension === "product") return [...new Set(row.productMentions.map(rankKey).filter(Boolean))];
+  return [...new Set([
+    row.primaryTopic ? canonicalizeCustomerVoiceTopic(row.primaryTopic) ?? rankKey(row.primaryTopic) : null,
+    ...row.secondaryTopics.map((topic) => canonicalizeCustomerVoiceTopic(topic) ?? rankKey(topic)),
+  ].filter((value): value is string => Boolean(value)))];
+}
+
+function drilldownDistribution(rows: CustomerVoiceAnalysisRow[], totalConversations: number, dimension: StoreInsightsCustomerVoiceDimension) {
+  const counts = new Map<string, number>();
+  for (const row of rows) for (const label of customerVoiceLabels(row, dimension)) counts.set(label, (counts.get(label) ?? 0) + 1);
+  return [...counts.entries()]
+    .map(([label, count]) => ({ label, count, percentage: percentage(count, totalConversations) }))
+    .sort((left, right) => right.count - left.count || left.label.localeCompare(right.label));
+}
+
+function senderDisplayName(message: CustomerVoiceDrilldownConversation["messages"][number]): string | null {
+  return message.sender?.displayName?.trim() || message.senderDisplayName?.trim() || null;
+}
+
+function isHumanOutboundMessage(message: CustomerVoiceDrilldownConversation["messages"][number]): boolean {
+  return message.direction === MessageDirection.OUTBOUND && Boolean(message.senderUserId) && senderDisplayName(message) !== AUTO_REPLY_BOT_DISPLAY_NAME;
+}
+
+function salesTagged(conversation: CustomerVoiceDrilldownConversation): boolean {
+  const productNames = [...conversation.salesProducts.map((product) => product.customProductName?.trim() || product.productModel.name), ...conversation.products.map((product) => product.productModel.name)].filter(Boolean);
+  return Boolean(
+    conversation.customerSalesStatus ||
+    conversation.purchaseRecordedAt ||
+    conversation.salesRecordedAt ||
+    conversation.purchaseRecordedById ||
+    conversation.salesRecordedById ||
+    conversation.sourceChannels.length > 0 ||
+    conversation.isInstallment ||
+    productNames.length > 0,
+  );
+}
+
+async function storeContext(prisma: PrismaService, storeId: string): Promise<StoreInsightsStore> {
+  const store = await prisma.store.findFirst({
+    where: { id: storeId, isActive: true, archivedAt: null },
+    select: {
+      id: true,
+      name: true,
+      code: true,
+      region: true,
+      storeMaster: { select: { externalStoreId: true, province: true, region: true } },
+      lineOfficialAccounts: {
+        where: { accountType: "STORE", isActive: true, archivedAt: null },
+        orderBy: { name: "asc" },
+        select: { id: true, name: true, basicId: true, connectionStatus: true, lastWebhookReceivedAt: true },
+      },
+    },
+  });
+  if (!store) throw new NotFoundException("Store not found");
+  return {
+    id: store.id,
+    name: store.name,
+    code: store.code,
+    externalStoreId: store.storeMaster?.externalStoreId ?? null,
+    province: store.storeMaster?.province ?? null,
+    region: store.storeMaster?.region ?? store.region ?? null,
+    lineOas: store.lineOfficialAccounts.map((oa) => ({
+      id: oa.id,
+      name: oa.name,
+      basicId: oa.basicId,
+      connectionStatus: oa.connectionStatus,
+      lastWebhookReceivedAt: oa.lastWebhookReceivedAt ? oa.lastWebhookReceivedAt.toISOString() : null,
+    })),
+  };
+}
+
 function modelNameForAnalysis(draft: CustomerVoiceAnalysisDraft): string {
   return draft.source === CustomerVoiceAnalysisSource.AI_CLASSIFIED ? "ai" : CUSTOMER_VOICE_ANALYSIS_VERSION.replace("customer-voice-", "");
 }
@@ -351,6 +467,97 @@ export class CustomerVoiceService {
       topTopics: ranked.topTopics,
       topIntents: ranked.topIntents,
       topProducts: ranked.topProducts,
+    };
+  }
+
+  async getCustomerVoiceDrilldown(user: AuthUser, storeId: string, query: StoreInsightsCustomerVoiceDrilldownQueryDto = {}): Promise<StoreInsightsCustomerVoiceDrilldownResponse> {
+    if (!this.storeAccess) throw new ForbiddenException("Store access is unavailable");
+    await this.storeAccess.assertStoreAccess(user, storeId);
+    const [store, currentPeriod] = await Promise.all([storeContext(this.prisma, storeId), Promise.resolve(period(query))]);
+    const currentWhere = eligibleConversationWhere(storeId, currentPeriod);
+    const responseWindowEnd = new Date(currentPeriod.end.getTime() + RESPONSE_EVALUATION_WINDOW_MS);
+    const [totalConversations, conversations] = await Promise.all([
+      this.prisma.conversation.count({ where: currentWhere }),
+      this.prisma.conversation.findMany({
+        where: currentWhere,
+        select: {
+          ...customerVoiceDrilldownSelect,
+          messages: { ...customerVoiceDrilldownSelect.messages, where: { sentAt: { gte: currentPeriod.start, lt: responseWindowEnd } } },
+        },
+        orderBy: [{ latestMessageAt: "desc" }, { id: "desc" }],
+      }),
+    ]);
+    const dimension = query.dimension ?? "topic";
+    const currentRows = conversations.flatMap((conversation) => conversation.customerVoiceAnalyses.map(toRow));
+    const coverage = coverageFor(currentRows, totalConversations);
+    const distribution = drilldownDistribution(currentRows, totalConversations, dimension);
+    const requestedValue = query.value?.trim() || null;
+    const normalizedValue = requestedValue && dimension === "topic"
+      ? canonicalizeCustomerVoiceTopic(requestedValue) ?? rankKey(requestedValue)
+      : requestedValue;
+    const normalizedSearch = query.search?.trim().toLocaleLowerCase() || null;
+    const evidence = conversations.map((conversation) => {
+      const analysis = conversation.customerVoiceAnalyses.find(({ analysisVersion }) => analysisVersion === CUSTOMER_VOICE_ANALYSIS_VERSION) ?? null;
+      const analysisRow = analysis ? toRow(analysis) : null;
+      const inbound = conversation.messages.find((message) => message.direction === MessageDirection.INBOUND && message.sentAt >= currentPeriod.start && message.sentAt < currentPeriod.end);
+      const humanReply = inbound ? conversation.messages.find((message) => isHumanOutboundMessage(message) && message.sentAt >= inbound.sentAt) : undefined;
+      const topicLabels = analysisRow ? customerVoiceLabels(analysisRow, "topic") : [];
+      const productLabels = analysisRow ? customerVoiceLabels(analysisRow, "product") : [];
+      const classified = analysisRow ? isUsableCustomerVoiceAnalysis({ primaryTopic: analysisRow.primaryTopic as CustomerVoiceTopic | null, intent: analysisRow.intent, productMentions: analysisRow.productMentions }) : false;
+      const tagged = salesTagged(conversation);
+      return {
+        id: conversation.id,
+        customer: { displayName: conversation.customer.displayName },
+        topics: topicLabels,
+        intent: analysisRow?.intent ?? null,
+        products: productLabels,
+        salesTagged: tagged,
+        responseStatus: humanReply ? "REPLIED" as const : "UNANSWERED" as const,
+        responder: humanReply && senderDisplayName(humanReply) ? { displayName: senderDisplayName(humanReply)! } : null,
+        firstInboundAt: inbound?.sentAt.toISOString() ?? null,
+        lastActivity: conversation.latestMessageAt.toISOString(),
+        source: analysis?.source ?? CustomerVoiceAnalysisSource.UNCLASSIFIED,
+        analysisVersion: analysis?.analysisVersion ?? CUSTOMER_VOICE_ANALYSIS_VERSION,
+        classified,
+        dimensionLabels: analysisRow ? customerVoiceLabels(analysisRow, dimension) : [],
+      };
+    }).filter((item) =>
+      (!normalizedValue || item.dimensionLabels.includes(normalizedValue)) &&
+      (!query.unclassified || !item.classified) &&
+      (!query.responseStatus || item.responseStatus === query.responseStatus) &&
+      (query.salesTagged === undefined || item.salesTagged === query.salesTagged) &&
+      (!normalizedSearch || [item.customer.displayName, ...item.topics, item.intent, ...item.products, item.source, item.responseStatus, item.responder?.displayName].filter(Boolean).join(" ").toLocaleLowerCase().includes(normalizedSearch)),
+    );
+    const sort = query.sort ?? "date-desc";
+    evidence.sort((left, right) => {
+      const leftDate = left.firstInboundAt ? new Date(left.firstInboundAt).getTime() : new Date(left.lastActivity).getTime();
+      const rightDate = right.firstInboundAt ? new Date(right.firstInboundAt).getTime() : new Date(right.lastActivity).getTime();
+      const difference = leftDate - rightDate;
+      return difference === 0 ? left.id.localeCompare(right.id) : sort === "date-asc" ? difference : -difference;
+    });
+    const page = Math.max(1, query.page ?? 1);
+    const pageSize = Math.min(100, Math.max(1, query.pageSize ?? 25));
+    const total = evidence.length;
+    const items = evidence.slice((page - 1) * pageSize, page * pageSize).map((item) => {
+      const { dimensionLabels, ...safeItem } = item;
+      void dimensionLabels;
+      return safeItem;
+    });
+    this.logger.debug(`Customer Voice drilldown read store=${storeId} conversations=${totalConversations} matches=${total} dimension=${dimension}`);
+    return {
+      storeId,
+      store,
+      period: { from: currentPeriod.from, to: currentPeriod.to, timezone: currentPeriod.timezone },
+      analysisVersion: CUSTOMER_VOICE_ANALYSIS_VERSION,
+      dimension,
+      value: requestedValue,
+      coverage,
+      distribution,
+      items,
+      total,
+      page,
+      pageSize,
+      hasNextPage: page * pageSize < total,
     };
   }
 }

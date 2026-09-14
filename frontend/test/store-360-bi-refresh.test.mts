@@ -32,12 +32,12 @@ test("Customer Voice exposes tabs and honest partial coverage", () => {
   assert.match(panelCode, /role="tablist"/);
   assert.match(panelCode, /role="tab"/);
   assert.match(panelCode, /Current-version coverage/);
-  assert.match(panelCode, /It is not full-store coverage/);
+  assert.match(panelCode, /Classified \/ eligible; current analysis only/);
   assert.match(panelCode, /Product Interest/);
   assert.match(panelCode, /From conversations/);
   assert.match(panelCode, /items\.slice\(0, 5\)/);
-  assert.match(panelCode, /href="#conversation-explorer-title"/);
-  assert.match(panelCode, /View all topics/);
+  assert.match(panelCode, /Explore/);
+  assert.doesNotMatch(panelCode, /View all topics/);
 });
 
 test("Store 360 overview uses a compact conversation preview and responsive loading layout", () => {
