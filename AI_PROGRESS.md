@@ -1,10 +1,11 @@
-# 2026-09-14: Android 1.1.27+47 PDF QA candidate [READY FOR QA]
+# 2026-09-14: Android 1.1.27+47 PDF QA candidate [BLOCKED ON WORKFLOW VISIBILITY]
 - **Current Task**: Review and package the implemented PDF feature as a signed staging/release-candidate APK without activating production build 47.
 - **Review**: The PDF implementation was reconciled onto current `origin/main` (`f8e12a0`) without touching the concurrent greeting-targeting change. `docs/executive-guide/` remains untouched; no credentials, generated artifacts, or signed URLs are included.
 - **Packaging**: Android version is `1.1.27+47`, package remains `click.lineoppo.chat`. The obsolete `android-production-release.yml` remains unchanged; the separate manual `android-signed-qa.yml` workflow restores existing signing material only from CI secrets and uploads an APK artifact only.
 - **Repository sync**: `origin/main` was fetched and the PDF candidate is based on it; the pre-existing remote `release/android-1.1.25` branch is not overwritten.
 - **Release boundary**: No production AppRelease activation, force-update, backend deployment, or production release workflow was triggered. The production-configured APK will require the new backend endpoints to be deployed before end-to-end PDF testing against production can work.
-- **Next Action**: Commit and push the reviewed workflow correction, dispatch `android-signed-qa.yml`, verify its signed artifact, then install it over the existing app for device QA. Do not activate build 47 or deploy production.
+- **Blocker**: GitHub only exposes `workflow_dispatch` workflows that exist on the default branch. `android-signed-qa.yml` is safely committed on this candidate branch but is not yet registered, so dispatch returned HTTP 404. The prior run of the obsolete production workflow is not a valid QA result for this task.
+- **Next Action**: Merge or otherwise make only `android-signed-qa.yml` visible on the default branch through the repository’s review process, then dispatch it at this candidate ref, verify the artifact, and install it over the existing app. Do not activate build 47 or deploy production.
 
 # 2026-09-14: End-to-end PDF support for Flutter chat [IMPLEMENTED & VERIFIED]
 - **Current Task**: Add inbound and outbound PDF support to the existing chat system without deployment or release.
