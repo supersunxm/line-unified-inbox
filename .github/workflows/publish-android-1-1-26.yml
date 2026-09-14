@@ -1,5 +1,8 @@
 name: Publish Android 1.1.26
 
+# This workflow is intentionally versioned with the release candidate so a
+# fast-forward fix to the candidate can safely retrigger the publisher.
+
 on:
   push:
     branches:

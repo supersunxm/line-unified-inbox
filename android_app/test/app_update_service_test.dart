@@ -91,8 +91,8 @@ class _PermissionThenInstallService extends AppUpdateService {
 class _ControlledUpdateService extends AppUpdateService {
   _ControlledUpdateService({
     required DateTime Function() now,
-    AppUpdatePromptStore? promptStore,
-  }) : super(ApiClient(TokenStore()), now: now, promptStore: promptStore);
+    super.promptStore,
+  }) : super(ApiClient(TokenStore()), now: now);
 
   AppUpdateInfo? response;
   Future<AppUpdateInfo?>? pendingResponse;
