@@ -1,3 +1,10 @@
+# Android 1.1.25+45 uses the existing CI signing and publisher path (2026-09-14)
+
+- Keep the permanent Android keystore outside the repository and restore it only from the existing GitHub Actions secrets used by prior production releases. Do not create, replace, or inspect signing credentials locally.
+- Base the release on the fetched `origin/main` production baseline (`1.1.24+44`), increment the app to `1.1.25+45`, preserve the package ID `click.lineoppo.chat`, and verify the existing certificate fingerprint in CI.
+- Reuse the established one-off publisher workflow pattern: build the signed APK, verify package/version/signer, copy the APK to the public download surface, update release metadata and migration, run the payload check, and commit the release artifact back to `main`.
+- Leave local visual QA and any UI polish for a separate post-installation task; this release contains the current redesign as-is.
+
 # Google Review Railway Cron Container Startup Reliability (2026-09-14)
 
 - **Direct Xvfb Background Launch over xvfb-run**: Debian/Ubuntu `/usr/bin/xvfb-run` relies on `wait` waiting for a signal (`SIGUSR1`) from `Xvfb`. In non-interactive container environments without signal forwarding or an init daemon, `Xvfb` fails to deliver this signal to the parent shell, causing `xvfb-run` to hang indefinitely on `wait` before Node is ever invoked. We bypass `xvfb-run` entirely by launching `Xvfb :99` in the background within `railway-entrypoint.sh`, polling for process health, binding `DISPLAY=:99`, and directly executing `node scripts/weekly-collector/run-single-cycle.mjs`.

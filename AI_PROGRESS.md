@@ -1,3 +1,17 @@
+# 2026-09-14: Android 1.1.25+45 release [IN PROGRESS]
+- **Current Task**: Release the Flutter chat UI redesign as the next Android update without changing backend behavior, package identity, or signing configuration.
+- **Completed Work**:
+  - Fetched `origin/main` at the production baseline `1.1.24+44` and rebased the isolated redesign commit onto it.
+  - Set `android_app/pubspec.yaml` to `1.1.25+45` and added the established CI publisher using the existing permanent signing secrets.
+  - Kept the unrelated untracked `docs/executive-guide/` directory out of the release files.
+- **Checks Run**:
+  - `flutter analyze`: passed.
+  - Full Flutter tests: **246/246 passed**.
+  - Debug APK metadata: package `click.lineoppo.chat`, version `1.1.25`, versionCode `45`.
+  - `git diff --check`: passed.
+- **Signing/Distribution**: Local signing material is intentionally absent. CI will restore the existing authorized keystore and verify the known production certificate SHA-256 without exposing credentials.
+- **Next Action**: Commit and push the release candidate to the branch, then push the same verified commit to `main` so the normal signed publisher runs. Confirm CI and published metadata before reporting completion.
+
 # 2026-09-14: Google Review Railway Cron Container Startup Reliability Fix [COMPLETED & VERIFIED]
 # 2026-09-14: Google Review Railway Cron Container Startup Reliability Fix [COMPLETED & VERIFIED]
 - **Current Task**: Investigate and fix the Railway cron container startup failure where `google-review-daily-collector` logged only "Starting Container" without executing application collector logic at 23:30 Asia/Bangkok.

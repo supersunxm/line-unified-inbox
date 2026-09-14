@@ -36,7 +36,7 @@ void main() {
     expect(find.text('42'), findsOneWidget);
     expect(find.text('7'), findsOneWidget);
     expect(find.text('35'), findsOneWidget);
-    expect(find.text('Total'), findsOneWidget);
+    expect(find.text('All'), findsOneWidget);
     expect(find.text('Need Reply'), findsOneWidget);
     expect(find.text('Completed'), findsOneWidget);
   });

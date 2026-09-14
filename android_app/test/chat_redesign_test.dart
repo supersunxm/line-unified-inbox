@@ -96,8 +96,8 @@ void main() {
 
     expect(find.text('🌐 Online'), findsOneWidget);
     expect(find.text('♫ TikTok'), findsOneWidget);
-    expect(find.text('Customer Sales Info'), findsOneWidget);
-    await tester.tap(find.text('Customer Sales Info'));
+    expect(find.text('Tagging'), findsOneWidget);
+    await tester.tap(find.text('Tagging'));
     expect(pressed, isTrue);
   });
 
@@ -117,7 +117,7 @@ void main() {
 
     await tester.tap(find.byTooltip('Add attachment'));
     await tester.pumpAndSettle();
-    expect(find.text('Customer Sales Info'), findsOneWidget);
+    expect(find.text('Tagging'), findsOneWidget);
     expect(find.text('Customer profile'), findsOneWidget);
     expect(find.text('Take Photo'), findsNothing);
     expect(find.text('Gallery'), findsNothing);
