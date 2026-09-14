@@ -183,7 +183,8 @@ jobs:
           APK="frontend/public/downloads/oppo-line-oa-chat-v1.1.26-production.apk"
           MIGRATION="backend/prisma/migrations/20260914150000_release_android_1_1_26/migration.sql"
           test "$(sha256sum "$APK" | cut -d' ' -f1)" = "$APK_SHA256"
-          test "$(grep -c "forceUpdate.*false" "$MIGRATION")" -ge 1
+          grep -Fq '"forceUpdate", "apkUrl"' "$MIGRATION"
+          grep -Fq "'1.0.3', 4, false," "$MIGRATION"
           python3 <<'PY'
           from pathlib import Path
           migration = Path("backend/prisma/migrations/20260914150000_release_android_1_1_26/migration.sql").read_text()
