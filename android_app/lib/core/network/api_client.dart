@@ -237,7 +237,8 @@ class ApiClient {
     }
     request.fields['idempotencyKey'] = idempotencyKey;
     request.files.add(http.MultipartFile.fromBytes(field, bytes,
-        filename: filename, contentType: _multipartMediaType(mimeType, filename)));
+        filename: filename,
+        contentType: _multipartMediaType(mimeType, filename)));
     late http.Response response;
     try {
       response = await _sendAndRead(request, timeout: timeout);
@@ -295,6 +296,7 @@ class ApiClient {
       'image/gif',
       'image/webp',
       'video/mp4',
+      'application/pdf',
     };
     final value = supplied != null && supported.contains(supplied)
         ? supplied
@@ -304,6 +306,7 @@ class ApiClient {
             'gif' => 'image/gif',
             'webp' => 'image/webp',
             'mp4' => 'video/mp4',
+            'pdf' => 'application/pdf',
             _ => null,
           };
     if (value == null) return null;

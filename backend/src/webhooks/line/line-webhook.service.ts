@@ -16,6 +16,7 @@ import { stickerPresentationFromRawPayload } from "../../messages/sticker-messag
 import { AutoResponseExecutionService } from "../../auto-response/auto-response-execution.service";
 import { GreetingExecutionService } from "../../greeting-message/greeting-execution.service";
 import { OWNER_TRACKING_STARTED_AT } from "../../owner-tracking";
+import { isPdfFilename, sanitizePdfFilename } from "../../media/pdf-media";
 
 const messageTypeMap: Record<string, MessageType> = {
   text: "TEXT", image: "IMAGE", video: "VIDEO", audio: "AUDIO", file: "FILE", location: "LOCATION", sticker: "STICKER",
@@ -211,8 +212,15 @@ export class LineWebhookService {
           ...("keywords" in message && Array.isArray(message.keywords) ? { keywords: message.keywords.filter((keyword): keyword is string => typeof keyword === "string") } : {}),
           ...("text" in message && typeof message.text === "string" ? { text: message.text } : {}),
         }
-      : { type: message.type };
-    const fileName = message.type === "file" && "fileName" in message ? message.fileName : undefined;
+      : message.type === "file"
+        ? {
+            type: message.type,
+            ...("fileName" in message && typeof message.fileName === "string" ? { fileName: sanitizePdfFilename(message.fileName) } : {}),
+            ...("fileSize" in message && typeof message.fileSize === "number" && Number.isSafeInteger(message.fileSize) && message.fileSize >= 0 ? { fileSize: message.fileSize } : {}),
+          }
+        : { type: message.type };
+    const fileName = message.type === "file" && "fileName" in message && typeof message.fileName === "string" ? sanitizePdfFilename(message.fileName) : undefined;
+    const fileSize = message.type === "file" && "fileSize" in message && typeof message.fileSize === "number" && Number.isSafeInteger(message.fileSize) && message.fileSize >= 0 ? message.fileSize : undefined;
     const latitude = message.type === "location" && "latitude" in message ? message.latitude : undefined;
     const longitude = message.type === "location" && "longitude" in message ? message.longitude : undefined;
 
@@ -268,8 +276,10 @@ export class LineWebhookService {
         },
       });
       if (this.notifications && conversation.storeId) await this.notifications.enqueueInboundMessage(tx, { storeId: conversation.storeId, storeName: oa.store?.name, conversationId: conversation.id, messageId: storedMessage.id, customerName: customer.displayName, messageType: storedMessageType, preview: messagePlaceholder(message), sentAt: sentAt.toISOString() });
-      const mediaType = message.type === "image" || message.type === "video" ? messageTypeMap[message.type] : null;
-      const media = mediaType ? await tx.messageMedia.create({ data: { messageId: storedMessage.id, providerMessageId: message.id, mediaType } }) : null;
+      const mediaType = message.type === "image" || message.type === "video" || message.type === "file" ? messageTypeMap[message.type] : null;
+      const media = mediaType
+        ? await tx.messageMedia.create({ data: { messageId: storedMessage.id, providerMessageId: message.id, mediaType, ...(fileSize !== undefined ? { fileSize } : {}), ...(message.type === "file" && !isPdfFilename(fileName) ? { processingStatus: "SKIPPED", errorCode: "UNSUPPORTED_FILE_TYPE", errorMessage: "Only PDF files are supported" } : {}) } })
+        : null;
       await tx.activityHistory.create({ data: { conversationId: conversation.id, actionType: ActivityActionType.MESSAGE_RECEIVED, previousStatus: existing?.followUpStatus, newStatus: FollowUpStatus.FOLLOW_UP, description: `Inbound ${message.type} message received` } });
       if (shouldResetBm && prevBmStatus) {
         await tx.activityHistory.create({
@@ -282,7 +292,7 @@ export class LineWebhookService {
           },
         });
       }
-      return { conversation, messageId: storedMessage.id, mediaId: media?.id, mediaType, ownerTracked: storedMessage.createdAt >= OWNER_TRACKING_STARTED_AT };
+      return { conversation, messageId: storedMessage.id, mediaId: media?.id, mediaType, mediaProcessingStatus: media?.processingStatus ?? "PENDING", fileName, ownerTracked: storedMessage.createdAt >= OWNER_TRACKING_STARTED_AT };
     });
     const conversation = stored.conversation;
     const sticker = stickerPresentationFromRawPayload(rawPayload);
@@ -291,14 +301,21 @@ export class LineWebhookService {
       version: 1,
       conversationId: conversation.id,
       storeId: conversation.storeId,
-      message: { id: stored.messageId, direction: "INBOUND", messageType: messageTypeMap[message.type] ?? MessageType.UNSUPPORTED, text: messagePlaceholder(message), sentAt: sentAt.toISOString(), sticker, media: stored.mediaId ? { processingStatus: "PENDING", mimeType: null, fileSize: null, url: null } : null },
+      message: { id: stored.messageId, direction: "INBOUND", messageType: messageTypeMap[message.type] ?? MessageType.UNSUPPORTED, text: messagePlaceholder(message), fileName: stored.fileName ?? null, sentAt: sentAt.toISOString(), sticker, media: stored.mediaId ? { processingStatus: stored.mediaProcessingStatus, mimeType: null, fileSize: fileSize ?? null, url: null } : null },
       conversation: { id: conversation.id, latestMessageAt: sentAt.toISOString(), bmReplyStatus: conversation.bmReplyStatus, ownerTracked: stored.ownerTracked },
     });
     if ((message.type === "image" || message.type === "video") && stored.mediaId) {
       await this.images.process(stored.mediaId, oa.id, message.id, sentAt, stored.mediaType ?? MessageType.UNSUPPORTED);
       if (this.realtime) {
         const media = await this.prisma.messageMedia.findUnique({ where: { id: stored.mediaId }, select: { processingStatus: true, mimeType: true, fileSize: true } });
-        this.realtime.publish({ type: "message.media.updated", version: 1, conversationId: conversation.id, storeId: conversation.storeId, message: { id: stored.messageId, direction: "INBOUND", messageType: messageTypeMap[message.type] ?? MessageType.UNSUPPORTED, text: messagePlaceholder(message), sentAt: sentAt.toISOString(), media: { processingStatus: media?.processingStatus ?? "FAILED", mimeType: media?.mimeType ?? null, fileSize: media?.fileSize ?? null, url: media?.processingStatus === "READY" ? `/messages/${stored.messageId}/media` : null } } });
+        this.realtime.publish({ type: "message.media.updated", version: 1, conversationId: conversation.id, storeId: conversation.storeId, message: { id: stored.messageId, direction: "INBOUND", messageType: messageTypeMap[message.type] ?? MessageType.UNSUPPORTED, text: messagePlaceholder(message), fileName: stored.fileName ?? null, sentAt: sentAt.toISOString(), media: { processingStatus: media?.processingStatus ?? "FAILED", mimeType: media?.mimeType ?? null, fileSize: media?.fileSize ?? null, url: media?.processingStatus === "READY" ? `/messages/${stored.messageId}/media` : null } } });
+      }
+    }
+    if (message.type === "file" && stored.mediaId && stored.mediaProcessingStatus === "PENDING") {
+      await this.images.processPdf(stored.mediaId, oa.id, message.id, sentAt, stored.fileName, fileSize);
+      if (this.realtime) {
+        const media = await this.prisma.messageMedia.findUnique({ where: { id: stored.mediaId }, select: { processingStatus: true, mimeType: true, fileSize: true } });
+        this.realtime.publish({ type: "message.media.updated", version: 1, conversationId: conversation.id, storeId: conversation.storeId, message: { id: stored.messageId, direction: "INBOUND", messageType: MessageType.FILE, text: messagePlaceholder(message), fileName: stored.fileName ?? null, sentAt: sentAt.toISOString(), media: { processingStatus: media?.processingStatus ?? "FAILED", mimeType: media?.mimeType ?? null, fileSize: media?.fileSize ?? fileSize ?? null, url: media?.processingStatus === "READY" ? `/messages/${stored.messageId}/media` : null } } });
       }
     }
     if (message.type === "text" && "text" in message && this.autoResponseExecution) {

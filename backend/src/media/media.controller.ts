@@ -6,6 +6,8 @@ import { isAllowedPublicMediaObjectKey, verifyMediaPublicUrl } from "./media-pub
 import { StoreAccessService } from "../auth/store-access.service";
 import { PrismaService } from "../prisma.service";
 import { MediaStorageService } from "./media-storage";
+import { isPdfDocumentToken } from "./pdf-document-url";
+import { isPdfMagicBytes, PDF_MIME_TYPE, sanitizePdfFilename } from "./pdf-media";
 
 function resolveMediaContentType(key: string, storedContentType?: string): string {
   if (storedContentType && storedContentType !== "application/octet-stream") {
@@ -121,6 +123,40 @@ export class MediaController {
     } catch (error) {
       if (error instanceof NotFoundException) throw error;
       throw new NotFoundException("Media is unavailable");
+    }
+  }
+}
+
+@Controller("d")
+export class PdfDocumentController {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly storage: MediaStorageService,
+  ) {}
+
+  @Public()
+  @Get(":token")
+  async get(@Param("token") token: string, @Res() response: Response) {
+    if (!isPdfDocumentToken(token)) throw new NotFoundException("Document is unavailable");
+    const media = await this.prisma.messageMedia.findUnique({
+      where: { id: token },
+      include: { message: { select: { fileName: true } } },
+    });
+    if (!media || media.mediaType !== "FILE" || media.mimeType !== PDF_MIME_TYPE || media.processingStatus !== "READY" || (!media.objectKey && !media.fileId)) {
+      throw new NotFoundException("Document is unavailable");
+    }
+    try {
+      const stored = await this.storage.get(media.fileId ?? media.objectKey!);
+      if (!isPdfMagicBytes(stored.body)) throw new Error("Stored document is not a PDF");
+      const filename = sanitizePdfFilename(media.message.fileName);
+      response.setHeader("Content-Type", PDF_MIME_TYPE);
+      response.setHeader("Content-Length", String(stored.body.length));
+      response.setHeader("Content-Disposition", `inline; filename="document.pdf"; filename*=UTF-8''${encodeURIComponent(filename)}`);
+      response.setHeader("Cache-Control", "public, max-age=300");
+      response.setHeader("X-Content-Type-Options", "nosniff");
+      response.send(stored.body);
+    } catch {
+      throw new NotFoundException("Document is unavailable");
     }
   }
 }

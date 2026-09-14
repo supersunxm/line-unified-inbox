@@ -18,6 +18,7 @@ import 'widgets/chat_composer.dart';
 import 'widgets/conversation_info_page.dart';
 import 'widgets/conversation_tags_sheet.dart';
 import 'widgets/message_timeline.dart';
+import 'pdf_attachment.dart';
 
 enum ReplyState { sending, failed }
 
@@ -28,10 +29,84 @@ class PendingReply {
   ReplyState state;
 }
 
+class _PdfPreviewPage extends StatelessWidget {
+  const _PdfPreviewPage({required this.attachment});
+
+  final PdfAttachment attachment;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = appLocalizations(context);
+    final size = formatPdfFileSize(attachment.fileSize);
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(l10n.sendPdfQuestion),
+        leading: IconButton(
+          icon: const Icon(Icons.close),
+          onPressed: () => Navigator.of(context).pop(false),
+        ),
+      ),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Card(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.picture_as_pdf_outlined,
+                      color: Colors.red, size: 72),
+                  const SizedBox(height: 16),
+                  Text(
+                    attachment.filename,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 8),
+                  Text('${l10n.pdfFile} · $size'),
+                  const SizedBox(height: 24),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => Navigator.of(context).pop(false),
+                          child: Text(l10n.cancel),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: FilledButton.icon(
+                          onPressed: () => Navigator.of(context).pop(true),
+                          icon: const Icon(Icons.send_rounded, size: 18),
+                          label: Text(l10n.send),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class PendingImage {
   PendingImage(this.bytes, this.filename, this.key);
   final Uint8List bytes;
   final String filename;
+  final String key;
+  ReplyState state = ReplyState.sending;
+}
+
+class PendingPdf {
+  PendingPdf(this.attachment, this.key);
+  final PdfAttachment attachment;
   final String key;
   ReplyState state = ReplyState.sending;
 }
@@ -77,8 +152,10 @@ class _ChatPageState extends State<ChatPage> {
   final _scroll = ScrollController();
   final List<PendingReply> _pending = [];
   final List<PendingImage> _pendingImages = [];
+  final List<PendingPdf> _pendingPdfs = [];
   final Map<String, Uint8List> _mediaBytes = {};
   bool _sendingVideo = false;
+  bool _sendingPdf = false;
   final Set<String> _mediaLoading = {};
   Future<ConversationDetail>? _future;
   ConversationDetail? _detail;
@@ -172,8 +249,7 @@ class _ChatPageState extends State<ChatPage> {
   Future<void> _showConversationTags() async {
     final detail = _detail;
     if (detail == null || !mounted) return;
-    final wasInterested =
-        detail.customerSalesInformation?.isInterested == true;
+    final wasInterested = detail.customerSalesInformation?.isInterested == true;
     final sheetResult = await ConversationTagsSheet.show(
       context: context,
       conversationId: detail.id,
@@ -379,6 +455,7 @@ class _ChatPageState extends State<ChatPage> {
         direction: current.direction,
         messageType: current.messageType,
         sentAt: current.sentAt,
+        fileName: current.fileName,
         sender: current.sender,
         media: updatedMedia,
         idempotencyKey: current.idempotencyKey);
@@ -405,6 +482,7 @@ class _ChatPageState extends State<ChatPage> {
     setState(() {
       _pending.removeWhere((item) => item.key == idempotencyKey);
       _pendingImages.removeWhere((item) => item.key == idempotencyKey);
+      _pendingPdfs.removeWhere((item) => item.key == idempotencyKey);
       _detail = detail.copyWith(messages: messages, bmReplyStatus: 'REPLIED');
     });
   }
@@ -787,6 +865,106 @@ class _ChatPageState extends State<ChatPage> {
     }
   }
 
+  Future<void> _pickPdf() async {
+    final l10n = appLocalizations(context);
+    try {
+      final picked = await const PdfAttachmentPicker().pick();
+      if (picked == null || !mounted) return;
+      final confirmSend = await Navigator.of(context).push<bool>(
+        MaterialPageRoute(
+          fullscreenDialog: true,
+          builder: (_) => _PdfPreviewPage(attachment: picked),
+        ),
+      );
+      if (confirmSend == true && mounted) await _sendPdf(picked);
+    } on PdfAttachmentException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _error = switch (error.code) {
+          'PDF_TOO_LARGE' => l10n.pdfTooLarge,
+          'PDF_EXTENSION_REQUIRED' || 'PDF_MIME_REQUIRED' => l10n.pdfOnly,
+          'PDF_VIEWER_UNAVAILABLE' => l10n.pdfViewerUnavailable,
+          _ => l10n.pdfUnavailable,
+        };
+      });
+    } on PlatformException catch (error) {
+      if (mounted) {
+        setState(() => _error = error.message ?? l10n.pdfUnavailable);
+      }
+    } catch (_) {
+      if (mounted) setState(() => _error = l10n.pdfUnavailable);
+    }
+  }
+
+  Future<void> _sendPdf(PdfAttachment attachment,
+      {PendingPdf? existing}) async {
+    if (_sendingPdf) return;
+    final pending = existing ?? PendingPdf(attachment, _key());
+    if (existing == null) setState(() => _pendingPdfs.add(pending));
+    setState(() {
+      _sendingPdf = true;
+      pending.state = ReplyState.sending;
+      _error = null;
+    });
+    _scrollToBottom();
+    try {
+      final message = await widget.repository.sendPdf(
+        widget.conversationId,
+        pending.attachment.bytes,
+        pending.attachment.filename,
+        pending.key,
+        mimeType: pending.attachment.mimeType,
+      );
+      if (mounted) _mergeSentMessage(message, pending.key);
+    } on ApiException catch (error) {
+      if (mounted) {
+        setState(() {
+          pending.state = ReplyState.failed;
+          _error = error.statusCode == 413
+              ? appLocalizations(context).pdfTooLarge
+              : error.message;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          pending.state = ReplyState.failed;
+          _error = appLocalizations(context).pdfUnavailable;
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _sendingPdf = false);
+    }
+  }
+
+  Future<void> _openPdf(ChatMedia media, String id, String filename) async {
+    final l10n = appLocalizations(context);
+    try {
+      final bytes = await _loadMedia(media, id);
+      if (bytes == null || bytes.isEmpty) {
+        throw const PdfAttachmentException('PDF_UNAVAILABLE');
+      }
+      final attachment = validatePdfAttachment(
+        bytes: bytes,
+        filename: filename,
+        mimeType: media.mimeType,
+      );
+      await const PdfFileOpener().open(attachment);
+    } on PdfAttachmentException catch (error) {
+      if (mounted) {
+        setState(() => _error = error.code == 'PDF_VIEWER_UNAVAILABLE'
+            ? l10n.pdfViewerUnavailable
+            : l10n.pdfUnavailable);
+      }
+    } on PlatformException catch (error) {
+      if (mounted) {
+        setState(() => _error = error.message ?? l10n.pdfViewerUnavailable);
+      }
+    } catch (_) {
+      if (mounted) setState(() => _error = l10n.pdfViewerUnavailable);
+    }
+  }
+
   String _recordVideoLabel(BuildContext context) =>
       switch (Localizations.localeOf(context).languageCode) {
         'th' => 'ถ่ายวิดีโอ',
@@ -973,7 +1151,16 @@ class _ChatPageState extends State<ChatPage> {
                                     isSending:
                                         pending.state == ReplyState.sending,
                                     bytes: pending.bytes,
-                                    filename: pending.filename))
+                                    filename: pending.filename)),
+                            ..._pendingPdfs.map((pending) =>
+                                PendingTimelineMessage(
+                                    key: pending.key,
+                                    isImage: false,
+                                    isPdf: true,
+                                    isSending:
+                                        pending.state == ReplyState.sending,
+                                    filename: pending.attachment.filename,
+                                    fileSize: pending.attachment.fileSize))
                           ],
                           loadingOlder: _loadingOlder,
                           mediaBytes: _mediaBytes,
@@ -984,6 +1171,7 @@ class _ChatPageState extends State<ChatPage> {
                                   builder: (_) => _ImageViewer(
                                       bytes: bytes, mimeType: mimeType))),
                           onLoadMedia: _loadImageMedia,
+                          onOpenPdf: _openPdf,
                           onLoadVideo: (media, id) async {
                             final bytes = await _loadMedia(media, id);
                             if (bytes == null || bytes.isEmpty) {
@@ -1025,12 +1213,13 @@ class _ChatPageState extends State<ChatPage> {
                               _pickImage(preferredSource: ImageSource.gallery)
                           : null,
                       onAttachVideo: widget.canReply ? _pickVideo : null,
+                      onAttachPdf: widget.canReply ? _pickPdf : null,
                       onOpenSalesInfo:
                           widget.canReply ? _showConversationTags : null,
                       onOpenConversationInfo: _showCustomerProfile,
                       onOpenStatus:
                           widget.canReply ? _showConversationActions : null,
-                      isAttaching: _sendingVideo,
+                      isAttaching: _sendingVideo || _sendingPdf,
                       onSend: widget.canReply ? _send : null)
                 ]));
           }));
@@ -1045,6 +1234,12 @@ class _ChatPageState extends State<ChatPage> {
     for (final pending in _pendingImages) {
       if (pending.key == key) {
         _sendImage(pending.bytes, pending.filename, existing: pending);
+        return;
+      }
+    }
+    for (final pending in _pendingPdfs) {
+      if (pending.key == key) {
+        _sendPdf(pending.attachment, existing: pending);
         return;
       }
     }

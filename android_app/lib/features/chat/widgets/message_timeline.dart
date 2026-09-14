@@ -11,6 +11,7 @@ import 'image_bubble.dart';
 import 'message_bubble.dart';
 import 'sticker_bubble.dart';
 import 'video_bubble.dart';
+import 'pdf_bubble.dart';
 
 typedef OpenImageCallback = void Function(Uint8List bytes, String? mimeType);
 
@@ -22,6 +23,8 @@ class PendingTimelineMessage {
     this.text,
     this.bytes,
     this.filename,
+    this.isPdf = false,
+    this.fileSize,
   });
 
   final String key;
@@ -30,6 +33,8 @@ class PendingTimelineMessage {
   final String? text;
   final Uint8List? bytes;
   final String? filename;
+  final bool isPdf;
+  final int? fileSize;
 }
 
 class MessageTimeline extends StatelessWidget {
@@ -45,6 +50,7 @@ class MessageTimeline extends StatelessWidget {
     this.onOpenImage,
     this.onLoadMedia,
     this.onLoadVideo,
+    this.onOpenPdf,
     this.onUserScroll,
     this.isProgrammaticScroll,
   });
@@ -60,6 +66,8 @@ class MessageTimeline extends StatelessWidget {
   final void Function(ChatMedia media, String messageId)? onLoadMedia;
   final Future<Uint8List> Function(ChatMedia media, String messageId)?
       onLoadVideo;
+  final Future<void> Function(
+      ChatMedia media, String messageId, String filename)? onOpenPdf;
   final VoidCallback? onUserScroll;
   final bool Function()? isProgrammaticScroll;
 
@@ -128,6 +136,9 @@ class MessageTimeline extends StatelessWidget {
     final media = message.media;
     final image = message.messageType == 'IMAGE';
     final video = message.messageType == 'VIDEO';
+    final pdf = message.messageType == 'FILE' &&
+        (media?.isPdf ??
+            message.fileName?.toLowerCase().endsWith('.pdf') == true);
     final sticker = message.messageType == 'STICKER';
     if (image && media != null && media.ready) {
       onLoadMedia?.call(media, message.id);
@@ -157,11 +168,43 @@ class MessageTimeline extends StatelessWidget {
                           ? null
                           : () => onLoadVideo!(media, message.id),
                     )
-                  : null,
+                  : pdf
+                      ? PdfBubble(
+                          filename: message.fileName ?? 'document.pdf',
+                          fileSize: media?.fileSize,
+                          media: media,
+                          onOpen:
+                              media == null || !media.ready || onOpenPdf == null
+                                  ? null
+                                  : () => onOpenPdf!(media, message.id,
+                                      message.fileName ?? 'document.pdf'),
+                        )
+                      : null,
     );
   }
 
   Widget _pendingRow(BuildContext context, PendingTimelineMessage pending) {
+    if (pending.isPdf) {
+      return Align(
+        alignment: Alignment.centerRight,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+          child: PdfBubble(
+            filename: pending.filename ?? 'document.pdf',
+            fileSize: pending.fileSize,
+            isSending: pending.isSending,
+            media: ChatMedia(
+              processingStatus: pending.isSending ? 'PENDING' : 'FAILED',
+              mimeType: 'application/pdf',
+              fileSize: pending.fileSize,
+            ),
+            onRetry: pending.isSending || onRetryMessage == null
+                ? null
+                : () => onRetryMessage!(pending.key),
+          ),
+        ),
+      );
+    }
     if (pending.isImage) {
       return Align(
         alignment: Alignment.centerRight,

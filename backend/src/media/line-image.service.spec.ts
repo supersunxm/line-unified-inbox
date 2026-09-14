@@ -9,6 +9,35 @@ import { MediaStorageService } from "./media-storage";
 
 type MediaUpdate = { processingStatus: string; mimeType?: string; objectKey?: string | null; fileSize?: number; provider?: string; fileId?: string; errorCode?: string };
 
+async function runPdf(response: Response, filename = "customer-statement.pdf", maxBytes = "1024", declaredFileSize?: number) {
+  const previousFetch = global.fetch;
+  const previousMax = process.env.MEDIA_MAX_PDF_FILE_SIZE_BYTES;
+  const previousEnabled = process.env.MEDIA_STORAGE_ENABLED;
+  process.env.MEDIA_STORAGE_ENABLED = "true";
+  process.env.MEDIA_MAX_PDF_FILE_SIZE_BYTES = maxBytes;
+  let authorization = "";
+  let update: MediaUpdate | undefined;
+  let stored: { key: string; body: Buffer; mimeType: string } | undefined;
+  global.fetch = (_url: string | URL | Request, init?: RequestInit) => {
+    authorization = new Headers(init?.headers).get("authorization") ?? "";
+    return Promise.resolve(response);
+  };
+  const prisma = {
+    lineOfficialAccount: { findUnique: () => Promise.resolve({ encryptedChannelAccessToken: "encrypted-token" }) },
+    messageMedia: { update: ({ data }: { data: MediaUpdate }) => { update = data; return Promise.resolve({}); } },
+  } as unknown as PrismaService;
+  const encryption = { decrypt: () => "oa-specific-token" } as unknown as CredentialEncryptionService;
+  const storage = { put: (key: string, body: Buffer, mimeType: string) => { stored = { key, body, mimeType }; return Promise.resolve({ provider: "s3", fileId: key, mimeType, size: body.length }); } } as unknown as MediaStorageService;
+  try {
+    await new LineImageService(prisma, encryption, storage).processPdf("media-pdf-1", "oa-1", "line-pdf-1", new Date("2026-07-20T00:00:00Z"), filename, declaredFileSize);
+    return { authorization, update, stored };
+  } finally {
+    global.fetch = previousFetch;
+    if (previousMax === undefined) delete process.env.MEDIA_MAX_PDF_FILE_SIZE_BYTES; else process.env.MEDIA_MAX_PDF_FILE_SIZE_BYTES = previousMax;
+    if (previousEnabled === undefined) delete process.env.MEDIA_STORAGE_ENABLED; else process.env.MEDIA_STORAGE_ENABLED = previousEnabled;
+  }
+}
+
 async function runImage(response: Response, maxBytes = "1024", mediaType = MessageType.IMAGE) {
   const previousFetch = global.fetch;
   const previousMax = process.env.MEDIA_MAX_FILE_SIZE_BYTES;
@@ -93,6 +122,35 @@ void test("LINE 404 and 410 are recorded as FAILED without throwing", async () =
     assert.equal(result.update?.processingStatus, "FAILED");
     assert.equal(result.update?.errorCode, `LINE_HTTP_${status}`);
   }
+});
+
+void test("inbound PDF uses the OA token, validates the response, and stores PDF metadata", async () => {
+  const result = await runPdf(new Response(Buffer.from("%PDF-1.7\nbody"), { status: 200, headers: { "content-type": "application/pdf", "content-length": "13" } }));
+  assert.equal(result.authorization, "Bearer oa-specific-token");
+  assert.equal(result.update?.processingStatus, "READY");
+  assert.equal(result.update?.mimeType, "application/pdf");
+  assert.equal(result.update?.fileSize, 13);
+  assert.match(result.stored?.key ?? "", /^line-media\/oa-1\/2026\/07\/line-pdf-1\.pdf$/);
+});
+
+void test("inbound PDF rejects unsupported filename, MIME, signature, and size", async () => {
+  const wrongName = await runPdf(new Response(Buffer.from("%PDF-1.7"), { status: 200, headers: { "content-type": "application/pdf" } }), "statement.exe");
+  assert.equal(wrongName.update?.processingStatus, "SKIPPED");
+  assert.equal(wrongName.update?.errorCode, "UNSUPPORTED_FILE_TYPE");
+  const wrongMime = await runPdf(new Response(Buffer.from("%PDF-1.7"), { status: 200, headers: { "content-type": "image/png" } }));
+  assert.equal(wrongMime.update?.errorCode, "UNSUPPORTED_MIME_TYPE");
+  const wrongSignature = await runPdf(new Response(Buffer.from("not pdf"), { status: 200, headers: { "content-type": "application/pdf" } }));
+  assert.equal(wrongSignature.update?.errorCode, "PDF_SIGNATURE_INVALID");
+  const oversized = await runPdf(new Response(Buffer.from("%PDF-1.7\n123"), { status: 200, headers: { "content-type": "application/pdf" } }), "statement.pdf", "10");
+  assert.equal(oversized.update?.errorCode, "MEDIA_TOO_LARGE");
+  const declaredOversized = await runPdf(new Response(Buffer.from("%PDF-1.7"), { status: 200, headers: { "content-type": "application/pdf" } }), "statement.pdf", "1024", 2048);
+  assert.equal(declaredOversized.update?.errorCode, "MEDIA_TOO_LARGE");
+});
+
+void test("inbound PDF download failures remain FAILED and do not throw", async () => {
+  const result = await runPdf(new Response(null, { status: 410 }));
+  assert.equal(result.update?.processingStatus, "FAILED");
+  assert.equal(result.update?.errorCode, "LINE_HTTP_410");
 });
 
 import { join } from "node:path";

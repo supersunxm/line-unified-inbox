@@ -1,3 +1,19 @@
+# Android 1.1.27+47 signed QA candidate (2026-09-14)
+
+- Keep the obsolete `android-production-release.yml` production workflow unchanged. Add the smallest separate manual `android-signed-qa.yml` workflow: restore the permanent keystore from CI secrets, verify package/version/signer, and upload a 30-day QA artifact only. Do not use versioned publish workflows because they update `AppRelease` and push release artifacts to `main`.
+- Keep `click.lineoppo.chat` and use `1.1.27+47`; no local signing key is created and no signing configuration is changed.
+- The signed candidate uses the repository’s existing production API base URL. Since the PDF endpoints are new and no staging backend was found, end-to-end PDF QA requires an explicitly authorized backend deployment first; this task does not deploy production or activate build 47.
+- GitHub does not register a new `workflow_dispatch` workflow until it exists on the default branch. Keep the QA workflow on the candidate branch and use the repository review process to make only that workflow visible on the default branch before dispatch; never fall back to the obsolete production workflow.
+
+# End-to-end PDF support (2026-09-14)
+
+- Reuse `Message` and `MessageMedia`; preserve file-event metadata even when a PDF download fails, and mark non-PDF LINE files as skipped without downloading them.
+- Centralize PDF validation around the `.pdf` extension, accepted PDF MIME types, `%PDF-` magic bytes, and the configurable 20 MB default limit. Keep filenames as display metadata only; storage keys use opaque IDs.
+- Use the existing per-OA LINE credential resolution and media storage paths for inbound downloads. Outbound PDFs use existing authenticated conversation access and storage, then deliver a Flex message containing a stable opaque HTTPS `/d/{uuid}` document URL because LINE has no native outbound file message type.
+- Serve customer PDF links only for READY PDF media through a strict UUID token lookup, with no storage key exposure and no five-minute signed URL dependency. Keep private media access on the existing authorized route.
+- Use Android `ACTION_OPEN_DOCUMENT` plus the existing `FileProvider`/platform viewer path. The chat UI shows a compact PDF bubble and confirmation step; it does not add a custom PDF renderer or change the existing redesign.
+- This implementation is code/test/build work only. Deployment, production release, installation, screenshot QA, and UI polish remain separate authorized actions.
+
 # Proactive Android update prompt (2026-09-14)
 
 - Reuse the existing `AppUpdateService` and `/app/version/android` `AppRelease` contract. The client compares numeric `buildNumber` values, so version strings are not used to decide whether an update exists.

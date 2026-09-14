@@ -18,6 +18,9 @@ import { stickerPresentationFromRawPayload } from "./messages/sticker-message";
 import { serializeConversationOwner } from "./conversation-owner";
 import { ownerTrackingInboundFilter } from "./owner-tracking";
 import { FOCUS_STORE_GROUP_ID, isFocusStoreReference } from "./focus-store-group";
+import { randomUUID } from "node:crypto";
+import { createPdfDocumentUrl } from "./media/pdf-document-url";
+import { PDF_MIME_TYPE, readPdfMaxBytes, validatePdfBuffer, PdfValidationError } from "./media/pdf-media";
 
 const conversationBaseInclude = {
   customer: true,
@@ -169,7 +172,7 @@ export class ConversationsService {
     return { ...safe, sender, sticker, media: media ? { processingStatus: media.processingStatus, mimeType: media.mimeType, fileSize: media.fileSize, url: media.processingStatus === "READY" ? `/messages/${message.id}/media` : null } : null };
   }
 
-  private publishOutboundMessage(conversation: { id: string; storeId: string | null; bmReplyStatus: string; owner?: { id: string; displayName: string } | null; ownerTracked?: boolean }, message: { id: string; direction?: MessageDirection; messageType: string; originalText: string; sentAt: Date; senderUserId?: string | null; senderDisplayName?: string | null }, media: { processingStatus: string; mimeType?: string | null; fileSize?: number | null } | null = null, owner?: { id: string; displayName: string } | null) {
+  private publishOutboundMessage(conversation: { id: string; storeId: string | null; bmReplyStatus: string; owner?: { id: string; displayName: string } | null; ownerTracked?: boolean }, message: { id: string; direction?: MessageDirection; messageType: string; originalText: string; sentAt: Date; senderUserId?: string | null; senderDisplayName?: string | null; fileName?: string | null }, media: { processingStatus: string; mimeType?: string | null; fileSize?: number | null } | null = null, owner?: { id: string; displayName: string } | null) {
     if (!this.realtime) return;
     this.realtime.publish({
       type: "message.created",
@@ -181,6 +184,7 @@ export class ConversationsService {
         direction: MessageDirection.OUTBOUND,
         messageType: message.messageType,
         text: message.originalText,
+        fileName: message.fileName ?? null,
         sentAt: message.sentAt.toISOString(),
         sender: resolveMessageSender({ ...message, direction: MessageDirection.OUTBOUND }),
         media: media
@@ -968,6 +972,87 @@ export class ConversationsService {
       return { message: this.safeMessage({ ...created, media: { processingStatus: "READY", mimeType: stored.mimeType, fileSize: stored.size } }), bmReplyStatus: BmReplyStatus.REPLIED, duplicate: lineResult.duplicateAccepted };
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") { const existing = await this.prisma.message.findUnique({ where: { externalMessageId: dedupeExternalId }, include: { media: true } }); if (existing) return { message: this.safeMessage(existing), bmReplyStatus: BmReplyStatus.REPLIED, duplicate: true }; }
+      throw error;
+    }
+  }
+
+  async sendPdf(id: string, file: { buffer: Buffer; mimetype: string; size: number; originalname?: string }, idempotencyKey: string, operator: AuthUser) {
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(idempotencyKey)) throw new BadRequestException("idempotencyKey must be a UUID");
+    let pdf: ReturnType<typeof validatePdfBuffer>;
+    try {
+      pdf = validatePdfBuffer({ buffer: file.buffer, filename: file.originalname, mimeType: file.mimetype, maxBytes: readPdfMaxBytes() });
+    } catch (error) {
+      if (error instanceof PdfValidationError) {
+        const message = error.code === "PDF_TOO_LARGE" ? "ไฟล์ PDF ต้องมีขนาดไม่เกิน 20 MB" : error.code === "PDF_EXTENSION_REQUIRED" ? "รองรับไฟล์ PDF เท่านั้น" : error.code === "PDF_MIME_REQUIRED" ? "ชนิดไฟล์ไม่ตรงกับ PDF" : "ไฟล์ที่เลือกไม่ใช่ PDF ที่ถูกต้อง";
+        throw new BadRequestException(message);
+      }
+      throw error;
+    }
+    const dedupeExternalId = `outbound:${idempotencyKey}`;
+    const priorMessage = await this.prisma.message.findUnique({ where: { externalMessageId: dedupeExternalId }, include: { media: true } });
+    if (priorMessage) return { message: this.safeMessage(priorMessage), bmReplyStatus: BmReplyStatus.REPLIED, duplicate: true };
+    if (!this.media) throw new ServiceUnavailableException("Media storage is unavailable");
+    const conversation = await this.prisma.conversation.findUnique({ where: { id }, include: { customer: true, lineOfficialAccount: true, store: true, owner: { select: { id: true, displayName: true, isActive: true, status: true, role: true, canAccessAllStores: true, memberships: { where: { status: "ACTIVE", store: { isActive: true, archivedAt: null } }, select: { storeId: true } } } }, _count: { select: { messages: { where: ownerTrackingInboundFilter() } } } } });
+    if (!conversation) throw new NotFoundException("ไม่พบการสนทนา");
+    if (!conversation.customer.lineUserId) throw new BadRequestException("ไม่พบ LINE User ID ของลูกค้า");
+    if (!conversation.lineOfficialAccount?.isActive || conversation.lineOfficialAccount.archivedAt || !conversation.lineOfficialAccount.encryptedChannelAccessToken) throw new BadRequestException("LINE Official Account นี้ไม่ได้เปิดใช้งาน");
+    let accessToken: string;
+    try { accessToken = this.encryption.decrypt(conversation.lineOfficialAccount.encryptedChannelAccessToken); } catch { throw new ServiceUnavailableException("ไม่สามารถอ่าน Channel Access Token ของร้านนี้ได้"); }
+
+    const objectKey = `line-media/outbound/${conversation.id}/${idempotencyKey}.pdf`;
+    const stored = await this.media.put(objectKey, file.buffer, PDF_MIME_TYPE);
+    if (!stored.fileId && !stored.provider) throw new ServiceUnavailableException("Media storage failed to persist outbound PDF");
+    const documentToken = randomUUID();
+    const documentUrl = createPdfDocumentUrl(documentToken);
+    try {
+      const claimed = await this.claimEligibleReplyToken(conversation.id);
+      let lineResult: { requestId: string | null; acceptedRequestId: string | null; externalMessageId: string | null; duplicateAccepted: boolean };
+      let deliveryMethod: "REPLY" | "PUSH" = "PUSH";
+      const context = {
+        conversationId: conversation.id,
+        userId: operator.id,
+        storeId: conversation.storeId ?? undefined,
+        storeName: conversation.store?.name,
+        channelId: conversation.lineOfficialAccount.channelId || conversation.lineOfficialAccount.id,
+      };
+      if (claimed) {
+        const replyRes = await this.lineMessaging.replyPdfDocument({ accessToken, replyToken: claimed.replyToken, filename: pdf.filename, fileSize: pdf.fileSize, url: documentUrl, context: { ...context, replyTokenAgeMs: claimed.ageMs, replyTokenAgeBucket: claimed.ageBucket } });
+        if (replyRes.success) {
+          lineResult = { requestId: replyRes.requestId, acceptedRequestId: null, externalMessageId: replyRes.externalMessageId, duplicateAccepted: false };
+          deliveryMethod = "REPLY";
+        } else if (replyRes.invalidReplyToken) {
+          lineResult = await this.lineMessaging.pushPdfDocument({ accessToken, lineUserId: conversation.customer.lineUserId, filename: pdf.filename, fileSize: pdf.fileSize, url: documentUrl, retryKey: idempotencyKey, context: { ...context, replyTokenAgeMs: claimed.ageMs, replyTokenAgeBucket: claimed.ageBucket, fallbackReason: "INVALID_REPLY_TOKEN" } });
+        } else {
+          throw new ServiceUnavailableException("ส่งไฟล์ PDF ไม่สำเร็จ กรุณาลองอีกครั้ง");
+        }
+      } else {
+        lineResult = await this.lineMessaging.pushPdfDocument({ accessToken, lineUserId: conversation.customer.lineUserId, filename: pdf.filename, fileSize: pdf.fileSize, url: documentUrl, retryKey: idempotencyKey, context });
+      }
+
+      const sentAt = new Date();
+      let ownerAssigned = false;
+      let ownerTracked = conversation._count?.messages === undefined ? true : conversation._count.messages > 0;
+      const created = await this.prisma.$transaction(async (tx) => {
+        const message = await tx.message.create({ data: { conversationId: conversation.id, externalMessageId: dedupeExternalId, direction: MessageDirection.OUTBOUND, messageType: MessageType.FILE, originalText: `[PDF: ${pdf.filename}]`, fileName: pdf.filename, sentAt, senderUserId: operator.id, senderDisplayName: operator.displayName?.trim() || "Store", rawPayload: { provider: "LINE", deliveryMethod, providerMessageId: lineResult.externalMessageId, requestId: lineResult.requestId, acceptedRequestId: lineResult.acceptedRequestId, fileType: PDF_MIME_TYPE } } });
+        await tx.messageMedia.create({ data: { id: documentToken, messageId: message.id, providerMessageId: dedupeExternalId, mediaType: MessageType.FILE, mimeType: PDF_MIME_TYPE, objectKey: stored.provider === "google-drive" ? null : objectKey, provider: stored.provider, fileId: stored.fileId, fileSize: stored.size, processingStatus: "READY" } });
+        await tx.conversation.update({ where: { id: conversation.id }, data: { latestMessageAt: sentAt, bmReplyStatus: BmReplyStatus.REPLIED, followUpStatus: FollowUpStatus.COMPLETED } });
+        ownerTracked = await isOwnerTrackedForTransaction(tx, conversation.id, ownerTracked);
+        if (ownerTracked && typeof tx.conversation.updateMany === "function") {
+          const ownerUpdate = await tx.conversation.updateMany({ where: { id: conversation.id, ownerUserId: null }, data: { ownerUserId: operator.id } });
+          ownerAssigned = ownerUpdate.count === 1;
+        }
+        await tx.activityHistory.create({ data: { conversationId: conversation.id, actionType: ActivityActionType.STATUS_CHANGED, previousStatus: conversation.followUpStatus, newStatus: FollowUpStatus.COMPLETED, previousBmReplyStatus: conversation.bmReplyStatus, newBmReplyStatus: BmReplyStatus.REPLIED, createdByName: operator.displayName, description: `Customer PDF sent via LINE (${deliveryMethod}); storeId=${conversation.storeId}; lineOfficialAccountId=${conversation.lineOfficialAccountId}` } });
+        return message;
+      });
+      const owner = ownerAssigned ? { id: operator.id, displayName: operator.displayName?.trim() || "Staff" } : serializeConversationOwner(conversation.owner, conversation.storeId);
+      const media = { processingStatus: "READY", mimeType: PDF_MIME_TYPE, fileSize: stored.size };
+      this.publishOutboundMessage({ ...conversation, ownerTracked }, created, media, owner);
+      return { message: this.safeMessage({ ...created, media }), bmReplyStatus: BmReplyStatus.REPLIED, duplicate: lineResult.duplicateAccepted };
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+        const existing = await this.prisma.message.findUnique({ where: { externalMessageId: dedupeExternalId }, include: { media: true } });
+        if (existing) return { message: this.safeMessage(existing), bmReplyStatus: BmReplyStatus.REPLIED, duplicate: true };
+      }
       throw error;
     }
   }

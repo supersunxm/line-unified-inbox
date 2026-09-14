@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../prisma.service";
-import { MediaController } from "./media.controller";
+import { MediaController, PdfDocumentController } from "./media.controller";
 import { MediaStorageService } from "./media-storage";
 import { StoreAccessService } from "../auth/store-access.service";
 import {
@@ -61,6 +61,45 @@ void test("unavailable media is not disclosed", async () => {
     () => controller.get("message-1", { user: { id: "user-1" } } as never, {} as never),
     NotFoundException,
   );
+});
+
+void test("customer PDF endpoint serves only READY PDFs through an opaque token", async () => {
+  const token = "11111111-1111-4111-8111-111111111111";
+  const body = Buffer.from("%PDF-1.7\n%%EOF");
+  const prisma = {
+    messageMedia: {
+      findUnique: ({ where }: { where: { id: string } }) => Promise.resolve(where.id === token ? {
+        mediaType: "FILE",
+        mimeType: "application/pdf",
+        processingStatus: "READY",
+        objectKey: "line-media/oa/2026/09/private.pdf",
+        fileId: null,
+        message: { fileName: "customer statement.pdf" },
+      } : null),
+    },
+  } as unknown as PrismaService;
+  const storage = { get: () => Promise.resolve({ body, contentType: "application/pdf" }) } as unknown as MediaStorageService;
+  const controller = new PdfDocumentController(prisma, storage);
+  const headers = new Map<string, string>();
+  let sent: Buffer | undefined;
+  await controller.get(token, { setHeader: (key: string, value: string) => headers.set(key, value), send: (value: Buffer) => { sent = value; } } as never);
+  assert.deepEqual(sent, body);
+  assert.equal(headers.get("Content-Type"), "application/pdf");
+  assert.match(headers.get("Content-Disposition") ?? "", /inline/);
+  assert.equal(headers.get("X-Content-Type-Options"), "nosniff");
+  assert.equal(headers.get("Cache-Control"), "public, max-age=300");
+});
+
+void test("customer PDF endpoint rejects invalid tokens, non-PDF media, and corrupt stored bytes", async () => {
+  const token = "22222222-2222-4222-8222-222222222222";
+  const prisma = {
+    messageMedia: {
+      findUnique: ({ where }: { where: { id: string } }) => Promise.resolve(where.id === token ? { mediaType: "IMAGE", mimeType: "image/png", processingStatus: "READY", objectKey: "image.png", message: { fileName: "image.png" } } : null),
+    },
+  } as unknown as PrismaService;
+  const controller = new PdfDocumentController(prisma, { get: () => Promise.resolve({ body: Buffer.from("not pdf") }) } as unknown as MediaStorageService);
+  await assert.rejects(() => controller.get("not-a-token", {} as never), NotFoundException);
+  await assert.rejects(() => controller.get(token, {} as never), NotFoundException);
 });
 
 void test("isAllowedPublicMediaObjectKey enforces allowed namespaces and blocks path traversal", () => {

@@ -122,4 +122,24 @@ void main() {
     expect(find.text('Take Photo'), findsNothing);
     expect(find.text('Gallery'), findsNothing);
   });
+
+  testWidgets('composer action sheet exposes PDF only when supplied',
+      (tester) async {
+    final controller = TextEditingController();
+    addTearDown(controller.dispose);
+    var selected = false;
+    await tester.pumpWidget(_localized(
+      Scaffold(
+        body: ChatComposer(
+          controller: controller,
+          onAttachPdf: () => selected = true,
+        ),
+      ),
+    ));
+    await tester.tap(find.byTooltip('Add attachment'));
+    await tester.pumpAndSettle();
+    expect(find.text('Attach PDF'), findsOneWidget);
+    await tester.tap(find.text('Attach PDF'));
+    expect(selected, isTrue);
+  });
 }

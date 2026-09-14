@@ -217,6 +217,66 @@ void test("sendImage validates content, persists media, sender, and REPLIED stat
   assert.equal(result.bmReplyStatus, "REPLIED");
 });
 
+void test("sendPdf uploads to shared storage, sends a LINE document link, and persists only after acceptance", async () => {
+  const previousBase = process.env.PUBLIC_WEBHOOK_BASE_URL;
+  process.env.PUBLIC_WEBHOOK_BASE_URL = "https://files.example.test";
+  const pdf = Buffer.from("%PDF-1.7\n%%EOF");
+  let mediaData: Record<string, unknown> | undefined;
+  let lineInput: Record<string, unknown> | undefined;
+  const conversation = { id: "conversation-pdf", storeId: "store", lineOfficialAccountId: "oa", followUpStatus: "FOLLOW_UP", bmReplyStatus: "NOT_REPLIED", customer: { lineUserId: "Ucustomer" }, store: { id: "store", name: "Store" }, lineOfficialAccount: { id: "oa", channelId: "channel", isActive: true, archivedAt: null, encryptedChannelAccessToken: "cipher" }, _count: { messages: 1 }, owner: null };
+  const prisma = {
+    message: { findUnique: async () => null },
+    conversation: { findUnique: async () => conversation },
+    $transaction: async (callback: (tx: any) => Promise<unknown>) => callback({
+      message: { create: async ({ data }: { data: Record<string, unknown> }) => ({ id: "message-pdf", ...data }) },
+      messageMedia: { create: async ({ data }: { data: Record<string, unknown> }) => { mediaData = data; return data; } },
+      conversation: { update: async () => conversation },
+      activityHistory: { create: async () => ({}) },
+    }),
+  } as unknown as PrismaService;
+  const line = {
+    pushPdfDocument: async (input: Record<string, unknown>) => {
+      lineInput = input;
+      return { requestId: "request-pdf", acceptedRequestId: null, externalMessageId: "line-pdf", duplicateAccepted: false };
+    },
+  } as unknown as LineMessagingService;
+  try {
+    const service = new ConversationsService(prisma, noopOperations, { decrypt: () => "token" } as CredentialEncryptionService, line, { put: async (_key: string, _body: Buffer, mime: string) => ({ provider: "s3", fileId: "stored-pdf", mimeType: mime, size: pdf.length }) } as never);
+    const result = await service.sendPdf(conversation.id, { buffer: pdf, mimetype: "application/pdf", size: pdf.length, originalname: "../quote.pdf" }, "123e4567-e89b-42d3-a456-426614174099", { id: "bm-a", email: "bm@example.com", displayName: "BM A", role: UserRole.VIEWER, isActive: true });
+    assert.equal(result.message.messageType, "FILE");
+    assert.equal(result.message.fileName, "__quote.pdf");
+    assert.equal(mediaData?.mimeType, "application/pdf");
+    assert.equal(mediaData?.processingStatus, "READY");
+    assert.match(String(lineInput?.url), /^https:\/\/files\.example\.test\/d\//);
+    assert.equal(String(lineInput?.filename), "__quote.pdf");
+  } finally {
+    if (previousBase === undefined) delete process.env.PUBLIC_WEBHOOK_BASE_URL;
+    else process.env.PUBLIC_WEBHOOK_BASE_URL = previousBase;
+  }
+});
+
+void test("sendPdf rejects invalid content and never persists when LINE delivery fails", async () => {
+  const previousBase = process.env.PUBLIC_WEBHOOK_BASE_URL;
+  process.env.PUBLIC_WEBHOOK_BASE_URL = "https://files.example.test";
+  let transactionCalled = false;
+  const conversation = { id: "conversation-pdf-fail", storeId: "store", lineOfficialAccountId: "oa", followUpStatus: "FOLLOW_UP", bmReplyStatus: "NOT_REPLIED", customer: { lineUserId: "Ucustomer" }, store: { id: "store", name: "Store" }, lineOfficialAccount: { id: "oa", isActive: true, archivedAt: null, encryptedChannelAccessToken: "cipher" } };
+  const prisma = {
+    message: { findUnique: async () => null },
+    conversation: { findUnique: async () => conversation },
+    $transaction: async () => { transactionCalled = true; throw new Error("persistence must not run"); },
+  } as unknown as PrismaService;
+  const line = { pushPdfDocument: async () => { throw new BadGatewayException("LINE ปฏิเสธการส่งข้อความ"); } } as unknown as LineMessagingService;
+  try {
+    const service = new ConversationsService(prisma, noopOperations, { decrypt: () => "token" } as CredentialEncryptionService, line, { put: async () => ({ provider: "s3", fileId: "stored-pdf", mimeType: "application/pdf", size: 12 }) } as never);
+    await assert.rejects(() => service.sendPdf(conversation.id, { buffer: Buffer.from("not pdf"), mimetype: "application/pdf", size: 7, originalname: "quote.pdf" }, "123e4567-e89b-42d3-a456-426614174100", { id: "bm-a", email: "bm@example.com", displayName: "BM A", role: UserRole.VIEWER, isActive: true }), /PDF/);
+    await assert.rejects(() => service.sendPdf(conversation.id, { buffer: Buffer.from("%PDF-1.7\n%%EOF"), mimetype: "application/pdf", size: 14, originalname: "quote.pdf" }, "123e4567-e89b-42d3-a456-426614174101", { id: "bm-a", email: "bm@example.com", displayName: "BM A", role: UserRole.VIEWER, isActive: true }), /LINE ปฏิเสธ/);
+    assert.equal(transactionCalled, false);
+  } finally {
+    if (previousBase === undefined) delete process.env.PUBLIC_WEBHOOK_BASE_URL;
+    else process.env.PUBLIC_WEBHOOK_BASE_URL = previousBase;
+  }
+});
+
 void test("conversation returns only the canonical manager URL and excludes chat and credential fields", async () => {
   const managerUrl = "https://manager.line.biz/account/canonical";
   const chatUrl = "https://chat.line.biz/U1234567890abcdef";

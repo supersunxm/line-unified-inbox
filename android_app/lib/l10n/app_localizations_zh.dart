@@ -392,6 +392,30 @@ class AppLocalizationsZh extends AppLocalizations {
   String get attachImage => '添加图片';
 
   @override
+  String get attachPdf => '添加 PDF';
+
+  @override
+  String get pdfFile => 'PDF 文件';
+
+  @override
+  String get openPdf => '打开 PDF';
+
+  @override
+  String get sendPdfQuestion => '发送 PDF？';
+
+  @override
+  String get pdfUnavailable => 'PDF 不可用';
+
+  @override
+  String get pdfViewerUnavailable => '没有可用的 PDF 查看器';
+
+  @override
+  String get pdfOnly => '仅支持 PDF 文件';
+
+  @override
+  String get pdfTooLarge => 'PDF 文件必须小于或等于 20 MB';
+
+  @override
   String get takePhoto => '拍照';
 
   @override
@@ -1408,6 +1432,30 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
 
   @override
   String get attachImage => '添加图片';
+
+  @override
+  String get attachPdf => '添加 PDF';
+
+  @override
+  String get pdfFile => 'PDF 文件';
+
+  @override
+  String get openPdf => '打开 PDF';
+
+  @override
+  String get sendPdfQuestion => '发送 PDF？';
+
+  @override
+  String get pdfUnavailable => 'PDF 不可用';
+
+  @override
+  String get pdfViewerUnavailable => '没有可用的 PDF 查看器';
+
+  @override
+  String get pdfOnly => '仅支持 PDF 文件';
+
+  @override
+  String get pdfTooLarge => 'PDF 文件必须小于或等于 20 MB';
 
   @override
   String get takePhoto => '拍照';

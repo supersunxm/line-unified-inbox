@@ -165,6 +165,58 @@ void test("video webhook creates pending video media and invokes the backend pro
   assert.equal(processedType, "VIDEO");
 });
 
+void test("PDF webhook persists filename and size before invoking PDF processing", async () => {
+  let messageData: Record<string, unknown> | undefined;
+  let mediaData: Record<string, unknown> | undefined;
+  let processed: unknown[] | undefined;
+  const transactionClient = {
+    conversation: { create: () => Promise.resolve({ id: "conversation-pdf", storeId: "store-pdf", followUpStatus: "FOLLOW_UP" }) },
+    message: { create: ({ data }: { data: Record<string, unknown> }) => { messageData = data; return Promise.resolve({ id: "stored-pdf-message", createdAt: new Date() }); } },
+    messageMedia: { create: ({ data }: { data: Record<string, unknown> }) => { mediaData = data; return Promise.resolve({ id: "pdf-media-1", processingStatus: data.processingStatus ?? "PENDING" }); } },
+    activityHistory: { create: () => Promise.resolve({}) },
+  };
+  const prisma = {
+    webhookEvent: { create: () => Promise.resolve({}), update: () => Promise.resolve({}) },
+    lineOfficialAccount: { findFirst: () => Promise.resolve({ id: "oa-pdf", storeId: "store-pdf", store: { id: "store-pdf" } }), update: () => Promise.resolve({}) },
+    customer: { upsert: () => Promise.resolve({ id: "customer-pdf", displayName: "PDF Customer" }) },
+    conversation: { findFirst: () => Promise.resolve(null) },
+    $transaction: (callback: (tx: typeof transactionClient) => Promise<unknown>) => callback(transactionClient),
+  } as unknown as PrismaService;
+  const images = { processPdf: (...args: unknown[]) => { processed = args; return Promise.resolve(); } } as unknown as LineImageService;
+  const service = new LineWebhookService(prisma, { enabled: true } as LineWebhookConfig, {} as CredentialEncryptionService, {} as ClassificationService, { refresh: () => Promise.resolve({}) } as unknown as LineProfileService, images);
+  await service.accept({ events: [{ type: "message", webhookEventId: "event-pdf", timestamp: Date.now(), source: { type: "user", userId: "line-pdf-user" }, message: { type: "file", id: "line-pdf-1", fileName: "../quote.pdf", fileSize: 4096 } }] }, "oa-pdf");
+  assert.equal(messageData?.messageType, "FILE");
+  assert.equal(messageData?.fileName, "__quote.pdf");
+  assert.equal(messageData?.originalText, "[File: __quote.pdf]");
+  assert.deepEqual(mediaData, { messageId: "stored-pdf-message", providerMessageId: "line-pdf-1", mediaType: "FILE", fileSize: 4096 });
+  assert.deepEqual(processed?.slice(0, 3), ["pdf-media-1", "oa-pdf", "line-pdf-1"]);
+  assert.equal(processed?.[5], 4096);
+});
+
+void test("non-PDF LINE files remain in history as skipped media and are not downloaded", async () => {
+  let mediaData: Record<string, unknown> | undefined;
+  let processCalled = false;
+  const transactionClient = {
+    conversation: { create: () => Promise.resolve({ id: "conversation-file", storeId: "store-file", followUpStatus: "FOLLOW_UP" }) },
+    message: { create: () => Promise.resolve({ id: "stored-file-message", createdAt: new Date() }) },
+    messageMedia: { create: ({ data }: { data: Record<string, unknown> }) => { mediaData = data; return Promise.resolve({ id: "file-media-1", processingStatus: data.processingStatus }); } },
+    activityHistory: { create: () => Promise.resolve({}) },
+  };
+  const prisma = {
+    webhookEvent: { create: () => Promise.resolve({}), update: () => Promise.resolve({}) },
+    lineOfficialAccount: { findFirst: () => Promise.resolve({ id: "oa-file", storeId: "store-file", store: { id: "store-file" } }), update: () => Promise.resolve({}) },
+    customer: { upsert: () => Promise.resolve({ id: "customer-file", displayName: "File Customer" }) },
+    conversation: { findFirst: () => Promise.resolve(null) },
+    $transaction: (callback: (tx: typeof transactionClient) => Promise<unknown>) => callback(transactionClient),
+  } as unknown as PrismaService;
+  const images = { processPdf: () => { processCalled = true; return Promise.resolve(); } } as unknown as LineImageService;
+  const service = new LineWebhookService(prisma, { enabled: true } as LineWebhookConfig, {} as CredentialEncryptionService, {} as ClassificationService, { refresh: () => Promise.resolve({}) } as unknown as LineProfileService, images);
+  await service.accept({ events: [{ type: "message", webhookEventId: "event-exe", timestamp: Date.now(), source: { type: "user", userId: "line-file-user" }, message: { type: "file", id: "line-file-1", fileName: "quote.exe", fileSize: 20 } }] }, "oa-file");
+  assert.equal(mediaData?.processingStatus, "SKIPPED");
+  assert.equal(mediaData?.errorCode, "UNSUPPORTED_FILE_TYPE");
+  assert.equal(processCalled, false);
+});
+
 void test("inbound message on REPLIED conversation resets bmReplyStatus to NOT_REPLIED and records activity without touching followUpStatus logic", async () => {
   const { BmReplyStatus, FollowUpStatus, ActivityActionType } = await import("@prisma/client");
 

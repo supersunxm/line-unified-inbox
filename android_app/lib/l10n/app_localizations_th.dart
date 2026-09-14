@@ -393,6 +393,30 @@ class AppLocalizationsTh extends AppLocalizations {
   String get attachImage => 'แนบรูปภาพ';
 
   @override
+  String get attachPdf => 'แนบไฟล์ PDF';
+
+  @override
+  String get pdfFile => 'ไฟล์ PDF';
+
+  @override
+  String get openPdf => 'เปิด PDF';
+
+  @override
+  String get sendPdfQuestion => 'ส่งไฟล์ PDF หรือไม่';
+
+  @override
+  String get pdfUnavailable => 'ไม่สามารถใช้ไฟล์ PDF ได้';
+
+  @override
+  String get pdfViewerUnavailable => 'ไม่พบแอปสำหรับเปิด PDF';
+
+  @override
+  String get pdfOnly => 'รองรับเฉพาะไฟล์ PDF';
+
+  @override
+  String get pdfTooLarge => 'ไฟล์ PDF ต้องมีขนาดไม่เกิน 20 MB';
+
+  @override
   String get takePhoto => 'ถ่ายภาพ';
 
   @override

@@ -11,6 +11,7 @@ export type RealtimeEvent = {
     direction: string;
     messageType: string;
     text: string;
+    fileName?: string | null;
     sentAt: string;
     sender?: { userId: string | null; displayName: string } | null;
     sticker?: { text: string | null; keywords: string[] } | null;

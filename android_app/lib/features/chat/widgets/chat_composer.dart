@@ -14,6 +14,7 @@ class ChatComposer extends StatelessWidget {
     this.onAttachCamera,
     this.onAttachGallery,
     this.onAttachVideo,
+    this.onAttachPdf,
     this.onOpenSalesInfo,
     this.onOpenConversationInfo,
     this.onOpenStatus,
@@ -28,6 +29,7 @@ class ChatComposer extends StatelessWidget {
   final VoidCallback? onAttachCamera;
   final VoidCallback? onAttachGallery;
   final VoidCallback? onAttachVideo;
+  final VoidCallback? onAttachPdf;
   final VoidCallback? onOpenSalesInfo;
   final VoidCallback? onOpenConversationInfo;
   final VoidCallback? onOpenStatus;
@@ -79,6 +81,12 @@ class ChatComposer extends StatelessWidget {
               _ComposerAction.video,
               Icons.videocam_outlined,
               _videoLabel(sheetContext),
+            ),
+          if (enabled && onAttachPdf != null)
+            _ComposerActionData(
+              _ComposerAction.pdf,
+              Icons.picture_as_pdf_outlined,
+              l10n.attachPdf,
             ),
           if (onOpenSalesInfo != null)
             _ComposerActionData(
@@ -132,6 +140,9 @@ class ChatComposer extends StatelessWidget {
       case _ComposerAction.video:
         onAttachVideo?.call();
         return;
+      case _ComposerAction.pdf:
+        onAttachPdf?.call();
+        return;
       case _ComposerAction.salesInfo:
         onOpenSalesInfo?.call();
         return;
@@ -163,6 +174,7 @@ class ChatComposer extends StatelessWidget {
         onAttachCamera != null ||
         onAttachGallery != null ||
         onAttachVideo != null ||
+        onAttachPdf != null ||
         onOpenSalesInfo != null ||
         onOpenConversationInfo != null ||
         onOpenStatus != null;
@@ -312,7 +324,16 @@ class _ActionTile extends StatelessWidget {
       );
 }
 
-enum _ComposerAction { image, camera, gallery, video, salesInfo, info, status }
+enum _ComposerAction {
+  image,
+  camera,
+  gallery,
+  video,
+  pdf,
+  salesInfo,
+  info,
+  status
+}
 
 class _ComposerActionData {
   const _ComposerActionData(this.action, this.icon, this.label);
