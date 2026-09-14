@@ -16,6 +16,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
@@ -28,6 +30,12 @@ jobs:
 
       - name: Generate localization
         run: flutter gen-l10n
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Run Flutter tests
+        run: flutter test
 
       - name: Restore permanent signing material
         env:
@@ -76,6 +84,9 @@ jobs:
           test "$PACKAGE_ID" = "click.lineoppo.chat"
           test "$VERSION_NAME" = "1.1.27"
           test "$VERSION_CODE" = "47"
+
+          APK_SHA256="$(sha256sum "$APK" | cut -d' ' -f1)"
+          echo "APK SHA-256: $APK_SHA256"
 
           "$APKSIGNER" verify --verbose --print-certs "$APK" | tee /tmp/android-qa-apk-signature.txt
           EXPECTED_CERT_SHA256="e244a89876388b015bbd10abe39326aab15da2e1ec0fe0d6a8248855126af114"
