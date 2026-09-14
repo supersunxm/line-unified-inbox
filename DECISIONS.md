@@ -1,6 +1,6 @@
 # Android 1.1.27+47 signed QA candidate (2026-09-14)
 
-- Reuse the existing manual `android-production-release.yml` signing infrastructure, but keep it artifact-only: restore the permanent keystore from CI secrets, verify package/version/signer, and upload a 30-day QA artifact. Do not use versioned publish workflows because they update `AppRelease` and push release artifacts to `main`.
+- Keep the obsolete `android-production-release.yml` production workflow unchanged. Add the smallest separate manual `android-signed-qa.yml` workflow: restore the permanent keystore from CI secrets, verify package/version/signer, and upload a 30-day QA artifact only. Do not use versioned publish workflows because they update `AppRelease` and push release artifacts to `main`.
 - Keep `click.lineoppo.chat` and use `1.1.27+47`; no local signing key is created and no signing configuration is changed.
 - The signed candidate uses the repository’s existing production API base URL. Since the PDF endpoints are new and no staging backend was found, end-to-end PDF QA requires an explicitly authorized backend deployment first; this task does not deploy production or activate build 47.
 

@@ -1,10 +1,10 @@
-# 2026-09-14: Android 1.1.27+47 PDF QA candidate [IN PROGRESS]
+# 2026-09-14: Android 1.1.27+47 PDF QA candidate [READY FOR QA]
 - **Current Task**: Review and package the implemented PDF feature as a signed staging/release-candidate APK without activating production build 47.
-- **Review**: The working diff contains PDF support, required progress/decision documentation, the version bump, and the existing artifact-only signing workflow update. `docs/executive-guide/` remains untouched; no credentials, generated artifacts, or signed URLs are included.
-- **Packaging**: Android version is `1.1.27+47`, package remains `click.lineoppo.chat`. The manual `android-production-release.yml` path was converted to an artifact-only QA candidate for this exact version and still restores the existing signing material only from CI secrets.
-- **Repository sync**: `origin/main` was fetched and is newer than the original candidate base by the greeting-targeting commits; the candidate must be rebased before push.
+- **Review**: The PDF implementation was reconciled onto current `origin/main` (`f8e12a0`) without touching the concurrent greeting-targeting change. `docs/executive-guide/` remains untouched; no credentials, generated artifacts, or signed URLs are included.
+- **Packaging**: Android version is `1.1.27+47`, package remains `click.lineoppo.chat`. The obsolete `android-production-release.yml` remains unchanged; the separate manual `android-signed-qa.yml` workflow restores existing signing material only from CI secrets and uploads an APK artifact only.
+- **Repository sync**: `origin/main` was fetched and the PDF candidate is based on it; the pre-existing remote `release/android-1.1.25` branch is not overwritten.
 - **Release boundary**: No production AppRelease activation, force-update, backend deployment, or production release workflow was triggered. The production-configured APK will require the new backend endpoints to be deployed before end-to-end PDF testing against production can work.
-- **Next Action**: Run the final pre-commit checks, commit only the reviewed files, rebase safely onto `origin/main`, push the candidate branch, and manually dispatch the artifact-only signed QA workflow.
+- **Next Action**: Commit and push the reviewed workflow correction, dispatch `android-signed-qa.yml`, verify its signed artifact, then install it over the existing app for device QA. Do not activate build 47 or deploy production.
 
 # 2026-09-14: End-to-end PDF support for Flutter chat [IMPLEMENTED & VERIFIED]
 - **Current Task**: Add inbound and outbound PDF support to the existing chat system without deployment or release.
