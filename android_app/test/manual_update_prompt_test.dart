@@ -8,6 +8,8 @@ import 'package:line_oa_chat_hub/core/network/api_client.dart';
 import 'package:line_oa_chat_hub/core/storage/token_store.dart';
 import 'package:line_oa_chat_hub/core/services/app_update_service.dart';
 import 'package:line_oa_chat_hub/features/profile/widgets/settings_section.dart';
+import 'package:shared_preferences_platform_interface/in_memory_shared_preferences_async.dart';
+import 'package:shared_preferences_platform_interface/shared_preferences_async_platform_interface.dart';
 
 class _AvailableUpdateService extends AppUpdateService {
   _AvailableUpdateService() : super(ApiClient(TokenStore()));
@@ -61,35 +63,46 @@ String _section(String source, String start, String end) {
 }
 
 void main() {
-  test('app startup does not show an update dialog', () {
+  setUp(() {
+    SharedPreferencesAsyncPlatform.instance =
+        InMemorySharedPreferencesAsync.empty();
+  });
+
+  test('authenticated startup schedules a post-frame update check', () {
     final restore = _section(
       _mainSource(),
       'Future<void> _restore()',
       'Future<void> _openConversation',
     );
-    expect(restore, isNot(contains('checkForUpdates')));
+    expect(restore, contains('_scheduleDailyUpdateCheck();'));
   });
 
-  test('login completion does not show an update dialog', () {
+  test('login completion schedules a post-frame update check', () {
     final login = _section(
       _mainSource(),
       'Future<void> _finishLogin()',
       'Future<void> _refreshSession',
     );
-    expect(login, isNot(contains('checkForUpdates')));
+    expect(login, contains('_scheduleDailyUpdateCheck();'));
   });
 
-  test('app resume does not show an update dialog', () {
+  test('app resume can schedule only the daily update check', () {
     final lifecycle = _section(
       _mainSource(),
       'void didChangeAppLifecycleState',
       'Future<void> _restore()',
     );
-    expect(lifecycle, isNot(contains('checkForUpdates')));
+    expect(lifecycle, contains('_scheduleDailyUpdateCheck();'));
+    expect(lifecycle, isNot(contains('isManual: true')));
   });
 
-  test('the app shell contains no automatic update prompt call', () {
-    expect(_mainSource(), isNot(contains('checkForUpdates')));
+  test('daily update checks are gated by the authenticated main UI', () {
+    final source = _mainSource();
+    expect(source, contains('Future<void> _runDailyUpdateCheck'));
+    expect(source, contains('_navigator.currentState?.context'));
+    expect(source, contains('addPostFrameCallback'));
+    expect(source, contains('!_hasMainWorkspace(_user!)'));
+    expect(source, contains('_lastAutomaticUpdateCheckDate == today'));
   });
 
   testWidgets('manual Profile check shows the dialog for a newer build', (

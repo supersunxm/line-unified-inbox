@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../localization/localization.dart';
 import '../logging/safe_logger.dart';
@@ -58,6 +59,44 @@ class AppUpdateInfo {
 
   bool isForceUpdateRequired(int currentBuildNumber) =>
       forceUpdate || currentBuildNumber < minimumSupportedBuildNumber;
+}
+
+class AppUpdatePromptState {
+  const AppUpdatePromptState({
+    required this.localDate,
+    required this.buildNumber,
+  });
+
+  final String localDate;
+  final int buildNumber;
+}
+
+class AppUpdatePromptStore {
+  AppUpdatePromptStore({SharedPreferencesAsync? preferences})
+      : _preferences = preferences ?? SharedPreferencesAsync();
+
+  static const lastPromptDateKey = 'last_update_prompt_date';
+  static const lastPromptedBuildNumberKey = 'last_prompted_build_number';
+
+  final SharedPreferencesAsync _preferences;
+
+  Future<AppUpdatePromptState?> read() async {
+    final localDate = await _preferences.getString(lastPromptDateKey);
+    final buildNumber = await _preferences.getInt(lastPromptedBuildNumberKey);
+    if (localDate == null || buildNumber == null) return null;
+    return AppUpdatePromptState(
+      localDate: localDate,
+      buildNumber: buildNumber,
+    );
+  }
+
+  Future<void> save({
+    required String localDate,
+    required int buildNumber,
+  }) async {
+    await _preferences.setString(lastPromptDateKey, localDate);
+    await _preferences.setInt(lastPromptedBuildNumberKey, buildNumber);
+  }
 }
 
 enum UpdateProgressStatus {
@@ -123,16 +162,23 @@ class AppUpdateService {
     http.Client? downloadClient,
     ApkInstaller? installer,
     CacheDirectoryProvider? cacheDirectoryProvider,
+    AppUpdatePromptStore? promptStore,
+    DateTime Function()? now,
   })  : _downloadClient = downloadClient ?? http.Client(),
         _installer = installer ?? const AndroidApkInstaller().call,
         _cacheDirectoryProvider =
-            cacheDirectoryProvider ?? getApplicationSupportDirectory;
+            cacheDirectoryProvider ?? getApplicationSupportDirectory,
+        _promptStore = promptStore ?? AppUpdatePromptStore(),
+        _now = now ?? DateTime.now;
 
   final ApiClient _api;
   final http.Client _downloadClient;
   final ApkInstaller _installer;
   final CacheDirectoryProvider _cacheDirectoryProvider;
+  final AppUpdatePromptStore _promptStore;
+  final DateTime Function() _now;
   bool _dialogShowing = false;
+  Future<void>? _checkInFlight;
   Future<UpdateFlowResult>? _updateInFlight;
   String? _verifiedApkPath;
   int? _verifiedBuildNumber;
@@ -154,10 +200,31 @@ class AppUpdateService {
     PackageInfo? overridePackageInfo,
     AppUpdateInfo? overrideUpdateInfo,
   }) async {
-    // Version checks are deliberately user initiated. The only automatic
-    // updater activity left in the app is retrying an install that already
-    // reached Android's permission settings from the active update dialog.
-    if (!isManual) return;
+    final existing = _checkInFlight;
+    if (existing != null) {
+      await existing;
+      return;
+    }
+    final operation = _checkForUpdates(
+      context,
+      isManual: isManual,
+      overridePackageInfo: overridePackageInfo,
+      overrideUpdateInfo: overrideUpdateInfo,
+    );
+    _checkInFlight = operation;
+    try {
+      await operation;
+    } finally {
+      if (identical(_checkInFlight, operation)) _checkInFlight = null;
+    }
+  }
+
+  Future<void> _checkForUpdates(
+    BuildContext context, {
+    required bool isManual,
+    PackageInfo? overridePackageInfo,
+    AppUpdateInfo? overrideUpdateInfo,
+  }) async {
     if (_dialogShowing) return;
 
     try {
@@ -208,12 +275,28 @@ class AppUpdateService {
         return;
       }
 
+      final isForced = info.isForceUpdateRequired(currentBuildNumber);
+      final localDate = _localCalendarDate(_now());
+      if (!isManual && !isForced) {
+        try {
+          final promptState = await _promptStore.read();
+          if (promptState?.localDate == localDate &&
+              promptState?.buildNumber == info.buildNumber) {
+            return;
+          }
+        } catch (error) {
+          SafeLogger.updateCheckFailed(
+            'prompt_state_${error.runtimeType}',
+          );
+          return;
+        }
+      }
+
       if (!context.mounted) return;
 
-      final isForced = info.isForceUpdateRequired(currentBuildNumber);
       _dialogShowing = true;
 
-      await showDialog<void>(
+      final dismissed = await showDialog<bool>(
         context: context,
         barrierDismissible: !isForced,
         builder: (dialogCtx) => PopScope(
@@ -228,9 +311,29 @@ class AppUpdateService {
           ),
         ),
       );
+
+      if (!isForced && dismissed != false) {
+        try {
+          await _promptStore.save(
+            localDate: localDate,
+            buildNumber: info.buildNumber,
+          );
+        } catch (error) {
+          SafeLogger.updateCheckFailed(
+            'prompt_state_save_${error.runtimeType}',
+          );
+        }
+      }
     } finally {
       _dialogShowing = false;
     }
+  }
+
+  String _localCalendarDate(DateTime value) {
+    final local = value.toLocal();
+    final month = local.month.toString().padLeft(2, '0');
+    final day = local.day.toString().padLeft(2, '0');
+    return '${local.year.toString().padLeft(4, '0')}-$month-$day';
   }
 
   Future<UpdateFlowResult> downloadAndInstallApk(
@@ -703,7 +806,7 @@ class _AppUpdateDialogState extends State<_AppUpdateDialog>
       actions: [
         if (!widget.isForced)
           TextButton(
-            onPressed: _busy ? null : () => Navigator.of(context).pop(),
+            onPressed: _busy ? null : () => Navigator.of(context).pop(true),
             child: Text(l10n.later),
           ),
         FilledButton.icon(

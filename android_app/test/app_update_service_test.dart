@@ -14,6 +14,9 @@ import 'package:line_oa_chat_hub/core/network/api_client.dart';
 import 'package:line_oa_chat_hub/core/network/connectivity_service.dart';
 import 'package:line_oa_chat_hub/core/services/app_update_service.dart';
 import 'package:line_oa_chat_hub/core/storage/token_store.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shared_preferences_platform_interface/in_memory_shared_preferences_async.dart';
+import 'package:shared_preferences_platform_interface/shared_preferences_async_platform_interface.dart';
 
 class _OnlineConnectivity extends ConnectivityService {
   @override
@@ -85,10 +88,79 @@ class _PermissionThenInstallService extends AppUpdateService {
   }
 }
 
+class _ControlledUpdateService extends AppUpdateService {
+  _ControlledUpdateService({
+    required DateTime Function() now,
+    AppUpdatePromptStore? promptStore,
+  }) : super(ApiClient(TokenStore()), now: now, promptStore: promptStore);
+
+  AppUpdateInfo? response;
+  Future<AppUpdateInfo?>? pendingResponse;
+  var fetchCount = 0;
+
+  @override
+  Future<AppUpdateInfo?> fetchLatestVersion() async {
+    fetchCount++;
+    return pendingResponse ?? response;
+  }
+}
+
+PackageInfo _packageInfoForBuild(int buildNumber) => PackageInfo(
+      appName: 'OPPO LINE OA Chat',
+      packageName: 'click.lineoppo.chat',
+      version: '1.1.$buildNumber',
+      buildNumber: '$buildNumber',
+    );
+
+AppUpdateInfo _updateInfoForBuild(
+  int buildNumber, {
+  bool forceUpdate = false,
+}) =>
+    AppUpdateInfo(
+      latestVersion: '1.1.$buildNumber',
+      buildNumber: buildNumber,
+      minimumSupportedVersion: '1.0.3',
+      minimumSupportedBuildNumber: 4,
+      forceUpdate: forceUpdate,
+      apkUrl: 'https://lineoppo.click/downloads/update.apk',
+    );
+
+Future<void> _pumpAutomaticCheck(
+  WidgetTester tester,
+  AppUpdateService service,
+  PackageInfo packageInfo,
+) async {
+  await tester.pumpWidget(
+    MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: Builder(
+        builder: (context) => Scaffold(
+          body: ElevatedButton(
+            key: const ValueKey('automatic-update-check'),
+            onPressed: () => service.checkForUpdates(
+              context,
+              overridePackageInfo: packageInfo,
+            ),
+            child: const Text('Automatic check'),
+          ),
+        ),
+      ),
+    ),
+  );
+  await tester.tap(find.byKey(const ValueKey('automatic-update-check')));
+  await tester.pumpAndSettle();
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  setUp(() => FlutterSecureStorage.setMockInitialValues({}));
+  setUp(() {
+    FlutterSecureStorage.setMockInitialValues({});
+    SharedPreferences.setMockInitialValues({});
+    SharedPreferencesAsyncPlatform.instance =
+        InMemorySharedPreferencesAsync.empty();
+  });
 
   group('AppUpdateInfo', () {
     test('parses JSON correctly', () {
@@ -343,7 +415,7 @@ void main() {
       );
     });
 
-    testWidgets('automatic checks never present an update dialog', (
+    testWidgets('automatic checks show a dismissible update dialog', (
       tester,
     ) async {
       final updateService = AppUpdateService(ApiClient(TokenStore()));
@@ -384,9 +456,237 @@ void main() {
       await tester.tap(find.text('Automatic check'));
       await tester.pumpAndSettle();
 
-      expect(find.text('New Version Available'), findsNothing);
+      expect(find.text('New Version Available'), findsOneWidget);
+      expect(find.text('Later'), findsOneWidget);
+      await tester.tap(find.text('Later'));
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('build 44 receives the forced build-45 update', (
+      tester,
+    ) async {
+      final service = _ControlledUpdateService(
+        now: () => DateTime(2026, 9, 14, 9),
+      )..response = _updateInfoForBuild(45, forceUpdate: true);
+
+      await _pumpAutomaticCheck(
+        tester,
+        service,
+        _packageInfoForBuild(44),
+      );
+
+      expect(find.text('Update Required'), findsOneWidget);
+      expect(find.text('Later'), findsNothing);
+    });
+
+    testWidgets('build 45 is not prompted for build 45', (tester) async {
+      final service = _ControlledUpdateService(
+        now: () => DateTime(2026, 9, 14),
+      )..response = _updateInfoForBuild(45, forceUpdate: true);
+
+      await _pumpAutomaticCheck(
+        tester,
+        service,
+        _packageInfoForBuild(45),
+      );
+
       expect(find.text('Update Required'), findsNothing);
+      expect(find.text('New Version Available'), findsNothing);
+    });
+
+    testWidgets('a build newer than the latest release is not prompted', (
+      tester,
+    ) async {
+      final service = _ControlledUpdateService(
+        now: () => DateTime(2026, 9, 14),
+      )..response = _updateInfoForBuild(45);
+
+      await _pumpAutomaticCheck(
+        tester,
+        service,
+        _packageInfoForBuild(46),
+      );
+
+      expect(find.text('Update Required'), findsNothing);
+      expect(find.text('New Version Available'), findsNothing);
+    });
+
+    testWidgets('same-build optional prompt is suppressed for the local day', (
+      tester,
+    ) async {
+      final service = _ControlledUpdateService(
+        now: () => DateTime(2026, 9, 14, 9),
+      )..response = _updateInfoForBuild(46);
+
+      await _pumpAutomaticCheck(
+        tester,
+        service,
+        _packageInfoForBuild(45),
+      );
+      expect(find.text('New Version Available'), findsOneWidget);
+      await tester.tap(find.text('Later'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('automatic-update-check')));
+      await tester.pumpAndSettle();
+
+      expect(service.fetchCount, 2);
+      expect(find.text('New Version Available'), findsNothing);
+    });
+
+    testWidgets('concurrent automatic checks share one metadata request', (
+      tester,
+    ) async {
+      final response = Completer<AppUpdateInfo?>();
+      final service = _ControlledUpdateService(
+        now: () => DateTime(2026, 9, 14, 9),
+      )..pendingResponse = response.future;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Builder(
+            builder: (context) => Scaffold(
+              body: const SizedBox(key: ValueKey('update-context')),
+            ),
+          ),
+        ),
+      );
+      final context =
+          tester.element(find.byKey(const ValueKey('update-context')));
+      final packageInfo = _packageInfoForBuild(45);
+      final first = service.checkForUpdates(
+        context,
+        overridePackageInfo: packageInfo,
+      );
+      final second = service.checkForUpdates(
+        context,
+        overridePackageInfo: packageInfo,
+      );
+
+      expect(service.fetchCount, 1);
+      response.complete(_updateInfoForBuild(46));
+      await tester.pumpAndSettle();
+
+      expect(find.text('New Version Available'), findsOneWidget);
+      await tester.tap(find.text('Later'));
+      await tester.pumpAndSettle();
+      await Future.wait([first, second]);
+    });
+
+    testWidgets('optional prompt reappears on the next local calendar day', (
+      tester,
+    ) async {
+      var now = DateTime(2026, 9, 14, 23, 50);
+      final service = _ControlledUpdateService(now: () => now)
+        ..response = _updateInfoForBuild(46);
+
+      await _pumpAutomaticCheck(
+        tester,
+        service,
+        _packageInfoForBuild(45),
+      );
+      await tester.tap(find.text('Later'));
+      await tester.pumpAndSettle();
+
+      now = DateTime(2026, 9, 15, 0, 1);
+      await tester.tap(find.byKey(const ValueKey('automatic-update-check')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('New Version Available'), findsOneWidget);
+    });
+
+    testWidgets('newer release bypasses same-day suppression', (tester) async {
+      var now = DateTime(2026, 9, 14, 9);
+      final service = _ControlledUpdateService(now: () => now)
+        ..response = _updateInfoForBuild(46);
+
+      await _pumpAutomaticCheck(
+        tester,
+        service,
+        _packageInfoForBuild(45),
+      );
+      await tester.tap(find.text('Later'));
+      await tester.pumpAndSettle();
+
+      service.response = _updateInfoForBuild(47);
+      now = DateTime(2026, 9, 14, 15);
+      await tester.tap(find.byKey(const ValueKey('automatic-update-check')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('New Version Available'), findsOneWidget);
+      expect(find.textContaining('1.1.47+47'), findsOneWidget);
+    });
+
+    testWidgets('forced update ignores same-day optional suppression', (
+      tester,
+    ) async {
+      final preferences = SharedPreferencesAsync();
+      await preferences.setString(
+        AppUpdatePromptStore.lastPromptDateKey,
+        '2026-09-14',
+      );
+      await preferences.setInt(
+        AppUpdatePromptStore.lastPromptedBuildNumberKey,
+        45,
+      );
+      final service = _ControlledUpdateService(
+        now: () => DateTime(2026, 9, 14, 16),
+        promptStore: AppUpdatePromptStore(preferences: preferences),
+      )..response = _updateInfoForBuild(45, forceUpdate: true);
+
+      await _pumpAutomaticCheck(
+        tester,
+        service,
+        _packageInfoForBuild(44),
+      );
+
+      expect(find.text('Update Required'), findsOneWidget);
+    });
+
+    testWidgets('automatic metadata failure leaves the app usable', (
+      tester,
+    ) async {
+      final service = _ControlledUpdateService(
+        now: () => DateTime(2026, 9, 14),
+      );
+
+      await _pumpAutomaticCheck(
+        tester,
+        service,
+        _packageInfoForBuild(45),
+      );
+
+      expect(find.text('Automatic check'), findsOneWidget);
+      expect(find.byType(AlertDialog), findsNothing);
       expect(find.byType(SnackBar), findsNothing);
+    });
+
+    testWidgets('persisted same-day state suppresses a fresh service instance',
+        (tester) async {
+      final first = _ControlledUpdateService(
+        now: () => DateTime(2026, 9, 14, 9),
+      )..response = _updateInfoForBuild(46);
+
+      await _pumpAutomaticCheck(
+        tester,
+        first,
+        _packageInfoForBuild(45),
+      );
+      await tester.tap(find.text('Later'));
+      await tester.pumpAndSettle();
+
+      final second = _ControlledUpdateService(
+        now: () => DateTime(2026, 9, 14, 18),
+      )..response = _updateInfoForBuild(46);
+      await _pumpAutomaticCheck(
+        tester,
+        second,
+        _packageInfoForBuild(45),
+      );
+
+      expect(find.text('New Version Available'), findsNothing);
     });
 
     testWidgets(

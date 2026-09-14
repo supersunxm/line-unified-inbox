@@ -1,3 +1,12 @@
+# Proactive Android update prompt (2026-09-14)
+
+- Reuse the existing `AppUpdateService` and `/app/version/android` `AppRelease` contract. The client compares numeric `buildNumber` values, so version strings are not used to decide whether an update exists.
+- Trigger automatic checks only after authenticated main-workspace navigation has settled, on the next frame, and at most once per local calendar date in the current app session. Resume handling is gated out for password-change and pending-access states.
+- Persist only the local prompt date and prompted release build number through `SharedPreferencesAsync`. Optional prompts are suppressed only when both match; a newer build on the same day prompts again. Explicit dismissal, including the dialog barrier, records the suppression state.
+- Keep `forceUpdate` and `minimumSupportedBuildNumber` behavior unchanged. Forced prompts bypass local suppression and remain non-dismissible.
+- Treat metadata and prompt-state failures as non-blocking background failures. A single-flight guard prevents overlapping lifecycle/navigation checks from issuing duplicate metadata requests.
+- Do not add backend schema/API changes, a second updater, signing changes, package-name changes, or UI redesign changes for this feature. Production publication remains a separate authorized release action.
+
 # Android 1.1.25+45 uses the existing CI signing and publisher path (2026-09-14)
 
 - Keep the permanent Android keystore outside the repository and restore it only from the existing GitHub Actions secrets used by prior production releases. Do not create, replace, or inspect signing credentials locally.

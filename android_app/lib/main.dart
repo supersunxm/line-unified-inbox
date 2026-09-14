@@ -59,6 +59,7 @@ class _LineOaAppState extends State<LineOaApp> with WidgetsBindingObserver {
   bool _loggingOut = false;
   bool _restoreDeferred = false;
   Future<void>? _restoreInFlight;
+  String? _lastAutomaticUpdateCheckDate;
   static const _nonCriticalStartupTimeout = Duration(seconds: 15);
 
   @override
@@ -95,8 +96,9 @@ class _LineOaAppState extends State<LineOaApp> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       SafeLogger.lifecycle('resumed');
-      if (_user != null) {
+      if (_user != null && _hasMainWorkspace(_user!)) {
         _refreshSession();
+        _scheduleDailyUpdateCheck();
       }
     }
   }
@@ -138,7 +140,10 @@ class _LineOaAppState extends State<LineOaApp> with WidgetsBindingObserver {
         StartupRestoreStatus.invalidSession => 'invalid',
       },
     );
-    if (result.isAuthenticated) _startPostNavigationServices();
+    if (result.isAuthenticated && _hasMainWorkspace(result.user!)) {
+      _startPostNavigationServices();
+      _scheduleDailyUpdateCheck();
+    }
   }
 
   void _startPostNavigationServices() {
@@ -190,7 +195,59 @@ class _LineOaAppState extends State<LineOaApp> with WidgetsBindingObserver {
       _user = result.user;
       _restoreDeferred = result.shouldShowRetry;
     });
-    if (result.isAuthenticated) _startPostNavigationServices();
+    if (result.isAuthenticated && _hasMainWorkspace(result.user!)) {
+      _startPostNavigationServices();
+      _scheduleDailyUpdateCheck();
+    }
+  }
+
+  bool _hasMainWorkspace(CurrentUser user) =>
+      !user.mustChangePassword &&
+      (user.canAccessHqWorkspace ||
+          user.canAccessStoreWorkspace ||
+          user.canAccessMainOaWorkspace);
+
+  void _scheduleDailyUpdateCheck() {
+    if (!mounted ||
+        _user == null ||
+        !_hasMainWorkspace(_user!) ||
+        _loggingOut ||
+        _loading) {
+      return;
+    }
+    final today = _localCalendarDate(DateTime.now());
+    if (_lastAutomaticUpdateCheckDate == today) return;
+    _lastAutomaticUpdateCheckDate = today;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted ||
+          _user == null ||
+          !_hasMainWorkspace(_user!) ||
+          _loggingOut) {
+        return;
+      }
+      final context = _navigator.currentState?.context;
+      if (context == null) {
+        _lastAutomaticUpdateCheckDate = null;
+        return;
+      }
+      unawaited(_runDailyUpdateCheck(context));
+    });
+  }
+
+  Future<void> _runDailyUpdateCheck(BuildContext context) async {
+    try {
+      await _updateService.checkForUpdates(context);
+    } catch (error) {
+      SafeLogger.updateCheckFailed('daily_${error.runtimeType}');
+    }
+  }
+
+  String _localCalendarDate(DateTime value) {
+    final local = value.toLocal();
+    final month = local.month.toString().padLeft(2, '0');
+    final day = local.day.toString().padLeft(2, '0');
+    return '${local.year.toString().padLeft(4, '0')}-$month-$day';
   }
 
   Future<void> _refreshSession() async {

@@ -1,3 +1,19 @@
+# 2026-09-14: Proactive daily Android update prompt [COMPLETED & VERIFIED]
+- **Current Task**: Add a lightweight daily update prompt to the Flutter Android client while reusing the existing `/app/version/android` metadata contract and APK download/install flow. Production deployment remains intentionally out of scope.
+- **Completed Work**:
+  - Added an authenticated-main-UI-only, post-frame automatic check after startup restore/login and on resume, gated to users with an available main workspace.
+  - Added local-calendar-day suppression for optional prompts using `last_update_prompt_date` and `last_prompted_build_number` in `SharedPreferencesAsync`; a newer release bypasses an older same-day dismissal, while forced updates are never suppressed.
+  - Added single-flight protection for concurrent metadata checks and quiet failure handling so update metadata/storage failures do not block the app.
+  - Preserved the existing manual Profile check, force-update behavior, checksum verification, APK installer, package identity, signing configuration, backend APIs, and chat UI redesign.
+- **Checks Run**:
+  - Focused update-flow tests: **35/35 passed**.
+  - Full Flutter test suite: **256/256 passed**.
+  - `flutter analyze`: passed with no issues.
+  - `git diff --check`: passed.
+  - Debug APK build: passed; `build/app/outputs/flutter-apk/app-debug.apk` metadata is package `click.lineoppo.chat`, version `1.1.25`, versionCode `45`.
+- **Release Boundary**: No app installation, uninstall, production signing-key action, backend change, publish, or deployment was performed. The unrelated untracked `docs/executive-guide/` directory remains untouched.
+- **Next Action**: Install the authorized build through the normal existing release path when desired, then perform the separate visual QA/polish pass.
+
 # 2026-09-14: Android 1.1.25 migration recovery [COMPLETED & VERIFIED]
 - **Root Cause**: `backend/prisma/migrations/20260914140000_release_android_1_1_25/migration.sql` had one invalid trailing comma in the final PostgreSQL `ARRAY[...]` item, causing production Prisma `P3018` / PostgreSQL `42601`.
 - **Recovery**: Confirmed the failed row had `applied_steps_count=0`, no finished timestamp, and no build-45 `AppRelease` row. Marked the failed migration rolled back with Prisma's supported `migrate resolve --rolled-back` command, then deployed the one-character SQL correction.
