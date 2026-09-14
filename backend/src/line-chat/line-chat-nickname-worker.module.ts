@@ -1,3 +1,4 @@
+import "./line-chat-pdf-relay-patch";
 import { Module } from "@nestjs/common";
 import { PrismaModule } from "../prisma.module";
 import { LineChatNicknameWorkerService } from "./line-chat-nickname-worker.service";
