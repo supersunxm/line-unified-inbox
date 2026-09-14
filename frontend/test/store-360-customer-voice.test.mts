@@ -41,6 +41,8 @@ test("Customer Voice Overview links to the protected drill-down dimensions", () 
   assert.match(drilldownCode, /responseStatus/);
   assert.match(drilldownCode, /salesTagged/);
   assert.match(drilldownCode, /unclassified/);
+  assert.match(drilldownCode, /notAnalyzed/);
+  assert.match(drilldownCode, /window\.location\.assign/);
   assert.match(drilldownCode, /hasNextPage/);
   assert.match(drilldownCode, /\/chats\?storeId=/);
   assert.match(typeCode, /export type StoreInsightsCustomerVoice/);

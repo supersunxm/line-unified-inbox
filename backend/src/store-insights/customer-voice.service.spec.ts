@@ -44,7 +44,8 @@ test("Customer Voice API scopes to active STORE conversations and aggregates one
   assert.equal(result.coverage.totalConversations, 1);
   assert.equal(result.coverage.analysisRows, 2);
   assert.equal(result.coverage.classifiedConversations, 1);
-  assert.equal(result.coverage.unclassifiedConversations, 0);
+  assert.equal(result.coverage.unclassifiedConversations, 1);
+  assert.equal(result.coverage.notAnalyzedConversations, 0);
   assert.deepEqual(result.topTopics.map(({ label, count }) => ({ label, count })), [
     { label: "Price Inquiry", count: 1 },
     { label: "Stock Availability", count: 1 },
@@ -53,6 +54,16 @@ test("Customer Voice API scopes to active STORE conversations and aggregates one
   assert.equal(calls.conversationWheres[0] && (calls.conversationWheres[0] as { isQa: boolean }).isQa, false);
   assert.deepEqual((calls.conversationWheres[0] as { lineOfficialAccount: unknown }).lineOfficialAccount, { accountType: "STORE", isActive: true, archivedAt: null });
   assert.equal((calls.conversationWheres[0] as { messages: { some: { direction: string } } }).messages.some.direction, "INBOUND");
+});
+
+test("a conversation with only historical analysis rows is not counted as current-version analyzed", async () => {
+  const { service, calls } = buildService([]);
+  const result = await service.getCustomerVoice(user, "store-1", { from: "2026-09-09", to: "2026-09-09" });
+  assert.equal(result.coverage.analyzedConversations, 0);
+  assert.equal(result.coverage.classifiedConversations, 0);
+  assert.equal(result.coverage.unclassifiedConversations, 0);
+  assert.equal(result.coverage.notAnalyzedConversations, 1);
+  assert.equal((calls.analysisWheres[0] as { analysisVersion: string }).analysisVersion, CUSTOMER_VOICE_ANALYSIS_VERSION);
 });
 
 test("comparison is zero-safe and returns NEW without dividing by zero", async () => {
@@ -83,7 +94,7 @@ test("authorization is checked before the store is read", async () => {
   assert.equal(storeRead, false);
 });
 
-function drilldownConversation(id: string, name: string, inboundAt: string, currentAnalysis: Record<string, unknown> | null, extras: Record<string, unknown> = {}) {
+function drilldownConversation(id: string, name: string, inboundAt: string, currentAnalysis: Record<string, unknown> | null, extras: Record<string, unknown> = {}, historicalVersions: string[] = []) {
   return {
     id,
     latestMessageAt: new Date(inboundAt),
@@ -102,15 +113,16 @@ function drilldownConversation(id: string, name: string, inboundAt: string, curr
     salesRecordedById: null,
     salesProducts: [],
     products: [],
-    customerVoiceAnalyses: currentAnalysis ? [{ analysisVersion: CUSTOMER_VOICE_ANALYSIS_VERSION, ...currentAnalysis }] : [],
+    customerVoiceAnalyses: [...historicalVersions.map((analysisVersion) => ({ analysisVersion })), ...(currentAnalysis ? [{ analysisVersion: CUSTOMER_VOICE_ANALYSIS_VERSION, ...currentAnalysis }] : [])],
   };
 }
 
 test("Customer Voice drill-down uses only the current version and returns safe paginated evidence", async () => {
   const conversations = [
     drilldownConversation("c-topic", "Customer Topic", "2026-09-09T03:00:00.000Z", analysis(CustomerVoiceAnalysisSource.RULE_ENRICHED, "Price Inquiry", ["Promotion"], "PRICE_CHECK", ["OPPO Reno16"]), { reply: true }),
-    drilldownConversation("c-unclassified", "Customer Unclassified", "2026-09-09T04:00:00.000Z", null),
+    drilldownConversation("c-unclassified", "Customer Unclassified", "2026-09-09T04:00:00.000Z", analysis(CustomerVoiceAnalysisSource.UNCLASSIFIED, null)),
     drilldownConversation("c-other", "Customer Other", "2026-09-09T05:00:00.000Z", analysis(CustomerVoiceAnalysisSource.MIXED_ENRICHED, "After-sales / Repair", [], "AFTER_SALES", ["OPPO Find X8"]), { customerSalesStatus: "PURCHASED" }),
+    drilldownConversation("c-not-analyzed", "Customer Not Analyzed", "2026-09-09T06:00:00.000Z", null, {}, ["customer-voice-rules-v1", "customer-voice-rules-v2"]),
   ];
   const calls: { conversationWhere?: unknown; select?: unknown; writes: number } = { writes: 0 };
   const prisma = {
@@ -129,10 +141,11 @@ test("Customer Voice drill-down uses only the current version and returns safe p
   const result = await service.getCustomerVoiceDrilldown(user, "store-1", { from: "2026-09-09", to: "2026-09-09", dimension: "topic", value: "Price Inquiry", pageSize: 1 });
 
   assert.equal(result.analysisVersion, CUSTOMER_VOICE_ANALYSIS_VERSION);
-  assert.equal(result.coverage.totalConversations, 3);
-  assert.equal(result.coverage.analysisRows, 2);
+  assert.equal(result.coverage.totalConversations, 4);
+  assert.equal(result.coverage.analysisRows, 3);
   assert.equal(result.coverage.classifiedConversations, 2);
   assert.equal(result.coverage.unclassifiedConversations, 1);
+  assert.equal(result.coverage.notAnalyzedConversations, 1);
   assert.deepEqual(result.distribution.map(({ label, count }) => ({ label, count })), [
     { label: "After-sales / Repair", count: 1 },
     { label: "Price Inquiry", count: 1 },
@@ -152,6 +165,11 @@ test("Customer Voice drill-down uses only the current version and returns safe p
 
   const unclassified = await service.getCustomerVoiceDrilldown(user, "store-1", { from: "2026-09-09", to: "2026-09-09", unclassified: true, pageSize: 10 });
   assert.deepEqual(unclassified.items.map(({ id }) => id), ["c-unclassified"]);
+  assert.equal(unclassified.items[0].source, CustomerVoiceAnalysisSource.UNCLASSIFIED);
+  const notAnalyzed = await service.getCustomerVoiceDrilldown(user, "store-1", { from: "2026-09-09", to: "2026-09-09", notAnalyzed: true, pageSize: 10 });
+  assert.deepEqual(notAnalyzed.items.map(({ id }) => id), ["c-not-analyzed"]);
+  assert.equal(notAnalyzed.items[0].source, null);
+  assert.equal(notAnalyzed.items[0].analysisVersion, null);
   const intent = await service.getCustomerVoiceDrilldown(user, "store-1", { from: "2026-09-09", to: "2026-09-09", dimension: "intent", value: "AFTER_SALES", pageSize: 10 });
   assert.deepEqual(intent.items.map(({ id }) => id), ["c-other"]);
   const product = await service.getCustomerVoiceDrilldown(user, "store-1", { from: "2026-09-09", to: "2026-09-09", dimension: "product", value: "OPPO Reno16", responseStatus: "REPLIED", pageSize: 10 });

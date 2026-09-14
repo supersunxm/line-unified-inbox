@@ -2403,3 +2403,17 @@ Keep `StoreMaster.tiktokProfileUrl` as the only persisted TikTok profile URL. Po
 
 - Keep this work as a local checkpoint only. The fetched base was `origin/main` at `4595cae21fc538795e2f98e570e6c3ba7b1cc7d1`; reconciliation must wait until the next integration window so a newer `origin/main` can be used.
 - Treat unavailable local HTTP smoke as an environment constraint: port 3000 belongs to an unrelated process and port 3001 has no service. Do not kill that process, choose a fallback port, or contact production to compensate.
+
+## 2026-09-14: Store 360 Phase 2B semantic and production-build gate
+
+- Keep `customer-voice-rules-v3` as the sole current-version source for Customer Voice analysis, coverage, distributions, and evidence. Historical v1/v2 rows remain excluded from current analyzed counts.
+- Distinguish analyzed-but-unclassified (`analyzed - classified`) from not analyzed (`eligible - analyzed`) in drill-down coverage and filters. A missing current-version row has null provenance and is labeled `Not analyzed`; it must not be presented as `UNCLASSIFIED`.
+- Treat the sanitized fixture as reconciliation evidence only: 60 eligible, 53 analyzed, 46 classified, 7 unclassified, and 7 not analyzed. Topic/product dimensions may have multiple labels in the canonical model; intent remains one label per analysis row.
+- Use a native URL navigation fallback for the Customer Voice search/select controls because the isolated production bundle did not apply query-only App Router pushes, while existing link drill-downs remained functional. This is limited to URL/query state and leaves metric and API semantics unchanged.
+- Preserve the canonical AppShell/AppSidebar and existing Phase 2A/Overview contracts. No Customer Voice v4, schema, migration, worker, production, or write behavior is part of this gate.
+
+## 2026-09-14: Phase 2B baseline and reconciliation gate
+
+- Require a clean detached worktree from the fetched `origin/main` to establish the backend baseline before interpreting the feature suite. The clean baseline reproduced six known failures, and the reconciled feature reproduced the same six categories with no additional failures; this is classification A and is safe to proceed past the code reconciliation gate.
+- Rebase the committed Phase 2B feature onto the fetched `origin/main` without conflict. Keep the reconciled branch local and unpushed until the separate real-data reconciliation step and its authenticated smoke are explicitly authorized.
+- Treat the post-reconcile focused Store 360/Store Insights tests, full frontend suite, changed-file ESLint, backend/frontend builds, and `git diff --check` as the release-gate evidence. These checks do not authorize production access, Customer Voice v4 execution, worker enablement, or persistence.

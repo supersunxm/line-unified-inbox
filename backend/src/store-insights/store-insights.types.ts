@@ -104,6 +104,11 @@ export class StoreInsightsCustomerVoiceDrilldownQueryDto extends StoreInsightsQu
   @Transform(({ value }: { value: unknown }) => (value === "true" ? true : value === "false" ? false : value))
   @IsIn([true, false])
   unclassified?: boolean;
+
+  @IsOptional()
+  @Transform(({ value }: { value: unknown }) => (value === "true" ? true : value === "false" ? false : value))
+  @IsIn([true, false])
+  notAnalyzed?: boolean;
 }
 
 export class StoreInsightsExportDto {
@@ -270,8 +275,8 @@ export type StoreInsightsCustomerVoiceEvidence = {
   responder: { displayName: string } | null;
   firstInboundAt: string | null;
   lastActivity: string;
-  source: string;
-  analysisVersion: string;
+  source: string | null;
+  analysisVersion: string | null;
   classified: boolean;
 };
 
@@ -288,6 +293,7 @@ export type StoreInsightsCustomerVoiceDrilldownResponse = {
     analyzedConversations: number;
     classifiedConversations: number;
     unclassifiedConversations: number;
+    notAnalyzedConversations: number;
     persistedTopicConversations: number;
     ruleEnrichedConversations: number;
     aiEnrichedConversations: number;

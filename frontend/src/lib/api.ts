@@ -486,7 +486,7 @@ export const api = {
     const qs = query.toString();
     return request<StoreInsightsCustomerVoice>(`/store-insights/${encodeURIComponent(storeId)}/customer-voice${qs ? `?${qs}` : ""}`);
   },
-  storeInsightsCustomerVoiceDrilldown: (storeId: string, params: { from?: string; to?: string; dimension?: StoreInsightsCustomerVoiceDimension; value?: string; search?: string; responseStatus?: "REPLIED" | "UNANSWERED"; salesTagged?: boolean; sort?: "date-desc" | "date-asc"; unclassified?: boolean; page?: number; pageSize?: number } = {}) => {
+  storeInsightsCustomerVoiceDrilldown: (storeId: string, params: { from?: string; to?: string; dimension?: StoreInsightsCustomerVoiceDimension; value?: string; search?: string; responseStatus?: "REPLIED" | "UNANSWERED"; salesTagged?: boolean; sort?: "date-desc" | "date-asc"; unclassified?: boolean; notAnalyzed?: boolean; page?: number; pageSize?: number } = {}) => {
     const query = new URLSearchParams();
     for (const [key, value] of Object.entries(params)) if (value !== undefined && value !== "") query.set(key, String(value));
     const qs = query.toString();

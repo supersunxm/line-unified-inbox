@@ -447,6 +447,7 @@ export type StoreInsightsCustomerVoiceCoverage = {
   analyzedConversations: number;
   classifiedConversations: number;
   unclassifiedConversations: number;
+  notAnalyzedConversations: number;
   persistedTopicConversations: number;
   ruleEnrichedConversations: number;
   aiEnrichedConversations: number;
@@ -476,8 +477,8 @@ export type StoreInsightsCustomerVoiceEvidence = {
   responder: { displayName: string } | null;
   firstInboundAt: string | null;
   lastActivity: string;
-  source: string;
-  analysisVersion: string;
+  source: string | null;
+  analysisVersion: string | null;
   classified: boolean;
 };
 export type StoreInsightsCustomerVoiceDrilldownResponse = {

@@ -60,6 +60,7 @@ export type CustomerVoiceCoverage = {
   analyzedConversations: number;
   classifiedConversations: number;
   unclassifiedConversations: number;
+  notAnalyzedConversations: number;
   persistedTopicConversations: number;
   ruleEnrichedConversations: number;
   aiEnrichedConversations: number;
@@ -204,6 +205,8 @@ function aggregateCounts(rows: CustomerVoiceAnalysisRow[], totalConversations: n
 
 function coverageFor(rows: CustomerVoiceAnalysisRow[], totalConversations: number): CustomerVoiceCoverage {
   const classifiedConversations = rows.filter((row) => isUsableCustomerVoiceAnalysis({ primaryTopic: row.primaryTopic as CustomerVoiceTopic | null, intent: row.intent, productMentions: row.productMentions })).length;
+  const unclassifiedConversations = rows.length - classifiedConversations;
+  const notAnalyzedConversations = Math.max(0, totalConversations - rows.length);
   const persistedTopicConversations = rows.filter((row) => row.source === CustomerVoiceAnalysisSource.EXISTING_TOPIC || row.source === CustomerVoiceAnalysisSource.MIXED_ENRICHED).length;
   const ruleEnrichedConversations = rows.filter((row) => row.source === CustomerVoiceAnalysisSource.RULE_ENRICHED || row.source === CustomerVoiceAnalysisSource.MIXED_ENRICHED).length;
   const aiEnrichedConversations = rows.filter((row) => row.source === CustomerVoiceAnalysisSource.AI_CLASSIFIED || (row.source === CustomerVoiceAnalysisSource.MIXED_ENRICHED && Boolean(row.modelProvider))).length;
@@ -212,7 +215,8 @@ function coverageFor(rows: CustomerVoiceAnalysisRow[], totalConversations: numbe
     analysisRows: rows.length,
     analyzedConversations: rows.length,
     classifiedConversations,
-    unclassifiedConversations: Math.max(0, totalConversations - classifiedConversations),
+    unclassifiedConversations,
+    notAnalyzedConversations,
     persistedTopicConversations,
     ruleEnrichedConversations,
     aiEnrichedConversations,
@@ -488,7 +492,7 @@ export class CustomerVoiceService {
       }),
     ]);
     const dimension = query.dimension ?? "topic";
-    const currentRows = conversations.flatMap((conversation) => conversation.customerVoiceAnalyses.map(toRow));
+    const currentRows = conversations.flatMap((conversation) => conversation.customerVoiceAnalyses.filter(({ analysisVersion }) => analysisVersion === CUSTOMER_VOICE_ANALYSIS_VERSION).map(toRow));
     const coverage = coverageFor(currentRows, totalConversations);
     const distribution = drilldownDistribution(currentRows, totalConversations, dimension);
     const requestedValue = query.value?.trim() || null;
@@ -516,14 +520,15 @@ export class CustomerVoiceService {
         responder: humanReply && senderDisplayName(humanReply) ? { displayName: senderDisplayName(humanReply)! } : null,
         firstInboundAt: inbound?.sentAt.toISOString() ?? null,
         lastActivity: conversation.latestMessageAt.toISOString(),
-        source: analysis?.source ?? CustomerVoiceAnalysisSource.UNCLASSIFIED,
-        analysisVersion: analysis?.analysisVersion ?? CUSTOMER_VOICE_ANALYSIS_VERSION,
+        source: analysis?.source ?? null,
+        analysisVersion: analysis?.analysisVersion ?? null,
         classified,
         dimensionLabels: analysisRow ? customerVoiceLabels(analysisRow, dimension) : [],
       };
     }).filter((item) =>
       (!normalizedValue || item.dimensionLabels.includes(normalizedValue)) &&
-      (!query.unclassified || !item.classified) &&
+      (!query.unclassified || (item.analysisVersion !== null && !item.classified)) &&
+      (!query.notAnalyzed || item.analysisVersion === null) &&
       (!query.responseStatus || item.responseStatus === query.responseStatus) &&
       (query.salesTagged === undefined || item.salesTagged === query.salesTagged) &&
       (!normalizedSearch || [item.customer.displayName, ...item.topics, item.intent, ...item.products, item.source, item.responseStatus, item.responder?.displayName].filter(Boolean).join(" ").toLocaleLowerCase().includes(normalizedSearch)),
