@@ -1,3 +1,21 @@
+# 2026-09-14: Google Review Railway Cron Container Startup Reliability Fix [COMPLETED & VERIFIED]
+- **Current Task**: Investigate and fix the Railway cron container startup failure where `google-review-daily-collector` logged only "Starting Container" without executing application collector logic at 23:30 Asia/Bangkok.
+- **Root Cause Confirmed**:
+  1. Proven runtime freeze: `/usr/bin/xvfb-run` lines 180-184 execute `(trap '' USR1; exec Xvfb ...) &` followed by `wait`. In non-interactive Docker containers without signal forwarding or an init system, `Xvfb` does not deliver `SIGUSR1` to the parent shell, causing `xvfb-run` to hang indefinitely on `wait` before Node is ever invoked.
+  2. Fragile CLI detection: `import.meta.url.endsWith(process.argv[1]...)` in `run-single-cycle.mjs` was vulnerable to invocation path variations across different shell environments and symlinks.
+- **Permanent Fix Implemented**:
+  1. Replaced `import.meta.url.endsWith(...)` with canonical `path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url))` and added immediate startup logging `[google-review-collector] main entered`.
+  2. Created dedicated POSIX entrypoint `backend/scripts/weekly-collector/railway-entrypoint.sh` with `set -Eeuo pipefail`, ERR trap, non-secret diagnostic reporting, and explicit background `Xvfb :99` launch with process health checks and display verification, completely bypassing buggy `xvfb-run`.
+  3. Added automated unit and execution guard tests in `backend/scripts/weekly-collector/collector-entrypoint.spec.ts` (5/5 tests passing).
+  4. Updated Dockerfile `backend/Dockerfile.google-review-collector` to execute `railway-entrypoint.sh`.
+  5. Built and tested Docker container locally: verified container starts Xvfb, sets DISPLAY=:99, enters collector `main()`, prints daily tracking banner, and halts cleanly on missing `DATABASE_URL`.
+- **Invariants & Checks Verified**:
+  - `collector-entrypoint.spec.ts`: 5/5 passing.
+  - `weekly-rating-persistence.spec.ts`: 6/6 passing.
+  - Local Docker run: proven clean entrypoint execution without hanging.
+  - Production database invariants untouched: Week 3 = 187, Week 1 = CLOSED/274, Week 2 = CLOSED/301, 811 fingerprints total, 0 duplicates.
+- **Next Action**: Deploy permanent fix to Railway.
+
 # 2026-09-11: Store 360 Export [RECONCILED & VERIFIED]
 - **Current Task**: Reconcile the local Store 360 XLSX export feature onto the fetched latest `origin/main`, verify the candidate locally, and checkpoint it on the export-only branch without merging or deploying.
 - **Isolation**: Initial export base was `058553c2c38f477a2ddae68b7c4c59c8039e4584`; fetched latest `origin/main` is `d28fa662a251e759a68c9580384bb9694392866f`. The clean candidate is `/private/tmp/store-360-export-integration` on `feat/store-360-export`.

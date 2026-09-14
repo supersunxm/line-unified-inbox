@@ -1,3 +1,9 @@
+# Google Review Railway Cron Container Startup Reliability (2026-09-14)
+
+- **Direct Xvfb Background Launch over xvfb-run**: Debian/Ubuntu `/usr/bin/xvfb-run` relies on `wait` waiting for a signal (`SIGUSR1`) from `Xvfb`. In non-interactive container environments without signal forwarding or an init daemon, `Xvfb` fails to deliver this signal to the parent shell, causing `xvfb-run` to hang indefinitely on `wait` before Node is ever invoked. We bypass `xvfb-run` entirely by launching `Xvfb :99` in the background within `railway-entrypoint.sh`, polling for process health, binding `DISPLAY=:99`, and directly executing `node scripts/weekly-collector/run-single-cycle.mjs`.
+- **Deterministic CLI Execution Guard**: The previous guard `import.meta.url.endsWith(process.argv[1]...)` was vulnerable to path format variations (symlinks, relative paths, container mounts). We replaced it with canonical filesystem path resolution: `path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url))`, and added explicit `[google-review-collector] main entered` logging to guarantee observable startup tracing.
+- **Fail-Safe Container Entrypoint**: The container `CMD` executes `backend/scripts/weekly-collector/railway-entrypoint.sh` with `set -Eeuo pipefail` and ERR trap, checking for required binaries (`node`, `Xvfb`, `chromium`), reporting environment state safely without leaking secrets, and cleaning up background Xvfb processes on exit.
+
 # Store 360 Export (2026-09-11)
 
 - Add a read-only `POST /store-insights/export` endpoint rather than a separate analytics query path. It accepts an explicit `storeIds` list, `startDate`, `endDate`, and the only supported reporting timezone (`Asia/Bangkok`), authorizes every requested store before reading data, caps requests at 10 stores, and rejects oversized exports instead of truncating them.

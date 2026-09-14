@@ -1,3 +1,5 @@
+import { fileURLToPath } from "node:url";
+import path from "node:path";
 import playwright from "playwright";
 const { chromium } = playwright;
 import { PrismaClient, GoogleReviewPeriodStatus } from "@prisma/client";
@@ -110,6 +112,7 @@ export async function refreshWeeklyStoreTotal({ storeCode, storeId, storeRating,
 }
 
 async function main() {
+  console.log("[google-review-collector] main entered");
   const targetReviewDateOverride = process.env.GOOGLE_REVIEW_WRITE_DATE?.trim() || null;
   const todayBangkok = getTodayBangkokDate();
   const targetWeekNumber = targetReviewDateOverride
@@ -382,7 +385,13 @@ async function main() {
   console.log(`================================================================================\n`);
 }
 
-if (process.argv[1] && import.meta.url.endsWith(process.argv[1].replace(/^[A-Za-z]:/, ""))) {
+const currentFilePath = fileURLToPath(import.meta.url);
+
+const isDirectExecution =
+  Boolean(process.argv[1]) &&
+  path.resolve(process.argv[1]) === path.resolve(currentFilePath);
+
+if (isDirectExecution) {
   main()
     .catch((err) => {
       console.error("Fatal error in Continuous Collector Cycle:", err);

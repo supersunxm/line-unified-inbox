@@ -29,12 +29,14 @@ RUN npx playwright install chromium \
   && test -n "$CHROME_BIN" \
   && ln -s "$CHROME_BIN" /usr/local/bin/chromium
 
+# Ensure entrypoint script is executable
+RUN chmod +x scripts/weekly-collector/railway-entrypoint.sh
+
 # Runtime environment defaults for Railway container
 ENV NODE_ENV=production
 ENV NODE_OPTIONS="--experimental-strip-types"
 ENV GOOGLE_REVIEW_HEADLESS=true
 ENV GOOGLE_REVIEW_PROFILE_DIR=/tmp/google-review-kpi-profile
 
-# Executes exactly ONE collector cycle across active Focus Stores, then exits.
-# xvfb-run is required when GOOGLE_REVIEW_HEADLESS=false so Chromium has an X server.
-CMD ["xvfb-run", "-a", "node", "scripts/weekly-collector/run-single-cycle.mjs"]
+# Executes exactly ONE collector cycle across active Focus Stores via deterministic shell entrypoint
+CMD ["bash", "scripts/weekly-collector/railway-entrypoint.sh"]
