@@ -11,10 +11,11 @@ import '../../core/network/api_exception.dart';
 import '../../core/logging/safe_logger.dart';
 import '../../core/services/media_save_service.dart';
 import '../../core/widgets/status_badge.dart';
+import '../../core/widgets/system_notice_card.dart';
 import '../inbox/conversation_repository.dart';
 import 'widgets/conversation_header.dart';
 import 'widgets/chat_composer.dart';
-import 'widgets/customer_profile_sheet.dart';
+import 'widgets/conversation_info_page.dart';
 import 'widgets/conversation_tags_sheet.dart';
 import 'widgets/message_timeline.dart';
 
@@ -143,11 +144,15 @@ class _ChatPageState extends State<ChatPage> {
   void _showCustomerProfile() {
     final detail = _detail;
     if (detail == null) return;
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      builder: (_) => CustomerProfileSheet(detail: detail),
+    Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => ConversationInfoPage(
+          detail: detail,
+          onOwnerTap: widget.canReply ? _showOwnerSelector : null,
+          onSalesTap: widget.canReply ? _showConversationTags : null,
+          onStatusTap: widget.canReply ? _showConversationActions : null,
+        ),
+      ),
     );
   }
 
@@ -596,48 +601,31 @@ class _ChatPageState extends State<ChatPage> {
     await _sendText(text);
   }
 
-  Future<void> _pickImage() async {
+  Future<void> _pickImage({ImageSource? preferredSource}) async {
     final l10n = appLocalizations(context);
-    final source = await showModalBottomSheet<ImageSource>(
-      context: context,
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (ctx) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 36,
-                height: 4,
-                margin: const EdgeInsets.only(bottom: 8),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade400,
-                  borderRadius: BorderRadius.circular(2),
+    final source = preferredSource ??
+        await showModalBottomSheet<ImageSource>(
+          context: context,
+          backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+          showDragHandle: true,
+          builder: (ctx) => SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.camera_alt_outlined),
+                  title: Text(l10n.takePhoto),
+                  onTap: () => Navigator.pop(ctx, ImageSource.camera),
                 ),
-              ),
-              ListTile(
-                leading: const Icon(Icons.camera_alt_outlined,
-                    color: Color(0xFF0F8A5F)),
-                title: Text(l10n.takePhoto,
-                    style: const TextStyle(fontWeight: FontWeight.w600)),
-                onTap: () => Navigator.pop(ctx, ImageSource.camera),
-              ),
-              ListTile(
-                leading: const Icon(Icons.photo_library_outlined,
-                    color: Color(0xFF0F8A5F)),
-                title: Text(l10n.chooseFromGallery,
-                    style: const TextStyle(fontWeight: FontWeight.w600)),
-                onTap: () => Navigator.pop(ctx, ImageSource.gallery),
-              ),
-            ],
+                ListTile(
+                  leading: const Icon(Icons.photo_library_outlined),
+                  title: Text(l10n.chooseFromGallery),
+                  onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+                ),
+              ],
+            ),
           ),
-        ),
-      ),
-    );
+        );
 
     if (source == null || !mounted) return;
 
@@ -963,10 +951,9 @@ class _ChatPageState extends State<ChatPage> {
                     onAction:
                         widget.canReply ? _showConversationActions : null),
                 body: Column(children: [
-                  ConversationTagsBar(
+                  ConversationMetadataStrip(
                       tags: detail.tags,
                       customerSalesInformation: detail.customerSalesInformation,
-                      purchaseInformation: detail.purchaseInformation,
                       onPressed:
                           widget.canReply ? _showConversationTags : null),
                   Expanded(
@@ -1007,10 +994,13 @@ class _ChatPageState extends State<ChatPage> {
                           onUserScroll: () => _scrollGeneration += 1,
                           isProgrammaticScroll: () => _programmaticScroll)),
                   if (_error != null)
-                    Padding(
-                        padding: const EdgeInsets.all(8),
-                        child: Text(_error!,
-                            style: const TextStyle(color: Colors.red))),
+                    SystemNoticeCard(
+                      message: _friendlyError(_error!),
+                      technicalDetail:
+                          _isResolverIssue(_error!) ? _error : null,
+                      onRetry: _load,
+                      onDetails: () => _showErrorDetails(_error!),
+                    ),
                   if (!widget.canReply)
                     Padding(
                       padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
@@ -1026,8 +1016,20 @@ class _ChatPageState extends State<ChatPage> {
                   ChatComposer(
                       controller: _text,
                       enabled: widget.canReply,
-                      onAttach: widget.canReply ? _pickImage : null,
+                      onAttachCamera: widget.canReply
+                          ? () =>
+                              _pickImage(preferredSource: ImageSource.camera)
+                          : null,
+                      onAttachGallery: widget.canReply
+                          ? () =>
+                              _pickImage(preferredSource: ImageSource.gallery)
+                          : null,
                       onAttachVideo: widget.canReply ? _pickVideo : null,
+                      onOpenSalesInfo:
+                          widget.canReply ? _showConversationTags : null,
+                      onOpenConversationInfo: _showCustomerProfile,
+                      onOpenStatus:
+                          widget.canReply ? _showConversationActions : null,
                       isAttaching: _sendingVideo,
                       onSend: widget.canReply ? _send : null)
                 ]));
@@ -1046,6 +1048,35 @@ class _ChatPageState extends State<ChatPage> {
         return;
       }
     }
+  }
+
+  bool _isResolverIssue(String message) =>
+      message.toUpperCase().contains('RESOLVE') ||
+      message.toUpperCase().contains('MATCH');
+
+  String _friendlyError(String message) {
+    if (!_isResolverIssue(message)) return message;
+    return switch (Localizations.localeOf(context).languageCode) {
+      'th' => 'ยังจับคู่ลูกค้ากับ LINE OA Manager ไม่สำเร็จ',
+      'zh' => '尚未成功将客户与 LINE OA Manager 匹配',
+      _ => 'This customer could not be matched with LINE OA Manager',
+    };
+  }
+
+  void _showErrorDetails(String message) {
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(appLocalizations(dialogContext).moreActions),
+        content: SelectableText(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: Text(appLocalizations(dialogContext).close),
+          ),
+        ],
+      ),
+    );
   }
 }
 

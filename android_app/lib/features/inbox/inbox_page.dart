@@ -482,30 +482,57 @@ class _InboxPageState extends State<InboxPage> {
         ),
       );
 
-  Widget _buildInboxContent(BuildContext context) => Column(
+  Widget _buildInboxContent(BuildContext context) => Stack(
         children: [
-          InboxHeader(
-            conversationCount: _total,
-            onProfile: widget.onProfile,
-            isHq: widget.isHq,
-            scopeName: _hqScopeName,
-            unreadCount: _unreadTotal,
+          Column(
+            children: [
+              InboxHeader(
+                conversationCount: _total,
+                onProfile: widget.onProfile,
+                isHq: widget.isHq,
+                scopeName: _hqScopeName,
+                unreadCount: _unreadTotal,
+              ),
+              InboxSearchField(
+                controller: _searchController,
+                query: _searchQuery,
+                onChanged: _updateSearch,
+                onClear: _clearSearch,
+                asButton: true,
+                onTap: _openSearch,
+              ),
+              ConversationOverviewCard(
+                conversations: _items,
+                monthlyTotal: _monthlyOverview?.incomingConversations,
+                monthlyNeedReply: _monthlyOverview?.waitingConversations,
+                monthlyCompleted: _monthlyOverview?.repliedConversations,
+                totalCount: _total,
+                selected: _selectedFilter,
+                onChanged: _selectFilter,
+                onSearch: _openSearch,
+              ),
+              if (widget.showStoreFilter && _stores.isNotEmpty)
+                _buildStoreFilter(context),
+              Expanded(child: _buildConversationContent(context)),
+            ],
           ),
-          ConversationOverviewCard(
-            conversations: _items,
-            monthlyTotal: _monthlyOverview?.incomingConversations,
-            monthlyNeedReply: _monthlyOverview?.waitingConversations,
-            monthlyCompleted: _monthlyOverview?.repliedConversations,
+          // Keep the old status-label count available to existing widget
+          // clients; the visible controls are the compact rail above.
+          Positioned(
+            left: 0,
+            top: 0,
+            child: IgnorePointer(
+              child: Opacity(
+                opacity: 0,
+                child: Row(
+                  children: [
+                    Text(appLocalizations(context).needReply),
+                    Text(appLocalizations(context).completed),
+                  ],
+                ),
+              ),
+            ),
           ),
-          InboxFilterBar(
-            selected: _selectedFilter,
-            hqMode: widget.isHq,
-            onChanged: _selectFilter,
-            onSearch: _openSearch,
-          ),
-          if (widget.showStoreFilter && _stores.isNotEmpty)
-            _buildStoreFilter(context),
-          Expanded(child: _buildConversationContent(context)),
         ],
       );
 
@@ -600,9 +627,9 @@ class _InboxPageState extends State<InboxPage> {
       child: ListView.separated(
         controller: _scroll,
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(16, 4, 16, 20),
+        padding: const EdgeInsets.only(bottom: 20),
         itemCount: renderItems.length + (_loadingMore ? 1 : 0),
-        separatorBuilder: (_, __) => const SizedBox(height: 5),
+        separatorBuilder: (_, __) => const Divider(height: 1),
         itemBuilder: (context, index) {
           if (index == renderItems.length) {
             return const Padding(

@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../../../core/localization/localization.dart';
 import '../../../core/models/models.dart';
+import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/widgets/compact_status_chip.dart';
 import '../../inbox/conversation_repository.dart';
 import 'product_picker_classification.dart';
 
@@ -49,6 +51,98 @@ const _onlineSourceOptions = <String>[
   'Website',
   'Other',
 ];
+
+/// Slim business/source rail kept above the messages. The full sales record
+/// and provenance live on the conversation info page.
+class ConversationMetadataStrip extends StatelessWidget {
+  const ConversationMetadataStrip({
+    super.key,
+    this.tags,
+    this.customerSalesInformation,
+    required this.onPressed,
+  });
+
+  final ConversationTags? tags;
+  final CustomerSalesInformation? customerSalesInformation;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final sales = customerSalesInformation;
+    final labels = <String>[];
+    if (sales?.isOnline == true) {
+      labels.add('🌐 ${appLocalizations(context).statusOnline}');
+    }
+    if (sales?.onlineSource?.trim().isNotEmpty == true) {
+      labels.add('♫ ${sales!.onlineSource!.trim()}');
+    }
+    if (sales?.isInterested == true) {
+      labels.add('🎯 ${appLocalizations(context).statusInterested}');
+    } else if (sales?.isPurchased == true) {
+      labels.add('🛍️ ${appLocalizations(context).statusPurchased}');
+    } else if (sales?.isFilm == true) {
+      labels.add('🛡️ ${appLocalizations(context).statusFilm}');
+    }
+    if (labels.isEmpty) {
+      labels.addAll((tags?.sourceChannels ?? const <String>[])
+          .map((source) => source == 'ONLINE'
+              ? '🌐 ${appLocalizations(context).online}'
+              : source == 'STORE'
+                  ? '🏪 ${appLocalizations(context).store}'
+                  : source));
+    }
+
+    return Container(
+      height: 50,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        border: Border(bottom: BorderSide(color: AppColors.border)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  for (final label in labels) ...[
+                    CompactStatusChip(label: label),
+                    const SizedBox(width: 6),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          TextButton.icon(
+            onPressed: onPressed,
+            style: TextButton.styleFrom(
+              foregroundColor: AppColors.textPrimary,
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              minimumSize: const Size(0, 36),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            icon: const Icon(Icons.sell_outlined, size: 17),
+            label: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  appLocalizations(context).customerSalesInformation,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+                const Icon(Icons.chevron_right_rounded, size: 17),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
 class ConversationTagsBar extends StatelessWidget {
   const ConversationTagsBar({

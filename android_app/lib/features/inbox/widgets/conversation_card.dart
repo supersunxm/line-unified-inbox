@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
-import '../../../core/models/models.dart';
+
 import '../../../core/localization/localization.dart';
+import '../../../core/models/models.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/app_widgets.dart';
 import 'conversation_preview.dart';
 
+/// Dense, divider-led conversation row. Secondary business metadata stays
+/// visible, but the customer and latest message carry the hierarchy.
 class ConversationCard extends StatelessWidget {
   const ConversationCard({
     super.key,
@@ -20,77 +23,68 @@ class ConversationCard extends StatelessWidget {
   final bool showStoreContext;
 
   @override
-  Widget build(BuildContext context) {
-    return Card(
-      margin: EdgeInsets.zero,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(10, 6, 8, 6),
-          child: Stack(
-            children: [
-              hqLayout ? _buildHqLayout(context) : _buildStoreLayout(context),
-              if (conversation.unreadCount > 0)
-                Positioned(
-                  left: 0,
-                  top: 0,
-                  child: ExcludeSemantics(
-                    child: Opacity(
-                      opacity: 0,
-                      child: UnreadBadge(count: conversation.unreadCount),
+  Widget build(BuildContext context) => Card(
+        margin: EdgeInsets.zero,
+        elevation: 0,
+        shape: const RoundedRectangleBorder(),
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+            child: Stack(
+              children: [
+                hqLayout ? _buildHqLayout(context) : _buildStoreLayout(context),
+                if (conversation.unreadCount > 0)
+                  Positioned(
+                    right: 0,
+                    top: 0,
+                    child: ExcludeSemantics(
+                      child: Opacity(
+                        opacity: 0,
+                        child: UnreadBadge(count: conversation.unreadCount),
+                      ),
                     ),
                   ),
-                ),
-            ],
+              ],
+            ),
           ),
         ),
-      ),
-    );
-  }
+      );
 
   Widget _buildHqLayout(BuildContext context) => Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
         children: [
           Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Expanded(
                 child: Text(
                   conversation.storeName,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w800,
-                        fontSize: 14,
-                      ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              if (conversation.sentAt != null)
-                Text(
-                  formatConversationTimestamp(conversation.sentAt!.toLocal()),
                   style: Theme.of(context).textTheme.labelMedium?.copyWith(
                         color: AppColors.textSecondary,
                         fontWeight: FontWeight.w700,
                       ),
                 ),
+              ),
+              if (conversation.sentAt != null) _time(context),
             ],
           ),
-          const SizedBox(height: 5),
+          const SizedBox(height: 4),
           Text.rich(
             TextSpan(
               children: [
                 TextSpan(
                   text: conversation.customerName,
-                  style: const TextStyle(fontWeight: FontWeight.w700),
+                  style: const TextStyle(
+                    color: AppColors.textPrimary,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
                 const TextSpan(text: ' : '),
                 TextSpan(
-                  text: localizedConversationPreview(
-                      context, conversation.preview),
-                ),
+                    text: localizedConversationPreview(
+                        context, conversation.preview)),
               ],
             ),
             maxLines: 1,
@@ -100,10 +94,6 @@ class ConversationCard extends StatelessWidget {
                   fontSize: 12.5,
                 ),
           ),
-          _OwnerSummary(
-              owner: conversation.owner,
-              ownerTracked: conversation.ownerTracked),
-          _SalesSummary(summary: conversation.customerSalesSummary),
           const SizedBox(height: 6),
           Row(
             children: [
@@ -116,9 +106,14 @@ class ConversationCard extends StatelessWidget {
                 ),
                 compact: true,
               ),
-              const Spacer(),
-              const Icon(Icons.chevron_right,
-                  size: 16, color: AppColors.textSecondary),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _OwnerSummary(
+                  owner: conversation.owner,
+                  ownerTracked: conversation.ownerTracked,
+                ),
+              ),
+              _SalesStatus(summary: conversation.customerSalesSummary),
             ],
           ),
         ],
@@ -130,83 +125,79 @@ class ConversationCard extends StatelessWidget {
           UserAvatar(
             displayName: conversation.customerName,
             imageUrl: conversation.customerPictureUrl,
-            radius: 18,
+            radius: 22,
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 11),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
-                  conversation.customerName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 14,
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        conversation.customerName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 14,
+                            ),
                       ),
+                    ),
+                    if (conversation.sentAt != null) ...[
+                      const SizedBox(width: 6),
+                      _time(context),
+                    ],
+                  ],
                 ),
                 if (showStoreContext)
                   Padding(
-                    padding: const EdgeInsets.only(top: 1),
-                    child: StoreBadge(
-                      name: conversation.storeName,
-                      compact: true,
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Text(
+                      conversation.storeName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                            color: AppColors.textSecondary,
+                            fontWeight: FontWeight.w600,
+                          ),
                     ),
                   ),
-                _OwnerSummary(
-                    owner: conversation.owner,
-                    ownerTracked: conversation.ownerTracked),
-                const SizedBox(height: 1),
+                const SizedBox(height: 2),
                 ConversationPreview(
-                    preview: conversation.preview, showTimestamp: false),
-                _ProductSummary(summary: conversation.customerSalesSummary),
+                  preview: conversation.preview,
+                  showTimestamp: false,
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _OwnerSummary(
+                        owner: conversation.owner,
+                        ownerTracked: conversation.ownerTracked,
+                      ),
+                    ),
+                    _SalesSummary(summary: conversation.customerSalesSummary),
+                    const SizedBox(width: 6),
+                    StatusBadge(
+                      status: conversation.bmReplyStatus,
+                      compact: true,
+                    ),
+                  ],
+                ),
               ],
             ),
           ),
-          const SizedBox(width: 8),
-          _ConversationMeta(
-            sentAt: conversation.sentAt,
-            salesSummary: conversation.customerSalesSummary,
-            replyStatus: conversation.bmReplyStatus,
-          ),
-          const SizedBox(width: 2),
-          const Icon(Icons.chevron_right,
-              size: 16, color: AppColors.textSecondary),
         ],
       );
-}
 
-class _ConversationMeta extends StatelessWidget {
-  const _ConversationMeta({
-    required this.sentAt,
-    required this.salesSummary,
-    required this.replyStatus,
-  });
-
-  final DateTime? sentAt;
-  final CustomerSalesSummary? salesSummary;
-  final String replyStatus;
-
-  @override
-  Widget build(BuildContext context) => Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          if (sentAt != null)
-            Text(
-              formatConversationTimestamp(sentAt!.toLocal()),
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: AppColors.textSecondary,
-                    fontWeight: FontWeight.w700,
-                  ),
+  Widget _time(BuildContext context) => Text(
+        formatConversationTimestamp(conversation.sentAt!.toLocal()),
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: AppColors.textSecondary,
+              fontWeight: FontWeight.w600,
             ),
-          const SizedBox(height: 2),
-          _SalesStatusBadge(summary: salesSummary),
-          const SizedBox(height: 2),
-          StatusBadge(status: replyStatus, compact: true),
-        ],
       );
 }
 
@@ -219,105 +210,37 @@ class _OwnerSummary extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (owner == null && !ownerTracked) return const SizedBox.shrink();
-    return Padding(
-      padding: const EdgeInsets.only(top: 1),
-      child: Row(
-        children: [
-          const Icon(Icons.person_outline,
-              size: 13, color: AppColors.textSecondary),
-          const SizedBox(width: 3),
-          Flexible(
-            child: Text(
-              '${appLocalizations(context).conversationOwner}: ${owner?.displayName ?? appLocalizations(context).unassignedOwner}',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: AppColors.textSecondary,
-                    fontWeight: FontWeight.w600,
-                  ),
-            ),
+    return Row(
+      children: [
+        const Icon(Icons.person_outline,
+            size: 13, color: AppColors.textSecondary),
+        const SizedBox(width: 3),
+        Flexible(
+          child: Text(
+            '${appLocalizations(context).conversationOwner}: ${owner?.displayName ?? appLocalizations(context).unassignedOwner}',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: AppColors.textSecondary,
+                  fontWeight: FontWeight.w600,
+                ),
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SalesStatusBadge extends StatelessWidget {
-  const _SalesStatusBadge({required this.summary});
-
-  final CustomerSalesSummary? summary;
-
-  @override
-  Widget build(BuildContext context) {
-    final status = switch (summary?.status) {
-      'ONLINE' => '🌐 ${appLocalizations(context).statusOnline}',
-      'INTERESTED' => '🎯 ${appLocalizations(context).statusInterested}',
-      'PURCHASED' => '🛍️ ${appLocalizations(context).statusPurchased}',
-      'FILM' => '🛡️ ${appLocalizations(context).statusFilm}',
-      _ => null,
-    };
-    if (status == null) return const SizedBox.shrink();
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(
-        color: AppColors.primaryContainer.withAlpha(150),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        status,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              fontWeight: FontWeight.w700,
-              fontSize: 10.5,
-            ),
-      ),
-    );
-  }
-}
-
-class _ProductSummary extends StatelessWidget {
-  const _ProductSummary({required this.summary});
-
-  final CustomerSalesSummary? summary;
-
-  @override
-  Widget build(BuildContext context) {
-    if (summary == null || (summary!.products.isEmpty && !summary!.isFilm)) {
-      return const SizedBox.shrink();
-    }
-    if (summary!.isFilm) {
-      final brand = summary!.filmBrand?.trim();
-      if (brand?.isEmpty != false) return const SizedBox.shrink();
-      return Padding(
-        padding: const EdgeInsets.only(top: 1),
-        child: Text(
-          '🛡️ $brand',
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: AppColors.textSecondary,
-                fontWeight: FontWeight.w600,
-              ),
         ),
-      );
-    }
-    final first = summary!.products.first;
-    final productLabel =
-        '📱 ${first.modelName}${first.quantity > 1 ? ' ×${first.quantity}' : ''}${summary!.products.length > 1 ? ' +${summary!.products.length - 1}' : ''}';
-    return Padding(
-      padding: const EdgeInsets.only(top: 1),
-      child: Text(
-        productLabel,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: AppColors.textSecondary,
-              fontWeight: FontWeight.w600,
-            ),
-      ),
+      ],
     );
+  }
+}
+
+class _SalesStatus extends StatelessWidget {
+  const _SalesStatus({required this.summary});
+
+  final CustomerSalesSummary? summary;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = _statusLabel(context, summary?.status);
+    if (label == null) return const SizedBox.shrink();
+    return _Pill(text: label, color: AppColors.primary);
   }
 }
 
@@ -329,84 +252,55 @@ class _SalesSummary extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (summary == null || summary!.isEmpty) return const SizedBox.shrink();
-    final status = switch (summary!.status) {
+    final label = _statusLabel(context, summary!.status);
+    final first = summary!.products.isEmpty ? null : summary!.products.first;
+    final product = first == null
+        ? null
+        : '📱 ${first.modelName}${first.quantity > 1 ? ' ×${first.quantity}' : ''}${summary!.products.length > 1 ? ' +${summary!.products.length - 1}' : ''}';
+    return Flexible(
+      child: Text(
+        product ?? label ?? '',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: AppColors.textSecondary,
+              fontWeight: FontWeight.w600,
+            ),
+      ),
+    );
+  }
+}
+
+class _Pill extends StatelessWidget {
+  const _Pill({required this.text, required this.color});
+
+  final String text;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+        decoration: BoxDecoration(
+          color: AppColors.primaryContainer,
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Text(
+          text,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: color,
+                fontWeight: FontWeight.w700,
+                fontSize: 10.5,
+              ),
+        ),
+      );
+}
+
+String? _statusLabel(BuildContext context, String? status) => switch (status) {
       'ONLINE' => '🌐 ${appLocalizations(context).statusOnline}',
       'INTERESTED' => '🎯 ${appLocalizations(context).statusInterested}',
       'PURCHASED' => '🛍️ ${appLocalizations(context).statusPurchased}',
       'FILM' => '🛡️ ${appLocalizations(context).statusFilm}',
       _ => null,
     };
-    final first = summary!.products.isEmpty ? null : summary!.products.first;
-    final productLabel = first == null
-        ? null
-        : '📱 ${first.modelName}${first.quantity > 1 ? ' ×${first.quantity}' : ''}${summary!.products.length > 1 ? ' +${summary!.products.length - 1}' : ''}';
-    final filmLabel =
-        summary!.isFilm && summary!.filmBrand?.trim().isNotEmpty == true
-            ? '🛡️ ${summary!.filmBrand!.trim()}'
-            : null;
-    final onlineSourceLabel =
-        summary!.isOnline && summary!.onlineSource?.trim().isNotEmpty == true
-            ? '🌐 ${summary!.onlineSource!.trim()}'
-            : null;
-    return Padding(
-      padding: const EdgeInsets.only(top: 2),
-      child: Wrap(
-        spacing: 4,
-        runSpacing: 2,
-        crossAxisAlignment: WrapCrossAlignment.center,
-        children: [
-          if (status != null)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-              decoration: BoxDecoration(
-                color: AppColors.primaryContainer.withAlpha(150),
-                borderRadius: BorderRadius.circular(5),
-              ),
-              child: Text(
-                status,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 10.5,
-                    ),
-              ),
-            ),
-          if (onlineSourceLabel != null)
-            Text(
-              onlineSourceLabel,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: AppColors.textSecondary,
-                    fontWeight: FontWeight.w600,
-                  ),
-            ),
-          if (filmLabel != null)
-            Text(
-              filmLabel,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: AppColors.textSecondary,
-                    fontWeight: FontWeight.w600,
-                  ),
-            ),
-          if (productLabel != null)
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 220),
-              child: Text(
-                productLabel,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: AppColors.textSecondary,
-                      fontWeight: FontWeight.w600,
-                    ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}

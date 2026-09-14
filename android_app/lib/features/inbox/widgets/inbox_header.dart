@@ -21,7 +21,7 @@ class InboxHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+        padding: const EdgeInsets.fromLTRB(16, 10, 12, 4),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
@@ -35,18 +35,18 @@ class InboxHeader extends StatelessWidget {
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
                           color: AppColors.textPrimary,
                           fontWeight: FontWeight.w800,
-                          fontSize: 20,
+                          fontSize: 22,
                         ),
                   ),
-                  const SizedBox(height: 1),
+                  const SizedBox(height: 3),
                   Text(
                     isHq
                         ? 'HQ · ${scopeName ?? appLocalizations(context).allStores}'
                         : appLocalizations(context)
                             .conversationsCount(conversationCount),
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
                           color: AppColors.textSecondary,
-                          fontSize: 12,
+                          fontSize: 11,
                         ),
                   ),
                   if (isHq)
@@ -64,15 +64,12 @@ class InboxHeader extends StatelessWidget {
               onPressed: onProfile,
               tooltip: appLocalizations(context).profileTooltip,
               icon: const Icon(Icons.person_outline, size: 20),
-              constraints: const BoxConstraints(minWidth: 38, minHeight: 38),
+              constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
               padding: EdgeInsets.zero,
               style: IconButton.styleFrom(
                 foregroundColor: AppColors.textPrimary,
-                backgroundColor: AppColors.surface,
-                side: const BorderSide(color: AppColors.border),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
+                backgroundColor: AppColors.surfaceMuted,
+                shape: const CircleBorder(),
               ),
             ),
           ],

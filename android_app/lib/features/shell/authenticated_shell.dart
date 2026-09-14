@@ -203,8 +203,7 @@ class AuthenticatedShellState extends State<AuthenticatedShell> {
             destinations.map((item) => item.child).toList(growable: false),
       ),
       bottomNavigationBar: NavigationBar(
-        height: 58,
-        labelBehavior: NavigationDestinationLabelBehavior.alwaysHide,
+        labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
         selectedIndex: selectedIndex,
         onDestinationSelected: (index) =>
             setState(() => _selectedIndex = index),

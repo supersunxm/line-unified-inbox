@@ -1,4 +1,5 @@
 # 2026-09-14: Google Review Railway Cron Container Startup Reliability Fix [COMPLETED & VERIFIED]
+# 2026-09-14: Google Review Railway Cron Container Startup Reliability Fix [COMPLETED & VERIFIED]
 - **Current Task**: Investigate and fix the Railway cron container startup failure where `google-review-daily-collector` logged only "Starting Container" without executing application collector logic at 23:30 Asia/Bangkok.
 - **Root Cause Confirmed**:
   1. Proven runtime freeze: `/usr/bin/xvfb-run` lines 180-184 execute `(trap '' USR1; exec Xvfb ...) &` followed by `wait`. In non-interactive Docker containers without signal forwarding or an init system, `Xvfb` does not deliver `SIGUSR1` to the parent shell, causing `xvfb-run` to hang indefinitely on `wait` before Node is ever invoked.
@@ -15,6 +16,25 @@
   - Local Docker run: proven clean entrypoint execution without hanging.
   - Production database invariants untouched: Week 3 = 187, Week 1 = CLOSED/274, Week 2 = CLOSED/301, 811 fingerprints total, 0 duplicates.
 - **Next Action**: Deploy permanent fix to Railway.
+
+# 2026-09-14: Flutter black-app chat UI redesign [COMPLETED & VERIFIED]
+- **Current Task**: Refactor the Flutter inbox, conversation room, composer, and information architecture toward the attached LINE-like internal-app mockup while preserving existing business behavior.
+- **Completed Work**:
+  - Replaced the inbox overview block with compact status/filter pills and an always-visible search surface that opens the existing full search mode.
+  - Reworked conversation rows into divider-led, compact customer/message rows with quieter store, owner, source, sales, timestamp, unread, and reply-status treatments.
+  - Reduced the conversation header from 152px to 72px and moved source/sales context into a slim metadata strip.
+  - Added a full conversation information page for customer, store, owner, source, reply status, sales, activity, and existing media counts; existing owner/status/sales callbacks remain the source of truth.
+  - Added a compact composer with direct camera/gallery affordances and a callback-driven action sheet for existing media, sales, status, and info actions.
+  - Added a reusable system notice presentation for operational errors and resolver diagnostics instead of raw red text in the timeline.
+- **Checks Run**:
+  - `flutter analyze`: passed with no issues.
+  - Focused redesign widget tests: **3/3 passed**.
+  - Full Flutter test suite: **239/239 passed**.
+  - Android debug APK: passed; generated `build/app/outputs/flutter-apk/app-debug.apk`.
+  - `git diff --check`: passed.
+  - `flutter devices`: only macOS and Chrome are available; no Android emulator or device is provisioned for live tap-through verification.
+- **Release Boundary**: A release APK was not produced because this checkout has no `android/key.properties`/permanent signing identity, and the release task also stops at the existing Android legacy/new DSL `compileSdk` incompatibility. No signing key was created or substituted.
+- **Next Action**: Review the scoped Flutter UI diff. Resolve the Android release-toolchain/signing prerequisites separately before a production APK release.
 
 # 2026-09-11: Store 360 Export [RECONCILED & VERIFIED]
 - **Current Task**: Reconcile the local Store 360 XLSX export feature onto the fetched latest `origin/main`, verify the candidate locally, and checkpoint it on the export-only branch without merging or deploying.

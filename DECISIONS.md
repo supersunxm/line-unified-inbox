@@ -2417,3 +2417,10 @@ Keep `StoreMaster.tiktokProfileUrl` as the only persisted TikTok profile URL. Po
 - Require a clean detached worktree from the fetched `origin/main` to establish the backend baseline before interpreting the feature suite. The clean baseline reproduced six known failures, and the reconciled feature reproduced the same six categories with no additional failures; this is classification A and is safe to proceed past the code reconciliation gate.
 - Rebase the committed Phase 2B feature onto the fetched `origin/main` without conflict. Keep the reconciled branch local and unpushed until the separate real-data reconciliation step and its authenticated smoke are explicitly authorized.
 - Treat the post-reconcile focused Store 360/Store Insights tests, full frontend suite, changed-file ESLint, backend/frontend builds, and `git diff --check` as the release-gate evidence. These checks do not authorize production access, Customer Voice v4 execution, worker enablement, or persistence.
+# Flutter chat UI redesign — 2026-09-14
+
+- Keep the existing `ConversationRepository`, realtime patching, message timeline, media picker, owner selector, sales sheet, and status update flows unchanged. The redesign changes presentation and navigation placement only.
+- Use a compact `ConversationMetadataStrip` above the timeline and a dedicated `ConversationInfoPage` for secondary business context. This keeps the room conversation-first without removing assignee, source, sales, status, or activity data.
+- Make the composer action sheet callback-driven. Only capabilities supplied by `ChatPage` appear, so the LINE-like action grid cannot imply unsupported modules.
+- Preserve the existing full-screen search mode for behavior/test compatibility while exposing a non-editable search surface in the normal inbox header.
+- Present resolver and operational failures through `SystemNoticeCard`; retain the technical error in a detail dialog and use localized friendly copy for known match failures.
