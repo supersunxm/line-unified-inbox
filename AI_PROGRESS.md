@@ -1,16 +1,19 @@
-# 2026-09-14: Android 1.1.25+45 release [IN PROGRESS]
+# 2026-09-14: Android 1.1.25+45 release [COMPLETED & VERIFIED]
 - **Current Task**: Release the Flutter chat UI redesign as the next Android update without changing backend behavior, package identity, or signing configuration.
 - **Completed Work**:
-  - Fetched `origin/main` at the production baseline `1.1.24+44` and rebased the isolated redesign commit onto it.
+  - Fetched and rebased onto the current `origin/main`, preserving the concurrent main-branch changes.
   - Set `android_app/pubspec.yaml` to `1.1.25+45` and added the established CI publisher using the existing permanent signing secrets.
   - Kept the unrelated untracked `docs/executive-guide/` directory out of the release files.
+  - Published the signed production APK and release metadata through GitHub Actions run `34819942468`.
 - **Checks Run**:
   - `flutter analyze`: passed.
   - Full Flutter tests: **246/246 passed**.
-  - Debug APK metadata: package `click.lineoppo.chat`, version `1.1.25`, versionCode `45`.
+  - CI signed APK metadata: package `click.lineoppo.chat`, version `1.1.25`, versionCode `45`; existing production certificate verification passed.
+  - Published APK SHA-256: `459f9dabf16f5bdb2f705640163937e7143ad2a9cdc35804d9ecfac46946abfd`.
   - `git diff --check`: passed.
-- **Signing/Distribution**: Local signing material is intentionally absent. CI will restore the existing authorized keystore and verify the known production certificate SHA-256 without exposing credentials.
-- **Next Action**: Commit and push the release candidate to the branch, then push the same verified commit to `main` so the normal signed publisher runs. Confirm CI and published metadata before reporting completion.
+- **Signing/Distribution**: Local signing material remains intentionally absent. CI restored the existing authorized keystore, verified the known production certificate, and published `frontend/public/downloads/oppo-line-oa-chat-v1.1.25-production.apk` plus the `/download` metadata and additive release migration.
+- **Release Commits**: UI redesign `735b070`; release preparation and CI workflow updates `4d52e66`, `44548d7`, `95ec866`; published release `497ac3833d50d2251f7160e93e06b8ad83cac6d3` (`chore(android): release 1.1.25+45`).
+- **Next Action**: Install the published 1.1.25+45 APK over the existing version 44 app without uninstalling it, then perform the separate visual QA/polish pass against the supplied mockup.
 
 # 2026-09-14: Google Review Railway Cron Container Startup Reliability Fix [COMPLETED & VERIFIED]
 # 2026-09-14: Google Review Railway Cron Container Startup Reliability Fix [COMPLETED & VERIFIED]

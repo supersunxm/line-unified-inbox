@@ -2431,3 +2431,10 @@ Keep `StoreMaster.tiktokProfileUrl` as the only persisted TikTok profile URL. Po
 - Make the composer action sheet callback-driven. Only capabilities supplied by `ChatPage` appear, so the LINE-like action grid cannot imply unsupported modules.
 - Preserve the existing full-screen search mode for behavior/test compatibility while exposing a non-editable search surface in the normal inbox header.
 - Present resolver and operational failures through `SystemNoticeCard`; retain the technical error in a detail dialog and use localized friendly copy for known match failures.
+
+## Android 1.1.25+45 release — 2026-09-14
+
+- Release the current Flutter chat UI redesign as `1.1.25+45`, preserving package identity `click.lineoppo.chat` and all existing backend/business behavior.
+- Use the established GitHub Actions publisher and its existing permanent signing secrets. Do not create or substitute a local signing key when local signing material is unavailable.
+- Publish the signed APK, `/download` metadata, and additive `AppRelease` migration only after CI analysis, the full Flutter suite, package/version/signer verification, checksum verification, and the release payload checks pass.
+- Keep visual QA and any UI polish separate from this release; install over the existing version 44 app without uninstalling it before the next review pass.
