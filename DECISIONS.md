@@ -50,6 +50,12 @@
 - The Store 360 UI keeps its dashboard picker single-select but opens an export dialog scoped to the already authorized store payload. The current dashboard store is selected by default, with bounded multi-select for the controlled pilot.
 - The export candidate was reconciled after fetching latest `origin/main` (`d28fa662…`): checkpoint `d64d07c` cherry-picked cleanly, and the final feature commit is `9ba01ba` on `feat/store-360-export`, pushed only to that feature branch. Do not merge or deploy from this task.
 
+# Android 1.1.28+48 preparation preserves the existing update prompt (2026-09-15)
+
+- Keep the existing `AppUpdateService`, lifecycle scheduling, local-day suppression, forced-update semantics, manual Profile check, checksum verification, and Android installer bridge unchanged. The prompt was audited rather than reimplemented.
+- Prepare the next candidate with only the version metadata change from `1.1.27+47` to `1.1.28+48`; retain package identity `click.lineoppo.chat` and all existing signing configuration.
+- Keep the PDF hotfix and unrelated weekly-collector work outside this preparation change. Do not deploy backend changes, activate an `AppRelease`, publish a download artifact, or trigger Railway from this task.
+
 # Architecture & Design Decisions
 
 ## Rich Menu selection is unbounded; worker execution remains bounded (2026-09-11)

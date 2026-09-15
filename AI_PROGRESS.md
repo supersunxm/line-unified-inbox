@@ -1,3 +1,12 @@
+# 2026-09-15: Android 1.1.28+48 daily update prompt audit [PREPARED]
+- **Current Task**: Audit the existing proactive daily update prompt on current `main` and prepare the next Android version without reimplementing the feature or publishing build 48.
+- **Audit**: The prompt remains in `AppUpdateService` and the authenticated-main-workspace startup/login/resume lifecycle gates. Optional prompts use local-day plus release-build suppression; forced prompts bypass suppression and remain non-dismissible. Manual Profile checks remain available independently.
+- **Regression Review**: The latest PDF hotfix changed backend files only and did not modify the Flutter update service, app lifecycle scheduling, settings entry point, startup restore, or Android installer bridge. Existing update and startup tests cover the audited paths.
+- **Checks**: Focused update tests **36/36 passed**; full Flutter suite **268/268 passed**; `flutter analyze` passed with no issues; `flutter build apk --debug` passed; APK metadata verified as package `click.lineoppo.chat`, version `1.1.28`, build `48`; `git diff --check` passed.
+- **Preparation**: `android_app/pubspec.yaml` is set to `1.1.28+48`. No backend/API, AppRelease, migration, production catalog, signing, release workflow, Railway, or UI behavior changes were made.
+- **Workspace Boundary**: Existing unrelated weekly-collector edits and untracked `docs/executive-guide/` content remain untouched and excluded from the preparation commit.
+- **Next Action**: Review/merge this preparation branch through the normal repository process before any separately authorized build-48 release or backend deployment.
+
 # 2026-09-14: Android 1.1.27+47 PDF QA candidate [BLOCKED ON WORKFLOW VISIBILITY]
 - **Current Task**: Review and package the implemented PDF feature as a signed staging/release-candidate APK without activating production build 47.
 - **Review**: The PDF implementation was reconciled onto current `origin/main` (`f8e12a0`) without touching the concurrent greeting-targeting change. `docs/executive-guide/` remains untouched; no credentials, generated artifacts, or signed URLs are included.
