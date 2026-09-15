@@ -1397,6 +1397,42 @@ abstract class AppLocalizations {
   /// **'Sign in quickly'**
   String get pinLoginSubtitle;
 
+  /// No description provided for @pinNotConfiguredTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'PIN not set up yet'**
+  String get pinNotConfiguredTitle;
+
+  /// No description provided for @pinNotConfiguredBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in with your password first, then set a 6-digit PIN for your next sign-in.'**
+  String get pinNotConfiguredBody;
+
+  /// No description provided for @pinUnavailableTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'This PIN is not available'**
+  String get pinUnavailableTitle;
+
+  /// No description provided for @pinUnavailableBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in with your password to set up a new PIN.'**
+  String get pinUnavailableBody;
+
+  /// No description provided for @pinServiceUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Unable to connect to the service. Check your connection and try again.'**
+  String get pinServiceUnavailable;
+
+  /// No description provided for @pinAuthRecovery.
+  ///
+  /// In en, this message translates to:
+  /// **'Your session could not be verified. Sign in with your password.'**
+  String get pinAuthRecovery;
+
   /// No description provided for @forgotPin.
   ///
   /// In en, this message translates to:

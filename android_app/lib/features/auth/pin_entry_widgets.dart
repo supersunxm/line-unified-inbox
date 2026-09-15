@@ -220,3 +220,82 @@ class PinEntryScaffold extends StatelessWidget {
     );
   }
 }
+
+class PinRecoveryScaffold extends StatelessWidget {
+  const PinRecoveryScaffold({
+    super.key,
+    required this.employeeId,
+    required this.employeeLabel,
+    required this.title,
+    required this.subtitle,
+    required this.actionLabel,
+    required this.onUsePassword,
+  });
+
+  final String employeeId;
+  final String employeeLabel;
+  final String title;
+  final String subtitle;
+  final String actionLabel;
+  final VoidCallback onUsePassword;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Scaffold(
+      appBar: AppBar(),
+      body: SafeArea(
+        child: LayoutBuilder(
+          builder: (context, constraints) => SingleChildScrollView(
+            padding: AppSpacing.screen,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                minHeight: constraints.maxHeight - AppSpacing.xl * 2,
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Card(
+                    child: ListTile(
+                      leading: const CircleAvatar(
+                        child: Icon(Icons.person_outline),
+                      ),
+                      title: Text(employeeLabel,
+                          style: theme.textTheme.labelLarge),
+                      subtitle:
+                          Text(employeeId, style: theme.textTheme.titleMedium),
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.xxl),
+                  Icon(
+                    Icons.lock_reset_outlined,
+                    size: 56,
+                    color: theme.colorScheme.primary,
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                  Text(title,
+                      style: theme.textTheme.headlineSmall,
+                      textAlign: TextAlign.center),
+                  const SizedBox(height: AppSpacing.sm),
+                  Text(subtitle,
+                      style: theme.textTheme.bodyLarge
+                          ?.copyWith(color: AppColors.textSecondary),
+                      textAlign: TextAlign.center),
+                  const SizedBox(height: AppSpacing.xl),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      onPressed: onUsePassword,
+                      icon: const Icon(Icons.key_outlined),
+                      label: Text(actionLabel),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}

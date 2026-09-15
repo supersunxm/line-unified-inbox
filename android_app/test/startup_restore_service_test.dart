@@ -33,6 +33,18 @@ void main() {
     expect(source.substring(start, end), isNot(contains('_restore')));
   });
 
+  test('background lifecycle states do not clear auth or PIN state', () {
+    final source = File('lib/main.dart').readAsStringSync();
+    final start = source.indexOf('void didChangeAppLifecycleState');
+    final end = source.indexOf('Future<void> _restore()', start);
+    final lifecycle = source.substring(start, end);
+
+    expect(lifecycle, contains('state == AppLifecycleState.resumed'));
+    expect(lifecycle, isNot(contains('_tokens.clear')));
+    expect(lifecycle, isNot(contains('_pinDeviceState.forgetPin')));
+    expect(lifecycle, isNot(contains('_expireSession')));
+  });
+
   test('valid stored session enters the app', () async {
     final result = await StartupRestoreService(
       hasStoredCredentials: () async => true,

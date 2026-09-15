@@ -4939,3 +4939,27 @@ The six failures in the full backend suite were reproduced individually in both 
 | `all phase2 manager layouts prefer the same sole textarea primitive as Central World` | PRE-EXISTING BASELINE | Verification expects `metadata.disabled`, absent from the current helper source. | Existing manager-layout assertion mismatch; unrelated to PIN. |
 
 Waiver scope: focused PIN/auth tests pass **26/26**, focused Flutter PIN tests pass **8/8**, and the full Flutter suite passes **276/276**. This waiver records why the six known unrelated failures do not indicate a PIN regression; it does not claim the full backend suite is green.
+
+# Current task: Existing-employee PIN onboarding fallback (2026-09-15)
+
+- Added device-local, fingerprinted employee markers for successful PIN enrollment/login. The marker contains no PIN or PIN hash and is used only to decide whether the PIN keypad is appropriate on this device.
+- Employees without a local PIN marker now go directly to password guidance with their employee ID preserved. A successful password login continues through the existing optional PIN enrollment flow; completed enrollment and successful PIN login record the local marker.
+- PIN-unavailable/reset/disabled responses show neutral password recovery and clear the stale local marker. Invalid PIN, temporary lockout, connectivity/service failures, and session recovery failures remain separately classified.
+- Verification: focused PIN onboarding tests **16/16**, full Flutter suite **284/284**, and `flutter analyze` passed. No deployment, backend change, migration, APK build, or production mutation was performed.
+- The pre-existing untracked `docs/executive-guide/` files were left untouched. Next action: review this local candidate and run the normal Android QA/build workflow only after approval.
+
+# Current task: PIN authentication transient-error lifecycle (2026-09-15)
+
+- Audited authentication error ownership. Password login owns the parent `LoginPage` error; PIN entry, PIN setup, and PIN management own separate transient errors. No shared error value is passed between these flows.
+- Cleared password transient error and PIN transient error state at every authentication-mode handoff, including PIN-to-password fallback, password-to-methods/PIN, and forgot-PIN recovery. Employee ID and PIN guidance remain intact.
+- Added regression coverage for unavailable PIN, network/wrong PIN fallback, password-only errors, returning to sign-in methods, password-to-PIN fallback, and successful authentication.
+- No backend, migration, deployment, release, or unrelated UI changes were made for this fix. The untracked `docs/executive-guide/` files remain untouched.
+
+# Current task: Long-lived Flutter mobile session restoration (2026-09-15)
+
+- Audited the existing authentication/session architecture before editing. It already persists the mobile access token, rotating refresh token, and both expiry timestamps together in Flutter Secure Storage under `mobile_credentials_v2`; no PIN, password, or hash is stored on-device.
+- Confirmed the existing backend policy: access sessions last 12 hours; mobile refresh sessions last 30 days from session creation as a bounded, rotating refresh window. Refresh rotation preserves the original refresh expiry rather than silently extending it. No expiry policy or backend endpoint was changed in this task.
+- Confirmed app relaunch/process restart restoration uses `/auth/me` with transparent refresh, temporary storage/network/server failures preserve credentials, and terminal refresh rejection/disabled-account responses clear the session through the canonical expiration path. Background/inactive lifecycle states do not clear auth or PIN state; resume performs a best-effort authenticated refresh.
+- Added explicit regression coverage for password and PIN login credential persistence across a new `TokenStore`, logout clearing access/refresh credentials while preserving the device-local PIN marker, and lifecycle safety during non-resumed states. Biometric authentication remains paused and was not implemented.
+- Verification: focused auth/session/startup/PIN tests **45/45**, full Flutter suite **294/294**, `flutter analyze`, Android debug APK build, and `git diff --check` passed. No backend source, migration, deployment, commit, push, or production mutation was performed.
+- Expected behavior: a valid session restores directly to the app without a PIN prompt; offline/temporary startup failures show retry while retaining secure credentials; explicit logout revokes/clears the mobile session but leaves the PIN routing marker for the next sign-in. After the bounded 30-day refresh window expires, reauthentication is required.

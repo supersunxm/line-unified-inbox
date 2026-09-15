@@ -15,6 +15,7 @@ class PinSetupPage extends StatefulWidget {
     this.employeeId,
     this.allowLater = false,
     this.onLater,
+    this.onEnrollmentRecorded,
   });
 
   final Future<void> Function(String pin, String confirmationPin) submit;
@@ -22,6 +23,7 @@ class PinSetupPage extends StatefulWidget {
   final String? employeeId;
   final bool allowLater;
   final VoidCallback? onLater;
+  final Future<void> Function(String employeeId)? onEnrollmentRecorded;
 
   @override
   State<PinSetupPage> createState() => _PinSetupPageState();
@@ -75,6 +77,13 @@ class _PinSetupPageState extends State<PinSetupPage> {
     });
     try {
       await widget.submit(_firstPin, confirmationPin);
+      if (widget.employeeId != null) {
+        try {
+          await widget.onEnrollmentRecorded?.call(widget.employeeId!);
+        } catch (_) {
+          // Local routing metadata must never block a successful enrollment.
+        }
+      }
       await widget.onCompleted();
     } on ApiException catch (error) {
       if (mounted) {

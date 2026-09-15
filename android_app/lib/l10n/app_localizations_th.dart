@@ -675,6 +675,28 @@ class AppLocalizationsTh extends AppLocalizations {
   String get pinLoginSubtitle => 'เข้าสู่ระบบอย่างรวดเร็ว';
 
   @override
+  String get pinNotConfiguredTitle => 'ยังไม่ได้ตั้ง PIN';
+
+  @override
+  String get pinNotConfiguredBody =>
+      'เข้าสู่ระบบด้วยรหัสผ่านก่อน แล้วตั้ง PIN 6 หลักสำหรับการใช้งานครั้งถัดไป';
+
+  @override
+  String get pinUnavailableTitle => 'ไม่สามารถใช้ PIN นี้ได้';
+
+  @override
+  String get pinUnavailableBody =>
+      'เข้าสู่ระบบด้วยรหัสผ่านเพื่อตั้งค่า PIN ใหม่';
+
+  @override
+  String get pinServiceUnavailable =>
+      'ไม่สามารถเชื่อมต่อบริการได้ กรุณาตรวจสอบเครือข่ายแล้วลองอีกครั้ง';
+
+  @override
+  String get pinAuthRecovery =>
+      'ไม่สามารถยืนยันเซสชันได้ กรุณาเข้าสู่ระบบด้วยรหัสผ่าน';
+
+  @override
   String get forgotPin => 'ลืม PIN?';
 
   @override

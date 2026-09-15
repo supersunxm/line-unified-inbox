@@ -3,32 +3,38 @@ import 'package:flutter/material.dart';
 import '../../core/config/app_config.dart';
 import '../../core/localization/localization.dart';
 import '../../core/network/api_exception.dart';
+import '../../core/storage/pin_device_state_store.dart';
 import '../debug/runtime_config_page.dart';
 import 'auth_repository.dart';
 import 'pin_entry_page.dart';
 
 class LoginPage extends StatefulWidget {
-  const LoginPage({
+  LoginPage({
     super.key,
     required this.auth,
     required this.onLoggedIn,
     required this.onRegister,
-  });
+    PinDeviceStateStore? pinDeviceState,
+  }) : pinDeviceState = pinDeviceState ?? PinDeviceStateStore();
 
   final AuthRepository auth;
   final Future<void> Function() onLoggedIn;
   final VoidCallback onRegister;
+  final PinDeviceStateStore pinDeviceState;
 
   @override
   State<LoginPage> createState() => _LoginPageState();
 }
+
+enum _PasswordGuidance { pinNotConfigured, pinUnavailable }
 
 class _LoginPageState extends State<LoginPage> {
   final _identifier = TextEditingController();
   final _password = TextEditingController();
   bool _passwordMode = !AppConfig.pinLoginEnabled;
   bool _loading = false;
-  String? _error;
+  String? _passwordError;
+  _PasswordGuidance? _passwordGuidance;
 
   @override
   void dispose() {
@@ -37,18 +43,45 @@ class _LoginPageState extends State<LoginPage> {
     super.dispose();
   }
 
-  void _showPasswordLogin() {
+  void _showPasswordLogin([_PasswordGuidance? guidance]) {
     if (_loading) return;
     setState(() {
       _passwordMode = true;
-      _error = null;
+      _passwordGuidance = guidance;
+      _passwordError = null;
+    });
+  }
+
+  void _showLoginMethods() {
+    if (_loading) return;
+    setState(() {
+      _passwordMode = false;
+      _passwordGuidance = null;
+      _passwordError = null;
     });
   }
 
   Future<void> _openPinLogin() async {
     final identifier = _identifier.text.trim();
     if (identifier.isEmpty) {
-      setState(() => _error = appLocalizations(context).employeeIdRequired);
+      setState(
+          () => _passwordError = appLocalizations(context).employeeIdRequired);
+      return;
+    }
+    setState(() {
+      _passwordError = null;
+      _passwordGuidance = null;
+    });
+    bool hasKnownPin;
+    try {
+      hasKnownPin = await widget.pinDeviceState.hasKnownPin(identifier);
+    } catch (_) {
+      // Missing local metadata must fail closed to password authentication.
+      hasKnownPin = false;
+    }
+    if (!mounted) return;
+    if (!hasKnownPin) {
+      _showPasswordLogin(_PasswordGuidance.pinNotConfigured);
       return;
     }
     await Navigator.of(context).push<void>(
@@ -57,9 +90,13 @@ class _LoginPageState extends State<LoginPage> {
           auth: widget.auth,
           employeeId: identifier,
           onLoggedIn: widget.onLoggedIn,
+          onPinLoginSuccess: widget.pinDeviceState.recordPinEnabled,
+          onPinUnavailable: widget.pinDeviceState.forgetPin,
           onUsePassword: () {
             Navigator.of(context).pop();
-            if (mounted) _showPasswordLogin();
+            if (mounted) {
+              _showPasswordLogin(_PasswordGuidance.pinUnavailable);
+            }
           },
         ),
       ),
@@ -69,24 +106,27 @@ class _LoginPageState extends State<LoginPage> {
   Future<void> _submitPassword() async {
     final l10n = appLocalizations(context);
     if (_identifier.text.trim().isEmpty) {
-      setState(() => _error = l10n.employeeIdRequired);
+      setState(() => _passwordError = l10n.employeeIdRequired);
       return;
     }
     if (_password.text.isEmpty) {
-      setState(() => _error = l10n.passwordRequired);
+      setState(() => _passwordError = l10n.passwordRequired);
       return;
     }
     setState(() {
       _loading = true;
-      _error = null;
+      _passwordError = null;
     });
     try {
       await widget.auth.login(_identifier.text, _password.text);
+      if (mounted) setState(() => _passwordError = null);
       await widget.onLoggedIn();
     } on ApiException catch (error) {
-      if (mounted) setState(() => _error = _errorMessage(error, l10n));
+      if (mounted) {
+        setState(() => _passwordError = _errorMessage(error, l10n));
+      }
     } catch (_) {
-      if (mounted) setState(() => _error = l10n.unableToSignIn);
+      if (mounted) setState(() => _passwordError = l10n.unableToSignIn);
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -118,6 +158,33 @@ class _LoginPageState extends State<LoginPage> {
     final l10n = appLocalizations(context);
     return Column(
       children: [
+        if (_passwordGuidance != null) ...[
+          Card(
+            color: Theme.of(context).colorScheme.surfaceContainerHighest,
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  Text(
+                    _passwordGuidance == _PasswordGuidance.pinNotConfigured
+                        ? l10n.pinNotConfiguredTitle
+                        : l10n.pinUnavailableTitle,
+                    style: Theme.of(context).textTheme.titleMedium,
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    _passwordGuidance == _PasswordGuidance.pinNotConfigured
+                        ? l10n.pinNotConfiguredBody
+                        : l10n.pinUnavailableBody,
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+        ],
         _identityForm(context, pinMode: false),
         const SizedBox(height: 12),
         TextField(
@@ -137,16 +204,12 @@ class _LoginPageState extends State<LoginPage> {
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
               : const Icon(Icons.lock_open_outlined),
-          label: Text(l10n.login),
+          label: Text(
+              _passwordGuidance == null ? l10n.login : l10n.signInWithPassword),
         ),
         if (AppConfig.pinLoginEnabled)
           TextButton(
-            onPressed: _loading
-                ? null
-                : () => setState(() {
-                      _passwordMode = false;
-                      _error = null;
-                    }),
+            onPressed: _loading ? null : _showLoginMethods,
             child: Text(l10n.backToLoginMethods),
           ),
       ],
@@ -218,10 +281,10 @@ class _LoginPageState extends State<LoginPage> {
                 Text(l10n.signInApproved, textAlign: TextAlign.center),
                 const SizedBox(height: 24),
                 _passwordMode ? _passwordForm(context) : _pinChoice(context),
-                if (_error != null)
+                if (_passwordError != null)
                   Padding(
                     padding: const EdgeInsets.only(top: 12),
-                    child: Text(_error!,
+                    child: Text(_passwordError!,
                         style: TextStyle(
                             color: Theme.of(context).colorScheme.error),
                         textAlign: TextAlign.center),

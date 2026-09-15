@@ -2511,3 +2511,21 @@ Keep `StoreMaster.tiktokProfileUrl` as the only persisted TikTok profile URL. Po
 - Abort route/workspace-scoped reads on effect cleanup and abort the prior request when a newer refresh supersedes it. Keep the existing generation/request-id and active guards because cancellation is best-effort and an older response must remain unable to overwrite newer state.
 - Keep supporting-data polling's existing overlap skip and all existing intervals. Store Management webhook diagnostics remain an explicit initial/manual/mutation operation; SSE is unchanged and is not cancelled by this follow-up.
 - Treat the isolated fixture's lack of upstream abort events through the Next rewrite as an instrumentation limitation, not evidence that cancellation failed. Do not claim production deployment readiness until a real authenticated environment confirms browser-level aborted requests; this checkpoint remains local, uncommitted, and undeployed.
+
+## 2026-09-15: Existing-employee PIN onboarding fallback
+
+- Do not add an API that checks PIN enrollment for arbitrary employee IDs. On the device, store only a SHA-256 fingerprint of employee IDs that have completed PIN enrollment or a successful PIN login; never store PIN material locally.
+- Treat missing local PIN state as a safe password-first route. This avoids enrollment/account enumeration and gives existing employees the password authentication path that can lead to the existing optional enrollment prompt.
+- Treat the backend's generic `INVALID_PIN_CREDENTIALS` response, plus explicit PIN-unavailable variants, as a neutral password recovery state when a local marker is stale. Keep `INVALID_PIN`, `PIN_LOCKED`, transport failures, and session errors distinct so users do not see a false service outage.
+
+## 2026-09-15: PIN authentication transient-error ownership
+
+- Keep password-login errors owned by `LoginPage` and PIN-entry errors owned by `PinEntryPage`; PIN setup and management retain their own request state. Do not use a shared transient error string across authentication flows.
+- Clear only transient request/error state before each mode handoff. Preserve employee ID and intentional PIN onboarding/recovery guidance, and clear the password error after successful authentication before continuing the canonical session flow.
+
+## 2026-09-15: Mobile session persistence and biometric pause
+
+- Retain the existing 12-hour access token plus 30-day bounded, rotating mobile refresh session. The refresh window is absolute rather than sliding, so active use cannot create an unbounded session without reauthentication.
+- Keep access/refresh credentials in one atomic Flutter Secure Storage record. Restore through the canonical authenticated `/auth/me` path; temporary failures remain retryable and do not erase credentials, while only invalid/revoked/expired refresh sessions or disabled accounts force the login path.
+- Treat PIN as a sign-in method, not an app-unlock mechanism. A valid restored session bypasses PIN UI, lifecycle transitions never clear session or PIN routing state, and explicit logout clears the session while preserving the device-local PIN marker.
+- Biometric authentication is explicitly paused and is not part of this change. Revisit it as a separate, authorized authentication decision.

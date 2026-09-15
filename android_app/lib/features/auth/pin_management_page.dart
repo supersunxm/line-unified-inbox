@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/localization/localization.dart';
 import '../../core/network/api_exception.dart';
+import '../../core/storage/pin_device_state_store.dart';
 import 'auth_repository.dart';
 import 'pin_setup_page.dart';
 
@@ -11,11 +12,13 @@ class PinManagementPage extends StatefulWidget {
     required this.auth,
     required this.employeeId,
     required this.pinEnabled,
+    this.pinDeviceState,
   });
 
   final AuthRepository auth;
   final String employeeId;
   final bool pinEnabled;
+  final PinDeviceStateStore? pinDeviceState;
 
   @override
   State<PinManagementPage> createState() => _PinManagementPageState();
@@ -24,6 +27,8 @@ class PinManagementPage extends StatefulWidget {
 class _PinManagementPageState extends State<PinManagementPage> {
   late bool _pinEnabled = widget.pinEnabled;
   bool _loading = false;
+  late final PinDeviceStateStore _pinState =
+      widget.pinDeviceState ?? PinDeviceStateStore();
 
   Future<void> _setup() async {
     final changed = await _openPinSetup(widget.auth.setupPin);
@@ -57,6 +62,11 @@ class _PinManagementPageState extends State<PinManagementPage> {
     setState(() => _loading = true);
     try {
       await widget.auth.disablePin(password);
+      try {
+        await _pinState.forgetPin(widget.employeeId);
+      } catch (_) {
+        // Device-local metadata is best effort and contains no credential.
+      }
       if (mounted) {
         setState(() => _pinEnabled = false);
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -78,6 +88,7 @@ class _PinManagementPageState extends State<PinManagementPage> {
         builder: (_) => PinSetupPage(
           employeeId: widget.employeeId,
           submit: submit,
+          onEnrollmentRecorded: _pinState.recordPinEnabled,
           onCompleted: () async => Navigator.of(context).pop(true),
         ),
       ),

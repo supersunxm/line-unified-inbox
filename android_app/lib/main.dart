@@ -5,6 +5,7 @@ import 'core/logging/safe_logger.dart';
 import 'core/localization/localization.dart';
 import 'core/network/api_client.dart';
 import 'core/storage/token_store.dart';
+import 'core/storage/pin_device_state_store.dart';
 import 'core/models/models.dart';
 import 'core/models/authorization_extensions.dart';
 import 'core/theme/app_theme.dart';
@@ -45,6 +46,7 @@ class _LineOaAppState extends State<LineOaApp> with WidgetsBindingObserver {
   final _navigator = GlobalKey<NavigatorState>();
   final _authenticatedShell = GlobalKey<AuthenticatedShellState>();
   late final TokenStore _tokens;
+  late final PinDeviceStateStore _pinDeviceState;
   late final AuthRepository _auth;
   late final ApiClient _api;
   late final ConversationRepository _conversations;
@@ -70,6 +72,7 @@ class _LineOaAppState extends State<LineOaApp> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _tokens = TokenStore();
+    _pinDeviceState = PinDeviceStateStore();
     _api = ApiClient(_tokens, onSessionExpired: _expireSession);
     _auth = AuthRepository(_api, _tokens);
     _conversations = ConversationRepository(_api);
@@ -135,6 +138,7 @@ class _LineOaAppState extends State<LineOaApp> with WidgetsBindingObserver {
       _restoreDeferred = result.shouldShowRetry;
       _loading = false;
     });
+    if (result.isAuthenticated) _rememberPinIfEnabled(result.user!);
     SafeLogger.sessionRestoration(
       switch (result.status) {
         StartupRestoreStatus.authenticated => 'success',
@@ -201,6 +205,7 @@ class _LineOaAppState extends State<LineOaApp> with WidgetsBindingObserver {
         _pinEnrollmentDismissedUserId = null;
       }
     });
+    if (result.isAuthenticated) _rememberPinIfEnabled(result.user!);
     if (result.isAuthenticated && _hasMainWorkspace(result.user!)) {
       _startPostNavigationServices();
       _scheduleDailyUpdateCheck();
@@ -212,6 +217,18 @@ class _LineOaAppState extends State<LineOaApp> with WidgetsBindingObserver {
       (user.canAccessHqWorkspace ||
           user.canAccessStoreWorkspace ||
           user.canAccessMainOaWorkspace);
+
+  void _rememberPinIfEnabled(CurrentUser user) {
+    final employeeId = user.employeeId?.trim();
+    if (!user.pinEnabled || employeeId == null || employeeId.isEmpty) return;
+    unawaited(() async {
+      try {
+        await _pinDeviceState.recordPinEnabled(employeeId);
+      } catch (_) {
+        // Local routing metadata is best effort and contains no credential.
+      }
+    }());
+  }
 
   void _scheduleDailyUpdateCheck() {
     if (!mounted ||
@@ -362,6 +379,7 @@ class _LineOaAppState extends State<LineOaApp> with WidgetsBindingObserver {
       }
       return LoginPage(
           auth: _auth,
+          pinDeviceState: _pinDeviceState,
           onLoggedIn: _finishLogin,
           onRegister: () => setState(() => _registering = true));
     }
@@ -379,6 +397,7 @@ class _LineOaAppState extends State<LineOaApp> with WidgetsBindingObserver {
       return PinSetupPage(
         employeeId: user.employeeId,
         submit: _auth.setupPin,
+        onEnrollmentRecorded: _pinDeviceState.recordPinEnabled,
         onCompleted: _finishLogin,
         allowLater: !AppConfig.pinEnrollmentRequired,
         onLater: () => setState(() => _pinEnrollmentDismissedUserId = user.id),

@@ -679,6 +679,28 @@ class AppLocalizationsEn extends AppLocalizations {
   String get pinLoginSubtitle => 'Sign in quickly';
 
   @override
+  String get pinNotConfiguredTitle => 'PIN not set up yet';
+
+  @override
+  String get pinNotConfiguredBody =>
+      'Sign in with your password first, then set a 6-digit PIN for your next sign-in.';
+
+  @override
+  String get pinUnavailableTitle => 'This PIN is not available';
+
+  @override
+  String get pinUnavailableBody =>
+      'Sign in with your password to set up a new PIN.';
+
+  @override
+  String get pinServiceUnavailable =>
+      'Unable to connect to the service. Check your connection and try again.';
+
+  @override
+  String get pinAuthRecovery =>
+      'Your session could not be verified. Sign in with your password.';
+
+  @override
   String get forgotPin => 'Forgot PIN?';
 
   @override

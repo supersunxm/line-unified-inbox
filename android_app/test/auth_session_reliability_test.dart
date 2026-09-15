@@ -7,8 +7,12 @@ import 'package:http/testing.dart';
 import 'package:line_oa_chat_hub/core/network/api_client.dart';
 import 'package:line_oa_chat_hub/core/network/api_exception.dart';
 import 'package:line_oa_chat_hub/core/network/connectivity_service.dart';
+import 'package:line_oa_chat_hub/core/storage/pin_device_state_store.dart';
 import 'package:line_oa_chat_hub/core/storage/token_store.dart';
 import 'package:line_oa_chat_hub/features/auth/auth_repository.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shared_preferences_platform_interface/in_memory_shared_preferences_async.dart';
+import 'package:shared_preferences_platform_interface/shared_preferences_async_platform_interface.dart';
 
 class _Online extends ConnectivityService {
   @override
@@ -25,13 +29,57 @@ MobileCredentials _credentials() => MobileCredentials(
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  setUp(() => FlutterSecureStorage.setMockInitialValues({}));
+  setUp(() {
+    FlutterSecureStorage.setMockInitialValues({});
+    SharedPreferences.setMockInitialValues({});
+    SharedPreferencesAsyncPlatform.instance =
+        InMemorySharedPreferencesAsync.empty();
+  });
 
   test('valid stored session survives a new TokenStore instance', () async {
     await TokenStore().saveCredentials(_credentials());
     final restored = await TokenStore().readCredentials();
     expect(restored?.accessToken, 'expired-access');
     expect(restored?.refreshToken, 'refresh-one');
+  });
+
+  test('password and PIN login persist credentials for relaunch', () async {
+    for (final loginPath in <String>[
+      '/auth/mobile/login',
+      '/auth/mobile/pin/login',
+    ]) {
+      FlutterSecureStorage.setMockInitialValues({});
+      final store = TokenStore();
+      final api = ApiClient(
+        store,
+        connectivity: _Online(),
+        httpClient: MockClient((request) async {
+          expect(request.url.path, loginPath);
+          return http.Response(
+            jsonEncode({
+              'accessToken': 'access-for-$loginPath',
+              'refreshToken': 'refresh-for-$loginPath',
+              'expiresAt': '2026-08-27T00:00:00Z',
+              'refreshExpiresAt': '2026-09-25T00:00:00Z',
+            }),
+            200,
+          );
+        }),
+      );
+      final auth = AuthRepository(api, store);
+
+      if (loginPath.endsWith('pin/login')) {
+        await auth.loginWithPin('12345678', '123456');
+      } else {
+        await auth.login('12345678', 'Password@123');
+      }
+
+      final relaunchedStore = TokenStore();
+      final restored = await relaunchedStore.readCredentials();
+      expect(restored?.accessToken, 'access-for-$loginPath');
+      expect(restored?.refreshToken, 'refresh-for-$loginPath');
+      expect(restored?.refreshExpiresAt, DateTime.utc(2026, 9, 25));
+    }
   });
 
   test('expired access refreshes and retries the original request', () async {
@@ -190,5 +238,23 @@ void main() {
     await AuthRepository(api, store).logout();
     expect(sentRefresh, 'refresh-one');
     expect(await store.readCredentials(), isNull);
+  });
+
+  test('explicit logout clears session but preserves the local PIN marker',
+      () async {
+    final store = TokenStore();
+    final pinState = PinDeviceStateStore();
+    await store.saveCredentials(_credentials());
+    await pinState.recordPinEnabled('12345678');
+    final api = ApiClient(
+      store,
+      connectivity: _Online(),
+      httpClient: MockClient((_) async => http.Response('{}', 204)),
+    );
+
+    await AuthRepository(api, store).logout();
+
+    expect(await store.readCredentials(), isNull);
+    expect(await pinState.hasKnownPin('12345678'), isTrue);
   });
 }

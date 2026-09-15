@@ -671,6 +671,24 @@ class AppLocalizationsZh extends AppLocalizations {
   String get pinLoginSubtitle => '快速登录';
 
   @override
+  String get pinNotConfiguredTitle => '尚未设置 PIN';
+
+  @override
+  String get pinNotConfiguredBody => '请先使用密码登录，然后设置 6 位 PIN 供下次登录使用。';
+
+  @override
+  String get pinUnavailableTitle => '此 PIN 无法使用';
+
+  @override
+  String get pinUnavailableBody => '请使用密码登录以重新设置 PIN。';
+
+  @override
+  String get pinServiceUnavailable => '无法连接服务，请检查网络后重试。';
+
+  @override
+  String get pinAuthRecovery => '无法验证当前会话，请使用密码登录。';
+
+  @override
   String get forgotPin => '忘记 PIN？';
 
   @override
@@ -1824,6 +1842,24 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
 
   @override
   String get pinLoginSubtitle => '快速登录';
+
+  @override
+  String get pinNotConfiguredTitle => '尚未设置 PIN';
+
+  @override
+  String get pinNotConfiguredBody => '请先使用密码登录，然后设置 6 位 PIN 供下次登录使用。';
+
+  @override
+  String get pinUnavailableTitle => '此 PIN 无法使用';
+
+  @override
+  String get pinUnavailableBody => '请使用密码登录以重新设置 PIN。';
+
+  @override
+  String get pinServiceUnavailable => '无法连接服务，请检查网络后重试。';
+
+  @override
+  String get pinAuthRecovery => '无法验证当前会话，请使用密码登录。';
 
   @override
   String get forgotPin => '忘记 PIN？';
