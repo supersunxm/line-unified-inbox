@@ -20,7 +20,7 @@ export class SetupService {
   }
   private hash(id: string, code: string) { return createHash("sha256").update(`${id}:${code}`).digest(); }
   private mask(email: string) { const [name, domain] = email.split("@"); return `${name.slice(0, Math.min(2, name.length))}***@${domain}`; }
-  private validatePassword(password: string) { assertPasswordPolicy(password); if (["password1234", "123456789012", "qwerty123456"].includes(password.toLowerCase())) throw new BadRequestException("Use a stronger password with at least 12 characters"); }
+  private validatePassword(password: string) { assertPasswordPolicy(password); }
   async requestOtp(displayName: string, rawEmail: string, password: string, language: EmailLanguage) {
     this.validatePassword(password); if (!displayName.trim()) throw new BadRequestException("Display name is required");
     const normalizedEmail = this.normalize(rawEmail); const availability = await this.status(); if (!availability.registrationAvailable) throw new ConflictException("First administrator setup is unavailable");

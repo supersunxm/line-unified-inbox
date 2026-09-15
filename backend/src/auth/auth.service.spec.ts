@@ -150,7 +150,7 @@ void test("change password rejects a weak replacement before hashing or updating
   );
 
   await assert.rejects(
-    () => service.changePassword("user-1", "temporary-password", "weak-password-1"),
+    () => service.changePassword("user-1", "temporary-password", "weakpass"),
     (error: unknown) => (error as { response?: { code?: string } }).response?.code === "PASSWORD_POLICY_VIOLATION",
   );
   assert.equal(hashed, false);

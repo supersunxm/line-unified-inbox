@@ -1,13 +1,11 @@
 import { BadRequestException } from "@nestjs/common";
 
-export const PASSWORD_POLICY_MESSAGE = "Password must be at least 12 characters and include an uppercase letter, a lowercase letter, a number, and a special character";
-export const PASSWORD_POLICY_PATTERN = /^(?=.{12,}$)(?=.*[A-Z])(?=.*[a-z])(?=.*[0-9])(?=.*[^A-Za-z0-9\s]).*$/;
+export const PASSWORD_POLICY_MESSAGE = "Password must be at least 8 characters and include at least one letter and one number";
+export const PASSWORD_POLICY_PATTERN = /^(?=.{8,}$)(?=.*\p{L})(?=.*[0-9]).*$/u;
 export const PASSWORD_POLICY_REQUIREMENTS = [
-  "At least 12 characters",
-  "At least one uppercase letter (A-Z)",
-  "At least one lowercase letter (a-z)",
+  "At least 8 characters",
+  "At least one letter",
   "At least one number (0-9)",
-  "At least one special character",
 ] as const;
 
 export function isPasswordPolicyCompliant(password: string): boolean {

@@ -12,10 +12,10 @@ import { MobileAuthService } from "./mobile-auth.service";
 import { PASSWORD_POLICY_MESSAGE, PASSWORD_POLICY_PATTERN } from "./password-policy";
 
 class LoginDto { @IsString() @IsNotEmpty() identifier!: string; @IsString() @IsNotEmpty() password!: string; }
-class SetupRequestDto { @IsString() @IsNotEmpty() displayName!: string; @IsEmail() email!: string; @IsString() @MinLength(12) @Matches(PASSWORD_POLICY_PATTERN, { message: PASSWORD_POLICY_MESSAGE }) password!: string; @IsIn(["th", "en", "zh"]) language: "th" | "en" | "zh" = "en"; }
+class SetupRequestDto { @IsString() @IsNotEmpty() displayName!: string; @IsEmail() email!: string; @IsString() @MinLength(8) @Matches(PASSWORD_POLICY_PATTERN, { message: PASSWORD_POLICY_MESSAGE }) password!: string; @IsIn(["th", "en", "zh"]) language: "th" | "en" | "zh" = "en"; }
 class SetupVerifyDto extends SetupRequestDto { @IsString() challengeId!: string; @IsString() @Length(6, 6) otp!: string; }
 class ResendDto { @IsString() challengeId!: string; @IsIn(["th", "en", "zh"]) language: "th" | "en" | "zh" = "en"; }
-class ChangePasswordDto { @IsString() @IsNotEmpty() currentPassword!: string; @IsString() @MinLength(12) @Matches(PASSWORD_POLICY_PATTERN, { message: PASSWORD_POLICY_MESSAGE }) newPassword!: string; }
+class ChangePasswordDto { @IsString() @IsNotEmpty() currentPassword!: string; @IsString() @MinLength(8) @Matches(PASSWORD_POLICY_PATTERN, { message: PASSWORD_POLICY_MESSAGE }) newPassword!: string; }
 class MobileRefreshDto { @IsString() @IsNotEmpty() refreshToken!: string; }
 class MobileLogoutDto { @IsOptional() @IsString() @IsNotEmpty() refreshToken?: string; }
 
