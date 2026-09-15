@@ -14,7 +14,7 @@ type PlanRow = Candidate & {
   lineOfficialAccountId: string;
   storeCode: string;
   oaName: string;
-  action: "APPLY" | "ALREADY_MATCHED" | "SKIP_AMBIGUOUS" | "SKIP_UNMATCHED" | "SKIP_CONFLICT";
+  action: "APPLY" | "ALREADY_MATCHED" | "SKIP_AMBIGUOUS" | "SKIP_AMBIGUOUS_SESSION" | "SKIP_UNMATCHED" | "SKIP_CONFLICT";
   reason: string;
 };
 
@@ -119,6 +119,28 @@ async function discoverSessionBots(session: {
   }
 }
 
+function quarantineDuplicateApplyTargets(plans: PlanRow[]): number {
+  const byTarget = new Map<string, PlanRow[]>();
+  for (const row of plans) {
+    if (row.action !== "APPLY" || !row.lineOfficialAccountId) continue;
+    const rows = byTarget.get(row.lineOfficialAccountId) ?? [];
+    rows.push(row);
+    byTarget.set(row.lineOfficialAccountId, rows);
+  }
+
+  let duplicateTargetCount = 0;
+  for (const rows of byTarget.values()) {
+    if (rows.length < 2) continue;
+    duplicateTargetCount += 1;
+    const discoveredMappings = rows.map((row) => `${row.sessionKey}:${row.botId}`).join(", ");
+    for (const row of rows) {
+      row.action = "SKIP_AMBIGUOUS_SESSION";
+      row.reason = `Exact OA target discovered from multiple Manager mappings (${discoveredMappings})`;
+    }
+  }
+  return duplicateTargetCount;
+}
+
 async function main(): Promise<void> {
   const sessionKeys = parseCsvArg("sessions", ["profile-b", "account-1"]);
   const doApply = applyRequested();
@@ -172,9 +194,7 @@ async function main(): Promise<void> {
     }
   }
 
-  const targetIds = plans.filter((row) => row.action === "APPLY").map((row) => row.lineOfficialAccountId);
-  const duplicateTargets = targetIds.filter((id, index) => targetIds.indexOf(id) !== index);
-  if (duplicateTargets.length > 0) throw new Error(`Duplicate OA apply targets detected: ${new Set(duplicateTargets).size}`);
+  const quarantinedDuplicateTargets = quarantineDuplicateApplyTargets(plans);
 
   let applied = 0;
   if (doApply) {
@@ -206,6 +226,7 @@ async function main(): Promise<void> {
     sessions: sessionKeys,
     mode: doApply ? "APPLY" : "DRY_RUN",
     summary,
+    quarantinedDuplicateTargets,
     applied,
     mutationPerformed: doApply && applied > 0,
   }));
