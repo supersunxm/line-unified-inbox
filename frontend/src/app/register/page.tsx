@@ -10,7 +10,7 @@ const registerTranslations = {
   th: {
     loadStoresFailed: "ไม่สามารถโหลดรายชื่อร้านค้าได้",
     passwordMismatch: "รหัสผ่านไม่ตรงกัน",
-    passwordTooShort: "รหัสผ่านต้องมีอย่างน้อย 12 ตัวอักษร",
+    passwordTooShort: "รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร และมีตัวอักษรกับตัวเลขอย่างน้อยอย่างละ 1 ตัว",
     selectStoreError: "กรุณาเลือกร้านค้า",
     registrationFailed: "ลงทะเบียนไม่สำเร็จ",
     submittedTitle: "ส่งคำขอลงทะเบียนแล้ว",
@@ -34,11 +34,9 @@ const registerTranslations = {
     hidePassword: "ซ่อนรหัสผ่าน",
     showPassword: "แสดงรหัสผ่าน",
     requirements: "ข้อกำหนดรหัสผ่าน",
-    min12: "อย่างน้อย 12 ตัวอักษร",
-    uppercase: "มีตัวพิมพ์ใหญ่อย่างน้อย 1 ตัว (A-Z)",
-    lowercase: "มีตัวพิมพ์เล็กอย่างน้อย 1 ตัว (a-z)",
+    min8: "อย่างน้อย 8 ตัวอักษร",
+    letter: "มีตัวอักษรอย่างน้อย 1 ตัว",
     number: "มีตัวเลขอย่างน้อย 1 ตัว (0-9)",
-    special: "มีอักขระพิเศษอย่างน้อย 1 ตัว (@#$%^&*...)",
     confirmPassword: "ยืนยันรหัสผ่าน",
     hideConfirm: "ซ่อนรหัสผ่านยืนยัน",
     showConfirm: "แสดงรหัสผ่านยืนยัน",
@@ -49,7 +47,7 @@ const registerTranslations = {
   en: {
     loadStoresFailed: "Unable to load stores",
     passwordMismatch: "Passwords do not match",
-    passwordTooShort: "Password must contain at least 12 characters",
+    passwordTooShort: "Password must be at least 8 characters and include at least one letter and one number",
     selectStoreError: "Please select a store",
     registrationFailed: "Registration failed",
     submittedTitle: "Registration submitted",
@@ -73,11 +71,9 @@ const registerTranslations = {
     hidePassword: "Hide password",
     showPassword: "Show password",
     requirements: "Password requirements",
-    min12: "At least 12 characters",
-    uppercase: "At least 1 uppercase letter (A-Z)",
-    lowercase: "At least 1 lowercase letter (a-z)",
+    min8: "At least 8 characters",
+    letter: "At least 1 letter",
     number: "At least 1 number (0-9)",
-    special: "At least 1 special character (@#$%^&*...)",
     confirmPassword: "Confirm password",
     hideConfirm: "Hide confirm password",
     showConfirm: "Show confirm password",
@@ -88,7 +84,7 @@ const registerTranslations = {
   zh: {
     loadStoresFailed: "无法加载门店列表",
     passwordMismatch: "两次输入的密码不一致",
-    passwordTooShort: "密码至少需要 12 个字符",
+    passwordTooShort: "密码至少需要 8 个字符，并至少包含 1 个字母和 1 个数字",
     selectStoreError: "请选择门店",
     registrationFailed: "注册失败",
     submittedTitle: "注册申请已提交",
@@ -112,11 +108,9 @@ const registerTranslations = {
     hidePassword: "隐藏密码",
     showPassword: "显示密码",
     requirements: "密码要求",
-    min12: "至少 12 个字符",
-    uppercase: "至少 1 个大写字母 (A-Z)",
-    lowercase: "至少 1 个小写字母 (a-z)",
+    min8: "至少 8 个字符",
+    letter: "至少 1 个字母",
     number: "至少 1 个数字 (0-9)",
-    special: "至少 1 个特殊字符 (@#$%^&*...)",
     confirmPassword: "确认密码",
     hideConfirm: "隐藏确认密码",
     showConfirm: "显示确认密码",
@@ -171,7 +165,7 @@ export default function RegisterPage() {
     event.preventDefault();
     setError(null);
     if (password !== confirmPassword) { setError(t.passwordMismatch); return; }
-    if (password.length < 12) { setError(t.passwordTooShort); return; }
+    if (password.length < 8 || !/\p{L}/u.test(password) || !/[0-9]/.test(password)) { setError(t.passwordTooShort); return; }
     if (!isHq && !storeId) { setError(t.selectStoreError); return; }
     setSubmitting(true);
     try {
@@ -217,8 +211,8 @@ export default function RegisterPage() {
           <label className="block text-sm sm:col-span-2">{t.role}<select value={role} onChange={(event) => setRole(event.target.value as RegistrationRole)} className="mt-1 w-full rounded-lg border border-slate-300 bg-transparent p-2.5 dark:border-slate-700"><option value="STAFF">{t.staffRole}</option><option value="STORE_MANAGER">{t.managerRole}</option><option value="HQ">{t.hqRole}</option></select></label>
           {!isHq && <label className="block text-sm sm:col-span-2">{t.store}<select required disabled={storesLoading || stores.length === 0} value={storeId} onChange={(event) => setStoreId(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 bg-transparent p-2.5 dark:border-slate-700">{storesLoading && <option value="">{t.loadingStores}</option>}{!storesLoading && stores.length === 0 && <option value="">{t.noStores}</option>}{stores.map((store) => <option key={store.id} value={store.id}>{store.name}{store.code ? ` (${store.code})` : ""}</option>)}</select></label>}
           {isHq && <div className="sm:col-span-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300">{t.hqNotice}</div>}
-          <label className="block text-sm">{t.password}<div className="relative mt-1"><input type={showPassword ? "text" : "password"} required minLength={12} autoComplete="new-password" aria-describedby="registration-password-requirements" value={password} onChange={(event) => setPassword(event.target.value)} className="w-full rounded-lg border border-slate-300 bg-transparent py-2.5 pl-2.5 pr-11 dark:border-slate-700" /><button type="button" aria-label={showPassword ? t.hidePassword : t.showPassword} aria-pressed={showPassword} onClick={() => setShowPassword((visible) => !visible)} className="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-slate-500 hover:text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:text-slate-400 dark:hover:text-slate-100"><PasswordVisibilityIcon visible={showPassword} /></button></div><div id="registration-password-requirements" className="mt-2 text-xs leading-5 text-slate-500 dark:text-slate-400"><p className="font-medium text-slate-600 dark:text-slate-300">{t.requirements}</p><ul className="mt-1 space-y-0.5" aria-label={t.requirements}><li>✓ {t.min12}</li><li>✓ {t.uppercase}</li><li>✓ {t.lowercase}</li><li>✓ {t.number}</li><li>✓ {t.special}</li></ul></div></label>
-          <label className="block text-sm">{t.confirmPassword}<div className="relative mt-1"><input type={showConfirmPassword ? "text" : "password"} required minLength={12} autoComplete="new-password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} className="w-full rounded-lg border border-slate-300 bg-transparent py-2.5 pl-2.5 pr-11 dark:border-slate-700" /><button type="button" aria-label={showConfirmPassword ? t.hideConfirm : t.showConfirm} aria-pressed={showConfirmPassword} onClick={() => setShowConfirmPassword((visible) => !visible)} className="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-slate-500 hover:text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:text-slate-400 dark:hover:text-slate-100"><PasswordVisibilityIcon visible={showConfirmPassword} /></button></div></label>
+          <label className="block text-sm">{t.password}<div className="relative mt-1"><input type={showPassword ? "text" : "password"} required minLength={8} autoComplete="new-password" aria-describedby="registration-password-requirements" value={password} onChange={(event) => setPassword(event.target.value)} className="w-full rounded-lg border border-slate-300 bg-transparent py-2.5 pl-2.5 pr-11 dark:border-slate-700" /><button type="button" aria-label={showPassword ? t.hidePassword : t.showPassword} aria-pressed={showPassword} onClick={() => setShowPassword((visible) => !visible)} className="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-slate-500 hover:text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:text-slate-400 dark:hover:text-slate-100"><PasswordVisibilityIcon visible={showPassword} /></button></div><div id="registration-password-requirements" className="mt-2 text-xs leading-5 text-slate-500 dark:text-slate-400"><p className="font-medium text-slate-600 dark:text-slate-300">{t.requirements}</p><ul className="mt-1 space-y-0.5" aria-label={t.requirements}><li>✓ {t.min8}</li><li>✓ {t.letter}</li><li>✓ {t.number}</li></ul></div></label>
+          <label className="block text-sm">{t.confirmPassword}<div className="relative mt-1"><input type={showConfirmPassword ? "text" : "password"} required minLength={8} autoComplete="new-password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} className="w-full rounded-lg border border-slate-300 bg-transparent py-2.5 pl-2.5 pr-11 dark:border-slate-700" /><button type="button" aria-label={showConfirmPassword ? t.hideConfirm : t.showConfirm} aria-pressed={showConfirmPassword} onClick={() => setShowConfirmPassword((visible) => !visible)} className="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-slate-500 hover:text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:text-slate-400 dark:hover:text-slate-100"><PasswordVisibilityIcon visible={showConfirmPassword} /></button></div></label>
         </div>
         <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">{t.accountNote}</p>
         <button disabled={submitting || (!isHq && (storesLoading || !storeId))} className="mt-6 w-full rounded-lg bg-slate-900 px-4 py-2.5 font-medium text-white disabled:opacity-50 dark:bg-white dark:text-slate-900">{submitting ? t.submitting : t.submit}</button>
