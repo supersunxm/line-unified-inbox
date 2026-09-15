@@ -85,6 +85,47 @@ void test("approved HQ listing is separated from legacy username admins", async 
   assert.deepEqual(where.employeeId, { not: null });
 });
 
+void test("resetting an active HQ password requires a change and revokes existing sessions", async () => {
+  let updateData: any;
+  let resetWhere: any;
+  let deletedSessionUserId: string | null = null;
+  let hashedPassword: string | null = null;
+  let auditEntry: any;
+  const prisma: any = {
+    user: {
+      findUnique: async () => ({ role: UserRole.ADMIN, status: UserStatus.ACTIVE, isActive: true, canManageAccounts: true }),
+      findFirst: async ({ where }: any) => { resetWhere = where; return { id: "hq-1" }; },
+      update: async ({ data }: any) => { updateData = data; return {}; },
+    },
+    session: {
+      deleteMany: async ({ where }: any) => { deletedSessionUserId = where.userId; return { count: 2 }; },
+    },
+    $transaction: async (operations: Promise<unknown>[]) => Promise.all(operations),
+  };
+  const passwords: any = {
+    hash: async (password: string) => { hashedPassword = password; return "new-hash"; },
+  };
+  const audit: any = {
+    record: async (entry: any) => { auditEntry = entry; },
+  };
+  const service = new HqRegistrationService(prisma, passwords, undefined, audit);
+
+  const result = await service.resetPassword("hq-1", "admin-1");
+
+  assert.equal(result.userId, "hq-1");
+  assert.equal(result.temporaryPassword, hashedPassword);
+  assert.equal(result.temporaryPassword.length, 14);
+  assert.equal(resetWhere.id, "hq-1");
+  assert.equal(resetWhere.role, UserRole.ADMIN);
+  assert.equal(resetWhere.status, UserStatus.ACTIVE);
+  assert.equal(resetWhere.isActive, true);
+  assert.equal(updateData.passwordHash, "new-hash");
+  assert.equal(updateData.mustChangePassword, true);
+  assert.equal(deletedSessionUserId, "hq-1");
+  assert.equal(auditEntry.action, "HQ_PASSWORD_RESET");
+  assert.equal(auditEntry.targetUserId, "hq-1");
+});
+
 void test("deactivating HQ revokes active sessions without requiring store membership", async () => {
   const updates: any[] = [];
   const prisma: any = {

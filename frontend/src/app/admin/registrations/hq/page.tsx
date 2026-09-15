@@ -56,6 +56,9 @@ function HqApprovalContent() {
   const [approved, setApproved] = useState<ApprovedHq[]>([]);
   const [loading, setLoading] = useState(true);
   const [acting, setActing] = useState<string | null>(null);
+  const [resetTarget, setResetTarget] = useState<ApprovedHq | null>(null);
+  const [temporaryPassword, setTemporaryPassword] = useState<string | null>(null);
+  const [passwordCopied, setPasswordCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -126,6 +129,49 @@ function HqApprovalContent() {
       setError(cause instanceof Error ? cause.message : "Account status change failed");
     } finally {
       setActing(null);
+    }
+  }
+
+  function openResetPassword(account: ApprovedHq) {
+    setResetTarget(account);
+    setTemporaryPassword(null);
+    setPasswordCopied(false);
+    setError(null);
+    setNotice(null);
+  }
+
+  function closeResetPassword() {
+    if (resetTarget && acting === resetTarget.id) return;
+    setResetTarget(null);
+    setTemporaryPassword(null);
+    setPasswordCopied(false);
+  }
+
+  async function resetPassword() {
+    if (!resetTarget) return;
+    const target = resetTarget;
+    setActing(target.id);
+    setError(null);
+    setNotice(null);
+    setPasswordCopied(false);
+    try {
+      const result = await request<{ userId: string; temporaryPassword: string }>(`/admin/registrations/hq-users/${target.id}/reset-password`, { method: "POST" });
+      setTemporaryPassword(result.temporaryPassword);
+      setNotice(`Password reset for ${target.displayName}. Share the temporary password securely.`);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Password reset failed");
+    } finally {
+      setActing(null);
+    }
+  }
+
+  async function copyTemporaryPassword() {
+    if (!temporaryPassword) return;
+    try {
+      await navigator.clipboard.writeText(temporaryPassword);
+      setPasswordCopied(true);
+    } catch {
+      setError("Unable to copy the temporary password. Please copy it manually.");
     }
   }
 
@@ -200,7 +246,10 @@ function HqApprovalContent() {
                       <p className="mt-2 text-xs text-[var(--app-text-secondary)]">Web + Mobile · All Stores · Account Management · Reply · Main OA</p>
                       <p className="mt-1 text-xs text-[var(--app-text-secondary)]">Last login: {account.lastLoginAt ? new Date(account.lastLoginAt).toLocaleString() : "Never"}</p>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap justify-end gap-2">
+                      {active && (
+                        <button disabled={acting === account.id} onClick={() => openResetPassword(account)} className="rounded-lg border border-[var(--app-border)] bg-[var(--app-surface)] px-4 py-2 text-sm font-medium text-[var(--app-text-primary)] disabled:opacity-50">Reset password</button>
+                      )}
                       {active ? (
                         <button disabled={acting === account.id} onClick={() => void actLifecycle(account, "deactivate")} className="rounded-lg border border-red-300 px-4 py-2 text-sm font-medium text-red-700 disabled:opacity-50">Deactivate</button>
                       ) : (
@@ -214,6 +263,37 @@ function HqApprovalContent() {
           </div>
         )}
       </div>
+
+      {resetTarget && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-labelledby="hq-password-reset-title">
+          <div className="w-full max-w-md rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-6 shadow-2xl">
+            <h2 id="hq-password-reset-title" className="text-lg font-bold">{temporaryPassword ? "Temporary password" : "Reset password"}</h2>
+            {temporaryPassword ? (
+              <>
+                <p className="mt-2 text-sm text-[var(--app-text-secondary)]">Password reset completed for <span className="font-semibold text-[var(--app-text-primary)]">{resetTarget.displayName}</span>. Their existing sessions were signed out and they must change this password after signing in.</p>
+                <div className="mt-4 rounded-xl border border-[var(--app-border)] bg-[var(--app-bg)] p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-[var(--app-text-secondary)]">Temporary password</p>
+                  <code className="mt-2 block break-all text-lg font-bold tracking-wide text-[var(--app-text-primary)]">{temporaryPassword}</code>
+                </div>
+                <p className="mt-3 text-xs text-amber-700">This password is shown only for this reset result. Share it securely with the account owner.</p>
+                <div className="mt-5 flex justify-end gap-2">
+                  <button type="button" onClick={() => void copyTemporaryPassword()} className="rounded-lg border border-[var(--app-border)] px-4 py-2 text-sm font-medium">{passwordCopied ? "Copied" : "Copy password"}</button>
+                  <button type="button" onClick={closeResetPassword} className="rounded-lg bg-[var(--app-accent)] px-4 py-2 text-sm font-medium text-white">Done</button>
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="mt-2 text-sm text-[var(--app-text-secondary)]">Generate a temporary password for <span className="font-semibold text-[var(--app-text-primary)]">{resetTarget.displayName}</span>?</p>
+                <p className="mt-2 text-xs text-[var(--app-text-secondary)]">The current password will stop working, existing sessions will be signed out, and the account owner will be required to set a new password after signing in.</p>
+                <div className="mt-5 flex justify-end gap-2">
+                  <button type="button" disabled={acting === resetTarget.id} onClick={closeResetPassword} className="rounded-lg border border-[var(--app-border)] px-4 py-2 text-sm font-medium disabled:opacity-50">Cancel</button>
+                  <button type="button" disabled={acting === resetTarget.id} onClick={() => void resetPassword()} className="rounded-lg bg-[var(--app-accent)] px-4 py-2 text-sm font-medium text-white disabled:opacity-50">{acting === resetTarget.id ? "Resetting…" : "Reset password"}</button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </main>
   );
 }

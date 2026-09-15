@@ -17,6 +17,7 @@ export class AdminRegistrationController {
   @Patch(":id/reject") reject(@Param("id") id: string, @Req() request: AuthRequest) { return this.registration.reject(id, request.user!.id, request.ip, request.get("user-agent")); }
   @Patch("hq-users/:id/approve") approveHq(@Param("id") id: string, @Req() request: AuthRequest) { return this.hqRegistration.approve(id, request.user!.id, request.ip, request.get("user-agent")); }
   @Patch("hq-users/:id/reject") rejectHq(@Param("id") id: string, @Req() request: AuthRequest) { return this.hqRegistration.reject(id, request.user!.id, request.ip, request.get("user-agent")); }
+  @Post("hq-users/:id/reset-password") resetHqPassword(@Param("id") id: string, @Req() request: AuthRequest) { return this.hqRegistration.resetPassword(id, request.user!.id, request.ip, request.get("user-agent")); }
   @Patch("hq-users/:id/deactivate") deactivateHq(@Param("id") id: string, @Req() request: AuthRequest) { return this.hqRegistration.deactivate(id, request.user!.id, request.ip, request.get("user-agent")); }
   @Patch("hq-users/:id/reactivate") reactivateHq(@Param("id") id: string, @Req() request: AuthRequest) { return this.hqRegistration.reactivate(id, request.user!.id, request.ip, request.get("user-agent")); }
   @Post("users/:id/reset-password") resetPassword(@Param("id") id: string, @Req() request: AuthRequest) { return this.auth.resetPassword(id, request.user!.id, request.ip, request.get("user-agent")); }
