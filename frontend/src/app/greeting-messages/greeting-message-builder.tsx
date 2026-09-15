@@ -126,7 +126,7 @@ export function GreetingMessageBuilder({
         if ((block as { type?: string }).type === "RICH_MESSAGE") {
           return (
             <GreetingRichMessageBlock
-              key={(block as GreetingRichMessageBlockValue).id || `block-${index}`}
+              key={(block as unknown as GreetingRichMessageBlockValue).id || `block-${index}`}
               block={block as unknown as GreetingRichMessageBlockValue}
               index={index}
               totalBlocks={messages.length}
