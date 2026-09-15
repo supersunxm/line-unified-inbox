@@ -4963,3 +4963,10 @@ Waiver scope: focused PIN/auth tests pass **26/26**, focused Flutter PIN tests p
 - Added explicit regression coverage for password and PIN login credential persistence across a new `TokenStore`, logout clearing access/refresh credentials while preserving the device-local PIN marker, and lifecycle safety during non-resumed states. Biometric authentication remains paused and was not implemented.
 - Verification: focused auth/session/startup/PIN tests **45/45**, full Flutter suite **294/294**, `flutter analyze`, Android debug APK build, and `git diff --check` passed. No backend source, migration, deployment, commit, push, or production mutation was performed.
 - Expected behavior: a valid session restores directly to the app without a PIN prompt; offline/temporary startup failures show retry while retaining secure credentials; explicit logout revokes/clears the mobile session but leaves the PIN routing marker for the next sign-in. After the bounded 30-day refresh window expires, reauthentication is required.
+
+# Current task: Public PIN authentication release — 2026-09-15
+
+- Published Android `1.1.29+49` from main through GitHub Actions run `34954009264`; the signed release payload commit is `9c6a7714631c12008cb19c2c948d0904b7a75937`.
+- Existing CI production signing material was used. The public APK verifies as package `click.lineoppo.chat`, version `1.1.29`, build `49`, with the established production certificate; SHA-256 is `1d7f5a5122480c76f9fea0b661b2b1ac88752de025d54d3f42794eb13d770569`.
+- Backend migration `20260915170000_release_android_1_1_29` applied through the normal Railway pre-deploy path; production `/health` and `/health/readiness` are healthy. Public `/app/version/android` reports build 49 with `forceUpdate=false`.
+- The production frontend deployment completed successfully and the public APK URL returns HTTP 200 with a matching checksum. No forced logout, manual migration, manual deploy, replacement signing key, or unrelated-file cleanup was performed. The untracked `docs/executive-guide/` directory remains untouched.

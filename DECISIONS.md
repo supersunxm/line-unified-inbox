@@ -2529,3 +2529,9 @@ Keep `StoreMaster.tiktokProfileUrl` as the only persisted TikTok profile URL. Po
 - Keep access/refresh credentials in one atomic Flutter Secure Storage record. Restore through the canonical authenticated `/auth/me` path; temporary failures remain retryable and do not erase credentials, while only invalid/revoked/expired refresh sessions or disabled accounts force the login path.
 - Treat PIN as a sign-in method, not an app-unlock mechanism. A valid restored session bypasses PIN UI, lifecycle transitions never clear session or PIN routing state, and explicit logout clears the session while preserving the device-local PIN marker.
 - Biometric authentication is explicitly paused and is not part of this change. Revisit it as a separate, authorized authentication decision.
+
+## 2026-09-15: Public PIN release 1.1.29+49
+
+- Use the established manual GitHub Actions publisher with the existing production certificate; do not create a local signing key. The workflow verifies package, version, signer, and checksum before generating the additive AppRelease migration and public download catalog entry.
+- Keep `forceUpdate=false` for this PIN release so existing sessions remain valid and users are not forcibly logged out. The canonical public release metadata is build 49; build 48 is deactivated by the additive release migration after build 49 is available.
+- Production backend and frontend propagation are both verified through the normal Railway deployments. No manual production deploy or manual Prisma migration was used.
