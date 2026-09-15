@@ -213,7 +213,10 @@ jobs:
           set -euo pipefail
           # flutter gen-l10n may rewrite checked-in generated files on the runner.
           # Release metadata is the only intended working-tree change here.
-          git restore --worktree -- android_app/lib/l10n
+          git restore --worktree -- \
+            android_app/analysis_options.yaml \
+            android_app/pubspec.lock \
+            android_app/lib/l10n
           unexpected="$(git diff --name-only | grep -v -E '^(frontend/public/downloads/oppo-line-oa-chat-v1\.1\.29-production\.apk|frontend/src/app/download/releases\.ts|frontend/test/android-download-release\.test\.mts|backend/prisma/migrations/20260915170000_release_android_1_1_29/migration\.sql)$' || true)"
           if test -n "$unexpected"; then
             echo "Unexpected tracked changes before release commit:"
