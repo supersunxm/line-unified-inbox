@@ -49,7 +49,7 @@ void test("rejects registration passwords that do not meet the shared policy", a
   };
   const service = new RegistrationService(prisma, { hash: async () => "should-not-hash" } as any);
   await assert.rejects(
-    () => service.request({ ...dto(), password: "weak-password-1" }),
+    () => service.request({ ...dto(), password: "weakpass" }),
     (error: unknown) => error instanceof BadRequestException && error.getResponse().code === "PASSWORD_POLICY_VIOLATION",
   );
 });
