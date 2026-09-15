@@ -11,7 +11,7 @@ void test("shared password policy accepts 8+ characters with a letter and number
 });
 
 void test("shared password policy rejects missing requirements", () => {
-  for (const password of ["oppo123", "12345678", "oppopass", "!!!!!!!!"] ) {
+  for (const password of ["oppo123", "12345678", "oppopass", "!!!!!!!!"]) {
     assert.equal(isPasswordPolicyCompliant(password), false, password);
     assert.throws(
       () => assertPasswordPolicy(password),
