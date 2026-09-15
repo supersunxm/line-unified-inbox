@@ -1,5 +1,6 @@
 import { ConflictException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { UserRole, UserStatus } from "@prisma/client";
+import { randomInt } from "node:crypto";
 import { PrismaService } from "../prisma.service";
 import { PasswordService } from "./password.service";
 import { AuthRateLimitService } from "./auth-rate-limit.service";
@@ -24,6 +25,22 @@ export class HqRegistrationService {
       username: null,
       employeeId: { not: null },
     } as const;
+  }
+
+  private temporaryPassword() {
+    const upper = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+    const lower = "abcdefghijkmnopqrstuvwxyz";
+    const digits = "23456789";
+    const symbols = "@#$%^&*";
+    const pick = (chars: string) => chars[randomInt(chars.length)];
+    const required = [pick(upper), pick(lower), pick(digits), pick(symbols)];
+    const all = upper + lower + digits + symbols;
+    while (required.length < 14) required.push(pick(all));
+    for (let index = required.length - 1; index > 0; index -= 1) {
+      const swapIndex = randomInt(index + 1);
+      [required[index], required[swapIndex]] = [required[swapIndex], required[index]];
+    }
+    return required.join("");
   }
 
   async request(input: { name: string; employeeId: string; email: string; password: string }, ip = "unknown") {
@@ -180,6 +197,32 @@ export class HqRegistrationService {
 
     await this.audit?.record({ actorUserId, action: "HQ_ACCOUNT_REJECTED", targetUserId: user.id, ipAddress, userAgent });
     return { userId: user.id, status: UserStatus.REJECTED, accountType: "HQ" as const };
+  }
+
+  async resetPassword(userId: string, actorUserId: string, ipAddress?: string, userAgent?: string) {
+    await this.assertApprover(actorUserId);
+    if (userId === actorUserId) throw new ForbiddenException("You cannot reset your own HQ password");
+
+    const user = await this.prisma.user.findFirst({
+      where: { id: userId, ...this.hqIdentityWhere(), status: UserStatus.ACTIVE, isActive: true },
+      select: { id: true },
+    });
+    if (!user) throw new NotFoundException("Active HQ account not found");
+
+    const temporaryPassword = this.temporaryPassword();
+    assertPasswordPolicy(temporaryPassword);
+    const passwordHash = await this.passwords.hash(temporaryPassword);
+
+    await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: user.id },
+        data: { passwordHash, mustChangePassword: true },
+      }),
+      this.prisma.session.deleteMany({ where: { userId: user.id } }),
+    ]);
+
+    await this.audit?.record({ actorUserId, action: "HQ_PASSWORD_RESET", targetUserId: user.id, metadata: { reason: "ADMIN_RESET_PASSWORD" }, ipAddress, userAgent });
+    return { userId: user.id, temporaryPassword };
   }
 
   async deactivate(userId: string, actorUserId: string, ipAddress?: string, userAgent?: string) {
