@@ -4,21 +4,34 @@ import { PrismaClient, GoogleReviewPeriodStatus } from "@prisma/client";
 import { computeReviewFingerprint } from "./fingerprint-helper.mjs";
 import { segmentThaiWords } from "../../../tools/google-review-checker-extension/src/core/thaiWordCounter.ts";
 import { isEditedReviewDateText } from "../../../tools/google-review-checker-extension/src/core/googleReviewDateParser.ts";
-import { classifyDateForWeek, resolveWeekNumberFromDate } from "./date-classifier.mjs";
+import {
+  classifyDateForWeek,
+  resolveWeekNumberFromDate,
+  parseReviewDate,
+  getWeekDateBoundaries,
+} from "./date-classifier.mjs";
 import { resolveGoogleReviewProfileDir } from "./browser-runtime-config.mjs";
 import { openReviewsPane, ensureNewestSort } from "./maps-dom-helper.mjs";
+import { getProductionPrismaClient } from "./db-credential-helper.mjs";
 
-const prisma = new PrismaClient();
+let defaultPrisma = null;
+function getDefaultPrisma() {
+  if (!defaultPrisma) {
+    defaultPrisma = getProductionPrismaClient();
+  }
+  return defaultPrisma;
+}
 export const PERSISTENT_PROFILE_DIR = resolveGoogleReviewProfileDir();
 
-export function getTodayBangkokDate() {
+export function getTodayBangkokDate(ref = new Date()) {
+  const targetDate = ref instanceof Date ? ref : new Date(ref);
   const formatter = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Bangkok",
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
   });
-  return formatter.format(new Date()); // YYYY-MM-DD
+  return formatter.format(targetDate); // YYYY-MM-DD
 }
 
 function ensureDateStats(statsByDate, reviewDate) {
@@ -42,9 +55,11 @@ function ensureDateStats(statsByDate, reviewDate) {
  */
 export async function collectStoreContinuous(page, store, options = {}) {
   const { storeCode, storeId, storeName, googleMapsUrl } = store;
-  const todayBangkok = options.todayBangkok || getTodayBangkokDate();
+  const referenceNow = options.referenceNow || new Date();
+  const todayBangkok = options.todayBangkok || getTodayBangkokDate(referenceNow);
   const targetWeekNumber = options.targetWeekNumber || resolveWeekNumberFromDate(todayBangkok);
   const targetReviewDateOnly = options.targetReviewDateOnly || process.env.GOOGLE_REVIEW_WRITE_DATE?.trim() || null;
+  const prisma = options.prismaClient || getDefaultPrisma();
   const startTime = Date.now();
 
   console.log(`\n================================================================================`);
@@ -202,13 +217,21 @@ export async function collectStoreContinuous(page, store, options = {}) {
       const thaiSeg = segmentThaiWords(cardData.reviewText);
       const wordCount = thaiSeg.count;
 
-      const parsedDate = parseReviewDate(cardData.dateText, new Date());
+      const parsedDate = parseReviewDate(cardData.dateText, referenceNow);
       const resolvedDate = parsedDate.exactDate;
 
-      // Chronology stop: when review is strictly older than target week
-      if (parsedDate.type === "OLDER_THAN_7_DAYS" || (resolvedDate && targetWeekNumber === 2 && resolvedDate < "2026-09-03")) {
-        console.log(`  [STOP CONDITION] Card #${currentCardIndex + 1}: "${cardData.dateText}" -> ${resolvedDate || parsedDate.type} is older than Week ${targetWeekNumber} start. Halting store scan immediately.`);
-        stopReason = `STOP_CHRONOLOGY_OLDER_THAN_WEEK_${targetWeekNumber}`;
+      // Chronology stop: when review is strictly older than target date or target week
+      const weekBounds = getWeekDateBoundaries(targetWeekNumber);
+      if (
+        parsedDate.type === "OLDER_THAN_7_DAYS" ||
+        (resolvedDate && resolvedDate < weekBounds.startDate) ||
+        (targetReviewDateOnly && resolvedDate && resolvedDate < targetReviewDateOnly)
+      ) {
+        const reason = (targetReviewDateOnly && resolvedDate && resolvedDate < targetReviewDateOnly)
+          ? `STOP_CHRONOLOGY_OLDER_THAN_TARGET_DATE_${targetReviewDateOnly}`
+          : `STOP_CHRONOLOGY_OLDER_THAN_WEEK_${targetWeekNumber}`;
+        console.log(`  [STOP CONDITION] Card #${currentCardIndex + 1}: "${cardData.dateText}" -> ${resolvedDate || parsedDate.type}. Halting store scan immediately (${reason}).`);
+        stopReason = reason;
         stopTriggered = true;
         break;
       }
@@ -243,7 +266,7 @@ export async function collectStoreContinuous(page, store, options = {}) {
       consecutiveSeenCount = 0;
       newReviewsDiscovered++;
 
-      const dateClass = classifyDateForWeek(cardData.dateText, targetWeekNumber, new Date());
+      const dateClass = classifyDateForWeek(cardData.dateText, targetWeekNumber, referenceNow);
       if (cardData.hasPhoto) reviewsWithPhoto++;
       if (wordCount >= 15) reviewsOver15ThaiWords++;
 

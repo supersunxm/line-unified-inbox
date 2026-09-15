@@ -10,8 +10,9 @@ import {
   buildGoogleReviewLaunchOptions,
   resolveGoogleReviewProfileDir,
 } from "./browser-runtime-config.mjs";
+import { getProductionPrismaClient } from "./db-credential-helper.mjs";
 
-const prisma = new PrismaClient();
+const prisma = process.env.DATABASE_URL !== undefined ? new PrismaClient() : getProductionPrismaClient();
 const persistentProfileDir = resolveGoogleReviewProfileDir();
 
 export async function upsertDailyByReviewDate({
@@ -113,8 +114,9 @@ export async function refreshWeeklyStoreTotal({ storeCode, storeId, storeRating,
 
 async function main() {
   console.log("[google-review-collector] main entered");
+  const referenceNow = new Date();
   const targetReviewDateOverride = process.env.GOOGLE_REVIEW_WRITE_DATE?.trim() || null;
-  const todayBangkok = getTodayBangkokDate();
+  const todayBangkok = getTodayBangkokDate(referenceNow);
   const targetWeekNumber = targetReviewDateOverride
     ? resolveWeekNumberFromDate(targetReviewDateOverride)
     : resolveWeekNumberFromDate(todayBangkok);
@@ -216,6 +218,7 @@ async function main() {
       storeName,
       googleMapsUrl,
     }, {
+      referenceNow,
       todayBangkok,
       targetWeekNumber,
       targetReviewDateOnly: targetReviewDateOverride,
