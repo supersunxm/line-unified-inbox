@@ -62,6 +62,7 @@ import { AppVersionModule } from "./app-version/app-version.module";
 import { RichMenuModule } from "./rich-menu/rich-menu.module";
 import { AutoResponseModule } from "./auto-response/auto-response.module";
 import { GreetingMessageModule } from "./greeting-message/greeting-message.module";
+import { RichMessageModule } from "./rich-message/rich-message.module";
 import { LineChatModule } from "./line-chat/line-chat.module";
 import { MainOaController } from "./main-oa.controller";
 import { GoogleReviewKpiModule } from "./google-review-kpi/google-review-kpi.module";
@@ -69,7 +70,7 @@ import { PublicStoresModule } from "./public-stores/public-stores.module";
 import { StoreInsightsModule } from "./store-insights/store-insights.module";
 
 @Module({
-  imports: [PrismaModule, AuthModule, StoreInsightsModule, RealtimeModule, CredentialsModule, MediaModule, ClassificationModule, LineProfileModule, LineWebhookModule, LineOfficialAccountsModule, StoreMasterModule, FollowerInsightsModule, FriendSourceLinksModule, TranslationModule, OperationsModule, ExecutiveBriefModule, BiAssistantModule, ActionAgentModule, ImpactEngineModule, AiTelemetryModule, OperationalMemoryModule, MassMessageModule, CouponModule, TikTokModule, AppVersionModule, RichMenuModule, AutoResponseModule, GreetingMessageModule, LineChatModule, GoogleReviewKpiModule, PublicStoresModule],
+  imports: [PrismaModule, AuthModule, StoreInsightsModule, RealtimeModule, CredentialsModule, MediaModule, ClassificationModule, LineProfileModule, LineWebhookModule, LineOfficialAccountsModule, StoreMasterModule, FollowerInsightsModule, FriendSourceLinksModule, TranslationModule, OperationsModule, ExecutiveBriefModule, BiAssistantModule, ActionAgentModule, ImpactEngineModule, AiTelemetryModule, OperationalMemoryModule, MassMessageModule, CouponModule, TikTokModule, AppVersionModule, RichMenuModule, AutoResponseModule, GreetingMessageModule, RichMessageModule, LineChatModule, GoogleReviewKpiModule, PublicStoresModule],
   controllers: [HealthController, MainOaController, StoresController, ConversationsController, ActivityController, DashboardController, DashboardResponseBucketsController, MessageTrafficController, MetadataController, OperationsController, CustomersController, MobileConversationsController, MobileVideoController, MobileNotificationsController, MobileConfigController, MobileProductsController, MonthlySummaryController, PurchaseAnalyticsController],
   providers: [ConversationsService, { provide: LineMessagingService, useClass: PilotAwareLineMessagingService }, DashboardAnalyticsService, DashboardExecutiveService, OperationReportService, CustomerIntelligenceService, RootCauseService, RecommendationService, MobileConversationsService, MobilePdfSendService, MobileVideoService, MobileNotificationsService, MobileConfigService, MonthlySummaryService, PriorityService, PurchaseAnalyticsService, PurchaseBroadcastAudienceService, MessageTrafficService],
 })
