@@ -4,10 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../../core/localization/localization.dart';
+import '../../../core/config/app_config.dart';
+import '../../../core/models/models.dart';
 import '../../../core/theme/app_spacing.dart';
 
 import '../../../core/services/app_update_service.dart';
 import '../../notifications/notification_service.dart';
+import '../../auth/auth_repository.dart';
+import '../../auth/pin_management_page.dart';
 import 'installed_app_version.dart';
 
 class SettingsSection extends StatefulWidget {
@@ -17,12 +21,16 @@ class SettingsSection extends StatefulWidget {
     this.updateService,
     this.packageInfo,
     this.notificationService,
+    this.user,
+    this.auth,
   });
 
   final VoidCallback? onPersonalInformation;
   final AppUpdateService? updateService;
   final PackageInfo? packageInfo;
   final NotificationService? notificationService;
+  final CurrentUser? user;
+  final AuthRepository? auth;
 
   @override
   State<SettingsSection> createState() => _SettingsSectionState();
@@ -31,6 +39,7 @@ class SettingsSection extends StatefulWidget {
 class _SettingsSectionState extends State<SettingsSection> {
   PackageInfo? _packageInfo;
   NotificationPermissionStatus? _notificationStatus;
+  late bool _pinEnabled = widget.user?.pinEnabled ?? false;
 
   @override
   void initState() {
@@ -72,6 +81,22 @@ class _SettingsSectionState extends State<SettingsSection> {
                 onTap: widget.onPersonalInformation,
               ),
               const Divider(height: 1),
+              if (AppConfig.pinLoginEnabled &&
+                  widget.user?.employeeId?.trim().isNotEmpty == true &&
+                  widget.auth != null)
+                ListTile(
+                  leading: const Icon(Icons.pin_outlined),
+                  title: Text(l10n.loginSecurity),
+                  subtitle: Text(
+                    '${l10n.pinSixDigits} · ${_pinEnabled ? l10n.pinStatusEnabled : l10n.pinStatusDisabled}',
+                  ),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => _managePin(context),
+                ),
+              if (AppConfig.pinLoginEnabled &&
+                  widget.user?.employeeId?.trim().isNotEmpty == true &&
+                  widget.auth != null)
+                const Divider(height: 1),
               ListTile(
                 leading: const Icon(Icons.language),
                 title: Text(l10n.language),
@@ -170,6 +195,22 @@ class _SettingsSectionState extends State<SettingsSection> {
       }
     }
     if (mounted) setState(() => _notificationStatus = status);
+  }
+
+  Future<void> _managePin(BuildContext context) async {
+    final user = widget.user;
+    final auth = widget.auth;
+    if (user == null || auth == null || user.employeeId == null) return;
+    final changed = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => PinManagementPage(
+          auth: auth,
+          employeeId: user.employeeId!,
+          pinEnabled: _pinEnabled,
+        ),
+      ),
+    );
+    if (changed != null && mounted) setState(() => _pinEnabled = changed);
   }
 
   Future<void> _showLanguagePicker(BuildContext context) async {

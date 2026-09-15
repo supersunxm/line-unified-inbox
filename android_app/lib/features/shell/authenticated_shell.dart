@@ -128,6 +128,7 @@ class AuthenticatedShellState extends State<AuthenticatedShell> {
         keyName: 'profile',
         child: ProfilePage(
           user: widget.user,
+          auth: widget.auth,
           onLogout: widget.onLogout,
           onApprovals:
               widget.user.canManageAccounts ? _openAdminApprovals : null,

@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable, Logger, UnauthorizedException } from "@nestjs/common";
+import { BadRequestException, ConflictException, ForbiddenException, HttpException, HttpStatus, Injectable, Logger, UnauthorizedException } from "@nestjs/common";
 import { createHash, randomBytes, randomInt } from "node:crypto";
 import { MembershipStatus, Prisma, SessionType, UserRole, UserStatus } from "@prisma/client";
 import { PrismaService } from "../prisma.service";
@@ -7,6 +7,10 @@ import { AuthRateLimitService } from "./auth-rate-limit.service";
 import { AuditLogService } from "./audit-log.service";
 import { assertPasswordPolicy } from "./password-policy";
 import { buildPermissionContext, hasWorkspaceAccess } from "./permission-context";
+import { PIN_PATTERN, PIN_POLICY_MESSAGE } from "./mobile-auth.dto";
+
+const PIN_MAX_ATTEMPTS = 5;
+const PIN_LOCK_DURATION_MS = 15 * 60_000;
 
 type AuthUserSource = {
   id: string;
@@ -24,6 +28,12 @@ type AuthUserSource = {
   canManageMainOa?: boolean;
   status?: string;
   mustChangePassword?: boolean;
+  passwordHash?: string | null;
+  pinHash?: string | null;
+  pinEnabled?: boolean;
+  pinFailedAttempts?: number;
+  pinLockedUntil?: Date | null;
+  pinUpdatedAt?: Date | null;
   phone?: string | null;
   firstName?: string | null;
   lastName?: string | null;
@@ -67,6 +77,7 @@ export class AuthService {
       isActive: user.isActive,
       status: user.status,
       mustChangePassword: user.mustChangePassword ?? false,
+      pinEnabled: Boolean(user.pinEnabled && user.pinHash),
       phone: user.phone,
       firstName: user.firstName,
       lastName: user.lastName,
@@ -107,9 +118,10 @@ export class AuthService {
   }
 
   async login(email: string, password: string, sessionType: SessionType = SessionType.WEB, ip = "unknown", userAgent?: string) {
-    const identifier = email.trim().toLowerCase();
+    const rawIdentifier = email.trim();
+    const identifier = rawIdentifier.toLowerCase();
     await this.rateLimiter?.assertLoginAllowed(ip, identifier);
-    const user = await this.prisma.user.findFirst({ where: { OR: [{ normalizedEmail: identifier }, { username: identifier }] }, include: this.userInclude });
+    const user = await this.prisma.user.findFirst({ where: { OR: [{ normalizedEmail: identifier }, { username: identifier }, { employeeId: rawIdentifier }] }, include: this.userInclude });
     if (!user || !user.passwordHash || !(await this.passwords.verify(password, user.passwordHash))) {
       await this.rateLimiter?.recordLoginFailure(ip, identifier);
       await this.audit?.record({ action: "USER_LOGIN_FAILED", targetUserId: user?.id, ipAddress: ip, userAgent });
@@ -135,10 +147,166 @@ export class AuthService {
     }
     if (!this.platformAccessAllowed(user, sessionType)) await this.rejectPlatformAccess(user, sessionType, ip, userAgent);
 
+    if ((user.pinFailedAttempts ?? 0) > 0 || user.pinLockedUntil) {
+      await this.prisma.user.update({ where: { id: user.id }, data: { pinFailedAttempts: 0, pinLockedUntil: null } });
+    }
+
     const session = await this.createSession(user.id, sessionType);
     this.logger.log(JSON.stringify({ event: "login_success", userId: user.id, role: user.role, sessionType }));
     await this.audit?.record({ actorUserId: user.id, action: "USER_LOGIN_SUCCESS", metadata: { sessionType }, ipAddress: ip, userAgent });
     return { ...session, user: this.safeUser(user) };
+  }
+
+  private invalidPinCredentials(): never {
+    throw new UnauthorizedException({ code: "INVALID_PIN_CREDENTIALS", message: "Invalid employee ID or PIN" });
+  }
+
+  private assertPin(pin: string) {
+    if (!PIN_PATTERN.test(pin)) throw new BadRequestException({ code: "INVALID_PIN_FORMAT", message: PIN_POLICY_MESSAGE });
+  }
+
+  private assertPinPair(pin: string, confirmationPin: string) {
+    this.assertPin(pin);
+    this.assertPin(confirmationPin);
+    if (pin !== confirmationPin) throw new BadRequestException({ code: "PIN_MISMATCH", message: "PIN entries do not match" });
+  }
+
+  private mobileUserEligible(user: AuthUserSource | null | undefined) {
+    if (!user?.isActive || user.status !== UserStatus.ACTIVE) return false;
+    const authorization = this.authorizationFor(user);
+    return authorization.platforms.mobile && hasWorkspaceAccess(authorization);
+  }
+
+  private pinLocked(user: AuthUserSource, now = new Date()) {
+    return Boolean(user.pinLockedUntil && user.pinLockedUntil > now);
+  }
+
+  private pinLockError(): never {
+    throw new HttpException({ code: "PIN_LOCKED", message: "PIN login is temporarily locked. Try again later." }, HttpStatus.TOO_MANY_REQUESTS);
+  }
+
+  private async recordPinRateLimitFailure(ip: string, employeeId: string) {
+    try {
+      await this.rateLimiter?.recordLoginFailure(ip, employeeId);
+    } catch (error) {
+      // The per-account PIN lock is the user-facing PIN policy. If the shared
+      // IP/identifier bucket reaches its limit first, keep the same safe PIN
+      // response instead of leaking which limiter tripped.
+      if (error instanceof HttpException && error.getStatus() === 429) return;
+      throw error;
+    }
+  }
+
+  private async resetPinFailures(userId: string) {
+    await this.prisma.user.update({ where: { id: userId }, data: { pinFailedAttempts: 0, pinLockedUntil: null } });
+  }
+
+  private async recordPinFailure(initial: Pick<AuthUserSource, "id" | "pinFailedAttempts" | "pinLockedUntil">) {
+    let current = initial;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const now = new Date();
+      const previousAttempts = current.pinLockedUntil && current.pinLockedUntil <= now ? 0 : current.pinFailedAttempts ?? 0;
+      const nextAttempts = previousAttempts + 1;
+      const lockedUntil = nextAttempts >= PIN_MAX_ATTEMPTS ? new Date(now.getTime() + PIN_LOCK_DURATION_MS) : null;
+      const updated = await this.prisma.user.updateMany({
+        where: { id: current.id, pinFailedAttempts: current.pinFailedAttempts ?? 0, pinLockedUntil: current.pinLockedUntil ?? null },
+        data: { pinFailedAttempts: nextAttempts, pinLockedUntil: lockedUntil },
+      });
+      if (updated.count === 1) return { attempts: nextAttempts, lockedUntil };
+      const refreshed = await this.prisma.user.findUnique({ where: { id: current.id }, select: { id: true, pinFailedAttempts: true, pinLockedUntil: true } });
+      if (!refreshed) break;
+      current = refreshed;
+    }
+    return { attempts: PIN_MAX_ATTEMPTS, lockedUntil: new Date(Date.now() + PIN_LOCK_DURATION_MS) };
+  }
+
+  private mobileSessionResponse(session: { token: string; expiresAt: Date; refreshToken?: string; refreshExpiresAt?: Date }) {
+    return { accessToken: session.token, expiresAt: session.expiresAt, refreshToken: session.refreshToken, refreshExpiresAt: session.refreshExpiresAt };
+  }
+
+  async loginWithPin(employeeId: string, pin: string, ip = "unknown", userAgent?: string) {
+    this.assertPin(pin);
+    const normalizedEmployeeId = employeeId.trim();
+    await this.rateLimiter?.assertLoginAllowed(ip, normalizedEmployeeId);
+    const user = await this.prisma.user.findFirst({ where: { employeeId: normalizedEmployeeId }, include: this.userInclude });
+    if (!user || !this.mobileUserEligible(user) || !user.pinEnabled || !user.pinHash) {
+      await this.recordPinRateLimitFailure(ip, normalizedEmployeeId);
+      return this.invalidPinCredentials();
+    }
+    if (this.pinLocked(user)) return this.pinLockError();
+
+    if (!(await this.passwords.verify(pin, user.pinHash))) {
+      const failure = await this.recordPinFailure(user);
+      await this.recordPinRateLimitFailure(ip, normalizedEmployeeId);
+      await this.audit?.record({ action: "USER_LOGIN_FAILED", targetUserId: user.id, metadata: { reason: "INVALID_PIN" }, ipAddress: ip, userAgent });
+      if (failure.lockedUntil) return this.pinLockError();
+      throw new UnauthorizedException({ code: "INVALID_PIN", message: "Incorrect PIN", remainingAttempts: Math.max(0, PIN_MAX_ATTEMPTS - failure.attempts) });
+    }
+
+    await this.resetPinFailures(user.id);
+    const session = await this.createSession(user.id, SessionType.MOBILE);
+    this.logger.log(JSON.stringify({ event: "login_success", userId: user.id, role: user.role, sessionType: SessionType.MOBILE, method: "PIN" }));
+    await this.audit?.record({ actorUserId: user.id, action: "USER_LOGIN_SUCCESS", metadata: { sessionType: SessionType.MOBILE, method: "PIN" }, ipAddress: ip, userAgent });
+    return this.mobileSessionResponse(session);
+  }
+
+  private async authenticatedMobileUser(userId: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, include: this.userInclude });
+    if (!user || !this.mobileUserEligible(user)) throw new UnauthorizedException({ code: "ACCOUNT_SUSPENDED", message: "Account is unavailable" });
+    return user;
+  }
+
+  private async verifyPassword(user: AuthUserSource, password: string) {
+    if (!password || !user.passwordHash || !(await this.passwords.verify(password, user.passwordHash))) {
+      throw new UnauthorizedException({ code: "INVALID_CREDENTIALS", message: "Current password is incorrect" });
+    }
+  }
+
+  async setupPin(userId: string, pin: string, confirmationPin: string) {
+    this.assertPinPair(pin, confirmationPin);
+    const user = await this.authenticatedMobileUser(userId);
+    if (user.pinEnabled || user.pinHash) throw new ConflictException({ code: "PIN_ALREADY_CONFIGURED", message: "PIN is already configured" });
+    const pinHash = await this.passwords.hash(pin);
+    await this.prisma.user.update({ where: { id: user.id }, data: { pinHash, pinEnabled: true, pinFailedAttempts: 0, pinLockedUntil: null, pinUpdatedAt: new Date() } });
+    await this.audit?.record({ actorUserId: user.id, action: "PIN_ENABLED" });
+    return { success: true, pinEnabled: true };
+  }
+
+  async changePin(userId: string, currentPin: string | undefined, currentPassword: string | undefined, pin: string, confirmationPin: string) {
+    this.assertPinPair(pin, confirmationPin);
+    const hasCurrentPin = Boolean(currentPin);
+    const hasCurrentPassword = Boolean(currentPassword);
+    if (hasCurrentPin === hasCurrentPassword) throw new BadRequestException({ code: "PIN_VERIFICATION_REQUIRED", message: "Provide either the current PIN or password" });
+    const user = await this.authenticatedMobileUser(userId);
+    if (!user.pinEnabled || !user.pinHash) throw new ConflictException({ code: "PIN_NOT_CONFIGURED", message: "PIN is not configured" });
+    if (hasCurrentPin) {
+      this.assertPin(currentPin!);
+      if (!(await this.passwords.verify(currentPin!, user.pinHash))) throw new UnauthorizedException({ code: "INVALID_CREDENTIALS", message: "Current PIN is incorrect" });
+    } else {
+      await this.verifyPassword(user, currentPassword!);
+    }
+    const pinHash = await this.passwords.hash(pin);
+    await this.prisma.user.update({ where: { id: user.id }, data: { pinHash, pinEnabled: true, pinFailedAttempts: 0, pinLockedUntil: null, pinUpdatedAt: new Date() } });
+    await this.audit?.record({ actorUserId: user.id, action: "PIN_CHANGED" });
+    return { success: true, pinEnabled: true };
+  }
+
+  async resetPin(userId: string, currentPassword: string, pin: string, confirmationPin: string) {
+    this.assertPinPair(pin, confirmationPin);
+    const user = await this.authenticatedMobileUser(userId);
+    await this.verifyPassword(user, currentPassword);
+    const pinHash = await this.passwords.hash(pin);
+    await this.prisma.user.update({ where: { id: user.id }, data: { pinHash, pinEnabled: true, pinFailedAttempts: 0, pinLockedUntil: null, pinUpdatedAt: new Date() } });
+    await this.audit?.record({ actorUserId: user.id, action: "PIN_RESET" });
+    return { success: true, pinEnabled: true };
+  }
+
+  async disablePin(userId: string, password: string) {
+    const user = await this.authenticatedMobileUser(userId);
+    await this.verifyPassword(user, password);
+    await this.prisma.user.update({ where: { id: user.id }, data: { pinHash: null, pinEnabled: false, pinFailedAttempts: 0, pinLockedUntil: null, pinUpdatedAt: new Date() } });
+    await this.audit?.record({ actorUserId: user.id, action: "PIN_DISABLED" });
+    return { success: true, pinEnabled: false };
   }
 
   async authenticate(token?: string, expectedSessionType?: SessionType) {

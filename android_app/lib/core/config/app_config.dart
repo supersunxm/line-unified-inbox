@@ -4,12 +4,22 @@ class AppConfig {
   const AppConfig._();
 
   static const apiBaseUrl = String.fromEnvironment('API_BASE_URL');
-  static const appEnvironment = String.fromEnvironment('APP_ENV', defaultValue: 'development');
+  static const appEnvironment =
+      String.fromEnvironment('APP_ENV', defaultValue: 'development');
+  static const pinLoginEnabled =
+      bool.fromEnvironment('PIN_LOGIN_ENABLED', defaultValue: true);
+  static const pinEnrollmentRequired =
+      bool.fromEnvironment('PIN_ENROLLMENT_REQUIRED', defaultValue: false);
 
   static String get resolvedApiBaseUrl {
-    if (apiBaseUrl.isNotEmpty) return apiBaseUrl;
-    if (!kReleaseMode && appEnvironment == 'development') return 'http://10.0.2.2:3001';
-    throw const AppConfigException('API_BASE_URL is required for production builds. Pass --dart-define=API_BASE_URL=https://your-backend.example');
+    if (apiBaseUrl.isNotEmpty) {
+      return apiBaseUrl;
+    }
+    if (!kReleaseMode && appEnvironment == 'development') {
+      return 'http://10.0.2.2:3001';
+    }
+    throw const AppConfigException(
+        'API_BASE_URL is required for production builds. Pass --dart-define=API_BASE_URL=https://your-backend.example');
   }
 
   static Uri uri(String path, [Map<String, String>? query]) {
@@ -21,5 +31,6 @@ class AppConfig {
 class AppConfigException implements Exception {
   const AppConfigException(this.message);
   final String message;
-  @override String toString() => message;
+  @override
+  String toString() => message;
 }

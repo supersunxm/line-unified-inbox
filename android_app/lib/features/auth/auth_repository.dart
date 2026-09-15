@@ -27,6 +27,45 @@ class AuthRepository {
     await _saveCredentials(result);
   }
 
+  Future<void> loginWithPin(String employeeId, String pin) async {
+    final result = await _api.post('/auth/mobile/pin/login',
+        body: {'employeeId': employeeId.trim(), 'pin': pin},
+        authenticated: false);
+    await _saveCredentials(result);
+  }
+
+  Future<void> setupPin(String pin, String confirmationPin) async {
+    await _api.post('/auth/mobile/pin/setup',
+        body: {'pin': pin, 'confirmationPin': confirmationPin});
+  }
+
+  Future<void> changePin({
+    String? currentPin,
+    String? currentPassword,
+    required String pin,
+    required String confirmationPin,
+  }) async {
+    await _api.post('/auth/mobile/pin/change', body: {
+      if (currentPin != null) 'currentPin': currentPin,
+      if (currentPassword != null) 'currentPassword': currentPassword,
+      'pin': pin,
+      'confirmationPin': confirmationPin,
+    });
+  }
+
+  Future<void> resetPin(
+      String password, String pin, String confirmationPin) async {
+    await _api.post('/auth/mobile/pin/reset', body: {
+      'currentPassword': password,
+      'pin': pin,
+      'confirmationPin': confirmationPin,
+    });
+  }
+
+  Future<void> disablePin(String password) async {
+    await _api.post('/auth/mobile/pin/disable', body: {'password': password});
+  }
+
   Future<void> _saveCredentials(Map<String, dynamic> result) =>
       _tokens.saveCredentials(MobileCredentials(
         accessToken: result['accessToken'] as String,

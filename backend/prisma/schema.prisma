@@ -289,6 +289,11 @@ model User {
   normalizedEmail               String                       @unique
   displayName                   String
   passwordHash                  String?
+  pinHash                       String?
+  pinEnabled                    Boolean                      @default(false)
+  pinFailedAttempts             Int                          @default(0)
+  pinLockedUntil                DateTime?
+  pinUpdatedAt                  DateTime?
   mustChangePassword            Boolean                      @default(false)
   role                          UserRole                     @default(VIEWER)
   status                        UserStatus                   @default(ACTIVE)

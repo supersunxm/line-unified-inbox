@@ -630,6 +630,79 @@ class AppLocalizationsTh extends AppLocalizations {
   String get password => 'รหัสผ่าน';
 
   @override
+  String get passwordRequired => 'กรุณาระบุรหัสผ่าน';
+
+  @override
+  String get employeeIdOrUsername => 'รหัสพนักงาน / ชื่อผู้ใช้';
+
+  @override
+  String get signInWithPin => 'เข้าสู่ระบบด้วย PIN';
+
+  @override
+  String get signInWithPassword => 'เข้าสู่ระบบด้วยรหัสผ่าน';
+
+  @override
+  String get backToLoginMethods => 'กลับไปเลือกวิธีเข้าสู่ระบบ';
+
+  @override
+  String get or => 'หรือ';
+
+  @override
+  String get pinSetupTitle => 'ตั้ง PIN 6 หลัก';
+
+  @override
+  String get pinSetupSubtitle => 'ใช้สำหรับเข้าสู่ระบบครั้งถัดไป';
+
+  @override
+  String get pinConfirmTitle => 'ยืนยัน PIN อีกครั้ง';
+
+  @override
+  String get pinConfirmSubtitle => 'กรอก PIN เดิมซ้ำเพื่อยืนยัน';
+
+  @override
+  String get pinSetupStepOne => 'ขั้นตอน 1 จาก 2';
+
+  @override
+  String get pinSetupStepTwo => 'ขั้นตอน 2 จาก 2';
+
+  @override
+  String get pinSetupLater => 'ไว้ภายหลัง';
+
+  @override
+  String get pinLoginTitle => 'กรอก PIN 6 หลัก';
+
+  @override
+  String get pinLoginSubtitle => 'เข้าสู่ระบบอย่างรวดเร็ว';
+
+  @override
+  String get forgotPin => 'ลืม PIN?';
+
+  @override
+  String get pinPasswordFallback =>
+      'หากยังไม่ได้ตั้ง PIN หรือจำไม่ได้ ให้เข้าสู่ระบบด้วยรหัสผ่าน';
+
+  @override
+  String get incorrectPin => 'PIN ไม่ถูกต้อง';
+
+  @override
+  String get pinLocked =>
+      'การเข้าสู่ระบบด้วย PIN ถูกล็อกชั่วคราว กรุณาลองใหม่ภายหลัง';
+
+  @override
+  String get pinUnableToSave => 'บันทึก PIN ไม่ได้ กรุณาลองอีกครั้ง';
+
+  @override
+  String get pinMismatch => 'PIN ไม่ตรงกัน';
+
+  @override
+  String get deletePinDigit => 'ลบตัวเลข PIN ล่าสุด';
+
+  @override
+  String pinDotsEntered(int count) {
+    return 'กรอก PIN แล้ว $count จาก 6 หลัก';
+  }
+
+  @override
   String get createBmAccount => 'สมัครสมาชิก';
 
   @override
@@ -741,6 +814,48 @@ class AppLocalizationsTh extends AppLocalizations {
 
   @override
   String get accountSecurity => 'บัญชีและความปลอดภัย';
+
+  @override
+  String get loginSecurity => 'ความปลอดภัยในการเข้าสู่ระบบ';
+
+  @override
+  String get pinSixDigits => 'PIN 6 หลัก';
+
+  @override
+  String get pinStatusEnabled => 'เปิดใช้งาน';
+
+  @override
+  String get pinStatusDisabled => 'ยังไม่ได้ตั้งค่า';
+
+  @override
+  String get setupPin => 'ตั้ง PIN';
+
+  @override
+  String get changePin => 'เปลี่ยน PIN';
+
+  @override
+  String get resetPin => 'รีเซ็ต PIN / ลืม PIN';
+
+  @override
+  String get disablePin => 'ปิดการใช้ PIN';
+
+  @override
+  String get verifyPinOrPassword => 'ยืนยันด้วย PIN หรือรหัสผ่าน';
+
+  @override
+  String get currentPin => 'PIN ปัจจุบัน';
+
+  @override
+  String get verifyPassword => 'ยืนยันรหัสผ่าน';
+
+  @override
+  String get verificationRequired => 'กรุณาระบุข้อมูลยืนยัน';
+
+  @override
+  String get continueLabel => 'ดำเนินการต่อ';
+
+  @override
+  String get pinDisabledSuccess => 'ปิดการเข้าสู่ระบบด้วย PIN แล้ว';
 
   @override
   String get managedByOrganization => 'จัดการโดยองค์กรของคุณ';

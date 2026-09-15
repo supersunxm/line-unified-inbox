@@ -634,6 +634,78 @@ class AppLocalizationsEn extends AppLocalizations {
   String get password => 'Password';
 
   @override
+  String get passwordRequired => 'Password is required.';
+
+  @override
+  String get employeeIdOrUsername => 'Employee ID / username';
+
+  @override
+  String get signInWithPin => 'Sign in with PIN';
+
+  @override
+  String get signInWithPassword => 'Sign in with password';
+
+  @override
+  String get backToLoginMethods => 'Back to sign-in methods';
+
+  @override
+  String get or => 'or';
+
+  @override
+  String get pinSetupTitle => 'Set 6-digit PIN';
+
+  @override
+  String get pinSetupSubtitle => 'Use it for your next sign-in';
+
+  @override
+  String get pinConfirmTitle => 'Confirm your PIN';
+
+  @override
+  String get pinConfirmSubtitle => 'Enter the same PIN again';
+
+  @override
+  String get pinSetupStepOne => 'Step 1 of 2';
+
+  @override
+  String get pinSetupStepTwo => 'Step 2 of 2';
+
+  @override
+  String get pinSetupLater => 'Later';
+
+  @override
+  String get pinLoginTitle => 'Enter 6-digit PIN';
+
+  @override
+  String get pinLoginSubtitle => 'Sign in quickly';
+
+  @override
+  String get forgotPin => 'Forgot PIN?';
+
+  @override
+  String get pinPasswordFallback =>
+      'No PIN yet or forgot it? Sign in with your password.';
+
+  @override
+  String get incorrectPin => 'Incorrect PIN.';
+
+  @override
+  String get pinLocked => 'PIN sign-in is temporarily locked. Try again later.';
+
+  @override
+  String get pinUnableToSave => 'Unable to save PIN. Please try again.';
+
+  @override
+  String get pinMismatch => 'PINs do not match.';
+
+  @override
+  String get deletePinDigit => 'Delete last PIN digit';
+
+  @override
+  String pinDotsEntered(int count) {
+    return '$count of 6 PIN digits entered';
+  }
+
+  @override
   String get createBmAccount => 'Create account';
 
   @override
@@ -745,6 +817,48 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get accountSecurity => 'Account & Security';
+
+  @override
+  String get loginSecurity => 'Sign-in security';
+
+  @override
+  String get pinSixDigits => '6-digit PIN';
+
+  @override
+  String get pinStatusEnabled => 'Enabled';
+
+  @override
+  String get pinStatusDisabled => 'Not set up';
+
+  @override
+  String get setupPin => 'Set up PIN';
+
+  @override
+  String get changePin => 'Change PIN';
+
+  @override
+  String get resetPin => 'Reset PIN / Forgot PIN';
+
+  @override
+  String get disablePin => 'Turn off PIN';
+
+  @override
+  String get verifyPinOrPassword => 'Verify with PIN or password';
+
+  @override
+  String get currentPin => 'Current PIN';
+
+  @override
+  String get verifyPassword => 'Verify password';
+
+  @override
+  String get verificationRequired => 'Enter your verification value.';
+
+  @override
+  String get continueLabel => 'Continue';
+
+  @override
+  String get pinDisabledSuccess => 'PIN sign-in is now disabled.';
 
   @override
   String get managedByOrganization => 'Managed by your organization';

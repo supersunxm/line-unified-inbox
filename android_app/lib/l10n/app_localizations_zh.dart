@@ -626,6 +626,77 @@ class AppLocalizationsZh extends AppLocalizations {
   String get password => '密码';
 
   @override
+  String get passwordRequired => '请输入密码。';
+
+  @override
+  String get employeeIdOrUsername => '员工编号 / 用户名';
+
+  @override
+  String get signInWithPin => '使用 PIN 登录';
+
+  @override
+  String get signInWithPassword => '使用密码登录';
+
+  @override
+  String get backToLoginMethods => '返回登录方式';
+
+  @override
+  String get or => '或';
+
+  @override
+  String get pinSetupTitle => '设置 6 位 PIN';
+
+  @override
+  String get pinSetupSubtitle => '用于下次登录';
+
+  @override
+  String get pinConfirmTitle => '再次确认 PIN';
+
+  @override
+  String get pinConfirmSubtitle => '再次输入相同 PIN';
+
+  @override
+  String get pinSetupStepOne => '第 1 步，共 2 步';
+
+  @override
+  String get pinSetupStepTwo => '第 2 步，共 2 步';
+
+  @override
+  String get pinSetupLater => '稍后';
+
+  @override
+  String get pinLoginTitle => '输入 6 位 PIN';
+
+  @override
+  String get pinLoginSubtitle => '快速登录';
+
+  @override
+  String get forgotPin => '忘记 PIN？';
+
+  @override
+  String get pinPasswordFallback => '尚未设置或忘记 PIN？请使用密码登录。';
+
+  @override
+  String get incorrectPin => 'PIN 不正确。';
+
+  @override
+  String get pinLocked => 'PIN 登录暂时锁定，请稍后再试。';
+
+  @override
+  String get pinUnableToSave => '无法保存 PIN，请重试。';
+
+  @override
+  String get pinMismatch => 'PIN 不一致。';
+
+  @override
+  String get deletePinDigit => '删除最后一位 PIN';
+
+  @override
+  String pinDotsEntered(int count) {
+    return '已输入 $count/6 位 PIN';
+  }
+
+  @override
   String get createBmAccount => '注册账号';
 
   @override
@@ -736,6 +807,48 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get accountSecurity => '账号与安全';
+
+  @override
+  String get loginSecurity => '登录安全';
+
+  @override
+  String get pinSixDigits => '6 位 PIN';
+
+  @override
+  String get pinStatusEnabled => '已启用';
+
+  @override
+  String get pinStatusDisabled => '尚未设置';
+
+  @override
+  String get setupPin => '设置 PIN';
+
+  @override
+  String get changePin => '更改 PIN';
+
+  @override
+  String get resetPin => '重置 PIN / 忘记 PIN';
+
+  @override
+  String get disablePin => '关闭 PIN';
+
+  @override
+  String get verifyPinOrPassword => '使用 PIN 或密码验证';
+
+  @override
+  String get currentPin => '当前 PIN';
+
+  @override
+  String get verifyPassword => '验证密码';
+
+  @override
+  String get verificationRequired => '请输入验证信息。';
+
+  @override
+  String get continueLabel => '继续';
+
+  @override
+  String get pinDisabledSuccess => 'PIN 登录已关闭。';
 
   @override
   String get managedByOrganization => '由您的组织管理';
@@ -1668,6 +1781,77 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
   String get password => '密码';
 
   @override
+  String get passwordRequired => '请输入密码。';
+
+  @override
+  String get employeeIdOrUsername => '员工编号 / 用户名';
+
+  @override
+  String get signInWithPin => '使用 PIN 登录';
+
+  @override
+  String get signInWithPassword => '使用密码登录';
+
+  @override
+  String get backToLoginMethods => '返回登录方式';
+
+  @override
+  String get or => '或';
+
+  @override
+  String get pinSetupTitle => '设置 6 位 PIN';
+
+  @override
+  String get pinSetupSubtitle => '用于下次登录';
+
+  @override
+  String get pinConfirmTitle => '再次确认 PIN';
+
+  @override
+  String get pinConfirmSubtitle => '再次输入相同 PIN';
+
+  @override
+  String get pinSetupStepOne => '第 1 步，共 2 步';
+
+  @override
+  String get pinSetupStepTwo => '第 2 步，共 2 步';
+
+  @override
+  String get pinSetupLater => '稍后';
+
+  @override
+  String get pinLoginTitle => '输入 6 位 PIN';
+
+  @override
+  String get pinLoginSubtitle => '快速登录';
+
+  @override
+  String get forgotPin => '忘记 PIN？';
+
+  @override
+  String get pinPasswordFallback => '尚未设置或忘记 PIN？请使用密码登录。';
+
+  @override
+  String get incorrectPin => 'PIN 不正确。';
+
+  @override
+  String get pinLocked => 'PIN 登录暂时锁定，请稍后再试。';
+
+  @override
+  String get pinUnableToSave => '无法保存 PIN，请重试。';
+
+  @override
+  String get pinMismatch => 'PIN 不一致。';
+
+  @override
+  String get deletePinDigit => '删除最后一位 PIN';
+
+  @override
+  String pinDotsEntered(int count) {
+    return '已输入 $count/6 位 PIN';
+  }
+
+  @override
   String get createBmAccount => '注册账号';
 
   @override
@@ -1778,6 +1962,48 @@ class AppLocalizationsZhCn extends AppLocalizationsZh {
 
   @override
   String get accountSecurity => '账号与安全';
+
+  @override
+  String get loginSecurity => '登录安全';
+
+  @override
+  String get pinSixDigits => '6 位 PIN';
+
+  @override
+  String get pinStatusEnabled => '已启用';
+
+  @override
+  String get pinStatusDisabled => '尚未设置';
+
+  @override
+  String get setupPin => '设置 PIN';
+
+  @override
+  String get changePin => '更改 PIN';
+
+  @override
+  String get resetPin => '重置 PIN / 忘记 PIN';
+
+  @override
+  String get disablePin => '关闭 PIN';
+
+  @override
+  String get verifyPinOrPassword => '使用 PIN 或密码验证';
+
+  @override
+  String get currentPin => '当前 PIN';
+
+  @override
+  String get verifyPassword => '验证密码';
+
+  @override
+  String get verificationRequired => '请输入验证信息。';
+
+  @override
+  String get continueLabel => '继续';
+
+  @override
+  String get pinDisabledSuccess => 'PIN 登录已关闭。';
 
   @override
   String get managedByOrganization => '由您的组织管理';

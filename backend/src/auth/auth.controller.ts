@@ -6,7 +6,7 @@ import { Public } from "./auth.decorators";
 import { AuthRequest } from "./auth.guard";
 import { SetupService } from "./setup.service";
 import { sessionCookieOptions } from "./session-cookie";
-import { MobilePasswordLoginDto, MobileSendOtpDto, MobileVerifyOtpDto } from "./mobile-auth.dto";
+import { MobilePasswordLoginDto, MobilePinChangeDto, MobilePinDisableDto, MobilePinLoginDto, MobilePinResetDto, MobilePinSetupDto, MobileSendOtpDto, MobileVerifyOtpDto } from "./mobile-auth.dto";
 import { SessionType } from "@prisma/client";
 import { MobileAuthService } from "./mobile-auth.service";
 import { PASSWORD_POLICY_MESSAGE, PASSWORD_POLICY_PATTERN } from "./password-policy";
@@ -37,6 +37,21 @@ export class AuthController {
   @Public() @Post("mobile/login") async mobileLogin(@Body() dto: MobilePasswordLoginDto, @Req() request: Request) {
     const result = await this.auth.login(dto.email, dto.password, SessionType.MOBILE, request.ip, request.get("user-agent"));
     return { accessToken: result.token, expiresAt: result.expiresAt, refreshToken: result.refreshToken, refreshExpiresAt: result.refreshExpiresAt, mustChangePassword: Boolean(result.user.mustChangePassword) };
+  }
+  @Public() @Post("mobile/pin/login") async mobilePinLogin(@Body() dto: MobilePinLoginDto, @Req() request: Request) {
+    return this.auth.loginWithPin(dto.employeeId, dto.pin, request.ip, request.get("user-agent"));
+  }
+  @Post("mobile/pin/setup") setupPin(@Body() dto: MobilePinSetupDto, @Req() request: AuthRequest) {
+    return this.auth.setupPin(request.user!.id, dto.pin, dto.confirmationPin);
+  }
+  @Post("mobile/pin/change") changePin(@Body() dto: MobilePinChangeDto, @Req() request: AuthRequest) {
+    return this.auth.changePin(request.user!.id, dto.currentPin, dto.currentPassword, dto.pin, dto.confirmationPin);
+  }
+  @Post("mobile/pin/reset") resetPin(@Body() dto: MobilePinResetDto, @Req() request: AuthRequest) {
+    return this.auth.resetPin(request.user!.id, dto.currentPassword, dto.pin, dto.confirmationPin);
+  }
+  @Post("mobile/pin/disable") disablePin(@Body() dto: MobilePinDisableDto, @Req() request: AuthRequest) {
+    return this.auth.disablePin(request.user!.id, dto.password);
   }
   @Public() @Post("mobile/send-otp") mobileSendOtp(@Body() dto: MobileSendOtpDto) { return this.mobile.sendOtp(dto.phone); }
   @Public() @Post("mobile/verify-otp") mobileVerifyOtp(@Body() dto: MobileVerifyOtpDto) { return this.mobile.verifyOtp(dto.challengeId, dto.otp); }

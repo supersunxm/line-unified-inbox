@@ -4907,3 +4907,27 @@ Verification passed: frontend TypeScript, zero-warning ESLint, 173/173 tests, an
 - Remaining follow-up debt is intentionally unchanged: request cancellation and optimization of the remaining shared datasets. No P1 production deployment is authorized by this task.
 - Next action: report the local before/after evidence and leave the working tree uncommitted for user review.
 - No Customer Voice rules, Customer Voice v4, schema, migrations, workers, production hosts/databases, production data, or write paths were changed or touched. Push and deployment remain intentionally not performed.
+
+# Current task: Flutter 6-digit PIN authentication — 2026-09-15
+
+- Added additive User PIN fields and a backwards-compatible Prisma migration. Existing employees retain password login; migrated users start with no PIN and no password changes.
+- Reused the existing scrypt password-hashing mechanism, mobile session/token issuance, authorization checks, and authenticated Flutter session restore. PIN values and hashes are never returned or logged.
+- Added employee-ID PIN login, two-step enrollment, forgot/reset/change/disable management, backend five-failure/15-minute PIN lockout, existing backend rate limiting, and Flutter PIN keypad/dot components with localized states and loading protection.
+- Verification completed locally: focused backend PIN/controller tests **14/14**, focused Flutter PIN tests **8/8**, full Flutter suite **276/276**, `flutter analyze`, changed-auth lint, backend build, Prisma validation, and Android debug/release-mode compilation all passed. The full backend suite recorded **1959/1965 passed**; the six failures are the unchanged known Line Chat baseline failures (two missing `vitest` dependencies, one health-baseline assertion, two health-reconciliation fixture errors, and one textarea-metadata assertion).
+- Security review confirmed PIN hashes/values are not returned or logged, public PIN login returns a generic failure for missing/ineligible/unconfigured accounts, PIN lockout preserves password access, and the additive migration leaves existing passwords unchanged. No deployment, production data change, or commit was performed. Unrelated Store 360/P1 work and the untracked `docs/executive-guide/` directory remain outside this feature scope.
+- Current Android metadata remains package `click.lineoppo.chat`, version `1.1.28+48`. Local debug APK and intentionally unsigned release-mode APK compile successfully; production signing remains CI-only because no local release key is present. Next action: user review and explicit authorization for the normal migration/deployment/release process after the known backend baseline failures are handled.
+
+## PIN authentication backend release waiver — 2026-09-15
+
+The six failures in the full backend suite were reproduced individually in both the PIN worktree and a clean archive of `HEAD` (`c60d26f3d5f363c7dffb87b80ca24e023c1f915a`). No PIN or authentication source change is involved in any failing stack.
+
+| Test | Classification | Failure | Release rationale |
+| --- | --- | --- | --- |
+| `line-chat-composer-fallback.regression.spec.ts` | ENVIRONMENT/DEPENDENCY FAILURE | The spec imports `vitest`, which is not installed. | LINE Chat test dependency gap; unrelated to PIN. |
+| `line-chat-manager-image-relay-worker.spec.ts` | ENVIRONMENT/DEPENDENCY FAILURE | The spec imports `vitest`, which is not installed. | LINE Chat test dependency gap; unrelated to PIN. |
+| `LineChat health baseline is created once and historical counts reset to zero` | PRE-EXISTING BASELINE | Fixture observes historical `success: 238`, `total: 238` instead of zero. | Existing health-baseline fixture/data issue; unrelated to PIN. |
+| `health reconciliation hides stale pending predecessors when a newer job exists` | PRE-EXISTING BASELINE | Test fixture does not provide `findFirst` for the reset-at lookup. | Existing reconciliation fixture issue; unrelated to PIN. |
+| `health reconciliation preserves a latest mapped pending job as actionable` | PRE-EXISTING BASELINE | Test fixture does not provide `findFirst` for the reset-at lookup. | Existing reconciliation fixture issue; unrelated to PIN. |
+| `all phase2 manager layouts prefer the same sole textarea primitive as Central World` | PRE-EXISTING BASELINE | Verification expects `metadata.disabled`, absent from the current helper source. | Existing manager-layout assertion mismatch; unrelated to PIN. |
+
+Waiver scope: focused PIN/auth tests pass **26/26**, focused Flutter PIN tests pass **8/8**, and the full Flutter suite passes **276/276**. This waiver records why the six known unrelated failures do not indicate a PIN regression; it does not claim the full backend suite is green.

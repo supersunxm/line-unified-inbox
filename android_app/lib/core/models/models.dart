@@ -145,6 +145,7 @@ class CurrentUser {
       this.employeeId,
       this.phone,
       this.position,
+      this.pinEnabled = false,
       this.mustChangePassword = false});
   final String id;
   final String? email;
@@ -156,6 +157,7 @@ class CurrentUser {
   final String? employeeId;
   final String? phone;
   final String? position;
+  final bool pinEnabled;
   final bool mustChangePassword;
   factory CurrentUser.fromJson(Map<String, dynamic> json) {
     final profile =
@@ -178,6 +180,7 @@ class CurrentUser {
             profile['employeeId'] as String? ?? json['employeeId'] as String?,
         phone: profile['phone'] as String?,
         position: profile['position'] as String?,
+        pinEnabled: json['pinEnabled'] as bool? ?? false,
         mustChangePassword: json['mustChangePassword'] as bool? ?? false);
   }
 }

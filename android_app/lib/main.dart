@@ -12,9 +12,11 @@ import 'core/theme/app_scroll_behavior.dart';
 import 'core/widgets/error_state.dart';
 import 'core/services/app_update_service.dart';
 import 'core/services/startup_restore_service.dart';
+import 'core/config/app_config.dart';
 import 'features/auth/auth_repository.dart';
 import 'features/auth/change_password_page.dart';
 import 'features/auth/login_page.dart';
+import 'features/auth/pin_setup_page.dart';
 import 'features/auth/registration_page.dart';
 import 'features/auth/pending_approval_page.dart';
 import 'features/auth/waiting_approval_page.dart';
@@ -58,6 +60,7 @@ class _LineOaAppState extends State<LineOaApp> with WidgetsBindingObserver {
   bool _loading = true;
   bool _loggingOut = false;
   bool _restoreDeferred = false;
+  String? _pinEnrollmentDismissedUserId;
   Future<void>? _restoreInFlight;
   String? _lastAutomaticUpdateCheckDate;
   static const _nonCriticalStartupTimeout = Duration(seconds: 15);
@@ -194,6 +197,9 @@ class _LineOaAppState extends State<LineOaApp> with WidgetsBindingObserver {
     setState(() {
       _user = result.user;
       _restoreDeferred = result.shouldShowRetry;
+      if (result.user?.id != _pinEnrollmentDismissedUserId) {
+        _pinEnrollmentDismissedUserId = null;
+      }
     });
     if (result.isAuthenticated && _hasMainWorkspace(result.user!)) {
       _startPostNavigationServices();
@@ -269,6 +275,7 @@ class _LineOaAppState extends State<LineOaApp> with WidgetsBindingObserver {
         _restoreDeferred = false;
         _registering = false;
         _pendingApproval = false;
+        _pinEnrollmentDismissedUserId = null;
       });
     }
   }
@@ -296,6 +303,7 @@ class _LineOaAppState extends State<LineOaApp> with WidgetsBindingObserver {
             _user = null;
             _registering = false;
             _pendingApproval = false;
+            _pinEnrollmentDismissedUserId = null;
           });
         }
       }
@@ -362,6 +370,18 @@ class _LineOaAppState extends State<LineOaApp> with WidgetsBindingObserver {
         auth: _auth,
         onChanged: _finishLogin,
         onLogout: _logout,
+      );
+    }
+    if (AppConfig.pinLoginEnabled &&
+        user.employeeId?.trim().isNotEmpty == true &&
+        !user.pinEnabled &&
+        _pinEnrollmentDismissedUserId != user.id) {
+      return PinSetupPage(
+        employeeId: user.employeeId,
+        submit: _auth.setupPin,
+        onCompleted: _finishLogin,
+        allowLater: !AppConfig.pinEnrollmentRequired,
+        onLater: () => setState(() => _pinEnrollmentDismissedUserId = user.id),
       );
     }
     final hasWorkspace = user.canAccessHqWorkspace ||

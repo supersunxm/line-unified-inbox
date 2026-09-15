@@ -1307,6 +1307,144 @@ abstract class AppLocalizations {
   /// **'Password'**
   String get password;
 
+  /// No description provided for @passwordRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Password is required.'**
+  String get passwordRequired;
+
+  /// No description provided for @employeeIdOrUsername.
+  ///
+  /// In en, this message translates to:
+  /// **'Employee ID / username'**
+  String get employeeIdOrUsername;
+
+  /// No description provided for @signInWithPin.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in with PIN'**
+  String get signInWithPin;
+
+  /// No description provided for @signInWithPassword.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in with password'**
+  String get signInWithPassword;
+
+  /// No description provided for @backToLoginMethods.
+  ///
+  /// In en, this message translates to:
+  /// **'Back to sign-in methods'**
+  String get backToLoginMethods;
+
+  /// No description provided for @or.
+  ///
+  /// In en, this message translates to:
+  /// **'or'**
+  String get or;
+
+  /// No description provided for @pinSetupTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Set 6-digit PIN'**
+  String get pinSetupTitle;
+
+  /// No description provided for @pinSetupSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Use it for your next sign-in'**
+  String get pinSetupSubtitle;
+
+  /// No description provided for @pinConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm your PIN'**
+  String get pinConfirmTitle;
+
+  /// No description provided for @pinConfirmSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the same PIN again'**
+  String get pinConfirmSubtitle;
+
+  /// No description provided for @pinSetupStepOne.
+  ///
+  /// In en, this message translates to:
+  /// **'Step 1 of 2'**
+  String get pinSetupStepOne;
+
+  /// No description provided for @pinSetupStepTwo.
+  ///
+  /// In en, this message translates to:
+  /// **'Step 2 of 2'**
+  String get pinSetupStepTwo;
+
+  /// No description provided for @pinSetupLater.
+  ///
+  /// In en, this message translates to:
+  /// **'Later'**
+  String get pinSetupLater;
+
+  /// No description provided for @pinLoginTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter 6-digit PIN'**
+  String get pinLoginTitle;
+
+  /// No description provided for @pinLoginSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in quickly'**
+  String get pinLoginSubtitle;
+
+  /// No description provided for @forgotPin.
+  ///
+  /// In en, this message translates to:
+  /// **'Forgot PIN?'**
+  String get forgotPin;
+
+  /// No description provided for @pinPasswordFallback.
+  ///
+  /// In en, this message translates to:
+  /// **'No PIN yet or forgot it? Sign in with your password.'**
+  String get pinPasswordFallback;
+
+  /// No description provided for @incorrectPin.
+  ///
+  /// In en, this message translates to:
+  /// **'Incorrect PIN.'**
+  String get incorrectPin;
+
+  /// No description provided for @pinLocked.
+  ///
+  /// In en, this message translates to:
+  /// **'PIN sign-in is temporarily locked. Try again later.'**
+  String get pinLocked;
+
+  /// No description provided for @pinUnableToSave.
+  ///
+  /// In en, this message translates to:
+  /// **'Unable to save PIN. Please try again.'**
+  String get pinUnableToSave;
+
+  /// No description provided for @pinMismatch.
+  ///
+  /// In en, this message translates to:
+  /// **'PINs do not match.'**
+  String get pinMismatch;
+
+  /// No description provided for @deletePinDigit.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete last PIN digit'**
+  String get deletePinDigit;
+
+  /// No description provided for @pinDotsEntered.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} of 6 PIN digits entered'**
+  String pinDotsEntered(int count);
+
   /// No description provided for @createBmAccount.
   ///
   /// In en, this message translates to:
@@ -1522,6 +1660,90 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Account & Security'**
   String get accountSecurity;
+
+  /// No description provided for @loginSecurity.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign-in security'**
+  String get loginSecurity;
+
+  /// No description provided for @pinSixDigits.
+  ///
+  /// In en, this message translates to:
+  /// **'6-digit PIN'**
+  String get pinSixDigits;
+
+  /// No description provided for @pinStatusEnabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Enabled'**
+  String get pinStatusEnabled;
+
+  /// No description provided for @pinStatusDisabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Not set up'**
+  String get pinStatusDisabled;
+
+  /// No description provided for @setupPin.
+  ///
+  /// In en, this message translates to:
+  /// **'Set up PIN'**
+  String get setupPin;
+
+  /// No description provided for @changePin.
+  ///
+  /// In en, this message translates to:
+  /// **'Change PIN'**
+  String get changePin;
+
+  /// No description provided for @resetPin.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset PIN / Forgot PIN'**
+  String get resetPin;
+
+  /// No description provided for @disablePin.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn off PIN'**
+  String get disablePin;
+
+  /// No description provided for @verifyPinOrPassword.
+  ///
+  /// In en, this message translates to:
+  /// **'Verify with PIN or password'**
+  String get verifyPinOrPassword;
+
+  /// No description provided for @currentPin.
+  ///
+  /// In en, this message translates to:
+  /// **'Current PIN'**
+  String get currentPin;
+
+  /// No description provided for @verifyPassword.
+  ///
+  /// In en, this message translates to:
+  /// **'Verify password'**
+  String get verifyPassword;
+
+  /// No description provided for @verificationRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter your verification value.'**
+  String get verificationRequired;
+
+  /// No description provided for @continueLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue'**
+  String get continueLabel;
+
+  /// No description provided for @pinDisabledSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'PIN sign-in is now disabled.'**
+  String get pinDisabledSuccess;
 
   /// No description provided for @managedByOrganization.
   ///
