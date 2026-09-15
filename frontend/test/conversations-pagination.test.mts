@@ -197,7 +197,7 @@ test("Pagination architecture in page.tsx enforces layout height lock, filter re
   assert.match(pageCode, /reconcileConversationPage\(response\.total, query\.page, query\.pageSize\)/);
 
   // API conversations method supports query parameters
-  assert.match(apiCode, /conversations: \(params\?: Record<string, string \| number \| boolean \| undefined>\) =>/);
+  assert.match(apiCode, /conversations: \(params\?: Record<string, string \| number \| boolean \| undefined>, options\?: ApiRequestOptions\) =>/);
 
   // Pagination Footer Accessibility & Page Size Options (10, 20, 30, 40)
   assert.match(footerCode, /<option value=\{10\}>10<\/option>\s*<option value=\{20\}>20<\/option>\s*<option value=\{30\}>30<\/option>\s*<option value=\{40\}>40<\/option>/);

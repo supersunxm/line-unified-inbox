@@ -13,9 +13,9 @@ const typeCode = readFileSync(new URL("../src/types/api.ts", import.meta.url), "
 test("Store 360 loads Customer Voice with the selected period and previous comparison", () => {
   assert.match(apiCode, /storeInsightsCustomerVoice:/);
   assert.match(apiCode, /\/customer-voice/);
-  assert.match(viewCode, /api\.storeInsightsCustomerVoice\(activeStoreId, \{ from, to, \.\.\.compare \}\)/);
+  assert.match(viewCode, /api\.storeInsightsCustomerVoice\(activeStoreId, \{ from, to, \.\.\.compare \}, \{ signal: controller\.signal \}\)/);
   assert.match(viewCode, /customerVoiceRequestId/);
-  assert.match(viewCode, /if \(requestId === customerVoiceRequestId\.current\) setCustomerVoice\(value\)/);
+  assert.match(viewCode, /if \(!controller\.signal\.aborted && requestId === customerVoiceRequestId\.current\) setCustomerVoice\(value\)/);
   assert.match(viewCode, /<CustomerVoicePanel data=\{customerVoice\} loading=\{customerVoiceLoading\} error=\{customerVoiceError\} storeId=\{activeStoreId\} from=\{from\} to=\{to\}/);
 });
 

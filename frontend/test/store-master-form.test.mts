@@ -40,7 +40,7 @@ test("Store Master search uses the account-name search endpoint", () => {
   assert.match(api, /searchStoreMaster[\s\S]*store-master\/search/);
   assert.match(api, /store-master\/search\?q=\$\{encodeURIComponent\(query\)\}/);
   assert.match(page, /value=\{searchQuery\}[\s\S]*setSearchQuery\(nextQuery\)/);
-  assert.match(page, /useEffect\([\s\S]*api\.searchStoreMaster\(query, 10\)/);
+  assert.match(page, /useEffect\([\s\S]*api\.searchStoreMaster\(query, 10, \{ signal: controller\.signal \}\)/);
 });
 
 test("typing lam calls api.searchStoreMaster with limit 10 after debounce", async () => {

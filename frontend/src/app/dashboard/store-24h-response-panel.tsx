@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { isAbortError } from "@/lib/api";
 import { UnifiedPeriodPicker } from "@/components/date-range/unified-period-picker";
 import { rangeForPreset, type DashboardDateRange } from "./dashboard-date-range";
 
@@ -66,28 +67,43 @@ export function Store24hResponsePanel({ getStoreDisplayName, onOpenStore }: Prop
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
+  const requestController = useRef<AbortController | null>(null);
 
   const load = useCallback(async () => {
+    requestController.current?.abort();
+    const controller = new AbortController();
+    requestController.current = controller;
     setLoading(true);
     try {
       const params = new URLSearchParams({ dateFrom: range.dateFrom, dateTo: range.dateTo });
       const response = await fetch(`/api-backend/dashboard/store-24h-response-summary?${params.toString()}`, {
         credentials: "include",
         cache: "no-store",
+        signal: controller.signal,
       });
       if (!response.ok) throw new Error(`โหลดอัตราตอบกลับไม่สำเร็จ (${response.status})`);
-      setData((await response.json()) as Store24hResponse);
-      setError(null);
+      if (!controller.signal.aborted) {
+        setData((await response.json()) as Store24hResponse);
+        setError(null);
+      }
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "โหลดข้อมูลไม่สำเร็จ");
+      if (!controller.signal.aborted && !isAbortError(requestError)) {
+        setError(requestError instanceof Error ? requestError.message : "โหลดข้อมูลไม่สำเร็จ");
+      }
     } finally {
-      setLoading(false);
+      if (requestController.current === controller) {
+        requestController.current = null;
+        if (!controller.signal.aborted) setLoading(false);
+      }
     }
   }, [range.dateFrom, range.dateTo]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => void load(), 0);
-    return () => window.clearTimeout(timer);
+    return () => {
+      window.clearTimeout(timer);
+      requestController.current?.abort();
+    };
   }, [load]);
 
   const handleSort = (key: SortKey) => {

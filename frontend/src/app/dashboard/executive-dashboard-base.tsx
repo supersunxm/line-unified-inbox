@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { DashboardAnalyticsResponse } from "@/types/api";
+import { isAbortError } from "@/lib/api";
 import { UnifiedPeriodPicker as DateRangePicker } from "@/components/date-range/unified-period-picker";
 import { periodForRange, rangeForPreset, type DashboardDateRange } from "./dashboard-date-range";
 
@@ -184,8 +185,12 @@ export function ExecutiveDashboardV2({
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState(false);
   const [lastFetchAt, setLastFetchAt] = useState<Date | null>(null);
+  const requestController = useRef<AbortController | null>(null);
 
   const load = useCallback(async (nextPeriod: Period, nextRange: DashboardDateRange) => {
+    requestController.current?.abort();
+    const controller = new AbortController();
+    requestController.current = controller;
     setLoading(true);
     try {
       const params = new URLSearchParams({
@@ -194,21 +199,26 @@ export function ExecutiveDashboardV2({
         dateTo: nextRange.dateTo,
       });
       const [analyticsResponse, healthResponse] = await Promise.all([
-        fetch(`/api-backend/dashboard/analytics?${params.toString()}`, { credentials: "include", cache: "no-store" }),
-        fetch(`/api-backend/dashboard/executive-store-health?${params.toString()}`, { credentials: "include", cache: "no-store" }),
+        fetch(`/api-backend/dashboard/analytics?${params.toString()}`, { credentials: "include", cache: "no-store", signal: controller.signal }),
+        fetch(`/api-backend/dashboard/executive-store-health?${params.toString()}`, { credentials: "include", cache: "no-store", signal: controller.signal }),
       ]);
       if (!analyticsResponse.ok) throw new Error(`Dashboard analytics request failed (${analyticsResponse.status})`);
       if (!healthResponse.ok) throw new Error(`Executive store health request failed (${healthResponse.status})`);
       const analyticsData = (await analyticsResponse.json()) as DashboardAnalyticsResponse;
       const healthData = (await healthResponse.json()) as ExecutiveStoreHealth;
-      setAnalytics(analyticsData);
-      setHealth(healthData);
-      setLastFetchAt(new Date());
-      setFetchError(false);
-    } catch {
-      setFetchError(true);
+      if (!controller.signal.aborted) {
+        setAnalytics(analyticsData);
+        setHealth(healthData);
+        setLastFetchAt(new Date());
+        setFetchError(false);
+      }
+    } catch (error) {
+      if (!controller.signal.aborted && !isAbortError(error)) setFetchError(true);
     } finally {
-      setLoading(false);
+      if (requestController.current === controller) {
+        requestController.current = null;
+        if (!controller.signal.aborted) setLoading(false);
+      }
     }
   }, []);
 
@@ -218,6 +228,7 @@ export function ExecutiveDashboardV2({
     return () => {
       window.clearTimeout(initialLoad);
       window.clearInterval(interval);
+      requestController.current?.abort();
     };
   }, [load, period, dateRange]);
 

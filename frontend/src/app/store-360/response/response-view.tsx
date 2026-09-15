@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AppShell, PageContainer } from "@/components/shell";
-import { api } from "@/lib/api";
+import { api, isAbortError } from "@/lib/api";
 import type { AuthUser } from "@/lib/authorization";
 import type {
   ApiStore,
@@ -129,6 +129,8 @@ export function ResponseDrilldownView() {
   const [error, setError] = useState<string | null>(null);
   const [bootstrapError, setBootstrapError] = useState<string | null>(null);
   const requestId = useRef(0);
+  const bootstrapRequestController = useRef<AbortController | null>(null);
+  const requestController = useRef<AbortController | null>(null);
 
   const updateQuery = useCallback((updates: Record<string, string | undefined>) => {
     const params = new URLSearchParams({ storeId: activeStoreId || requestedStoreId, from, to, segment });
@@ -140,9 +142,12 @@ export function ResponseDrilldownView() {
   }, [activeStoreId, from, requestedStoreId, router, segment, to]);
 
   useEffect(() => {
+    bootstrapRequestController.current?.abort();
+    const controller = new AbortController();
     let active = true;
-    void withStore360Timeout(Promise.all([api.me(), api.stores()])).then(([user, storeRows]) => {
-      if (!active) return;
+    bootstrapRequestController.current = controller;
+    void withStore360Timeout(Promise.all([api.me({ signal: controller.signal }), api.stores(false, { signal: controller.signal })])).then(([user, storeRows]) => {
+      if (!active || controller.signal.aborted) return;
       const authorizedStores = storeRows ?? [];
       const resolvedStoreId = resolveAuthorizedStoreId(requestedStoreId, authorizedStores);
       setAuthUser(user as AuthUser);
@@ -159,29 +164,40 @@ export function ResponseDrilldownView() {
         router.replace("/store-360/response?" + params.toString(), { scroll: false });
       }
     }).catch((reason: unknown) => {
-      if (active) setBootstrapError(reason instanceof Error ? reason.message : "Unable to load authorized stores");
+      if (active && !controller.signal.aborted && !isAbortError(reason)) setBootstrapError(reason instanceof Error ? reason.message : "Unable to load authorized stores");
     });
-    return () => { active = false; };
+    return () => {
+      active = false;
+      controller.abort();
+      if (bootstrapRequestController.current === controller) bootstrapRequestController.current = null;
+    };
   }, [from, page, requestedStoreId, responderId, router, salesTagged, search, segment, sort, to]);
 
   const loadCases = useCallback(async () => {
     if (!bootstrapped || !activeStoreId) { if (bootstrapped) setLoading(false); return; }
+    requestController.current?.abort();
+    const controller = new AbortController();
     const currentRequest = ++requestId.current;
+    requestController.current = controller;
     setLoading(true);
     setError(null);
     try {
-      const value = await api.storeInsightsResponseCases(activeStoreId, { from, to, segment, search: search || undefined, responderId: responderId || undefined, salesTagged, sort, page, pageSize: PAGE_SIZE });
-      if (currentRequest === requestId.current) setData(value);
+      const value = await api.storeInsightsResponseCases(activeStoreId, { from, to, segment, search: search || undefined, responderId: responderId || undefined, salesTagged, sort, page, pageSize: PAGE_SIZE }, { signal: controller.signal });
+      if (!controller.signal.aborted && currentRequest === requestId.current) setData(value);
     } catch (reason) {
-      if (currentRequest === requestId.current) setError(reason instanceof Error ? reason.message : "Unable to load response evidence");
+      if (!controller.signal.aborted && !isAbortError(reason) && currentRequest === requestId.current) setError(reason instanceof Error ? reason.message : "Unable to load response evidence");
     } finally {
-      if (currentRequest === requestId.current) setLoading(false);
+      if (requestController.current === controller) requestController.current = null;
+      if (!controller.signal.aborted && currentRequest === requestId.current) setLoading(false);
     }
   }, [activeStoreId, bootstrapped, from, page, responderId, salesTagged, search, segment, sort, to]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => { void loadCases(); }, 0);
-    return () => window.clearTimeout(timer);
+    return () => {
+      window.clearTimeout(timer);
+      requestController.current?.abort();
+    };
   }, [loadCases]);
 
   const store = data?.store ?? stores.find((item) => item.id === activeStoreId) ?? null;

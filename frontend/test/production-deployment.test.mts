@@ -33,7 +33,8 @@ test("session restoration and logout rely on the secure server cookie", async ()
   const apiSource = await readFile(new URL("../src/lib/api.ts", import.meta.url), "utf8");
   const pageSource = await readFile(new URL("../src/app/page.tsx", import.meta.url), "utf8");
   assert.match(apiSource, /credentials: "include"/);
-  assert.match(pageSource, /setAuthUser\(await api\.me\(\)\)/);
+  assert.match(pageSource, /api\.me\(\{ signal: controller\.signal \}\)/);
+  assert.match(pageSource, /setAuthUser\(user\)/);
   assert.match(pageSource, /await api\.logout\(\)/);
   assert.match(pageSource, /setAuthUser\(null\)/);
   assert.equal(routeAfterLogin("/login"), "/home");

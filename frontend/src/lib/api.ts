@@ -146,6 +146,12 @@ export class ApiError extends Error {
   }
 }
 
+export type ApiRequestOptions = Pick<RequestInit, "signal">;
+
+export function isAbortError(error: unknown): boolean {
+  return typeof error === "object" && error !== null && "name" in error && error.name === "AbortError";
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const isBrowser = typeof window !== "undefined";
   const requestUrl = isBrowser
@@ -168,7 +174,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       credentials: "include",
       headers,
     });
-  } catch {
+  } catch (error) {
+    if (isAbortError(error)) throw error;
     const developmentHint =
       process.env.NODE_ENV === "development"
         ? ` Attempted ${requestUrl}. The backend may not be running; start it with \"cd backend && npm run start:dev\".`
@@ -200,7 +207,8 @@ async function requestBlob(path: string, init?: RequestInit): Promise<{ blob: Bl
   let response: Response;
   try {
     response = await fetch(requestUrl, { ...init, credentials: "include", headers });
-  } catch {
+  } catch (error) {
+    if (isAbortError(error)) throw error;
     throw new ApiError("Unable to reach the data service.", 0);
   }
   if (!response.ok) {
@@ -237,19 +245,19 @@ async function download(path: string) {
 
 export const api = {
   login: (identifier: string, password: string) => request<{ id: string; email: string; displayName: string; role: "ADMIN" | "VIEWER" }>("/auth/login", { method: "POST", body: JSON.stringify({ identifier, password }) }),
-  setupStatus: () =>
+  setupStatus: (options?: ApiRequestOptions) =>
     request<{ firstAdminRequired: boolean; registrationAvailable: boolean; emailProviderConfigured: boolean; emailProviderMode: string }>(
       "/auth/setup-status",
-      { cache: "no-store", headers: { "Cache-Control": "no-cache, no-store, must-revalidate" } },
+      { ...options, cache: "no-store", headers: { "Cache-Control": "no-cache, no-store, must-revalidate" } },
     ),
   requestSetupOtp: (displayName: string, email: string, password: string, language: "th" | "en" | "zh") => request<{ challengeId: string; maskedEmail: string; expiresInSeconds: number; resendAfterSeconds: number }>("/auth/setup/request-otp", { method: "POST", body: JSON.stringify({ displayName, email, password, language }) }),
   verifySetupOtp: (input: { challengeId: string; displayName: string; email: string; password: string; otp: string; language: "th" | "en" | "zh" }) => request<{ id: string; email: string; displayName: string; role: "ADMIN" | "VIEWER" }>("/auth/setup/verify-otp", { method: "POST", body: JSON.stringify(input) }),
   resendSetupOtp: (challengeId: string, language: "th" | "en" | "zh") => request<{ challengeId: string; maskedEmail: string; expiresInSeconds: number; resendAfterSeconds: number }>("/auth/setup/resend-otp", { method: "POST", body: JSON.stringify({ challengeId, language }) }),
   logout: () => request<{ success: true }>("/auth/logout", { method: "POST" }),
-  me: () =>
+  me: (options?: ApiRequestOptions) =>
     request<{ id: string; email: string; displayName: string; role: "ADMIN" | "VIEWER"; permissions?: { canAccessMainOa: boolean; canManageMainOa: boolean } }>(
       "/auth/me",
-      { cache: "no-store", headers: { "Cache-Control": "no-cache, no-store, must-revalidate" } },
+      { ...options, cache: "no-store", headers: { "Cache-Control": "no-cache, no-store, must-revalidate" } },
     ),
   getPendingRegistrations: async () => {
     const response = await request<{ registrations?: PendingRegistration[] } | PendingRegistration[]>("/admin/registrations/pending");
@@ -274,8 +282,8 @@ export const api = {
     const qs = query.toString();
     return request<PurchaseAnalyticsResponse>(`/admin/purchase-analytics${qs ? `?${qs}` : ""}`);
   },
-  systemStatus: () => request<{ frontend: string; backendApi: string; database: string; lineWebhookEnabled: boolean; publicWebhookUrlConfigured: boolean; activeLineOaCount: number; connectedLineOaCount: number; lineOaIssueCount: number; lastValidWebhookReceived: string | null; lastStoreMasterImport: string | null; storeMasterRecordCount: number; classificationEngine: string; pilotMode: boolean }>("/operations/status"),
-  operationalErrors: () => request<Array<{ id: string; feature: string; summary: string; resolved: boolean; createdAt: string }>>("/operations/errors"),
+  systemStatus: (options?: ApiRequestOptions) => request<{ frontend: string; backendApi: string; database: string; lineWebhookEnabled: boolean; publicWebhookUrlConfigured: boolean; activeLineOaCount: number; connectedLineOaCount: number; lineOaIssueCount: number; lastValidWebhookReceived: string | null; lastStoreMasterImport: string | null; storeMasterRecordCount: number; classificationEngine: string; pilotMode: boolean }>("/operations/status", options),
+  operationalErrors: (options?: ApiRequestOptions) => request<Array<{ id: string; feature: string; summary: string; resolved: boolean; createdAt: string }>>("/operations/errors", options),
   lineChatOperationsHealth: () => request<LineChatOperationsHealth>("/operations/line-chat-nickname/health", { cache: "no-store" }),
   retryLineChatFailedJobs: (sessionKey: string) => request<{ retriedCount: number }>(`/operations/line-chat-nickname/retry-failed?sessionKey=${encodeURIComponent(sessionKey)}`, { method: "POST" }),
   retryLineChatSelectedJobs: (payload: { sessionKey: string; jobIds: string[]; overrideNonRetryable?: boolean }) =>
@@ -294,12 +302,12 @@ export const api = {
       { method: "POST" },
     ),
   resetCounter: () => request<{ resetAt: string | null }>("/operations/reset-counter", { method: "POST" }),
-  pilotChecklist: (lineOaId: string) => request<{ oa: { id: string; name: string }; items: Array<{ itemKey: string; status: "NOT_TESTED" | "PASSED" | "FAILED" | "NOT_APPLICABLE"; note: string | null }> }>(`/operations/pilot-checklist/${lineOaId}`),
+  pilotChecklist: (lineOaId: string, options?: ApiRequestOptions) => request<{ oa: { id: string; name: string }; items: Array<{ itemKey: string; status: "NOT_TESTED" | "PASSED" | "FAILED" | "NOT_APPLICABLE"; note: string | null }> }>(`/operations/pilot-checklist/${lineOaId}`, options),
   updatePilotChecklist: (lineOaId: string, itemKey: string, status: "NOT_TESTED" | "PASSED" | "FAILED" | "NOT_APPLICABLE", note?: string) => request(`/operations/pilot-checklist/${lineOaId}/${itemKey}`, { method: "PUT", body: JSON.stringify({ status, note }) }),
   health: () => request<{ status: string }>("/health"),
-  searchStoreMaster: (query: string, limit = 10) => request<StoreMasterSuggestion[]>(`/store-master/search?q=${encodeURIComponent(query)}&limit=${limit}`),
+  searchStoreMaster: (query: string, limit = 10, options?: ApiRequestOptions) => request<StoreMasterSuggestion[]>(`/store-master/search?q=${encodeURIComponent(query)}&limit=${limit}`, options),
   syncStoreMaster: () => request<StoreMasterSyncResult>("/store-master/sync", { method: "POST" }),
-  conversations: (params?: Record<string, string | number | boolean | undefined>) => {
+  conversations: (params?: Record<string, string | number | boolean | undefined>, options?: ApiRequestOptions) => {
     const query = new URLSearchParams();
     if (params) {
       for (const [key, value] of Object.entries(params)) {
@@ -309,7 +317,7 @@ export const api = {
       }
     }
     const qStr = query.toString();
-    return request<ConversationListResponse>(`/conversations${qStr ? `?${qStr}` : "?pageSize=100"}`);
+    return request<ConversationListResponse>(`/conversations${qStr ? `?${qStr}` : "?pageSize=100"}`, options);
   },
   mainOaAccounts: () => request<Array<{ id: string; name: string; connectionStatus: string; isActive: boolean; _count: { conversations: number } }>>("/main-oa/accounts"),
   mainOaConversations: (params?: Record<string, string | number | boolean | undefined>) => {
@@ -319,10 +327,10 @@ export const api = {
   },
   mainOaConversation: (id: string) => request<ApiConversation>(`/main-oa/conversations/${encodeURIComponent(id)}`),
   sendMainOaMessage: (id: string, text: string, idempotencyKey: string) => request<SendConversationMessageResponse>(`/main-oa/conversations/${encodeURIComponent(id)}/messages`, { method: "POST", body: JSON.stringify({ text, idempotencyKey }) }),
-  bmReplyStatusSummary: () => request<BmReplyStatusSummaryResponse>("/conversations/bm-reply-status-summary"),
+  bmReplyStatusSummary: (options?: ApiRequestOptions) => request<BmReplyStatusSummaryResponse>("/conversations/bm-reply-status-summary", options),
   storePrioritySummary: () => request<StorePrioritySummaryResponse>("/conversations/store-priority-summary"),
-  conversation: (id: string) => request<ApiConversation>(`/conversations/${id}`),
-  conversationMessages: (id: string, page = 1) => request<ConversationMessagesResponse>(`/conversations/${id}/messages?page=${page}&pageSize=30`),
+  conversation: (id: string, options?: ApiRequestOptions) => request<ApiConversation>(`/conversations/${id}`, options),
+  conversationMessages: (id: string, page = 1, options?: ApiRequestOptions) => request<ConversationMessagesResponse>(`/conversations/${id}/messages?page=${page}&pageSize=30`, options),
   sendConversationMessage: (id: string, text: string, idempotencyKey: string) =>
     request<SendConversationMessageResponse>(`/conversations/${encodeURIComponent(id)}/messages`, {
       method: "POST",
@@ -347,9 +355,9 @@ export const api = {
   reanalyzeConversation: (id: string) => request<ApiConversation>(`/conversations/${id}/reanalyze`, { method: "POST" }),
   updateConversationTags: (id: string, productModelIds: string[], topicIds: string[]) => request<ApiConversation>(`/conversations/${id}/tags`, { method: "PATCH", body: JSON.stringify({ productModelIds, topicIds }) }),
   refreshLineProfile: (id: string) => request<ApiConversation["customer"]>(`/conversations/${id}/refresh-profile`, { method: "POST" }),
-  customerNameHistory: (customerId: string) => request<{ currentName: string; history: Array<{ id: string; displayName: string; source: string; capturedAt: string }> }>(`/customers/${encodeURIComponent(customerId)}/name-history`),
-  customerEvents: (customerId: string) => request<ApiCustomerEvent[]>(`/customers/${encodeURIComponent(customerId)}/events`),
-  customerIntelligence: (customerId: string) => request<ApiCustomerIntelligence>(`/customers/${encodeURIComponent(customerId)}/intelligence`),
+  customerNameHistory: (customerId: string, options?: ApiRequestOptions) => request<{ currentName: string; history: Array<{ id: string; displayName: string; source: string; capturedAt: string }> }>(`/customers/${encodeURIComponent(customerId)}/name-history`, options),
+  customerEvents: (customerId: string, options?: ApiRequestOptions) => request<ApiCustomerEvent[]>(`/customers/${encodeURIComponent(customerId)}/events`, options),
+  customerIntelligence: (customerId: string, options?: ApiRequestOptions) => request<ApiCustomerIntelligence>(`/customers/${encodeURIComponent(customerId)}/intelligence`, options),
   updateStatus: (id: string, status: ApiFollowUpStatus) => request<{ changed: boolean; conversation: ApiConversation }>(`/conversations/${id}/status`, { method: "PATCH", body: JSON.stringify({ status }) }),
   updateBmReplyStatus: (id: string, status: ApiBmReplyStatus) => request<{ changed: boolean; conversation: ApiConversation }>(`/conversations/${id}/bm-reply-status`, { method: "PATCH", body: JSON.stringify({ status, bmReplyStatus: status }) }),
   bulkUpdateBmReplyStatus: (input: { storeId: string; status: ApiBmReplyStatus; fromStatuses?: ApiBmReplyStatus[] }) =>
@@ -372,18 +380,18 @@ export const api = {
   addNote: (id: string, content: string) => request<ApiConversation["notes"][number]>(`/conversations/${id}/notes`, { method: "POST", body: JSON.stringify({ content, createdByName: "OPPO LINE OA Specialist" }) }),
   activity: (id: string) => request<ApiConversation["activityHistory"]>(`/conversations/${id}/activity`),
   recentActivity: () => request<unknown[]>("/activity/recent"),
-  stores: (showArchived = false) => request<ApiStore[]>(`/stores?showArchived=${showArchived}`),
+  stores: (showArchived = false, options?: ApiRequestOptions) => request<ApiStore[]>(`/stores?showArchived=${showArchived}`, options),
   getStoreDeletionPreview: (id: string) => request<StoreDeletionPreview>(`/stores/${id}/deletion-preview`),
   deleteStore: (id: string, storeName: string) => request<StoreRemovalResult>(`/stores/${id}?mode=permanent`, { method: "DELETE", body: JSON.stringify({ confirmation: `DELETE ${storeName}` }) }),
   archiveStore: (id: string) => request<StoreRemovalResult>(`/stores/${id}/archive`, { method: "POST" }),
   restoreStore: (id: string) => request<StoreRemovalResult>(`/stores/${id}/restore`, { method: "POST" }),
-  products: () => request<ProductMetadataResponse>("/metadata/products"),
+  products: (options?: ApiRequestOptions) => request<ProductMetadataResponse>("/metadata/products", options),
   productVariants: (productId: string) => request<{ items: ProductVariantMetadata[] }>(`/mobile/products/${encodeURIComponent(productId)}/variants`),
   updatePurchaseInformation: (id: string, input: { purchaseChannel?: string[]; paymentMethod?: "INSTALLMENT" | null; productModelId?: string | null; productVariantId?: string | null }) =>
     request<ApiConversation>(`/mobile/conversations/${encodeURIComponent(id)}/purchase-information`, { method: "PATCH", body: JSON.stringify(input) }),
   updateCustomerSalesInfo: (id: string, input: UpdateCustomerSalesInfoInput) =>
     request<ApiConversation>(`/mobile/conversations/${encodeURIComponent(id)}/customer-sales-info`, { method: "PATCH", body: JSON.stringify(input) }),
-  topics: () => request<ApiTopic[]>("/metadata/topics"),
+  topics: (options?: ApiRequestOptions) => request<ApiTopic[]>("/metadata/topics", options),
   dashboard: () => request<DashboardAnalyticsResponse>("/dashboard/analytics"),
   dashboardAnalytics: (period: "today" | "7d" | "30d" = "today") => request<DashboardAnalyticsResponse>(`/dashboard/analytics?period=${period}`),
   productCorrections: (storeId?: string) => request<ProductCorrectionInsightResponse>(`/product-intelligence/corrections${storeId ? `?storeId=${storeId}` : ""}`),
@@ -428,7 +436,7 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ phrase }),
     }),
-  lineOfficialAccounts: (showArchived = false) => request<LineOfficialAccountResponse[]>(`/line-official-accounts?showArchived=${showArchived}`),
+  lineOfficialAccounts: (showArchived = false, options?: ApiRequestOptions) => request<LineOfficialAccountResponse[]>(`/line-official-accounts?showArchived=${showArchived}`, options),
   exportLineOfficialAccounts: (params: { search?: string; status?: "all" | "active" | "issues"; showArchived?: boolean }) => {
     const query = new URLSearchParams();
     if (params.search?.trim()) query.set("search", params.search.trim());
@@ -441,7 +449,7 @@ export const api = {
   setLineOfficialAccountStatus: (id: string, isActive: boolean) => request<LineOfficialAccountResponse>(`/line-official-accounts/${id}/status`, { method: "PATCH", body: JSON.stringify({ isActive }) }),
   testLineOfficialAccount: (id: string) => request<LineOaTestResult>(`/line-official-accounts/${id}/test-connection`, { method: "POST" }),
   lineOfficialAccountCredentialHealth: (id: string) => request<LineOaCredentialHealth>(`/line-official-accounts/${id}/credential-health`),
-  lineOfficialAccountWebhookInfo: (id: string) => request<LineOaWebhookInfo>(`/line-official-accounts/${id}/webhook-info`),
+  lineOfficialAccountWebhookInfo: (id: string, options?: ApiRequestOptions) => request<LineOaWebhookInfo>(`/line-official-accounts/${id}/webhook-info`, options),
   regenerateLineOfficialAccountWebhook: (id: string) => request<LineOaWebhookInfo>(`/line-official-accounts/${id}/regenerate-webhook`, { method: "POST" }),
   removeLineOfficialAccount: (id: string) => request<{ outcome: "deleted" | "archived"; id: string }>(`/line-official-accounts/${id}`, { method: "DELETE" }),
   archiveLineOfficialAccount: (id: string) => request<{ outcome: "archived"; id: string }>(`/line-official-accounts/${id}/archive`, { method: "POST" }),
@@ -456,11 +464,11 @@ export const api = {
   followerInsightsBackfill: (dto: { dateFrom: string; dateTo: string; lineOaId?: string; lineOaIds?: string[]; force?: boolean }) => request<SyncBatchResult>("/follower-insights/backfill", { method: "POST", body: JSON.stringify(dto) }),
   followerInsightsJobStatus: (lineOaId: string) => request<BackfillJobResponseDto>(`/follower-insights/backfill/jobs/${encodeURIComponent(lineOaId)}`),
   followerInsightsRetryJob: (lineOaId: string) => request<BackfillJobResponseDto>("/follower-insights/backfill/retry", { method: "POST", body: JSON.stringify({ lineOaId }) }),
-  storeInsightsSummary: (storeId: string, params: { from?: string; to?: string; compareFrom?: string; compareTo?: string } = {}) => {
+  storeInsightsSummary: (storeId: string, params: { from?: string; to?: string; compareFrom?: string; compareTo?: string } = {}, options?: ApiRequestOptions) => {
     const query = new URLSearchParams();
     for (const [key, value] of Object.entries(params)) if (value) query.set(key, value);
     const qs = query.toString();
-    return request<StoreInsightsSummary>(`/store-insights/${encodeURIComponent(storeId)}/summary${qs ? `?${qs}` : ""}`);
+    return request<StoreInsightsSummary>(`/store-insights/${encodeURIComponent(storeId)}/summary${qs ? `?${qs}` : ""}`, options);
   },
   storeInsightsResponsePerformance: (storeId: string, params: { from?: string; to?: string } = {}) => {
     const query = new URLSearchParams();
@@ -480,29 +488,29 @@ export const api = {
     const qs = query.toString();
     return request<{ storeId: string; period: StoreInsightsSummary["period"] } & StoreInsightsSales>(`/store-insights/${encodeURIComponent(storeId)}/sales${qs ? `?${qs}` : ""}`);
   },
-  storeInsightsCustomerVoice: (storeId: string, params: { from?: string; to?: string; compareFrom?: string; compareTo?: string } = {}) => {
+  storeInsightsCustomerVoice: (storeId: string, params: { from?: string; to?: string; compareFrom?: string; compareTo?: string } = {}, options?: ApiRequestOptions) => {
     const query = new URLSearchParams();
     for (const [key, value] of Object.entries(params)) if (value) query.set(key, value);
     const qs = query.toString();
-    return request<StoreInsightsCustomerVoice>(`/store-insights/${encodeURIComponent(storeId)}/customer-voice${qs ? `?${qs}` : ""}`);
+    return request<StoreInsightsCustomerVoice>(`/store-insights/${encodeURIComponent(storeId)}/customer-voice${qs ? `?${qs}` : ""}`, options);
   },
-  storeInsightsCustomerVoiceDrilldown: (storeId: string, params: { from?: string; to?: string; dimension?: StoreInsightsCustomerVoiceDimension; value?: string; search?: string; responseStatus?: "REPLIED" | "UNANSWERED"; salesTagged?: boolean; sort?: "date-desc" | "date-asc"; unclassified?: boolean; notAnalyzed?: boolean; page?: number; pageSize?: number } = {}) => {
+  storeInsightsCustomerVoiceDrilldown: (storeId: string, params: { from?: string; to?: string; dimension?: StoreInsightsCustomerVoiceDimension; value?: string; search?: string; responseStatus?: "REPLIED" | "UNANSWERED"; salesTagged?: boolean; sort?: "date-desc" | "date-asc"; unclassified?: boolean; notAnalyzed?: boolean; page?: number; pageSize?: number } = {}, options?: ApiRequestOptions) => {
     const query = new URLSearchParams();
     for (const [key, value] of Object.entries(params)) if (value !== undefined && value !== "") query.set(key, String(value));
     const qs = query.toString();
-    return request<StoreInsightsCustomerVoiceDrilldownResponse>(`/store-insights/${encodeURIComponent(storeId)}/customer-voice/cases${qs ? `?${qs}` : ""}`);
+    return request<StoreInsightsCustomerVoiceDrilldownResponse>(`/store-insights/${encodeURIComponent(storeId)}/customer-voice/cases${qs ? `?${qs}` : ""}`, options);
   },
-  storeInsightsConversations: (storeId: string, params: { from?: string; to?: string; responseStatus?: "REPLIED" | "UNANSWERED"; responderId?: string; salesTagged?: boolean; customerVoiceTopic?: string; page?: number; pageSize?: number } = {}) => {
+  storeInsightsConversations: (storeId: string, params: { from?: string; to?: string; responseStatus?: "REPLIED" | "UNANSWERED"; responderId?: string; salesTagged?: boolean; customerVoiceTopic?: string; page?: number; pageSize?: number } = {}, options?: ApiRequestOptions) => {
     const query = new URLSearchParams();
     for (const [key, value] of Object.entries(params)) if (value !== undefined && value !== "") query.set(key, String(value));
     const qs = query.toString();
-    return request<StoreInsightsConversationResponse>(`/store-insights/${encodeURIComponent(storeId)}/conversations${qs ? `?${qs}` : ""}`);
+    return request<StoreInsightsConversationResponse>(`/store-insights/${encodeURIComponent(storeId)}/conversations${qs ? `?${qs}` : ""}`, options);
   },
-  storeInsightsResponseCases: (storeId: string, params: { from?: string; to?: string; segment?: StoreInsightsResponseSegment; search?: string; responderId?: string; salesTagged?: boolean; sort?: StoreInsightsResponseSort; page?: number; pageSize?: number } = {}) => {
+  storeInsightsResponseCases: (storeId: string, params: { from?: string; to?: string; segment?: StoreInsightsResponseSegment; search?: string; responderId?: string; salesTagged?: boolean; sort?: StoreInsightsResponseSort; page?: number; pageSize?: number } = {}, options?: ApiRequestOptions) => {
     const query = new URLSearchParams();
     for (const [key, value] of Object.entries(params)) if (value !== undefined && value !== "") query.set(key, String(value));
     const qs = query.toString();
-    return request<StoreInsightsResponseCasesResponse>(`/store-insights/${encodeURIComponent(storeId)}/response-cases${qs ? `?${qs}` : ""}`);
+    return request<StoreInsightsResponseCasesResponse>(`/store-insights/${encodeURIComponent(storeId)}/response-cases${qs ? `?${qs}` : ""}`, options);
   },
   storeInsightsExport: (input: { storeIds: string[]; startDate: string; endDate: string; timezone: "Asia/Bangkok" }) =>
     requestBlob("/store-insights/export", { method: "POST", body: JSON.stringify(input) }),

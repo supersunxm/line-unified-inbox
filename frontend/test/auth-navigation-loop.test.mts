@@ -95,8 +95,8 @@ test("api.ts uses same-origin proxy in browser to guarantee cookie transmission 
   assert.match(apiCode, /path\.startsWith\("\/auth\/"\)\s*\?\s*path\s*:\s*`\/api-backend\$\{path\}`/);
 
   // /auth/me and /auth/setup-status enforce no-store and no-cache headers to prevent stale 304 responses
-  assert.match(apiCode, /me:\s*\(\)\s*=>\s*request[\s\S]*?"\/auth\/me"[\s\S]*?cache:\s*"no-store"/);
-  assert.match(apiCode, /setupStatus:\s*\(\)\s*=>\s*request[\s\S]*?"\/auth\/setup-status"[\s\S]*?cache:\s*"no-store"/);
+  assert.match(apiCode, /me:\s*\(options\?:\s*ApiRequestOptions\)\s*=>\s*request[\s\S]*?"\/auth\/me"[\s\S]*?cache:\s*"no-store"/);
+  assert.match(apiCode, /setupStatus:\s*\(options\?:\s*ApiRequestOptions\)\s*=>\s*request[\s\S]*?"\/auth\/setup-status"[\s\S]*?cache:\s*"no-store"/);
 });
 
 test("ApplicationWorkspace implements single authority redirect logic without UI flicker or competing loops", () => {

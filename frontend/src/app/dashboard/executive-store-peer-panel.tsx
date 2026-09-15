@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { UnifiedPeriodPicker } from "@/components/date-range/unified-period-picker";
+import { isAbortError } from "@/lib/api";
 import { periodForRange, rangeForPreset } from "./dashboard-date-range";
 type WatchIssue = "reach" | "block" | "inactive";
 
@@ -94,9 +95,13 @@ export function ExecutiveStorePeerPanel({ language, getStoreDisplayName, onOpenS
   const [data, setData] = useState<ExecutiveStoreHealth | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const requestController = useRef<AbortController | null>(null);
 
   const load = useCallback(async () => {
+    requestController.current?.abort();
+    const controller = new AbortController();
     setLoading(true);
+    requestController.current = controller;
     try {
       const params = new URLSearchParams({ period: periodForRange(dateRange), ...dateRange });
       if (tier) params.set("tier", tier);
@@ -106,14 +111,22 @@ export function ExecutiveStorePeerPanel({ language, getStoreDisplayName, onOpenS
       const response = await fetch(`/api-backend/dashboard/executive-store-health?${params.toString()}`, {
         credentials: "include",
         cache: "no-store",
+        signal: controller.signal,
       });
       if (!response.ok) throw new Error(`Executive peer request failed (${response.status})`);
-      setData((await response.json()) as ExecutiveStoreHealth);
-      setError(null);
+      if (!controller.signal.aborted) {
+        setData((await response.json()) as ExecutiveStoreHealth);
+        setError(null);
+      }
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "โหลดข้อมูลไม่สำเร็จ");
+      if (!controller.signal.aborted && !isAbortError(requestError)) {
+        setError(requestError instanceof Error ? requestError.message : "โหลดข้อมูลไม่สำเร็จ");
+      }
     } finally {
-      setLoading(false);
+      if (requestController.current === controller) {
+        requestController.current = null;
+        if (!controller.signal.aborted) setLoading(false);
+      }
     }
   }, [area, bm, kpiPlan, dateRange, tier]);
 
@@ -123,6 +136,7 @@ export function ExecutiveStorePeerPanel({ language, getStoreDisplayName, onOpenS
     return () => {
       window.clearTimeout(timer);
       window.clearInterval(interval);
+      requestController.current?.abort();
     };
   }, [load]);
 

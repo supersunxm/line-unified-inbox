@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent, KeyboardEvent } from "react";
 import Link from "next/link";
 import type { ApiCustomerEvent } from "@/types/api";
-import { ApiError, api } from "@/lib/api";
+import { ApiError, api, isAbortError } from "@/lib/api";
 import { FOCUS_STORE_GROUP_ID, FOCUS_STORE_GROUP_ROUTE_PARAM, FOCUS_STORE_GROUP_ROUTE_VALUE, getFocusStoreGroupCopy } from "@/lib/focus-store-group";
 import { AUTH_UNAUTHORIZED_EVENT, getAuthState, resolveAuthRedirect, routeAfterLogin } from "@/lib/auth-session";
 import { ThemeControl } from "./theme";
@@ -1569,6 +1569,16 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
   const refreshInProgress = useRef(false);
   const conversationRequestGuard = useRef(new LatestConversationRequestGuard());
+  const conversationRequestController = useRef<AbortController | null>(null);
+  const supportingRequestController = useRef<AbortController | null>(null);
+  const systemStatusRequestController = useRef<AbortController | null>(null);
+  const setupStatusRequestController = useRef<AbortController | null>(null);
+  const conversationDetailRequestController = useRef<AbortController | null>(null);
+  const storeMasterSearchRequestController = useRef<AbortController | null>(null);
+  const pilotChecklistRequestController = useRef<AbortController | null>(null);
+  const customerNameHistoryRequestController = useRef<AbortController | null>(null);
+  const customerIntelligenceRequestController = useRef<AbortController | null>(null);
+  const customerEventsRequestController = useRef<AbortController | null>(null);
   const lineOaSubmissionInFlight = useRef(false);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
   const newestChatMessageRef = useRef<string | null>(null);
@@ -1581,6 +1591,24 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
   const [isChatPageLoading, setIsChatPageLoading] = useState(false);
   const [chatPageError, setChatPageError] = useState<string | null>(null);
   const [hasNewChatsAvailable, setHasNewChatsAvailable] = useState(false);
+
+  useEffect(() => {
+    return () => {
+      conversationRequestController.current?.abort();
+      supportingRequestController.current?.abort();
+      supportingRequestController.current = null;
+      refreshInProgress.current = false;
+      systemStatusRequestController.current?.abort();
+      setupStatusRequestController.current?.abort();
+      conversationDetailRequestController.current?.abort();
+      storeMasterSearchRequestController.current?.abort();
+      pilotChecklistRequestController.current?.abort();
+      customerNameHistoryRequestController.current?.abort();
+      customerIntelligenceRequestController.current?.abort();
+      customerEventsRequestController.current?.abort();
+    };
+  }, [initialSection]);
+
   const text = translations[language];
   const aiRecommendedNextAction = useMemo(() => {
     if (!customerIntelligence) return null;
@@ -1666,22 +1694,27 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
     const query = searchQuery.trim();
     if (!showLineOaForm || editingLineOaId || selectedMaster || !query) return;
     let active = true;
+    const controller = new AbortController();
+    storeMasterSearchRequestController.current?.abort();
+    storeMasterSearchRequestController.current = controller;
     const loadingTimer = window.setTimeout(() => {
       if (active) setMasterSearchState({ status: "loading", query });
     }, 0);
     const searchTimer = window.setTimeout(() => {
-      void api.searchStoreMaster(query, 10)
+      void api.searchStoreMaster(query, 10, { signal: controller.signal })
         .then((suggestions) => {
           if (!active) return;
           setMasterSearchState({ status: "success", query, suggestions });
           setMasterActiveIndex(suggestions.length ? 0 : -1);
         })
-        .catch(() => {
-          if (active) setMasterSearchState({ status: "error", query, message: text.storeMasterSearchFailed });
+        .catch((error: unknown) => {
+          if (active && !controller.signal.aborted && !isAbortError(error)) setMasterSearchState({ status: "error", query, message: text.storeMasterSearchFailed });
         });
     }, 300);
     return () => {
       active = false;
+      controller.abort();
+      if (storeMasterSearchRequestController.current === controller) storeMasterSearchRequestController.current = null;
       window.clearTimeout(loadingTimer);
       window.clearTimeout(searchTimer);
     };
@@ -1743,13 +1776,16 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
   const previousConversationFilterShape = useRef(conversationFilterShapeKey);
 
   const loadConversations = useCallback(async (query: ConversationListQuery, silent = false) => {
+    conversationRequestController.current?.abort();
+    const controller = new AbortController();
+    conversationRequestController.current = controller;
     const requestGeneration = conversationRequestGuard.current.begin();
     const requestKey = conversationListQueryKey(query);
     if (!silent) setIsChatPageLoading(true);
     setChatPageError(null);
 
     try {
-      const response = await api.conversations(query);
+      const response = await api.conversations(query, { signal: controller.signal });
       if (
         !conversationRequestGuard.current.isLatest(requestGeneration) ||
         requestKey !== conversationListQueryKey(conversationQueryRef.current)
@@ -1771,10 +1807,13 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
       );
       setLastUpdatedAt(new Date());
     } catch (error) {
-      if (!conversationRequestGuard.current.isLatest(requestGeneration)) return;
+      if (controller.signal.aborted || isAbortError(error) || !conversationRequestGuard.current.isLatest(requestGeneration)) return;
       setChatPageError(error instanceof Error ? error.message : text.connectionError);
     } finally {
-      if (conversationRequestGuard.current.isLatest(requestGeneration)) {
+      if (conversationRequestController.current === controller) {
+        conversationRequestController.current = null;
+      }
+      if (!controller.signal.aborted && conversationRequestGuard.current.isLatest(requestGeneration)) {
         setIsChatPageLoading(false);
       }
     }
@@ -1808,15 +1847,17 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
 
     if (refreshInProgress.current) return;
     refreshInProgress.current = true;
+    const controller = new AbortController();
+    supportingRequestController.current = controller;
     if (!silent) setIsLoading(true);
     setApiError(null);
     try {
       const [storeResponse, productResponse, topicResponse, lineOaResponse, bmSummaryResponse] = await Promise.all([
-        loadStores ? api.stores(showArchivedStores) : Promise.resolve(null),
-        loadChatMetadata ? api.products() : Promise.resolve(null),
-        loadChatMetadata ? api.topics() : Promise.resolve(null),
-        loadLineOas ? api.lineOfficialAccounts(showArchivedLineOas) : Promise.resolve(null),
-        loadBmSummary ? api.bmReplyStatusSummary() : Promise.resolve(null),
+        loadStores ? api.stores(showArchivedStores, { signal: controller.signal }) : Promise.resolve(null),
+        loadChatMetadata ? api.products({ signal: controller.signal }) : Promise.resolve(null),
+        loadChatMetadata ? api.topics({ signal: controller.signal }) : Promise.resolve(null),
+        loadLineOas ? api.lineOfficialAccounts(showArchivedLineOas, { signal: controller.signal }) : Promise.resolve(null),
+        loadBmSummary ? api.bmReplyStatusSummary({ signal: controller.signal }) : Promise.resolve(null),
       ]);
       if (storeResponse) {
         setStores(
@@ -1846,17 +1887,21 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
         const webhookInfo = await Promise.all(
           lineOaResponse.map(async (account) => [
             account.id,
-            await api.lineOfficialAccountWebhookInfo(account.id),
+            await api.lineOfficialAccountWebhookInfo(account.id, { signal: controller.signal }),
           ] as const),
         );
         setWebhookInfoById(Object.fromEntries(webhookInfo));
       }
       setLastUpdatedAt(new Date());
     } catch (error) {
+      if (controller.signal.aborted || isAbortError(error)) return;
       setApiError(error instanceof Error ? error.message : "Unable to load data");
     } finally {
-      if (!silent) setIsLoading(false);
-      refreshInProgress.current = false;
+      if (supportingRequestController.current === controller) {
+        supportingRequestController.current = null;
+        refreshInProgress.current = false;
+      }
+      if (!controller.signal.aborted && !silent) setIsLoading(false);
     }
   }, [initialSection, showArchivedLineOas, showArchivedStores]);
 
@@ -1880,33 +1925,74 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
 
 
   const loadSystemStatus = useCallback(async () => {
+    systemStatusRequestController.current?.abort();
+    const controller = new AbortController();
+    systemStatusRequestController.current = controller;
     try {
-      const [status, errors] = await Promise.all([api.systemStatus(), api.operationalErrors()]);
-      setSystemStatus(status); setOperationalErrors(errors);
+      const [status, errors] = await Promise.all([
+        api.systemStatus({ signal: controller.signal }),
+        api.operationalErrors({ signal: controller.signal }),
+      ]);
+      if (!controller.signal.aborted) {
+        setSystemStatus(status); setOperationalErrors(errors);
+      }
     } catch (error) {
-      setApiError(error instanceof Error ? error.message : "Unable to load system status");
+      if (!controller.signal.aborted && !isAbortError(error)) {
+        setApiError(error instanceof Error ? error.message : "Unable to load system status");
+      }
+    } finally {
+      if (systemStatusRequestController.current === controller) {
+        systemStatusRequestController.current = null;
+      }
     }
   }, []);
 
   const checkSetupStatus = useCallback(async () => {
+    setupStatusRequestController.current?.abort();
+    const controller = new AbortController();
+    setupStatusRequestController.current = controller;
     setAuthChecked(false); setSetupStatusError(null);
     try {
-      const status = await api.setupStatus();
+      const status = await api.setupStatus({ signal: controller.signal });
+      if (controller.signal.aborted) return;
       setSetupStatus(status);
       if (!status.firstAdminRequired) {
         try {
-          setAuthUser(await api.me());
+          const user = await api.me({ signal: controller.signal });
+          if (!controller.signal.aborted) setAuthUser(user);
         } catch (error) {
+          if (controller.signal.aborted || isAbortError(error)) return;
           if (!(error instanceof ApiError) || error.status !== 401) throw error;
           setAuthUser(null);
         }
       }
     }
-    catch (error) { setSetupStatusError(error instanceof Error ? error.message : "Unable to check administrator setup"); }
-    finally { setAuthChecked(true); }
+    catch (error) {
+      if (!controller.signal.aborted && !isAbortError(error)) {
+        setSetupStatusError(error instanceof Error ? error.message : "Unable to check administrator setup");
+      }
+    }
+    finally {
+      if (setupStatusRequestController.current === controller) {
+        setupStatusRequestController.current = null;
+      }
+      if (!controller.signal.aborted) setAuthChecked(true);
+    }
   }, []);
 
-  async function loadPilotChecklist(lineOaId: string) { setPilotChecklist(await api.pilotChecklist(lineOaId)); }
+  async function loadPilotChecklist(lineOaId: string) {
+    pilotChecklistRequestController.current?.abort();
+    const controller = new AbortController();
+    pilotChecklistRequestController.current = controller;
+    try {
+      const checklist = await api.pilotChecklist(lineOaId, { signal: controller.signal });
+      if (!controller.signal.aborted) setPilotChecklist(checklist);
+    } catch (error) {
+      if (!isAbortError(error)) throw error;
+    } finally {
+      if (pilotChecklistRequestController.current === controller) pilotChecklistRequestController.current = null;
+    }
+  }
   async function updatePilotItem(itemKey: string, status: "NOT_TESTED" | "PASSED" | "FAILED" | "NOT_APPLICABLE", note?: string) {
     if (!pilotChecklist) return; await api.updatePilotChecklist(pilotChecklist.oa.id, itemKey, status, note); await loadPilotChecklist(pilotChecklist.oa.id);
   }
@@ -2141,14 +2227,32 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
     if (!selectedConversationId) return;
     let active = true;
     const load = async () => {
+      conversationDetailRequestController.current?.abort();
+      const controller = new AbortController();
+      conversationDetailRequestController.current = controller;
       try {
-        const [conversation, messages] = await Promise.all([api.conversation(selectedConversationId), api.conversationMessages(selectedConversationId)]);
-        if (active) { setSelectedApiConversation(conversation); setChatHistory(messages); }
-      } catch { /* The main data error surface handles API availability. */ }
+        const [conversation, messages] = await Promise.all([
+          api.conversation(selectedConversationId, { signal: controller.signal }),
+          api.conversationMessages(selectedConversationId, 1, { signal: controller.signal }),
+        ]);
+        if (active && !controller.signal.aborted) {
+          setSelectedApiConversation(conversation); setChatHistory(messages);
+        }
+      } catch (error) {
+        if (!isAbortError(error)) { /* The main data error surface handles API availability. */ }
+      } finally {
+        if (conversationDetailRequestController.current === controller) {
+          conversationDetailRequestController.current = null;
+        }
+      }
     };
     void load();
     const poll = window.setInterval(() => void load(), 12_000);
-    return () => { active = false; window.clearInterval(poll); };
+    return () => {
+      active = false;
+      window.clearInterval(poll);
+      conversationDetailRequestController.current?.abort();
+    };
   }, [selectedConversationId]);
 
   useEffect(() => {
@@ -2199,21 +2303,26 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
       return () => { active = false; };
     }
 
+    const controller = new AbortController();
+    customerNameHistoryRequestController.current?.abort();
+    customerNameHistoryRequestController.current = controller;
     const loadHistory = async () => {
       setCustomerNameHistoryLoading(true);
       setCustomerNameHistoryError(null);
       try {
-        const history = await api.customerNameHistory(customerId);
-        if (active) setCustomerNameHistory(history);
+        const history = await api.customerNameHistory(customerId, { signal: controller.signal });
+        if (active && !controller.signal.aborted) setCustomerNameHistory(history);
       } catch (error) {
-        if (active) setCustomerNameHistoryError(error instanceof Error ? error.message : "Unable to load LINE name history");
+        if (active && !controller.signal.aborted && !isAbortError(error)) setCustomerNameHistoryError(error instanceof Error ? error.message : "Unable to load LINE name history");
       } finally {
-        if (active) setCustomerNameHistoryLoading(false);
+        if (active && !controller.signal.aborted) setCustomerNameHistoryLoading(false);
+        if (customerNameHistoryRequestController.current === controller) customerNameHistoryRequestController.current = null;
       }
     };
     void loadHistory();
     return () => {
       active = false;
+      controller.abort();
     };
   }, [selectedApiConversation]);
 
@@ -2230,22 +2339,27 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
       return () => { active = false; };
     }
 
+    const controller = new AbortController();
+    customerIntelligenceRequestController.current?.abort();
+    customerIntelligenceRequestController.current = controller;
     const loadIntelligence = async () => {
       setCustomerIntelligenceLoading(true);
       setCustomerIntelligenceError(null);
       try {
-        const intelligence = await api.customerIntelligence(customerId);
-        if (active) setCustomerIntelligence(intelligence);
+        const intelligence = await api.customerIntelligence(customerId, { signal: controller.signal });
+        if (active && !controller.signal.aborted) setCustomerIntelligence(intelligence);
       } catch (error) {
-        if (active) setCustomerIntelligenceError(error instanceof Error ? error.message : "Unable to load customer intelligence");
+        if (active && !controller.signal.aborted && !isAbortError(error)) setCustomerIntelligenceError(error instanceof Error ? error.message : "Unable to load customer intelligence");
       } finally {
-        if (active) setCustomerIntelligenceLoading(false);
+        if (active && !controller.signal.aborted) setCustomerIntelligenceLoading(false);
+        if (customerIntelligenceRequestController.current === controller) customerIntelligenceRequestController.current = null;
       }
     };
 
     void loadIntelligence();
     return () => {
       active = false;
+      controller.abort();
     };
   }, [selectedApiConversation]);
 
@@ -2262,22 +2376,27 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
       return () => { active = false; };
     }
 
+    const controller = new AbortController();
+    customerEventsRequestController.current?.abort();
+    customerEventsRequestController.current = controller;
     const loadEvents = async () => {
       setCustomerEventsLoading(true);
       setCustomerEventsError(null);
       try {
-        const events = await api.customerEvents(customerId);
-        if (active) setCustomerEvents(events);
+        const events = await api.customerEvents(customerId, { signal: controller.signal });
+        if (active && !controller.signal.aborted) setCustomerEvents(events);
       } catch (error) {
-        if (active) setCustomerEventsError(error instanceof Error ? error.message : "Unable to load customer events");
+        if (active && !controller.signal.aborted && !isAbortError(error)) setCustomerEventsError(error instanceof Error ? error.message : "Unable to load customer events");
       } finally {
-        if (active) setCustomerEventsLoading(false);
+        if (active && !controller.signal.aborted) setCustomerEventsLoading(false);
+        if (customerEventsRequestController.current === controller) customerEventsRequestController.current = null;
       }
     };
 
     void loadEvents();
     return () => {
       active = false;
+      controller.abort();
     };
   }, [selectedApiConversation]);
 

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { AppShell, PageContainer } from "@/components/shell";
-import { api } from "@/lib/api";
+import { api, isAbortError } from "@/lib/api";
 import type { AuthUser } from "@/lib/authorization";
 import type {
   ApiStore,
@@ -369,6 +369,8 @@ export function CustomerVoiceDrilldownView() {
   const [bootstrapError, setBootstrapError] = useState<string | null>(null);
   const [retryNonce, setRetryNonce] = useState(0);
   const requestId = useRef(0);
+  const bootstrapRequestController = useRef<AbortController | null>(null);
+  const requestController = useRef<AbortController | null>(null);
 
   const queryState = {
     storeId: activeStoreId || requestedStoreId,
@@ -406,10 +408,13 @@ export function CustomerVoiceDrilldownView() {
   };
 
   useEffect(() => {
+    bootstrapRequestController.current?.abort();
+    const controller = new AbortController();
+    bootstrapRequestController.current = controller;
     let active = true;
-    void withStore360Timeout(Promise.all([api.me(), api.stores()]))
+    void withStore360Timeout(Promise.all([api.me({ signal: controller.signal }), api.stores(false, { signal: controller.signal })]))
       .then(([user, storeRows]) => {
-        if (!active) return;
+        if (!active || controller.signal.aborted) return;
         const authorizedStores = storeRows ?? [];
         const resolvedStoreId = resolveAuthorizedStoreId(
           requestedStoreId,
@@ -442,7 +447,7 @@ export function CustomerVoiceDrilldownView() {
           );
       })
       .catch((reason: unknown) => {
-        if (active)
+        if (active && !controller.signal.aborted && !isAbortError(reason))
           setBootstrapError(
             reason instanceof Error
               ? reason.message
@@ -451,6 +456,8 @@ export function CustomerVoiceDrilldownView() {
       });
     return () => {
       active = false;
+      controller.abort();
+      if (bootstrapRequestController.current === controller) bootstrapRequestController.current = null;
     };
   }, [
     dimension,
@@ -470,7 +477,10 @@ export function CustomerVoiceDrilldownView() {
 
   useEffect(() => {
     if (!bootstrapped || !activeStoreId) return;
+    requestController.current?.abort();
+    const controller = new AbortController();
     const currentRequest = ++requestId.current;
+    requestController.current = controller;
     let active = true;
     void api
       .storeInsightsCustomerVoiceDrilldown(activeStoreId, {
@@ -486,12 +496,12 @@ export function CustomerVoiceDrilldownView() {
         notAnalyzed: notAnalyzed || undefined,
         page,
         pageSize: PAGE_SIZE,
-      })
+      }, { signal: controller.signal })
       .then((result) => {
-        if (active && currentRequest === requestId.current) setData(result);
+        if (active && !controller.signal.aborted && currentRequest === requestId.current) setData(result);
       })
       .catch((reason: unknown) => {
-        if (active && currentRequest === requestId.current)
+        if (active && !controller.signal.aborted && !isAbortError(reason) && currentRequest === requestId.current)
           setError(
             reason instanceof Error
               ? reason.message
@@ -499,10 +509,12 @@ export function CustomerVoiceDrilldownView() {
           );
       })
       .finally(() => {
-        if (active && currentRequest === requestId.current) setLoading(false);
+        if (requestController.current === controller) requestController.current = null;
+        if (active && !controller.signal.aborted && currentRequest === requestId.current) setLoading(false);
       });
     return () => {
       active = false;
+      controller.abort();
     };
   }, [
     activeStoreId,

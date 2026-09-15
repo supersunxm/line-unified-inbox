@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { AppShell, PageContainer } from "@/components/shell";
-import { api } from "@/lib/api";
+import { api, isAbortError } from "@/lib/api";
 import type { AuthUser } from "@/lib/authorization";
 import type {
   ApiStore,
@@ -320,48 +320,64 @@ export function Store360View() {
   const summaryRequestId = useRef(0);
   const customerVoiceRequestId = useRef(0);
   const conversationsRequestId = useRef(0);
+  const bootstrapRequestController = useRef<AbortController | null>(null);
+  const summaryRequestController = useRef<AbortController | null>(null);
+  const customerVoiceRequestController = useRef<AbortController | null>(null);
+  const conversationsRequestController = useRef<AbortController | null>(null);
 
   const activeStoreId = bootstrapComplete ? storeId || stores[0]?.id || "" : "";
   const updateUrl = useCallback((nextStoreId: string, nextFrom: string, nextTo: string) => { const params = new URLSearchParams(); if (nextStoreId) params.set("storeId", nextStoreId); params.set("from", nextFrom); params.set("to", nextTo); router.replace("/store-360?" + params.toString(), { scroll: false }); }, [router]);
 
   useEffect(() => {
+    bootstrapRequestController.current?.abort();
+    const controller = new AbortController();
+    bootstrapRequestController.current = controller;
     let active = true;
-    void withStore360Timeout(Promise.all([api.me(), api.stores()])).then(([user, storeRows]) => { if (!active) return; const authorizedStores = storeRows ?? []; const resolvedStoreId = resolveAuthorizedStoreId(initialSelection.current.storeId, authorizedStores); setAuthUser(user as AuthUser); setStores(authorizedStores); setStoreId(resolvedStoreId); setBootstrapComplete(true); if (resolvedStoreId !== initialSelection.current.storeId) updateUrl(resolvedStoreId, initialSelection.current.from, initialSelection.current.to); }).catch((reason: unknown) => { if (active) setBootstrapError(reason instanceof Error ? reason.message : "Unable to load authorized stores"); });
-    return () => { active = false; };
+    void withStore360Timeout(Promise.all([api.me({ signal: controller.signal }), api.stores(false, { signal: controller.signal })])).then(([user, storeRows]) => { if (!active || controller.signal.aborted) return; const authorizedStores = storeRows ?? []; const resolvedStoreId = resolveAuthorizedStoreId(initialSelection.current.storeId, authorizedStores); setAuthUser(user as AuthUser); setStores(authorizedStores); setStoreId(resolvedStoreId); setBootstrapComplete(true); if (resolvedStoreId !== initialSelection.current.storeId) updateUrl(resolvedStoreId, initialSelection.current.from, initialSelection.current.to); }).catch((reason: unknown) => { if (active && !controller.signal.aborted && !isAbortError(reason)) setBootstrapError(reason instanceof Error ? reason.message : "Unable to load authorized stores"); }).finally(() => { if (bootstrapRequestController.current === controller) bootstrapRequestController.current = null; });
+    return () => { active = false; controller.abort(); };
   }, [bootstrapAttempt, updateUrl]);
 
   const loadSummary = useCallback(async () => {
     if (!activeStoreId) { setLoading(false); return; }
+    summaryRequestController.current?.abort();
+    const controller = new AbortController();
+    summaryRequestController.current = controller;
     const requestId = ++summaryRequestId.current;
     setLoading(true); setError(null); setSummary(null);
-    try { const compare = comparisonMode === "previous" ? comparisonFor(from, to) : {}; const value = await api.storeInsightsSummary(activeStoreId, { from, to, ...compare }); if (requestId === summaryRequestId.current) setSummary(value); }
-    catch (reason) { if (requestId === summaryRequestId.current) setError(reason instanceof Error ? reason.message : "Unable to load Store 360"); }
-    finally { if (requestId === summaryRequestId.current) setLoading(false); }
+    try { const compare = comparisonMode === "previous" ? comparisonFor(from, to) : {}; const value = await api.storeInsightsSummary(activeStoreId, { from, to, ...compare }, { signal: controller.signal }); if (!controller.signal.aborted && requestId === summaryRequestId.current) setSummary(value); }
+    catch (reason) { if (!controller.signal.aborted && !isAbortError(reason) && requestId === summaryRequestId.current) setError(reason instanceof Error ? reason.message : "Unable to load Store 360"); }
+    finally { if (summaryRequestController.current === controller) summaryRequestController.current = null; if (!controller.signal.aborted && requestId === summaryRequestId.current) setLoading(false); }
   }, [activeStoreId, comparisonMode, from, to]);
 
   const loadConversations = useCallback(async () => {
     if (!activeStoreId) return;
+    conversationsRequestController.current?.abort();
+    const controller = new AbortController();
+    conversationsRequestController.current = controller;
     const requestId = ++conversationsRequestId.current;
     setConversationLoading(true); setConversations([]); setConversationTotal(0);
-    try { const value = await api.storeInsightsConversations(activeStoreId, { from, to, responseStatus: responseFilter === "ALL" ? undefined : responseFilter, responderId: responderFilter === "ALL" ? undefined : responderFilter, salesTagged: salesFilter === "ALL" ? undefined : salesFilter === "TAGGED", customerVoiceTopic: customerVoiceTopic ?? undefined }); if (requestId === conversationsRequestId.current) { setConversations(value.items); setConversationTotal(value.total); } }
-    catch (reason) { if (requestId === conversationsRequestId.current) setError(reason instanceof Error ? reason.message : "Unable to load conversations"); }
-    finally { if (requestId === conversationsRequestId.current) setConversationLoading(false); }
+    try { const value = await api.storeInsightsConversations(activeStoreId, { from, to, responseStatus: responseFilter === "ALL" ? undefined : responseFilter, responderId: responderFilter === "ALL" ? undefined : responderFilter, salesTagged: salesFilter === "ALL" ? undefined : salesFilter === "TAGGED", customerVoiceTopic: customerVoiceTopic ?? undefined }, { signal: controller.signal }); if (!controller.signal.aborted && requestId === conversationsRequestId.current) { setConversations(value.items); setConversationTotal(value.total); } }
+    catch (reason) { if (!controller.signal.aborted && !isAbortError(reason) && requestId === conversationsRequestId.current) setError(reason instanceof Error ? reason.message : "Unable to load conversations"); }
+    finally { if (conversationsRequestController.current === controller) conversationsRequestController.current = null; if (!controller.signal.aborted && requestId === conversationsRequestId.current) setConversationLoading(false); }
   }, [activeStoreId, customerVoiceTopic, from, responseFilter, responderFilter, salesFilter, to]);
 
   const loadCustomerVoice = useCallback(async () => {
     if (!activeStoreId) { setCustomerVoiceLoading(false); return; }
+    customerVoiceRequestController.current?.abort();
+    const controller = new AbortController();
+    customerVoiceRequestController.current = controller;
     const requestId = ++customerVoiceRequestId.current;
     setCustomerVoiceLoading(true); setCustomerVoiceError(null); setCustomerVoice(null);
-    try { const compare = comparisonMode === "previous" ? comparisonFor(from, to) : {}; const value = await api.storeInsightsCustomerVoice(activeStoreId, { from, to, ...compare }); if (requestId === customerVoiceRequestId.current) setCustomerVoice(value); }
-    catch (reason) { if (requestId === customerVoiceRequestId.current) setCustomerVoiceError(reason instanceof Error ? reason.message : "Unable to load Customer Voice"); }
-    finally { if (requestId === customerVoiceRequestId.current) setCustomerVoiceLoading(false); }
+    try { const compare = comparisonMode === "previous" ? comparisonFor(from, to) : {}; const value = await api.storeInsightsCustomerVoice(activeStoreId, { from, to, ...compare }, { signal: controller.signal }); if (!controller.signal.aborted && requestId === customerVoiceRequestId.current) setCustomerVoice(value); }
+    catch (reason) { if (!controller.signal.aborted && !isAbortError(reason) && requestId === customerVoiceRequestId.current) setCustomerVoiceError(reason instanceof Error ? reason.message : "Unable to load Customer Voice"); }
+    finally { if (customerVoiceRequestController.current === controller) customerVoiceRequestController.current = null; if (!controller.signal.aborted && requestId === customerVoiceRequestId.current) setCustomerVoiceLoading(false); }
   }, [activeStoreId, comparisonMode, from, to]);
 
-  useEffect(() => { const timer = window.setTimeout(() => { void loadSummary(); }, 0); return () => window.clearTimeout(timer); }, [loadSummary]);
-  useEffect(() => { const timer = window.setTimeout(() => { void loadConversations(); }, 0); return () => window.clearTimeout(timer); }, [loadConversations]);
-  useEffect(() => { const timer = window.setTimeout(() => { void loadCustomerVoice(); }, 0); return () => window.clearTimeout(timer); }, [loadCustomerVoice]);
+  useEffect(() => { const timer = window.setTimeout(() => { void loadSummary(); }, 0); return () => { window.clearTimeout(timer); summaryRequestController.current?.abort(); }; }, [loadSummary]);
+  useEffect(() => { const timer = window.setTimeout(() => { void loadConversations(); }, 0); return () => { window.clearTimeout(timer); conversationsRequestController.current?.abort(); }; }, [loadConversations]);
+  useEffect(() => { const timer = window.setTimeout(() => { void loadCustomerVoice(); }, 0); return () => { window.clearTimeout(timer); customerVoiceRequestController.current?.abort(); }; }, [loadCustomerVoice]);
 
-  const invalidateInsights = () => { summaryRequestId.current += 1; customerVoiceRequestId.current += 1; conversationsRequestId.current += 1; setSummary(null); setCustomerVoice(null); setCustomerVoiceTopic(null); setConversations([]); setConversationTotal(0); };
+  const invalidateInsights = () => { summaryRequestController.current?.abort(); customerVoiceRequestController.current?.abort(); conversationsRequestController.current?.abort(); summaryRequestId.current += 1; customerVoiceRequestId.current += 1; conversationsRequestId.current += 1; setSummary(null); setCustomerVoice(null); setCustomerVoiceTopic(null); setConversations([]); setConversationTotal(0); };
   const selectStore = (next: string) => { if (next === activeStoreId) return; invalidateInsights(); setStoreId(next); updateUrl(next, from, to); };
   const applyCustomRange = (nextFrom: string, nextTo: string) => { if (!nextFrom || !nextTo || nextFrom > nextTo || nextTo > todayInBangkok()) return; invalidateInsights(); setPreset("custom"); setFrom(nextFrom); setTo(nextTo); updateUrl(activeStoreId, nextFrom, nextTo); };
   const selectCustomerVoiceTopic = (topic: string) => { const nextTopic = customerVoiceTopic === topic ? null : topic; setCustomerVoiceTopic(nextTopic); conversationsRequestId.current += 1; setConversations([]); setConversationTotal(0); };
