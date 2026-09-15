@@ -80,6 +80,19 @@ test("one loader owns conversation state and polling reuses its current query", 
   assert.doesNotMatch(pageCode.slice(supportingStart, supportingEnd), /api\.conversations/);
 });
 
+test("silent workspace refreshes do not fan out webhook diagnostics", () => {
+  const supportingStart = pageCode.indexOf("const loadSupportingData");
+  const supportingEnd = pageCode.indexOf("const loadApplicationData", supportingStart);
+  const supportingCode = pageCode.slice(supportingStart, supportingEnd);
+
+  assert.match(supportingCode, /if \(initialSection === "stores" && includeWebhookInfo\)/);
+  assert.match(supportingCode, /lineOaResponse\.map\(async \(account\)/);
+  assert.match(supportingCode, /\[initialSection, showArchivedLineOas, showArchivedStores\]/);
+  assert.match(pageCode, /const loadApplicationData = useCallback\(async \(silent = false, includeWebhookInfo = !silent\)/);
+  assert.match(pageCode, /loadSupportingData\(silent, includeWebhookInfo\)/);
+  assert.match(pageCode, /await loadApplicationData\(true, true\)/);
+});
+
 test("classification filters are resolved to IDs and sent server-side", () => {
   assert.match(pageCode, /productSeriesId: initialSection === "chats" \? productSeriesId/);
   assert.match(pageCode, /productModelId: initialSection === "chats" \? productModelId/);

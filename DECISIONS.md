@@ -2482,3 +2482,9 @@ Keep `StoreMaster.tiktokProfileUrl` as the only persisted TikTok profile URL. Po
 - Correct only the invalid trailing comma in the final PostgreSQL text array item. Preserve the release data and existing `ON CONFLICT ("platform", "buildNumber") DO UPDATE` behavior.
 - Use `prisma migrate resolve --rolled-back` only after confirming the failed state and zero-step execution, then let the normal Railway pre-deploy `prisma migrate deploy` apply the corrected migration.
 - Do not delete migration history, reset/recreate the production database, modify Flutter/UI code, or alter the Android artifact.
+
+## 2026-09-15: P0 production reliability investigation
+
+- Treat the shared `ApplicationWorkspace` supporting-data poll as the proven reliability issue. The production request pattern exactly matches the source: every 12 seconds, every desktop `AuthorizedWorkspace` route fetched all shared datasets and then issued one webhook diagnostic request per LINE OA account. Do not change individual page UI or backend data contracts as the first response.
+- Keep webhook diagnostics out of silent refreshes and non-store sections. The data is configuration-oriented, not live conversation state; the store-management initial/manual load and explicit store-management mutations opt in as authoritative refresh paths. This removes the measured 145-request fan-out while preserving the existing controls and URLs.
+- Do not claim heap/Long Task values that the available browser instrumentation cannot expose. Record production route/network measurements, source-level render amplification, console results, and the browser tooling limitation separately; do not deploy until post-fix validation is reported.

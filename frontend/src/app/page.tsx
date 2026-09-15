@@ -1790,7 +1790,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
     void loadConversations(activeConversationQuery);
   }, [activeConversationQuery, activeConversationQueryKey, authUser, chatPage, conversationFilterShapeKey, loadConversations]);
 
-  const loadSupportingData = useCallback(async (silent = false) => {
+  const loadSupportingData = useCallback(async (silent = false, includeWebhookInfo = !silent) => {
     if (refreshInProgress.current) return;
     refreshInProgress.current = true;
     if (!silent) setIsLoading(true);
@@ -1819,13 +1819,20 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
       setLineOas(lineOaResponse);
       setBmSummaryData(bmSummaryResponse);
       setSupportingDataLoaded(true);
-      const webhookInfo = await Promise.all(
-        lineOaResponse.map(async (account) => [
-          account.id,
-          await api.lineOfficialAccountWebhookInfo(account.id),
-        ] as const),
-      );
-      setWebhookInfoById(Object.fromEntries(webhookInfo));
+      // Webhook configuration is not live conversation data. Refreshing it on
+      // every 12-second workspace poll created one request per OA account,
+      // even on sections that never render the webhook controls.
+      // Explicit store-management actions opt in so their existing refresh
+      // behavior remains unchanged.
+      if (initialSection === "stores" && includeWebhookInfo) {
+        const webhookInfo = await Promise.all(
+          lineOaResponse.map(async (account) => [
+            account.id,
+            await api.lineOfficialAccountWebhookInfo(account.id),
+          ] as const),
+        );
+        setWebhookInfoById(Object.fromEntries(webhookInfo));
+      }
       setDashboardSummary(dashboardResponse);
       setLastUpdatedAt(new Date());
     } catch (error) {
@@ -1834,11 +1841,11 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
       if (!silent) setIsLoading(false);
       refreshInProgress.current = false;
     }
-  }, [showArchivedLineOas, showArchivedStores]);
+  }, [initialSection, showArchivedLineOas, showArchivedStores]);
 
-  const loadApplicationData = useCallback(async (silent = false) => {
+  const loadApplicationData = useCallback(async (silent = false, includeWebhookInfo = !silent) => {
     await Promise.all([
-      loadSupportingData(silent),
+      loadSupportingData(silent, includeWebhookInfo),
       loadConversations(conversationQueryRef.current, silent),
     ]);
   }, [loadConversations, loadSupportingData]);
@@ -2664,20 +2671,20 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
       } else {
         const account = await api.createLineOfficialAccount(submission);
         if (!account.webhookConfigured || !isValidCanonicalWebhookUrl(account.webhookUrl)) {
-          await loadApplicationData(true);
+          await loadApplicationData(true, true);
           throw new Error(text.webhookCreationIncomplete);
         }
         setCreatedLineOa({ account, webhookUrl: account.webhookUrl });
         setShowLineOaForm(false);
       }
-      resetLineOaForm(); await loadApplicationData(true);
+      resetLineOaForm(); await loadApplicationData(true, true);
     } catch (error) { setLineOaError(formatLineOaError(error)); }
     finally { lineOaSubmissionInFlight.current = false; setLineOaSubmitting(false); }
   }
 
   async function toggleLineOa(account: LineOfficialAccountResponse) {
     setLineOaSubmitting(true); setLineOaError(null);
-    try { await api.setLineOfficialAccountStatus(account.id, !account.isActive); await loadApplicationData(true); }
+    try { await api.setLineOfficialAccountStatus(account.id, !account.isActive); await loadApplicationData(true, true); }
     catch (error) { setLineOaError(formatLineOaError(error)); }
     finally { setLineOaSubmitting(false); }
   }
@@ -2688,7 +2695,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
       const health = await api.lineOfficialAccountCredentialHealth(account.id);
       const result = await api.testLineOfficialAccount(account.id);
       setConnectionTest({ id: account.id, result: { ...result, credentialsAvailable: health.channelSecretStored, accessTokenAvailable: health.accessTokenStored, credentialDecryptionError: health.channelSecretStored && !health.channelSecretDecryptable } });
-      await loadApplicationData(true);
+      await loadApplicationData(true, true);
     }
     catch (error) { setLineOaError(error instanceof Error ? error.message : text.connectionError); }
     finally { setLineOaSubmitting(false); }
@@ -2726,7 +2733,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
     try {
       const result = await api.syncStoreMaster();
       setMasterSyncResult(result);
-      await loadApplicationData(true);
+      await loadApplicationData(true, true);
       setToastMessage(`${text.syncMasterSuccess} · Total: ${result.validation?.total ?? result.source?.rows} · Updated: ${result.connectedOaSync?.updated} · Unchanged: ${result.connectedOaSync?.unchanged}`);
     } catch (error) {
       setLineOaError(`${text.syncMasterFailed}: ${error instanceof Error ? error.message : "Unknown error"}`);
@@ -2749,7 +2756,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
       const webhook = await api.regenerateLineOfficialAccountWebhook(account.id);
       setWebhookInfoById((current) => ({ ...current, [account.id]: webhook }));
       setToastMessage(text.webhookRegenerated);
-      await loadApplicationData(true);
+      await loadApplicationData(true, true);
     } catch (error) { setLineOaError(error instanceof Error ? error.message : text.connectionError); }
     finally { setLineOaSubmitting(false); }
   }
@@ -2761,7 +2768,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
       await api.removeLineOfficialAccount(account.id);
       setWebhookInfoById((current) => { const next = { ...current }; delete next[account.id]; return next; });
       setCreatedLineOa((current) => current?.account.id === account.id ? null : current);
-      await loadApplicationData(true); setToastMessage(text.removeLineOa);
+      await loadApplicationData(true, true); setToastMessage(text.removeLineOa);
     }
     catch (error) { setLineOaError(error instanceof Error ? error.message : text.connectionError); }
     finally { setLineOaSubmitting(false); }
@@ -2769,7 +2776,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
 
   async function restoreLineOa(account: LineOfficialAccountResponse) {
     setLineOaSubmitting(true);
-    try { await api.restoreLineOfficialAccount(account.id); await loadApplicationData(true); }
+    try { await api.restoreLineOfficialAccount(account.id); await loadApplicationData(true, true); }
     finally { setLineOaSubmitting(false); }
   }
 
@@ -2790,7 +2797,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
         localStorage.removeItem(UI_PREFERENCES_STORAGE_KEY);
         localStorage.removeItem(CONVERSATION_STATES_STORAGE_KEY);
         setStoreRemovalPreview(null); setPermanentDeleteStep(false); setPermanentDeleteConfirmation("");
-        setToastMessage(text.storeDeletedSuccessfully); await loadApplicationData(true);
+        setToastMessage(text.storeDeletedSuccessfully); await loadApplicationData(true, true);
       }
     } catch (error) { setStoreRemovalMessage(error instanceof Error ? error.message : text.connectionError); }
     finally { setStoreRemovalLoading(false); }
@@ -2804,13 +2811,13 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
       if (result.result === "archived") {
         setStores((current) => current.filter(({ id }) => id !== storeRemovalPreview.storeId));
         if (selectedStore === storeRemovalPreview.storeId) setSelectedStore("all");
-        setStoreRemovalPreview(null); setToastMessage(text.storeArchivedSuccessfully); await loadApplicationData(true);
+        setStoreRemovalPreview(null); setToastMessage(text.storeArchivedSuccessfully); await loadApplicationData(true, true);
       } else setStoreRemovalMessage(text.storeHasActiveLineOa);
     } finally { setStoreRemovalLoading(false); }
   }
 
   async function restoreStore(storeId: string) {
-    await api.restoreStore(storeId); await loadApplicationData(true); setToastMessage(text.restoreStore);
+    await api.restoreStore(storeId); await loadApplicationData(true, true); setToastMessage(text.restoreStore);
   }
 
   async function loadEarlierMessages() {
