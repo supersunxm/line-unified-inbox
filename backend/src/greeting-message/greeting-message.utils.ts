@@ -9,12 +9,10 @@ export type DetectedImageFormat = "jpeg" | "png" | "unknown";
 export function detectImageMagicBytes(buffer: Buffer): DetectedImageFormat {
   if (!buffer || buffer.length < 3) return "unknown";
 
-  // JPEG magic bytes: FF D8 FF
   if (buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) {
     return "jpeg";
   }
 
-  // PNG magic bytes: 89 50 4E 47 0D 0A 1A 0A
   if (
     buffer.length >= 8 &&
     buffer[0] === 0x89 &&
@@ -44,9 +42,6 @@ export const IMAGE_EXTENSIONS: Record<string, string> = {
   "image/png": "png",
 };
 
-/**
- * Normalizes Greeting content JSON into a canonical ordered array of message blocks (1 to 5 items).
- */
 export function normalizeGreetingMessages(template: {
   contentJson?: any;
 }): GreetingMessageBlock[] {
@@ -60,9 +55,6 @@ export function normalizeGreetingMessages(template: {
   return [];
 }
 
-/**
- * Extracts all unique variable names across all TEXT message blocks.
- */
 export function extractAllGreetingVariables(
   messages: GreetingMessageBlock[],
 ): string[] {
@@ -70,20 +62,12 @@ export function extractAllGreetingVariables(
   for (const msg of messages) {
     if (msg.type === "TEXT" && msg.textTemplate) {
       const extracted = extractTemplateVariables(msg.textTemplate);
-      for (const v of extracted) {
-        vars.add(v);
-      }
+      for (const v of extracted) vars.add(v);
     }
   }
   return Array.from(vars);
 }
 
-/**
- * Validates a list of Greeting message blocks according to LINE & business constraints:
- * - Count between 1 and 5 blocks
- * - TEXT blocks must have non-empty textTemplate (max 5000 characters)
- * - IMAGE blocks must have valid mediaObjectKey
- */
 export function validateGreetingMessages(messages: GreetingMessageBlock[]): {
   valid: boolean;
   errors: string[];
@@ -112,17 +96,25 @@ export function validateGreetingMessages(messages: GreetingMessageBlock[]): {
       } else if (msg.textTemplate.length > 5000) {
         errors.push(`Block #${blockNum} (TEXT) exceeds maximum length of 5000 characters.`);
       }
-    } else if (msg.type === "IMAGE") {
+      return;
+    }
+
+    if (msg.type === "IMAGE") {
       if (!msg.mediaObjectKey || typeof msg.mediaObjectKey !== "string" || !msg.mediaObjectKey.trim()) {
         errors.push(`Block #${blockNum} (IMAGE) is missing media object key.`);
       }
-    } else {
-      errors.push(`Block #${blockNum} has unsupported type '${(msg as any).type}'.`);
+      return;
     }
+
+    if (msg.type === "RICH_MESSAGE") {
+      if (!msg.richMessageId || typeof msg.richMessageId !== "string" || !msg.richMessageId.trim()) {
+        errors.push(`Block #${blockNum} (RICH_MESSAGE) is missing Rich Message ID.`);
+      }
+      return;
+    }
+
+    errors.push(`Block #${blockNum} has unsupported type '${(msg as any).type}'.`);
   });
 
-  return {
-    valid: errors.length === 0,
-    errors,
-  };
+  return { valid: errors.length === 0, errors };
 }

@@ -23,7 +23,19 @@ export type GreetingImageBlock = {
   height?: number;
 };
 
-export type GreetingMessageBlock = GreetingTextBlock | GreetingImageBlock;
+export type GreetingRichMessageBlock = {
+  id: string;
+  type: "RICH_MESSAGE";
+  richMessageId: string;
+  richMessageName?: string;
+  previewUrl?: string;
+  altText?: string;
+};
+
+export type GreetingMessageBlock =
+  | GreetingTextBlock
+  | GreetingImageBlock
+  | GreetingRichMessageBlock;
 
 export type GreetingContentJson = {
   version: number;
@@ -102,6 +114,16 @@ export type ResolvedGreetingBlock =
       previewUrl: string;
       mediaObjectKey: string;
       previewObjectKey?: string;
+      isValid: boolean;
+      validationError?: string;
+    }
+  | {
+      id: string;
+      type: "RICH_MESSAGE";
+      richMessageId: string;
+      richMessageName?: string;
+      previewUrl?: string;
+      altText?: string;
       isValid: boolean;
       validationError?: string;
     };

@@ -9,6 +9,7 @@ import { MediaModule } from "../media/media.module";
 import { LineProfileModule } from "../line-profile.module";
 import { CredentialsModule } from "../credentials/credentials.module";
 import { ClassificationModule } from "../classification/classification.module";
+import { RichMessageModule } from "../rich-message/rich-message.module";
 import { GreetingMessageService } from "./greeting-message.service";
 import { GreetingExecutionService } from "./greeting-execution.service";
 import { GreetingMessageController } from "./greeting-message.controller";
@@ -20,6 +21,7 @@ import { GreetingMessageController } from "./greeting-message.controller";
     LineProfileModule,
     CredentialsModule,
     ClassificationModule,
+    RichMessageModule,
   ],
   controllers: [GreetingMessageController],
   providers: [
