@@ -73,7 +73,9 @@ test("one loader owns conversation state and polling reuses its current query", 
   assert.equal([...pageCode.matchAll(/api\.conversations\(/g)].length, 1);
   assert.match(pageCode, /const loadConversations = useCallback/);
   assert.match(pageCode, /loadConversations\(conversationQueryRef\.current, silent\)/);
-  assert.match(pageCode, /window\.setInterval[\s\S]*loadApplicationData\(true\)[\s\S]*12_000/);
+  assert.match(pageCode, /const loadPolledApplicationData = useCallback/);
+  assert.match(pageCode, /loadConversations\(conversationQueryRef\.current, true\)/);
+  assert.match(pageCode, /window\.setInterval[\s\S]*loadPolledApplicationData\(\)[\s\S]*12_000/);
 
   const supportingStart = pageCode.indexOf("const loadSupportingData");
   const supportingEnd = pageCode.indexOf("const loadApplicationData", supportingStart);
@@ -85,12 +87,28 @@ test("silent workspace refreshes do not fan out webhook diagnostics", () => {
   const supportingEnd = pageCode.indexOf("const loadApplicationData", supportingStart);
   const supportingCode = pageCode.slice(supportingStart, supportingEnd);
 
-  assert.match(supportingCode, /if \(initialSection === "stores" && includeWebhookInfo\)/);
+  assert.match(supportingCode, /if \(initialSection === "stores" && includeWebhookInfo && lineOaResponse\)/);
   assert.match(supportingCode, /lineOaResponse\.map\(async \(account\)/);
   assert.match(supportingCode, /\[initialSection, showArchivedLineOas, showArchivedStores\]/);
   assert.match(pageCode, /const loadApplicationData = useCallback\(async \(silent = false, includeWebhookInfo = !silent\)/);
   assert.match(pageCode, /loadSupportingData\(silent, includeWebhookInfo\)/);
   assert.match(pageCode, /await loadApplicationData\(true, true\)/);
+});
+
+test("shared supporting-data polling is route-scoped and bounded", () => {
+  const supportingStart = pageCode.indexOf("const loadSupportingData");
+  const supportingEnd = pageCode.indexOf("const loadApplicationData", supportingStart);
+  const supportingCode = pageCode.slice(supportingStart, supportingEnd);
+
+  assert.match(supportingCode, /mode: SupportingDataMode = "full"/);
+  assert.match(supportingCode, /loadChatMetadata = isChatsSection && mode === "full"/);
+  assert.match(supportingCode, /loadStores = isStoresSection \|\| isChatsSection && mode === "full"/);
+  assert.match(supportingCode, /loadLineOas = isStoresSection \|\| isChatsSection && mode === "full"/);
+  assert.doesNotMatch(supportingCode, /api\.dashboard\(\)/);
+  assert.match(pageCode, /if \(!authUser \|\| initialSection !== "chats"\) return;/);
+  assert.match(pageCode, /loadSupportingData\(true, false, "poll"\)/);
+  assert.match(pageCode, /const pollInterval = initialSection === "stores" \? 60_000 : initialSection === "chats" \? 12_000 : null/);
+  assert.match(pageCode, /initialSection === "chats" \? loadConversations\(conversationQueryRef\.current, silent\) : Promise\.resolve\(\)/);
 });
 
 test("classification filters are resolved to IDs and sent server-side", () => {

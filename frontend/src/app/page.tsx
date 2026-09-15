@@ -1394,6 +1394,8 @@ function mapApiConversationState(item: ApiConversation): ConversationState {
   };
 }
 
+type SupportingDataMode = "full" | "poll";
+
 export default function Home() {
   return <PublicLandingPage />;
 }
@@ -1779,7 +1781,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
   }, [text.connectionError]);
 
   useEffect(() => {
-    if (!authUser) return;
+    if (!authUser || initialSection !== "chats") return;
     if (previousConversationFilterShape.current !== conversationFilterShapeKey) {
       previousConversationFilterShape.current = conversationFilterShapeKey;
       if (chatPage !== 1) {
@@ -1788,43 +1790,59 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
       }
     }
     void loadConversations(activeConversationQuery);
-  }, [activeConversationQuery, activeConversationQueryKey, authUser, chatPage, conversationFilterShapeKey, loadConversations]);
+  }, [activeConversationQuery, activeConversationQueryKey, authUser, chatPage, conversationFilterShapeKey, initialSection, loadConversations]);
 
-  const loadSupportingData = useCallback(async (silent = false, includeWebhookInfo = !silent) => {
+  const loadSupportingData = useCallback(async (silent = false, includeWebhookInfo = !silent, mode: SupportingDataMode = "full") => {
+    const isChatsSection = initialSection === "chats";
+    const isStoresSection = initialSection === "stores";
+    const loadStores = isStoresSection || isChatsSection && mode === "full";
+    const loadChatMetadata = isChatsSection && mode === "full";
+    const loadBmSummary = isChatsSection;
+    const loadLineOas = isStoresSection || isChatsSection && mode === "full";
+
+    if (!loadStores && !isChatsSection) {
+      setSupportingDataLoaded(true);
+      if (!silent) setIsLoading(false);
+      return;
+    }
+
     if (refreshInProgress.current) return;
     refreshInProgress.current = true;
     if (!silent) setIsLoading(true);
     setApiError(null);
     try {
-      const [storeResponse, productResponse, topicResponse, dashboardResponse, lineOaResponse, bmSummaryResponse] = await Promise.all([
-        api.stores(showArchivedStores),
-        api.products(),
-        api.topics(),
-        api.dashboard(),
-        api.lineOfficialAccounts(showArchivedLineOas),
-        api.bmReplyStatusSummary(),
+      const [storeResponse, productResponse, topicResponse, lineOaResponse, bmSummaryResponse] = await Promise.all([
+        loadStores ? api.stores(showArchivedStores) : Promise.resolve(null),
+        loadChatMetadata ? api.products() : Promise.resolve(null),
+        loadChatMetadata ? api.topics() : Promise.resolve(null),
+        loadLineOas ? api.lineOfficialAccounts(showArchivedLineOas) : Promise.resolve(null),
+        loadBmSummary ? api.bmReplyStatusSummary() : Promise.resolve(null),
       ]);
-      setStores(
-        storeResponse.filter((store) => !store.archivedAt).map((store) => ({
-          id: store.id,
-          name: store.name,
-          waiting: store._count?.operationalNotRepliedCount ?? 0,
-          lineOaCount: store._count?.lineOfficialAccounts ?? 0,
-        })),
-      );
-      setAvailableStores(storeResponse);
-      setAvailableProductSeries(productResponse.series.map(({ id, name }) => ({ id, name })));
-      setAvailableProductModels(productResponse.series.flatMap(({ models }) => models.map(({ id, name }) => ({ id, name }))));
-      setAvailableTopics(topicResponse.map(({ id, name }) => ({ id, name })));
-      setLineOas(lineOaResponse);
-      setBmSummaryData(bmSummaryResponse);
+      if (storeResponse) {
+        setStores(
+          storeResponse.filter((store) => !store.archivedAt).map((store) => ({
+            id: store.id,
+            name: store.name,
+            waiting: store._count?.operationalNotRepliedCount ?? 0,
+            lineOaCount: store._count?.lineOfficialAccounts ?? 0,
+          })),
+        );
+        setAvailableStores(storeResponse);
+      }
+      if (productResponse) {
+        setAvailableProductSeries(productResponse.series.map(({ id, name }) => ({ id, name })));
+        setAvailableProductModels(productResponse.series.flatMap(({ models }) => models.map(({ id, name }) => ({ id, name }))));
+      }
+      if (topicResponse) setAvailableTopics(topicResponse.map(({ id, name }) => ({ id, name })));
+      if (lineOaResponse) setLineOas(lineOaResponse);
+      if (bmSummaryResponse) setBmSummaryData(bmSummaryResponse);
       setSupportingDataLoaded(true);
       // Webhook configuration is not live conversation data. Refreshing it on
       // every 12-second workspace poll created one request per OA account,
       // even on sections that never render the webhook controls.
       // Explicit store-management actions opt in so their existing refresh
       // behavior remains unchanged.
-      if (initialSection === "stores" && includeWebhookInfo) {
+      if (initialSection === "stores" && includeWebhookInfo && lineOaResponse) {
         const webhookInfo = await Promise.all(
           lineOaResponse.map(async (account) => [
             account.id,
@@ -1833,7 +1851,6 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
         );
         setWebhookInfoById(Object.fromEntries(webhookInfo));
       }
-      setDashboardSummary(dashboardResponse);
       setLastUpdatedAt(new Date());
     } catch (error) {
       setApiError(error instanceof Error ? error.message : "Unable to load data");
@@ -1846,9 +1863,20 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
   const loadApplicationData = useCallback(async (silent = false, includeWebhookInfo = !silent) => {
     await Promise.all([
       loadSupportingData(silent, includeWebhookInfo),
-      loadConversations(conversationQueryRef.current, silent),
+      initialSection === "chats" ? loadConversations(conversationQueryRef.current, silent) : Promise.resolve(),
     ]);
-  }, [loadConversations, loadSupportingData]);
+  }, [initialSection, loadConversations, loadSupportingData]);
+
+  const loadPolledApplicationData = useCallback(async () => {
+    if (initialSection === "chats") {
+      await Promise.all([
+        loadSupportingData(true, false, "poll"),
+        loadConversations(conversationQueryRef.current, true),
+      ]);
+      return;
+    }
+    if (initialSection === "stores") await loadSupportingData(true, false, "poll");
+  }, [initialSection, loadConversations, loadSupportingData]);
 
 
   const loadSystemStatus = useCallback(async () => {
@@ -1930,12 +1958,14 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
 
   useEffect(() => {
     if (!authUser) return;
+    const pollInterval = initialSection === "stores" ? 60_000 : initialSection === "chats" ? 12_000 : null;
+    if (pollInterval === null) return;
     const poll = window.setInterval(() => {
       const isEditingNote = document.activeElement instanceof HTMLTextAreaElement;
-      if (!document.hidden && !isEditingNote) void loadApplicationData(true);
-    }, 12_000);
+      if (!document.hidden && !isEditingNote) void loadPolledApplicationData();
+    }, pollInterval);
     return () => window.clearInterval(poll);
-  }, [authUser, loadApplicationData]);
+  }, [authUser, initialSection, loadPolledApplicationData]);
 
   useEffect(() => {
     const loadSavedPreferences = window.setTimeout(() => {
