@@ -7,6 +7,10 @@ import type {
   AutoResponseImageBlock as AutoResponseImageBlockType,
 } from "@/types/api";
 import { AutoResponseImageBlock } from "./auto-response-image-block";
+import {
+  AutoResponseRichMessageBlock,
+  type AutoResponseRichMessageBlockValue,
+} from "./auto-response-rich-message-block";
 import type { AutoResponseDict } from "./auto-response-i18n";
 
 type AutoResponseMessageBuilderProps = {
@@ -28,7 +32,7 @@ export function AutoResponseMessageBuilder({
   const canAddMore = messages.length < 5;
 
   const handleAddText = () => {
-    if (!canAddMore) return;
+    if (!canAddMore || disabled) return;
     const newBlock: AutoResponseTextBlock = {
       id: crypto.randomUUID(),
       type: "TEXT",
@@ -39,13 +43,24 @@ export function AutoResponseMessageBuilder({
   };
 
   const handleAddImage = () => {
-    if (!canAddMore) return;
+    if (!canAddMore || disabled) return;
     const newBlock: AutoResponseImageBlockType = {
       id: crypto.randomUUID(),
       type: "IMAGE",
       mediaObjectKey: "",
     };
     onChange([...messages, newBlock]);
+    setShowAddMenu(false);
+  };
+
+  const handleAddRichMessage = () => {
+    if (!canAddMore || disabled) return;
+    const newBlock: AutoResponseRichMessageBlockValue = {
+      id: crypto.randomUUID(),
+      type: "RICH_MESSAGE",
+      richMessageId: "",
+    };
+    onChange([...messages, newBlock as unknown as AutoResponseMessageBlock]);
     setShowAddMenu(false);
   };
 
@@ -57,7 +72,6 @@ export function AutoResponseMessageBuilder({
 
   const handleDeleteBlock = (index: number) => {
     if (messages.length <= 1) {
-      // Keep at least one block or reset to empty text
       const next: AutoResponseMessageBlock[] = [
         {
           id: crypto.randomUUID(),
@@ -105,7 +119,6 @@ export function AutoResponseMessageBuilder({
 
   return (
     <div className="space-y-4">
-      {/* Builder Header & Counter */}
       <div className="flex items-center justify-between">
         <div>
           <label className="block text-xs font-bold text-[var(--app-text-secondary)] uppercase tracking-wider">
@@ -127,9 +140,24 @@ export function AutoResponseMessageBuilder({
         </span>
       </div>
 
-      {/* Ordered Blocks Stream */}
       <div className="space-y-3">
         {messages.map((block, idx) => {
+          if ((block as { type?: string }).type === "RICH_MESSAGE") {
+            return (
+              <AutoResponseRichMessageBlock
+                key={(block as unknown as AutoResponseRichMessageBlockValue).id || `rich-${idx}`}
+                block={block as unknown as AutoResponseRichMessageBlockValue}
+                index={idx}
+                totalBlocks={messages.length}
+                disabled={disabled}
+                onChange={(updated) => handleUpdateBlock(idx, updated as unknown as AutoResponseMessageBlock)}
+                onDelete={() => handleDeleteBlock(idx)}
+                onMoveUp={() => handleMoveUp(idx)}
+                onMoveDown={() => handleMoveDown(idx)}
+              />
+            );
+          }
+
           if (block.type === "IMAGE") {
             return (
               <AutoResponseImageBlock
@@ -147,13 +175,12 @@ export function AutoResponseMessageBuilder({
             );
           }
 
-          // TEXT Block
+          const textBlock = block as AutoResponseTextBlock;
           return (
             <div
-              key={block.id || `txt-${idx}`}
+              key={textBlock.id || `txt-${idx}`}
               className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4 shadow-sm transition-all hover:border-[var(--app-accent)]/50"
             >
-              {/* Block Header */}
               <div className="mb-2 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[var(--app-accent)]/10 text-xs font-bold text-[var(--app-accent)]">
@@ -195,12 +222,11 @@ export function AutoResponseMessageBuilder({
                 </div>
               </div>
 
-              {/* Textarea */}
               <textarea
-                value={block.textTemplate || ""}
+                value={textBlock.textTemplate || ""}
                 onChange={(e) =>
                   handleUpdateBlock(idx, {
-                    ...block,
+                    ...textBlock,
                     textTemplate: e.target.value,
                   })
                 }
@@ -210,13 +236,12 @@ export function AutoResponseMessageBuilder({
                 className="w-full resize-y rounded-xl border border-[var(--app-border)] bg-[var(--app-bg)] p-3 text-sm text-[var(--app-text-primary)] focus:border-[var(--app-accent)] focus:outline-none"
               />
 
-              {/* Variable Inserter */}
               <div className="relative mt-2">
                 <button
                   type="button"
                   onClick={() =>
                     setVariableDropdownBlockId(
-                      variableDropdownBlockId === block.id ? null : block.id,
+                      variableDropdownBlockId === textBlock.id ? null : textBlock.id,
                     )
                   }
                   disabled={disabled}
@@ -229,36 +254,12 @@ export function AutoResponseMessageBuilder({
                   <span className="text-[10px] text-[var(--app-text-secondary)]">▼</span>
                 </button>
 
-                {variableDropdownBlockId === block.id && (
+                {variableDropdownBlockId === textBlock.id && (
                   <div className="absolute left-0 top-full z-20 mt-1 w-64 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] p-1.5 shadow-xl">
-                    <button
-                      type="button"
-                      onClick={() => handleInsertVariable(idx, "{{store.storeName}}")}
-                      className="block w-full rounded-lg px-3 py-1.5 text-left text-xs text-[var(--app-text-primary)] hover:bg-[var(--app-surface-hover)]"
-                    >
-                      {t.varStoreName}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleInsertVariable(idx, "{{store.googleMapsUrl}}")}
-                      className="block w-full rounded-lg px-3 py-1.5 text-left text-xs text-[var(--app-text-primary)] hover:bg-[var(--app-surface-hover)]"
-                    >
-                      {t.varGoogleMapsUrl}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleInsertVariable(idx, "{{store.lineOaLink}}")}
-                      className="block w-full rounded-lg px-3 py-1.5 text-left text-xs text-[var(--app-text-primary)] hover:bg-[var(--app-surface-hover)]"
-                    >
-                      {t.varLineOaLink}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleInsertVariable(idx, "{{store.tiktokProfileUrl}}")}
-                      className="block w-full rounded-lg px-3 py-1.5 text-left text-xs text-[var(--app-text-primary)] hover:bg-[var(--app-surface-hover)]"
-                    >
-                      {t.varTiktokUrl}
-                    </button>
+                    <button type="button" onClick={() => handleInsertVariable(idx, "{{store.storeName}}") } className="block w-full rounded-lg px-3 py-1.5 text-left text-xs text-[var(--app-text-primary)] hover:bg-[var(--app-surface-hover)]">{t.varStoreName}</button>
+                    <button type="button" onClick={() => handleInsertVariable(idx, "{{store.googleMapsUrl}}") } className="block w-full rounded-lg px-3 py-1.5 text-left text-xs text-[var(--app-text-primary)] hover:bg-[var(--app-surface-hover)]">{t.varGoogleMapsUrl}</button>
+                    <button type="button" onClick={() => handleInsertVariable(idx, "{{store.lineOaLink}}") } className="block w-full rounded-lg px-3 py-1.5 text-left text-xs text-[var(--app-text-primary)] hover:bg-[var(--app-surface-hover)]">{t.varLineOaLink}</button>
+                    <button type="button" onClick={() => handleInsertVariable(idx, "{{store.tiktokProfileUrl}}") } className="block w-full rounded-lg px-3 py-1.5 text-left text-xs text-[var(--app-text-primary)] hover:bg-[var(--app-surface-hover)]">{t.varTiktokUrl}</button>
                   </div>
                 )}
               </div>
@@ -267,7 +268,6 @@ export function AutoResponseMessageBuilder({
         })}
       </div>
 
-      {/* Add Block Action */}
       <div className="relative">
         <button
           type="button"
@@ -284,23 +284,10 @@ export function AutoResponseMessageBuilder({
         </button>
 
         {showAddMenu && canAddMore && (
-          <div className="absolute bottom-full left-1/2 z-20 mb-2 w-48 -translate-x-1/2 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-2 shadow-2xl">
-            <button
-              type="button"
-              onClick={handleAddText}
-              className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs font-semibold text-[var(--app-text-primary)] hover:bg-[var(--app-surface-hover)]"
-            >
-              <span className="text-sm">💬</span>
-              {t.typeText}
-            </button>
-            <button
-              type="button"
-              onClick={handleAddImage}
-              className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs font-semibold text-[var(--app-text-primary)] hover:bg-[var(--app-surface-hover)]"
-            >
-              <span className="text-sm">🖼</span>
-              {t.typeImage}
-            </button>
+          <div className="absolute bottom-full left-1/2 z-20 mb-2 w-52 -translate-x-1/2 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-2 shadow-2xl">
+            <button type="button" onClick={handleAddText} className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs font-semibold text-[var(--app-text-primary)] hover:bg-[var(--app-surface-hover)]"><span className="text-sm">💬</span>{t.typeText}</button>
+            <button type="button" onClick={handleAddImage} className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs font-semibold text-[var(--app-text-primary)] hover:bg-[var(--app-surface-hover)]"><span className="text-sm">🖼</span>{t.typeImage}</button>
+            <button type="button" onClick={handleAddRichMessage} className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs font-semibold text-[var(--app-text-primary)] hover:bg-[var(--app-surface-hover)]"><span className="inline-flex h-5 min-w-5 items-center justify-center rounded border border-[var(--app-border)] px-1 text-[9px] font-bold">RM</span>Rich Message</button>
           </div>
         )}
       </div>
