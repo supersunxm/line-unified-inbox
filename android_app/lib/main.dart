@@ -4,6 +4,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'core/logging/safe_logger.dart';
 import 'core/localization/localization.dart';
 import 'core/network/api_client.dart';
+import 'core/network/store_view_context.dart';
 import 'core/storage/token_store.dart';
 import 'core/storage/pin_device_state_store.dart';
 import 'core/models/models.dart';
@@ -25,6 +26,7 @@ import 'features/inbox/conversation_repository.dart';
 import 'features/notifications/notification_service.dart';
 import 'features/realtime/realtime_service.dart';
 import 'features/shell/authenticated_shell.dart';
+import 'features/shell/store_view_repository.dart';
 import 'features/summary/summary_repository.dart';
 
 void main() {
@@ -49,6 +51,8 @@ class _LineOaAppState extends State<LineOaApp> with WidgetsBindingObserver {
   late final PinDeviceStateStore _pinDeviceState;
   late final AuthRepository _auth;
   late final ApiClient _api;
+  late final StoreViewContextController _storeView;
+  late final StoreViewRepository _storeViewRepository;
   late final ConversationRepository _conversations;
   late final SummaryRepository _summary;
   late final RealtimeService _realtime;
@@ -73,8 +77,14 @@ class _LineOaAppState extends State<LineOaApp> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     _tokens = TokenStore();
     _pinDeviceState = PinDeviceStateStore();
-    _api = ApiClient(_tokens, onSessionExpired: _expireSession);
+    _storeView = StoreViewContextController();
+    _api = ApiClient(
+      _tokens,
+      httpClient: StoreViewHttpClient(_storeView),
+      onSessionExpired: _expireSession,
+    );
     _auth = AuthRepository(_api, _tokens);
+    _storeViewRepository = StoreViewRepository(_api);
     _conversations = ConversationRepository(_api);
     _summary = SummaryRepository(_api);
     _realtime = RealtimeService(_tokens);
@@ -93,6 +103,7 @@ class _LineOaAppState extends State<LineOaApp> with WidgetsBindingObserver {
   void dispose() {
     _notifications.dispose();
     _realtime.dispose();
+    _storeView.dispose();
     _language.dispose();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
@@ -284,6 +295,7 @@ class _LineOaAppState extends State<LineOaApp> with WidgetsBindingObserver {
   }
 
   Future<void> _expireSession() async {
+    _storeView.exit();
     await _tokens.clear();
     if (mounted && !_loggingOut) {
       _navigator.currentState?.popUntil((route) => route.isFirst);
@@ -300,6 +312,7 @@ class _LineOaAppState extends State<LineOaApp> with WidgetsBindingObserver {
   Future<void> _logout() async {
     if (_loggingOut) return;
     _loggingOut = true;
+    _storeView.exit();
     if (mounted) {
       setState(() {});
       _navigator.currentState?.popUntil((route) => route.isFirst);
@@ -417,6 +430,8 @@ class _LineOaAppState extends State<LineOaApp> with WidgetsBindingObserver {
         conversations: _conversations,
         summary: _summary,
         events: _realtime.events,
+        storeView: _storeView,
+        storeViewRepository: _storeViewRepository,
         onLogout: _logout,
         onConversationOpened: _notifications.clearConversationNotifications,
         updateService: _updateService,
