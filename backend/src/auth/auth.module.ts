@@ -1,5 +1,5 @@
 import { Module } from "@nestjs/common";
-import { APP_GUARD } from "@nestjs/core";
+import { APP_GUARD, APP_INTERCEPTOR } from "@nestjs/core";
 import { randomInt } from "node:crypto";
 import { AuthController } from "./auth.controller";
 import { AuthGuard } from "./auth.guard";
@@ -24,8 +24,10 @@ import { SMS_PROVIDER } from "./sms-provider";
 import { AuthRateLimitService } from "./auth-rate-limit.service";
 import { AuditLogService } from "./audit-log.service";
 import { AdminAuditLogController } from "./admin-audit-log.controller";
+import { StoreContextController } from "./store-context.controller";
+import { StoreContextAuditInterceptor } from "./store-context-audit.interceptor";
 
 import { PrismaModule } from "../prisma.module";
 
-@Module({ imports: [EmailModule, PrismaModule], controllers: [AuthController, RegistrationController, AdminRegistrationController, AdminAuditLogController], providers: [PasswordService, AuthService, AuthRateLimitService, AuditLogService, SetupService, DevAdminService, PilotAdminBootstrapService, StoreAccessService, MainOaAccessService, { provide: OTP_CODE_GENERATOR, useValue: () => randomInt(0, 1_000_000).toString().padStart(6, "0") }, { provide: SMS_PROVIDER, useFactory: () => process.env.NODE_ENV === "production" || process.env.SMS_PROVIDER === "smsmkt" ? new SmsMktProvider() : new DevelopmentSmsProvider() }, OtpChallengeService, RegistrationService, HqRegistrationService, MobileAuthService, { provide: APP_GUARD, useClass: AuthGuard }], exports: [PasswordService, AuthService, StoreAccessService, MainOaAccessService, AuditLogService] })
+@Module({ imports: [EmailModule, PrismaModule], controllers: [AuthController, RegistrationController, AdminRegistrationController, AdminAuditLogController, StoreContextController], providers: [PasswordService, AuthService, AuthRateLimitService, AuditLogService, SetupService, DevAdminService, PilotAdminBootstrapService, StoreAccessService, MainOaAccessService, { provide: OTP_CODE_GENERATOR, useValue: () => randomInt(0, 1_000_000).toString().padStart(6, "0") }, { provide: SMS_PROVIDER, useFactory: () => process.env.NODE_ENV === "production" || process.env.SMS_PROVIDER === "smsmkt" ? new SmsMktProvider() : new DevelopmentSmsProvider() }, OtpChallengeService, RegistrationService, HqRegistrationService, MobileAuthService, { provide: APP_GUARD, useClass: AuthGuard }, { provide: APP_INTERCEPTOR, useClass: StoreContextAuditInterceptor }], exports: [PasswordService, AuthService, StoreAccessService, MainOaAccessService, AuditLogService] })
 export class AuthModule {}
