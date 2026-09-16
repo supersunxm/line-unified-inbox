@@ -6,6 +6,7 @@ import '../../core/localization/localization.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/widgets/app_widgets.dart';
+import 'summary_follower_card.dart';
 import 'summary_repository.dart';
 
 const _minimumResponseSample = 10;
@@ -22,6 +23,7 @@ class SummaryPage extends StatefulWidget {
 class _SummaryPageState extends State<SummaryPage> {
   late String _month = _currentMonth();
   MonthlySummary? _summary;
+  SummaryFollowerSnapshot? _followers;
   Object? _error;
   bool _loading = true;
 
@@ -35,12 +37,14 @@ class _SummaryPageState extends State<SummaryPage> {
     setState(() {
       _loading = true;
       _error = null;
+      _followers = null;
     });
     try {
       final summary = await widget.repository.monthly(_month);
       if (!mounted) return;
       setState(() {
         _summary = summary;
+        _followers = widget.repository.lastFollowers;
         _loading = false;
       });
     } catch (error) {
@@ -96,7 +100,8 @@ class _SummaryPageState extends State<SummaryPage> {
           onRetry: _load);
     }
     if (summary.volume.incomingMessages == 0 &&
-        summary.volume.incomingConversations == 0) {
+        summary.volume.incomingConversations == 0 &&
+        !(_followers?.available ?? false)) {
       return EmptyState(
           icon: Icons.bar_chart_outlined,
           title: appLocalizations(context).noActivity,
@@ -114,6 +119,10 @@ class _SummaryPageState extends State<SummaryPage> {
                 style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: AppSpacing.md),
             _MetricGrid(summary: summary),
+            if (_followers != null) ...[
+              const SizedBox(height: AppSpacing.lg),
+              SummaryFollowerCard(data: _followers!),
+            ],
             const SizedBox(height: AppSpacing.xl),
             _TeamHandlingCard(team: summary.team),
             const SizedBox(height: AppSpacing.lg),
