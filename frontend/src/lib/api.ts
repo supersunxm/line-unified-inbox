@@ -107,9 +107,11 @@ export type LineChatSafeJobFailure = {
   recommendedAction: LineChatRecommendedAction;
   isAutoFixable: boolean;
 };
+export type LineChatBrowserState = "AVAILABLE" | "BUSY" | "RECOVERING" | "UNKNOWN";
 export type LineChatOperationsSession = {
   id: string; sessionKey: string; displayName: string; status: string; healthStatus: string; healthFailureStage: string | null;
   consecutiveAuthFailures: number; mappedOaCount: number; enabledOaCount: number; activeProfileLeases: number; activeLeaseOperation: string | null;
+  browserState: LineChatBrowserState; browserOperationKind: string | null; browserBusyUntil: string | null;
   authRecoveryInProgress?: boolean; authRecoveryCooldownRemainingMs?: number;
   lastAuthenticatedAt: string | null; lastSuccessfulRequestAt: string | null; lastAuthFailureAt: string | null;
   healthLastCheckedAt: string | null; healthLastHealthyAt: string | null; jobs: LineChatJobCounts;

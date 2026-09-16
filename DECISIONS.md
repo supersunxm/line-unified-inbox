@@ -2542,3 +2542,10 @@ Keep `StoreMaster.tiktokProfileUrl` as the only persisted TikTok profile URL. Po
 - Recover singleton artifacts only when `SingletonLock` is a readable symlink that identifies the current host and a numeric PID that is definitively absent. Different-host, unreadable, live, or otherwise ambiguous ownership remains busy and no singleton artifact is deleted.
 - Remove only `SingletonLock`, `SingletonSocket`, and `SingletonCookie` during confirmed stale recovery. Never remove or rewrite cookies, Local Storage, IndexedDB, Preferences, `Default/`, or the profile directory.
 - Route all Nest LINE Chat persistent-browser callers, including noVNC and manager text/image relays, through `LineChatSessionService`. Keep explicit custom launchers available for existing unit-test fakes.
+
+## 2026-09-16: LINE Chat independent browser availability observability
+
+- Treat `LineChatProfileOperationLease` as the sole browser/profile availability source. An active `leaseUntil > now` is `BUSY`; an absent or expired lease is `AVAILABLE`. Do not add a second lock, transient-state table, migration, or lifecycle behavior.
+- Expose only `browserState`, the allowlisted `operationKind`, and `browserBusyUntil`. Never select or serialize `ownerToken`; retain the existing session/authentication fields unchanged so BUSY cannot become AUTH_REQUIRED or replace CONNECTED.
+- Keep operation-kind translation centralized in the health-status helper and use Thai labels for the operator-facing Browser state/help copy. Show BUSY as a temporary amber informational state with the existing overall-health classification independent.
+- Add a 30-second read-only health-page refresh because this page had no existing polling cadence; keep manual refresh behavior and avoid an aggressive interval. Do not ingest historical stale-lock events because none are already persisted in the health-event contract.

@@ -1,6 +1,47 @@
-import type { LineChatOperationsSession } from "@/lib/api";
+import type { LineChatBrowserState, LineChatOperationsSession } from "@/lib/api";
 
 export type OverallHealth = { tone: "success" | "warning" | "danger"; label: string; reason: string };
+
+const BROWSER_STATE_LABELS: Record<LineChatBrowserState, string> = {
+  AVAILABLE: "พร้อมใช้งาน",
+  BUSY: "กำลังใช้งาน",
+  RECOVERING: "กำลังกู้คืน",
+  UNKNOWN: "ไม่ทราบสถานะ",
+};
+
+const BROWSER_OPERATION_LABELS: Record<string, string> = {
+  NICKNAME_UPDATE: "เปลี่ยนชื่อลูกค้า",
+  RECENT_RESOLUTION: "จับคู่ลูกค้า",
+  HEALTH_SESSION: "ตรวจ Session",
+  HEALTH_OA: "ตรวจ OA",
+  MANUAL_DIAGNOSTIC: "ตรวจสอบ/เปิด Browser",
+};
+
+export const BROWSER_STATUS_HELP_TEXT =
+  "สถานะ Session แสดงการเชื่อมต่อ LINE\nสถานะ Browser แสดงว่า Chromium Profile พร้อมรับงานใหม่หรือกำลังถูกใช้งาน";
+export const BROWSER_BUSY_HELP_TEXT = "เป็นสถานะชั่วคราว ระบบจะรอและลองใหม่อัตโนมัติ";
+
+export function getBrowserStateLabel(state: LineChatBrowserState): string {
+  return BROWSER_STATE_LABELS[state];
+}
+
+export function getBrowserOperationLabel(operationKind: string | null): string | null {
+  return operationKind ? BROWSER_OPERATION_LABELS[operationKind] ?? operationKind : null;
+}
+
+export function getBrowserStateTone(state: LineChatBrowserState): "success" | "warning" | "info" | "neutral" {
+  switch (state) {
+    case "AVAILABLE":
+      return "success";
+    case "BUSY":
+      return "warning";
+    case "RECOVERING":
+      return "info";
+    case "UNKNOWN":
+    default:
+      return "neutral";
+  }
+}
 
 export function getOverallHealth(session: LineChatOperationsSession): OverallHealth {
   if (session.authRecoveryInProgress) {

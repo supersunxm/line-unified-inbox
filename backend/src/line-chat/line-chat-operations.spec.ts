@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { classifyLineChatJobFailure, getRecommendedAction, LineChatOperationsService } from "./line-chat-operations.service";
 import { LineChatNicknameSyncJobStatus, LineChatSessionStatus } from "@prisma/client";
+import type { PrismaService } from "../prisma.service";
 
 test("LineChatOperationsService: getHealthSummary aggregates non-secret metrics", async () => {
   const mockSessions = [
@@ -83,6 +84,9 @@ test("LineChatOperationsService: getHealthSummary aggregates non-secret metrics"
   assert.equal(health.sessions[1].status, LineChatSessionStatus.AUTH_REQUIRED);
   assert.equal(health.sessions[1].consecutiveAuthFailures, 2);
   assert.equal(health.sessions[0].healthStatus, "CONNECTED");
+  assert.equal(health.sessions[0].browserState, "AVAILABLE");
+  assert.equal(health.sessions[0].browserOperationKind, null);
+  assert.equal(health.sessions[0].browserBusyUntil, null);
   assert.equal(health.sessions[0].jobs.success, 10);
   assert.deepEqual(Object.keys(health.sessions[0].recentFailures[0]).sort(), ["attemptCount", "conversationId", "createdAt", "failureCategory", "failureStage", "isAutoFixable", "jobId", "oaId", "oaName", "recommendedAction", "updatedAt"]);
   assert.equal(health.sessions[0].recentFailures[0].failureStage, "RESOLVE_NO_MATCH");
@@ -102,6 +106,75 @@ test("LineChatOperationsService: getHealthSummary aggregates non-secret metrics"
   assert.equal(health.rollout.disabledOas, 1);
   assert.equal(health.rollout.missingChatBotId, 1);
   assert.equal(health.rollout.missingSession, 1);
+});
+
+test("LineChatOperationsService: browser state uses only a non-expired lease and never exposes ownerToken", async () => {
+  const activeUntil = new Date(Date.now() + 60_000);
+  const expiredAt = new Date(Date.now() - 60_000);
+  const sessions = [{
+    id: "session-connected",
+    sessionKey: "profile-connected",
+    displayName: "Connected profile",
+    status: LineChatSessionStatus.ACTIVE,
+    lastAuthenticatedAt: null,
+    lastSuccessfulRequestAt: null,
+    lastAuthFailureAt: null,
+    consecutiveAuthFailures: 0,
+    healthStatus: "CONNECTED",
+    healthFailureStage: null,
+    healthLastCheckedAt: null,
+    healthLastHealthyAt: null,
+    lineOfficialAccounts: [],
+  }];
+  const leases = [
+    {
+      lineChatSessionId: "session-connected",
+      operationKind: "NICKNAME_UPDATE" as const,
+      leaseUntil: activeUntil,
+      ownerToken: "owner-token-must-not-leak",
+    },
+    {
+      lineChatSessionId: "session-connected",
+      operationKind: "RECENT_RESOLUTION" as const,
+      leaseUntil: expiredAt,
+      ownerToken: "expired-owner-token-must-not-leak",
+    },
+  ];
+  const mockPrisma = {
+    lineChatSession: { findMany: async () => sessions },
+    lineOfficialAccount: { findMany: async () => [] },
+    lineChatNicknameSyncJob: {
+      groupBy: async () => [],
+      findMany: async () => [],
+      count: async () => 0,
+      findFirst: async () => null,
+    },
+    lineChatProfileOperationLease: {
+      findMany: async (args: { where: { leaseUntil: { gt: Date } } }) =>
+        leases.filter((lease) => lease.leaseUntil > args.where.leaseUntil.gt),
+    },
+    conversation: {},
+  } as unknown as PrismaService;
+
+  const health = await new LineChatOperationsService(mockPrisma).getHealthSummary();
+  const session = health.sessions[0];
+
+  assert.equal(session.healthStatus, "CONNECTED");
+  assert.equal(session.browserState, "BUSY");
+  assert.equal(session.browserOperationKind, "NICKNAME_UPDATE");
+  assert.equal(session.browserBusyUntil, activeUntil.toISOString());
+  assert.equal(session.activeProfileLeases, 1);
+  assert.equal(session.activeLeaseOperation, "NICKNAME_UPDATE");
+  assert.doesNotMatch(JSON.stringify(health), /owner-token|expired-owner-token/);
+
+  const availableMockPrisma = {
+    ...mockPrisma,
+    lineChatProfileOperationLease: { findMany: async () => [] },
+  } as unknown as PrismaService;
+  const availableHealth = await new LineChatOperationsService(availableMockPrisma).getHealthSummary();
+  assert.equal(availableHealth.sessions[0].browserState, "AVAILABLE");
+  assert.equal(availableHealth.sessions[0].browserOperationKind, null);
+  assert.equal(availableHealth.sessions[0].browserBusyUntil, null);
 });
 
 test("LineChatOperationsService: failures are classified without treating job failures as session health", () => {
@@ -350,4 +423,3 @@ test("LineChatOperationsService: tryRememberedLogin works even when auto recover
     else process.env.LINE_CHAT_AUTO_AUTH_RECOVERY_ENABLED = previous;
   }
 });
-

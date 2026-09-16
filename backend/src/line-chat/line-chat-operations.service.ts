@@ -2,6 +2,9 @@ import { Inject, Injectable, NotFoundException, Optional } from "@nestjs/common"
 import { PrismaService } from "../prisma.service";
 import { LineChatNicknameSyncJobStatus, LineChatSessionStatus } from "@prisma/client";
 import { LineChatAuthRecoveryService, type LineChatAuthRecoveryResult } from "./line-chat-auth-recovery.service";
+import type { LineChatProfileOperationKind } from "./line-chat-profile-operation-coordinator.service";
+
+export type LineChatBrowserState = "AVAILABLE" | "BUSY" | "RECOVERING" | "UNKNOWN";
 
 export interface LineChatSessionSummary {
   id: string;
@@ -20,6 +23,9 @@ export interface LineChatSessionSummary {
   healthLastHealthyAt: string | null;
   activeProfileLeases: number;
   activeLeaseOperation: string | null;
+  browserState: LineChatBrowserState;
+  browserOperationKind: LineChatProfileOperationKind | null;
+  browserBusyUntil: string | null;
   authRecoveryInProgress?: boolean;
   authRecoveryCooldownRemainingMs?: number;
   jobs: LineChatQueueMetrics;
@@ -189,7 +195,7 @@ export class LineChatOperationsService {
       }),
       this.prisma.lineChatProfileOperationLease.findMany({
         where: { leaseUntil: { gt: now } },
-        select: { lineChatSessionId: true, operationKind: true },
+        select: { lineChatSessionId: true, operationKind: true, leaseUntil: true },
       }),
       this.prisma.lineChatNicknameSyncJob.findMany({
         where: { status: { in: [LineChatNicknameSyncJobStatus.FAILED_AUTH, LineChatNicknameSyncJobStatus.FAILED] } },
@@ -231,6 +237,7 @@ export class LineChatOperationsService {
         if (oaIds.has(group.lineOfficialAccountId)) addJobCount(jobs, group.status, group._count.id);
       }
       const leases = activeLeases.filter((lease) => lease.lineChatSessionId === s.id);
+      const activeLease = leases[0];
       return {
         id: s.id,
         sessionKey: s.sessionKey,
@@ -247,7 +254,10 @@ export class LineChatOperationsService {
         healthLastCheckedAt: s.healthLastCheckedAt?.toISOString() ?? null,
         healthLastHealthyAt: s.healthLastHealthyAt?.toISOString() ?? null,
         activeProfileLeases: leases.length,
-        activeLeaseOperation: leases[0]?.operationKind ?? null,
+        activeLeaseOperation: activeLease?.operationKind ?? null,
+        browserState: activeLease ? "BUSY" : "AVAILABLE",
+        browserOperationKind: activeLease?.operationKind ?? null,
+        browserBusyUntil: activeLease?.leaseUntil.toISOString() ?? null,
         authRecoveryInProgress: this.authRecovery?.isRecoveryInProgress(s.id) ?? false,
         authRecoveryCooldownRemainingMs: this.authRecovery?.getCooldownRemainingMs(s.id) ?? 0,
         jobs,

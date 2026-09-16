@@ -25,7 +25,14 @@ import {
 } from "@/lib/api";
 import type { AuthUser } from "@/lib/authorization";
 import { useAppLanguage } from "../../language";
-import { getOverallHealth } from "./line-chat-health-status";
+import {
+  BROWSER_BUSY_HELP_TEXT,
+  BROWSER_STATUS_HELP_TEXT,
+  getBrowserOperationLabel,
+  getBrowserStateLabel,
+  getBrowserStateTone,
+  getOverallHealth,
+} from "./line-chat-health-status";
 
 type FilterTab = "ALL" | "AUTO_FIXABLE" | "MANUAL_REVIEW" | "AUTHENTICATION" | "SYSTEM_ATTENTION";
 
@@ -75,6 +82,28 @@ const actionLabel = (action: LineChatRecommendedAction): string => {
       return "Investigate";
   }
 };
+
+function BrowserStatus({ session }: { session: LineChatOperationsSession }) {
+  const operationLabel = getBrowserOperationLabel(session.browserOperationKind);
+  const isBusy = session.browserState === "BUSY";
+
+  return (
+    <div
+      className="space-y-1"
+      title={isBusy ? `${BROWSER_STATUS_HELP_TEXT}\n${BROWSER_BUSY_HELP_TEXT}` : BROWSER_STATUS_HELP_TEXT}
+    >
+      <div className="text-xs text-[var(--app-text-tertiary)]">Browser</div>
+      <Badge variant={getBrowserStateTone(session.browserState)} dot>
+        {getBrowserStateLabel(session.browserState)}
+      </Badge>
+      {operationLabel && <div className="text-xs text-[var(--app-text-secondary)]">{operationLabel}</div>}
+      {isBusy && <div className="text-[11px] text-[var(--app-text-tertiary)]">{BROWSER_BUSY_HELP_TEXT}</div>}
+      {isBusy && session.browserBusyUntil && (
+        <div className="text-[11px] text-[var(--app-text-tertiary)]">ถึง {formatDate(session.browserBusyUntil)}</div>
+      )}
+    </div>
+  );
+}
 
 function JobSummary({
   session,
@@ -136,8 +165,8 @@ export function LineChatHealthView() {
   const [retrySelectedConfirmOpen, setRetrySelectedConfirmOpen] = useState(false);
   const [actionInProgress, setActionInProgress] = useState(false);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (options: { showLoading?: boolean } = {}) => {
+    if (options.showLoading !== false) setLoading(true);
     setError(null);
     try {
       const [authUser, health] = await Promise.all([api.me(), api.lineChatOperationsHealth()]);
@@ -156,6 +185,11 @@ export function LineChatHealthView() {
       void load();
     }, 0);
     return () => window.clearTimeout(timer);
+  }, [load]);
+
+  useEffect(() => {
+    const poll = window.setInterval(() => void load({ showLoading: false }), 30_000);
+    return () => window.clearInterval(poll);
   }, [load]);
 
   const selected = useMemo(
@@ -284,13 +318,13 @@ export function LineChatHealthView() {
     setActionInProgress(true);
     setError(null);
     try {
-      const result = await api.retryLineChatSelectedJobs(
-        detailSession.sessionKey,
-        Array.from(selectedJobIds),
+      const result = await api.retryLineChatSelectedJobs({
+        sessionKey: detailSession.sessionKey,
+        jobIds: Array.from(selectedJobIds),
         overrideNonRetryable,
-      );
+      });
       setNotice(
-        `${result.retriedCount} selected jobs queued for ${detailSession.sessionKey}. Skipped non-retryable: ${result.skippedNonRetryableCount}.`,
+        `${result.retriedCount} selected jobs queued for ${detailSession.sessionKey}. Skipped non-retryable: ${result.skippedCount}.`,
       );
       setRetrySelectedConfirmOpen(false);
       setDetailSessionKey(null);
@@ -367,6 +401,14 @@ export function LineChatHealthView() {
             </Button>
           }
         />
+        <div
+          role="note"
+          title={BROWSER_STATUS_HELP_TEXT}
+          className="rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-subtle)] p-3 text-xs text-[var(--app-text-secondary)]"
+        >
+          <div>สถานะ Session แสดงการเชื่อมต่อ LINE</div>
+          <div>สถานะ Browser แสดงว่า Chromium Profile พร้อมรับงานใหม่หรือกำลังถูกใช้งาน</div>
+        </div>
         {error && (
           <div role="alert" className="rounded-xl border border-[var(--app-danger)]/30 bg-[var(--app-danger-soft)] p-3 text-sm text-[var(--app-danger)]">
             {error}
@@ -412,12 +454,11 @@ export function LineChatHealthView() {
                     <TableHead>Account / session</TableHead>
                     <TableHead>Mapped OAs</TableHead>
                     <TableHead>Session</TableHead>
+                    <TableHead>Browser</TableHead>
                     <TableHead>Health</TableHead>
                     <TableHead>Job summary</TableHead>
                     <TableHead>Last health check</TableHead>
                     <TableHead>Failure stage</TableHead>
-                    <TableHead>Active leases</TableHead>
-                    <TableHead>Overall</TableHead>
                     <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -437,13 +478,16 @@ export function LineChatHealthView() {
                         </TableCell>
                         <TableCell>{session.mappedOaCount}</TableCell>
                         <TableCell>
-                          <Badge variant={tone(session.status)} dot>
-                            {session.status}
+                          <Badge variant={tone(session.healthStatus)} dot>
+                            {session.healthStatus}
                           </Badge>
                         </TableCell>
                         <TableCell>
-                          <Badge variant={tone(session.healthStatus)} dot>
-                            {session.healthStatus}
+                          <BrowserStatus session={session} />
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={overall.tone} dot>
+                            {overall.label}
                           </Badge>
                         </TableCell>
                         <TableCell>
@@ -451,15 +495,6 @@ export function LineChatHealthView() {
                         </TableCell>
                         <TableCell>{formatDate(session.healthLastCheckedAt)}</TableCell>
                         <TableCell>{session.healthFailureStage ?? "—"}</TableCell>
-                        <TableCell>
-                          {session.activeProfileLeases}
-                          {session.activeLeaseOperation ? ` · ${session.activeLeaseOperation}` : ""}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={overall.tone} dot>
-                            {overall.label}
-                          </Badge>
-                        </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-1.5">
                             {(session.healthStatus === "AUTH_REQUIRED" || session.status === "AUTH_REQUIRED") && (
@@ -518,10 +553,23 @@ export function LineChatHealthView() {
                   <h2 className="text-lg font-semibold">{selected.displayName}</h2>
                   <p className="text-sm text-[var(--app-text-secondary)]">{selected.sessionKey}</p>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  <Badge variant={tone(selected.status)}>{selected.status}</Badge>
-                  <Badge variant={tone(selected.healthStatus)}>{selected.healthStatus}</Badge>
-                  <Badge variant={getOverallHealth(selected).tone}>{getOverallHealth(selected).label}</Badge>
+                <div className="grid gap-2 sm:grid-cols-3">
+                  <div className="rounded-xl border border-[var(--app-border)] p-3">
+                    <div className="text-xs text-[var(--app-text-tertiary)]">Session</div>
+                    <Badge variant={tone(selected.healthStatus)} dot>
+                      {selected.healthStatus}
+                    </Badge>
+                    <div className="mt-1 text-[11px] text-[var(--app-text-tertiary)]">Lifecycle: {selected.status}</div>
+                  </div>
+                  <div className="rounded-xl border border-[var(--app-border)] p-3">
+                    <BrowserStatus session={selected} />
+                  </div>
+                  <div className="rounded-xl border border-[var(--app-border)] p-3">
+                    <div className="text-xs text-[var(--app-text-tertiary)]">Health</div>
+                    <Badge variant={getOverallHealth(selected).tone} dot>
+                      {getOverallHealth(selected).label}
+                    </Badge>
+                  </div>
                 </div>
                 <dl className="grid grid-cols-2 gap-3 text-sm">
                   <div>
