@@ -51,6 +51,7 @@ import { MassMessageModule } from "./mass-message/mass-message.module";
 import { CouponModule } from "./coupons/coupon.module";
 import { TikTokModule } from "./tiktok/tiktok.module";
 import { MonthlySummaryController } from "./mobile/monthly-summary.controller";
+import { MonthlyFollowerSummaryService } from "./mobile/monthly-follower-summary.service";
 import { MonthlySummaryService } from "./mobile/monthly-summary.service";
 import { PriorityService } from "./priority/priority.service";
 import { PurchaseAnalyticsController } from "./purchase-analytics.controller";
@@ -72,6 +73,6 @@ import { StoreInsightsModule } from "./store-insights/store-insights.module";
 @Module({
   imports: [PrismaModule, AuthModule, StoreInsightsModule, RealtimeModule, CredentialsModule, MediaModule, ClassificationModule, LineProfileModule, LineWebhookModule, LineOfficialAccountsModule, StoreMasterModule, FollowerInsightsModule, FriendSourceLinksModule, TranslationModule, OperationsModule, ExecutiveBriefModule, BiAssistantModule, ActionAgentModule, ImpactEngineModule, AiTelemetryModule, OperationalMemoryModule, MassMessageModule, CouponModule, TikTokModule, AppVersionModule, RichMenuModule, AutoResponseModule, GreetingMessageModule, RichMessageModule, LineChatModule, GoogleReviewKpiModule, PublicStoresModule],
   controllers: [HealthController, MainOaController, StoresController, ConversationsController, ActivityController, DashboardController, DashboardResponseBucketsController, MessageTrafficController, MetadataController, OperationsController, CustomersController, MobileConversationsController, MobileVideoController, MobileNotificationsController, MobileConfigController, MobileProductsController, MonthlySummaryController, PurchaseAnalyticsController],
-  providers: [ConversationsService, { provide: LineMessagingService, useClass: PilotAwareLineMessagingService }, DashboardAnalyticsService, DashboardExecutiveService, OperationReportService, CustomerIntelligenceService, RootCauseService, RecommendationService, MobileConversationsService, MobilePdfSendService, MobileVideoService, MobileNotificationsService, MobileConfigService, MonthlySummaryService, PriorityService, PurchaseAnalyticsService, PurchaseBroadcastAudienceService, MessageTrafficService],
+  providers: [ConversationsService, { provide: LineMessagingService, useClass: PilotAwareLineMessagingService }, DashboardAnalyticsService, DashboardExecutiveService, OperationReportService, CustomerIntelligenceService, RootCauseService, RecommendationService, MobileConversationsService, MobilePdfSendService, MobileVideoService, MobileNotificationsService, MobileConfigService, MonthlySummaryService, MonthlyFollowerSummaryService, PriorityService, PurchaseAnalyticsService, PurchaseBroadcastAudienceService, MessageTrafficService],
 })
 export class AppModule {}
