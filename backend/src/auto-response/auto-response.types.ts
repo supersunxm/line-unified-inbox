@@ -26,7 +26,16 @@ export type AutoResponseImageBlock = {
   height?: number;
 };
 
-export type AutoResponseMessageBlock = AutoResponseTextBlock | AutoResponseImageBlock;
+export type AutoResponseRichMessageBlock = {
+  id: string;
+  type: "RICH_MESSAGE";
+  richMessageId: string;
+  richMessageName?: string;
+  previewUrl?: string;
+  altText?: string;
+};
+
+export type AutoResponseMessageBlock = AutoResponseTextBlock | AutoResponseImageBlock | AutoResponseRichMessageBlock;
 
 export type AutoResponseContentJson = {
   version: number;
@@ -124,6 +133,16 @@ export type ResolvedAutoResponseBlock =
       previewUrl: string;
       mediaObjectKey: string;
       previewObjectKey?: string;
+      isValid: boolean;
+      validationError?: string;
+    }
+  | {
+      id: string;
+      type: "RICH_MESSAGE";
+      richMessageId: string;
+      richMessageName: string;
+      previewUrl: string;
+      altText: string;
       isValid: boolean;
       validationError?: string;
     };

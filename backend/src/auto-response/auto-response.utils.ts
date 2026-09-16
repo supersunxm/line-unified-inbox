@@ -54,7 +54,6 @@ export type DetectedImageFormat = "jpeg" | "png" | "unknown";
 export function detectImageMagicBytes(buffer: Buffer): DetectedImageFormat {
   if (!buffer || buffer.length < 8) return "unknown";
 
-  // PNG magic bytes: 89 50 4E 47 0D 0A 1A 0A
   if (
     buffer[0] === 0x89 &&
     buffer[1] === 0x50 &&
@@ -68,7 +67,6 @@ export function detectImageMagicBytes(buffer: Buffer): DetectedImageFormat {
     return "png";
   }
 
-  // JPEG magic bytes: FF D8 FF
   if (buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) {
     return "jpeg";
   }
@@ -89,8 +87,8 @@ export const IMAGE_EXTENSIONS: Record<string, string> = {
 };
 
 /**
- * Normalizes legacy single TEXT rules and new Phase 2 multi-message rules
- * into a canonical ordered array of message blocks (1 to 5 items).
+ * Normalizes legacy single TEXT rules and new multi-message rules into a canonical
+ * ordered array of message blocks (1 to 5 items).
  */
 export function normalizeAutoResponseMessages(rule: {
   textTemplate?: string | null;
@@ -121,6 +119,7 @@ export function normalizeAutoResponseMessages(rule: {
  * - Count between 1 and 5 blocks
  * - TEXT blocks must have non-empty textTemplate
  * - IMAGE blocks must have valid mediaObjectKey
+ * - RICH_MESSAGE blocks must reference a reusable Rich Message
  */
 export function validateAutoResponseMessages(messages: AutoResponseMessageBlock[]): {
   valid: boolean;
@@ -153,6 +152,10 @@ export function validateAutoResponseMessages(messages: AutoResponseMessageBlock[
     } else if (msg.type === "IMAGE") {
       if (!msg.mediaObjectKey || typeof msg.mediaObjectKey !== "string" || !msg.mediaObjectKey.trim()) {
         errors.push(`Block #${blockNum} (IMAGE) is missing media object key.`);
+      }
+    } else if (msg.type === "RICH_MESSAGE") {
+      if (!msg.richMessageId || typeof msg.richMessageId !== "string" || !msg.richMessageId.trim()) {
+        errors.push(`Block #${blockNum} (RICH_MESSAGE) must select a Rich Message.`);
       }
     } else {
       errors.push(`Block #${blockNum} has unsupported type '${(msg as any).type}'.`);
