@@ -13,7 +13,50 @@ export class StoreAccessService {
     return user.role === UserRole.ADMIN || user.authorization?.scope.allStores === true || user.permissions?.canAccessAllStores === true;
   }
 
+  canActAsStore(user: AuthUser) {
+    const hasHqWorkspace = user.role === UserRole.ADMIN || user.authorization?.workspaces.hq === true || user.permissions?.workspaces?.hq === true;
+    return hasHqWorkspace && this.contextHasAllStores(user);
+  }
+
+  private assertCanActAsStore(user: AuthUser) {
+    if (!this.canActAsStore(user)) {
+      throw new ForbiddenException({ code: "STORE_CONTEXT_NOT_ALLOWED", message: "HQ store view is not allowed for this account" });
+    }
+  }
+
+  async listActAsStoreOptions(user: AuthUser) {
+    this.assertCanActAsStore(user);
+    return this.prisma.store.findMany({
+      where: { isActive: true, archivedAt: null },
+      orderBy: [{ name: "asc" }, { id: "asc" }],
+      select: { id: true, name: true, code: true },
+    });
+  }
+
+  async applyStoreContext(user: AuthUser, storeId: string) {
+    this.assertCanActAsStore(user);
+    const normalizedStoreId = storeId.trim();
+    if (!normalizedStoreId) {
+      throw new NotFoundException({ code: "STORE_CONTEXT_NOT_FOUND", message: "Store not found" });
+    }
+    const store = await this.prisma.store.findFirst({
+      where: { id: normalizedStoreId, isActive: true, archivedAt: null },
+      select: { id: true, name: true, code: true },
+    });
+    if (!store) {
+      throw new NotFoundException({ code: "STORE_CONTEXT_NOT_FOUND", message: "Store not found" });
+    }
+    user.storeContext = {
+      mode: "STORE",
+      storeId: store.id,
+      storeName: store.name,
+      storeCode: store.code,
+    };
+    return user.storeContext;
+  }
+
   async accessibleStoreIds(user: AuthUser): Promise<StoreAccessScope> {
+    if (user.storeContext?.mode === "STORE") return [user.storeContext.storeId];
     if (this.contextHasAllStores(user)) return null;
 
     const account = await this.prisma.user.findUnique({
