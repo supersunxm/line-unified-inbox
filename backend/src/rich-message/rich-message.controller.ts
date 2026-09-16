@@ -2,6 +2,8 @@ import {
   Body,
   Controller,
   Get,
+  Logger,
+  NotFoundException,
   Param,
   Patch,
   Post,
@@ -14,6 +16,7 @@ import type { Response } from "express";
 import { UserRole } from "@prisma/client";
 import { Public, Roles } from "../auth/auth.decorators";
 import { AuthGuard, type AuthRequest } from "../auth/auth.guard";
+import { MediaStorageService } from "../media/media-storage";
 import { RichMessageService } from "./rich-message.service";
 import type { CreateRichMessageDto, UpdateRichMessageDto } from "./rich-message.types";
 
@@ -21,7 +24,12 @@ import type { CreateRichMessageDto, UpdateRichMessageDto } from "./rich-message.
 @UseGuards(AuthGuard)
 @Roles(UserRole.ADMIN)
 export class RichMessageController {
-  constructor(private readonly richMessages: RichMessageService) {}
+  private readonly logger = new Logger(RichMessageController.name);
+
+  constructor(
+    private readonly richMessages: RichMessageService,
+    private readonly storage: MediaStorageService,
+  ) {}
 
   @Get()
   list(
@@ -49,12 +57,40 @@ export class RichMessageController {
     @Res() response: Response,
   ) {
     const size = Number(sizeParam);
-    const image = await this.richMessages.renderImagemapImage(id, expires, signature, size);
-    response.setHeader("Content-Type", image.contentType);
-    response.setHeader("Content-Length", String(image.body.length));
-    response.setHeader("Cache-Control", "public, max-age=604800, immutable");
-    response.setHeader("Content-Disposition", "inline");
-    response.send(image.body);
+
+    try {
+      const image = await this.richMessages.renderImagemapImage(id, expires, signature, size);
+      response.setHeader("Content-Type", image.contentType);
+      response.setHeader("Content-Length", String(image.body.length));
+      response.setHeader("Cache-Control", "public, max-age=604800, immutable");
+      response.setHeader("Content-Disposition", "inline");
+      response.send(image.body);
+      return;
+    } catch (error) {
+      // NotFoundException covers invalid/expired signatures, unsupported sizes,
+      // missing records, and unavailable source media. Never bypass those checks.
+      if (error instanceof NotFoundException) throw error;
+
+      const detail = error instanceof Error ? error.message : String(error);
+      this.logger.warn(
+        `[RichMessage] imagemap transform failed for id=${id} size=${size}; falling back to stored source: ${detail}`,
+      );
+
+      // At this point renderImagemapImage() already passed signature/expiry and
+      // source-media checks; the remaining common failure is image transformation
+      // (e.g. sharp/native codec). Serve the stored source instead of returning 500
+      // so LINE can still display the imagemap and keep MESSAGE tap actions usable.
+      const richMessage = await this.richMessages.get(id);
+      const stored = await this.storage.get(richMessage.mediaObjectKey);
+      const contentType = stored.contentType || "image/jpeg";
+
+      response.setHeader("Content-Type", contentType);
+      response.setHeader("Content-Length", String(stored.body.length));
+      response.setHeader("Cache-Control", "public, max-age=604800, immutable");
+      response.setHeader("Content-Disposition", "inline");
+      response.setHeader("X-Rich-Message-Image-Fallback", "1");
+      response.send(stored.body);
+    }
   }
 
   @Get(":id")
