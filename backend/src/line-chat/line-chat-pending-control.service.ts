@@ -184,6 +184,7 @@ export class LineChatPendingControlService {
     let superseded = 0;
     let reconciledWithNewerJob = 0;
     const effectiveJobs: typeof trackedJobs = [];
+    const blockedJobs: Array<{ jobId: string; conversationId: string; reason: string }> = [];
 
     for (const trackedJob of trackedJobs) {
       const latestJob = latestByConversation.get(trackedJob.conversationId);
@@ -209,6 +210,7 @@ export class LineChatPendingControlService {
           const mappingReason = job.lastError?.trim() ?? "";
           if (!job.lineChatUserId?.trim() && MAPPING_BLOCK_REASONS.has(mappingReason)) {
             blockedMapping += 1;
+            blockedJobs.push({ jobId: job.id, conversationId: job.conversationId, reason: mappingReason });
             if (mappingReason === "RESOLVE_NO_MATCH") blockedNoMatch += 1;
             else if (mappingReason === "RESOLVE_AMBIGUOUS") blockedAmbiguous += 1;
             else if (mappingReason === "RESOLVE_CONFLICT") blockedConflict += 1;
@@ -221,6 +223,87 @@ export class LineChatPendingControlService {
         }
       }
     }
+
+    const blockedConversationIds = [...new Set(blockedJobs.map((job) => job.conversationId))];
+    const blockedConversations = blockedConversationIds.length
+      ? await this.prisma.conversation.findMany({
+          where: {
+            id: { in: blockedConversationIds },
+            lineOfficialAccountId: { in: oaIds },
+          },
+          select: {
+            id: true,
+            customerSalesStatus: true,
+            paymentMethod: true,
+            salesRecordedAt: true,
+            latestMessageAt: true,
+            customer: {
+              select: { displayName: true },
+            },
+            salesProducts: {
+              orderBy: { createdAt: "asc" },
+              take: 5,
+              select: {
+                customProductName: true,
+                ram: true,
+                rom: true,
+                color: true,
+                productModel: {
+                  select: { name: true },
+                },
+                productVariant: {
+                  select: { ram: true, rom: true, color: true },
+                },
+              },
+            },
+          },
+        })
+      : [];
+
+    const conversationById = new Map(blockedConversations.map((conversation) => [conversation.id, conversation]));
+    const blockedCustomers = blockedJobs
+      .map((job) => {
+        const conversation = conversationById.get(job.conversationId);
+        if (!conversation) {
+          return {
+            jobId: job.jobId,
+            conversationId: job.conversationId,
+            customerName: null,
+            reason: job.reason,
+            customerSalesStatus: null,
+            paymentMethod: null,
+            salesRecordedAt: null,
+            latestMessageAt: null,
+            productSummary: null,
+          };
+        }
+
+        const productSummary = conversation.salesProducts.length
+          ? conversation.salesProducts
+              .map((product) => {
+                const name = product.customProductName?.trim() || product.productModel.name;
+                const ram = product.ram?.trim() || product.productVariant?.ram?.trim() || null;
+                const rom = product.rom?.trim() || product.productVariant?.rom?.trim() || null;
+                const color = product.color?.trim() || product.productVariant?.color?.trim() || null;
+                const memory = ram && rom ? `${ram}+${rom}` : ram || rom;
+                return [name, memory, color].filter(Boolean).join(" · ");
+              })
+              .join(", ")
+          : null;
+
+        return {
+          jobId: job.jobId,
+          conversationId: job.conversationId,
+          customerName: conversation.customer.displayName,
+          reason: job.reason,
+          customerSalesStatus: conversation.customerSalesStatus,
+          paymentMethod: conversation.paymentMethod,
+          salesRecordedAt: conversation.salesRecordedAt?.toISOString() ?? null,
+          latestMessageAt: conversation.latestMessageAt.toISOString(),
+          productSummary,
+        };
+      })
+      .sort((a, b) => (b.latestMessageAt ?? "").localeCompare(a.latestMessageAt ?? ""));
 
     const total = jobIds.length;
     // Mapping-blocked jobs have completed this run's safe attempt. They remain
@@ -242,6 +325,7 @@ export class LineChatPendingControlService {
       blockedNoMatch,
       blockedAmbiguous,
       blockedConflict,
+      blockedCustomers,
       failed,
       superseded,
       reconciledWithNewerJob,

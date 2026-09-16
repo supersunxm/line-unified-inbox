@@ -33,6 +33,18 @@ type RunFailure = {
   updatedAt: string;
 };
 
+type BlockedCustomer = {
+  jobId: string;
+  conversationId: string;
+  customerName: string | null;
+  reason: string;
+  customerSalesStatus: string | null;
+  paymentMethod: string | null;
+  salesRecordedAt: string | null;
+  latestMessageAt: string | null;
+  productSummary: string | null;
+};
+
 type RunProgress = {
   sessionKey: string;
   total: number;
@@ -44,6 +56,7 @@ type RunProgress = {
   blockedNoMatch: number;
   blockedAmbiguous: number;
   blockedConflict: number;
+  blockedCustomers?: BlockedCustomer[];
   failed: number;
   superseded: number;
   reconciledWithNewerJob: number;
@@ -93,6 +106,29 @@ function formatTime(value: string) {
   return new Date(value).toLocaleString();
 }
 
+function blockedReasonLabel(reason: string) {
+  if (reason === "RESOLVE_NO_MATCH") return "ไม่พบคู่ใน LINE";
+  if (reason === "RESOLVE_AMBIGUOUS") return "พบหลายรายการ";
+  if (reason === "RESOLVE_CONFLICT") return "ข้อมูล Mapping ขัดแย้ง";
+  return reason;
+}
+
+function paymentLabel(paymentMethod: string | null) {
+  if (paymentMethod === "CASH") return "สด";
+  if (paymentMethod === "INSTALLMENT") return "ผ่อน";
+  if (paymentMethod === "CREDIT_CARD") return "บัตรเครดิต";
+  if (paymentMethod === "OTHER") return "อื่น ๆ";
+  return null;
+}
+
+function salesStatusLabel(status: string | null) {
+  if (status === "PURCHASED") return "ซื้อแล้ว";
+  if (status === "ONLINE") return "ออนไลน์";
+  if (status === "INTERESTED") return "สนใจ";
+  if (status === "FILM") return "ฟิล์ม";
+  return status;
+}
+
 export function LineChatPendingControlAction() {
   const [target, setTarget] = useState<HTMLElement | null>(null);
   const [paused, setPaused] = useState(false);
@@ -104,6 +140,7 @@ export function LineChatPendingControlAction() {
   const [runProgress, setRunProgress] = useState<RunProgress | null>(null);
   const [runError, setRunError] = useState<string | null>(null);
   const [showFailures, setShowFailures] = useState(false);
+  const [showBlockedCustomers, setShowBlockedCustomers] = useState(false);
 
   const refreshTarget = useCallback(() => {
     setTarget(findProfileBActionsTarget());
@@ -202,6 +239,7 @@ export function LineChatPendingControlAction() {
         setRunProgress(null);
         setRunError(null);
         setShowFailures(false);
+        setShowBlockedCustomers(false);
         void refreshRunProgress(run);
       }
 
@@ -219,6 +257,7 @@ export function LineChatPendingControlAction() {
     setRunProgress(null);
     setRunError(null);
     setShowFailures(false);
+    setShowBlockedCustomers(false);
   };
 
   const title = paused
@@ -293,6 +332,42 @@ export function LineChatPendingControlAction() {
             <div className="rounded-lg bg-[var(--app-warning-soft)] px-3 py-2 text-xs text-[var(--app-warning)]">
               {runProgress.blockedMapping} conversations could not be mapped safely in the realtime window. Historical recovery will retry exact matches automatically; ambiguous or conflicting identities are never forced.
               <div className="mt-1 text-[11px]">No match: {runProgress.blockedNoMatch} · Ambiguous: {runProgress.blockedAmbiguous} · Conflict: {runProgress.blockedConflict}</div>
+            </div>
+          ) : null}
+
+          {runProgress.blockedMapping > 0 && (runProgress.blockedCustomers?.length ?? 0) > 0 ? (
+            <div className="border-t border-[var(--app-border)] pt-3">
+              <Button size="sm" variant="outline" onClick={() => setShowBlockedCustomers((value) => !value)}>
+                {showBlockedCustomers ? "ซ่อนรายชื่อ" : `ดูรายชื่อลูกค้าที่ติด Mapping (${runProgress.blockedCustomers?.length ?? 0})`}
+              </Button>
+              {showBlockedCustomers ? (
+                <div className="mt-2 max-h-64 space-y-2 overflow-auto pr-1">
+                  {runProgress.blockedCustomers?.map((customer) => {
+                    const status = salesStatusLabel(customer.customerSalesStatus);
+                    const payment = paymentLabel(customer.paymentMethod);
+                    return (
+                      <div key={`${customer.jobId}:${customer.conversationId}`} className="rounded-lg border border-[var(--app-border)] p-2.5 text-xs">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0 font-medium text-[var(--app-text)]">{customer.customerName?.trim() || "ไม่พบชื่อลูกค้า"}</div>
+                          <span className="shrink-0 rounded-full bg-[var(--app-warning-soft)] px-2 py-0.5 text-[10px] text-[var(--app-warning)]">
+                            {blockedReasonLabel(customer.reason)}
+                          </span>
+                        </div>
+                        {customer.productSummary ? <div className="mt-1 break-words text-[var(--app-text-secondary)]">{customer.productSummary}</div> : null}
+                        {status || payment || customer.salesRecordedAt ? (
+                          <div className="mt-1 text-[11px] text-[var(--app-text-tertiary)]">
+                            {[status, payment, customer.salesRecordedAt ? formatTime(customer.salesRecordedAt) : null].filter(Boolean).join(" · ")}
+                          </div>
+                        ) : null}
+                        <div className="mt-1.5 flex items-center justify-between gap-2 text-[11px] text-[var(--app-text-tertiary)]">
+                          <span>{customer.latestMessageAt ? `แชทล่าสุด ${formatTime(customer.latestMessageAt)}` : "ไม่มีเวลาแชทล่าสุด"}</span>
+                          <a href={`/chats?conversationId=${encodeURIComponent(customer.conversationId)}`} className="shrink-0 text-[var(--app-accent)] hover:underline">เปิดแชท</a>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : null}
             </div>
           ) : null}
 
