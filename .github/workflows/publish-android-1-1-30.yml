@@ -2,6 +2,11 @@ name: Publish Android 1.1.30
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/publish-android-1-1-30.yml
 
 permissions:
   contents: write
