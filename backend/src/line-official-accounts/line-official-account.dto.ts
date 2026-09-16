@@ -30,6 +30,10 @@ export class UpdateLineOfficialAccountDto {
   @IsOptional() @IsString() channelAccessToken?: string;
   @IsOptional() @IsString() storeId?: string;
   @IsOptional() @IsString() storeMasterId?: string;
+  // The legacy desktop edit form includes the account's current status in the
+  // credential PATCH payload. Accept it for compatibility, but status changes
+  // remain owned by PATCH /:id/status and are intentionally not applied here.
+  @IsOptional() @IsBoolean() isActive?: boolean;
 }
 
 export class UpdateLineOaStatusDto { @IsBoolean() isActive!: boolean; }
