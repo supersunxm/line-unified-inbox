@@ -27,10 +27,10 @@ class AuthenticatedShell extends StatefulWidget {
     required this.conversations,
     required this.events,
     required this.summary,
-    required this.storeView,
-    required this.storeViewRepository,
     required this.onLogout,
     required this.onConversationOpened,
+    this.storeView,
+    this.storeViewRepository,
     this.updateService,
     this.notifications,
   });
@@ -40,8 +40,8 @@ class AuthenticatedShell extends StatefulWidget {
   final ConversationRepository conversations;
   final Stream<Map<String, dynamic>>? events;
   final SummaryRepository summary;
-  final StoreViewContextController storeView;
-  final StoreViewRepository storeViewRepository;
+  final StoreViewContextController? storeView;
+  final StoreViewRepository? storeViewRepository;
   final VoidCallback onLogout;
   final Future<void> Function(String conversationId) onConversationOpened;
   final AppUpdateService? updateService;
@@ -65,10 +65,26 @@ class _ShellDestination {
 
 class AuthenticatedShellState extends State<AuthenticatedShell> {
   int _selectedIndex = 0;
+  late final StoreViewContextController _fallbackStoreView;
 
-  bool get _isStoreView => widget.storeView.isActive;
+  StoreViewContextController get _storeView =>
+      widget.storeView ?? _fallbackStoreView;
 
-  String get _contextKey => widget.storeView.storeId ?? 'hq';
+  bool get _isStoreView => _storeView.isActive;
+
+  String get _contextKey => _storeView.storeId ?? 'hq';
+
+  @override
+  void initState() {
+    super.initState();
+    _fallbackStoreView = StoreViewContextController();
+  }
+
+  @override
+  void dispose() {
+    _fallbackStoreView.dispose();
+    super.dispose();
+  }
 
   Future<void> openConversation(String conversationId) async {
     if (!mounted ||
@@ -213,26 +229,27 @@ class AuthenticatedShellState extends State<AuthenticatedShell> {
   }
 
   Future<void> _openStoreViewPicker() async {
-    if (!widget.user.canActAsStore) return;
+    final repository = widget.storeViewRepository;
+    if (!widget.user.canActAsStore || repository == null) return;
     final selected = await showStoreViewPicker(
       context,
-      repository: widget.storeViewRepository,
-      selectedStore: widget.storeView.store,
+      repository: repository,
+      selectedStore: _storeView.store,
     );
     if (!mounted || selected == null) return;
-    widget.storeView.enter(selected);
+    _storeView.enter(selected);
     setState(() => _selectedIndex = 0);
   }
 
   void _exitStoreView() {
     if (!_isStoreView) return;
-    widget.storeView.exit();
+    _storeView.exit();
     setState(() => _selectedIndex = 0);
   }
 
   Widget _storeViewBanner(BuildContext context) {
     final theme = Theme.of(context);
-    final store = widget.storeView.store;
+    final store = _storeView.store;
     return Material(
       color: theme.colorScheme.surfaceContainerHighest,
       child: SafeArea(
@@ -296,13 +313,14 @@ class AuthenticatedShellState extends State<AuthenticatedShell> {
 
   @override
   Widget build(BuildContext context) => AnimatedBuilder(
-        animation: widget.storeView,
+        animation: _storeView,
         builder: (context, _) {
           final destinations = _destinations(context);
           final selectedIndex = _selectedIndex < destinations.length
               ? _selectedIndex
               : destinations.length - 1;
-          final showStoreViewBanner = widget.user.canActAsStore;
+          final showStoreViewBanner =
+              widget.user.canActAsStore && widget.storeViewRepository != null;
 
           return Scaffold(
             body: Column(
