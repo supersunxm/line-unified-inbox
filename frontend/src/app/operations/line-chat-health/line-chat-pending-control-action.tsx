@@ -40,6 +40,10 @@ type RunProgress = {
   processing: number;
   waitingForMapping: number;
   mappedReady: number;
+  blockedMapping: number;
+  blockedNoMatch: number;
+  blockedAmbiguous: number;
+  blockedConflict: number;
   failed: number;
   superseded: number;
   reconciledWithNewerJob: number;
@@ -272,10 +276,10 @@ export function LineChatPendingControlAction() {
           <div className="flex items-end justify-between gap-3">
             <div>
               <div className="text-2xl font-semibold">{runProgress.success} / {runProgress.total}</div>
-              <div className="text-xs text-[var(--app-text-secondary)]">conversations handled successfully</div>
+              <div className="text-xs text-[var(--app-text-secondary)]">nicknames changed successfully</div>
             </div>
-            <div className={`rounded-full px-2.5 py-1 text-xs font-medium ${runProgress.finished ? "bg-[var(--app-success-soft)] text-[var(--app-success)]" : "bg-[var(--app-info-soft)] text-[var(--app-info)]"}`}>
-              {runProgress.finished ? "Finished" : "Running"}
+            <div className={`rounded-full px-2.5 py-1 text-xs font-medium ${runProgress.finished ? (runProgress.blockedMapping > 0 ? "bg-[var(--app-warning-soft)] text-[var(--app-warning)]" : "bg-[var(--app-success-soft)] text-[var(--app-success)]") : "bg-[var(--app-info-soft)] text-[var(--app-info)]"}`}>
+              {runProgress.finished ? (runProgress.blockedMapping > 0 ? "Finished with gaps" : "Finished") : "Running"}
             </div>
           </div>
 
@@ -285,9 +289,16 @@ export function LineChatPendingControlAction() {
             </div>
           ) : null}
 
+          {runProgress.blockedMapping > 0 ? (
+            <div className="rounded-lg bg-[var(--app-warning-soft)] px-3 py-2 text-xs text-[var(--app-warning)]">
+              {runProgress.blockedMapping} conversations could not be mapped safely in the realtime window. Historical recovery will retry exact matches automatically; ambiguous or conflicting identities are never forced.
+              <div className="mt-1 text-[11px]">No match: {runProgress.blockedNoMatch} · Ambiguous: {runProgress.blockedAmbiguous} · Conflict: {runProgress.blockedConflict}</div>
+            </div>
+          ) : null}
+
           <div>
             <div className="mb-1 flex justify-between text-xs text-[var(--app-text-secondary)]">
-              <span>{runProgress.completed} completed</span>
+              <span>{runProgress.completed} attempted</span>
               <span>{runProgress.progressPercent}%</span>
             </div>
             <div className="h-2 overflow-hidden rounded-full bg-[var(--app-surface-subtle)]">
@@ -295,13 +306,15 @@ export function LineChatPendingControlAction() {
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-2 text-center text-xs">
+          <div className="grid grid-cols-4 gap-2 text-center text-[11px]">
             <div className="rounded-lg bg-[var(--app-success-soft)] p-2"><div className="font-semibold text-[var(--app-success)]">{runProgress.success}</div><div>Success</div></div>
             <div className="rounded-lg bg-[var(--app-surface-subtle)] p-2"><div className="font-semibold">{runProgress.processing}</div><div>Running</div></div>
             <div className="rounded-lg bg-[var(--app-surface-subtle)] p-2"><div className="font-semibold">{runProgress.mappedReady}</div><div>Mapped ready</div></div>
             <div className="rounded-lg bg-[var(--app-surface-subtle)] p-2"><div className="font-semibold">{runProgress.waitingForMapping}</div><div>Waiting map</div></div>
+            <div className="rounded-lg bg-[var(--app-warning-soft)] p-2"><div className="font-semibold text-[var(--app-warning)]">{runProgress.blockedMapping}</div><div>Blocked map</div></div>
             <div className="rounded-lg bg-[var(--app-warning-soft)] p-2"><div className="font-semibold text-[var(--app-warning)]">{runProgress.failed}</div><div>Failed</div></div>
             <div className="rounded-lg bg-[var(--app-surface-subtle)] p-2"><div className="font-semibold">{runProgress.remaining}</div><div>Remaining</div></div>
+            <div className="rounded-lg bg-[var(--app-surface-subtle)] p-2"><div className="font-semibold">{runProgress.superseded}</div><div>Superseded</div></div>
           </div>
 
           {runProgress.superseded > 0 || runProgress.missing > 0 ? (
