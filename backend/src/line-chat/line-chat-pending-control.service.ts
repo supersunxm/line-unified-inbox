@@ -6,6 +6,11 @@ const PROFILE_B_SESSION_KEY = "profile-b";
 const PAUSE_MARKER = "OPERATOR_PAUSED_PENDING";
 const PAUSE_UNTIL = new Date("2099-12-31T23:59:59.000Z");
 const MAX_RUN_JOBS = 500;
+const MAPPING_BLOCK_REASONS = new Set([
+  "RESOLVE_NO_MATCH",
+  "RESOLVE_AMBIGUOUS",
+  "RESOLVE_CONFLICT",
+]);
 
 function sanitizeRunError(value: string | null): string | null {
   if (!value) return null;
@@ -171,6 +176,10 @@ export class LineChatPendingControlService {
     let processing = 0;
     let waitingForMapping = 0;
     let mappedReady = 0;
+    let blockedMapping = 0;
+    let blockedNoMatch = 0;
+    let blockedAmbiguous = 0;
+    let blockedConflict = 0;
     let failed = 0;
     let superseded = 0;
     let reconciledWithNewerJob = 0;
@@ -196,15 +205,29 @@ export class LineChatPendingControlService {
         case LineChatNicknameSyncJobStatus.SUPERSEDED:
           superseded += 1;
           break;
-        case LineChatNicknameSyncJobStatus.PENDING:
-          if (job.lineChatUserId?.trim()) mappedReady += 1;
-          else waitingForMapping += 1;
+        case LineChatNicknameSyncJobStatus.PENDING: {
+          const mappingReason = job.lastError?.trim() ?? "";
+          if (!job.lineChatUserId?.trim() && MAPPING_BLOCK_REASONS.has(mappingReason)) {
+            blockedMapping += 1;
+            if (mappingReason === "RESOLVE_NO_MATCH") blockedNoMatch += 1;
+            else if (mappingReason === "RESOLVE_AMBIGUOUS") blockedAmbiguous += 1;
+            else if (mappingReason === "RESOLVE_CONFLICT") blockedConflict += 1;
+          } else if (job.lineChatUserId?.trim()) {
+            mappedReady += 1;
+          } else {
+            waitingForMapping += 1;
+          }
           break;
+        }
       }
     }
 
     const total = jobIds.length;
-    const completed = success + failed + superseded;
+    // Mapping-blocked jobs have completed this run's safe attempt. They remain
+    // PENDING so the historical backfill or a future realtime signal can recover
+    // them, but the operator UI must not look "Running" forever while they sleep
+    // through a 45–60 minute mapping backoff.
+    const completed = success + failed + superseded + blockedMapping;
     const remaining = Math.max(0, total - completed);
     const missing = Math.max(0, total - trackedJobs.length);
 
@@ -215,6 +238,10 @@ export class LineChatPendingControlService {
       processing,
       waitingForMapping,
       mappedReady,
+      blockedMapping,
+      blockedNoMatch,
+      blockedAmbiguous,
+      blockedConflict,
       failed,
       superseded,
       reconciledWithNewerJob,
