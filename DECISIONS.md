@@ -2535,3 +2535,10 @@ Keep `StoreMaster.tiktokProfileUrl` as the only persisted TikTok profile URL. Po
 - Use the established manual GitHub Actions publisher with the existing production certificate; do not create a local signing key. The workflow verifies package, version, signer, and checksum before generating the additive AppRelease migration and public download catalog entry.
 - Keep `forceUpdate=false` for this PIN release so existing sessions remain valid and users are not forcibly logged out. The canonical public release metadata is build 49; build 48 is deactivated by the additive release migration after build 49 is available.
 - Production backend and frontend propagation are both verified through the normal Railway deployments. No manual production deploy or manual Prisma migration was used.
+
+## 2026-09-16: LINE Chat persistent Chromium lifecycle
+
+- Keep `LineChatProfileOperationCoordinator` as the authoritative profile lease. The shared session-service launcher complements it with bounded Chromium launch retries and a bounded singleton-release grace period; it does not introduce a competing application lock.
+- Recover singleton artifacts only when `SingletonLock` is a readable symlink that identifies the current host and a numeric PID that is definitively absent. Different-host, unreadable, live, or otherwise ambiguous ownership remains busy and no singleton artifact is deleted.
+- Remove only `SingletonLock`, `SingletonSocket`, and `SingletonCookie` during confirmed stale recovery. Never remove or rewrite cookies, Local Storage, IndexedDB, Preferences, `Default/`, or the profile directory.
+- Route all Nest LINE Chat persistent-browser callers, including noVNC and manager text/image relays, through `LineChatSessionService`. Keep explicit custom launchers available for existing unit-test fakes.

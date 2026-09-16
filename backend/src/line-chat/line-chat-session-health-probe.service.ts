@@ -42,7 +42,7 @@ function managerAuthFromDiagnostics(result: DiagnosticsResult): LineChatHealthMa
 
 export function classifySessionProbeExecutionFailure(error: unknown): LineChatHealthFailureStage {
   const message = error instanceof Error ? error.message : String(error);
-  if (/Singleton(?:Lock|Socket|Cookie)|profile[^\n]*(?:in use|locked)|ProcessSingleton/iu.test(message)) {
+  if (/PROFILE_BROWSER_BUSY|Singleton(?:Lock|Socket|Cookie)|profile[^\n]*(?:in use|locked)|ProcessSingleton/iu.test(message)) {
     return "PROFILE_LOCK";
   }
   if (/launchPersistentContext|Failed to launch|Executable doesn't exist|browserType\.launch/iu.test(message)) {

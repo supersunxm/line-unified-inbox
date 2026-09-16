@@ -581,7 +581,11 @@ export class LineChatAuthRecoveryService {
         message: "Successfully logged in via remembered LINE account.",
       };
     } finally {
-      await context.close().catch(() => {});
+      if (typeof this.sessionService.closeManagedPersistentContext === "function") {
+        await this.sessionService.closeManagedPersistentContext(context, input.profilePath).catch(() => {});
+      } else {
+        await context.close().catch(() => {});
+      }
     }
   }
 

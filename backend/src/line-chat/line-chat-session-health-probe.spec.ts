@@ -251,5 +251,6 @@ test("execution failure classifier distinguishes Chromium launch from unknown er
     classifySessionProbeExecutionFailure(new Error("browserType.launchPersistentContext: Failed to launch Chromium")),
     "CHROMIUM_LAUNCH",
   );
+  assert.equal(classifySessionProbeExecutionFailure(new Error("PROFILE_BROWSER_BUSY")), "PROFILE_LOCK");
   assert.equal(classifySessionProbeExecutionFailure(new Error("unexpected runtime failure")), "UNKNOWN");
 });

@@ -2,7 +2,7 @@ import { Inject, Injectable, Logger } from "@nestjs/common";
 import { randomBytes } from "node:crypto";
 import { spawn, type ChildProcess } from "node:child_process";
 import * as fs from "node:fs";
-import { chromium, type BrowserContext } from "playwright";
+import { type BrowserContext } from "playwright";
 import { PrismaService } from "../prisma.service";
 import { LineChatSessionService } from "./line-chat-session.service";
 import { LineChatProfileOperationCoordinator } from "./line-chat-profile-operation-coordinator.service";
@@ -122,7 +122,11 @@ export class LineChatNovncRecoveryWorkerService {
           stopped = true;
           const context = browserContext;
           browserContext = null;
-          if (context) await context.close().catch(() => undefined);
+          if (context) await this.sessionService.closeManagedPersistentContext(context, profilePath, {
+            sessionId: session.id,
+            sessionKey: RECOVERY_SESSION_KEY,
+            profileStorageKey: session.profileStorageKey ?? undefined,
+          }).catch(() => undefined);
           for (const child of [...children].reverse()) if (child.exitCode === null && !child.killed) child.kill("SIGTERM");
           await Promise.all(children.map((child) => waitForExit(child)));
           for (const child of children) if (child.exitCode === null && !child.killed) child.kill("SIGKILL");
@@ -140,11 +144,16 @@ export class LineChatNovncRecoveryWorkerService {
           spawnManaged("websockify", [`127.0.0.1:${WEBSOCKIFY_PORT}`, `127.0.0.1:${VNC_PORT}`, "--web=/usr/share/novnc"]);
           await new Promise((resolve) => setTimeout(resolve, 750));
 
-          browserContext = await chromium.launchPersistentContext(profilePath, {
+          browserContext = await this.sessionService.launchManagedPersistentContext(profilePath, {
+            profilePath,
             headless: false,
             viewport: { width: 1440, height: 900 },
             env: { ...process.env, DISPLAY },
             args: ["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"],
+          }, {
+            sessionId: session.id,
+            sessionKey: RECOVERY_SESSION_KEY,
+            profileStorageKey: session.profileStorageKey ?? undefined,
           });
           const contextForCloseHandler = browserContext;
           contextForCloseHandler.once("close", () => {

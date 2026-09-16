@@ -1,6 +1,7 @@
-import { Injectable, Optional } from "@nestjs/common";
+import { Injectable, Logger, Optional } from "@nestjs/common";
 import * as path from "node:path";
 import * as fs from "node:fs";
+import { hostname } from "node:os";
 import { chromium, type BrowserContext, type Page, type Response } from "playwright";
 import type {
   LineChatDiscoveredChat,
@@ -32,6 +33,61 @@ export type ContextLauncher = (
   userDataDir: string,
   options?: LineChatSessionOptions
 ) => Promise<BrowserContext>;
+
+export const PROFILE_BROWSER_RETRY_BACKOFF_MS = [500, 1_000, 2_000] as const;
+export const PROFILE_BROWSER_RELEASE_WAIT_MS = 4_000;
+export const PROFILE_BROWSER_RELEASE_POLL_INTERVAL_MS = 100;
+export const PROFILE_BROWSER_BUSY_RETRY_AFTER_MS = 5_000;
+
+const CHROMIUM_SINGLETON_ARTIFACTS = ["SingletonLock", "SingletonSocket", "SingletonCookie"] as const;
+
+export interface LineChatProfileBrowserMetadata {
+  sessionId?: string;
+  sessionKey?: string;
+  profileStorageKey?: string;
+}
+
+export class ProfileBrowserBusyError extends Error {
+  public readonly code = "PROFILE_BROWSER_BUSY";
+  public readonly retryAfterMs = PROFILE_BROWSER_BUSY_RETRY_AFTER_MS;
+
+  constructor() {
+    super("PROFILE_BROWSER_BUSY");
+    this.name = "ProfileBrowserBusyError";
+  }
+}
+
+export function isProfileBrowserBusyError(error: unknown): error is ProfileBrowserBusyError {
+  return error instanceof ProfileBrowserBusyError
+    || (error instanceof Error && error.message === "PROFILE_BROWSER_BUSY");
+}
+
+export function isPersistentProfileLockError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /profile[^\n]*(?:appears to be in use|in use by another Chromium process|locked)|process[_-]?singleton|singleton(?:lock|socket|cookie)|the profile appears to be in use/iu.test(message);
+}
+
+function processExists(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error: unknown) {
+    return error instanceof Error && "code" in error && (error as NodeJS.ErrnoException).code !== "ESRCH";
+  }
+}
+
+function readSingletonLockIdentity(lockPath: string): { host: string; pid: number } | null {
+  try {
+    if (!fs.lstatSync(lockPath).isSymbolicLink()) return null;
+    const target = fs.readlinkSync(lockPath);
+    const match = /^(.*)-(\d+)$/u.exec(path.basename(target));
+    if (!match?.[1] || !match[2]) return null;
+    const pid = Number(match[2]);
+    return Number.isSafeInteger(pid) && pid > 0 ? { host: match[1], pid } : null;
+  } catch {
+    return null;
+  }
+}
 
 function isObservedChatListUrl(rawUrl: string, botId: string): boolean {
   try {
@@ -124,12 +180,106 @@ export interface PageExecutor {
 
 @Injectable()
 export class LineChatSessionService {
+  private readonly logger = new Logger(LineChatSessionService.name);
+  private readonly rawLauncher: ContextLauncher;
+  private readonly activeManagedContexts = new Map<string, number>();
   public readonly defaultLauncher: ContextLauncher;
 
   constructor(@Optional() customLauncher?: ContextLauncher) {
-    this.defaultLauncher =
-      customLauncher ??
-      ((dir, opts) => this.launchPlaywrightPersistentContext(dir, opts));
+    this.rawLauncher = customLauncher ?? ((dir, opts) => this.launchPlaywrightPersistentContext(dir, opts));
+    this.defaultLauncher = (dir, opts) => this.launchManagedPersistentContext(dir, opts);
+  }
+
+  /**
+   * Launches a persistent LINE Chat context with bounded singleton-lock
+   * handling. Application-level serialization remains the coordinator's job;
+   * this method only covers Chromium's process lifecycle around that lease.
+   */
+  public async launchManagedPersistentContext(
+    userDataDir: string,
+    options?: LineChatSessionOptions,
+    metadata: LineChatProfileBrowserMetadata = {},
+  ): Promise<BrowserContext> {
+    const resolvedProfile = path.resolve(userDataDir);
+    let lastLockError: unknown;
+
+    for (let attempt = 1; attempt <= PROFILE_BROWSER_RETRY_BACKOFF_MS.length + 1; attempt += 1) {
+      try {
+        const context = await this.rawLauncher(resolvedProfile, options);
+        this.markManagedContext(resolvedProfile, 1);
+        return context;
+      } catch (error: unknown) {
+        if (!isPersistentProfileLockError(error)) throw error;
+        lastLockError = error;
+        this.logger.warn(JSON.stringify({
+          event: "line_chat_profile_browser_busy",
+          ...this.safeProfileMetadata(metadata),
+          attempt,
+          retryAfterMs: PROFILE_BROWSER_RETRY_BACKOFF_MS[attempt - 1] ?? 0,
+        }));
+        const waitMs = PROFILE_BROWSER_RETRY_BACKOFF_MS[attempt - 1];
+        if (waitMs !== undefined) {
+          this.logger.log(JSON.stringify({
+            event: "line_chat_profile_launch_retry",
+            ...this.safeProfileMetadata(metadata),
+            attempt: attempt + 1,
+            waitMs,
+          }));
+          await this.delay(waitMs);
+        }
+      }
+    }
+
+    if (this.recoverStaleProfileLock(resolvedProfile, metadata)) {
+      this.logger.warn(JSON.stringify({
+        event: "line_chat_profile_stale_lock_recovered",
+        ...this.safeProfileMetadata(metadata),
+      }));
+      try {
+        const context = await this.rawLauncher(resolvedProfile, options);
+        this.markManagedContext(resolvedProfile, 1);
+        return context;
+      } catch (error: unknown) {
+        if (!isPersistentProfileLockError(error)) throw error;
+        lastLockError = error;
+      }
+    }
+
+    if (lastLockError) {
+      this.logger.warn(JSON.stringify({
+        event: "line_chat_profile_browser_busy",
+        ...this.safeProfileMetadata(metadata),
+        attempt: PROFILE_BROWSER_RETRY_BACKOFF_MS.length + 1,
+        outcome: "RETRYABLE",
+      }));
+    }
+    throw new ProfileBrowserBusyError();
+  }
+
+  /**
+   * Closes a persistent context and waits until Chromium's singleton files are
+   * gone before the caller can release its application-level profile lease.
+   */
+  public async closeManagedPersistentContext(
+    context: BrowserContext,
+    userDataDir: string,
+    metadata: LineChatProfileBrowserMetadata = {},
+  ): Promise<void> {
+    const resolvedProfile = path.resolve(userDataDir);
+    let closeError: unknown;
+    try {
+      await context.close();
+    } catch (error: unknown) {
+      closeError = error;
+    } finally {
+      await this.waitForProfileRelease(resolvedProfile, metadata);
+      this.markManagedContext(resolvedProfile, -1);
+    }
+    if (closeError) {
+      throw closeError instanceof Error
+        ? closeError
+        : new Error(typeof closeError === "string" ? closeError : "Persistent context close failed.");
+    }
   }
 
   /**
@@ -426,7 +576,7 @@ export class LineChatSessionService {
         ...(enumerationError ? { enumerationError } : {}),
       };
     } finally {
-      await context.close();
+      await this.closeManagedPersistentContext(context, resolvedProfile);
     }
   }
 
@@ -920,6 +1070,17 @@ export class LineChatSessionService {
         tokenSource,
       };
     } catch (err: unknown) {
+      if (isProfileBrowserBusyError(err)) {
+        return {
+          success: false,
+          dryRun: false,
+          botId,
+          lineUserId,
+          nickname,
+          profilePath: resolvedProfile,
+          error: err.code,
+        };
+      }
       const errorMsg = err instanceof Error ? err.message : String(err);
       return {
         success: false,
@@ -933,7 +1094,7 @@ export class LineChatSessionService {
     } finally {
       if (context) {
         try {
-          await context.close();
+          await this.closeManagedPersistentContext(context, resolvedProfile);
         } catch {
           // Context close errors should not override the main result
         }
@@ -1348,7 +1509,7 @@ export class LineChatSessionService {
         streamingSseObserved,
       };
     } finally {
-      await context.close();
+      await this.closeManagedPersistentContext(context, resolvedProfile);
     }
   }
 
@@ -1370,7 +1531,7 @@ export class LineChatSessionService {
 
     const targetUrl = options.url || "https://chat.line.biz/";
 
-    const context = await this.launchPlaywrightPersistentContext(resolvedProfile, {
+    const context = await this.launchManagedPersistentContext(resolvedProfile, {
       profilePath: resolvedProfile,
       headless: false,
     });
@@ -1393,8 +1554,141 @@ export class LineChatSessionService {
         message: `Persistent session cleanly saved to "${resolvedProfile}".`,
       };
     } finally {
-      await context.close();
+      await this.closeManagedPersistentContext(context, resolvedProfile);
     }
+  }
+
+  private safeProfileMetadata(metadata: LineChatProfileBrowserMetadata): LineChatProfileBrowserMetadata {
+    return {
+      ...(metadata.sessionId ? { sessionId: metadata.sessionId } : {}),
+      ...(metadata.sessionKey ? { sessionKey: metadata.sessionKey } : {}),
+      ...(metadata.profileStorageKey ? { profileStorageKey: metadata.profileStorageKey } : {}),
+    };
+  }
+
+  private markManagedContext(profilePath: string, delta: 1 | -1): void {
+    const current = this.activeManagedContexts.get(profilePath) ?? 0;
+    const next = current + delta;
+    if (next > 0) this.activeManagedContexts.set(profilePath, next);
+    else this.activeManagedContexts.delete(profilePath);
+  }
+
+  private async waitForProfileRelease(
+    profilePath: string,
+    metadata: LineChatProfileBrowserMetadata,
+  ): Promise<void> {
+    const initiallyPresent = this.singletonArtifactNames(profilePath);
+    if (initiallyPresent.length === 0) return;
+
+    this.logger.log(JSON.stringify({
+      event: "line_chat_profile_release_wait",
+      ...this.safeProfileMetadata(metadata),
+      artifactNames: initiallyPresent,
+      maxWaitMs: PROFILE_BROWSER_RELEASE_WAIT_MS,
+    }));
+
+    const startedAt = Date.now();
+    let remaining = initiallyPresent;
+    while (remaining.length > 0 && Date.now() - startedAt < PROFILE_BROWSER_RELEASE_WAIT_MS) {
+      await this.delay(PROFILE_BROWSER_RELEASE_POLL_INTERVAL_MS);
+      remaining = this.singletonArtifactNames(profilePath);
+    }
+
+    if (remaining.length > 0) {
+      this.logger.warn(JSON.stringify({
+        event: "line_chat_profile_release_wait",
+        ...this.safeProfileMetadata(metadata),
+        artifactNames: remaining,
+        outcome: "TIMEOUT_BUSY",
+        waitedMs: Math.min(PROFILE_BROWSER_RELEASE_WAIT_MS, Date.now() - startedAt),
+      }));
+    }
+  }
+
+  private singletonArtifactNames(profilePath: string): string[] {
+    return CHROMIUM_SINGLETON_ARTIFACTS.filter((name) => {
+      try {
+        fs.lstatSync(path.join(profilePath, name));
+        return true;
+      } catch {
+        return false;
+      }
+    });
+  }
+
+  private recoverStaleProfileLock(
+    profilePath: string,
+    metadata: LineChatProfileBrowserMetadata,
+  ): boolean {
+    const lockPath = path.join(profilePath, "SingletonLock");
+    const identity = readSingletonLockIdentity(lockPath);
+    if (!identity) {
+      if (this.singletonArtifactNames(profilePath).length > 0) {
+        this.logger.warn(JSON.stringify({
+          event: "line_chat_profile_stale_lock_detected",
+          ...this.safeProfileMetadata(metadata),
+          outcome: "UNCERTAIN_LOCK_OWNER",
+        }));
+      }
+      return false;
+    }
+
+    const currentHost = hostname();
+    if (identity.host !== currentHost) {
+      this.logger.warn(JSON.stringify({
+        event: "line_chat_profile_stale_lock_detected",
+        ...this.safeProfileMetadata(metadata),
+        lockHost: identity.host,
+        currentHost,
+        lockPid: identity.pid,
+        outcome: "REMOTE_OR_UNKNOWN_OWNER",
+      }));
+      return false;
+    }
+
+    if ((this.activeManagedContexts.get(profilePath) ?? 0) > 0 || processExists(identity.pid)) {
+      this.logger.warn(JSON.stringify({
+        event: "line_chat_profile_stale_lock_detected",
+        ...this.safeProfileMetadata(metadata),
+        lockHost: identity.host,
+        lockPid: identity.pid,
+        outcome: "LIVE_OWNER",
+      }));
+      return false;
+    }
+
+    const artifacts = this.singletonArtifactNames(profilePath);
+    if (artifacts.length === 0) return false;
+    this.logger.warn(JSON.stringify({
+      event: "line_chat_profile_stale_lock_detected",
+      ...this.safeProfileMetadata(metadata),
+      lockHost: identity.host,
+      lockPid: identity.pid,
+      artifactNames: artifacts,
+      outcome: "STALE_CONFIRMED",
+    }));
+    for (const artifact of artifacts) {
+      try {
+        fs.unlinkSync(path.join(profilePath, artifact));
+      } catch (error: unknown) {
+        if (!(error instanceof Error) || !("code" in error) || (error as NodeJS.ErrnoException).code !== "ENOENT") {
+          this.logger.warn(JSON.stringify({
+            event: "line_chat_profile_stale_lock_detected",
+            ...this.safeProfileMetadata(metadata),
+            lockHost: identity.host,
+            lockPid: identity.pid,
+            artifact,
+            outcome: "RECOVERY_FAILED",
+          }));
+          return false;
+        }
+      }
+    }
+    return true;
+  }
+
+  private delay(waitMs: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, waitMs));
   }
 
   private async launchPlaywrightPersistentContext(
@@ -1403,7 +1697,7 @@ export class LineChatSessionService {
   ): Promise<BrowserContext> {
     return chromium.launchPersistentContext(userDataDir, {
       headless: options?.headless ?? true,
-      viewport: { width: 1280, height: 800 },
+      viewport: options?.viewport ?? { width: 1280, height: 800 },
       args: [
         "--no-sandbox",
         "--disable-setuid-sandbox",
@@ -1411,6 +1705,7 @@ export class LineChatSessionService {
         ...(options?.args || []),
       ],
       ...(options?.channel ? { channel: options.channel } : {}),
+      ...(options?.env ? { env: options.env } : {}),
     });
   }
 }

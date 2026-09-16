@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger, ServiceUnavailableException } from "@nestjs/common";
 import { LineChatSessionStatus } from "@prisma/client";
-import { chromium, type BrowserContext, type Locator, type Page } from "playwright";
+import { type BrowserContext, type Locator, type Page } from "playwright";
 import * as fs from "node:fs";
 import { PrismaService } from "../prisma.service";
 import { LineChatSessionService } from "./line-chat-session.service";
@@ -13,6 +13,7 @@ import {
 } from "./line-chat-pilot.constants";
 import { findSoleManagerTextarea } from "./line-chat-composer-fallback";
 import type { ManagerRelayResult } from "./line-chat-manager-message-relay.service";
+import { isProfileBrowserBusyError } from "./line-chat-session.service";
 
 const RELAY_DEDUPE_TTL_MS = 15 * 60_000;
 const COMPOSER_WAIT_MS = 12_000;
@@ -226,7 +227,7 @@ export class LineChatManagerMessageRelayWorkerService {
           },
         },
       },
-    }) as Promise<RelayConversation | null>;
+    });
   }
 
   private assertRelayConfiguration(conversation: RelayConversation, storeCode: string): void {
@@ -265,7 +266,8 @@ export class LineChatManagerMessageRelayWorkerService {
 
     let context: BrowserContext | null = null;
     try {
-      context = await chromium.launchPersistentContext(input.profilePath, {
+      context = await this.sessionService.launchManagedPersistentContext(input.profilePath, {
+        profilePath: input.profilePath,
         headless: true,
         viewport: { width: 1280, height: 800 },
         args: [
@@ -335,6 +337,9 @@ export class LineChatManagerMessageRelayWorkerService {
         throw new ServiceUnavailableException("ยังยืนยันการส่งจาก LINE OA Manager ไม่ได้ จึงไม่บันทึกข้อความว่าส่งสำเร็จ");
       }
     } catch (error) {
+      if (isProfileBrowserBusyError(error)) {
+        throw new ServiceUnavailableException("PROFILE_BROWSER_BUSY");
+      }
       if (error instanceof ServiceUnavailableException) throw error;
       this.logger.error(JSON.stringify({
         event: "line_chat_manager_message_relay_failed",
@@ -343,7 +348,7 @@ export class LineChatManagerMessageRelayWorkerService {
       }));
       throw new ServiceUnavailableException("ส่งผ่าน LINE OA Manager ไม่สำเร็จ กรุณาลองอีกครั้ง");
     } finally {
-      if (context) await context.close().catch(() => {});
+      if (context) await this.sessionService.closeManagedPersistentContext(context, input.profilePath).catch(() => {});
     }
   }
 

@@ -1,16 +1,20 @@
 import { Inject, Injectable, Logger, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
 import { PrismaService } from "../prisma.service";
 import { LineChatNicknameSyncJobStatus, LineChatSessionStatus } from "@prisma/client";
-import { LineChatSessionService } from "./line-chat-session.service";
+import { isProfileBrowserBusyError, LineChatSessionService } from "./line-chat-session.service";
 import { hostname } from "node:os";
 import { resolve } from "node:path";
 import { LineChatRecentResolverService } from "./line-chat-recent-resolver.service";
 import {
   LineChatProfileOperationCoordinator,
+  PROFILE_OPERATION_RETRY_AFTER_MS,
   type LineChatProfileOperationContext,
   type ProfileOperationResult,
 } from "./line-chat-profile-operation-coordinator.service";
-import type { LineChatMappingBatchResult } from "./line-chat-recent-resolver.service";
+import type {
+  LineChatMappingBatchResult,
+  LineChatRecentMappingSnapshot,
+} from "./line-chat-recent-resolver.service";
 
 const WORKER_POLL_INTERVAL_MS = 3_000;
 const MAINTENANCE_KEEPALIVE_INTERVAL_MS = 60_000;
@@ -429,19 +433,24 @@ export class LineChatNicknameWorkerService implements OnModuleInit, OnModuleDest
     }
 
     const profilePath = this.sessionService.resolveProfilePath(session);
-    const operation = await this.withProfileOperation(
-      session.id,
-      "NICKNAME_UPDATE",
-      (operationContext) => this.processBrowserOperation(
-        { ...job, lineChatUserId: mappedLineChatUserId },
-        session,
-        botId,
-        profilePath,
-        operationContext,
-      ),
-    );
-    if (!operation.acquired) {
-      await this.deferProfileOperationBusy(job.id, operation.retryAfterMs);
+    try {
+      const operation = await this.withProfileOperation(
+        session.id,
+        "NICKNAME_UPDATE",
+        (operationContext) => this.processBrowserOperation(
+          { ...job, lineChatUserId: mappedLineChatUserId },
+          session,
+          botId,
+          profilePath,
+          operationContext,
+        ),
+      );
+      if (!operation.acquired) {
+        await this.deferProfileOperationBusy(job.id, operation.retryAfterMs);
+      }
+    } catch (error: unknown) {
+      if (!isProfileBrowserBusyError(error)) throw error;
+      await this.deferProfileOperationBusy(job.id, error.retryAfterMs);
     }
   }
 
@@ -540,18 +549,25 @@ export class LineChatNicknameWorkerService implements OnModuleInit, OnModuleDest
       const botId = oa.chatBotId?.trim();
       if (!jobs?.length || !session || !botId || session.status !== LineChatSessionStatus.ACTIVE) continue;
       const profilePath = this.sessionService.resolveProfilePath(session);
-      const operation = await this.withProfileOperation(
-        session.id,
-        "RECENT_RESOLUTION",
-        (operationContext) => this.recentResolver!.refreshSnapshot({
-          lineOfficialAccountId: oa.id,
-          botId,
-          sessionKey: session.sessionKey,
-          profilePath,
-          operationContext,
-        }),
-        { waitForLock: false },
-      );
+      let operation: ProfileOperationResult<LineChatRecentMappingSnapshot>;
+      try {
+        operation = await this.withProfileOperation(
+          session.id,
+          "RECENT_RESOLUTION",
+          (operationContext) => this.recentResolver!.refreshSnapshot({
+            lineOfficialAccountId: oa.id,
+            botId,
+            sessionKey: session.sessionKey,
+            profilePath,
+            operationContext,
+          }),
+          { waitForLock: false },
+        );
+      } catch (error: unknown) {
+        if (!isProfileBrowserBusyError(error)) throw error;
+        await this.deferMappingJobs(jobs, "PROFILE_OPERATION_BUSY", error.retryAfterMs);
+        continue;
+      }
       if (!operation.acquired) {
         this.logger.warn(JSON.stringify({
           event: "line_chat_nickname_mapping_refresh_deferred_profile_busy",
@@ -817,6 +833,11 @@ export class LineChatNicknameWorkerService implements OnModuleInit, OnModuleDest
           tokenSource: result.tokenSource,
         })
       );
+      return;
+    }
+
+    if (result.error === "PROFILE_BROWSER_BUSY") {
+      await this.deferProfileOperationBusy(job.id, PROFILE_OPERATION_RETRY_AFTER_MS);
       return;
     }
 

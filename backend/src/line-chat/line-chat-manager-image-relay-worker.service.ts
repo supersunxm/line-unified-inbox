@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger, ServiceUnavailableException } from "@nestjs/common";
 import { LineChatSessionStatus } from "@prisma/client";
-import { chromium, type BrowserContext, type Locator, type Page, type Response } from "playwright";
+import { type BrowserContext, type Locator, type Page, type Response } from "playwright";
 import * as fs from "node:fs";
 import { PrismaService } from "../prisma.service";
 import { LineChatSessionService } from "./line-chat-session.service";
@@ -12,6 +12,7 @@ import {
   isLineChatManagerRelayStoreEnabled,
 } from "./line-chat-pilot.constants";
 import type { ManagerRelayResult } from "./line-chat-manager-message-relay.service";
+import { isProfileBrowserBusyError } from "./line-chat-session.service";
 
 const RELAY_DEDUPE_TTL_MS = 15 * 60_000;
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
@@ -281,7 +282,8 @@ export class LineChatManagerImageRelayWorkerService {
 
     let context: BrowserContext | null = null;
     try {
-      context = await chromium.launchPersistentContext(input.profilePath, {
+      context = await this.sessionService.launchManagedPersistentContext(input.profilePath, {
+        profilePath: input.profilePath,
         headless: true,
         viewport: { width: 1280, height: 800 },
         args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-blink-features=AutomationControlled"],
@@ -369,6 +371,9 @@ export class LineChatManagerImageRelayWorkerService {
         networkEvidence.dispose();
       }
     } catch (error) {
+      if (isProfileBrowserBusyError(error)) {
+        throw new ServiceUnavailableException("PROFILE_BROWSER_BUSY");
+      }
       if (error instanceof ServiceUnavailableException) throw error;
       this.logger.error(JSON.stringify({
         event: "line_chat_manager_image_relay_failed",
@@ -377,7 +382,7 @@ export class LineChatManagerImageRelayWorkerService {
       }));
       throw new ServiceUnavailableException("ส่งรูปผ่าน LINE OA Manager ไม่สำเร็จ กรุณาลองอีกครั้ง");
     } finally {
-      if (context) await context.close().catch(() => {});
+      if (context) await this.sessionService.closeManagedPersistentContext(context, input.profilePath).catch(() => {});
     }
   }
 
@@ -554,7 +559,7 @@ export class LineChatManagerImageRelayWorkerService {
           },
         },
       },
-    }) as Promise<RelayConversation | null>;
+    });
   }
 
   private assertRelayConfiguration(conversation: RelayConversation, storeCode: string): void {

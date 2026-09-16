@@ -453,6 +453,59 @@ void test("worker transitions to FAILED_AUTH on session authentication failure",
   assert.equal(updatedSessionData?.status, LineChatSessionStatus.AUTH_REQUIRED);
 });
 
+void test("worker defers a managed browser profile busy result without changing session auth", async () => {
+  let updatedJobData: Record<string, unknown> | undefined;
+  let sessionUpdateCalled = false;
+  const prisma = {
+    lineChatNicknameSyncJob: {
+      findUnique: async () => ({
+        id: "job-browser-busy",
+        conversationId: "conv-browser-busy",
+        lineOfficialAccountId: "oa-browser-busy",
+        lineChatUserId: "Uchat_user_busy",
+        nickname: "Online",
+        status: LineChatNicknameSyncJobStatus.PROCESSING,
+        attemptCount: 0,
+        maxAttempts: 3,
+        createdAt: new Date("2026-08-31T10:00:00Z"),
+      }),
+      findFirst: async () => null,
+      update: async (args: { data: Record<string, unknown> }) => {
+        updatedJobData = args.data;
+        return {};
+      },
+    },
+    lineOfficialAccount: {
+      findUnique: async () => ({
+        id: "oa-browser-busy",
+        chatBotId: "Ubot",
+        lineChatSession: {
+          id: "session-browser-busy",
+          sessionKey: "profile-b",
+          status: LineChatSessionStatus.ACTIVE,
+        },
+      }),
+    },
+    lineChatSession: {
+      update: async () => {
+        sessionUpdateCalled = true;
+        return {};
+      },
+    },
+  };
+  const sessionService = {
+    resolveProfilePath: () => "/safe/profile",
+    updateNickname: async () => ({ success: false, error: "PROFILE_BROWSER_BUSY" }),
+  } as unknown as LineChatSessionService;
+
+  const worker = new LineChatNicknameWorkerService(prisma as never, sessionService);
+  await worker.processSingleJob("job-browser-busy");
+
+  assert.equal(updatedJobData?.status, LineChatNicknameSyncJobStatus.PENDING);
+  assert.equal(updatedJobData?.lastError, "PROFILE_OPERATION_BUSY");
+  assert.equal(sessionUpdateCalled, false);
+});
+
 void test("worker retries retryable network or 5xx failures with backoff", async () => {
   let updatedJobData: Record<string, unknown> | undefined;
 

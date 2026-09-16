@@ -28,6 +28,8 @@ export interface LineChatSessionOptions {
   headless?: boolean;
   channel?: string;
   args?: string[];
+  viewport?: { width: number; height: number };
+  env?: NodeJS.ProcessEnv;
 }
 
 export interface LineChatSessionValidation {
