@@ -11,6 +11,21 @@ export type AndroidRelease = {
 
 export const androidReleases: AndroidRelease[] = [
   {
+  version: "1.1.31",
+  build: 51,
+  releasedAt: "2026-09-17",
+  releasedAtDisplay: "17 กันยายน 2026",
+  size: "60.7 MB",
+  fileName: "oppo-line-oa-chat-v1.1.31-production.apk",
+  sha256: "b0e9e7a8164fe5bf51ee2987bb885feee0a8115568518026dbbbf0f3ff967e19",
+  notes: [
+    "เพิ่มจำนวนผู้ติดตาม LINE OA ในหน้า Summary",
+    "แสดงการเปลี่ยนแปลงผู้ติดตามจากข้อมูล snapshot ที่มีจริง โดยไม่ตีข้อมูลที่ขาดเป็นศูนย์",
+    "แสดงวันที่ข้อมูลและจำนวนบัญชีที่ครอบคลุม เพื่อช่วยตรวจความครบถ้วนของข้อมูล",
+    "รองรับขอบเขตสาขาปกติและ HQ Store View โดยไม่รวม Main OA",
+  ],
+},
+  {
   version: "1.1.30",
   build: 50,
   releasedAt: "2026-09-16",
