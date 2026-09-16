@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/localization/localization.dart';
 import '../../core/models/authorization_extensions.dart';
 import '../../core/models/models.dart';
+import '../../core/network/store_view_context.dart';
 import '../../core/services/app_update_service.dart';
 import '../auth/admin_approval_page.dart';
 import '../auth/auth_repository.dart';
@@ -14,6 +15,8 @@ import '../profile/profile_page.dart';
 import '../summary/summary_page.dart';
 import '../summary/summary_repository.dart';
 import '../notifications/notification_service.dart';
+import 'store_view_repository.dart';
+import 'store_view_sheet.dart';
 import 'workspace_home_page.dart';
 
 class AuthenticatedShell extends StatefulWidget {
@@ -26,6 +29,8 @@ class AuthenticatedShell extends StatefulWidget {
     required this.summary,
     required this.onLogout,
     required this.onConversationOpened,
+    this.storeView,
+    this.storeViewRepository,
     this.updateService,
     this.notifications,
   });
@@ -35,6 +40,8 @@ class AuthenticatedShell extends StatefulWidget {
   final ConversationRepository conversations;
   final Stream<Map<String, dynamic>>? events;
   final SummaryRepository summary;
+  final StoreViewContextController? storeView;
+  final StoreViewRepository? storeViewRepository;
   final VoidCallback onLogout;
   final Future<void> Function(String conversationId) onConversationOpened;
   final AppUpdateService? updateService;
@@ -58,6 +65,26 @@ class _ShellDestination {
 
 class AuthenticatedShellState extends State<AuthenticatedShell> {
   int _selectedIndex = 0;
+  late final StoreViewContextController _fallbackStoreView;
+
+  StoreViewContextController get _storeView =>
+      widget.storeView ?? _fallbackStoreView;
+
+  bool get _isStoreView => _storeView.isActive;
+
+  String get _contextKey => _storeView.storeId ?? 'hq';
+
+  @override
+  void initState() {
+    super.initState();
+    _fallbackStoreView = StoreViewContextController();
+  }
+
+  @override
+  void dispose() {
+    _fallbackStoreView.dispose();
+    super.dispose();
+  }
 
   Future<void> openConversation(String conversationId) async {
     if (!mounted ||
@@ -72,7 +99,8 @@ class AuthenticatedShellState extends State<AuthenticatedShell> {
           repository: widget.conversations,
           events: widget.events,
           canReply: widget.user.canReply,
-          showStoreContext: widget.user.shouldShowConversationStoreContext,
+          showStoreContext:
+              _isStoreView ? false : widget.user.shouldShowConversationStoreContext,
           onConversationOpened: widget.onConversationOpened,
         ),
       ),
@@ -84,14 +112,16 @@ class AuthenticatedShellState extends State<AuthenticatedShell> {
     final hasInboxAccess =
         widget.user.canAccessStoreWorkspace || widget.user.canAccessAllStores;
 
-    // HQ's primary mobile task is the all-store inbox. Keep the existing
-    // workspace-first order for Main OA and store-only users.
-    if (widget.user.canAccessHqWorkspace && hasInboxAccess) {
+    // HQ's primary mobile task is the all-store inbox. When HQ enters a store
+    // view, render the same store-oriented destinations and presentation that
+    // a store user sees while retaining the authenticated HQ identity.
+    if (!_isStoreView && widget.user.canAccessHqWorkspace && hasInboxAccess) {
       destinations.add(_inboxDestination(context));
     }
 
-    if (widget.user.canAccessHqWorkspace ||
-        widget.user.canAccessMainOaWorkspace) {
+    if (!_isStoreView &&
+        (widget.user.canAccessHqWorkspace ||
+            widget.user.canAccessMainOaWorkspace)) {
       destinations.add(
         _ShellDestination(
           keyName: 'workspace',
@@ -106,14 +136,18 @@ class AuthenticatedShellState extends State<AuthenticatedShell> {
     }
 
     if (hasInboxAccess &&
-        !(widget.user.canAccessHqWorkspace && hasInboxAccess)) {
+        (_isStoreView ||
+            !(widget.user.canAccessHqWorkspace && hasInboxAccess))) {
       destinations.add(_inboxDestination(context));
     }
     if (hasInboxAccess) {
       destinations.add(
         _ShellDestination(
           keyName: 'summary',
-          child: SummaryPage(repository: widget.summary),
+          child: SummaryPage(
+            key: ValueKey('summary:$_contextKey'),
+            repository: widget.summary,
+          ),
           destination: NavigationDestination(
             icon: const Icon(Icons.bar_chart_outlined),
             selectedIcon: const Icon(Icons.bar_chart),
@@ -127,11 +161,13 @@ class AuthenticatedShellState extends State<AuthenticatedShell> {
       _ShellDestination(
         keyName: 'profile',
         child: ProfilePage(
+          key: ValueKey('profile:$_contextKey'),
           user: widget.user,
           auth: widget.auth,
           onLogout: widget.onLogout,
-          onApprovals:
-              widget.user.canManageAccounts ? _openAdminApprovals : null,
+          onApprovals: !_isStoreView && widget.user.canManageAccounts
+              ? _openAdminApprovals
+              : null,
           onPersonalInformation: _openPersonalInformation,
           updateService: widget.updateService,
           notificationService: widget.notifications,
@@ -151,11 +187,13 @@ class AuthenticatedShellState extends State<AuthenticatedShell> {
       _ShellDestination(
         keyName: 'inbox',
         child: InboxPage(
+          key: ValueKey('inbox:$_contextKey'),
           repository: widget.conversations,
           events: widget.events,
-          isHq: widget.user.canAccessHqWorkspace,
-          showStoreFilter: widget.user.canAccessAllStores,
-          showStoreContext: widget.user.shouldShowConversationStoreContext,
+          isHq: !_isStoreView && widget.user.canAccessHqWorkspace,
+          showStoreFilter: !_isStoreView && widget.user.canAccessAllStores,
+          showStoreContext:
+              _isStoreView ? false : widget.user.shouldShowConversationStoreContext,
           onOpen: openConversation,
           onProfile: _openProfile,
         ),
@@ -182,7 +220,7 @@ class AuthenticatedShellState extends State<AuthenticatedShell> {
   }
 
   void _openAdminApprovals() {
-    if (!widget.user.canManageAccounts) return;
+    if (_isStoreView || !widget.user.canManageAccounts) return;
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => AdminApprovalPage(auth: widget.auth),
@@ -190,28 +228,128 @@ class AuthenticatedShellState extends State<AuthenticatedShell> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final destinations = _destinations(context);
-    final selectedIndex = _selectedIndex < destinations.length
-        ? _selectedIndex
-        : destinations.length - 1;
+  Future<void> _openStoreViewPicker() async {
+    final repository = widget.storeViewRepository;
+    if (!widget.user.canActAsStore || repository == null) return;
+    final selected = await showStoreViewPicker(
+      context,
+      repository: repository,
+      selectedStore: _storeView.store,
+    );
+    if (!mounted || selected == null) return;
+    _storeView.enter(selected);
+    setState(() => _selectedIndex = 0);
+  }
 
-    return Scaffold(
-      body: IndexedStack(
-        index: selectedIndex,
-        children:
-            destinations.map((item) => item.child).toList(growable: false),
-      ),
-      bottomNavigationBar: NavigationBar(
-        labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-        selectedIndex: selectedIndex,
-        onDestinationSelected: (index) =>
-            setState(() => _selectedIndex = index),
-        destinations: destinations
-            .map((item) => item.destination)
-            .toList(growable: false),
+  void _exitStoreView() {
+    if (!_isStoreView) return;
+    _storeView.exit();
+    setState(() => _selectedIndex = 0);
+  }
+
+  Widget _storeViewBanner(BuildContext context) {
+    final theme = Theme.of(context);
+    final store = _storeView.store;
+    return Material(
+      color: theme.colorScheme.surfaceContainerHighest,
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
+          child: Row(
+            children: [
+              Icon(
+                store == null ? Icons.corporate_fare_outlined : Icons.storefront,
+                size: 20,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      store == null
+                          ? 'HQ Mode'
+                          : 'กำลังใช้งานในมุมมองสาขา',
+                      style: theme.textTheme.labelSmall,
+                    ),
+                    if (store != null)
+                      Text(
+                        store.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              if (store == null)
+                TextButton.icon(
+                  onPressed: _openStoreViewPicker,
+                  icon: const Icon(Icons.storefront_outlined, size: 18),
+                  label: const Text('เข้าสู่มุมมองสาขา'),
+                )
+              else ...[
+                TextButton.icon(
+                  onPressed: _openStoreViewPicker,
+                  icon: const Icon(Icons.swap_horiz, size: 18),
+                  label: const Text('เปลี่ยน'),
+                ),
+                IconButton(
+                  tooltip: 'กลับ HQ',
+                  onPressed: _exitStoreView,
+                  icon: const Icon(Icons.close),
+                ),
+              ],
+            ],
+          ),
+        ),
       ),
     );
   }
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+        animation: _storeView,
+        builder: (context, _) {
+          final destinations = _destinations(context);
+          final selectedIndex = _selectedIndex < destinations.length
+              ? _selectedIndex
+              : destinations.length - 1;
+          final showStoreViewBanner =
+              widget.user.canActAsStore && widget.storeViewRepository != null;
+
+          return Scaffold(
+            body: Column(
+              children: [
+                if (showStoreViewBanner) _storeViewBanner(context),
+                Expanded(
+                  child: MediaQuery.removePadding(
+                    context: context,
+                    removeTop: showStoreViewBanner,
+                    child: IndexedStack(
+                      index: selectedIndex,
+                      children: destinations
+                          .map((item) => item.child)
+                          .toList(growable: false),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            bottomNavigationBar: NavigationBar(
+              labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+              selectedIndex: selectedIndex,
+              onDestinationSelected: (index) =>
+                  setState(() => _selectedIndex = index),
+              destinations: destinations
+                  .map((item) => item.destination)
+                  .toList(growable: false),
+            ),
+          );
+        },
+      );
 }
