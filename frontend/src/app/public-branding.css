@@ -1,11 +1,28 @@
-/* Public-facing OPPO Brand Shop icon treatment.
-   Scoped to customer/public headers so internal staff branding is untouched. */
+/* Shared OPPO Brand Shop logo treatment.
+   Reuse the same approved logo asset across public headers and the internal app shell. */
 
 /* Main public directory surfaces: /, /stores, /stores/[identifier] */
 a[aria-label="OPPO Brand Shop Home"] > span:first-child {
   display: block;
   width: 40px !important;
   height: 40px !important;
+  flex: 0 0 auto;
+  border-radius: 8px !important;
+  background-color: transparent !important;
+  background-image: url("/images/LOGO_OBS.png") !important;
+  background-position: center !important;
+  background-repeat: no-repeat !important;
+  background-size: contain !important;
+  color: transparent !important;
+  font-size: 0 !important;
+  box-shadow: none !important;
+}
+
+/* Internal desktop sidebar: replace the legacy letter avatar with the same homepage logo. */
+.app-desktop-sidebar > div:first-of-type > a > span:first-child {
+  display: block;
+  width: 32px !important;
+  height: 32px !important;
   flex: 0 0 auto;
   border-radius: 8px !important;
   background-color: transparent !important;
