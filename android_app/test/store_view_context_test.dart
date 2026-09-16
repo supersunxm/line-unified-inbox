@@ -2,8 +2,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
-import 'package:oppo_line_oa_chat/core/models/models.dart';
-import 'package:oppo_line_oa_chat/core/network/store_view_context.dart';
+import 'package:line_oa_chat_hub/core/models/models.dart';
+import 'package:line_oa_chat_hub/core/network/store_view_context.dart';
 
 void main() {
   test('store view context enters and exits a store', () {
