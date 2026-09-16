@@ -11,6 +11,21 @@ export type AndroidRelease = {
 
 export const androidReleases: AndroidRelease[] = [
   {
+  version: "1.1.30",
+  build: 50,
+  releasedAt: "2026-09-16",
+  releasedAtDisplay: "16 กันยายน 2026",
+  size: "60.7 MB",
+  fileName: "oppo-line-oa-chat-v1.1.30-production.apk",
+  sha256: "4b8a9d12455ddb1f2c6ec7a57c24c44b45ed0398a5fcff660c6674f9aa73e3ad",
+  notes: [
+    "เพิ่ม HQ Store View สำหรับผู้ดูแลสำนักงานใหญ่",
+    "ค้นหาและเลือกสาขาเพื่อดูและทำงานในมุมมองเดียวกับพนักงานสาขา",
+    "สลับสาขาหรือกลับ HQ ได้โดยไม่ต้องออกจากระบบ",
+    "เพิ่มการแยกขอบเขตข้อมูลและ audit สำหรับการทำงานในนามสาขา",
+  ],
+},
+  {
   version: "1.1.29",
   build: 49,
   releasedAt: "2026-09-15",
