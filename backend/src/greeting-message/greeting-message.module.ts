@@ -13,6 +13,8 @@ import { RichMessageModule } from "../rich-message/rich-message.module";
 import { GreetingMessageService } from "./greeting-message.service";
 import { GreetingExecutionService } from "./greeting-execution.service";
 import { GreetingMessageController } from "./greeting-message.controller";
+import { GreetingManagementController } from "./greeting-management.controller";
+import { GreetingManagementService } from "./greeting-management.service";
 
 @Module({
   imports: [
@@ -23,7 +25,7 @@ import { GreetingMessageController } from "./greeting-message.controller";
     ClassificationModule,
     RichMessageModule,
   ],
-  controllers: [GreetingMessageController],
+  controllers: [GreetingMessageController, GreetingManagementController],
   providers: [
     PrismaService,
     CredentialEncryptionService,
@@ -32,6 +34,7 @@ import { GreetingMessageController } from "./greeting-message.controller";
     AuditLogService,
     GreetingMessageService,
     GreetingExecutionService,
+    GreetingManagementService,
   ],
   exports: [GreetingMessageService, GreetingExecutionService],
 })
