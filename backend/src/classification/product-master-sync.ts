@@ -115,7 +115,7 @@ function seriesForProduct(name: string, category: string): string | undefined {
   if (category === "PHONE") {
     if (normalizedName.startsWith("oppo find ")) return "Find Series";
     if (normalizedName.startsWith("oppo reno")) return "Reno Series";
-    if (normalizedName.startsWith("oppo a6")) return "A Series";
+    if (/^oppo a\d/.test(normalizedName)) return "A Series";
     return undefined;
   }
   if (category === "TABLET") return "OPPO Pad Series";
