@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   Logger,
+  NotFoundException,
   Param,
   Patch,
   Post,
@@ -66,32 +67,23 @@ export class RichMessageController {
       response.send(image.body);
       return;
     } catch (error) {
+      // NotFoundException covers invalid/expired signatures, unsupported sizes,
+      // missing records, and unavailable source media. Never bypass those checks.
+      if (error instanceof NotFoundException) throw error;
+
       const detail = error instanceof Error ? error.message : String(error);
       this.logger.warn(
-        `[RichMessage] imagemap resize failed for id=${id} size=${size}; falling back to stored media: ${detail}`,
+        `[RichMessage] imagemap transform failed for id=${id} size=${size}; falling back to stored source: ${detail}`,
       );
 
-      // Preserve the signature/expiry checks in RichMessageService. If the normal
-      // renderer failed after validation (for example a sharp/native-image issue),
-      // serve the original uploaded image so LINE can still render the imagemap
-      // instead of returning HTTP 500. This keeps MESSAGE tap actions usable.
-      // `get()` is intentionally called here only after renderImagemapImage() has
-      // validated the signed public URL.
+      // At this point renderImagemapImage() already passed signature/expiry and
+      // source-media checks; the remaining common failure is image transformation
+      // (e.g. sharp/native codec). Serve the stored source instead of returning 500
+      // so LINE can still display the imagemap and keep MESSAGE tap actions usable.
       const richMessage = await this.richMessages.get(id);
-      let stored = await this.storage.get(richMessage.mediaObjectKey).catch(() => null);
-
-      if (!stored && richMessage.previewObjectKey) {
-        stored = await this.storage.get(richMessage.previewObjectKey).catch(() => null);
-      }
-
-      if (!stored) {
-        this.logger.error(
-          `[RichMessage] fallback media unavailable for id=${id} mediaObjectKey=${richMessage.mediaObjectKey}`,
-        );
-        throw error;
-      }
-
+      const stored = await this.storage.get(richMessage.mediaObjectKey);
       const contentType = stored.contentType || "image/jpeg";
+
       response.setHeader("Content-Type", contentType);
       response.setHeader("Content-Length", String(stored.body.length));
       response.setHeader("Cache-Control", "public, max-age=604800, immutable");
