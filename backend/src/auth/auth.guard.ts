@@ -38,6 +38,12 @@ export type AuthUser = {
     scope?: PermissionContext["scope"];
     capabilities?: PermissionContext["capabilities"];
   };
+  storeContext?: {
+    mode: "STORE";
+    storeId: string;
+    storeName: string;
+    storeCode: string | null;
+  };
 };
 export type AuthRequest = Request & { user?: AuthUser };
 
@@ -70,6 +76,17 @@ export class AuthGuard implements CanActivate {
     request.user = user;
     if (user.mustChangePassword && !isAllowedDuringPasswordChange(request)) {
       throw new ForbiddenException({ code: PASSWORD_CHANGE_REQUIRED_CODE, message: "Password change required" });
+    }
+    const actingStoreHeader = request.headers["x-act-as-store-id"];
+    if (actingStoreHeader !== undefined) {
+      if (!this.storeAccess || Array.isArray(actingStoreHeader)) {
+        throw new ForbiddenException({ code: "STORE_CONTEXT_NOT_ALLOWED", message: "HQ store view is not allowed for this account" });
+      }
+      const storeId = actingStoreHeader.trim();
+      if (!storeId) {
+        throw new ForbiddenException({ code: "STORE_CONTEXT_NOT_ALLOWED", message: "HQ store view is not allowed for this account" });
+      }
+      await this.storeAccess.applyStoreContext(user, storeId);
     }
     if (user.role === "VIEWER" && request.method !== "GET" && request.path !== "/auth/logout" && (!this.storeAccess || !(await this.storeAccess.canWriteAsStoreUser(user)))) throw new ForbiddenException("Viewer access is read-only");
     const roles = this.reflector.getAllAndOverride<UserRole[]>(REQUIRED_ROLES, [context.getHandler(), context.getClass()]);
