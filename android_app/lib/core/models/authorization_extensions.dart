@@ -39,6 +39,8 @@ extension CurrentUserAuthorization on CurrentUser {
       permissions['canAccessAllStores'] == true ||
       role == 'ADMIN';
 
+  bool get canActAsStore => canAccessHqWorkspace && canAccessAllStores;
+
   /// Store context is useful for disambiguation whenever the account can see
   /// multiple stores or is operating from an HQ/global workspace. A store-only
   /// account with exactly one canonical accessible store does not need the
