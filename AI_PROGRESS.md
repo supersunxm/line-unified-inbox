@@ -1,34 +1,38 @@
-# 2026-09-17: LINE Chat Durable Manual Mapping & Outbound Send Recovery [COMPLETED & VERIFIED]
-- **Current Task**: Implement durable manual identity mapping for LINE Chat customers, upgrade LINE Chat Health with an unresolved mapping backlog modal, provide an admin manual mapping split-pane workflow, unblock nickname synchronization, and implement safe, idempotent outbound message failure recovery.
+# 2026-09-17: LINE Chat Durable Manual Mapping & Outbound Recovery Production Rollout [COMPLETED & VERIFIED]
+- **Current Task**: Safely commit, push, deploy the completed manual mapping implementation, apply the production Prisma migration, validate the RBS Chonburi / Max pilot case (`RESOLVE_AMBIGUOUS`), and verify outbound message recovery.
 - **Completed Work**:
-  - **Phase 1 Architecture Audit**:
-    - Confirmed canonical durable identity is stored directly on `Conversation.lineChatUserId`.
-    - Confirmed no secondary mapping table exists or should be created.
-    - Confirmed outbound send path (`LineChatManagerMessageRelayWorkerService`) already consumes `Conversation.lineChatUserId` directly and skips resolution if present.
-    - Confirmed `RESOLVE_AMBIGUOUS` occurs when `lineChatUserId` is missing and multiple chats match the customer's display name, throwing a 503 `ServiceUnavailableException` which aborts before the outbound message is persisted.
-    - Confirmed both nickname sync jobs and outbound sending share `Conversation.lineChatUserId`.
-    - Confirmed existing migrations are fully aligned (141 migrations verified and applied).
-  - **Phase 2 Schema Migration & Backend Services**:
-    - Extended Prisma schema with `lineChatMappingSource`, `lineChatMappedAt`, and `lineChatMappedById` on `Conversation`, and `deliveryStatus` on `Message`.
-    - Created and applied migration `20260917160000_add_line_chat_manual_mapping_and_delivery_status`.
-    - Implemented `LineChatManualMappingService` with `getUnresolvedBacklog()`, `getMappingCandidates()`, and `bindManualMapping()`. Enforced strict same-OA validation, conflict detection, explicit override requirement, and audit history logging.
-    - Implemented `retryFailedMessage(conversationId, messageId, operator)` in `ConversationsService` with idempotency guards and delivery status updates.
-    - Exposed ADMIN-protected endpoints in `LineChatOperationsController` and `ConversationsController`.
-  - **Phase 3 & 4 LINE Chat Health UI & Manual Mapping Workflow**:
-    - Upgraded "Waiting for mapping" card on `/operations/line-chat-health` to be clickable with interactive hover states.
-    - Implemented `LineChatUnresolvedBacklogModal` listing all unresolved conversations with mapping reasons (`RESOLVE_AMBIGUOUS`, `RESOLVE_NO_MATCH`, `RESOLVE_CONFLICT`), latest inbound previews, and direct action triggers.
-    - Implemented `LineChatManualMappingModal` with a split-pane layout: Left pane displays internal conversation message history; Right pane displays verified LINE Chat candidates for the same OA only, controlled keyword search, conflict alerts, and a mandatory confirmation step.
-  - **Phase 5 & 6 Outbound Failure Recovery & Black App UI**:
-    - Updated `ConversationsService.sendMessage` to persist failed pre-send attempts with `deliveryStatus: FAILED`.
-    - Upgraded black app (`MobileChatsApp`) and desktop chat (`app/page.tsx`) to highlight failed outbound messages with visual alerts and provide an immediate, idempotent "ลองส่งอีกครั้ง" (Retry) action.
+  - **Production Commits Pushed**:
+    - `e61c6f9`: `feat(line-chat): add durable manual identity mapping and outbound message recovery`
+    - `0ecb5f8`: `fix(line-chat): relay candidate discovery to nickname worker with persistent profile`
+    - `daf3613`: `fix(line-chat): align manual mapping payload with backend DTO and add field fallbacks`
+  - **Production Prisma Migration**:
+    - Verified migration baseline and applied `20260917160000_add_line_chat_manual_mapping_and_delivery_status` to production Postgres.
+    - Verified new schema columns in `information_schema`:
+      - `Conversation`: `lineChatMappingSource`, `lineChatMappedAt`, `lineChatMappedById`.
+      - `Message`: `deliveryStatus` (default: `'DELIVERED'`).
+  - **Railway Deployments & Health**:
+    - Backend `line-unified-inbox`, worker `line-chat-nickname-worker`, and `frontend` deployed and verified healthy (`/health` = 200, `/health/readiness` = 200, `https://lineoppo.click` = 200).
+  - **RBS Chonburi / Max Pilot Validation**:
+    - Located conversation `9cf223e4-194a-47ce-b795-1192a22d3928` (Store `28375`, customer Max) in Waiting for mapping backlog.
+    - Verified inbound messages (18:58 Bangkok "OPPO reno 16 ผ่อนต้องใช้อะไรบ้างครับ", 18:59 Bangkok "ขอข้อมูลการดาวน์หน่อยครับ").
+    - Relayed candidate discovery to persistent worker profile; discovered 125 candidate chats.
+    - Identified Candidate 1 (`Uabf5b5217d6f288057b2a0046622a510`) with `lastMessageAt: 2026-09-16T11:59:38.161Z` matching inbound timestamp to the millisecond.
+    - Successfully confirmed manual mapping via `POST /operations/line-chat-nickname/conversations/9cf223e4-194a-47ce-b795-1192a22d3928/manual-map`.
+    - Verified persistence: `Conversation.lineChatUserId = "Uabf5b5217d6f288057b2a0046622a510"`, `lineChatMappingSource = "MANUAL"`, `lineChatMappedAt = "2026-09-17T08:59:52.512Z"`, `ActivityHistory` audit trail recorded.
+    - Verified backlog count: Max disappeared from Waiting for mapping (count dropped from 141 to 140).
+    - Verified nickname job `88804c3c-8568-4e6b-af82-bf68084dd284` automatically consumed durable ID and processed with `status: SUCCESS` (`nickname: TikTok 09/26`).
+  - **Legacy Outbound Attempt & Controlled Test Sends**:
+    - Checked DB for legacy failed Max message: confirmed `0` records with `deliveryStatus: FAILED`. Reported: *"Legacy failed attempt was not persisted under the old behavior."*
+    - Sent controlled test message 1 (`7592d7ac-c3a9-4ece-a5ee-550a29006184`): delivered with HTTP 200, `deliveryStatus: DELIVERED`, `bmReplyStatus: REPLIED`, zero `RESOLVE_AMBIGUOUS`.
+    - Sent controlled test message 2 (`97807b85-4039-4963-bb8c-ccde6ba1fe57`): delivered with HTTP 200, reused durable mapping directly.
 - **Checks Run & Passed**:
-  - Database migration applied: `20260917160000_add_line_chat_manual_mapping_and_delivery_status`.
-  - Targeted unit tests: 41/41 passed (`src/line-chat/line-chat-manual-mapping.spec.ts` & `src/conversations.service.spec.ts`).
-  - LINE Chat operational & resolver test suites: 69/69 passed.
-  - Frontend ESLint on modified files: 0 errors.
-  - Frontend production build: `next build` succeeded with all 44 routes generated.
+  - Database schema: 142 Prisma migrations verified.
+  - Manual mapping spec: 7/7 passed (`line-chat-manual-mapping.spec.ts`).
+  - Conversations service spec: 34/34 passed (`conversations.service.spec.ts`).
+  - Frontend production build: `next build` succeeded with all 44 routes.
   - Backend production build: `prisma generate && nest build` succeeded with 0 errors.
-- **Next Action**: Output final delivery report to user with exact validation steps for the RBS Chonburi / Max scenario.
+  - Production live validation: 100% passed on live Railway environment.
+- **Next Action**: Output final 11-point deployment and verification report to user.
 
 
 # 2026-09-17: TikTok Analytics Production Deployment & Verification [COMPLETED & VERIFIED]
