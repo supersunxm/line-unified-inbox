@@ -26,13 +26,17 @@ export interface UnresolvedMappingItem {
   storeCode: string;
   lineOfficialAccountId: string;
   lineOfficialAccountName: string;
+  lineOaName?: string;
   latestMessageAt: string;
+  latestChatTimestamp?: string;
   latestInboundMessage: {
     text: string;
     sentAt: string;
   } | null;
+  latestInboundPreview?: string | null;
   mappingReason: "RESOLVE_NO_MATCH" | "RESOLVE_AMBIGUOUS" | "RESOLVE_CONFLICT" | "UNRESOLVED";
   customerSalesStatus: string | null;
+  salesStatus?: string | null;
   paymentMethod: string | null;
   salesRecordedAt: string | null;
   nicknameTarget: string | null;
@@ -173,15 +177,19 @@ export class LineChatManualMappingService {
         storeCode,
         lineOfficialAccountId: conv.lineOfficialAccount.id,
         lineOfficialAccountName: conv.lineOfficialAccount.name,
+        lineOaName: conv.lineOfficialAccount.name,
         latestMessageAt: conv.latestMessageAt.toISOString(),
+        latestChatTimestamp: conv.latestMessageAt.toISOString(),
         latestInboundMessage: latestInbound
           ? {
               text: latestInbound.originalText,
               sentAt: latestInbound.sentAt.toISOString(),
             }
           : null,
+        latestInboundPreview: latestInbound ? latestInbound.originalText : null,
         mappingReason,
         customerSalesStatus: conv.customerSalesStatus,
+        salesStatus: conv.customerSalesStatus,
         paymentMethod: conv.paymentMethod,
         salesRecordedAt: conv.salesRecordedAt?.toISOString() ?? null,
         nicknameTarget: job.nickname,

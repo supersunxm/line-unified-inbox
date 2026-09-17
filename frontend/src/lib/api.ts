@@ -124,19 +124,31 @@ export type UnresolvedMappingReason = "RESOLVE_NO_MATCH" | "RESOLVE_AMBIGUOUS" |
 
 export interface UnresolvedMappingItem {
   conversationId: string;
+  jobId?: string | null;
   customerDisplayName: string;
+  storeId?: string | null;
   storeName: string;
   storeCode: string;
-  lineOaName: string;
-  lineOaBasicId: string | null;
-  lineOaChatBotId: string | null;
-  sessionKey: string | null;
-  latestChatTimestamp: string;
-  latestInboundPreview: string | null;
+  lineOfficialAccountId: string;
+  lineOfficialAccountName?: string;
+  lineOaName?: string;
+  lineOaBasicId?: string | null;
+  lineOaChatBotId?: string | null;
+  sessionKey?: string | null;
+  latestMessageAt?: string;
+  latestChatTimestamp?: string;
+  latestInboundMessage?: {
+    text: string;
+    sentAt: string;
+  } | null;
+  latestInboundPreview?: string | null;
   mappingReason: UnresolvedMappingReason;
-  salesStatus: string | null;
+  salesStatus?: string | null;
+  customerSalesStatus?: string | null;
+  paymentMethod?: string | null;
+  salesRecordedAt?: string | null;
   nicknameTarget: string | null;
-  matchedCount: number;
+  matchedCount?: number;
 }
 
 export interface CandidateChatInfo {
@@ -176,8 +188,8 @@ export interface MappingCandidatesResult {
 }
 
 export interface BindManualMappingInput {
-  targetLineChatUserId: string;
-  targetLineChatDisplayName?: string;
+  lineOfficialAccountId: string;
+  lineChatUserId: string;
   overrideConflict?: boolean;
 }
 

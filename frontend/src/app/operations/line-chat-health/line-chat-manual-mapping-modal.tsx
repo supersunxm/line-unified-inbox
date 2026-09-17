@@ -69,8 +69,8 @@ export function LineChatManualMappingModal({
     setError(null);
     try {
       const response = await api.bindLineChatManualMapping(item.conversationId, {
-        targetLineChatUserId: selectedCandidate.chatUserId,
-        targetLineChatDisplayName: selectedCandidate.displayName,
+        lineOfficialAccountId: item.lineOfficialAccountId,
+        lineChatUserId: selectedCandidate.chatUserId,
         overrideConflict: Boolean(selectedCandidate.conflict) ? overrideConflict : false,
       });
       onSuccess({
@@ -113,7 +113,9 @@ export function LineChatManualMappingModal({
             </div>
             <p className="mt-0.5 text-xs text-[var(--app-text-tertiary)]">
               Bind internal conversation to the verified LINE Chat identity for LINE OA:{" "}
-              <span className="font-semibold text-[var(--app-text-secondary)]">{item.lineOaName}</span>
+              <span className="font-semibold text-[var(--app-text-secondary)]">
+                {item.lineOaName || item.lineOfficialAccountName}
+              </span>
             </p>
           </div>
           <button
@@ -133,10 +135,10 @@ export function LineChatManualMappingModal({
           </div>
         )}
 
-        {/* Modal Body: Split Pane */}
-        <div className="flex min-h-0 flex-1 divide-x divide-[var(--app-border)]">
-          {/* LEFT: Internal Conversation */}
-          <div className="flex w-5/12 flex-col bg-[var(--app-surface-subtle)]/30 p-5 overflow-hidden">
+        {/* Content Body: Split Left (Internal) / Right (Candidates) */}
+        <div className="grid min-h-0 flex-1 grid-cols-1 divide-y divide-[var(--app-border)] overflow-y-auto lg:grid-cols-12 lg:divide-x lg:divide-y-0">
+          {/* Left Column: Internal Conversation & Inbound Messages */}
+          <div className="flex flex-col bg-[var(--app-surface-subtle)]/30 p-6 lg:col-span-5">
             <div className="mb-3">
               <div className="text-xs font-semibold uppercase tracking-wider text-[var(--app-text-tertiary)]">
                 Internal Conversation
@@ -144,16 +146,16 @@ export function LineChatManualMappingModal({
               <div className="mt-1 flex items-baseline justify-between">
                 <span className="text-base font-bold text-[var(--app-text)]">{item.customerDisplayName}</span>
                 <span className="text-xs text-[var(--app-text-tertiary)]">
-                  {formatTimestamp(item.latestChatTimestamp)}
+                  {formatTimestamp(item.latestChatTimestamp || item.latestMessageAt)}
                 </span>
               </div>
               <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-[var(--app-text-secondary)]">
                 <span className="rounded bg-[var(--app-surface)] px-1.5 py-0.5 text-[11px] font-mono border border-[var(--app-border)]">
                   ID: {item.conversationId.slice(0, 8)}...
                 </span>
-                {item.salesStatus && (
+                {(item.salesStatus || item.customerSalesStatus) && (
                   <span className="rounded bg-blue-500/10 px-1.5 py-0.5 text-[11px] font-medium text-blue-500">
-                    {item.salesStatus}
+                    {item.salesStatus || item.customerSalesStatus}
                   </span>
                 )}
                 {item.nicknameTarget && (

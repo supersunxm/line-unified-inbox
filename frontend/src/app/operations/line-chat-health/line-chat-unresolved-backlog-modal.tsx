@@ -54,13 +54,15 @@ export function LineChatUnresolvedBacklogModal({
       }
       if (!filterQuery) return true;
       const q = filterQuery.toLowerCase();
+      const oaName = item.lineOaName || item.lineOfficialAccountName || "";
+      const inboundPreview = item.latestInboundPreview || item.latestInboundMessage?.text || "";
       return (
         item.customerDisplayName.toLowerCase().includes(q) ||
         item.storeName.toLowerCase().includes(q) ||
         item.storeCode.toLowerCase().includes(q) ||
-        item.lineOaName.toLowerCase().includes(q) ||
+        oaName.toLowerCase().includes(q) ||
         item.conversationId.toLowerCase().includes(q) ||
-        (item.latestInboundPreview && item.latestInboundPreview.toLowerCase().includes(q))
+        inboundPreview.toLowerCase().includes(q)
       );
     });
   }, [items, filterQuery, filterReason]);
@@ -237,7 +239,7 @@ export function LineChatUnresolvedBacklogModal({
                           {item.customerDisplayName}
                         </span>
                         {getReasonBadge(item.mappingReason)}
-                        {item.matchedCount > 1 && (
+                        {Boolean(item.matchedCount && item.matchedCount > 1) && (
                           <span className="rounded bg-[var(--app-surface-subtle)] px-2 py-0.5 text-[11px] text-[var(--app-text-secondary)]">
                             {item.matchedCount} name matches
                           </span>
@@ -257,25 +259,25 @@ export function LineChatUnresolvedBacklogModal({
                         </span>
                         <span>·</span>
                         <span>
-                          LINE OA: <strong>{item.lineOaName}</strong>
+                          LINE OA: <strong>{item.lineOaName || item.lineOfficialAccountName}</strong>
                         </span>
                         <span>·</span>
-                        <span>Latest chat: {formatTimestamp(item.latestChatTimestamp)}</span>
+                        <span>Latest chat: {formatTimestamp(item.latestChatTimestamp || item.latestMessageAt)}</span>
                       </div>
 
                       {/* Message preview */}
-                      {item.latestInboundPreview && (
+                      {(item.latestInboundPreview || item.latestInboundMessage?.text) && (
                         <div className="rounded-lg bg-[var(--app-surface-subtle)]/60 px-3 py-1.5 text-xs text-[var(--app-text-secondary)]">
                           <span className="font-semibold text-[var(--app-text-tertiary)]">Latest inbound: </span>
-                          &ldquo;{item.latestInboundPreview}&rdquo;
+                          &ldquo;{item.latestInboundPreview || item.latestInboundMessage?.text}&rdquo;
                         </div>
                       )}
 
                       {/* Status / Tagging tags */}
                       <div className="flex flex-wrap items-center gap-2 pt-0.5 text-[11px]">
-                        {item.salesStatus && (
+                        {(item.salesStatus || item.customerSalesStatus) && (
                           <span className="rounded bg-blue-500/10 px-2 py-0.5 font-medium text-blue-500">
-                            Status: {item.salesStatus}
+                            Status: {item.salesStatus || item.customerSalesStatus}
                           </span>
                         )}
                         {item.nicknameTarget && (
