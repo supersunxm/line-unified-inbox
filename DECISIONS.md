@@ -1,3 +1,9 @@
+# TikTok Public Daily Follower Baseline Reconciliation (2026-09-17)
+
+- **Rate Limit Classification & Honest Diagnostic Reporting**: Rather than masking upstream rate limits as generic errors or `PROFILE_NOT_FOUND`, the collector explicitly classifies HTTP 403 and 429 status codes from TokCounter API as `RATE_LIMITED`. When an IP rate limit remains active after a 60-second cooldown period, the collector safely halts the batch run immediately to prevent futile hammering against TokCounter. All remaining uncollected accounts are categorized as `RATE_LIMITED` without falsifying numbers or inventing data.
+- **Relational Integrity Preservation**: Normalized TikTok accounts are stored in `TikTokPublicAccount` with a 1-to-many relationship to `StoreMaster` via `tiktokPublicAccountId`. Duplicate store entries sharing the same TikTok account (such as Store 27837 and Store 27368 both using `@o_taweekitburiram`) link to a single `TikTokPublicAccount` and a single daily snapshot in `TikTokPublicDailyMetric`, preventing duplicate network fetching and guaranteeing data consistency.
+- **Metric Date Locking to 2026-09-16**: To establish a solid, unified baseline date, metrics collected for this run are strictly bound to `2026-09-16` (Asia/Bangkok calendar day), ensuring consistent cross-store comparison and growth calculations.
+
 # TokCounter Public TikTok Metrics POC for Store 109 (2026-09-16)
 
 - **DOM Extraction & Stabilization Strategy**: TokCounter uses an animated Odometer counter that initializes with digit ribbons and zeros before resolving to the true metric values. The collector waits for account identity verification (checking the exact username `@o_seaconsquaresrinakarin` within the profile header), verifies the non-placeholder status of the counters, and requires two consistent reads separated by 3 seconds before accepting the values.

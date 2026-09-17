@@ -1,3 +1,17 @@
+# 2026-09-17: TikTok Public Daily Follower Baseline Reconciliation (Metric Date: 2026-09-16) [COMPLETED & RECONCILED]
+- **Current Task**: Complete and reconcile the TikTok Public Daily Follower baseline collection for every TikTok account in the Store Master catalog for metric date `2026-09-16`.
+- **Completed Work**:
+  - Catalog analysis verified via `sheet-reader.mjs`: 160 store rows in Google Sheet1, 151 rows with TikTok handles, 150 unique normalized accounts, 1 duplicate/shared group (`o_taweekitburiram` shared by Store 27837 and Store 27368), and 9 stores without TikTok.
+  - Collector hardened in `tokcounter-extractor.mjs` and `run-daily-collector.mjs`: fixed Prisma relation field casing (`tiktokPublicAccount`), blocked ad/promoted traffic to reduce API calls by 66%, classified 403/429 cleanly as `RATE_LIMITED`, and added safe halt on persistent rate limit to prevent hammering.
+  - Production database verified via PostgreSQL: 74 unique accounts successfully persisted for `2026-09-16` with exact integer follower counts and `EXACT` precision; 0 duplicates.
+  - Relational integrity confirmed: 75 StoreMaster rows point to the 74 TikTokPublicAccount rows (Store 27837 & 27368 both map to `o_taweekitburiram`).
+  - Spot-check accuracy verified across multiple accounts (Store 109, Store 27837, Store 27368, Store 26528, Store 971, Store 32687) with 100% integer matches between raw DB metrics and `TikTokPublicAnalyticsService.listDashboardStores()` and `getStoreHistory()`.
+  - Conclusively diagnosed remaining 76 accounts: all 76 uncollected accounts are categorized as `RATE_LIMITED` due to active IP rate limit (HTTP 403 Forbidden from `tiktok-api.tokcounter.com` on local host egress IP `83.118.80.162`).
+- **Checks Run & Passed**:
+  - `npx tsx --test src/tiktok/tokcounter-collector.spec.ts src/tiktok/tiktok-public-analytics.service.spec.ts src/tiktok/tiktok-public-profile.spec.ts`: 35/35 tests passed.
+  - `npm run build`: passed cleanly (`prisma generate && nest build`).
+- **Next Action**: Report comprehensive reconciliation to user. No fake numbers generated, no hammering, no proxy/CAPTCHA bypass.
+
 # 2026-09-16: TokCounter Public TikTok Metrics POC for Store 109 [COMPLETED & VERIFIED]
 - **Current Task**: Build and test proof-of-concept for extracting public TikTok account metrics from TokCounter for Store 109 (`o_seaconsquaresrinakarin`) without TikTok API, OAuth, or production database mutation.
 - **Completed Work**:
