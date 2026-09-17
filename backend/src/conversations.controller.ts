@@ -8,6 +8,15 @@ import type { AuthRequest } from "./auth/auth.guard";
 import { StoreAccessService } from "./auth/store-access.service";
 import { FOCUS_STORE_GROUP_ID } from "./focus-store-group";
 
+const LINE_CHAT_USER_ID_PATTERN = /^U[0-9a-f]{32}$/iu;
+
+function buildDirectLineOaManagerUrl(chatBotId: string | null | undefined, lineChatUserId: string | null | undefined): string | null {
+  const botId = chatBotId?.trim() ?? "";
+  const chatUserId = lineChatUserId?.trim() ?? "";
+  if (!LINE_CHAT_USER_ID_PATTERN.test(botId) || !LINE_CHAT_USER_ID_PATTERN.test(chatUserId)) return null;
+  return `https://chat.line.biz/${botId}/chat/${chatUserId}`;
+}
+
 @Controller("conversations")
 export class ConversationsController {
   constructor(private readonly service: ConversationsService, private readonly prisma: PrismaService, private readonly classification: ClassificationService, private readonly profiles: LineProfileService, private readonly storeAccess: StoreAccessService) { }
@@ -47,6 +56,22 @@ export class ConversationsController {
     await this.storeAccess.assertStoreAccess(req.user!, dto.storeId);
     const actingAdmin = req.user?.displayName || req.user?.email || "ADMIN";
     return this.service.bulkUpdateBmReplyStatus(dto, actingAdmin);
+  }
+  @Get(":id/line-oa-manager-url")
+  async lineOaManagerUrl(@Param("id") id: string, @Req() req: AuthRequest) {
+    await this.storeAccess.assertConversationAccess(req.user!, id);
+    const conversation = await this.prisma.conversation.findUnique({
+      where: { id },
+      select: {
+        lineChatUserId: true,
+        lineOfficialAccount: { select: { chatBotId: true } },
+      },
+    });
+    const url = buildDirectLineOaManagerUrl(
+      conversation?.lineOfficialAccount.chatBotId,
+      conversation?.lineChatUserId,
+    );
+    return { url, direct: Boolean(url) };
   }
   @Get(":id") async get(@Param("id") id: string, @Req() req: AuthRequest) { await this.storeAccess.assertConversationAccess(req.user!, id); return this.service.get(id); }
   @Patch(":id/status") async status(@Param("id") id: string, @Body() dto: UpdateStatusDto, @Req() req: AuthRequest) {
