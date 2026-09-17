@@ -8,6 +8,7 @@ import { Button, Card, LoadingState } from "@/components/ui";
 import { api } from "@/lib/api";
 import { AUTH_UNAUTHORIZED_EVENT } from "@/lib/auth-session";
 import type { ApiStore, PurchaseAnalyticsResponse } from "@/types/api";
+import { formatDistributionLabel, prepareDistribution } from "./distribution-utils";
 
 type AuthUser = { id: string; email: string; displayName: string; role: "ADMIN" | "VIEWER" };
 type TrendMetric = "purchases" | "products" | "customers";
@@ -190,17 +191,22 @@ function TrendChart({ data, metric }: { data: Array<{ date: string; purchases: n
 }
 
 function DistributionBar({ items, colors }: { items: Array<{ label: string; count: number }>; colors: string[] }) {
-  const total = items.reduce((sum, item) => sum + item.count, 0);
+  const { total, knownItems, knownTotal, missingCount } = prepareDistribution(items);
+  const decorated = items.map((item, index) => ({ ...item, color: colors[index % colors.length] }));
+  const knownDecorated = decorated.filter((item) => knownItems.some((known) => known.label === item.label));
+  const missingShare = Math.round(pct(missingCount, total));
+
   return (
     <div className="px-5 pb-5">
-      {items.length === 0 ? <p className="py-4 text-xs text-[var(--app-text-tertiary)]">No recorded information.</p> : <>
+      {knownDecorated.length === 0 ? <p className="py-4 text-xs text-[var(--app-text-tertiary)]">No recorded information yet.</p> : <>
         <div className="flex h-4 overflow-hidden rounded-full bg-slate-100">
-          {items.map((item, index) => <div key={item.label} style={{ width: `${pct(item.count, total)}%`, backgroundColor: colors[index % colors.length] }} title={`${item.label}: ${item.count}`} />)}
+          {knownDecorated.map((item) => <div key={item.label} style={{ width: `${pct(item.count, knownTotal)}%`, backgroundColor: item.color }} title={`${formatDistributionLabel(item.label)}: ${item.count}`} />)}
         </div>
         <div className="mt-4 grid gap-2 sm:grid-cols-2">
-          {items.slice(0, 4).map((item, index) => <div key={item.label} className="flex items-center justify-between gap-2 rounded-lg bg-[var(--app-surface-subtle)] px-3 py-2 text-xs"><div className="flex min-w-0 items-center gap-2"><span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: colors[index % colors.length] }} /><span className="truncate text-[var(--app-text-secondary)]">{item.label}</span></div><span className="font-semibold tabular-nums text-[var(--app-text-primary)]">{Math.round(pct(item.count, total))}%</span></div>)}
+          {knownDecorated.slice(0, 4).map((item) => <div key={item.label} className="flex items-center justify-between gap-2 rounded-lg bg-[var(--app-surface-subtle)] px-3 py-2 text-xs"><div className="flex min-w-0 items-center gap-2"><span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: item.color }} /><span className="truncate text-[var(--app-text-secondary)]">{formatDistributionLabel(item.label)}</span></div><span className="font-semibold tabular-nums text-[var(--app-text-primary)]">{Math.round(pct(item.count, knownTotal))}%</span></div>)}
         </div>
       </>}
+      {missingCount > 0 ? <p className="mt-3 text-[10px] text-[var(--app-text-tertiary)]">Not recorded · {missingShare}% of records</p> : null}
     </div>
   );
 }
