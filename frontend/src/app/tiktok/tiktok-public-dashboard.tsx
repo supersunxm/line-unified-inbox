@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { PageContainer } from "@/components/shell";
 import { useAppLanguage } from "../language";
 import type { TikTokPublicDashboardOverview, TikTokPublicDashboardStore } from "./tiktok-public-api";
@@ -57,12 +57,12 @@ export function TikTokPublicDashboard({ overview, stores }: Props) {
   const [query, setQuery] = useState("");
   const [region, setRegion] = useState("ALL");
   const [sort, setSort] = useState("followers");
-  const [refreshing, setRefreshing] = useState(false);
+  const [isRefreshing, startTransition] = useTransition();
 
   const handleRefresh = () => {
-    setRefreshing(true);
-    router.refresh();
-    setTimeout(() => setRefreshing(false), 1500);
+    startTransition(() => {
+      router.refresh();
+    });
   };
 
   const regions = useMemo(() => Array.from(new Set(stores.map((store) => store.region).filter(Boolean) as string[])).sort(), [stores]);
@@ -74,12 +74,38 @@ export function TikTokPublicDashboard({ overview, stores }: Props) {
       return matchesQuery && (region === "ALL" || store.region === region);
     });
     return [...filtered].sort((a, b) => {
-      if (sort === "growth7d") return (b.growth.sevenDay.absolute ?? -Infinity) - (a.growth.sevenDay.absolute ?? -Infinity);
+      if (sort === "growth1d") {
+        const aVal = a.growth.daily.absolute;
+        const bVal = b.growth.daily.absolute;
+        if (aVal === null && bVal === null) return 0;
+        if (aVal === null) return 1;
+        if (bVal === null) return -1;
+        return bVal - aVal;
+      }
+      if (sort === "growth7d") {
+        const aVal = a.growth.sevenDay.absolute;
+        const bVal = b.growth.sevenDay.absolute;
+        if (aVal === null && bVal === null) return 0;
+        if (aVal === null) return 1;
+        if (bVal === null) return -1;
+        return bVal - aVal;
+      }
+      if (sort === "growth30d") {
+        const aVal = a.growth.thirtyDay.absolute;
+        const bVal = b.growth.thirtyDay.absolute;
+        if (aVal === null && bVal === null) return 0;
+        if (aVal === null) return 1;
+        if (bVal === null) return -1;
+        return bVal - aVal;
+      }
+      if (sort === "storeName") {
+        return a.storeName.localeCompare(b.storeName, locale);
+      }
       if (sort === "likes") return b.likesCount - a.likesCount;
       if (sort === "videos") return b.videoCount - a.videoCount;
       return b.followerCount - a.followerCount;
     });
-  }, [stores, query, region, sort]);
+  }, [stores, query, region, sort, locale]);
 
   const leaders = useMemo(() => [...stores].sort((a, b) => b.followerCount - a.followerCount).slice(0, 5), [stores]);
   const totalFollowersShown = stores.reduce((sum, store) => sum + store.followerCount, 0);
@@ -101,7 +127,10 @@ export function TikTokPublicDashboard({ overview, stores }: Props) {
     allRegions: "ทุกภูมิภาค",
     sortBy: "เรียงตาม",
     followerSort: "Followers",
+    growth1dSort: "Growth วันนี้",
     growthSort: "Growth 7 วัน",
+    growth30dSort: "Growth 30 วัน",
+    storeNameSort: "ชื่อสาขา (ก-ฮ)",
     likesSort: "Likes",
     videosSort: "Videos",
     store: "สาขา",
@@ -128,7 +157,10 @@ export function TikTokPublicDashboard({ overview, stores }: Props) {
     allRegions: "All regions",
     sortBy: "Sort by",
     followerSort: "Followers",
+    growth1dSort: "1D growth",
     growthSort: "7D growth",
+    growth30dSort: "30D growth",
+    storeNameSort: "Store name (A-Z)",
     likesSort: "Likes",
     videosSort: "Videos",
     store: "Store",
@@ -153,10 +185,15 @@ export function TikTokPublicDashboard({ overview, stores }: Props) {
               <p className="mt-3 max-w-xl text-sm leading-6 text-white/60 sm:text-base">{text.subtitle}</p>
             </div>
             <div className="flex flex-wrap items-center gap-2 text-xs">
+              {overview.lastUpdatedAt && (
+                <span className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-2 font-medium text-white/60">
+                  {text.updated}: {new Intl.DateTimeFormat(locale, { timeZone: "Asia/Bangkok", day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(overview.lastUpdatedAt))}
+                </span>
+              )}
               <span className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-2 font-semibold text-white/75">{text.exact}</span>
               <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-2 font-semibold text-emerald-300">{number(overview.trackedStores, locale)} stores</span>
-              <button onClick={handleRefresh} disabled={refreshing} className="flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/[0.06] text-white/75 transition hover:bg-white/[0.12] disabled:opacity-50" aria-label="Refresh data">
-                <svg className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+              <button onClick={handleRefresh} disabled={isRefreshing} className="flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/[0.06] text-white/75 transition hover:bg-white/[0.12] disabled:opacity-50" aria-label="Refresh data">
+                <svg className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
               </button>
             </div>
           </div>
@@ -207,7 +244,10 @@ export function TikTokPublicDashboard({ overview, stores }: Props) {
                 </select>
                 <select value={sort} onChange={(event) => setSort(event.target.value)} className="h-11 rounded-2xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-700 outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200">
                   <option value="followers">{text.sortBy}: {text.followerSort}</option>
+                  <option value="growth1d">{text.sortBy}: {text.growth1dSort}</option>
                   <option value="growth7d">{text.sortBy}: {text.growthSort}</option>
+                  <option value="growth30d">{text.sortBy}: {text.growth30dSort}</option>
+                  <option value="storeName">{text.sortBy}: {text.storeNameSort}</option>
                   <option value="likes">{text.sortBy}: {text.likesSort}</option>
                   <option value="videos">{text.sortBy}: {text.videosSort}</option>
                 </select>
