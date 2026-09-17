@@ -17,6 +17,7 @@ import {
   getBangkokDate,
   offsetBangkokDate,
   resolveDefaultMetricDate,
+  calculatePacingDelayMs,
 } from "../../scripts/tiktok-public/run-daily-collector.mjs";
 
 describe("TokCounter Daily Collector Suite", () => {
@@ -237,6 +238,27 @@ describe("TokCounter Daily Collector Suite", () => {
       assert.ok(warnings.some((w) => w.includes("Clearing stale lock from dead PID 9999999")));
 
       LockManager.release(mockLogger as any);
+    });
+  });
+
+  describe("Conservative Pacing & Jitter", () => {
+    it("generates delays within the specified range", () => {
+      for (let i = 0; i < 50; i++) {
+        const delay = calculatePacingDelayMs(8000, 15000);
+        assert.ok(delay >= 8000, `Delay ${delay} is less than min 8000`);
+        assert.ok(delay <= 15000, `Delay ${delay} is greater than max 15000`);
+        assert.equal(Number.isInteger(delay), true);
+      }
+    });
+
+    it("handles default 8-15s bounds", () => {
+      const delay = calculatePacingDelayMs();
+      assert.ok(delay >= 8000 && delay <= 15000);
+    });
+
+    it("handles inverted bounds safely", () => {
+      const delay = calculatePacingDelayMs(10000, 5000);
+      assert.ok(delay >= 10000);
     });
   });
 });

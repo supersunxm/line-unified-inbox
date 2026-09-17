@@ -211,6 +211,15 @@ export function resolveDefaultMetricDate(refDate = new Date()) {
 }
 
 /**
+ * Calculates conservative pacing delay with jitter between requests (default 8–15s).
+ */
+export function calculatePacingDelayMs(minMs = 8000, maxMs = 15000) {
+  const min = Math.max(0, minMs);
+  const max = Math.max(min, maxMs);
+  return min + Math.floor(Math.random() * (max - min + 1));
+}
+
+/**
  * CLI parser.
  */
 function parseArgs(argv) {
@@ -221,6 +230,8 @@ function parseArgs(argv) {
   let filterUsername = null;
   let filterStoreId = null;
   let force = false;
+  let minDelayMs = 8000;
+  let maxDelayMs = 15000;
 
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
@@ -243,10 +254,16 @@ function parseArgs(argv) {
     } else if (arg === "--storeId" && argv[i + 1]) {
       filterStoreId = argv[i + 1].trim();
       i++;
+    } else if (arg === "--minDelay" && argv[i + 1]) {
+      minDelayMs = parseInt(argv[i + 1], 10);
+      i++;
+    } else if (arg === "--maxDelay" && argv[i + 1]) {
+      maxDelayMs = parseInt(argv[i + 1], 10);
+      i++;
     }
   }
 
-  return { headless, metricDate, dryRun, force, limit, filterUsername, filterStoreId };
+  return { headless, metricDate, dryRun, force, limit, filterUsername, filterStoreId, minDelayMs, maxDelayMs };
 }
 
 /**
@@ -313,12 +330,12 @@ export async function runDailyCollector(cliOptions = {}) {
         const existingMetrics = await prisma.tikTokPublicDailyMetric.findMany({
           where: { metricDate: metricDateObj },
           select: {
-            tikTokPublicAccount: { select: { username: true } },
+            tiktokPublicAccount: { select: { username: true } },
           },
         });
         for (const m of existingMetrics) {
-          if (m.tikTokPublicAccount?.username) {
-            alreadyCollectedUsernames.add(m.tikTokPublicAccount.username);
+          if (m.tiktokPublicAccount?.username) {
+            alreadyCollectedUsernames.add(m.tiktokPublicAccount.username);
           }
         }
         if (alreadyCollectedUsernames.size > 0) {
@@ -382,6 +399,50 @@ export async function runDailyCollector(cliOptions = {}) {
         const retryExtraction = await extractAccountMetrics(page, target.username, { timeoutMs: 25000 });
         if (retryExtraction.status === "SUCCESS") {
           extraction = retryExtraction;
+        } else {
+          logger.warn(
+            `  -> TokCounter rate limit remains active after cooldown. Halting current run to prevent hammering.`
+          );
+          failedAccounts.push({
+            username: target.username,
+            stores: target.stores,
+            status: "RATE_LIMITED",
+            error: extraction.error || "TokCounter API returned 403 Forbidden / Rate Limit",
+            durationMs: extraction.durationMs,
+          });
+          results.push({ target, extraction });
+
+          // Mark remaining targets as RATE_LIMITED without sending futile requests
+          for (let remIdx = index + 1; remIdx < targets.length; remIdx++) {
+            const remTarget = targets[remIdx];
+            if (!alreadyCollectedUsernames.has(remTarget.username)) {
+              failedAccounts.push({
+                username: remTarget.username,
+                stores: remTarget.stores,
+                status: "RATE_LIMITED",
+                error: "Run halted due to active TokCounter IP rate limit",
+                durationMs: 0,
+              });
+              results.push({
+                target: remTarget,
+                extraction: {
+                  status: "RATE_LIMITED",
+                  username: remTarget.username,
+                  error: "Run halted due to active TokCounter IP rate limit",
+                  durationMs: 0,
+                },
+              });
+            } else {
+              successfulAccounts.push({
+                username: remTarget.username,
+                stores: remTarget.stores,
+                followers: null,
+                precision: "EXACT",
+                durationMs: 0,
+              });
+            }
+          }
+          break; // Stop loop cleanly
         }
       }
 
@@ -492,9 +553,11 @@ export async function runDailyCollector(cliOptions = {}) {
         extraction,
       });
 
-      // Polite pause between sequential account navigations (5s)
+      // Conservative pacing between sequential account navigations (8–15s jitter)
       if (index < targets.length - 1) {
-        await page.waitForTimeout(5000);
+        const delayMs = calculatePacingDelayMs(cliOptions.minDelayMs || 8000, cliOptions.maxDelayMs || 15000);
+        logger.log(`  -> Conservative pause: waiting ${(delayMs / 1000).toFixed(1)}s before next account...`);
+        await page.waitForTimeout(delayMs);
       }
     }
 
