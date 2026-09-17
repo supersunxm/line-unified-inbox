@@ -5,7 +5,7 @@ import {
 } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
-import sharp from "sharp";
+import sharp = require("sharp");
 import type { AuthUser } from "../auth/auth.guard";
 import { AuditLogService } from "../auth/audit-log.service";
 import { createMediaPublicUrl } from "../media/media-public-url";
