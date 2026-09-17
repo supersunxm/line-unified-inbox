@@ -1,3 +1,17 @@
+# TikTok Public Analytics Dashboard Live Data Architecture (2026-09-17)
+
+- **SSR-First Data Fetching with Direct Endpoint Routing**:
+  The dashboard at `/tiktok` and store detail at `/tiktok/stores/[storeMasterId]` use Next.js App Router Server-Side Rendering (SSR). Session authorization is validated via the canonical `oppo_session` cookie on the server before dispatching parallel requests to `/tiktok/public/overview` and `/tiktok/public/stores`. If authentication has lapsed, the server component immediately issues an HTTP 307 redirect to `/login` without exposing partial state or leaking store data.
+
+- **Single-Store Endpoint Optimization**:
+  Previously, `/tiktok/stores/[storeMasterId]` fetched the entire list of 150 stores and executed an in-memory `.find()`. This has been updated to query `GET /tiktok/public/stores/:storeMasterId` directly in parallel with the 30-day history endpoint (`/history?days=30`), significantly cutting response payload size and server memory overhead.
+
+- **Multi-Provider Brand Labeling ("Exact public metrics")**:
+  With the collector transitioning from a TokCounter-only scraper to a resilient multi-provider engine (`COUNTIK` → `TOKCOUNTER` → `TIKTOK_DIRECT`), the UI badge was updated from `"Exact metrics only · statsV2"` to `"Exact public metrics"`. This accurately communicates that data is exact and public without tying presentation to a specific decommissioned provider property (`statsV2`).
+
+- **Strict Growth Metrics Semantics (`null` vs `0`)**:
+  To protect metric honesty, follower delta calculations strictly separate `0` (a verified, measured day-over-day change of zero followers) from `null` (where an account has only 1 snapshot and lacks a prior baseline). In both the overview `GrowthPill` and the detail view KPI cards, `null` renders strictly as `"—"` (em-dash), preventing misleading reports of zero growth when historical baselines are simply not yet available.
+
 # TikTok Permanent Daily Public Metrics Automation & Operational Architecture (2026-09-17)
 
 - **Operational Parity with Google Review Collector**:

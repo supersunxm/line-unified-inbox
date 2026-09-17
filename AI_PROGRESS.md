@@ -1,3 +1,22 @@
+# 2026-09-17: Connect TikTok Analytics Dashboard UI to Live Production Data [COMPLETED & VERIFIED]
+- **Current Task**: Connect the existing TikTok Analytics dashboard UI to real production TikTok public metrics backend (`/tiktok` and `/tiktok/stores/[storeMasterId]`), remove mock/preview fallback data, add loading skeletons, error boundaries, client refresh controls, and preserve honest growth metrics semantics.
+- **Completed Work**:
+  - **Removed Hardcoded Mock/Preview Data (`tiktok-public-dashboard.tsx`)**: Removed 115 lines of fake `previewStores` objects and `isPreview` fallback logic. Production data from SSR props is rendered directly.
+  - **Updated Public Metrics Badge (`tiktok-public-dashboard.tsx`)**: Updated badge text from `"Exact metrics only · statsV2"` to `"Exact public metrics"` across English and Thai locales to accurately reflect the multi-provider pipeline (`COUNTIK` → `TOKCOUNTER` → `TIKTOK_DIRECT`).
+  - **Client-Side Refresh Control**: Added interactive ↻ refresh buttons using Next.js `useRouter().refresh()` with spinning state animation on both the main dashboard and store detail views.
+  - **Single-Store Query Optimization (`stores/[storeMasterId]/page.tsx`)**: Replaced `fetchTikTokPublicStores()` + array filter with `fetchTikTokPublicStore(storeMasterId)` single-store API call, reducing payload transfer.
+  - **Loading Skeletons (`loading.tsx`)**: Created responsive, theme-aware animated pulse loading skeletons for `/tiktok` (header, 4 KPI cards, top-5 ranking, and store performance table) and `/tiktok/stores/[storeMasterId]` (header, profile info, 4 metrics cards, 3 growth cards, and sparkline chart).
+  - **Error Boundaries (`error.tsx`)**: Implemented client-side error boundaries with localized user guidance, distinction between auth expiration (`UNAUTHORIZED`) and network/fetch failures, and retry handlers (`reset()`).
+  - **Growth Metrics Integrity**: Verified that `0` denotes measured zero growth while `null` / unavailable baseline renders as `"—"` (em-dash), strictly preventing misleading conversions of missing historical baselines to zero.
+- **Checks Run & Passed**:
+  - `npx eslint` on all 8 TikTok dashboard files: 0 errors.
+  - `npm --prefix frontend run build`: passed cleanly (Turbopack, 44/44 pages compiled).
+  - `npm --prefix frontend test`: 589/589 tests passed.
+  - `npm --prefix backend run build`: passed cleanly (`prisma generate && nest build`).
+  - `npx tsx --test src/tiktok/*.spec.ts`: 76/76 passed.
+  - Git commit: `fd2ccc0` (`feat(tiktok): connect analytics dashboard to live metrics`).
+- **Next Action**: Await user instructions for future enhancements. Do NOT push without permission.
+
 # 2026-09-17: TikTok Permanent Daily Public Metrics Automation & Launchd Scheduling [COMPLETED & VERIFIED]
 - **Current Task**: Deploy permanent daily TikTok public metrics automation using the Google Review operational pattern, stagger LaunchAgent scheduling, implement missed-snapshot detection, and verify clean runner execution.
 - **Completed Work**:
