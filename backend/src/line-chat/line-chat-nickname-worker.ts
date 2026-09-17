@@ -9,6 +9,8 @@ import { LineChatNicknameWorkerService } from "./line-chat-nickname-worker.servi
 import { LineChatManagerMessageRelayWorkerService } from "./line-chat-manager-message-relay-worker.service";
 import { LineChatManagerImageRelayWorkerService } from "./line-chat-manager-image-relay-worker.service";
 import { LineChatNovncRecoveryWorkerService } from "./line-chat-novnc-recovery-worker.service";
+import { LineChatRecentResolverService } from "./line-chat-recent-resolver.service";
+import { LineChatSessionService } from "./line-chat-session.service";
 import type { ManagerRelayConversationSnapshot } from "./line-chat-manager-message-relay.service";
 
 const MAX_INTERNAL_BODY_BYTES = 64 * 1024;
@@ -139,6 +141,8 @@ async function bootstrap() {
   const textRelay = app.get(LineChatManagerMessageRelayWorkerService);
   const imageRelay = app.get(LineChatManagerImageRelayWorkerService);
   const recovery = app.get(LineChatNovncRecoveryWorkerService);
+  const recentResolver = app.get(LineChatRecentResolverService);
+  const sessionService = app.get(LineChatSessionService);
   const relayContexts = new Map<string, ManagerRelayConversationSnapshot>();
   installRelayContextLoader(textRelay, relayContexts);
   installRelayContextLoader(imageRelay, relayContexts);
@@ -185,6 +189,46 @@ async function bootstrap() {
           ? await recovery.start(body.sessionKey.trim())
           : await recovery.stop(body.sessionKey.trim());
         writeJson(response, 200, { success: true, ...result });
+        return;
+      }
+
+      if (request.method === "POST" && requestUrl.pathname === "/internal/line-chat/candidates") {
+        const body = await readJsonBody(request) as {
+          lineOfficialAccountId?: unknown;
+          botId?: unknown;
+          sessionKey?: unknown;
+          profileStorageKey?: unknown;
+          force?: unknown;
+        };
+        const oaId = typeof body.lineOfficialAccountId === "string" ? body.lineOfficialAccountId.trim() : "";
+        const botId = typeof body.botId === "string" ? body.botId.trim() : "";
+        const sessionKey = typeof body.sessionKey === "string" ? body.sessionKey.trim() : "";
+        if (!oaId || !botId || !sessionKey) {
+          writeJson(response, 400, { success: false, error: "INVALID_REQUEST" });
+          return;
+        }
+        const profilePath = sessionService.resolveProfilePath({
+          sessionKey,
+          profileStorageKey: (typeof body.profileStorageKey === "string" ? body.profileStorageKey.trim() : null) || null,
+          profilePath: null,
+        });
+        const snapshot = await recentResolver.refreshSnapshot({
+          lineOfficialAccountId: oaId,
+          botId,
+          sessionKey,
+          profilePath,
+          force: Boolean(body.force),
+        });
+        writeJson(response, 200, {
+          success: true,
+          snapshot: {
+            status: snapshot.status,
+            chats: snapshot.chats,
+            pagesFetched: snapshot.pagesFetched,
+            totalRawRecords: snapshot.totalRawRecords,
+            failureReason: snapshot.failureReason,
+          },
+        });
         return;
       }
 

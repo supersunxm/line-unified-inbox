@@ -15,6 +15,7 @@ import {
 import { PrismaService } from "../prisma.service";
 import { LineChatRecentResolverService } from "./line-chat-recent-resolver.service";
 import { LineChatSessionService } from "./line-chat-session.service";
+import type { LineChatDiscoveredChat } from "./line-chat.types";
 
 export interface UnresolvedMappingItem {
   conversationId: string;
@@ -248,27 +249,69 @@ export class LineChatManualMappingService {
       throw new BadRequestException("LINE Official Account นี้ยังไม่ได้เชื่อมโยงกับ LINE Chat Session");
     }
 
-    const profilePath = this.sessionService.resolveProfilePath(session);
-    let snapshot = await this.recentResolver.refreshSnapshot({
-      lineOfficialAccountId: oa.id,
-      botId: oa.chatBotId.trim(),
-      sessionKey: session.sessionKey,
-      profilePath,
-      force: false,
-    });
+    const workerUrl = process.env.LINE_CHAT_WORKER_INTERNAL_URL?.trim().replace(/\/+$/u, "");
+    const workerSecret = process.env.LINE_CHAT_WORKER_INTERNAL_SECRET?.trim();
 
-    // If initial cached snapshot is empty or failed, attempt a forced refresh
-    if (snapshot.status === "FAILED" || snapshot.chats.length === 0) {
-      snapshot = await this.recentResolver.refreshSnapshot({
+    let chats: readonly LineChatDiscoveredChat[] = [];
+
+    if (workerUrl && workerSecret) {
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 25_000);
+        const res = await fetch(`${workerUrl}/internal/line-chat/candidates`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Line-Chat-Internal-Secret": workerSecret,
+          },
+          body: JSON.stringify({
+            lineOfficialAccountId: oa.id,
+            botId: oa.chatBotId.trim(),
+            sessionKey: session.sessionKey,
+            profileStorageKey: session.profileStorageKey,
+            force: Boolean(search?.trim()),
+          }),
+          signal: controller.signal,
+        });
+        clearTimeout(timeout);
+        const data = (await res.json()) as {
+          success?: boolean;
+          snapshot?: { chats?: LineChatDiscoveredChat[] };
+        };
+        if (data.success && Array.isArray(data.snapshot?.chats)) {
+          chats = data.snapshot.chats;
+        }
+      } catch (err: unknown) {
+        Logger.warn(
+          `Failed to fetch candidate chats from worker: ${err instanceof Error ? err.message : String(err)}`,
+          "LineChatManualMappingService",
+        );
+      }
+    }
+
+    if (!chats.length) {
+      const profilePath = this.sessionService.resolveProfilePath(session);
+      let snapshot = await this.recentResolver.refreshSnapshot({
         lineOfficialAccountId: oa.id,
         botId: oa.chatBotId.trim(),
         sessionKey: session.sessionKey,
         profilePath,
-        force: true,
+        force: false,
       });
-    }
 
-    const chats = snapshot.chats;
+      // If initial cached snapshot is empty or failed, attempt a forced refresh
+      if (snapshot.status === "FAILED" || snapshot.chats.length === 0) {
+        snapshot = await this.recentResolver.refreshSnapshot({
+          lineOfficialAccountId: oa.id,
+          botId: oa.chatBotId.trim(),
+          sessionKey: session.sessionKey,
+          profilePath,
+          force: true,
+        });
+      }
+
+      chats = snapshot.chats;
+    }
     const cleanSearch = search?.trim().toLowerCase() || "";
     const targetNormalizedName = normalizeName(conversation.customer.displayName);
 
