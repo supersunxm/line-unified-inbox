@@ -1,4 +1,22 @@
+# 2026-09-17: TikTok Permanent Daily Public Metrics Automation & Launchd Scheduling [COMPLETED & VERIFIED]
+- **Current Task**: Deploy permanent daily TikTok public metrics automation using the Google Review operational pattern, stagger LaunchAgent scheduling, implement missed-snapshot detection, and verify clean runner execution.
+- **Completed Work**:
+  - **Pushed Verified Multi-Provider Commits**: Successfully pushed `0e6208a` and `c9ec4ee` to `origin/main` after verifying that 76/76 TikTok tests passed and the backend build succeeded.
+  - **Runner Hardening (`run-local-daily.sh`)**: Hardened shell runner to resolve repo root, standard and Homebrew PATH, locate Node executable, load `local-data/production-db.env` (chmod 600), append timestamped execution logs to `launchd-runner.log`, forward CLI arguments, and return precise exit codes.
+  - **Missed-Run / Snapshot Integrity (`run-daily-collector.mjs`)**: Added database preflight inspection to detect date gaps between the latest recorded metric and the target date. Skipped dates are classified as `MISSED_SNAPSHOT` to strictly prevent retrospective fabrication of past follower counts.
+  - **Classification & Health State Summary**: Enhanced collector loop to categorize outcomes into `SUCCESS`, `VERIFIED_PROFILE_NOT_FOUND`, `UNRESOLVED`, and `FAILED`. Structured durable state in `local-data/tiktok-public-daily-state.json` with provider distribution (`COUNTIK`, `TOKCOUNTER`, `TIKTOK_DIRECT`), provider health statuses, and account arrays.
+  - **LaunchAgent Configuration**: Validated `~/Library/LaunchAgents/com.oppo.tiktok-public-daily-collector.plist` scheduled at 02:30 Bangkok (90 minutes after Google Review at 01:00). Verified plist with `plutil -lint`, reloaded and verified via `launchctl print`.
+  - **Smoke Dry-Run Test**: Executed `--dryRun --limit 2` verifying Google Sheet parsing, Countik provider responses (exact 954 and 404 followers), pacing delays, clean lock acquire/release, and zero database mutations.
+- **Checks Run & Passed**:
+  - `plutil -lint ~/Library/LaunchAgents/com.oppo.tiktok-public-daily-collector.plist`: OK.
+  - `npx tsx --test src/tiktok/*.spec.ts`: 76/76 passed.
+  - `npm --prefix backend run build`: passed cleanly (`prisma generate && nest build`).
+  - `launchctl print gui/$(id -u)/com.oppo.tiktok-public-daily-collector`: active, correct interval (02:30).
+  - Dry-run smoke test: exit code 0.
+- **Next Action**: Create local automation commit and deliver final report.
+
 # 2026-09-17: TikTok Multi-Provider Public Metrics Collector & Production Hardening (Metric Date: 2026-09-16) [COMPLETED & VERIFIED]
+
 - **Current Task**: Harden multi-provider public TikTok metrics collector with independent `PROFILE_NOT_FOUND` consensus, authoritative direct evidence rules, and run-scoped rate-limit circuit breakers.
 - **Completed Work**:
   - **Issue 1 — PROFILE_NOT_FOUND Independent Consensus & Direct Evidence**:

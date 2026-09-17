@@ -1,4 +1,20 @@
+# TikTok Permanent Daily Public Metrics Automation & Operational Architecture (2026-09-17)
+
+- **Operational Parity with Google Review Collector**:
+  The TikTok public metrics collector adopts the proven local automation pattern established by the Google Review collector on macOS:
+  - LaunchAgent configuration via `~/Library/LaunchAgents/com.oppo.tiktok-public-daily-collector.plist` with `StartCalendarInterval`.
+  - Wrapper shell runner (`backend/scripts/tiktok-public/run-local-daily.sh`) ensuring robust PATH, dynamic Node discovery, and secure production environment variable loading (`local-data/production-db.env` outside git).
+  - Atomic PID-based process locking (`tiktok-public-daily.lock`) with automated stale dead-PID clearance to prevent overlapping execution.
+  - Durable local state persistence (`local-data/tiktok-public-daily-state.json`) tracking run lifecycle, provider distribution, provider health, and account outcome breakdowns.
+
+- **Staggered Scheduling Window (02:30 Asia/Bangkok)**:
+  To eliminate competition for local Chromium browser instances and PostgreSQL connection pool sockets with the Google Review daily collector (which runs at 01:00 Bangkok and requires ~40 minutes for 65 stores), the TikTok collector is scheduled at 02:30 Bangkok. This guarantees a dedicated 90-minute quiet period between heavy batch scraping jobs.
+
+- **Snapshot Honesty vs Retrospective Querying (`MISSED_SNAPSHOT`)**:
+  Unlike Google Maps reviews (where past customer reviews remain permanently timestamped and can be backfilled if a run is missed), public counter providers only expose current real-time follower counts. Consequently, if a collector run is missed, historical follower numbers for intermediate days cannot be truthfully reconstructed retrospectively. The collector detects gaps via database and state preflight audits, logging and categorizing skipped days as `MISSED_SNAPSHOT` to strictly forbid fabricating or copying numbers backwards.
+
 # TikTok Multi-Provider Public Metrics Architecture & Failover (2026-09-17)
+
 
 - **Independent Multi-Provider Discovery vs Anti-Abuse Bypass**:
   Rather than attempting to bypass TokCounter's local host IP rate limits (which would violate policies and be fragile), we conducted real-world live audits across 8 candidate public counter providers.
