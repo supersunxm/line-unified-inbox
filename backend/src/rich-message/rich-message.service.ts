@@ -5,7 +5,6 @@ import {
 } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
-import sharp = require("sharp");
 import type { AuthUser } from "../auth/auth.guard";
 import { AuditLogService } from "../auth/audit-log.service";
 import { createMediaPublicUrl } from "../media/media-public-url";
@@ -19,6 +18,7 @@ import type {
   UpdateRichMessageDto,
 } from "./rich-message.types";
 
+const sharp = require("sharp") as typeof import("sharp").default;
 const IMAGEMAP_WIDTH = 1040;
 const ALLOWED_IMAGE_WIDTHS = new Set([240, 300, 460, 700, 1040]);
 const PUBLIC_IMAGE_TTL_SECONDS = 7 * 24 * 60 * 60;
