@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, Req } from "@nestjs/common";
+import { Body, Controller, Get, Param, Patch, Post, Query, Redirect, Req } from "@nestjs/common";
 import { ConversationsService } from "./conversations.service";
 import { BulkMarkRepliedByFilterDto, BulkMarkRepliedDto, BulkUpdateBmReplyStatusDto, ConversationQueryDto, CreateNoteDto, SendConversationMessageDto, UpdateBmReplyStatusDto, UpdatePriorityDto, UpdateStatusDto } from "./dto";
 import { PrismaService } from "./prisma.service";
@@ -7,8 +7,10 @@ import { LineProfileService } from "./line-profile.service";
 import type { AuthRequest } from "./auth/auth.guard";
 import { StoreAccessService } from "./auth/store-access.service";
 import { FOCUS_STORE_GROUP_ID } from "./focus-store-group";
+import { loadLatestManagerUrls, resolveLineOaManagerUrl } from "./store-master/line-oa-manager-url";
 
 const LINE_CHAT_USER_ID_PATTERN = /^U[0-9a-f]{32}$/iu;
+const LINE_MANAGER_HOME = "https://manager.line.biz/";
 
 function buildDirectLineOaManagerUrl(chatBotId: string | null | undefined, lineChatUserId: string | null | undefined): string | null {
   const botId = chatBotId?.trim() ?? "";
@@ -72,6 +74,38 @@ export class ConversationsController {
       conversation?.lineChatUserId,
     );
     return { url, direct: Boolean(url) };
+  }
+  @Get(":id/open-line-oa-manager")
+  @Redirect(LINE_MANAGER_HOME, 302)
+  async openLineOaManager(@Param("id") id: string, @Req() req: AuthRequest) {
+    await this.storeAccess.assertConversationAccess(req.user!, id);
+    const conversation = await this.prisma.conversation.findUnique({
+      where: { id },
+      select: {
+        lineChatUserId: true,
+        lineOfficialAccount: { select: { chatBotId: true } },
+        store: {
+          select: {
+            code: true,
+            storeMaster: { select: { lineManagerUrl: true } },
+          },
+        },
+      },
+    });
+
+    const directUrl = buildDirectLineOaManagerUrl(
+      conversation?.lineOfficialAccount.chatBotId,
+      conversation?.lineChatUserId,
+    );
+    if (directUrl) return { url: directUrl, statusCode: 302 };
+
+    if (conversation?.store) {
+      const latestManagerUrls = await loadLatestManagerUrls(this.prisma, [conversation.store.code]);
+      const fallbackUrl = resolveLineOaManagerUrl(conversation.store, latestManagerUrls);
+      if (fallbackUrl) return { url: fallbackUrl, statusCode: 302 };
+    }
+
+    return { url: LINE_MANAGER_HOME, statusCode: 302 };
   }
   @Get(":id") async get(@Param("id") id: string, @Req() req: AuthRequest) { await this.storeAccess.assertConversationAccess(req.user!, id); return this.service.get(id); }
   @Patch(":id/status") async status(@Param("id") id: string, @Body() dto: UpdateStatusDto, @Req() req: AuthRequest) {
