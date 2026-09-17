@@ -1,24 +1,24 @@
-# 2026-09-17: Connect TikTok Analytics Dashboard UI to Live Production Data [COMPLETED & VERIFIED]
-- **Current Task**: Complete final verification and gap-closing pass on TikTok Analytics live metrics dashboard.
+# 2026-09-17: TikTok Analytics Production Deployment & Verification [COMPLETED & VERIFIED]
+- **Current Task**: Deploy TikTok Analytics live data dashboard and single-store analytics to production, verify live backend and frontend endpoints, conduct smoke tests, and confirm zero regression.
 - **Completed Work**:
-  - **Removed Hardcoded Mock/Preview Data (`tiktok-public-dashboard.tsx`)**: Removed 115 lines of fake `previewStores` objects and `isPreview` fallback logic. Production data from SSR props is rendered directly.
-  - **Updated Public Metrics Badge (`tiktok-public-dashboard.tsx`)**: Updated badge text from `"Exact metrics only · statsV2"` to `"Exact public metrics"` across English and Thai locales to accurately reflect the multi-provider pipeline (`COUNTIK` → `TOKCOUNTER` → `TIKTOK_DIRECT`).
-  - **Persisted Timestamp Badge**: Displayed `overview.lastUpdatedAt` in header badge group, formatted in Asia/Bangkok time, grounded in real database `collectedAt` timestamps.
-  - **Complete Sorting Options**: Implemented robust sort handling for `Followers`, `1D growth`, `7D growth`, `30D growth`, and `Store Name (A-Z)`, properly sorting nulls to the bottom without treating missing baselines as zero.
-  - **Non-Blocking Refresh Transitions**: Upgraded refresh handler to React 19 `useTransition` with `startTransition(() => router.refresh())`. Prevents screen blanking and retains stale data while refresh is in-flight.
-  - **Single-Store Query Optimization (`stores/[storeMasterId]/page.tsx`)**: Replaced `fetchTikTokPublicStores()` + array filter with `fetchTikTokPublicStore(storeMasterId)` single-store API call, reducing payload transfer.
-  - **Loading Skeletons (`loading.tsx`)**: Created responsive, theme-aware animated pulse loading skeletons for `/tiktok` (header, 4 KPI cards, top-5 ranking, and store performance table) and `/tiktok/stores/[storeMasterId]` (header, profile info, 4 metrics cards, 3 growth cards, and sparkline chart).
-  - **Error Boundaries (`error.tsx`)**: Implemented client-side error boundaries with localized user guidance, distinction between auth expiration (`UNAUTHORIZED`) and network/fetch failures, and retry handlers (`reset()`).
-  - **Growth Metrics Integrity**: Verified that `0` denotes measured zero growth while `null` / unavailable baseline renders as `"—"` (em-dash), strictly preventing misleading conversions of missing historical baselines to zero.
+  - **Timestamp Semantics Fix**: Separated business snapshot metric date (`latestMetricDate: "2026-09-16"`) from pipeline collection timestamp (`lastUpdatedAt: "2026-09-17T03:41:18.550Z"`). Implemented dedicated Bangkok timezone formatting rendering `"Data for 16 Sep 2026 · Updated 17 Sep 2026, 10:41"` (Thai: `"ข้อมูล ณ วันที่ 16 ก.ย. 2569 · อัปเดต 17 ก.ย. 2569 10:41"`). Grounded strictly in database timestamps without deriving from browser clock.
+  - **Rebased & Pushed**: Rebased cleanly over `origin/main` without merge commits; pushed commit `520d07a` to `origin/main`.
+  - **Railway Production Build & Deploy**: Both `frontend` (`https://lineoppo.click`) and `line-unified-inbox` (`https://line-unified-inbox-production-544f.up.railway.app`) compiled cleanly and transitioned to `● Online`.
+  - **Production Smoke Verification**:
+    - Backend Overview (`GET /tiktok/public/overview`): HTTP 200, 148 tracked stores, 945,058 followers, 9,410,380 likes, 25,692 videos, `latestMetricDate: "2026-09-16"`, `lastUpdatedAt: "2026-09-17T03:41:18.550Z"`.
+    - Backend Stores (`GET /tiktok/public/stores`): HTTP 200, exactly 148 active store records returned with correct sorting and growth structures.
+    - Single-Store Detail & History (`GET /tiktok/public/stores/91203776-b625-43ab-a67c-bfeb3e39129c`): HTTP 200 for Store 109 (`o_seaconsquaresrinakarin`, 4,477 followers, 11,035 likes, 136 videos). History array returns exact 2026-09-16 point.
+    - Frontend Dashboard SSR (`GET https://lineoppo.click/tiktok`): HTTP 200 with SSR HTML (372.8 KB) rendering correct header timestamp badge, KPI values, top ranking, and store table.
+    - Frontend Store Detail SSR (`GET https://lineoppo.click/tiktok/stores/91203776-b625-43ab-a67c-bfeb3e39129c`): HTTP 200 with SSR HTML (38.1 KB) rendering Store 109 metrics and history.
+    - Fail-Closed Auth: Unauthenticated requests issue HTTP 307 redirect (`NEXT_REDIRECT;replace;/login;307;`) without leaking store data or partial state.
+    - Session Hygiene: Temporary verification session was deleted immediately from production database.
 - **Checks Run & Passed**:
-  - `npx eslint` on all TikTok dashboard files: 0 errors.
-  - `npm --prefix frontend run build`: passed cleanly (Turbopack, 44/44 pages compiled).
-  - `npm --prefix frontend test`: 589/589 tests passed.
-  - `npm --prefix backend run build`: passed cleanly (`prisma generate && nest build`).
-  - `npx tsx --test src/tiktok/*.spec.ts`: 76/76 passed.
-  - Live production DB audit: 148 active stores covered, 945,058 followers, 9,410,380 likes, 25,692 videos.
-  - Git commits: `fd2ccc0`, `b9fe143`, and `a9e3161`.
-- **Next Action**: Await user permission before pushing to GitHub.
+  - Railway status: all production services `● Online`.
+  - Production backend and frontend smoke tests: 100% passed.
+  - Frontend test suite: 591/591 tests passed.
+  - Backend test suite: 76/76 TikTok tests passed.
+  - Production DB baseline integrity: 148 active stores, 0 duplicates, 0 non-EXACT.
+- **Next Action**: Output final production deployment report to user.
 
 # 2026-09-17: TikTok Permanent Daily Public Metrics Automation & Launchd Scheduling [COMPLETED & VERIFIED]
 - **Current Task**: Deploy permanent daily TikTok public metrics automation using the Google Review operational pattern, stagger LaunchAgent scheduling, implement missed-snapshot detection, and verify clean runner execution.
