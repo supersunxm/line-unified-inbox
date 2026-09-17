@@ -627,13 +627,15 @@ model StoreMaster {
   stores                Store[]
   tikTokAccounts        TikTokAccount[]
   tikTokPublicProfiles     TikTokPublicProfile[]
-  tikTokPublicDailyMetrics TikTokPublicDailyMetric[]
+  tiktokPublicAccountId    String?
+  tiktokPublicAccount      TikTokPublicAccount?         @relation(fields: [tiktokPublicAccountId], references: [id], onDelete: SetNull)
 
   @@index([source, sourceRowNumber])
   @@index([normalizedAccountName])
   @@index([externalStoreId])
   @@index([lineId])
   @@index([tiktokUsername])
+  @@index([tiktokPublicAccountId])
   @@index([province])
   @@index([region])
   @@index([dashboardTier])
@@ -1671,25 +1673,46 @@ model TikTokPublicProfile {
   @@index([lastFetchedAt])
 }
 
-model TikTokPublicDailyMetric {
-  id              String   @id
-  storeMasterId   String
-  metricDate      DateTime @db.Date
-  followerCount   Int
-  followingCount  Int
-  likesCount      Int
-  videoCount      Int
-  metricSource    String
-  metricPrecision String
-  fetchedAt       DateTime
+model TikTokPublicAccount {
+  id              String   @id @default(uuid())
+  username        String   @unique
+  displayName     String?
+  profileUrl      String
+  source          String   @default("TOKCOUNTER")
+  firstSeenAt     DateTime @default(now())
+  lastCollectedAt DateTime?
   createdAt       DateTime @default(now())
-  updatedAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
-  storeMaster StoreMaster @relation(fields: [storeMasterId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  stores          StoreMaster[]
+  dailyMetrics    TikTokPublicDailyMetric[]
 
-  @@unique([storeMasterId, metricDate])
+  @@index([username])
+}
+
+model TikTokPublicDailyMetric {
+  id                    String   @id @default(uuid())
+  tiktokPublicAccountId String
+  metricDate            DateTime @db.Date
+  followerCount         Int
+  followingCount        Int?
+  likesCount            Int?
+  videoCount            Int?
+  followersRaw          String?
+  followingRaw          String?
+  likesRaw              String?
+  videosRaw             String?
+  precision             String   @default("EXACT")
+  source                String   @default("TOKCOUNTER")
+  collectedAt           DateTime
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  tiktokPublicAccount   TikTokPublicAccount @relation(fields: [tiktokPublicAccountId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([tiktokPublicAccountId, metricDate])
   @@index([metricDate])
-  @@index([storeMasterId])
+  @@index([tiktokPublicAccountId])
 }
 
 enum AppPlatform {

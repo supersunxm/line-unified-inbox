@@ -1,3 +1,21 @@
+# 2026-09-16: TokCounter Public TikTok Metrics POC for Store 109 [COMPLETED & VERIFIED]
+- **Current Task**: Build and test proof-of-concept for extracting public TikTok account metrics from TokCounter for Store 109 (`o_seaconsquaresrinakarin`) without TikTok API, OAuth, or production database mutation.
+- **Completed Work**:
+  - Implemented `backend/scripts/tiktok-public/test-tokcounter-store.mjs` using local Playwright Chromium.
+  - Added strict identity verification matching `@o_seaconsquaresrinakarin` on the rendered profile card; fails closed on mismatch (`ACCOUNT_IDENTITY_UNVERIFIED`).
+  - Added multi-read stabilization logic waiting 3 seconds between reads to filter out odometer initialization animations and detect stable counts.
+  - Implemented exact number parsing extracting comma-separated integers (`4,477` -> `4477`, `11,035` -> `11035`, `86` -> `86`, `136` -> `136`) with explicit `EXACT` precision flags.
+  - Inspected TokCounter client-side bundle and identified module `10514` artificially adding 50 to like counts between 10,050 and 1,049,000, explaining the discrepancy between raw DOM (`11,035`) and API payload (`10,985`).
+  - Observed clean, public background endpoints (`https://tiktok-api.tokcounter.com/user/data/{user}` and `/user/stats/{id}`) without secrets or tokens.
+  - Performed 3 sequential repeatability runs with 100% success (3/3), ~6.36s average runtime, zero CAPTCHAs, zero logins, and zero persistent Chrome profile requirements.
+  - Analyzed Google Sheet1: 160 total stores, 151 stores with TikTok username, 150 unique usernames, 1 duplicate group (`o_taweekitburiram` with 2 stores), and 9 blank stores.
+- **Checks Run**:
+  - Node syntax & execution checks: passed.
+  - 3-run sequential test: 3/3 passed.
+  - Sheet1 full CSV parsing & deduplication check: passed.
+- **Workspace Boundary**: No database migrations, no production DB access, no Railway changes, no launchd scheduling, and no full scraping performed.
+- **Next Action**: Await user review of POC findings and recommendation before planning full collector.
+
 # 2026-09-15: Android 1.1.28+48 daily update prompt audit [PREPARED]
 - **Current Task**: Audit the existing proactive daily update prompt on current `main` and prepare the next Android version without reimplementing the feature or publishing build 48.
 - **Audit**: The prompt remains in `AppUpdateService` and the authenticated-main-workspace startup/login/resume lifecycle gates. Optional prompts use local-day plus release-build suppression; forced prompts bypass suppression and remain non-dismissible. Manual Profile checks remain available independently.
@@ -4997,3 +5015,39 @@ Waiver scope: focused PIN/auth tests pass **26/26**, focused Flutter PIN tests p
 - Runtime gate: canonical backend compilation reached **0 errors** and route registration included `GET /operations/line-chat-nickname/health`, but application bootstrap stopped on the pre-existing local Prisma mismatch (`User.pinHash` is absent from the local database). Docker/PostgreSQL was unavailable, and port 3000 was occupied by an unrelated process, so no backend health response or frontend browser smoke was claimed; the backend watch process was stopped cleanly.
 - No database migration or production access was performed during local verification. The pre-existing untracked `docs/executive-guide/` remains user-owned and untouched; the focused patch is ready for the authorized commit, push, CI, and deployment flow.
 - Local runtime verification remains blocked until the canonical PostgreSQL service is healthy and port 3000 is available; this is an unrelated local-environment baseline issue and will not be changed as part of this task.
+- Delivery: focused commit `740a9cbaccd749552946810e4f27c4f20ee9d3fc` was pushed to `main`. Application CI run `35078908458` passed Backend, Frontend, Android, and CI Gate. Production deployments completed successfully for backend `2f1ed02a-79db-401c-a595-5ac3d65cb274`, frontend `65110162-eb9b-4a98-baeb-fdcbb3e50c8d`, and the shared-source nickname worker `a21c9996-2ab0-4d93-ac92-ae57cdc3786a`; no mobile release or unrelated worker deploy was initiated.
+- Production safety: read-only `prisma migrate status` reported **137 migrations found; database schema is up to date**. The normal deployment path handled startup; no migration, profile data change, profile operation, backfill, or manual deploy was performed.
+- Post-deploy validation: backend `/health` and `/health/readiness`, frontend `/api/health`, and the authenticated Health page returned successfully. The reloaded page rendered the independent Session/Browser/Health fields and Thai help copy. Profile B / RBS Chonburi showed `ACTIVE`, `CONNECTED`, `AVAILABLE`, and `Healthy`, with zero active leases; the read-only response-shape audit selected only session, operation-kind, and lease-expiry metadata and found no `ownerToken`. The page body exposed no owner identity, cookies, CSRF/token, customer ID, LINE ID, or profile path fields, and browser console logs were empty.
+- Browser-state observation: natural production activity did not produce an active lease during the observation window. The single authorized noVNC diagnostic returned retryable `PROFILE_BROWSER_BUSY` without opening a session or changing authentication; the follow-up audit remained `CONNECTED`/`AVAILABLE` with zero leases, so no release transition was applicable. Production request logs showed a steady 30-second health refresh cadence after the expected initial duplicate, all successful.
+- Production logs showed no new auth, lock, Chromium, API, frontend, database, crash-loop, or permanent nickname errors attributable to this patch. Existing background identity-mapping/waiting-for-mapping warnings and standard npm/Prisma deprecation warnings remained outside this change. The post-deploy progress update is intentionally uncommitted and contains no secrets or raw logs; `docs/executive-guide/` remains untouched.
+
+# Current task: TokCounter TikTok Public Daily Collector & Follower Snapshot Engine (2026-09-16 / 2026-09-17)
+
+- **Schema & Migrations (Migration 138)**:
+  - Created `TikTokPublicAccount` model (`id`, `username UNIQUE`, `displayName`, `profileUrl`, `source`, `firstSeenAt`, `lastCollectedAt`).
+  - Added `StoreMaster.tiktokPublicAccountId` foreign key (`onDelete: SetNull`) to link retail stores with TikTok accounts, supporting N:1 shared handles (e.g. `o_taweekitburiram` mapped to both Store 27837 and Store 27368).
+  - Modernized `TikTokPublicDailyMetric`: linked to `tiktokPublicAccountId` with unique index `@@unique([tiktokPublicAccountId, metricDate])` and removed legacy `statsV2` check constraints.
+  - Successfully migrated production database via `prisma migrate deploy` (138 migrations applied).
+- **Google Sheet Master Catalog Reader**:
+  - Implemented `backend/scripts/tiktok-public/sheet-reader.mjs`: parses official Google Sheet1 CSV, handles hyphens in usernames (e.g. `o-themallthaphra`), strips `@`, and maps duplicate store groups cleanly.
+  - Verified catalog: 160 store rows, 151 with TikTok, 150 unique handles, 1 duplicate store group, 9 blank/invalid rows.
+- **TokCounter Playwright Extractor**:
+  - Implemented `backend/scripts/tiktok-public/tokcounter-extractor.mjs`: headless Chromium automation.
+  - Strict identity verification: matches exact `@<username>` DOM node.
+  - Accurate rate limit classification: detects 403 Forbidden / 429 and flags `RATE_LIMITED` instead of falsely reporting `PROFILE_NOT_FOUND`.
+  - Network route aborting: blocks unneeded third-party advertisements, trackers, and background boosted accounts (`azhar_baby_`, `tanviraa..1`) to cut outgoing API calls to `tiktok-api.tokcounter.com` by 66%.
+  - Two-read stabilization loop with live jitter tolerance ($\le 20$).
+- **Daily Collector Runner & Daemon**:
+  - Implemented `backend/scripts/tiktok-public/run-daily-collector.mjs`: lock manager (`local-data/tiktok-public-daily.lock`), durable state (`local-data/tiktok-public-daily-state.json`), scrubbed logger, idempotent date resumption (skips already collected accounts for the day unless `--force` is used), and exponential backoff retry on `RATE_LIMITED`.
+  - Shell runner `backend/scripts/tiktok-public/run-local-daily.sh` executable.
+  - Installed and validated launchd plist `~/Library/LaunchAgents/com.oppo.tiktok-public-daily-collector.plist` scheduled for 01:30 Asia/Bangkok, loaded and verified via `launchctl bootstrap gui/$(id -u)`.
+- **Backend Analytics Service**:
+  - Updated `backend/src/tiktok/tiktok-public-analytics.service.ts`: `listDashboardStores()`, `getStoreDashboard()`, and `getStoreHistory()` query `StoreMaster` linked to `TikTokPublicAccount` and `TikTokPublicDailyMetric`.
+- **Unit Testing & Compilation**:
+  - Added native test suite `backend/src/tiktok/tokcounter-collector.spec.ts` (22/22 passed).
+  - Full TikTok unit test suites: **35/35 passed (100%)**.
+  - Backend build `npm run build` compiled with 0 errors.
+- **Production Baseline Persistence**:
+  - Successfully persisted 74 accounts and daily snapshots into PostgreSQL production database on 2026-09-16.
+  - Identified TokCounter IP rate-limiting on unauthenticated public API after high-volume sequential requests; implemented rate limit backoff and route aborting to protect future collector runs.
+- **Railway Cron Recommendation**: Keep Railway `tiktok-daily-metrics-cron` enabled; it services private OAuth-bound accounts while local launchd handles public profiles.

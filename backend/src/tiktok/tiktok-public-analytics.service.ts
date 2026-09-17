@@ -72,10 +72,12 @@ export interface TikTokPublicHistoryPoint {
 
 interface RawPublicProfileRow {
   storeMasterId: string;
+  externalStoreId?: string;
   storeName: string;
   accountName: string;
   province: string | null;
   region: string | null;
+  tiktokPublicAccountId?: string | null;
   username: string;
   displayName: string | null;
   avatarUrl: string | null;
@@ -90,7 +92,8 @@ interface RawPublicProfileRow {
 }
 
 interface RawPublicMetricRow {
-  storeMasterId: string;
+  tiktokPublicAccountId?: string;
+  storeMasterId?: string;
   metricDate: Date | string;
   followerCount: number;
   followingCount: number;
@@ -154,7 +157,7 @@ export function calculateTikTokGrowth(
   };
 }
 
-function baselineAtOrBefore(
+export function baselineAtOrBefore(
   metrics: readonly RawPublicMetricRow[],
   targetDate: string,
 ): RawPublicMetricRow | null {
@@ -208,69 +211,61 @@ export class TikTokPublicAnalyticsService {
     const videoCount = profile.videoCount as number;
 
     await this.prisma.$transaction(async (tx) => {
-      await tx.$executeRawUnsafe(
-        `INSERT INTO "TikTokPublicProfile" (
-          "id", "storeMasterId", "username", "displayName", "avatarUrl", "bioDescription", "isVerified",
-          "followerCount", "followingCount", "likesCount", "videoCount", "profileUrl", "metricSource",
-          "metricPrecision", "lastFetchedAt", "createdAt", "updatedAt"
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)
-        ON CONFLICT ("storeMasterId") DO UPDATE SET
-          "username" = EXCLUDED."username",
-          "displayName" = EXCLUDED."displayName",
-          "avatarUrl" = EXCLUDED."avatarUrl",
-          "bioDescription" = EXCLUDED."bioDescription",
-          "isVerified" = EXCLUDED."isVerified",
-          "followerCount" = EXCLUDED."followerCount",
-          "followingCount" = EXCLUDED."followingCount",
-          "likesCount" = EXCLUDED."likesCount",
-          "videoCount" = EXCLUDED."videoCount",
-          "profileUrl" = EXCLUDED."profileUrl",
-          "metricSource" = EXCLUDED."metricSource",
-          "metricPrecision" = EXCLUDED."metricPrecision",
-          "lastFetchedAt" = EXCLUDED."lastFetchedAt",
-          "updatedAt" = CURRENT_TIMESTAMP`,
-        randomUUID(),
-        store.id,
-        profile.username,
-        profile.displayName,
-        profile.avatarUrl,
-        profile.bioDescription,
-        profile.isVerified,
-        followerCount,
-        followingCount,
-        likesCount,
-        videoCount,
-        profile.profileUrl,
-        profile.metricSource,
-        profile.metricPrecision,
-        fetchedAt,
-      );
+      const publicAccount = await tx.tikTokPublicAccount.upsert({
+        where: { username: profile.username },
+        create: {
+          username: profile.username,
+          displayName: profile.displayName || null,
+          profileUrl: profile.profileUrl,
+          source: profile.metricSource ?? "TOKCOUNTER",
+          firstSeenAt: fetchedAt,
+          lastCollectedAt: fetchedAt,
+        },
+        update: {
+          displayName: profile.displayName || undefined,
+          profileUrl: profile.profileUrl,
+          lastCollectedAt: fetchedAt,
+        },
+      });
 
-      await tx.$executeRawUnsafe(
-        `INSERT INTO "TikTokPublicDailyMetric" (
-          "id", "storeMasterId", "metricDate", "followerCount", "followingCount", "likesCount", "videoCount",
-          "metricSource", "metricPrecision", "fetchedAt", "createdAt", "updatedAt"
-        ) VALUES ($1,$2,$3::date,$4,$5,$6,$7,$8,$9,$10,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)
-        ON CONFLICT ("storeMasterId", "metricDate") DO UPDATE SET
-          "followerCount" = EXCLUDED."followerCount",
-          "followingCount" = EXCLUDED."followingCount",
-          "likesCount" = EXCLUDED."likesCount",
-          "videoCount" = EXCLUDED."videoCount",
-          "metricSource" = EXCLUDED."metricSource",
-          "metricPrecision" = EXCLUDED."metricPrecision",
-          "fetchedAt" = EXCLUDED."fetchedAt",
-          "updatedAt" = CURRENT_TIMESTAMP`,
-        randomUUID(),
-        store.id,
-        metricDate,
-        followerCount,
-        followingCount,
-        likesCount,
-        videoCount,
-        profile.metricSource,
-        profile.metricPrecision,
-        fetchedAt,
-      );
+      await tx.storeMaster.update({
+        where: { id: store.id },
+        data: {
+          tiktokPublicAccountId: publicAccount.id,
+          tiktokUsername: profile.username,
+          tiktokProfileUrl: profile.profileUrl,
+        },
+      });
+
+      const metricDateObj = new Date(`${metricDate}T00:00:00.000Z`);
+      await tx.tikTokPublicDailyMetric.upsert({
+        where: {
+          tiktokPublicAccountId_metricDate: {
+            tiktokPublicAccountId: publicAccount.id,
+            metricDate: metricDateObj,
+          },
+        },
+        create: {
+          tiktokPublicAccountId: publicAccount.id,
+          metricDate: metricDateObj,
+          followerCount,
+          followingCount,
+          likesCount,
+          videoCount,
+          precision: profile.metricPrecision ?? "EXACT",
+          source: profile.metricSource ?? "TOKCOUNTER",
+          collectedAt: fetchedAt,
+        },
+        update: {
+          followerCount,
+          followingCount,
+          likesCount,
+          videoCount,
+          precision: profile.metricPrecision ?? "EXACT",
+          source: profile.metricSource ?? "TOKCOUNTER",
+          collectedAt: fetchedAt,
+        },
+      });
     });
 
     return {
@@ -288,35 +283,66 @@ export class TikTokPublicAnalyticsService {
   async listDashboardStores(): Promise<TikTokPublicDashboardStore[]> {
     const profiles = await this.prisma.$queryRawUnsafe<RawPublicProfileRow[]>(
       `SELECT
-        p."storeMasterId", s."storeName", s."accountName", s."province", s."region",
-        p."username", p."displayName", p."avatarUrl", p."bioDescription", p."isVerified",
-        p."followerCount", p."followingCount", p."likesCount", p."videoCount", p."profileUrl", p."lastFetchedAt"
-      FROM "TikTokPublicProfile" p
-      INNER JOIN "StoreMaster" s ON s."id" = p."storeMasterId"
+        s."id" AS "storeMasterId",
+        s."externalStoreId",
+        s."storeName",
+        s."accountName",
+        s."province",
+        s."region",
+        a."id" AS "tiktokPublicAccountId",
+        COALESCE(a."username", p."username", s."tiktokUsername") AS "username",
+        COALESCE(a."displayName", p."displayName") AS "displayName",
+        p."avatarUrl",
+        p."bioDescription",
+        p."isVerified",
+        COALESCE(m."followerCount", p."followerCount", 0)::int AS "followerCount",
+        COALESCE(m."followingCount", p."followingCount", 0)::int AS "followingCount",
+        COALESCE(m."likesCount", p."likesCount", 0)::int AS "likesCount",
+        COALESCE(m."videoCount", p."videoCount", 0)::int AS "videoCount",
+        COALESCE(a."profileUrl", p."profileUrl", s."tiktokProfileUrl") AS "profileUrl",
+        COALESCE(m."collectedAt", a."lastCollectedAt", p."lastFetchedAt", CURRENT_TIMESTAMP) AS "lastFetchedAt"
+      FROM "StoreMaster" s
+      LEFT JOIN "TikTokPublicAccount" a ON s."tiktokPublicAccountId" = a."id"
+      LEFT JOIN "TikTokPublicProfile" p ON p."storeMasterId" = s."id"
+      LEFT JOIN LATERAL (
+        SELECT m1."followerCount", m1."followingCount", m1."likesCount", m1."videoCount", m1."collectedAt"
+        FROM "TikTokPublicDailyMetric" m1
+        WHERE m1."tiktokPublicAccountId" = a."id"
+        ORDER BY m1."metricDate" DESC
+        LIMIT 1
+      ) m ON true
       WHERE s."isActive" = true
-      ORDER BY p."followerCount" DESC, s."storeName" ASC`,
+        AND (a."id" IS NOT NULL OR p."id" IS NOT NULL)
+      ORDER BY COALESCE(m."followerCount", p."followerCount", 0) DESC NULLS LAST, s."storeName" ASC`,
     );
 
     if (profiles.length === 0) return [];
-    const storeIds = profiles.map((row) => row.storeMasterId);
-    const metrics = await this.prisma.$queryRawUnsafe<RawPublicMetricRow[]>(
-      `SELECT "storeMasterId", "metricDate", "followerCount", "followingCount", "likesCount", "videoCount", "fetchedAt"
-       FROM "TikTokPublicDailyMetric"
-       WHERE "storeMasterId" = ANY($1::text[])
-         AND "metricDate" >= (CURRENT_DATE - INTERVAL '35 days')
-       ORDER BY "storeMasterId", "metricDate" ASC`,
-      storeIds,
-    );
+    const accountIds = profiles
+      .map((row) => row.tiktokPublicAccountId)
+      .filter((id): id is string => Boolean(id));
 
-    const byStore = new Map<string, RawPublicMetricRow[]>();
+    let metrics: RawPublicMetricRow[] = [];
+    if (accountIds.length > 0) {
+      metrics = await this.prisma.$queryRawUnsafe<RawPublicMetricRow[]>(
+        `SELECT "tiktokPublicAccountId", "metricDate", "followerCount", "followingCount", "likesCount", "videoCount", "collectedAt" AS "fetchedAt"
+         FROM "TikTokPublicDailyMetric"
+         WHERE "tiktokPublicAccountId" = ANY($1::text[])
+           AND "metricDate" >= (CURRENT_DATE - INTERVAL '35 days')
+         ORDER BY "tiktokPublicAccountId", "metricDate" ASC`,
+        accountIds,
+      );
+    }
+
+    const byAccount = new Map<string, RawPublicMetricRow[]>();
     for (const metric of metrics) {
-      const current = byStore.get(metric.storeMasterId) ?? [];
+      if (!metric.tiktokPublicAccountId) continue;
+      const current = byAccount.get(metric.tiktokPublicAccountId) ?? [];
       current.push(metric);
-      byStore.set(metric.storeMasterId, current);
+      byAccount.set(metric.tiktokPublicAccountId, current);
     }
 
     return profiles.map((profile) => {
-      const storeMetrics = byStore.get(profile.storeMasterId) ?? [];
+      const storeMetrics = (profile.tiktokPublicAccountId ? byAccount.get(profile.tiktokPublicAccountId) : null) ?? [];
       const latestDate = getBangkokMetricDate(profile.lastFetchedAt);
       const oneDay = baselineAtOrBefore(storeMetrics, dateMinusDays(latestDate, 1));
       const sevenDay = baselineAtOrBefore(storeMetrics, dateMinusDays(latestDate, 7));
@@ -370,11 +396,12 @@ export class TikTokPublicAnalyticsService {
   async getStoreHistory(storeMasterId: string, days = 30): Promise<TikTokPublicHistoryPoint[]> {
     const safeDays = Math.min(Math.max(Math.trunc(days) || 30, 1), 365);
     const rows = await this.prisma.$queryRawUnsafe<RawPublicMetricRow[]>(
-      `SELECT "storeMasterId", "metricDate", "followerCount", "followingCount", "likesCount", "videoCount", "fetchedAt"
-       FROM "TikTokPublicDailyMetric"
-       WHERE "storeMasterId" = $1
-         AND "metricDate" >= (CURRENT_DATE - ($2::int * INTERVAL '1 day'))
-       ORDER BY "metricDate" ASC`,
+      `SELECT m."metricDate", m."followerCount", m."followingCount", m."likesCount", m."videoCount", m."collectedAt" AS "fetchedAt"
+       FROM "TikTokPublicDailyMetric" m
+       INNER JOIN "StoreMaster" s ON s."tiktokPublicAccountId" = m."tiktokPublicAccountId"
+       WHERE (s."id" = $1 OR s."externalStoreId" = $1)
+         AND m."metricDate" >= (CURRENT_DATE - ($2::int * INTERVAL '1 day'))
+       ORDER BY m."metricDate" ASC`,
       storeMasterId,
       safeDays,
     );
@@ -382,9 +409,9 @@ export class TikTokPublicAnalyticsService {
     return rows.map((row) => ({
       metricDate: isoDate(row.metricDate),
       followerCount: row.followerCount,
-      followingCount: row.followingCount,
-      likesCount: row.likesCount,
-      videoCount: row.videoCount,
+      followingCount: row.followingCount ?? 0,
+      likesCount: row.likesCount ?? 0,
+      videoCount: row.videoCount ?? 0,
       fetchedAt: isoTimestamp(row.fetchedAt),
     }));
   }
