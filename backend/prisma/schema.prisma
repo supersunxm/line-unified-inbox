@@ -114,6 +114,11 @@ enum MessageDirection {
   SYSTEM
 }
 
+enum MessageDeliveryStatus {
+  DELIVERED
+  FAILED
+}
+
 enum MessageType {
   TEXT
   IMAGE
@@ -335,6 +340,7 @@ model User {
   purchaseRecordedConversations Conversation[]               @relation("ConversationPurchaseRecorder")
   salesRecordedConversations    Conversation[]               @relation("ConversationSalesRecorder")
   ownedConversations             Conversation[]               @relation("ConversationOwner")
+  lineChatMappedConversations   Conversation[]               @relation("ConversationLineChatMapper")
   createdActivityHistory        ActivityHistory[]            @relation("ActivityHistoryCreator")
   googleReviewKpisChecked       GoogleReviewKpiResult[]      @relation("GoogleReviewKpiChecker")
   googleReviewAuditSessions     GoogleReviewAuditSession[]   @relation("GoogleReviewAuditStarter")
@@ -885,6 +891,9 @@ model Conversation {
   purchaseIntent        PurchaseIntent?
   ownerUserId           String?
   lineChatUserId        String?
+  lineChatMappingSource String?
+  lineChatMappedAt      DateTime?
+  lineChatMappedById    String?
   createdAt             DateTime                    @default(now())
   updatedAt             DateTime                    @updatedAt
   customer              Customer                    @relation(fields: [customerId], references: [id], onDelete: Restrict)
@@ -900,6 +909,7 @@ model Conversation {
   purchaseRecordedBy    User?                       @relation("ConversationPurchaseRecorder", fields: [purchaseRecordedById], references: [id], onDelete: SetNull)
   salesRecordedBy       User?                       @relation("ConversationSalesRecorder", fields: [salesRecordedById], references: [id], onDelete: SetNull)
   owner                 User?                       @relation("ConversationOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
+  lineChatMappedBy      User?                       @relation("ConversationLineChatMapper", fields: [lineChatMappedById], references: [id], onDelete: SetNull)
   pushNotifications     PushNotification[]
   autoResponseExecutions AutoResponseExecution[]     @relation("ConversationAutoResponseExecutions")
   nicknameSyncJobs      LineChatNicknameSyncJob[]
@@ -910,6 +920,7 @@ model Conversation {
   @@index([storeId])
   @@index([customerId])
   @@index([lineChatUserId])
+  @@index([lineChatMappingSource])
   @@index([customerSalesStatus])
   @@index([createdAt])
   @@index([storeId, createdAt])
@@ -928,6 +939,7 @@ model Message {
   conversationId           String
   externalMessageId        String?                      @unique
   direction                MessageDirection
+  deliveryStatus           MessageDeliveryStatus        @default(DELIVERED)
   messageType              MessageType                  @default(TEXT)
   originalText             String
   originalLanguage         String?
@@ -953,6 +965,7 @@ model Message {
   autoResponseExecutions   AutoResponseExecution[]      @relation("AutoResponseSourceMessage")
 
   @@index([conversationId, sentAt])
+  @@index([conversationId, deliveryStatus])
   @@index([conversationId, lineReplyTokenUsedAt, lineReplyTokenReceivedAt])
   @@index([senderUserId])
 }

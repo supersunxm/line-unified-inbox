@@ -9,6 +9,7 @@ export type RealtimeEvent = {
   message?: {
     id: string;
     direction: string;
+    deliveryStatus?: string | null;
     messageType: string;
     text: string;
     fileName?: string | null;

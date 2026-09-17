@@ -2776,7 +2776,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
     }
     const conflicts = error.conflicts ?? {};
     const messages = [
-      conflicts.channelId && lineOaForm.channelId.trim() ? text.duplicateChannelId.replace("{value}", lineOaForm.channelId.trim()) : null,
+      conflicts.channelId && lineOaForm.channelId?.trim() ? text.duplicateChannelId.replace("{value}", lineOaForm.channelId.trim()) : null,
       conflicts.basicId && lineOaForm.basicId?.trim() ? text.duplicateBasicId.replace("{value}", lineOaForm.basicId.trim()) : null,
       conflicts.storeCode
         ? text.duplicateStoreCode.replace("{value}", (selectedMaster?.externalStoreId ?? lineOaForm.newStore?.code ?? "—").trim())
@@ -2998,8 +2998,39 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
       window.requestAnimationFrame(() => chatEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" }));
     } catch (error) {
       setReplyError(error instanceof Error ? error.message : "ส่งข้อความไม่สำเร็จ กรุณาลองอีกครั้ง");
+      if (conversationId) {
+        void api.conversationMessages(conversationId, 1).then((res) => {
+          setChatHistory(res);
+          window.requestAnimationFrame(() => chatEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" }));
+        }).catch(() => {});
+      }
     } finally {
       setReplySending(false);
+    }
+  }
+
+  const [retryingMessageId, setRetryingMessageId] = useState<string | null>(null);
+
+  async function retryFailedMessage(messageId: string) {
+    const conversationId = selectedConversationId;
+    if (!conversationId || retryingMessageId || authUser?.role !== "ADMIN") return;
+    setRetryingMessageId(messageId);
+    setReplyError(null);
+    try {
+      const result = await api.retryConversationMessage(conversationId, messageId);
+      setChatHistory((current) => ({
+        ...current,
+        items: current.items.map((msg) => (msg.id === messageId ? result.message : msg)),
+      }));
+      setConversationStates((current) => current[conversationId]
+        ? { ...current, [conversationId]: { ...current[conversationId], bmReplyStatus: "REPLIED", status: "completed" } }
+        : current);
+      await loadApplicationData(true);
+      window.requestAnimationFrame(() => chatEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" }));
+    } catch (error) {
+      setReplyError(error instanceof Error ? error.message : "ส่งข้อความซ้ำไม่สำเร็จ กรุณาลองอีกครั้ง");
+    } finally {
+      setRetryingMessageId(null);
     }
   }
 
@@ -4703,7 +4734,71 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                         </div>
                         <div data-chat-message-scroll className="flex-1 min-h-0 space-y-2.5 overflow-y-auto overscroll-contain bg-[var(--app-surface-subtle)]/40 px-4 py-3">
                           {chatHistory.hasEarlier && <div className="pb-2 text-center"><button disabled={chatLoading} onClick={() => void loadEarlierMessages()} className="rounded-full border border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-text-secondary)] hover:text-[var(--app-text-primary)] px-3 py-1 text-xs shadow-[var(--app-shadow-card)] transition-colors">{text.loadEarlierMessages}</button></div>}
-                          {chatHistory.items.map((message, index) => { const previous = chatHistory.items[index - 1]; const date = new Date(message.sentAt); const showDate = !previous || new Date(previous.sentAt).toDateString() !== date.toDateString(); const translated = language === "th" ? message.translatedThai : language === "en" ? message.translatedEnglish : message.translatedChinese; const content = showTranslation ? translated ?? message.originalText : message.originalText; const inbound = message.direction === "INBOUND"; const senderName = getMessageSenderName(message); return <div key={message.id}>{showDate && <div data-chat-date-separator className="my-3 text-center text-xs text-[var(--app-text-tertiary)] font-tabular font-mono">{new Intl.DateTimeFormat(language, { dateStyle: "medium" }).format(date)}</div>}<div className={`flex items-end gap-2 ${message.direction === "SYSTEM" ? "justify-center" : inbound ? "justify-start" : "justify-end"}`}>{inbound && <div style={selectedApiConversation?.customer.pictureUrl ? { backgroundImage: `url(${selectedApiConversation.customer.pictureUrl})` } : undefined} className="mb-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--app-surface-subtle)] border border-[var(--app-border)] bg-cover bg-center text-xs font-medium text-[var(--app-text-secondary)]">{selectedApiConversation?.customer.pictureUrl ? "" : (selectedApiConversation?.customer.displayName ?? "L").slice(0, 1)}</div>}<div className={`max-w-[72%] ${message.direction === "SYSTEM" ? "bg-transparent text-xs text-[var(--app-text-tertiary)] font-tabular" : inbound ? "rounded-2xl rounded-bl-xs bg-[var(--app-surface)] border border-[var(--app-border)] px-4 py-2.5 shadow-[var(--app-shadow-card)] text-[var(--app-text-primary)]" : "rounded-2xl rounded-br-xs bg-[var(--app-accent-soft)]/60 border border-[var(--app-accent)]/20 px-4 py-2.5 text-[var(--app-text-primary)]"}`}>{senderName && <p data-message-sender className="mb-1 text-[11px] font-semibold text-[var(--app-text-secondary)]">{senderName}</p>}{message.messageType === "IMAGE" ? <MessageImage messageId={message.id} media={message.media} alt={text.customerImage} unavailableLabel={text.imageUnavailable} errorLabel={text.imageLoadError} retryLabel={text.retryImage} /> : message.messageType === "STICKER" ? <MessageSticker sticker={message.sticker} language={language} /> : <p className="whitespace-pre-wrap text-sm leading-relaxed">{content}</p>}{message.fileName && <p className="mt-1 text-xs font-medium">📎 {message.fileName}</p>}<MessageTranslationAction message={message} userRole={authUser.role} onTranslated={(translatedText) => updateMessageEnglishTranslation(message.id, translatedText)} /><p className={`mt-1 text-[10px] text-[var(--app-text-tertiary)] font-tabular font-mono ${inbound ? "" : "text-right"}`}>{new Intl.DateTimeFormat(language, { timeStyle: "short" }).format(date)}</p></div></div></div>; })}
+                          {chatHistory.items.map((message, index) => {
+                            const previous = chatHistory.items[index - 1];
+                            const date = new Date(message.sentAt);
+                            const showDate = !previous || new Date(previous.sentAt).toDateString() !== date.toDateString();
+                            const translated = language === "th" ? message.translatedThai : language === "en" ? message.translatedEnglish : message.translatedChinese;
+                            const content = showTranslation ? translated ?? message.originalText : message.originalText;
+                            const inbound = message.direction === "INBOUND";
+                            const isFailed = !inbound && message.deliveryStatus === "FAILED";
+                            const senderName = getMessageSenderName(message);
+                            return (
+                              <div key={message.id}>
+                                {showDate && (
+                                  <div data-chat-date-separator className="my-3 text-center text-xs text-[var(--app-text-tertiary)] font-tabular font-mono">
+                                    {new Intl.DateTimeFormat(language, { dateStyle: "medium" }).format(date)}
+                                  </div>
+                                )}
+                                <div className={`flex items-end gap-2 ${message.direction === "SYSTEM" ? "justify-center" : inbound ? "justify-start" : "justify-end"}`}>
+                                  {inbound && (
+                                    <div
+                                      style={selectedApiConversation?.customer.pictureUrl ? { backgroundImage: `url(${selectedApiConversation.customer.pictureUrl})` } : undefined}
+                                      className="mb-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--app-surface-subtle)] border border-[var(--app-border)] bg-cover bg-center text-xs font-medium text-[var(--app-text-secondary)]"
+                                    >
+                                      {selectedApiConversation?.customer.pictureUrl ? "" : (selectedApiConversation?.customer.displayName ?? "L").slice(0, 1)}
+                                    </div>
+                                  )}
+                                  <div
+                                    className={`max-w-[72%] ${
+                                      message.direction === "SYSTEM"
+                                        ? "bg-transparent text-xs text-[var(--app-text-tertiary)] font-tabular"
+                                        : inbound
+                                        ? "rounded-2xl rounded-bl-xs bg-[var(--app-surface)] border border-[var(--app-border)] px-4 py-2.5 shadow-[var(--app-shadow-card)] text-[var(--app-text-primary)]"
+                                        : isFailed
+                                        ? "rounded-2xl rounded-br-xs border-2 border-red-500 bg-red-950/40 text-red-100 px-4 py-2.5"
+                                        : "rounded-2xl rounded-br-xs bg-[var(--app-accent-soft)]/60 border border-[var(--app-accent)]/20 px-4 py-2.5 text-[var(--app-text-primary)]"
+                                    }`}
+                                  >
+                                    {senderName && <p data-message-sender className={`mb-1 text-[11px] font-semibold ${isFailed ? "text-red-200" : "text-[var(--app-text-secondary)]"}`}>{senderName}</p>}
+                                    {message.messageType === "IMAGE" ? <MessageImage messageId={message.id} media={message.media} alt={text.customerImage} unavailableLabel={text.imageUnavailable} errorLabel={text.imageLoadError} retryLabel={text.retryImage} /> : message.messageType === "STICKER" ? <MessageSticker sticker={message.sticker} language={language} /> : (
+                                      <p className="whitespace-pre-wrap text-sm leading-relaxed">{content}</p>
+                                    )}
+                                    {message.fileName && <p className="mt-1 text-xs font-medium">📎 {message.fileName}</p>}
+                                    <MessageTranslationAction message={message} userRole={authUser.role} onTranslated={(translatedText) => updateMessageEnglishTranslation(message.id, translatedText)} />
+                                    <p className={`mt-1 text-[10px] font-tabular font-mono ${isFailed ? "text-red-300" : "text-[var(--app-text-tertiary)]"} ${inbound ? "" : "text-right"}`}>
+                                      {new Intl.DateTimeFormat(language, { timeStyle: "short" }).format(date)}
+                                    </p>
+                                    {isFailed && (
+                                      <div className="mt-2 flex items-center justify-between gap-2 border-t border-red-500/30 pt-1.5">
+                                        <span className="text-[10px] font-bold text-red-300">ส่งไม่สำเร็จ</span>
+                                        {authUser?.role === "ADMIN" && (
+                                          <button
+                                            type="button"
+                                            disabled={retryingMessageId === message.id}
+                                            onClick={() => void retryFailedMessage(message.id)}
+                                            className="inline-flex items-center gap-1 rounded-full bg-red-600 px-2.5 py-0.5 text-[11px] font-bold text-white shadow-sm hover:bg-red-700 active:scale-95 disabled:opacity-50"
+                                          >
+                                            {retryingMessageId === message.id ? "กำลังส่งอีกครั้ง..." : "↻ ลองส่งอีกครั้ง"}
+                                          </button>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
                           {chatHistory.items.length === 0 && <p className="py-16 text-center text-sm text-[var(--app-text-tertiary)]">{text.noMessages}</p>}
                           <div ref={chatEndRef} />
                         </div>

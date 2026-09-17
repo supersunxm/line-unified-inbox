@@ -7,6 +7,9 @@ import { LineChatOperationsService } from "./line-chat-operations.service";
 import { LineChatNovncRecoveryService } from "./line-chat-novnc-recovery.service";
 import { LineChatPendingControlService } from "./line-chat-pending-control.service";
 import { LineChatHealthReconciliationService } from "./line-chat-health-reconciliation.service";
+import { LineChatManualMappingService } from "./line-chat-manual-mapping.service";
+import type { AuthRequest } from "../auth/auth.guard";
+import { Req } from "@nestjs/common";
 
 export class RetrySelectedJobsDto {
   @IsString()
@@ -36,6 +39,20 @@ export class RunProgressDto {
   jobIds!: string[];
 }
 
+export class BindManualMappingDto {
+  @IsString()
+  @IsNotEmpty()
+  lineOfficialAccountId!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  lineChatUserId!: string;
+
+  @IsOptional()
+  @IsBoolean()
+  overrideConflict?: boolean;
+}
+
 @Controller("operations/line-chat-nickname")
 @UseGuards(AuthGuard)
 @Roles(UserRole.ADMIN)
@@ -45,7 +62,37 @@ export class LineChatOperationsController {
     private readonly novncRecovery: LineChatNovncRecoveryService,
     private readonly pendingControl: LineChatPendingControlService,
     private readonly healthReconciliation: LineChatHealthReconciliationService,
+    private readonly manualMappingService: LineChatManualMappingService,
   ) {}
+
+  @Get("unresolved-backlog")
+  async getUnresolvedBacklog() {
+    return this.manualMappingService.getUnresolvedBacklog();
+  }
+
+  @Get("conversations/:id/mapping-candidates")
+  async getMappingCandidates(
+    @Param("id") conversationId: string,
+    @Query("search") search?: string,
+  ) {
+    return this.manualMappingService.getMappingCandidates(conversationId, search?.trim() || undefined);
+  }
+
+  @Post("conversations/:id/manual-map")
+  async bindManualMapping(
+    @Param("id") conversationId: string,
+    @Body() body: BindManualMappingDto,
+    @Req() req: AuthRequest,
+  ) {
+    return this.manualMappingService.bindManualMapping({
+      conversationId,
+      lineOfficialAccountId: body.lineOfficialAccountId,
+      lineChatUserId: body.lineChatUserId,
+      operatorId: req.user?.id,
+      operatorDisplayName: req.user?.displayName,
+      overrideConflict: Boolean(body.overrideConflict),
+    });
+  }
 
   @Get("health")
   async getHealth() {

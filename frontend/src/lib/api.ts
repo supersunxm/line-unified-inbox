@@ -120,6 +120,67 @@ export type LineChatOperationsSession = {
 export type LineChatMappingQueueMetrics = { mappedReadyPending: number; waitingForMapping: number; oldestPendingAt: string | null };
 export type LineChatOperationsHealth = { timestamp: string; sessions: LineChatOperationsSession[]; queue: LineChatJobCounts; mapping: LineChatMappingQueueMetrics; rollout: { totalOas: number; enabledOas: number; disabledOas: number; missingChatBotId: number; missingSession: number } };
 
+export type UnresolvedMappingReason = "RESOLVE_NO_MATCH" | "RESOLVE_AMBIGUOUS" | "RESOLVE_CONFLICT";
+
+export interface UnresolvedMappingItem {
+  conversationId: string;
+  customerDisplayName: string;
+  storeName: string;
+  storeCode: string;
+  lineOaName: string;
+  lineOaBasicId: string | null;
+  lineOaChatBotId: string | null;
+  sessionKey: string | null;
+  latestChatTimestamp: string;
+  latestInboundPreview: string | null;
+  mappingReason: UnresolvedMappingReason;
+  salesStatus: string | null;
+  nicknameTarget: string | null;
+  matchedCount: number;
+}
+
+export interface CandidateChatInfo {
+  chatUserId: string;
+  displayName: string;
+  lastMessageText?: string | null;
+  lastMessageAt?: string | null;
+  lastMessageDirection?: string | null;
+  confidence?: string;
+  matchReason?: string;
+  conflict?: {
+    conflictingConversationId: string;
+    conflictingCustomerName: string | null;
+  } | null;
+}
+
+export interface MappingCandidatesResult {
+  conversation: {
+    id: string;
+    customerDisplayName: string;
+    storeName: string;
+    storeCode: string;
+    lineOfficialAccountId: string;
+    lineOfficialAccountName: string;
+    currentLineChatUserId: string | null;
+    mappingSource?: string | null;
+    salesStatus?: string | null;
+    recentMessages: Array<{
+      id: string;
+      direction: "INBOUND" | "OUTBOUND" | "SYSTEM";
+      text: string;
+      sentAt: string;
+    }>;
+  };
+  candidates: CandidateChatInfo[];
+  totalDiscovered: number;
+}
+
+export interface BindManualMappingInput {
+  targetLineChatUserId: string;
+  targetLineChatDisplayName?: string;
+  overrideConflict?: boolean;
+}
+
 export type TranslationFeedbackIssueCategory = "meaning_issue" | "terminology_issue" | "other";
 export type MessageTranslationFeedbackResult = {
   id: string;
@@ -303,6 +364,20 @@ export const api = {
       `/operations/line-chat-nickname/sessions/${encodeURIComponent(sessionKey)}/try-remembered-login`,
       { method: "POST" },
     ),
+  lineChatUnresolvedBacklog: () =>
+    request<UnresolvedMappingItem[]>("/operations/line-chat-nickname/unresolved-backlog", { cache: "no-store" }),
+  lineChatMappingCandidates: (conversationId: string, search?: string) => {
+    const qs = search ? `?q=${encodeURIComponent(search)}` : "";
+    return request<MappingCandidatesResult>(
+      `/operations/line-chat-nickname/conversations/${encodeURIComponent(conversationId)}/mapping-candidates${qs}`,
+      { cache: "no-store" },
+    );
+  },
+  bindLineChatManualMapping: (conversationId: string, payload: BindManualMappingInput) =>
+    request<{ success: boolean; conversationId: string; lineChatUserId: string; message: string; reevaluatedJobs: number }>(
+      `/operations/line-chat-nickname/conversations/${encodeURIComponent(conversationId)}/manual-map`,
+      { method: "POST", body: JSON.stringify(payload) },
+    ),
   resetCounter: () => request<{ resetAt: string | null }>("/operations/reset-counter", { method: "POST" }),
   pilotChecklist: (lineOaId: string, options?: ApiRequestOptions) => request<{ oa: { id: string; name: string }; items: Array<{ itemKey: string; status: "NOT_TESTED" | "PASSED" | "FAILED" | "NOT_APPLICABLE"; note: string | null }> }>(`/operations/pilot-checklist/${lineOaId}`, options),
   updatePilotChecklist: (lineOaId: string, itemKey: string, status: "NOT_TESTED" | "PASSED" | "FAILED" | "NOT_APPLICABLE", note?: string) => request(`/operations/pilot-checklist/${lineOaId}/${itemKey}`, { method: "PUT", body: JSON.stringify({ status, note }) }),
@@ -338,6 +413,11 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ text, idempotencyKey }),
     }),
+  retryConversationMessage: (id: string, messageId: string) =>
+    request<SendConversationMessageResponse>(
+      `/conversations/${encodeURIComponent(id)}/messages/${encodeURIComponent(messageId)}/retry`,
+      { method: "POST" },
+    ),
   translateMessage: (messageId: string, targetLanguage: "en" | "zh") =>
     request<MessageTranslationResult>(`/messages/${encodeURIComponent(messageId)}/translations`, {
       method: "POST",

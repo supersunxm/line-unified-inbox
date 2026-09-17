@@ -68,6 +68,10 @@ export class ConversationsController {
     await this.storeAccess.assertConversationAccess(req.user!, id);
     return this.service.sendMessage(id, dto, req.user!);
   }
+  @Post(":id/messages/:messageId/retry") async retryMessage(@Param("id") id: string, @Param("messageId") messageId: string, @Req() req: AuthRequest) {
+    await this.storeAccess.assertConversationAccess(req.user!, id);
+    return this.service.retryFailedMessage(id, messageId, req.user!);
+  }
   @Post(":id/reanalyze") async reanalyze(@Param("id") id: string, @Req() req: AuthRequest) { await this.storeAccess.assertConversationAccess(req.user!, id); await this.classification.analyze(id, true); return this.service.get(id); }
   @Post(":id/refresh-profile") async refreshProfile(@Param("id") id: string, @Req() req: AuthRequest) { await this.storeAccess.assertConversationAccess(req.user!, id); const conversation = await this.service.get(id); return this.profiles.refresh(conversation.customerId, conversation.lineOfficialAccountId, true); }
   @Patch(":id/tags") async tags(@Param("id") id: string, @Body() body: { productModelIds?: string[]; topicIds?: string[] }, @Req() req: AuthRequest) { await this.storeAccess.assertConversationAccess(req.user!, id); return this.service.updateManualTags(id, body.productModelIds ?? [], body.topicIds ?? []); }

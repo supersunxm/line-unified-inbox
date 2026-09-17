@@ -1,5 +1,5 @@
 import { BadRequestException, ForbiddenException, Injectable, InternalServerErrorException, Logger, NotFoundException, ServiceUnavailableException } from "@nestjs/common";
-import { ActivityActionType, BmReplyStatus, FollowUpStatus, MessageDirection, MessageType, Prisma, UserStatus } from "@prisma/client";
+import { ActivityActionType, BmReplyStatus, FollowUpStatus, MessageDeliveryStatus, MessageDirection, MessageType, Prisma, UserStatus } from "@prisma/client";
 import { BulkMarkRepliedByFilterDto, BulkUpdateBmReplyStatusDto, ConversationQueryDto, CreateNoteDto, SendConversationMessageDto } from "./dto";
 import { OperationsService } from "./operations/operations.service";
 import { PrismaService } from "./prisma.service";
@@ -160,7 +160,7 @@ export class ConversationsService {
     };
   }
 
-  private safeMessage<T extends { id: string; direction: MessageDirection; messageType?: MessageType; rawPayload?: unknown; senderUserId?: string | null; senderDisplayName?: string | null; sender?: { id: string; displayName: string | null } | null; media?: { processingStatus: string; mimeType: string | null; fileSize: number | null } | null }>(message: T) {
+  private safeMessage<T extends { id: string; direction: MessageDirection; messageType?: MessageType; deliveryStatus?: MessageDeliveryStatus; rawPayload?: unknown; senderUserId?: string | null; senderDisplayName?: string | null; sender?: { id: string; displayName: string | null } | null; media?: { processingStatus: string; mimeType: string | null; fileSize: number | null } | null }>(message: T) {
     const { media, rawPayload, sender: senderUser, senderUserId, senderDisplayName, encryptedLineReplyToken: _encToken, lineReplyTokenReceivedAt: _tokenRecv, lineReplyTokenUsedAt: _tokenUsed, ...safe } = message as T & { encryptedLineReplyToken?: string | null; lineReplyTokenReceivedAt?: Date | null; lineReplyTokenUsedAt?: Date | null };
     void _encToken;
     void _tokenRecv;
@@ -169,7 +169,13 @@ export class ConversationsService {
     const sticker = safe.messageType === MessageType.STICKER
       ? stickerPresentationFromRawPayload(rawPayload)
       : null;
-    return { ...safe, sender, sticker, media: media ? { processingStatus: media.processingStatus, mimeType: media.mimeType, fileSize: media.fileSize, url: media.processingStatus === "READY" ? `/messages/${message.id}/media` : null } : null };
+    return {
+      ...safe,
+      deliveryStatus: (safe as { deliveryStatus?: MessageDeliveryStatus }).deliveryStatus ?? MessageDeliveryStatus.DELIVERED,
+      sender,
+      sticker,
+      media: media ? { processingStatus: media.processingStatus, mimeType: media.mimeType, fileSize: media.fileSize, url: media.processingStatus === "READY" ? `/messages/${message.id}/media` : null } : null,
+    };
   }
 
   private publishOutboundMessage(conversation: { id: string; storeId: string | null; bmReplyStatus: string; owner?: { id: string; displayName: string } | null; ownerTracked?: boolean }, message: { id: string; direction?: MessageDirection; messageType: string; originalText: string; sentAt: Date; senderUserId?: string | null; senderDisplayName?: string | null; fileName?: string | null }, media: { processingStatus: string; mimeType?: string | null; fileSize?: number | null } | null = null, owner?: { id: string; displayName: string } | null) {
@@ -182,6 +188,7 @@ export class ConversationsService {
       message: {
         id: message.id,
         direction: MessageDirection.OUTBOUND,
+        deliveryStatus: (message as { deliveryStatus?: MessageDeliveryStatus }).deliveryStatus ?? MessageDeliveryStatus.DELIVERED,
         messageType: message.messageType,
         text: message.originalText,
         fileName: message.fileName ?? null,
@@ -727,31 +734,53 @@ export class ConversationsService {
     let lineResult: { requestId: string | null; acceptedRequestId: string | null; externalMessageId: string | null; duplicateAccepted: boolean };
     let deliveryMethod: "REPLY" | "PUSH" = "PUSH";
 
-    if (claimed) {
-      const replyRes = await this.lineMessaging.replyText({
-        accessToken,
-        replyToken: claimed.replyToken,
-        text,
-        context: {
-          conversationId: conversation.id,
-          userId: operator.id,
-          storeId: conversation.storeId ?? undefined,
-          storeName: conversation.store?.name,
-          channelId: oa.channelId || oa.id,
-          replyTokenAgeMs: claimed.ageMs,
-          replyTokenAgeBucket: claimed.ageBucket,
-        },
-      });
+    try {
+      if (claimed) {
+        const replyRes = await this.lineMessaging.replyText({
+          accessToken,
+          replyToken: claimed.replyToken,
+          text,
+          context: {
+            conversationId: conversation.id,
+            userId: operator.id,
+            storeId: conversation.storeId ?? undefined,
+            storeName: conversation.store?.name,
+            channelId: oa.channelId || oa.id,
+            replyTokenAgeMs: claimed.ageMs,
+            replyTokenAgeBucket: claimed.ageBucket,
+          },
+        });
 
-      if (replyRes.success) {
-        lineResult = {
-          requestId: replyRes.requestId,
-          acceptedRequestId: null,
-          externalMessageId: replyRes.externalMessageId,
-          duplicateAccepted: false,
-        };
-        deliveryMethod = "REPLY";
-      } else if (replyRes.invalidReplyToken) {
+        if (replyRes.success) {
+          lineResult = {
+            requestId: replyRes.requestId,
+            acceptedRequestId: null,
+            externalMessageId: replyRes.externalMessageId,
+            duplicateAccepted: false,
+          };
+          deliveryMethod = "REPLY";
+        } else if (replyRes.invalidReplyToken) {
+          lineResult = await this.lineMessaging.pushText({
+            accessToken,
+            lineUserId: conversation.customer.lineUserId,
+            text,
+            retryKey: dto.idempotencyKey,
+            context: {
+              conversationId: conversation.id,
+              userId: operator.id,
+              storeId: conversation.storeId ?? undefined,
+              storeName: conversation.store?.name,
+              channelId: oa.channelId || oa.id,
+              replyTokenAgeMs: claimed.ageMs,
+              replyTokenAgeBucket: claimed.ageBucket,
+              fallbackReason: "INVALID_REPLY_TOKEN",
+            },
+          });
+          deliveryMethod = "PUSH";
+        } else {
+          throw new ServiceUnavailableException("ส่งข้อความไม่สำเร็จ กรุณาลองอีกครั้ง");
+        }
+      } else {
         lineResult = await this.lineMessaging.pushText({
           accessToken,
           lineUserId: conversation.customer.lineUserId,
@@ -763,30 +792,52 @@ export class ConversationsService {
             storeId: conversation.storeId ?? undefined,
             storeName: conversation.store?.name,
             channelId: oa.channelId || oa.id,
-            replyTokenAgeMs: claimed.ageMs,
-            replyTokenAgeBucket: claimed.ageBucket,
-            fallbackReason: "INVALID_REPLY_TOKEN",
           },
         });
         deliveryMethod = "PUSH";
-      } else {
-        throw new ServiceUnavailableException("ส่งข้อความไม่สำเร็จ กรุณาลองอีกครั้ง");
       }
-    } else {
-      lineResult = await this.lineMessaging.pushText({
-        accessToken,
-        lineUserId: conversation.customer.lineUserId,
-        text,
-        retryKey: dto.idempotencyKey,
-        context: {
-          conversationId: conversation.id,
-          userId: operator.id,
-          storeId: conversation.storeId ?? undefined,
-          storeName: conversation.store?.name,
-          channelId: oa.channelId || oa.id,
-        },
-      });
-      deliveryMethod = "PUSH";
+    } catch (error) {
+      // Pre-send failure: The outbound attempt never reached LINE.
+      // Save the message with FAILED deliveryStatus so it can be retried safely once mapped.
+      const failedSentAt = new Date();
+      if (typeof this.prisma.message?.upsert === "function") {
+        await this.prisma.message.upsert({
+          where: { externalMessageId: dedupeExternalId },
+          update: {
+            deliveryStatus: MessageDeliveryStatus.FAILED,
+            rawPayload: {
+              provider: "LINE",
+              deliveryMethod,
+              failedPreSend: true,
+              error: error instanceof Error ? error.message : String(error),
+            },
+          },
+          create: {
+            conversationId: conversation.id,
+            externalMessageId: dedupeExternalId,
+            direction: MessageDirection.OUTBOUND,
+            deliveryStatus: MessageDeliveryStatus.FAILED,
+            messageType: MessageType.TEXT,
+            originalText: text,
+            sentAt: failedSentAt,
+            senderUserId: operator.id,
+            senderDisplayName: operator.displayName?.trim() || "Store",
+            rawPayload: {
+              provider: "LINE",
+              deliveryMethod,
+              failedPreSend: true,
+              error: error instanceof Error ? error.message : String(error),
+            },
+          },
+        }).catch((recordErr: unknown) => {
+          const recordErrMsg = recordErr instanceof Error ? recordErr.message : String(recordErr);
+          Logger.warn(
+            `Failed to record FAILED message attempt for conversation ${conversation.id}: ${recordErrMsg}`,
+            "ConversationsService",
+          );
+        });
+      }
+      throw error;
     }
 
     const sentAt = new Date();
@@ -794,25 +845,61 @@ export class ConversationsService {
     let ownerTracked = conversation._count?.messages === undefined ? true : conversation._count.messages > 0;
     try {
       const message = await this.prisma.$transaction(async (tx) => {
-        const created = await tx.message.create({
-          data: {
-            conversationId: conversation.id,
-            externalMessageId: dedupeExternalId,
-            direction: MessageDirection.OUTBOUND,
-            messageType: MessageType.TEXT,
-            originalText: text,
-            sentAt,
-            senderUserId: operator.id,
-            senderDisplayName: operator.displayName?.trim() || "Store",
-            rawPayload: {
-              provider: "LINE",
-              deliveryMethod,
-              providerMessageId: lineResult.externalMessageId,
-              requestId: lineResult.requestId,
-              acceptedRequestId: lineResult.acceptedRequestId,
-            },
-          },
-        });
+        const created = typeof tx.message?.upsert === "function"
+          ? await tx.message.upsert({
+              where: { externalMessageId: dedupeExternalId },
+              update: {
+                deliveryStatus: MessageDeliveryStatus.DELIVERED,
+                sentAt,
+                senderUserId: operator.id,
+                senderDisplayName: operator.displayName?.trim() || "Store",
+                rawPayload: {
+                  provider: "LINE",
+                  deliveryMethod,
+                  providerMessageId: lineResult.externalMessageId,
+                  requestId: lineResult.requestId,
+                  acceptedRequestId: lineResult.acceptedRequestId,
+                },
+              },
+              create: {
+                conversationId: conversation.id,
+                externalMessageId: dedupeExternalId,
+                direction: MessageDirection.OUTBOUND,
+                deliveryStatus: MessageDeliveryStatus.DELIVERED,
+                messageType: MessageType.TEXT,
+                originalText: text,
+                sentAt,
+                senderUserId: operator.id,
+                senderDisplayName: operator.displayName?.trim() || "Store",
+                rawPayload: {
+                  provider: "LINE",
+                  deliveryMethod,
+                  providerMessageId: lineResult.externalMessageId,
+                  requestId: lineResult.requestId,
+                  acceptedRequestId: lineResult.acceptedRequestId,
+                },
+              },
+            })
+          : await tx.message.create({
+              data: {
+                conversationId: conversation.id,
+                externalMessageId: dedupeExternalId,
+                direction: MessageDirection.OUTBOUND,
+                deliveryStatus: MessageDeliveryStatus.DELIVERED,
+                messageType: MessageType.TEXT,
+                originalText: text,
+                sentAt,
+                senderUserId: operator.id,
+                senderDisplayName: operator.displayName?.trim() || "Store",
+                rawPayload: {
+                  provider: "LINE",
+                  deliveryMethod,
+                  providerMessageId: lineResult.externalMessageId,
+                  requestId: lineResult.requestId,
+                  acceptedRequestId: lineResult.acceptedRequestId,
+                },
+              },
+            });
         await tx.conversation.update({
           where: { id: conversation.id },
           data: { latestMessageAt: sentAt, bmReplyStatus: BmReplyStatus.REPLIED, followUpStatus: FollowUpStatus.COMPLETED },
@@ -852,6 +939,148 @@ export class ConversationsService {
       Logger.error(`LINE accepted outbound message but persistence failed for conversation ${conversation.id}`, undefined, "ConversationsService");
       throw new InternalServerErrorException("LINE รับข้อความแล้ว แต่บันทึกประวัติไม่สำเร็จ กรุณาลองส่งคำขอเดิมอีกครั้ง");
     }
+  }
+
+  async retryFailedMessage(conversationId: string, messageId: string, operator: AuthUser) {
+    const message = await this.prisma.message.findUnique({
+      where: { id: messageId },
+      include: {
+        conversation: {
+          include: {
+            customer: true,
+            lineOfficialAccount: true,
+            store: true,
+            owner: {
+              select: {
+                id: true,
+                displayName: true,
+                isActive: true,
+                status: true,
+                role: true,
+                canAccessAllStores: true,
+                memberships: { where: { status: "ACTIVE", store: { isActive: true, archivedAt: null } }, select: { storeId: true } },
+              },
+            },
+            _count: { select: { messages: { where: ownerTrackingInboundFilter() } } },
+          },
+        },
+      },
+    });
+
+    if (!message || message.conversationId !== conversationId) {
+      throw new NotFoundException("ไม่พบข้อความ");
+    }
+    if (message.direction !== MessageDirection.OUTBOUND) {
+      throw new BadRequestException("ข้อความนี้ไม่ใช่ข้อความส่งออก");
+    }
+
+    // Idempotency check: If message is already DELIVERED or has LINE providerMessageId,
+    // prevent duplicate customer-facing send!
+    if (message.deliveryStatus === MessageDeliveryStatus.DELIVERED) {
+      return { message: this.safeMessage(message), bmReplyStatus: BmReplyStatus.REPLIED, duplicate: true };
+    }
+
+    const raw = (message.rawPayload ?? {}) as Record<string, unknown>;
+    if (raw.providerMessageId || raw.requestId) {
+      const marked = await this.prisma.message.update({
+        where: { id: message.id },
+        data: { deliveryStatus: MessageDeliveryStatus.DELIVERED },
+      });
+      return { message: this.safeMessage(marked), bmReplyStatus: BmReplyStatus.REPLIED, duplicate: true };
+    }
+
+    const conversation = message.conversation;
+    if (!conversation.customer.lineUserId) {
+      throw new BadRequestException("ไม่พบ LINE User ID ของลูกค้า");
+    }
+    const oa = conversation.lineOfficialAccount;
+    if (!oa || oa.archivedAt || !oa.isActive) {
+      throw new BadRequestException("LINE Official Account นี้ไม่ได้เปิดใช้งาน");
+    }
+    if (!oa.encryptedChannelAccessToken) {
+      throw new BadRequestException("ไม่พบ Channel Access Token ของร้านนี้");
+    }
+
+    let accessToken: string;
+    try {
+      accessToken = this.encryption.decrypt(oa.encryptedChannelAccessToken);
+    } catch {
+      throw new ServiceUnavailableException("ไม่สามารถอ่าน Channel Access Token ของร้านนี้ได้");
+    }
+
+    const retryKey = message.externalMessageId?.replace(/^outbound:/, "") || randomUUID();
+
+    const lineResult = await this.lineMessaging.pushText({
+      accessToken,
+      lineUserId: conversation.customer.lineUserId,
+      text: message.originalText,
+      retryKey,
+      context: {
+        conversationId: conversation.id,
+        userId: operator.id,
+        storeId: conversation.storeId ?? undefined,
+        storeName: conversation.store?.name,
+        channelId: oa.channelId || oa.id,
+      },
+    });
+
+    const sentAt = new Date();
+    let ownerAssigned = false;
+    let ownerTracked = conversation._count?.messages === undefined ? true : conversation._count.messages > 0;
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const saved = await tx.message.update({
+        where: { id: message.id },
+        data: {
+          deliveryStatus: MessageDeliveryStatus.DELIVERED,
+          sentAt,
+          rawPayload: {
+            provider: "LINE",
+            deliveryMethod: "PUSH",
+            providerMessageId: lineResult.externalMessageId,
+            requestId: lineResult.requestId,
+            acceptedRequestId: lineResult.acceptedRequestId,
+            retriedAt: sentAt.toISOString(),
+            retriedByUserId: operator.id,
+          },
+        },
+      });
+
+      await tx.conversation.update({
+        where: { id: conversation.id },
+        data: { latestMessageAt: sentAt, bmReplyStatus: BmReplyStatus.REPLIED, followUpStatus: FollowUpStatus.COMPLETED },
+      });
+
+      ownerTracked = await isOwnerTrackedForTransaction(tx, conversation.id, ownerTracked);
+      if (ownerTracked && typeof tx.conversation.updateMany === "function") {
+        const ownerUpdate = await tx.conversation.updateMany({
+          where: { id: conversation.id, ownerUserId: null },
+          data: { ownerUserId: operator.id },
+        });
+        ownerAssigned = ownerUpdate.count === 1;
+      }
+
+      await tx.activityHistory.create({
+        data: {
+          conversationId: conversation.id,
+          actionType: ActivityActionType.STATUS_CHANGED,
+          previousStatus: conversation.followUpStatus,
+          newStatus: FollowUpStatus.COMPLETED,
+          previousBmReplyStatus: conversation.bmReplyStatus,
+          newBmReplyStatus: BmReplyStatus.REPLIED,
+          createdByName: operator.displayName,
+          description: `Retried failed customer message sent via LINE (PUSH); storeId=${conversation.storeId}; lineOfficialAccountId=${conversation.lineOfficialAccountId}`,
+        },
+      });
+
+      return saved;
+    });
+
+    const owner = ownerAssigned
+      ? { id: operator.id, displayName: operator.displayName?.trim() || "Staff" }
+      : serializeConversationOwner(conversation.owner, conversation.storeId);
+    this.publishOutboundMessage({ ...conversation, ownerTracked }, updated, null, owner);
+    return { message: this.safeMessage(updated), bmReplyStatus: BmReplyStatus.REPLIED, duplicate: lineResult.duplicateAccepted };
   }
 
   async sendImage(id: string, file: { buffer: Buffer; mimetype: string; size: number }, idempotencyKey: string, operator: AuthUser) {

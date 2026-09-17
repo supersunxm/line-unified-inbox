@@ -370,10 +370,39 @@ export function MobileChatsApp() {
       scrollMessagesToBottom();
     } catch (error) {
       setReplyError(error instanceof Error ? error.message : "ส่งข้อความไม่สำเร็จ");
+      void api.conversationMessages(selected.id, 1).then((res) => {
+        setMessages(res);
+        scrollMessagesToBottom();
+      }).catch(() => {});
     } finally {
       setReplySending(false);
     }
   }, [refreshSummary, replySending, replyText, scrollMessagesToBottom, selected, user]);
+
+  const [retryingMessageId, setRetryingMessageId] = useState<string | null>(null);
+
+  const retryFailedMessage = useCallback(async (messageId: string) => {
+    if (!selected || !user || user.role === "VIEWER" || retryingMessageId) return;
+    setRetryingMessageId(messageId);
+    setReplyError(null);
+    try {
+      const response = await api.retryConversationMessage(selected.id, messageId);
+      setMessages((current) => ({
+        ...current,
+        items: current.items.map((item) => (item.id === messageId ? response.message : item)),
+      }));
+      setSelected((current) => (current ? { ...current, bmReplyStatus: "REPLIED" } : current));
+      setConversations((current) =>
+        current.map((item) => (item.id === selected.id ? { ...item, bmReplyStatus: "REPLIED" } : item)),
+      );
+      void refreshSummary();
+      scrollMessagesToBottom();
+    } catch (error) {
+      setReplyError(error instanceof Error ? error.message : "ส่งข้อความซ้ำไม่สำเร็จ");
+    } finally {
+      setRetryingMessageId(null);
+    }
+  }, [refreshSummary, retryingMessageId, scrollMessagesToBottom, selected, user]);
 
   const loadEarlier = useCallback(async () => {
     if (!selected || !messages.hasEarlier || chatLoading) return;
@@ -593,17 +622,68 @@ export function MobileChatsApp() {
                       ) : (
                         <div className={`flex items-end gap-1.5 ${inbound ? "justify-start" : "justify-end"}`}>
                           {inbound && selected && <Avatar conversation={selected} size="sm" />}
-                          <div className={`max-w-[84%] rounded-2xl px-3 py-2 shadow-sm ${inbound ? "rounded-bl-sm border border-[var(--app-border)] bg-[var(--app-surface)]" : "rounded-br-sm bg-[var(--app-accent)] text-white"}`}>
-                            {senderName && <p data-message-sender className={`mb-1 text-[11px] font-semibold ${inbound ? "text-[var(--app-text-secondary)]" : "text-white/80"}`}>{senderName}</p>}
+                          <div
+                            className={`max-w-[84%] rounded-2xl px-3 py-2 shadow-sm ${
+                              inbound
+                                ? "rounded-bl-sm border border-[var(--app-border)] bg-[var(--app-surface)]"
+                                : message.deliveryStatus === "FAILED"
+                                ? "rounded-br-sm border-2 border-red-500 bg-red-950/40 text-red-100"
+                                : "rounded-br-sm bg-[var(--app-accent)] text-white"
+                            }`}
+                          >
+                            {senderName && (
+                              <p
+                                data-message-sender
+                                className={`mb-1 text-[11px] font-semibold ${
+                                  inbound ? "text-[var(--app-text-secondary)]" : "text-white/80"
+                                }`}
+                              >
+                                {senderName}
+                              </p>
+                            )}
                             {message.messageType === "IMAGE" ? (
-                              <MessageImage messageId={message.id} media={message.media} alt="รูปภาพจากลูกค้า" unavailableLabel="รูปภาพไม่ได้ถูกจัดเก็บ" errorLabel="โหลดรูปภาพไม่สำเร็จ" retryLabel="ลองอีกครั้ง" />
+                              <MessageImage
+                                messageId={message.id}
+                                media={message.media}
+                                alt="รูปภาพจากลูกค้า"
+                                unavailableLabel="รูปภาพไม่ได้ถูกจัดเก็บ"
+                                errorLabel="โหลดรูปภาพไม่สำเร็จ"
+                                retryLabel="ลองอีกครั้ง"
+                              />
                             ) : message.messageType === "STICKER" ? (
                               <MessageSticker sticker={message.sticker} />
                             ) : (
-                              <p className="whitespace-pre-wrap break-words text-[15px] leading-[1.45]">{content || "—"}</p>
+                              <p className="whitespace-pre-wrap break-words text-[15px] leading-[1.45]">
+                                {content || "—"}
+                              </p>
                             )}
                             {message.fileName && <p className="mt-1 text-xs">📎 {message.fileName}</p>}
-                            <p className={`mt-1 text-[10px] ${inbound ? "text-[var(--app-text-tertiary)]" : "text-white/70"}`}>{thaiTime(message.sentAt)}</p>
+                            <div className="mt-1 flex items-center justify-between gap-2">
+                              <p
+                                className={`text-[10px] ${
+                                  inbound ? "text-[var(--app-text-tertiary)]" : "text-white/70"
+                                }`}
+                              >
+                                {thaiTime(message.sentAt)}
+                              </p>
+                              {!inbound && message.deliveryStatus === "FAILED" && (
+                                <span className="rounded bg-red-500/20 px-1.5 py-0.5 text-[10px] font-bold text-red-300">
+                                  ส่งไม่สำเร็จ
+                                </span>
+                              )}
+                            </div>
+                            {!inbound && message.deliveryStatus === "FAILED" && user.role !== "VIEWER" && (
+                              <div className="mt-2 border-t border-red-500/30 pt-1.5 text-right">
+                                <button
+                                  type="button"
+                                  onClick={() => void retryFailedMessage(message.id)}
+                                  disabled={retryingMessageId === message.id}
+                                  className="inline-flex items-center gap-1 rounded-full bg-red-600 px-3 py-1 text-xs font-bold text-white shadow-sm hover:bg-red-700 active:scale-95 disabled:opacity-50"
+                                >
+                                  {retryingMessageId === message.id ? "กำลังส่งอีกครั้ง..." : "↻ ลองส่งอีกครั้ง (Retry)"}
+                                </button>
+                              </div>
+                            )}
                           </div>
                         </div>
                       )}

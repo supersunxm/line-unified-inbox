@@ -33,6 +33,7 @@ import {
   getBrowserStateTone,
   getOverallHealth,
 } from "./line-chat-health-status";
+import { LineChatUnresolvedBacklogModal } from "./line-chat-unresolved-backlog-modal";
 
 type FilterTab = "ALL" | "AUTO_FIXABLE" | "MANUAL_REVIEW" | "AUTHENTICATION" | "SYSTEM_ATTENTION";
 
@@ -148,6 +149,7 @@ export function LineChatHealthView() {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [report, setReport] = useState<LineChatOperationsHealth | null>(null);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [backlogModalOpen, setBacklogModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -432,9 +434,25 @@ export function LineChatHealthView() {
                   <dt className="text-xs text-[var(--app-text-tertiary)]">Mapped and ready</dt>
                   <dd className="mt-1 text-xl font-semibold">{report.mapping.mappedReadyPending}</dd>
                 </div>
-                <div className="rounded-xl bg-[var(--app-surface-subtle)] p-3">
-                  <dt className="text-xs text-[var(--app-text-tertiary)]">Waiting for mapping</dt>
-                  <dd className="mt-1 text-xl font-semibold">{report.mapping.waitingForMapping}</dd>
+                <div
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setBacklogModalOpen(true)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      setBacklogModalOpen(true);
+                    }
+                  }}
+                  className="group cursor-pointer rounded-xl bg-[var(--app-surface-subtle)] p-3 transition hover:bg-[var(--app-surface-hover)] border border-transparent hover:border-[var(--app-accent)]/40"
+                >
+                  <div className="flex items-center justify-between">
+                    <dt className="text-xs text-[var(--app-text-tertiary)] group-hover:text-[var(--app-accent)]">Waiting for mapping</dt>
+                    <span className="text-[10px] font-semibold text-[var(--app-accent)] opacity-80 group-hover:opacity-100">Click to resolve →</span>
+                  </div>
+                  <dd className="mt-1 text-xl font-semibold flex items-center justify-between">
+                    <span>{report.mapping.waitingForMapping}</span>
+                    <span className="text-xs font-normal text-[var(--app-text-tertiary)]">Manage</span>
+                  </dd>
                 </div>
                 <div className="rounded-xl bg-[var(--app-surface-subtle)] p-3">
                   <dt className="text-xs text-[var(--app-text-tertiary)]">Oldest pending</dt>
@@ -1067,6 +1085,15 @@ export function LineChatHealthView() {
           </div>
         )}
       </Modal>
+
+      {backlogModalOpen && (
+        <LineChatUnresolvedBacklogModal
+          onClose={() => setBacklogModalOpen(false)}
+          onMappingSuccess={() => {
+            void load({ showLoading: false });
+          }}
+        />
+      )}
     </AppShell>
   );
 }

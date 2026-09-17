@@ -1,3 +1,12 @@
+# LINE Chat Durable Manual Mapping & Outbound Message Recovery Architecture (2026-09-17)
+
+- **Single Canonical Identity Source (`Conversation.lineChatUserId`)**:
+  Identity mapping between internal conversations and LINE Official Account Manager 1:1 chat users remains anchored directly on `Conversation.lineChatUserId`. We deliberately avoid creating a secondary, parallel mapping table to eliminate split-brain discrepancies. All downstream consumers—including `LineChatManagerMessageRelayWorkerService`, `LineChatRecentResolverService`, `LineChatNicknameWorkerService`, and `LineChatPendingControlService`—read from this single canonical field.
+- **Manual Mapping Provenance & Audit Trail**:
+  To support safe admin manual mapping without breaking existing automatic mapping semantics, `Conversation` is augmented with provenance columns (`lineChatMappingSource = "MANUAL"`, `lineChatMappedAt`, `lineChatMappedById`). Every manual mapping operation is strictly bounded to the same LINE OA / store, requires confirmation against active session discovery data, requires explicit operator conflict override if already attached elsewhere, and writes a detailed audit entry to `ActivityHistory` and `AuditLog`.
+- **Pre-Send Outbound Failure State vs Silent Dropping**:
+  Previously, when a message send encountered a pre-send resolution failure (`RESOLVE_AMBIGUOUS`), the exception aborted execution before `prisma.$transaction` ran, leaving zero database record of the attempt. We introduce `Message.deliveryStatus` (`DELIVERED` | `FAILED`). When pre-send failure occurs, the attempted outbound message is persisted with `deliveryStatus: FAILED` and failure metadata, enabling the operator to view the failed attempt in the black app UI and trigger an idempotent `Retry failed message` action once the conversation is manually mapped.
+
 # TikTok Public Analytics Dashboard Live Data Architecture (2026-09-17)
 
 - **SSR-First Data Fetching with Direct Endpoint Routing**:

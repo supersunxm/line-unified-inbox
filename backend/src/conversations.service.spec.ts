@@ -1060,4 +1060,171 @@ void test("replyToken fields are never exposed in safeMessage", () => {
   assert.equal(safe.lineReplyTokenReceivedAt, undefined);
   assert.equal(safe.lineReplyTokenUsedAt, undefined);
   assert.equal(safe.id, "msg-1");
+  assert.equal(safe.deliveryStatus, "DELIVERED");
+});
+
+void test("outbound send failure with RESOLVE_AMBIGUOUS persists message with FAILED deliveryStatus", async () => {
+  let createdMessageData: any = null;
+  const conversation = {
+    id: "conv-max",
+    storeId: "store-1",
+    store: { name: "OPPO BS RBS Chonburi" },
+    customer: { lineUserId: "Ucustomer_max" },
+    lineOfficialAccount: { id: "oa-1", isActive: true, archivedAt: null, encryptedChannelAccessToken: "cipher" },
+    _count: { messages: 1 },
+  };
+
+  const prisma = {
+    message: {
+      findUnique: async () => null,
+      upsert: async ({ create }: any) => {
+        createdMessageData = create;
+        return { id: "msg-failed-1", ...create };
+      },
+    },
+    conversation: {
+      findUnique: async () => conversation,
+      findMany: async () => [],
+    },
+  } as unknown as PrismaService;
+
+  const encryption = { decrypt: () => "token" } as unknown as CredentialEncryptionService;
+  const lineMessaging = {
+    pushText: async () => {
+      throw new Error("ยังจับคู่ลูกค้ากับ LINE OA Manager ไม่สำเร็จ (RESOLVE_AMBIGUOUS)");
+    },
+  } as unknown as LineMessagingService;
+
+  const service = new ConversationsService(prisma, noopOperations, encryption, lineMessaging);
+
+  await assert.rejects(
+    () =>
+      service.sendMessage(
+        "conv-max",
+        { text: "Hello Max", idempotencyKey: "123e4567-e89b-42d3-a456-426614174099" },
+        { id: "op-1", email: "op@test.com", displayName: "Staff", role: UserRole.VIEWER, isActive: true },
+      ),
+    /RESOLVE_AMBIGUOUS/,
+  );
+
+  assert.ok(createdMessageData, "Failed message record must be created");
+  assert.equal(createdMessageData.deliveryStatus, "FAILED");
+  assert.equal(createdMessageData.originalText, "Hello Max");
+  assert.equal(createdMessageData.rawPayload.failedPreSend, true);
+});
+
+void test("retryFailedMessage resends message using durable mapping and marks it DELIVERED", async () => {
+  const messageRecord: any = {
+    id: "msg-failed-1",
+    conversationId: "conv-max",
+    externalMessageId: "outbound:idemp-1",
+    direction: MessageDirection.OUTBOUND,
+    deliveryStatus: "FAILED",
+    originalText: "Hello Max",
+    rawPayload: { failedPreSend: true },
+    conversation: {
+      id: "conv-max",
+      storeId: "store-1",
+      store: { name: "OPPO BS RBS Chonburi" },
+      customer: { lineUserId: "Ucustomer_max" },
+      lineOfficialAccount: { id: "oa-1", isActive: true, archivedAt: null, encryptedChannelAccessToken: "cipher" },
+      _count: { messages: 1 },
+    },
+  };
+
+  let pushCalled = false;
+  let updatedMessageData: any = null;
+
+  const prisma = {
+    message: {
+      findUnique: async () => messageRecord,
+      update: async ({ data }: any) => {
+        updatedMessageData = data;
+        return { ...messageRecord, ...data };
+      },
+    },
+    conversation: {
+      update: async () => ({}),
+      updateMany: async () => ({ count: 0 }),
+    },
+    activityHistory: {
+      create: async () => ({}),
+    },
+    $transaction: async (fn: any) => fn({
+      message: {
+        update: async ({ data }: any) => {
+          updatedMessageData = data;
+          return { ...messageRecord, ...data };
+        },
+      },
+      conversation: {
+        update: async () => ({}),
+        updateMany: async () => ({ count: 0 }),
+      },
+      activityHistory: {
+        create: async () => ({}),
+      },
+    }),
+  } as unknown as PrismaService;
+
+  const encryption = { decrypt: () => "token" } as unknown as CredentialEncryptionService;
+  const lineMessaging = {
+    pushText: async () => {
+      pushCalled = true;
+      return { requestId: "req-1", acceptedRequestId: null, externalMessageId: "line-msg-1", duplicateAccepted: false };
+    },
+  } as unknown as LineMessagingService;
+
+  const service = new ConversationsService(prisma, noopOperations, encryption, lineMessaging);
+
+  const result = await service.retryFailedMessage(
+    "conv-max",
+    "msg-failed-1",
+    { id: "op-1", email: "op@test.com", displayName: "Staff", role: UserRole.VIEWER, isActive: true },
+  );
+
+  assert.equal(pushCalled, true);
+  assert.equal(updatedMessageData.deliveryStatus, "DELIVERED");
+  assert.equal(result.message.deliveryStatus, "DELIVERED");
+  assert.equal(result.duplicate, false);
+});
+
+void test("retryFailedMessage is idempotent and does NOT duplicate already-delivered messages", async () => {
+  const deliveredMessage: any = {
+    id: "msg-delivered-1",
+    conversationId: "conv-max",
+    direction: MessageDirection.OUTBOUND,
+    deliveryStatus: "DELIVERED",
+    originalText: "Hello Max",
+    rawPayload: { providerMessageId: "line-msg-1" },
+    conversation: {
+      id: "conv-max",
+      customer: { lineUserId: "Ucustomer_max" },
+      lineOfficialAccount: { isActive: true },
+    },
+  };
+
+  let pushCalled = false;
+  const prisma = {
+    message: { findUnique: async () => deliveredMessage },
+  } as unknown as PrismaService;
+
+  const lineMessaging = {
+    pushText: async () => {
+      pushCalled = true;
+      return {} as any;
+    },
+  } as unknown as LineMessagingService;
+
+  const service = new ConversationsService(prisma, noopOperations, {} as any, lineMessaging);
+
+  const result = await service.retryFailedMessage(
+    "conv-max",
+    "msg-delivered-1",
+    { id: "op-1", email: "op@test.com", displayName: "Staff", role: UserRole.VIEWER, isActive: true },
+  );
+
+  assert.equal(pushCalled, false, "Push API must NOT be called for already-delivered messages");
+  assert.equal(result.duplicate, true);
+  assert.equal(result.message.deliveryStatus, "DELIVERED");
 });

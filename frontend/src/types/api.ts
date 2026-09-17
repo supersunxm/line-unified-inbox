@@ -117,6 +117,7 @@ export type ApiConversation = {
     media: { processingStatus: "PENDING" | "READY" | "FAILED" | "SKIPPED"; mimeType: string | null; fileSize: number | null; url: string | null } | null;
     latitude: number | null;
     longitude: number | null;
+    deliveryStatus?: "DELIVERED" | "FAILED" | null;
   }>;
   products: Array<{ source: string | null; confidence: number | null; matchedPhrase?: string | null; detectionMethod?: string | null; productModel: { id: string; name: string; classificationLevel?: string; productSeries: { id: string; name: string; productGroup?: string } } }>;
   topics: Array<{ source: string | null; confidence: number | null; topic: { id: string; name: string; category: string } }>;

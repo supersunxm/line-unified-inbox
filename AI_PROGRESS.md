@@ -1,3 +1,36 @@
+# 2026-09-17: LINE Chat Durable Manual Mapping & Outbound Send Recovery [COMPLETED & VERIFIED]
+- **Current Task**: Implement durable manual identity mapping for LINE Chat customers, upgrade LINE Chat Health with an unresolved mapping backlog modal, provide an admin manual mapping split-pane workflow, unblock nickname synchronization, and implement safe, idempotent outbound message failure recovery.
+- **Completed Work**:
+  - **Phase 1 Architecture Audit**:
+    - Confirmed canonical durable identity is stored directly on `Conversation.lineChatUserId`.
+    - Confirmed no secondary mapping table exists or should be created.
+    - Confirmed outbound send path (`LineChatManagerMessageRelayWorkerService`) already consumes `Conversation.lineChatUserId` directly and skips resolution if present.
+    - Confirmed `RESOLVE_AMBIGUOUS` occurs when `lineChatUserId` is missing and multiple chats match the customer's display name, throwing a 503 `ServiceUnavailableException` which aborts before the outbound message is persisted.
+    - Confirmed both nickname sync jobs and outbound sending share `Conversation.lineChatUserId`.
+    - Confirmed existing migrations are fully aligned (141 migrations verified and applied).
+  - **Phase 2 Schema Migration & Backend Services**:
+    - Extended Prisma schema with `lineChatMappingSource`, `lineChatMappedAt`, and `lineChatMappedById` on `Conversation`, and `deliveryStatus` on `Message`.
+    - Created and applied migration `20260917160000_add_line_chat_manual_mapping_and_delivery_status`.
+    - Implemented `LineChatManualMappingService` with `getUnresolvedBacklog()`, `getMappingCandidates()`, and `bindManualMapping()`. Enforced strict same-OA validation, conflict detection, explicit override requirement, and audit history logging.
+    - Implemented `retryFailedMessage(conversationId, messageId, operator)` in `ConversationsService` with idempotency guards and delivery status updates.
+    - Exposed ADMIN-protected endpoints in `LineChatOperationsController` and `ConversationsController`.
+  - **Phase 3 & 4 LINE Chat Health UI & Manual Mapping Workflow**:
+    - Upgraded "Waiting for mapping" card on `/operations/line-chat-health` to be clickable with interactive hover states.
+    - Implemented `LineChatUnresolvedBacklogModal` listing all unresolved conversations with mapping reasons (`RESOLVE_AMBIGUOUS`, `RESOLVE_NO_MATCH`, `RESOLVE_CONFLICT`), latest inbound previews, and direct action triggers.
+    - Implemented `LineChatManualMappingModal` with a split-pane layout: Left pane displays internal conversation message history; Right pane displays verified LINE Chat candidates for the same OA only, controlled keyword search, conflict alerts, and a mandatory confirmation step.
+  - **Phase 5 & 6 Outbound Failure Recovery & Black App UI**:
+    - Updated `ConversationsService.sendMessage` to persist failed pre-send attempts with `deliveryStatus: FAILED`.
+    - Upgraded black app (`MobileChatsApp`) and desktop chat (`app/page.tsx`) to highlight failed outbound messages with visual alerts and provide an immediate, idempotent "ลองส่งอีกครั้ง" (Retry) action.
+- **Checks Run & Passed**:
+  - Database migration applied: `20260917160000_add_line_chat_manual_mapping_and_delivery_status`.
+  - Targeted unit tests: 41/41 passed (`src/line-chat/line-chat-manual-mapping.spec.ts` & `src/conversations.service.spec.ts`).
+  - LINE Chat operational & resolver test suites: 69/69 passed.
+  - Frontend ESLint on modified files: 0 errors.
+  - Frontend production build: `next build` succeeded with all 44 routes generated.
+  - Backend production build: `prisma generate && nest build` succeeded with 0 errors.
+- **Next Action**: Output final delivery report to user with exact validation steps for the RBS Chonburi / Max scenario.
+
+
 # 2026-09-17: TikTok Analytics Production Deployment & Verification [COMPLETED & VERIFIED]
 - **Current Task**: Deploy TikTok Analytics live data dashboard and single-store analytics to production, verify live backend and frontend endpoints, conduct smoke tests, and confirm zero regression.
 - **Completed Work**:
