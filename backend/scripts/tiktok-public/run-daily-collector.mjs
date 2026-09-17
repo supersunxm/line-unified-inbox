@@ -146,14 +146,28 @@ export class StateManager {
   static load() {
     if (!fs.existsSync(STATE_FILE_PATH)) {
       return {
+        metricDate: null,
         lastSuccessfulMetricDate: null,
         lastRunStartedAt: null,
         lastRunCompletedAt: null,
         status: null,
-        totalUniqueAccounts: 0,
-        successAccounts: 0,
+        catalogAccounts: 0,
+        successfulAccounts: 0,
+        verifiedNotFoundAccounts: 0,
+        unresolvedAccounts: 0,
         failedAccounts: 0,
+        providerDistribution: {
+          COUNTIK: 0,
+          TOKCOUNTER: 0,
+          TIKTOK_DIRECT: 0,
+        },
+        providerHealth: {
+          COUNTIK: "HEALTHY",
+          TOKCOUNTER: "HEALTHY",
+          TIKTOK_DIRECT: "HEALTHY",
+        },
         unresolvedUsernames: [],
+        verifiedNotFoundUsernames: [],
       };
     }
     try {
@@ -167,6 +181,7 @@ export class StateManager {
     fs.writeFileSync(STATE_FILE_PATH, JSON.stringify(state, null, 2), "utf8");
   }
 }
+
 
 /**
  * Resolves current Bangkok date YYYY-MM-DD.
@@ -317,10 +332,32 @@ export async function runDailyCollector(cliOptions = {}) {
       logger.log(`Limited execution to ${targets.length} accounts.`);
     }
 
+    let latestRecordedMetricDate = null;
     if (!cliOptions.dryRun) {
       prisma = getProductionPrismaClient();
       await prisma.$connect();
       logger.log("Connected to PostgreSQL production database.");
+
+      // Audit latest recorded metric date to detect missed runs
+      try {
+        const latestMetric = await prisma.tikTokPublicDailyMetric.findFirst({
+          orderBy: { metricDate: "desc" },
+          select: { metricDate: true },
+        });
+        if (latestMetric?.metricDate) {
+          latestRecordedMetricDate = latestMetric.metricDate.toISOString().slice(0, 10);
+          logger.log(`Latest recorded metric date in DB: ${latestRecordedMetricDate}`);
+
+          const expectedPrevDate = offsetBangkokDate(targetMetricDate, -1);
+          if (latestRecordedMetricDate < expectedPrevDate) {
+            logger.warn(
+              `[MISSED_SNAPSHOT_AUDIT] Gap detected between latest DB metric date (${latestRecordedMetricDate}) and target (${targetMetricDate}). Note: Historical TikTok public followers cannot be fetched retrospectively and skipped days are classified as MISSED_SNAPSHOT to avoid fabricating historical data.`
+            );
+          }
+        }
+      } catch (err) {
+        logger.warn(`Could not query latest metric date: ${err.message}`);
+      }
     }
 
     // Check already collected accounts for targetMetricDate to enable graceful resume
@@ -349,6 +386,7 @@ export async function runDailyCollector(cliOptions = {}) {
       }
     }
 
+
     // 2. Launch single Playwright Chromium browser instance
     logger.log("Launching local Playwright Chromium instance...");
     browser = await chromium.launch({
@@ -372,6 +410,8 @@ export async function runDailyCollector(cliOptions = {}) {
 
     const results = [];
     const successfulAccounts = [];
+    const verifiedNotFoundAccounts = [];
+    const unresolvedAccounts = [];
     const failedAccounts = [];
 
     // 3. Sequential Collection Loop
@@ -570,6 +610,34 @@ export async function runDailyCollector(cliOptions = {}) {
           durationMs: extraction.durationMs,
           source: extraction.source,
         });
+      } else if (extraction.status === "PROFILE_NOT_FOUND") {
+        logger.log(
+          `  -> VERIFIED_PROFILE_NOT_FOUND: @${target.username} confirmed non-existent via ${extraction.notFoundAttempts?.length || 1} independent source(s) (${extraction.durationMs || 0}ms)`
+        );
+        verifiedNotFoundAccounts.push({
+          username: target.username,
+          stores: target.stores,
+          status: "PROFILE_NOT_FOUND",
+          durationMs: extraction.durationMs || 0,
+        });
+      } else if (extraction.status === "UNRESOLVED") {
+        logger.warn(
+          `  -> UNRESOLVED: @${target.username} lacks independent 404 confirmation (${extraction.error || "unresolved"}) (${extraction.durationMs || 0}ms)`
+        );
+        unresolvedAccounts.push({
+          username: target.username,
+          stores: target.stores,
+          status: "UNRESOLVED",
+          error: extraction.error,
+          durationMs: extraction.durationMs || 0,
+        });
+        failedAccounts.push({
+          username: target.username,
+          stores: target.stores,
+          status: "UNRESOLVED",
+          error: extraction.error,
+          durationMs: extraction.durationMs || 0,
+        });
       } else {
         logger.warn(
           `  -> FAILED: status=${extraction.status}, error=${extraction.error || "unknown"} (${extraction.durationMs || 0}ms)`
@@ -601,16 +669,44 @@ export async function runDailyCollector(cliOptions = {}) {
       failedAccounts.length === 0
         ? "SUCCESS"
         : successfulAccounts.length > 0
-        ? "PARTIAL_SUCCESS"
+        ? "PARTIAL"
         : "FAILED";
+
+    const providerDistribution = {
+      COUNTIK: 0,
+      TOKCOUNTER: 0,
+      TIKTOK_DIRECT: 0,
+    };
+    for (const acc of successfulAccounts) {
+      if (acc.source && providerDistribution[acc.source] !== undefined) {
+        providerDistribution[acc.source]++;
+      }
+    }
+
+    const providerHealth = {
+      COUNTIK: providerManager.rateLimitedForRun.has("COUNTIK") ? "RATE_LIMITED" : "HEALTHY",
+      TOKCOUNTER: providerManager.rateLimitedForRun.has("TOKCOUNTER") ? "RATE_LIMITED" : "HEALTHY",
+      TIKTOK_DIRECT: providerManager.rateLimitedForRun.has("TIKTOK_DIRECT") ? "RATE_LIMITED" : "HEALTHY",
+    };
 
     logger.log("==================================================");
     logger.log(`COLLECTOR RUN SUMMARY [${overallStatus}]`);
-    logger.log(`Total Target Accounts: ${targets.length}`);
-    logger.log(`Successful Accounts:   ${successfulAccounts.length}`);
-    logger.log(`Failed Accounts:       ${failedAccounts.length}`);
-    logger.log(`Elapsed Time:          ${elapsedSeconds}s (avg ${(elapsedSeconds / targets.length).toFixed(2)}s/account)`);
+    logger.log(`Total Target Accounts:    ${targets.length}`);
+    logger.log(`Successful Accounts:      ${successfulAccounts.length}`);
+    logger.log(`Verified Not Found:       ${verifiedNotFoundAccounts.length}`);
+    logger.log(`Unresolved Accounts:      ${unresolvedAccounts.length}`);
+    logger.log(`Failed Accounts:          ${failedAccounts.length}`);
+    logger.log(`Provider Distribution:    COUNTIK=${providerDistribution.COUNTIK}, TOKCOUNTER=${providerDistribution.TOKCOUNTER}, TIKTOK_DIRECT=${providerDistribution.TIKTOK_DIRECT}`);
+    logger.log(`Provider Health:          COUNTIK=${providerHealth.COUNTIK}, TOKCOUNTER=${providerHealth.TOKCOUNTER}, TIKTOK_DIRECT=${providerHealth.TIKTOK_DIRECT}`);
+    logger.log(`Elapsed Time:             ${elapsedSeconds}s (avg ${(elapsedSeconds / targets.length).toFixed(2)}s/account)`);
     logger.log("==================================================");
+
+    if (verifiedNotFoundAccounts.length > 0) {
+      logger.log("Verified non-existent accounts in catalog:");
+      for (const v of verifiedNotFoundAccounts) {
+        logger.log(`  - @${v.username} (stores: ${v.stores.map((s) => s.storeId).join(",")})`);
+      }
+    }
 
     if (failedAccounts.length > 0) {
       logger.warn("Failed accounts breakdown:");
@@ -622,17 +718,24 @@ export async function runDailyCollector(cliOptions = {}) {
     // 4. Update Durable State
     if (!cliOptions.dryRun) {
       const state = {
+        metricDate: targetMetricDate,
         lastSuccessfulMetricDate:
-          overallStatus === "SUCCESS" || overallStatus === "PARTIAL_SUCCESS"
+          overallStatus === "SUCCESS" || overallStatus === "PARTIAL"
             ? targetMetricDate
             : StateManager.load().lastSuccessfulMetricDate,
         lastRunStartedAt: referenceNow.toISOString(),
         lastRunCompletedAt: new Date().toISOString(),
         status: overallStatus,
-        totalUniqueAccounts: targets.length,
-        successAccounts: successfulAccounts.length,
+        catalogAccounts: targets.length,
+        successfulAccounts: successfulAccounts.length,
+        verifiedNotFoundAccounts: verifiedNotFoundAccounts.length,
+        unresolvedAccounts: unresolvedAccounts.length,
         failedAccounts: failedAccounts.length,
-        unresolvedUsernames: failedAccounts.map((f) => f.username),
+        providerDistribution,
+        providerHealth,
+        unresolvedUsernames: unresolvedAccounts.map((f) => f.username),
+        verifiedNotFoundUsernames: verifiedNotFoundAccounts.map((v) => v.username),
+        failedUsernames: failedAccounts.map((f) => f.username),
       };
       StateManager.save(state);
       logger.log(`Saved state to ${STATE_FILE_PATH}`);
@@ -640,13 +743,19 @@ export async function runDailyCollector(cliOptions = {}) {
 
     return {
       status: overallStatus,
-      success: overallStatus === "SUCCESS" || overallStatus === "PARTIAL_SUCCESS",
+      success: overallStatus === "SUCCESS" || overallStatus === "PARTIAL",
       metricDate: targetMetricDate,
       totalTargets: targets.length,
       successCount: successfulAccounts.length,
+      verifiedNotFoundCount: verifiedNotFoundAccounts.length,
+      unresolvedCount: unresolvedAccounts.length,
       failedCount: failedAccounts.length,
+      providerDistribution,
+      providerHealth,
       elapsedSeconds,
       successfulAccounts,
+      verifiedNotFoundAccounts,
+      unresolvedAccounts,
       failedAccounts,
     };
   } catch (err) {
