@@ -1,3 +1,25 @@
+# 2026-09-17: TikTok Multi-Provider Public Metrics Collector & Production Hardening (Metric Date: 2026-09-16) [COMPLETED & VERIFIED]
+- **Current Task**: Harden multi-provider public TikTok metrics collector with independent `PROFILE_NOT_FOUND` consensus, authoritative direct evidence rules, and run-scoped rate-limit circuit breakers.
+- **Completed Work**:
+  - **Issue 1 — PROFILE_NOT_FOUND Independent Consensus & Direct Evidence**:
+    - Enforced Rule A: requires independent agreement from at least 2 distinct providers before classifying an account as `PROFILE_NOT_FOUND`.
+    - Enforced Rule B: permits single direct evidence from `TIKTOK_DIRECT` only when authoritative official TikTok error codes (`10221` / `ACCOUNT_NOT_FOUND` / `"TikTok account not found."`) are explicitly returned.
+    - If only 1 third-party provider reports 404 while others are rate-limited or unavailable, returns `UNRESOLVED` instead of falsely marking the account non-existent.
+    - Preserved candidate username resolution (checking `rawUrl` and hyphen replacements) prior to final status evaluation.
+  - **Issue 2 — Run-Scoped Rate Limit Circuit Breaker**:
+    - Added `rateLimitedForRun` set to `TikTokPublicProviderManager`. When any provider returns `RATE_LIMITED` (HTTP 403 / 429), it is immediately disabled for the remainder of the collector run.
+    - Prevents re-querying or hammering rate-limited providers during long batch runs (e.g. 150 accounts) even if local timer cooldowns expire.
+    - Full eligibility automatically resets upon creating a fresh `ProviderManager` instance on the next daily collector invocation.
+  - **Regression Test Suites**:
+    - Added Issue 1 Cases 1–5 and Issue 2 Cases A–D to `backend/src/tiktok/tiktok-multi-provider.spec.ts`. All 59 tests across 14 suites passed cleanly.
+  - **Baseline Verification**:
+    - Verified PostgreSQL production baseline for `2026-09-16` remains 100% intact: 148 exact metrics, 0 non-exact, 0 duplicate metrics, 149 mapped StoreMaster rows (74 TOKCOUNTER, 74 COUNTIK), 2 verified non-existent accounts (`@o_lotusbanbueng`, `@oppo_kamthieng01`).
+- **Checks Run & Passed**:
+  - `npx tsx --test src/tiktok/tiktok-multi-provider.spec.ts src/tiktok/tokcounter-collector.spec.ts src/tiktok/tiktok-public-analytics.service.spec.ts src/tiktok/tiktok-public-profile.spec.ts`: 59/59 tests passed.
+  - `npm run build` in backend: passed cleanly (`prisma generate && nest build`).
+  - Database audit: 148 metrics for `2026-09-16`, 148 exact, 0 non-exact, 0 duplicates.
+- **Next Action**: Create focused local commits and provide final report. Do NOT push.
+
 # 2026-09-17: Google Review 2026-09-16 Recovery & Week-Boundary Catch-Up Fix [COMPLETED & VERIFIED]
 - **Current Task**: Recover missing Google Review Daily KPI for `2026-09-16`, reconcile Week 3 total, implement permanent week-boundary catch-up fix, stagger TikTok collector in launchd, and verify clean idempotent kickstart.
 - **Completed Work**:

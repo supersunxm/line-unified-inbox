@@ -1,3 +1,24 @@
+# TikTok Multi-Provider Public Metrics Architecture & Failover (2026-09-17)
+
+- **Independent Multi-Provider Discovery vs Anti-Abuse Bypass**:
+  Rather than attempting to bypass TokCounter's local host IP rate limits (which would violate policies and be fragile), we conducted real-world live audits across 8 candidate public counter providers.
+  - **Countik (`https://countik.com/`)**: Identified as a robust, fully independent public provider exposing exact integer stats (`followerCount`, `followingCount`, `heartCount`, `videoCount`) via its public endpoint with standard browser headers. Tested across all catalog accounts with ~200–500ms latency, zero CAPTCHA, and 100% exact integer precision.
+  - **TokCounter (`https://tokcounter.com/`)**: Retained as a verified exact provider using Playwright DOM odometer extraction, placed into automatic `COOLDOWN` status whenever HTTP 403 / rate limits occur.
+  - **TikTok Direct Web Hydration (`probeTikTokPublicProfile`)**: Serves as tertiary fallback using direct web hydration payloads.
+  - **Rejected Providers**: `tokcount.com` and `livecounts.io` were rejected because they share TokCounter's backend API (`tiktok-api.tokcounter.com`); `tokplex.com` and `zafame.com` were rejected because they return display-rounded numbers (e.g. 14k); `famoid.com` was rejected due to Cloudflare Turnstile CAPTCHA.
+
+- **Adapter Abstraction & Provider Lifecycle State Machine**:
+  Each provider implements `BaseTikTokProviderAdapter` managing an in-memory lifecycle state: `HEALTHY`, `COOLDOWN`, `DEGRADED`, and `UNAVAILABLE`. When a provider returns `RATE_LIMITED` (HTTP 403 or 429), it automatically transitions to `COOLDOWN` with a configurable backoff (e.g. 10 minutes for TokCounter, 5 minutes for Countik). `TikTokPublicProviderManager` immediately skips providers in cooldown, preventing wasteful network requests and hammering.
+
+- **Exactness Assertion & Anomaly Guard**:
+  Every provider result is strictly validated via `assertExactProviderResult()`, which fails closed if `followerCount` is not a safe, non-negative integer or if `precision !== "EXACT"`. Additionally, a suspicious jump guard flags any sudden metric jump exceeding 10x and 50,000 followers compared to previous history, triggering cross-validation against another healthy provider.
+
+- **Candidate Handle Resolution for Catalog Typo Resilience**:
+  Catalog discrepancies in Google Sheets (e.g. StoreMaster row having `o-themallthaphra` with hyphen, but TikTok profile URL having `o_themallthaphra` with underscore) previously caused 404s. `extractWithFailover` generates candidate handles from `rawUrl` and hyphen replacements. If the primary handle reports `PROFILE_NOT_FOUND`, the manager automatically tests the candidates before declaring the account missing.
+
+- **Honest Non-Existent Account Reconciliation**:
+  For accounts that legitimately do not exist on TikTok (`o_lotusbanbueng` and `oppo_kamthieng01`), verified by HTTP 404 on Countik, DOM absence, and official TikTok error code 10221 (`ACCOUNT_NOT_FOUND`) on direct probe, the collector records `PROFILE_NOT_FOUND`. No synthetic or fabricated data is ever persisted.
+
 # Google Review Week-Boundary Catch-Up & Launchd Schedule Stagger (2026-09-17)
 
 - **Week-Boundary Finalization vs Arbitrary Closed Weeks**:
