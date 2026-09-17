@@ -117,6 +117,8 @@ function paymentLabel(paymentMethod: string | null) {
   if (paymentMethod === "CASH") return "สด";
   if (paymentMethod === "INSTALLMENT") return "ผ่อน";
   if (paymentMethod === "CREDIT_CARD") return "บัตรเครดิต";
+  if (paymentMethod === "UFUND") return "Ufund";
+  if (paymentMethod === "SG_FINANCE") return "SG";
   if (paymentMethod === "OTHER") return "อื่น ๆ";
   return null;
 }
@@ -127,6 +129,49 @@ function salesStatusLabel(status: string | null) {
   if (status === "INTERESTED") return "สนใจ";
   if (status === "FILM") return "ฟิล์ม";
   return status;
+}
+
+function csvCell(value: string | null | undefined) {
+  const raw = value ?? "";
+  const safe = /^[=+\-@]/.test(raw) ? `'${raw}` : raw;
+  return `"${safe.replace(/"/g, '""')}"`;
+}
+
+function downloadBlockedCustomersCsv(customers: BlockedCustomer[]) {
+  const headers = [
+    "customer_name",
+    "tagging_status",
+    "payment_method",
+    "product_summary",
+    "mapping_reason",
+    "sales_recorded_at",
+    "latest_message_at",
+    "conversation_id",
+    "job_id",
+    "chat_url",
+  ];
+  const rows = customers.map((customer) => [
+    customer.customerName?.trim() || "",
+    customer.customerSalesStatus || "",
+    customer.paymentMethod || "",
+    customer.productSummary || "",
+    customer.reason,
+    customer.salesRecordedAt || "",
+    customer.latestMessageAt || "",
+    customer.conversationId,
+    customer.jobId,
+    new URL(`/chats?conversationId=${encodeURIComponent(customer.conversationId)}`, window.location.origin).toString(),
+  ]);
+  const csv = `\uFEFF${[headers, ...rows].map((row) => row.map((value) => csvCell(value)).join(",")).join("\r\n")}`;
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `profile-b-blocked-mapping-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
 }
 
 export function LineChatPendingControlAction() {
@@ -337,9 +382,14 @@ export function LineChatPendingControlAction() {
 
           {runProgress.blockedMapping > 0 && (runProgress.blockedCustomers?.length ?? 0) > 0 ? (
             <div className="border-t border-[var(--app-border)] pt-3">
-              <Button size="sm" variant="outline" onClick={() => setShowBlockedCustomers((value) => !value)}>
-                {showBlockedCustomers ? "ซ่อนรายชื่อ" : `ดูรายชื่อลูกค้าที่ติด Mapping (${runProgress.blockedCustomers?.length ?? 0})`}
-              </Button>
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" variant="outline" onClick={() => setShowBlockedCustomers((value) => !value)}>
+                  {showBlockedCustomers ? "ซ่อนรายชื่อ" : `ดูรายชื่อลูกค้าที่ติด Mapping (${runProgress.blockedCustomers?.length ?? 0})`}
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => downloadBlockedCustomersCsv(runProgress.blockedCustomers ?? [])}>
+                  ดาวน์โหลด CSV
+                </Button>
+              </div>
               {showBlockedCustomers ? (
                 <div className="mt-2 max-h-64 space-y-2 overflow-auto pr-1">
                   {runProgress.blockedCustomers?.map((customer) => {
