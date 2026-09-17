@@ -11,6 +11,21 @@ export type AndroidRelease = {
 
 export const androidReleases: AndroidRelease[] = [
   {
+  version: "1.1.32",
+  build: 52,
+  releasedAt: "2026-09-17",
+  releasedAtDisplay: "17 กันยายน 2026",
+  size: "60.7 MB",
+  fileName: "oppo-line-oa-chat-v1.1.32-production.apk",
+  sha256: "9d68f9d4a5e226a984c67a623c1c908391be8f0c81d6d2d513353bc02de7537d",
+  notes: [
+    "ปรับ Payment Method ในหน้า Tagging เป็น Cash, Installment และ Other",
+    "เมื่อเลือก Installment สามารถเลือก Credit Card, Ufund หรือ SG Finance ได้",
+    "ชื่อใน LINE OA Manager ใช้ ผ่อน, Ufund หรือ SG ตามประเภทการผ่อนที่เลือก",
+    "รองรับข้อมูล Installment เดิมโดยไม่แก้ไขประวัติการขายเดิม",
+  ],
+},
+  {
   version: "1.1.31",
   build: 51,
   releasedAt: "2026-09-17",
