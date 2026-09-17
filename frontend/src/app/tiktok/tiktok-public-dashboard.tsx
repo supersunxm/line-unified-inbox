@@ -6,6 +6,7 @@ import { useMemo, useState, useTransition } from "react";
 import { PageContainer } from "@/components/shell";
 import { useAppLanguage } from "../language";
 import type { TikTokPublicDashboardOverview, TikTokPublicDashboardStore } from "./tiktok-public-api";
+import { formatDashboardTimestamp } from "./tiktok-public-timestamp";
 
 type Props = {
   overview: TikTokPublicDashboardOverview;
@@ -54,6 +55,7 @@ export function TikTokPublicDashboard({ overview, stores }: Props) {
   const { language } = useAppLanguage();
   const locale = language === "th" ? "th-TH" : language === "zh" ? "zh-CN" : "en-US";
   const router = useRouter();
+  const timestampLabel = formatDashboardTimestamp(overview.latestMetricDate, overview.lastUpdatedAt, locale, language);
   const [query, setQuery] = useState("");
   const [region, setRegion] = useState("ALL");
   const [sort, setSort] = useState("followers");
@@ -185,9 +187,9 @@ export function TikTokPublicDashboard({ overview, stores }: Props) {
               <p className="mt-3 max-w-xl text-sm leading-6 text-white/60 sm:text-base">{text.subtitle}</p>
             </div>
             <div className="flex flex-wrap items-center gap-2 text-xs">
-              {overview.lastUpdatedAt && (
-                <span className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-2 font-medium text-white/60">
-                  {text.updated}: {new Intl.DateTimeFormat(locale, { timeZone: "Asia/Bangkok", day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(overview.lastUpdatedAt))}
+              {timestampLabel && (
+                <span className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-2 font-medium text-white/70">
+                  {timestampLabel}
                 </span>
               )}
               <span className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-2 font-semibold text-white/75">{text.exact}</span>

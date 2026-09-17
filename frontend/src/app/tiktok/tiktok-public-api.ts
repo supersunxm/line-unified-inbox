@@ -35,6 +35,7 @@ export type TikTokPublicDashboardOverview = {
   totalLikes: number;
   totalVideos: number;
   lastUpdatedAt: string | null;
+  latestMetricDate?: string | null;
 };
 
 export type TikTokPublicHistoryPoint = {

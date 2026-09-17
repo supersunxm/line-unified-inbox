@@ -59,6 +59,7 @@ export interface TikTokPublicDashboardOverview {
   totalLikes: number;
   totalVideos: number;
   lastUpdatedAt: string | null;
+  latestMetricDate: string | null;
 }
 
 export interface TikTokPublicHistoryPoint {
@@ -376,6 +377,10 @@ export class TikTokPublicAnalyticsService {
 
   async getDashboardOverview(): Promise<TikTokPublicDashboardOverview> {
     const stores = await this.listDashboardStores();
+    const latestMetricRow = await this.prisma.tikTokPublicDailyMetric.findFirst({
+      orderBy: { metricDate: "desc" },
+      select: { metricDate: true },
+    });
     return {
       trackedStores: stores.length,
       totalFollowers: stores.reduce((sum, store) => sum + store.followerCount, 0),
@@ -385,6 +390,7 @@ export class TikTokPublicAnalyticsService {
         if (!latest || store.lastFetchedAt > latest) return store.lastFetchedAt;
         return latest;
       }, null),
+      latestMetricDate: latestMetricRow ? isoDate(latestMetricRow.metricDate) : null,
     };
   }
 
