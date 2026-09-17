@@ -1,0 +1,290 @@
+name: Apply installment finance options patch
+
+on:
+  push:
+    branches:
+      - feat/installment-finance-options
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/installment-finance-options
+          fetch-depth: 0
+
+      - name: Apply focused source changes
+        shell: bash
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              p = Path(path)
+              text = p.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"Expected exactly one match in {path}, found {count}")
+              p.write_text(text.replace(old, new, 1))
+
+          replace_once(
+              "backend/prisma/schema.prisma",
+              """enum PaymentMethodType {
+            CASH
+            INSTALLMENT
+            CREDIT_CARD
+            OTHER
+          }""",
+              """enum PaymentMethodType {
+            CASH
+            INSTALLMENT
+            CREDIT_CARD
+            UFUND
+            SG_FINANCE
+            OTHER
+          }""",
+          )
+
+          replace_once(
+              "backend/src/line-chat-nickname.ts",
+              'paymentMethod?: "CASH" | "INSTALLMENT" | "CREDIT_CARD" | "OTHER" | null;',
+              'paymentMethod?: "CASH" | "INSTALLMENT" | "CREDIT_CARD" | "UFUND" | "SG_FINANCE" | "OTHER" | null;',
+          )
+          replace_once(
+              "backend/src/line-chat-nickname.ts",
+              '- PURCHASED -> "<compactModel> <สด|ผ่อน> <MM/YY>"',
+              '- PURCHASED -> "<compactModel> <สด|ผ่อน|Ufund|SG> <MM/YY>"',
+          )
+          replace_once(
+              "backend/src/line-chat-nickname.ts",
+              'Never truncates or removes paymentLabel (สด/ผ่อน) or month/year (MM/YY).',
+              'Never truncates or removes paymentLabel (สด/ผ่อน/Ufund/SG) or month/year (MM/YY).',
+          )
+          replace_once(
+              "backend/src/line-chat-nickname.ts",
+              '''  const paymentLabel = input.paymentMethod === "CASH"
+            ? "สด"
+            : input.paymentMethod === "INSTALLMENT"
+              ? "ผ่อน"
+              : null;''',
+              '''  const paymentLabel = input.paymentMethod === "CASH"
+            ? "สด"
+            : input.paymentMethod === "INSTALLMENT" || input.paymentMethod === "CREDIT_CARD"
+              ? "ผ่อน"
+              : input.paymentMethod === "UFUND"
+                ? "Ufund"
+                : input.paymentMethod === "SG_FINANCE"
+                  ? "SG"
+                  : null;''',
+          )
+
+          replace_once(
+              "android_app/lib/features/chat/widgets/conversation_tags_sheet.dart",
+              '''                                  'CREDIT_CARD' =>
+                                    '💳 ${appLocalizations(context).paymentCreditCard}',
+                                  'OTHER' =>''',
+              '''                                  'CREDIT_CARD' =>
+                                    '💳 ${appLocalizations(context).paymentCreditCard}',
+                                  'UFUND' => '💳 Ufund',
+                                  'SG_FINANCE' => '💳 SG Finance',
+                                  'OTHER' =>''',
+          )
+
+          replace_once(
+              "android_app/lib/features/chat/widgets/conversation_tags_sheet.dart",
+              '''  String? get _selectedOnlineSourceOption =>
+              _onlineSourceOptions.contains(_onlineSource)
+                  ? _onlineSource
+                  : _onlineSource == null
+                      ? null
+                      : 'Other';
+
+            bool get _hasValidFilmBrand {''',
+              '''  String? get _selectedOnlineSourceOption =>
+              _onlineSourceOptions.contains(_onlineSource)
+                  ? _onlineSource
+                  : _onlineSource == null
+                      ? null
+                      : 'Other';
+
+            bool get _isInstallmentPayment => const <String>{
+                  'INSTALLMENT',
+                  'CREDIT_CARD',
+                  'UFUND',
+                  'SG_FINANCE',
+                }.contains(_paymentMethod);
+
+            bool get _hasValidFilmBrand {''',
+          )
+
+          replace_once(
+              "android_app/lib/features/chat/widgets/conversation_tags_sheet.dart",
+              '''  void _setPaymentMethod(String value, bool selected) {
+            setState(() {
+              _paymentMethod = selected ? value : null;
+              _dirty = true;
+            });
+          }
+
+            void _setStatus(String? status) {''',
+              '''  void _setPaymentMethod(String value, bool selected) {
+            setState(() {
+              _paymentMethod = selected ? value : null;
+              _dirty = true;
+            });
+          }
+
+            void _setInstallmentSelected(bool selected) {
+            setState(() {
+              if (selected) {
+                if (!_isInstallmentPayment) {
+                  _paymentMethod = 'CREDIT_CARD';
+                }
+              } else if (_isInstallmentPayment) {
+                _paymentMethod = null;
+              }
+              _dirty = true;
+            });
+          }
+
+            void _setInstallmentProvider(String value, bool selected) {
+            if (!selected) return;
+            _setPaymentMethod(value, true);
+          }
+
+            void _setStatus(String? status) {''',
+          )
+
+          replace_once(
+              "android_app/lib/features/chat/widgets/conversation_tags_sheet.dart",
+              '''                        _choice(
+                              'INSTALLMENT',
+                              '💳 ${l10n.installment}',
+                              _paymentMethod == 'INSTALLMENT',
+                              (selected) =>
+                                  _setPaymentMethod('INSTALLMENT', selected),
+                            ),
+                            _choice(
+                              'CREDIT_CARD',
+                              '💳 ${l10n.paymentCreditCard}',
+                              _paymentMethod == 'CREDIT_CARD',
+                              (selected) =>
+                                  _setPaymentMethod('CREDIT_CARD', selected),
+                            ),
+                            _choice(
+                              'OTHER',
+                              '🏷️ ${l10n.paymentOther}',
+                              _paymentMethod == 'OTHER',
+                              (selected) => _setPaymentMethod('OTHER', selected),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: AppSpacing.lg),''',
+              '''                        _choice(
+                              'INSTALLMENT',
+                              '💳 ${l10n.installment}',
+                              _isInstallmentPayment,
+                              _setInstallmentSelected,
+                            ),
+                            _choice(
+                              'OTHER',
+                              '🏷️ ${l10n.paymentOther}',
+                              _paymentMethod == 'OTHER',
+                              (selected) => _setPaymentMethod('OTHER', selected),
+                            ),
+                          ],
+                        ),
+                        if (_isInstallmentPayment) ...[
+                          const SizedBox(height: AppSpacing.md),
+                          Text(
+                            'Installment Type',
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleSmall
+                                ?.copyWith(fontWeight: FontWeight.w600),
+                          ),
+                          const SizedBox(height: AppSpacing.xs),
+                          Wrap(
+                            spacing: AppSpacing.sm,
+                            runSpacing: AppSpacing.xs,
+                            children: [
+                              _choice(
+                                'CREDIT_CARD',
+                                '💳 ${l10n.paymentCreditCard}',
+                                _paymentMethod == 'INSTALLMENT' ||
+                                    _paymentMethod == 'CREDIT_CARD',
+                                (selected) => _setInstallmentProvider(
+                                    'CREDIT_CARD', selected),
+                              ),
+                              _choice(
+                                'UFUND',
+                                'Ufund',
+                                _paymentMethod == 'UFUND',
+                                (selected) =>
+                                    _setInstallmentProvider('UFUND', selected),
+                              ),
+                              _choice(
+                                'SG_FINANCE',
+                                'SG Finance',
+                                _paymentMethod == 'SG_FINANCE',
+                                (selected) => _setInstallmentProvider(
+                                    'SG_FINANCE', selected),
+                              ),
+                            ],
+                          ),
+                        ],
+                        const SizedBox(height: AppSpacing.lg),''',
+          )
+
+          replace_once(
+              "android_app/test/tagging_test.dart",
+              '''    await tester.tap(find.widgetWithText(FilterChip, '○ 🏪 Store'));
+            await tester.tap(find.widgetWithText(ChoiceChip, '○ 💳 Installment'));
+            await tester.pumpAndSettle();
+
+            await tester.tap(find.text('+ Add Product').first);''',
+              '''    await tester.tap(find.widgetWithText(FilterChip, '○ 🏪 Store'));
+            await tester.tap(find.widgetWithText(ChoiceChip, '○ 💳 Installment'));
+            await tester.pumpAndSettle();
+
+            expect(find.text('Installment Type'), findsOneWidget);
+            expect(find.widgetWithText(ChoiceChip, '✓ 💳 Credit Card'), findsOneWidget);
+            expect(find.widgetWithText(ChoiceChip, '○ Ufund'), findsOneWidget);
+            expect(find.widgetWithText(ChoiceChip, '○ SG Finance'), findsOneWidget);
+
+            await tester.tap(find.widgetWithText(ChoiceChip, '○ Ufund'));
+            await tester.pumpAndSettle();
+            expect(find.widgetWithText(ChoiceChip, '✓ Ufund'), findsOneWidget);
+
+            await tester.tap(find.text('+ Add Product').first);''',
+          )
+          replace_once(
+              "android_app/test/tagging_test.dart",
+              "    expect(repository.currentSales?.paymentMethod, 'INSTALLMENT');",
+              "    expect(repository.currentSales?.paymentMethod, 'UFUND');",
+          )
+
+          migration = Path("backend/prisma/migrations/20260917043000_add_installment_finance_payment_methods/migration.sql")
+          migration.parent.mkdir(parents=True, exist_ok=True)
+          migration.write_text('''-- AlterEnum\nALTER TYPE "PaymentMethodType" ADD VALUE 'UFUND';\nALTER TYPE "PaymentMethodType" ADD VALUE 'SG_FINANCE';\n''')
+
+          test_file = Path("backend/src/line-chat-nickname.installment-finance.spec.ts")
+          test_file.write_text('''import { describe, expect, it } from "vitest";\nimport { buildLineChatNickname } from "./line-chat-nickname";\n\nconst baseInput = {\n  status: "PURCHASED" as const,\n  recordedAt: new Date("2026-09-16T08:00:00.000Z"),\n  products: [{ model: { name: "OPPO A5" } }],\n};\n\ndescribe("LINE chat installment finance nickname labels", () => {\n  it("keeps legacy INSTALLMENT as credit-card installment", () => {\n    expect(buildLineChatNickname({ ...baseInput, paymentMethod: "INSTALLMENT" }))\n      .toBe("A5 ผ่อน 09/26");\n  });\n\n  it("maps explicit credit card to ผ่อน", () => {\n    expect(buildLineChatNickname({ ...baseInput, paymentMethod: "CREDIT_CARD" }))\n      .toBe("A5 ผ่อน 09/26");\n  });\n\n  it("maps Ufund to Ufund", () => {\n    expect(buildLineChatNickname({ ...baseInput, paymentMethod: "UFUND" }))\n      .toBe("A5 Ufund 09/26");\n  });\n\n  it("maps SG Finance to SG", () => {\n    expect(buildLineChatNickname({ ...baseInput, paymentMethod: "SG_FINANCE" }))\n      .toBe("A5 SG 09/26");\n  });\n});\n''')
+          PY
+
+      - name: Remove temporary patch workflow
+        run: rm .github/workflows/apply-installment-finance-options.yml
+
+      - name: Commit patch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "feat(tagging): add installment finance options"
+          git push origin HEAD:feat/installment-finance-options
