@@ -89,6 +89,18 @@ const input = {
   profilePath: "/safe/profile-b",
 };
 
+const eligibility = {
+  oaStoreId: "store-28375",
+  oaAccountType: "STORE",
+  oaIsActive: true,
+  oaArchivedAt: null,
+  oaChatBotId: BOT_ID,
+  oaSessionKey: "profile-b",
+  oaSessionStatus: "ACTIVE",
+  expectedBotId: BOT_ID,
+  expectedSessionKey: "profile-b",
+};
+
 test("duplicate display names resolve by the one matching reliable message timestamp", async () => {
   const value = realtimeFixture({
     chats: [
@@ -158,4 +170,79 @@ test("two same-name chats inside the timestamp tolerance remain ambiguous", asyn
   assert.deepEqual(await value.service.resolve(input), { status: "RESOLVE_AMBIGUOUS" });
   assert.equal(value.writes.length, 0);
   assert.equal(value.diagnostics[0].timestampCandidateCount, 2);
+});
+
+test("batch mapping separates duplicate display names by reliable timestamps", async () => {
+  const secondAt = new Date(ANCHOR_AT.getTime() + 5 * 60 * 1000);
+  const rows = [
+    {
+      id: "conversation-a",
+      storeId: "store-28375",
+      lineOfficialAccountId: "oa-rbs-chonburi",
+      lineChatUserId: null,
+      latestMessageAt: ANCHOR_AT,
+      customer: { displayName: "Max" },
+      messages: [{ direction: "INBOUND", deliveryStatus: "DELIVERED", sentAt: ANCHOR_AT }],
+      store: { code: "28375", storeMaster: null },
+    },
+    {
+      id: "conversation-b",
+      storeId: "store-28375",
+      lineOfficialAccountId: "oa-rbs-chonburi",
+      lineChatUserId: null,
+      latestMessageAt: secondAt,
+      customer: { displayName: "Max" },
+      messages: [{ direction: "INBOUND", deliveryStatus: "DELIVERED", sentAt: secondAt }],
+      store: { code: "28375", storeMaster: null },
+    },
+  ];
+  const writes: Array<Record<string, unknown>> = [];
+  const tx = {
+    conversation: {
+      findFirst: async () => null,
+      updateMany: async (args: Record<string, unknown>) => {
+        writes.push(args);
+        return { count: 1 };
+      },
+      findUnique: async () => null,
+    },
+  };
+  const prisma = {
+    conversation: {
+      findMany: async (args: { where?: { id?: { in?: string[] }; lineChatUserId?: unknown } }) => {
+        if (args.where?.id?.in) return rows;
+        return [];
+      },
+      findUnique: async () => null,
+    },
+    $transaction: async (callback: (value: typeof tx) => Promise<unknown>) => callback(tx),
+  };
+  const service = new LineChatRecentResolverService(prisma as never, {} as never);
+  const snapshot = {
+    key: "profile-b::oa-rbs-chonburi::bot",
+    status: "READY" as const,
+    chats: [
+      discovered(CHAT_A, 0),
+      {
+        ...discovered(CHAT_B, 5 * 60 * 1000),
+        lastMessageAt: secondAt.toISOString(),
+      },
+    ],
+    refreshedAt: new Date(),
+    expiresAt: new Date(Date.now() + 60_000),
+    pagesFetched: 1,
+    totalRawRecords: 2,
+  };
+
+  const result = await service.applySnapshotMappings({
+    lineOfficialAccountId: "oa-rbs-chonburi",
+    conversationIds: ["conversation-a", "conversation-b"],
+    snapshot,
+    eligibility,
+  });
+
+  assert.equal(result.mappedCount, 2);
+  assert.equal(result.ambiguousCount, 0);
+  assert.equal(result.noMatchCount, 0);
+  assert.deepEqual(writes.map((write) => (write.data as Record<string, unknown>).lineChatUserId), [CHAT_A, CHAT_B]);
 });
