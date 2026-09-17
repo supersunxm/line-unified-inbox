@@ -1,3 +1,18 @@
+# Google Review Week-Boundary Catch-Up & Launchd Schedule Stagger (2026-09-17)
+
+- **Week-Boundary Finalization vs Arbitrary Closed Weeks**:
+  When a new weekly competition period begins (e.g. Week 4 on 2026-09-17), the previous week (Week 3) transitions to `CLOSED`. The daily collector scheduled for 01:00 Bangkok on the boundary morning is responsible for collecting yesterday's reviews (2026-09-16), which belongs to the newly closed week.
+  Previously, the collector candidate search only queried candidate dates within the current `OPEN` week, skipping yesterday entirely at week boundaries, and `runCollectionForDate` threw an unhandled error when attempting to write to a `CLOSED` period.
+  We established a strict, bounded exception: `options.allowPreviousWeekFinalization` is authorized exclusively when all three conditions hold simultaneously:
+  1. `options.allowPreviousWeekFinalization === true`
+  2. `targetDate === yesterdayBangkok`
+  3. `targetWeekNumber === currentWeekNumber - 1`
+  Any request targeting arbitrary older closed periods (e.g. Week 1 or Week 2) without explicit `--force-reconcile` remains strictly forbidden and fails closed.
+
+- **Launchd Scheduling Stagger to Prevent Headless Browser & DB Pool Contention**:
+  Overnight forensic logs revealed that the Google Review collector started at 01:06:59 Bangkok (taking ~40 minutes for 65 stores). At 01:43:13 Bangkok, the TikTok Public collector fired concurrently via launchd (`com.oppo.tiktok-public-daily-collector` at 01:30). Running two headless Playwright Chromium browser contexts simultaneously while making concurrent Prisma queries through Railway's PostgreSQL proxy (`tokaido.proxy.rlwy.net:38745`) saturated the connection pool and led to socket connection timeouts.
+  To permanently isolate both batch workloads, TikTok collector launchd schedule was shifted from 01:30 to 02:30 Bangkok. This gives Google Review 90 minutes of dedicated, unobstructed system resources and database connections before TikTok collection begins.
+
 # TikTok Public Daily Follower Baseline Reconciliation (2026-09-17)
 
 - **Rate Limit Classification & Honest Diagnostic Reporting**: Rather than masking upstream rate limits as generic errors or `PROFILE_NOT_FOUND`, the collector explicitly classifies HTTP 403 and 429 status codes from TokCounter API as `RATE_LIMITED`. When an IP rate limit remains active after a 60-second cooldown period, the collector safely halts the batch run immediately to prevent futile hammering against TokCounter. All remaining uncollected accounts are categorized as `RATE_LIMITED` without falsifying numbers or inventing data.

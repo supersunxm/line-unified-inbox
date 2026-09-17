@@ -170,7 +170,7 @@ class LockManager {
 /**
  * Manages durable local success state outside git.
  */
-class StateManager {
+export class StateManager {
   static load() {
     if (!fs.existsSync(STATE_FILE_PATH)) {
       return {
@@ -234,76 +234,106 @@ class StateManager {
 }
 
 /**
- * Resolves missing completed Bangkok dates for the current OPEN week.
+ * Resolves missing completed Bangkok dates for the current OPEN week and previous week boundary.
  */
 export async function resolveMissingCompletedDates(prisma, referenceNow) {
   const todayBangkok = getTodayBangkokDate(referenceNow);
   const yesterdayBangkok = offsetBangkokDate(todayBangkok, -1);
   const currentWeekNumber = resolveWeekNumberFromDate(todayBangkok);
+  const yesterdayWeekNumber = resolveWeekNumberFromDate(yesterdayBangkok);
 
-  // Retrieve current open week period
+  const missingDates = [];
+
+  // 1. Check yesterdayBangkok first if it belongs to the immediately previous week (e.g. Week 3 when today is Week 4)
+  if (yesterdayWeekNumber === currentWeekNumber - 1) {
+    const isCompletedInState = StateManager.isDateCompleted(yesterdayBangkok);
+    if (!isCompletedInState) {
+      const prevWeekPeriod = await prisma.googleReviewWeeklyPeriod.findUnique({
+        where: { weekNumber: yesterdayWeekNumber },
+      });
+      const dbCount = prevWeekPeriod
+        ? await prisma.googleReviewDailyKpi.count({
+            where: {
+              date: yesterdayBangkok,
+              weekPeriodId: prevWeekPeriod.id,
+            },
+          })
+        : 0;
+
+      if (dbCount > 0) {
+        // Daily KPI row already exists in DB; reconcile local state
+        StateManager.recordSuccess({
+          targetDate: yesterdayBangkok,
+          startedAt: new Date().toISOString(),
+          completedAt: new Date().toISOString(),
+          storesAccounted: 65,
+          qualifiedAdded: 0,
+          fingerprintsAdded: 0,
+        });
+      } else {
+        missingDates.push(yesterdayBangkok);
+      }
+    }
+  }
+
+  // 2. Retrieve current open week period and candidate dates up to yesterdayBangkok
   const openPeriod = await prisma.googleReviewWeeklyPeriod.findUnique({
     where: { weekNumber: currentWeekNumber },
   });
 
-  if (!openPeriod || openPeriod.status !== GoogleReviewPeriodStatus.OPEN) {
-    return [];
-  }
+  if (openPeriod && openPeriod.status === GoogleReviewPeriodStatus.OPEN) {
+    const boundaries = getWeekDateBoundaries(currentWeekNumber);
+    const startDate = boundaries.startDate;
 
-  const boundaries = getWeekDateBoundaries(currentWeekNumber);
-  const startDate = boundaries.startDate;
-
-  // Build candidate completed dates within the open week up to yesterday
-  const candidateDates = [];
-  let cur = startDate;
-  while (cur <= yesterdayBangkok) {
-    candidateDates.push(cur);
-    cur = offsetBangkokDate(cur, 1);
-  }
-
-  // Find which dates are already populated with dailies in DB or recorded in state
-  const existingDailies = await prisma.googleReviewDailyKpi.groupBy({
-    by: ["date"],
-    _count: { storeCode: true },
-    where: {
-      date: { in: candidateDates },
-      weekPeriodId: openPeriod.id,
-    },
-  });
-
-  const dbDateCountMap = new Map();
-  for (const d of existingDailies) {
-    dbDateCountMap.set(d.date, d._count.storeCode);
-  }
-
-  const missingDates = [];
-  for (const date of candidateDates) {
-    const isCompletedInState = StateManager.isDateCompleted(date);
-    const dbCount = dbDateCountMap.get(date) || 0;
-
-    // If date is already marked completed in state, it's not missing
-    if (isCompletedInState) {
-      continue;
+    const candidateDates = [];
+    let cur = startDate;
+    while (cur <= yesterdayBangkok) {
+      candidateDates.push(cur);
+      cur = offsetBangkokDate(cur, 1);
     }
 
-    // If DB already has entries for this date, sync state and skip
-    if (dbCount > 0) {
-      StateManager.recordSuccess({
-        targetDate: date,
-        startedAt: new Date().toISOString(),
-        completedAt: new Date().toISOString(),
-        storesAccounted: 65,
-        qualifiedAdded: 0,
-        fingerprintsAdded: 0,
+    if (candidateDates.length > 0) {
+      const existingDailies = await prisma.googleReviewDailyKpi.groupBy({
+        by: ["date"],
+        _count: { storeCode: true },
+        where: {
+          date: { in: candidateDates },
+          weekPeriodId: openPeriod.id,
+        },
       });
-      continue;
-    }
 
-    // Otherwise, date is missing from database
-    missingDates.push(date);
+      const dbDateCountMap = new Map();
+      for (const d of existingDailies) {
+        dbDateCountMap.set(d.date, d._count.storeCode);
+      }
+
+      for (const date of candidateDates) {
+        const isCompletedInState = StateManager.isDateCompleted(date);
+        const dbCount = dbDateCountMap.get(date) || 0;
+
+        if (isCompletedInState) {
+          continue;
+        }
+
+        if (dbCount > 0) {
+          StateManager.recordSuccess({
+            targetDate: date,
+            startedAt: new Date().toISOString(),
+            completedAt: new Date().toISOString(),
+            storesAccounted: 65,
+            qualifiedAdded: 0,
+            fingerprintsAdded: 0,
+          });
+          continue;
+        }
+
+        missingDates.push(date);
+      }
+    }
   }
 
-  return missingDates;
+  // Deduplicate and return chronologically sorted (oldest -> newest)
+  return Array.from(new Set(missingDates)).sort((a, b) => a.localeCompare(b));
 }
 
 /**
@@ -320,11 +350,24 @@ export async function runCollectionForDate({
   const targetWeekNumber = resolveWeekNumberFromDate(targetDate);
   const boundaries = getWeekDateBoundaries(targetWeekNumber);
 
+  const todayBangkok = getTodayBangkokDate(referenceNow);
+  const yesterdayBangkok = offsetBangkokDate(todayBangkok, -1);
+  const currentWeekNumber = resolveWeekNumberFromDate(todayBangkok);
+
+  const isAllowedPrevWeek = Boolean(
+    options.allowPreviousWeekFinalization &&
+    targetDate === yesterdayBangkok &&
+    targetWeekNumber === currentWeekNumber - 1
+  );
+
   logger.log("================================================================================");
   logger.log(` LOCAL DAILY GOOGLE REVIEW COLLECTOR - TARGET DATE: ${targetDate} (WEEK ${targetWeekNumber})`);
   logger.log(` REFERENCE_NOW (FROZEN): ${referenceNow.toISOString()}`);
   logger.log(` Target Week Boundaries: [${boundaries.startDate}, ${boundaries.endDateExclusive})`);
   logger.log(` Profile Dir: ${resolveGoogleReviewProfileDir()}`);
+  if (isAllowedPrevWeek) {
+    logger.log(" [WEEK-BOUNDARY] Safe previous-week finalization authorized for yesterday's closed week.");
+  }
   logger.log(" Invariant: Respect existing fingerprint.reviewDate authority; never double-count.");
   logger.log("================================================================================\n");
 
@@ -334,7 +377,7 @@ export async function runCollectionForDate({
   if (!weekPeriod) {
     throw new Error(`Weekly Period for Week ${targetWeekNumber} not found!`);
   }
-  if (!options.forceReconcile && weekPeriod.status === GoogleReviewPeriodStatus.CLOSED) {
+  if (!options.forceReconcile && !isAllowedPrevWeek && weekPeriod.status === GoogleReviewPeriodStatus.CLOSED) {
     throw new Error(`Cannot collect into CLOSED Week ${targetWeekNumber} period!`);
   }
 
@@ -628,24 +671,30 @@ export async function runPostflightVerification(prisma, targetDate, targetWeekNu
   }
 
   // Invariant 4: Historical days for Week 3 before targetDate must remain unchanged
-  const historicalDailies = await prisma.googleReviewDailyKpi.groupBy({
-    by: ["date"],
-    _sum: { qualifiedReviews: true },
-    where: {
-      date: { in: ["2026-09-10", "2026-09-11", "2026-09-12", "2026-09-13"] },
-    },
-    orderBy: { date: "asc" },
-  });
   const expectedHistorical = {
     "2026-09-10": 38,
     "2026-09-11": 36,
     "2026-09-12": 55,
     "2026-09-13": 58,
+    "2026-09-14": 33,
+    "2026-09-15": 25,
+    "2026-09-16": 25,
   };
-  for (const row of historicalDailies) {
-    if (expectedHistorical[row.date] !== undefined) {
-      if (row._sum.qualifiedReviews !== expectedHistorical[row.date]) {
-        failures.push(`Historical daily ${row.date} changed: was ${expectedHistorical[row.date]}, now ${row._sum.qualifiedReviews}`);
+  const datesToCheck = Object.keys(expectedHistorical).filter((d) => d < targetDate);
+  if (datesToCheck.length > 0) {
+    const historicalDailies = await prisma.googleReviewDailyKpi.groupBy({
+      by: ["date"],
+      _sum: { qualifiedReviews: true },
+      where: {
+        date: { in: datesToCheck },
+      },
+      orderBy: { date: "asc" },
+    });
+    for (const row of historicalDailies) {
+      if (expectedHistorical[row.date] !== undefined) {
+        if (row._sum.qualifiedReviews !== expectedHistorical[row.date]) {
+          failures.push(`Historical daily ${row.date} changed: was ${expectedHistorical[row.date]}, now ${row._sum.qualifiedReviews}`);
+        }
       }
     }
   }
@@ -670,16 +719,28 @@ export async function runPostflightVerification(prisma, targetDate, targetWeekNu
     if (ratedStoresCount !== 65) {
       failures.push(`Week 3 rated stores count is ${ratedStoresCount}, expected 65`);
     }
+
+    // When targetWeekNumber > 3, Week 3 must remain CLOSED at 270 qualified
+    if (targetWeekNumber > 3) {
+      const w3Total = await prisma.googleReviewWeeklyKpi.aggregate({
+        where: { weekPeriodId: w3.id },
+        _sum: { qualifiedReviews: true },
+      });
+      if (w3.status !== GoogleReviewPeriodStatus.CLOSED || w3Total._sum.qualifiedReviews !== 270) {
+        failures.push(`Week 3 invariant violated: status=${w3.status}, qualified=${w3Total._sum.qualifiedReviews} (expected CLOSED / 270)`);
+      }
+    }
   }
 
-  // Invariant 7: No future date fingerprints created
-  if (targetDate < "2026-09-15") {
+  // Invariant 7: No future date fingerprints created beyond targetDate
+  const todayBangkok = getBangkokDateString(new Date());
+  const yesterdayBangkok = offsetBangkokDate(todayBangkok, -1);
+  if (targetDate >= yesterdayBangkok) {
     const futureFpCount = await prisma.googleReviewFingerprint.count({
       where: { reviewDate: { gt: targetDate } },
     });
-    // Note: If Sep 15 reviews were never inserted, future count for Sep 14 target date should be 0
-    if (targetDate === "2026-09-14" && futureFpCount > 0) {
-      failures.push(`Future date fingerprints detected: count=${futureFpCount}`);
+    if (futureFpCount > 0) {
+      failures.push(`Future date fingerprints detected beyond targetDate ${targetDate}: count=${futureFpCount}`);
     }
   }
 
@@ -743,11 +804,17 @@ async function main() {
 
     logger.log(`Processing date queue sequentially: [${datesToProcess.join(", ")}]`);
 
+    const currentWeekNumber = resolveWeekNumberFromDate(todayBangkok);
+
     for (const date of datesToProcess) {
       if (!forceReconcile && !targetDateArg && StateManager.isDateCompleted(date)) {
         logger.log(`Date ${date} already marked SUCCESS in state file. Skipping.`);
         continue;
       }
+
+      const dateWeekNumber = resolveWeekNumberFromDate(date);
+      const isAllowedPrevWeek =
+        date === defaultTargetDate && dateWeekNumber === currentWeekNumber - 1;
 
       await runCollectionForDate({
         targetDate: date,
@@ -759,6 +826,7 @@ async function main() {
           dryRun,
           forceReconcile,
           headless,
+          allowPreviousWeekFinalization: isAllowedPrevWeek,
         },
       });
     }

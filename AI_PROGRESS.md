@@ -1,3 +1,21 @@
+# 2026-09-17: Google Review 2026-09-16 Recovery & Week-Boundary Catch-Up Fix [COMPLETED & VERIFIED]
+- **Current Task**: Recover missing Google Review Daily KPI for `2026-09-16`, reconcile Week 3 total, implement permanent week-boundary catch-up fix, stagger TikTok collector in launchd, and verify clean idempotent kickstart.
+- **Completed Work**:
+  - **Preflight DB Inspection**: Verified Week 3 baseline before mutation: Week 3 was CLOSED at 245 qualified (Sep 10–15 sum). Sep 16 had 0 Daily KPI rows and 28 partial fingerprints from interrupted overnight collector crash (caused by connection pool timeouts when TikTok collector launched concurrently at 01:30).
+  - **Full 65-Store Recovery**: Sentinel test on CentralWorld 25610 passed cleanly. Full recovery scan ran with `--target-date 2026-09-16 --force-reconcile --headless true`. 65/65 stores accounted for (64 pass 1, 1 retry pass). Found 9 additional Sep 16 fingerprints (4 qualified, 5 unqualified). Total Sep 16 fingerprints: 37 (25 qualified, 12 unqualified). Total DB fingerprints: 934, 0 duplicates.
+  - **KPI Reconciliation**: Reconciled all 65 Daily KPI rows for `2026-09-16` (25 qualified, 37 checked across 65 stores). Reconciled Week 3 to exactly 270 qualified reviews (Sep 10: 38, Sep 11: 36, Sep 12: 55, Sep 13: 58, Sep 14: 33, Sep 15: 25, Sep 16: 25). Week 1 (274) and Week 2 (301) remained strictly frozen.
+  - **Permanent Week-Boundary Catch-Up**: Updated `resolveMissingCompletedDates()` in `backend/scripts/weekly-collector/run-local-daily-collector.mjs` to check `yesterdayBangkok` across week boundaries (e.g. Week 3 when today is Week 4). If uncollected, queues yesterday under `allowPreviousWeekFinalization`. If already in DB, synchronizes local state without re-scraping.
+  - **Safe Closed-Week Guard**: In `runCollectionForDate()`, allowed collection into a CLOSED week only if `options.forceReconcile === true` OR (`options.allowPreviousWeekFinalization === true` AND `targetDate === yesterdayBangkok` AND `targetWeekNumber === currentWeekNumber - 1`). Arbitrary older closed weeks (e.g. Week 2) remain strictly rejected.
+  - **Postflight Invariants Hardening**: Updated `runPostflightVerification()` to check all historical days of Week 3 (`< targetDate`) and enforce that Week 3 remains CLOSED at 270 when `targetWeekNumber > 3`. Enforced no premature reviews beyond `targetDate`.
+  - **Launchd Scheduling Stagger**: Staggered `com.oppo.tiktok-public-daily-collector.plist` from 01:30 to 02:30 Bangkok to eliminate concurrent Chromium and PostgreSQL connection pool contention with the 01:00 Google Review collector.
+  - **Regression Test Suite**: Added Cases 1–5 to `run-local-daily-collector.spec.ts`. All 75 tests across 19 suites in `weekly-collector` passed cleanly.
+  - **Launchd Verification**: Kickstarted `com.oppo.google-review-daily-collector` via `launchctl kickstart -k`. Confirmed clean idempotent exit in 3s (exit code 0, 0 re-scrapes).
+- **Checks Run & Passed**:
+  - `npx tsx --test backend/scripts/weekly-collector/*.spec.ts`: 75/75 passed.
+  - `npm --prefix backend run build`: passed cleanly (`prisma generate && nest build`).
+  - `launchctl kickstart -k gui/$(id -u)/com.oppo.google-review-daily-collector`: exit code 0.
+- **Next Action**: Commit and push permanent changes to `origin/main`.
+
 # 2026-09-17: TikTok Public Daily Follower Baseline Reconciliation (Metric Date: 2026-09-16) [COMPLETED & RECONCILED]
 - **Current Task**: Complete and reconcile the TikTok Public Daily Follower baseline collection for every TikTok account in the Store Master catalog for metric date `2026-09-16`.
 - **Completed Work**:
