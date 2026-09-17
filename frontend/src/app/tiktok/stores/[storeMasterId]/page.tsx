@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import { fetchTikTokAccountsListFromBackend } from "../../tiktok-api-client";
 import { TikTokPublicStoreDetail } from "../../tiktok-public-store-detail";
-import { fetchTikTokPublicHistory, fetchTikTokPublicStores } from "../../tiktok-public-api";
+import { fetchTikTokPublicHistory, fetchTikTokPublicStore } from "../../tiktok-public-api";
 
 export const dynamic = "force-dynamic";
 
@@ -31,17 +31,19 @@ export default async function TikTokPublicStorePage({ params }: Props) {
     redirect(`/tiktok/dashboard/${encodeURIComponent(linkedAccount.id)}`);
   }
 
+  let store;
+  let history;
   try {
-    const [stores, history] = await Promise.all([
-      fetchTikTokPublicStores({ sessionToken }),
+    [store, history] = await Promise.all([
+      fetchTikTokPublicStore(storeMasterId, { sessionToken }),
       fetchTikTokPublicHistory(storeMasterId, 30, { sessionToken }),
     ]);
-    const store = stores.find((candidate) => candidate.storeMasterId === storeMasterId) ?? null;
-    if (!store) notFound();
-    return <TikTokPublicStoreDetail store={store} history={history} />;
   } catch (error) {
     if (error instanceof Error && error.message === "UNAUTHORIZED") redirect("/login");
     if (error instanceof Error && error.message === "NOT_FOUND") notFound();
     throw error;
   }
+
+  if (!store) notFound();
+  return <TikTokPublicStoreDetail store={store} history={history} />;
 }

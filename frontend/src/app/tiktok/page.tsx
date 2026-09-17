@@ -17,14 +17,17 @@ export default async function TikTokOverviewPage() {
   const sessionToken = cookieStore.get("oppo_session")?.value?.trim();
   if (!sessionToken) redirect("/login");
 
+  let overview;
+  let stores;
   try {
-    const [overview, stores] = await Promise.all([
+    [overview, stores] = await Promise.all([
       fetchTikTokPublicOverview({ sessionToken }),
       fetchTikTokPublicStores({ sessionToken }),
     ]);
-    return <TikTokPublicDashboard overview={overview} stores={stores} />;
   } catch (error) {
     if (error instanceof Error && error.message === "UNAUTHORIZED") redirect("/login");
     throw error;
   }
+
+  return <TikTokPublicDashboard overview={overview} stores={stores} />;
 }

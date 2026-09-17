@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { PageContainer } from "@/components/shell";
 import { useAppLanguage } from "../language";
@@ -10,124 +11,6 @@ type Props = {
   overview: TikTokPublicDashboardOverview;
   stores: TikTokPublicDashboardStore[];
 };
-
-const previewStores: TikTokPublicDashboardStore[] = [
-  {
-    storeMasterId: "preview-kanchanaburi",
-    storeName: "OBS Big C Kanchanaburi By VTEC",
-    accountName: "OPPO Brand Shop",
-    province: "Kanchanaburi",
-    region: "WEST",
-    username: "o_bigckanchanaburi",
-    displayName: "OPPO Big C Kanchanaburi",
-    avatarUrl: null,
-    bioDescription: null,
-    isVerified: false,
-    followerCount: 19503,
-    followingCount: 71,
-    likesCount: 135625,
-    videoCount: 400,
-    profileUrl: "https://www.tiktok.com/@o_bigckanchanaburi",
-    lastFetchedAt: "2026-09-07T10:00:00.000Z",
-    growth: {
-      daily: { absolute: 32, percent: 0.16 },
-      sevenDay: { absolute: 241, percent: 1.25 },
-      thirtyDay: { absolute: 904, percent: 4.86 },
-    },
-  },
-  {
-    storeMasterId: "preview-lopburi",
-    storeName: "OBS Big C Lopburi By J.I.",
-    accountName: "OPPO Brand Shop",
-    province: "Lopburi",
-    region: "CENTRAL",
-    username: "o_bigclopburi",
-    displayName: "OPPO Big C Lopburi",
-    avatarUrl: null,
-    bioDescription: null,
-    isVerified: false,
-    followerCount: 10146,
-    followingCount: 115,
-    likesCount: 83072,
-    videoCount: 509,
-    profileUrl: "https://www.tiktok.com/@o_bigclopburi",
-    lastFetchedAt: "2026-09-07T10:00:00.000Z",
-    growth: {
-      daily: { absolute: 18, percent: 0.18 },
-      sevenDay: { absolute: 176, percent: 1.76 },
-      thirtyDay: { absolute: 622, percent: 6.53 },
-    },
-  },
-  {
-    storeMasterId: "preview-rama4",
-    storeName: "OBS Big C Rama 4 By K K Mobile",
-    accountName: "OPPO Brand Shop",
-    province: "Bangkok",
-    region: "BANGKOK",
-    username: "oppobigcrama4",
-    displayName: "OPPO Big C Rama 4",
-    avatarUrl: null,
-    bioDescription: null,
-    isVerified: false,
-    followerCount: 9236,
-    followingCount: 101,
-    likesCount: 49621,
-    videoCount: 119,
-    profileUrl: "https://www.tiktok.com/@oppobigcrama4",
-    lastFetchedAt: "2026-09-07T10:00:00.000Z",
-    growth: {
-      daily: { absolute: 11, percent: 0.12 },
-      sevenDay: { absolute: 93, percent: 1.02 },
-      thirtyDay: { absolute: 314, percent: 3.52 },
-    },
-  },
-  {
-    storeMasterId: "preview-nakhonpathom",
-    storeName: "OBS Big C Nakhon Pathom FL.1 By Com7",
-    accountName: "OPPO Brand Shop",
-    province: "Nakhon Pathom",
-    region: "CENTRAL",
-    username: "o_bigcnakhonpathom",
-    displayName: "OPPO Big C Nakhon Pathom",
-    avatarUrl: null,
-    bioDescription: null,
-    isVerified: false,
-    followerCount: 6507,
-    followingCount: 175,
-    likesCount: 42368,
-    videoCount: 479,
-    profileUrl: "https://www.tiktok.com/@o_bigcnakhonpathom",
-    lastFetchedAt: "2026-09-07T10:00:00.000Z",
-    growth: {
-      daily: { absolute: -4, percent: -0.06 },
-      sevenDay: { absolute: 61, percent: 0.95 },
-      thirtyDay: { absolute: 204, percent: 3.24 },
-    },
-  },
-  {
-    storeMasterId: "preview-suwinthawong",
-    storeName: "OBS Big C Suwinthawong FL.2 By Phechduang",
-    accountName: "OPPO Brand Shop",
-    province: "Bangkok",
-    region: "BANGKOK",
-    username: "o_bigcsuwinthawong",
-    displayName: "OPPO Big C Suwinthawong",
-    avatarUrl: null,
-    bioDescription: null,
-    isVerified: false,
-    followerCount: 6245,
-    followingCount: 540,
-    likesCount: 56399,
-    videoCount: 240,
-    profileUrl: "https://www.tiktok.com/@o_bigcsuwinthawong",
-    lastFetchedAt: "2026-09-07T10:00:00.000Z",
-    growth: {
-      daily: { absolute: 7, percent: 0.11 },
-      sevenDay: { absolute: 54, percent: 0.87 },
-      thirtyDay: { absolute: 188, percent: 3.1 },
-    },
-  },
-];
 
 function number(value: number, locale: string) {
   return new Intl.NumberFormat(locale).format(value);
@@ -170,26 +53,22 @@ function MetricCard({ label, value, detail }: { label: string; value: string; de
 export function TikTokPublicDashboard({ overview, stores }: Props) {
   const { language } = useAppLanguage();
   const locale = language === "th" ? "th-TH" : language === "zh" ? "zh-CN" : "en-US";
+  const router = useRouter();
   const [query, setQuery] = useState("");
   const [region, setRegion] = useState("ALL");
   const [sort, setSort] = useState("followers");
+  const [refreshing, setRefreshing] = useState(false);
 
-  const isPreview = process.env.NODE_ENV !== "production" && stores.length === 0;
-  const sourceStores = isPreview ? previewStores : stores;
-  const sourceOverview = isPreview
-    ? {
-        trackedStores: 148,
-        totalFollowers: previewStores.reduce((sum, store) => sum + store.followerCount, 0),
-        totalLikes: previewStores.reduce((sum, store) => sum + store.likesCount, 0),
-        totalVideos: previewStores.reduce((sum, store) => sum + store.videoCount, 0),
-        lastUpdatedAt: previewStores[0]?.lastFetchedAt ?? null,
-      }
-    : overview;
+  const handleRefresh = () => {
+    setRefreshing(true);
+    router.refresh();
+    setTimeout(() => setRefreshing(false), 1500);
+  };
 
-  const regions = useMemo(() => Array.from(new Set(sourceStores.map((store) => store.region).filter(Boolean) as string[])).sort(), [sourceStores]);
+  const regions = useMemo(() => Array.from(new Set(stores.map((store) => store.region).filter(Boolean) as string[])).sort(), [stores]);
   const visibleStores = useMemo(() => {
     const needle = query.trim().toLowerCase();
-    const filtered = sourceStores.filter((store) => {
+    const filtered = stores.filter((store) => {
       const matchesQuery = !needle || [store.storeName, store.accountName, store.username, store.province ?? "", store.region ?? ""]
         .some((value) => value.toLowerCase().includes(needle));
       return matchesQuery && (region === "ALL" || store.region === region);
@@ -200,21 +79,20 @@ export function TikTokPublicDashboard({ overview, stores }: Props) {
       if (sort === "videos") return b.videoCount - a.videoCount;
       return b.followerCount - a.followerCount;
     });
-  }, [sourceStores, query, region, sort]);
+  }, [stores, query, region, sort]);
 
-  const leaders = useMemo(() => [...sourceStores].sort((a, b) => b.followerCount - a.followerCount).slice(0, 5), [sourceStores]);
-  const totalFollowersShown = sourceStores.reduce((sum, store) => sum + store.followerCount, 0);
+  const leaders = useMemo(() => [...stores].sort((a, b) => b.followerCount - a.followerCount).slice(0, 5), [stores]);
+  const totalFollowersShown = stores.reduce((sum, store) => sum + store.followerCount, 0);
 
   const text = language === "th" ? {
     eyebrow: "RETAIL SOCIAL INTELLIGENCE",
     title: "TikTok Analytics",
     subtitle: "ดูภาพรวมการเติบโตของ TikTok ทุกสาขา จากตัวเลข Exact ของ Public Profile",
-    preview: "Preview Mode — ใช้ข้อมูลตัวอย่างจาก Dry Run เพื่อดูหน้าตาเท่านั้น ยังไม่ได้บันทึกลงฐานข้อมูล",
     tracked: "สาขาที่มี TikTok",
     followers: "Followers ที่แสดง",
     likes: "Likes ที่แสดง",
     videos: "Videos ที่แสดง",
-    exact: "Exact metrics only · statsV2",
+    exact: "Exact public metrics",
     ranking: "Top stores",
     rankingSub: "เรียงตามจำนวน Followers",
     storePerformance: "Store performance",
@@ -237,12 +115,11 @@ export function TikTokPublicDashboard({ overview, stores }: Props) {
     eyebrow: "RETAIL SOCIAL INTELLIGENCE",
     title: "TikTok Analytics",
     subtitle: "Track store-level TikTok growth using exact public profile metrics.",
-    preview: "Preview Mode — sample dry-run data for UI preview only. Nothing has been persisted yet.",
     tracked: "TikTok stores",
     followers: "Shown followers",
     likes: "Shown likes",
     videos: "Shown videos",
-    exact: "Exact metrics only · statsV2",
+    exact: "Exact public metrics",
     ranking: "Top stores",
     rankingSub: "Ranked by follower count",
     storePerformance: "Store performance",
@@ -275,24 +152,21 @@ export function TikTokPublicDashboard({ overview, stores }: Props) {
               <h1 className="mt-3 text-3xl font-black tracking-[-0.045em] sm:text-4xl lg:text-5xl">{text.title}</h1>
               <p className="mt-3 max-w-xl text-sm leading-6 text-white/60 sm:text-base">{text.subtitle}</p>
             </div>
-            <div className="flex flex-wrap gap-2 text-xs">
+            <div className="flex flex-wrap items-center gap-2 text-xs">
               <span className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-2 font-semibold text-white/75">{text.exact}</span>
-              <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-2 font-semibold text-emerald-300">{number(sourceOverview.trackedStores, locale)} stores</span>
+              <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-2 font-semibold text-emerald-300">{number(overview.trackedStores, locale)} stores</span>
+              <button onClick={handleRefresh} disabled={refreshing} className="flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/[0.06] text-white/75 transition hover:bg-white/[0.12] disabled:opacity-50" aria-label="Refresh data">
+                <svg className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+              </button>
             </div>
           </div>
         </section>
 
-        {isPreview && (
-          <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300">
-            {text.preview}
-          </div>
-        )}
-
         <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <MetricCard label={text.tracked} value={number(sourceOverview.trackedStores, locale)} detail="StoreMaster coverage" />
-          <MetricCard label={text.followers} value={compact(totalFollowersShown, locale)} detail={`${number(totalFollowersShown, locale)} followers`} />
-          <MetricCard label={text.likes} value={compact(sourceOverview.totalLikes, locale)} detail={`${number(sourceOverview.totalLikes, locale)} likes`} />
-          <MetricCard label={text.videos} value={number(sourceOverview.totalVideos, locale)} detail="Public profile total" />
+          <MetricCard label={text.tracked} value={number(overview.trackedStores, locale)} detail="StoreMaster coverage" />
+          <MetricCard label={text.followers} value={compact(totalFollowersShown, locale)} detail={`${number(overview.totalFollowers, locale)} followers`} />
+          <MetricCard label={text.likes} value={compact(overview.totalLikes, locale)} detail={`${number(overview.totalLikes, locale)} likes`} />
+          <MetricCard label={text.videos} value={number(overview.totalVideos, locale)} detail="Public profile total" />
         </section>
 
         <section className="grid gap-5 xl:grid-cols-[0.9fr_1.7fr]">
@@ -306,7 +180,7 @@ export function TikTokPublicDashboard({ overview, stores }: Props) {
             </div>
             <div className="mt-5 space-y-1.5">
               {leaders.map((store, index) => (
-                <Link key={store.storeMasterId} href={isPreview ? "#" : `/tiktok/stores/${encodeURIComponent(store.storeMasterId)}`} className="group flex items-center gap-3 rounded-2xl px-2 py-3 hover:bg-slate-50 dark:hover:bg-white/[0.03]">
+                <Link key={store.storeMasterId} href={`/tiktok/stores/${encodeURIComponent(store.storeMasterId)}`} className="group flex items-center gap-3 rounded-2xl px-2 py-3 hover:bg-slate-50 dark:hover:bg-white/[0.03]">
                   <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-xs font-black ${index === 0 ? "bg-slate-950 text-white dark:bg-white dark:text-slate-950" : "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400"}`}>{index + 1}</div>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-semibold text-slate-800 dark:text-slate-100">{store.storeName}</p>
@@ -360,7 +234,7 @@ export function TikTokPublicDashboard({ overview, stores }: Props) {
                     {visibleStores.map((store) => (
                       <tr key={store.storeMasterId} className="group transition hover:bg-slate-50/80 dark:hover:bg-white/[0.025]">
                         <td className="px-5 py-4">
-                          <Link href={isPreview ? "#" : `/tiktok/stores/${encodeURIComponent(store.storeMasterId)}`} className="flex items-center gap-3">
+                          <Link href={`/tiktok/stores/${encodeURIComponent(store.storeMasterId)}`} className="flex items-center gap-3">
                             <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-slate-950 text-sm font-black text-white dark:bg-white dark:text-slate-950">
                               {store.avatarUrl ? <img src={store.avatarUrl} alt="" className="h-full w-full object-cover" /> : "T"}
                             </div>
