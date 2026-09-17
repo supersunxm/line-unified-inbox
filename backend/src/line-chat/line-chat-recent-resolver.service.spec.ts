@@ -4,7 +4,17 @@ import { LineChatRecentResolverService } from "./line-chat-recent-resolver.servi
 
 const CHAT_ID = `U${"a".repeat(32)}`;
 const CHAT_ID_2 = `U${"b".repeat(32)}`;
-const MESSAGE_AT = new Date("2026-09-01T05:00:00.000Z");
+const CHAT_ID_3 = `U${"c".repeat(32)}`;
+const BOT_ID = "U729972869a565723cb7fcf7ea28bbc43";
+const MESSAGE_AT = new Date("2026-09-16T11:59:38.161Z");
+
+function message(
+  sentAt = MESSAGE_AT,
+  direction: "INBOUND" | "OUTBOUND" | "SYSTEM" = "INBOUND",
+  deliveryStatus: "DELIVERED" | "FAILED" = "DELIVERED",
+) {
+  return { sentAt, direction, deliveryStatus };
+}
 
 function conversation(overrides: Record<string, unknown> = {}) {
   return {
@@ -13,8 +23,8 @@ function conversation(overrides: Record<string, unknown> = {}) {
     lineOfficialAccountId: "oa-1",
     lineChatUserId: null,
     latestMessageAt: MESSAGE_AT,
-    customer: { displayName: "สมชาย Oppo" },
-    messages: [{ sentAt: MESSAGE_AT }],
+    customer: { displayName: "Max" },
+    messages: [message()],
     store: { code: "28375", storeMaster: null },
     lineOfficialAccount: {
       name: "OPPO BS RBS Chonburi",
@@ -22,14 +32,19 @@ function conversation(overrides: Record<string, unknown> = {}) {
       accountType: "STORE",
       isActive: true,
       archivedAt: null,
-      chatBotId: "U729972869a565723cb7fcf7ea28bbc43",
-      lineChatSession: { sessionKey: "profile-b" },
+      chatBotId: BOT_ID,
+      lineChatSession: { sessionKey: "profile-b", status: "ACTIVE" },
     },
     ...overrides,
   };
 }
 
-function chat(id = CHAT_ID, name = "  สมชาย   OPPO ", offsetMs = 30_000, lastMessageAt?: string | null) {
+function chat(
+  id = CHAT_ID,
+  name = "Max",
+  offsetMs = 0,
+  lastMessageAt?: string | null,
+) {
   return {
     chatUserId: id,
     displayName: name,
@@ -86,108 +101,201 @@ function fixture(options: {
     },
   };
   const service = new LineChatRecentResolverService(prisma as never, session as never);
-  (service as unknown as { logger: { log: (message: string) => void } }).logger = {
-    log: (message: string) => diagnostics.push(message),
+  (service as unknown as { logger: { log: (value: string) => void } }).logger = {
+    log: (value: string) => diagnostics.push(value),
   };
   return {
     service,
     writes,
     discoveryInputs,
     diagnostics,
-    selectedCustomerFields: () => ((findUniqueArgs?.select as Record<string, unknown>)?.customer as { select?: unknown })?.select,
+    selectedMessages: () => ((findUniqueArgs?.select as Record<string, unknown>)?.messages as Record<string, unknown> | undefined),
   };
 }
 
 const input = {
   conversationId: "conversation-1",
   lineOfficialAccountId: "oa-1",
-  botId: "U729972869a565723cb7fcf7ea28bbc43",
+  botId: BOT_ID,
   sessionKey: "profile-b",
   profilePath: "/safe/profile",
 };
 
-test("unique normalized exact customer name resolves with a guarded write", async () => {
-  const value = fixture();
-  const result = await value.service.resolve(input);
-  assert.deepEqual(result, { status: "RESOLVED", lineChatUserId: CHAT_ID });
-  assert.equal(value.discoveryInputs.length, 1);
-  assert.equal(value.discoveryInputs[0].maxPages, 5);
-  assert.equal(value.discoveryInputs[0].maxChats, 125);
-  assert.equal(value.diagnostics.length, 1);
-  const diagnostic = JSON.parse(value.diagnostics[0]) as Record<string, unknown>;
-  assert.equal(diagnostic.resolutionStatus, "RESOLVED");
-  assert.equal(diagnostic.recentChatCount, 1);
-  assert.equal(diagnostic.exactNameMatchCount, 1);
-  assert.deepEqual(value.selectedCustomerFields(), { displayName: true });
-  assert.deepEqual(value.writes[0], {
-    where: { id: "conversation-1", lineOfficialAccountId: "oa-1", lineChatUserId: null },
-    data: { lineChatUserId: CHAT_ID },
-  });
-});
-
-test("message timestamps never determine pilot candidate selection", async (t) => {
-  await t.test("exact customer name resolves even when LINE activity is hours away", async () => {
-    const value = fixture({ chats: [chat(CHAT_ID, "สมชาย Oppo", 3 * 60 * 60 * 1000)] });
-    assert.deepEqual(await value.service.resolve(input), { status: "RESOLVED", lineChatUserId: CHAT_ID });
-    assert.equal(value.writes.length, 1);
-    const diagnostic = JSON.parse(value.diagnostics[0]) as Record<string, unknown>;
-    assert.equal(diagnostic.exactNameMatchCount, 1);
-    assert.equal(diagnostic.combinedMatchCount, 0);
-  });
-
-  await t.test("timestamp-only candidate with a different customer name never resolves", async () => {
-    const value = fixture({ chats: [chat(CHAT_ID, "different name", 0)] });
-    assert.deepEqual(await value.service.resolve(input), { status: "RESOLVE_NO_MATCH" });
-    assert.equal(value.writes.length, 0);
-    const diagnostic = JSON.parse(value.diagnostics[0]) as Record<string, unknown>;
-    assert.equal(diagnostic.exactNameMatchCount, 0);
-    assert.equal(diagnostic.timestampWithinToleranceCount, 1);
-  });
-});
-
-test("exact customer name resolves even when LINE timestamp is missing or invalid", async (t) => {
-  for (const lastMessageAt of [null, "not-a-timestamp"] as const) {
-    await t.test(String(lastMessageAt), async () => {
-      const value = fixture({ chats: [chat(CHAT_ID, "สมชาย Oppo", 0, lastMessageAt)] });
-      assert.deepEqual(await value.service.resolve(input), { status: "RESOLVED", lineChatUserId: CHAT_ID });
-      const diagnostic = JSON.parse(value.diagnostics[0]) as Record<string, unknown>;
-      assert.equal(diagnostic.exactNameMatchCount, 1);
-      assert.equal(diagnostic.combinedMatchCount, 0);
-      assert.equal(diagnostic.exactNameWithMissingTimestampCount, 1);
-    });
-  }
-});
-
-test("multiple exact customer-name candidates are ambiguous regardless of timestamp", async () => {
+test("duplicate display names resolve by the unique confirmed-message timestamp", async () => {
   const value = fixture({
     chats: [
-      chat(CHAT_ID, "สมชาย Oppo", 0),
-      chat(CHAT_ID_2, "สมชาย Oppo", 3 * 60 * 60 * 1000),
+      chat(CHAT_ID, "Max", -86_400_000),
+      chat(CHAT_ID_2, "Max", 0),
+      chat(CHAT_ID_3, "Max", 86_400_000),
+    ],
+  });
+
+  assert.deepEqual(await value.service.resolve(input), {
+    status: "RESOLVED",
+    lineChatUserId: CHAT_ID_2,
+  });
+  assert.deepEqual(value.writes[0], {
+    where: { id: "conversation-1", lineOfficialAccountId: "oa-1", lineChatUserId: null },
+    data: { lineChatUserId: CHAT_ID_2 },
+  });
+
+  const diagnostic = JSON.parse(value.diagnostics[0]) as Record<string, unknown>;
+  assert.equal(diagnostic.resolutionMethod, "TIMESTAMP_FINGERPRINT");
+  assert.equal(diagnostic.nameCandidateCount, 3);
+  assert.equal(diagnostic.fingerprintMatchCount, 1);
+  assert.equal(diagnostic.anchorDirection, "INBOUND");
+  assert.equal(diagnostic.targetTimestampSource, "MESSAGE_SENT_AT");
+});
+
+test("a confirmed timestamp mismatch never falls back to unsafe name-only mapping", async () => {
+  const value = fixture({ chats: [chat(CHAT_ID, "Max", 3 * 60 * 60 * 1000)] });
+  assert.deepEqual(await value.service.resolve(input), { status: "RESOLVE_NO_MATCH" });
+  assert.equal(value.writes.length, 0);
+  const diagnostic = JSON.parse(value.diagnostics[0]) as Record<string, unknown>;
+  assert.equal(diagnostic.resolutionMethod, "UNRESOLVED");
+  assert.equal(diagnostic.exactNameMatchCount, 1);
+  assert.equal(diagnostic.fingerprintMatchCount, 0);
+});
+
+test("two same-name candidates inside timestamp tolerance remain ambiguous", async () => {
+  const value = fixture({
+    chats: [
+      chat(CHAT_ID, "Max", -10_000),
+      chat(CHAT_ID_2, "Max", 10_000),
     ],
   });
   assert.deepEqual(await value.service.resolve(input), { status: "RESOLVE_AMBIGUOUS" });
   assert.equal(value.writes.length, 0);
   const diagnostic = JSON.parse(value.diagnostics[0]) as Record<string, unknown>;
-  assert.equal(diagnostic.exactNameMatchCount, 2);
-  assert.equal(diagnostic.resolutionStatus, "RESOLVE_AMBIGUOUS");
+  assert.equal(diagnostic.fingerprintMatchCount, 2);
 });
 
-test("timestamp diagnostics remain informational when fallback conversation timestamp is used", async () => {
+test("failed outbound messages are never used as identity anchors", async () => {
+  const failedAt = new Date(MESSAGE_AT.getTime() + 10 * 60_000);
   const value = fixture({
-    conversation: conversation({ messages: [] }),
-    chats: [chat(CHAT_ID, "สมชาย Oppo", 60_000)],
+    conversation: conversation({
+      latestMessageAt: failedAt,
+      messages: [
+        message(failedAt, "OUTBOUND", "FAILED"),
+        message(MESSAGE_AT, "INBOUND", "DELIVERED"),
+      ],
+    }),
+    chats: [
+      chat(CHAT_ID, "Max", 10 * 60_000),
+      chat(CHAT_ID_2, "Max", 0),
+    ],
   });
-  assert.deepEqual(await value.service.resolve(input), { status: "RESOLVED", lineChatUserId: CHAT_ID });
+
+  assert.deepEqual(await value.service.resolve(input), {
+    status: "RESOLVED",
+    lineChatUserId: CHAT_ID_2,
+  });
   const diagnostic = JSON.parse(value.diagnostics[0]) as Record<string, unknown>;
-  assert.equal(diagnostic.targetTimestampSource, "CONVERSATION_LATEST_MESSAGE_AT");
-  assert.equal(diagnostic.closestExactNameTimestampDeltaBucket, "31s-60s");
+  assert.equal(diagnostic.anchorDirection, "INBOUND");
+
+  const selectedMessages = value.selectedMessages();
+  const where = selectedMessages?.where as { OR?: Array<Record<string, unknown>> } | undefined;
+  assert.ok(where?.OR?.some((entry) => entry.direction === "INBOUND"));
+  assert.ok(where?.OR?.some((entry) => entry.direction === "OUTBOUND" && entry.deliveryStatus === "DELIVERED"));
 });
 
-test("diagnostic payload contains no customer, identifier, timestamp, or secret values", async () => {
-  const value = fixture();
+test("latest delivered outbound can safely anchor resolution when no inbound is available", async () => {
+  const outboundAt = new Date(MESSAGE_AT.getTime() + 120_000);
+  const value = fixture({
+    conversation: conversation({
+      messages: [message(outboundAt, "OUTBOUND", "DELIVERED")],
+      latestMessageAt: outboundAt,
+    }),
+    chats: [
+      chat(CHAT_ID, "Max", 0),
+      chat(CHAT_ID_2, "Max", 120_000),
+    ],
+  });
+  assert.deepEqual(await value.service.resolve(input), {
+    status: "RESOLVED",
+    lineChatUserId: CHAT_ID_2,
+  });
+  const diagnostic = JSON.parse(value.diagnostics[0]) as Record<string, unknown>;
+  assert.equal(diagnostic.anchorDirection, "OUTBOUND");
+  assert.equal(diagnostic.resolutionMethod, "TIMESTAMP_FINGERPRINT");
+});
+
+test("name-only fallback is retained only when no usable message anchor exists", async (t) => {
+  await t.test("unique name resolves", async () => {
+    const value = fixture({
+      conversation: conversation({
+        messages: [message(MESSAGE_AT, "OUTBOUND", "FAILED")],
+      }),
+      chats: [chat(CHAT_ID, "Max", 3 * 60 * 60 * 1000)],
+    });
+    assert.deepEqual(await value.service.resolve(input), {
+      status: "RESOLVED",
+      lineChatUserId: CHAT_ID,
+    });
+    const diagnostic = JSON.parse(value.diagnostics[0]) as Record<string, unknown>;
+    assert.equal(diagnostic.resolutionMethod, "NAME_ONLY");
+    assert.equal(diagnostic.targetTimestampSource, "NONE");
+    assert.equal(diagnostic.anchorDirection, "NONE");
+  });
+
+  await t.test("duplicate names remain ambiguous", async () => {
+    const value = fixture({
+      conversation: conversation({ messages: [] }),
+      chats: [
+        chat(CHAT_ID, "Max", 0),
+        chat(CHAT_ID_2, "Max", 60_000),
+      ],
+    });
+    assert.deepEqual(await value.service.resolve(input), { status: "RESOLVE_AMBIGUOUS" });
+    assert.equal(value.writes.length, 0);
+  });
+});
+
+test("timestamp-only candidate with a different display name never resolves", async () => {
+  const value = fixture({ chats: [chat(CHAT_ID, "Different Person", 0)] });
+  assert.deepEqual(await value.service.resolve(input), { status: "RESOLVE_NO_MATCH" });
+  assert.equal(value.writes.length, 0);
+});
+
+test("missing or invalid candidate timestamps fail closed when a confirmed anchor exists", async (t) => {
+  for (const lastMessageAt of [null, "not-a-timestamp"] as const) {
+    await t.test(String(lastMessageAt), async () => {
+      const value = fixture({ chats: [chat(CHAT_ID, "Max", 0, lastMessageAt)] });
+      assert.deepEqual(await value.service.resolve(input), { status: "RESOLVE_NO_MATCH" });
+      assert.equal(value.writes.length, 0);
+    });
+  }
+});
+
+test("durable lineChatUserId always wins without browser discovery", async () => {
+  const value = fixture({ conversation: conversation({ lineChatUserId: CHAT_ID_3 }) });
+  assert.deepEqual(await value.service.resolve(input), {
+    status: "RESOLVED",
+    lineChatUserId: CHAT_ID_3,
+  });
+  assert.equal(value.discoveryInputs.length, 0);
+  assert.equal(value.writes.length, 0);
+});
+
+test("diagnostic payload contains no customer names, LINE IDs, timestamps, or secrets", async () => {
+  const value = fixture({
+    chats: [
+      chat(CHAT_ID, "Max", -86_400_000),
+      chat(CHAT_ID_2, "Max", 0),
+    ],
+  });
   await value.service.resolve(input);
   const payload = value.diagnostics[0];
-  for (const forbidden of [CHAT_ID, "สมชาย Oppo", MESSAGE_AT.toISOString(), "lineUserId", "userId", "token", "cookie", "secret"]) {
+  for (const forbidden of [
+    CHAT_ID,
+    CHAT_ID_2,
+    "Max",
+    MESSAGE_AT.toISOString(),
+    "lineUserId",
+    "token",
+    "cookie",
+    "secret",
+  ]) {
     assert.equal(payload.includes(forbidden), false, `diagnostic leaked ${forbidden}`);
   }
 });
@@ -198,6 +306,7 @@ test("same-OA reuse is a conflict and an existing mapping is never overwritten",
     assert.deepEqual(await value.service.resolve(input), { status: "RESOLVE_CONFLICT" });
     assert.equal(value.writes.length, 0);
   });
+
   await t.test("target already mapped", async () => {
     const value = fixture({ conversation: conversation({ lineChatUserId: CHAT_ID_2 }) });
     assert.deepEqual(await value.service.resolve(input), { status: "RESOLVED", lineChatUserId: CHAT_ID_2 });
@@ -206,7 +315,7 @@ test("same-OA reuse is a conflict and an existing mapping is never overwritten",
   });
 });
 
-test("guarded-update race proceeds only when the stored mapping equals the candidate", async (t) => {
+test("guarded-update race proceeds only when stored mapping equals candidate", async (t) => {
   await t.test("same mapping", async () => {
     const value = fixture({ writeCount: 0, racedMapping: CHAT_ID });
     assert.deepEqual(await value.service.resolve(input), { status: "RESOLVED", lineChatUserId: CHAT_ID });
@@ -233,7 +342,7 @@ test("non-pilot or mismatched OA identity fails before browser discovery", async
   assert.equal(value.discoveryInputs.length, 0);
 });
 
-test("Phase 2 Central World 25610 resolves successfully with DB routing", async () => {
+test("Phase 2 Central World still resolves with DB routing and timestamp evidence", async () => {
   const cwConversation = conversation({
     id: "conversation-cw-1",
     storeId: "store-cw",
@@ -249,7 +358,6 @@ test("Phase 2 Central World 25610 resolves successfully with DB routing", async 
       lineChatSession: { sessionKey: "account-1", status: "ACTIVE" },
     },
   });
-
   const cwInput = {
     conversationId: "conversation-cw-1",
     lineOfficialAccountId: "oa-cw",
@@ -259,134 +367,77 @@ test("Phase 2 Central World 25610 resolves successfully with DB routing", async 
   };
 
   const value = fixture({ conversation: cwConversation });
-  const result = await value.service.resolve(cwInput);
-  assert.deepEqual(result, { status: "RESOLVED", lineChatUserId: CHAT_ID });
+  assert.deepEqual(await value.service.resolve(cwInput), { status: "RESOLVED", lineChatUserId: CHAT_ID });
   assert.equal(value.writes.length, 1);
-  assert.deepEqual(value.writes[0], {
-    where: { id: "conversation-cw-1", lineOfficialAccountId: "oa-cw", lineChatUserId: null },
-    data: { lineChatUserId: CHAT_ID },
-  });
 });
 
-test("cross-OA or mismatched invocation parameters fail closed with RESOLVE_CONFLICT", async (t) => {
-  const cwConversation = conversation({
-    id: "conversation-cw-1",
-    storeId: "store-cw",
-    lineOfficialAccountId: "oa-cw",
-    store: { code: "25610", storeMaster: null },
-    lineOfficialAccount: {
-      name: "OPPO Central World",
-      storeId: "store-cw",
-      accountType: "STORE",
-      isActive: true,
-      archivedAt: null,
-      chatBotId: "U001732513bc5f534c1a40d36c89bb43f",
-      lineChatSession: { sessionKey: "account-1", status: "ACTIVE" },
-    },
-  });
-
-  await t.test("wrong botId", async () => {
-    const value = fixture({ conversation: cwConversation });
-    const result = await value.service.resolve({
-      conversationId: "conversation-cw-1",
-      lineOfficialAccountId: "oa-cw",
-      botId: "U_WRONG_BOT_ID",
-      sessionKey: "account-1",
-      profilePath: "/safe/profiles/account-1-v1",
-    });
-    assert.deepEqual(result, { status: "RESOLVE_CONFLICT" });
-    assert.equal(value.discoveryInputs.length, 0);
-  });
-
-  await t.test("wrong sessionKey", async () => {
-    const value = fixture({ conversation: cwConversation });
-    const result = await value.service.resolve({
-      conversationId: "conversation-cw-1",
-      lineOfficialAccountId: "oa-cw",
-      botId: "U001732513bc5f534c1a40d36c89bb43f",
-      sessionKey: "profile-wrong",
-      profilePath: "/safe/profiles/account-1-v1",
-    });
-    assert.deepEqual(result, { status: "RESOLVE_CONFLICT" });
-    assert.equal(value.discoveryInputs.length, 0);
-  });
-
-  await t.test("HEAD_OFFICE accountType fails closed", async () => {
-    const value = fixture({
-      conversation: conversation({
-        lineOfficialAccount: {
-          ...cwConversation.lineOfficialAccount,
-          accountType: "HEAD_OFFICE",
-        },
-      }),
-    });
-    const result = await value.service.resolve(input);
-    assert.deepEqual(result, { status: "RESOLVE_CONFLICT" });
-  });
-
-  await t.test("inactive OA fails closed", async () => {
-    const value = fixture({
-      conversation: conversation({
-        lineOfficialAccount: {
-          ...cwConversation.lineOfficialAccount,
-          isActive: false,
-        },
-      }),
-    });
-    const result = await value.service.resolve(input);
-    assert.deepEqual(result, { status: "RESOLVE_CONFLICT" });
-  });
-
-  await t.test("archived OA fails closed", async () => {
-    const value = fixture({
-      conversation: conversation({
-        lineOfficialAccount: {
-          ...cwConversation.lineOfficialAccount,
-          archivedAt: new Date(),
-        },
-      }),
-    });
-    const result = await value.service.resolve(input);
-    assert.deepEqual(result, { status: "RESOLVE_CONFLICT" });
-  });
-
-  await t.test("mismatched conversation.storeId and oa.storeId fails closed", async () => {
-    const value = fixture({
-      conversation: conversation({
-        storeId: "store-other",
-        lineOfficialAccount: {
-          ...cwConversation.lineOfficialAccount,
-          storeId: "store-cw",
-        },
-      }),
-    });
-    const result = await value.service.resolve(input);
-    assert.deepEqual(result, { status: "RESOLVE_CONFLICT" });
-  });
-
-  await t.test("session status DISABLED fails closed", async () => {
-    const value = fixture({
-      conversation: conversation({
-        lineOfficialAccount: {
-          ...cwConversation.lineOfficialAccount,
-          lineChatSession: { sessionKey: "account-1", status: "DISABLED" },
-        },
-      }),
-    });
-    const result = await value.service.resolve(input);
-    assert.deepEqual(result, { status: "RESOLVE_CONFLICT" });
-  });
-});
-
-test("one in-flight mapping refresh is reused to persist multiple safe mappings", async () => {
-  const chatOne = `U${"c".repeat(32)}`;
-  const chatTwo = `U${"d".repeat(32)}`;
+test("one in-flight mapping refresh is reused", async () => {
   let discoveryCalls = 0;
-  const writes: Array<Record<string, unknown>> = [];
+  const prisma = {
+    conversation: {
+      findMany: async () => [],
+      findUnique: async () => null,
+    },
+  };
+  const session = {
+    discoverRecentChats: async () => {
+      discoveryCalls++;
+      await new Promise((resolve) => setImmediate(resolve));
+      return {
+        status: "READY" as const,
+        chats: [chat()],
+        pagesFetched: 1,
+        totalRawRecords: 1,
+      };
+    },
+  };
+  const service = new LineChatRecentResolverService(prisma as never, session as never);
+  const refreshInput = {
+    lineOfficialAccountId: "oa-1",
+    botId: BOT_ID,
+    sessionKey: "profile-b",
+    profilePath: "/safe/profile",
+  };
+  const [first, second] = await Promise.all([
+    service.refreshSnapshot(refreshInput),
+    service.refreshSnapshot(refreshInput),
+  ]);
+  assert.equal(first, second);
+  assert.equal(discoveryCalls, 1);
+});
+
+test("batch backlog maps duplicate-name conversations to distinct LINE chats by timestamp", async () => {
   const rows = [
-    { id: "conversation-1", storeId: "store-28375", lineOfficialAccountId: "oa-1", lineChatUserId: null, customer: { displayName: "สมชาย Oppo" }, store: { code: "28375", storeMaster: null } },
-    { id: "conversation-2", storeId: "store-28375", lineOfficialAccountId: "oa-1", lineChatUserId: null, customer: { displayName: "สุดา Oppo" }, store: { code: "28375", storeMaster: null } },
+    {
+      id: "conversation-a",
+      storeId: "store-28375",
+      lineOfficialAccountId: "oa-1",
+      lineChatUserId: null,
+      customer: { displayName: "Max" },
+      messages: [message(new Date(MESSAGE_AT.getTime() - 120_000))],
+      store: { code: "28375", storeMaster: null },
+    },
+    {
+      id: "conversation-b",
+      storeId: "store-28375",
+      lineOfficialAccountId: "oa-1",
+      lineChatUserId: null,
+      customer: { displayName: "Max" },
+      messages: [message(MESSAGE_AT)],
+      store: { code: "28375", storeMaster: null },
+    },
+    {
+      id: "conversation-c",
+      storeId: "store-28375",
+      lineOfficialAccountId: "oa-1",
+      lineChatUserId: null,
+      customer: { displayName: "Max" },
+      messages: [message(new Date(MESSAGE_AT.getTime() + 120_000))],
+      store: { code: "28375", storeMaster: null },
+    },
   ];
+  const writes: Array<Record<string, unknown>> = [];
+  const diagnostics: string[] = [];
   const tx = {
     conversation: {
       findFirst: async () => null,
@@ -399,92 +450,110 @@ test("one in-flight mapping refresh is reused to persist multiple safe mappings"
   };
   const prisma = {
     conversation: {
-      findMany: async (args: { where?: { id?: { in?: string[] } } }) => args.where?.id?.in ? rows : [],
+      findMany: async (args: { where?: { id?: { in?: string[] }; lineChatUserId?: unknown } }) => {
+        if (args.where?.id?.in) return rows;
+        return [];
+      },
       findUnique: async () => null,
     },
     $transaction: async (callback: (value: typeof tx) => Promise<unknown>) => callback(tx),
   };
-  const session = {
-    discoverRecentChats: async () => {
-      discoveryCalls++;
-      await new Promise((resolve) => setImmediate(resolve));
-      return {
-        status: "READY" as const,
-        chats: [
-          chat(chatOne, "สมชาย Oppo"),
-          chat(chatTwo, "สุดา Oppo"),
-        ],
-        pagesFetched: 1,
-        totalRawRecords: 2,
-      };
-    },
+  const service = new LineChatRecentResolverService(prisma as never, {} as never);
+  (service as unknown as { logger: { log: (value: string) => void } }).logger = {
+    log: (value: string) => diagnostics.push(value),
   };
-  const service = new LineChatRecentResolverService(prisma as never, session as never);
-  const refreshInput = {
-    lineOfficialAccountId: "oa-1",
-    botId: input.botId,
-    sessionKey: input.sessionKey,
-    profilePath: input.profilePath,
+
+  const snapshot = {
+    key: "profile-b::oa-1::bot",
+    status: "READY" as const,
+    chats: [
+      chat(CHAT_ID, "Max", -120_000),
+      chat(CHAT_ID_2, "Max", 0),
+      chat(CHAT_ID_3, "Max", 120_000),
+    ],
+    refreshedAt: new Date(),
+    expiresAt: new Date(Date.now() + 60_000),
+    pagesFetched: 1,
+    totalRawRecords: 3,
   };
-  const [first, second] = await Promise.all([
-    service.refreshSnapshot(refreshInput),
-    service.refreshSnapshot(refreshInput),
-  ]);
-  assert.equal(first, second);
-  assert.equal(discoveryCalls, 1);
 
   const result = await service.applySnapshotMappings({
     lineOfficialAccountId: "oa-1",
-    conversationIds: ["conversation-1", "conversation-2"],
-    snapshot: first,
+    conversationIds: rows.map((row) => row.id),
+    snapshot,
     eligibility: {
       oaStoreId: "store-28375",
       oaAccountType: "STORE",
       oaIsActive: true,
       oaArchivedAt: null,
-      oaChatBotId: input.botId,
-      oaSessionKey: input.sessionKey,
+      oaChatBotId: BOT_ID,
+      oaSessionKey: "profile-b",
       oaSessionStatus: "ACTIVE",
-      expectedBotId: input.botId,
-      expectedSessionKey: input.sessionKey,
+      expectedBotId: BOT_ID,
+      expectedSessionKey: "profile-b",
     },
   });
-  assert.deepEqual(result, {
-    status: "REFRESHED",
-    conversationCount: 2,
-    candidateCount: 2,
-    mappedCount: 2,
-    noMatchCount: 0,
-    ambiguousCount: 0,
-    conflictCount: 0,
-    unresolvedReasons: new Map(),
-  });
-  assert.deepEqual(writes.map((write) => write.data), [
-    { lineChatUserId: chatOne },
-    { lineChatUserId: chatTwo },
-  ]);
 
-  const rejected = await service.applySnapshotMappings({
+  assert.equal(result.mappedCount, 3);
+  assert.equal(result.ambiguousCount, 0);
+  assert.equal(result.noMatchCount, 0);
+  assert.deepEqual(writes.map((write) => (write.data as { lineChatUserId: string }).lineChatUserId), [
+    CHAT_ID,
+    CHAT_ID_2,
+    CHAT_ID_3,
+  ]);
+  assert.equal(diagnostics.length, 3);
+  assert.ok(diagnostics.every((value) => JSON.parse(value).resolutionMethod === "TIMESTAMP_FINGERPRINT"));
+});
+
+test("batch backlog remains ambiguous when duplicate names share the same timestamp window", async () => {
+  const rows = [{
+    id: "conversation-a",
+    storeId: "store-28375",
     lineOfficialAccountId: "oa-1",
-    conversationIds: ["conversation-1", "conversation-2"],
-    snapshot: first,
+    lineChatUserId: null,
+    customer: { displayName: "Max" },
+    messages: [message(MESSAGE_AT)],
+    store: { code: "28375", storeMaster: null },
+  }];
+  const prisma = {
+    conversation: {
+      findMany: async (args: { where?: { id?: { in?: string[] } } }) => args.where?.id?.in ? rows : [],
+      findUnique: async () => null,
+    },
+  };
+  const service = new LineChatRecentResolverService(prisma as never, {} as never);
+  (service as unknown as { logger: { log: () => void } }).logger = { log: () => undefined };
+
+  const result = await service.applySnapshotMappings({
+    lineOfficialAccountId: "oa-1",
+    conversationIds: ["conversation-a"],
+    snapshot: {
+      key: "profile-b::oa-1::bot",
+      status: "READY",
+      chats: [
+        chat(CHAT_ID, "Max", -10_000),
+        chat(CHAT_ID_2, "Max", 10_000),
+      ],
+      refreshedAt: new Date(),
+      expiresAt: new Date(Date.now() + 60_000),
+      pagesFetched: 1,
+      totalRawRecords: 2,
+    },
     eligibility: {
-      oaStoreId: "store-other",
+      oaStoreId: "store-28375",
       oaAccountType: "STORE",
       oaIsActive: true,
       oaArchivedAt: null,
-      oaChatBotId: input.botId,
-      oaSessionKey: input.sessionKey,
+      oaChatBotId: BOT_ID,
+      oaSessionKey: "profile-b",
       oaSessionStatus: "ACTIVE",
-      expectedBotId: input.botId,
-      expectedSessionKey: input.sessionKey,
+      expectedBotId: BOT_ID,
+      expectedSessionKey: "profile-b",
     },
   });
-  assert.equal(rejected.conflictCount, 2);
-  assert.equal(rejected.candidateCount, 0);
-  assert.deepEqual([...rejected.unresolvedReasons.entries()], [
-    ["conversation-1", "RESOLVE_CONFLICT"],
-    ["conversation-2", "RESOLVE_CONFLICT"],
-  ]);
-  assert.equal(writes.length, 2);
+
+  assert.equal(result.mappedCount, 0);
+  assert.equal(result.ambiguousCount, 1);
+  assert.equal(result.unresolvedReasons.get("conversation-a"), "RESOLVE_AMBIGUOUS");
 });
