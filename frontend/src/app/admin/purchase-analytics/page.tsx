@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { AuthorizedSection } from "../../authorized-workspace";
 import { LegacyI18nBoundary } from "../../legacy-i18n-boundary";
 import { pickLanguageText, useAppLanguage } from "../../language";
-import PurchaseAnalyticsDesktopPage from "./purchase-analytics-desktop";
+import PurchaseIntelligenceDashboard from "./purchase-intelligence-dashboard";
 import { purchaseAnalyticsPhrases, purchaseAnalyticsTemplates } from "./purchase-analytics-i18n";
 import { MobilePurchaseAnalyticsApp } from "./mobile-purchase-analytics-app";
 
@@ -36,7 +36,7 @@ export default function PurchaseAnalyticsPage() {
   return (
     <LegacyI18nBoundary phrases={purchaseAnalyticsPhrases} templates={purchaseAnalyticsTemplates}>
       <AuthorizedSection section="purchase-analytics">
-        {mode === "mobile" ? <MobilePurchaseAnalyticsApp /> : <PurchaseAnalyticsDesktopPage />}
+        {mode === "mobile" ? <MobilePurchaseAnalyticsApp /> : <PurchaseIntelligenceDashboard />}
       </AuthorizedSection>
     </LegacyI18nBoundary>
   );
