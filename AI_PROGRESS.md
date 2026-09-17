@@ -1,21 +1,24 @@
 # 2026-09-17: Connect TikTok Analytics Dashboard UI to Live Production Data [COMPLETED & VERIFIED]
-- **Current Task**: Connect the existing TikTok Analytics dashboard UI to real production TikTok public metrics backend (`/tiktok` and `/tiktok/stores/[storeMasterId]`), remove mock/preview fallback data, add loading skeletons, error boundaries, client refresh controls, and preserve honest growth metrics semantics.
+- **Current Task**: Complete final verification and gap-closing pass on TikTok Analytics live metrics dashboard.
 - **Completed Work**:
   - **Removed Hardcoded Mock/Preview Data (`tiktok-public-dashboard.tsx`)**: Removed 115 lines of fake `previewStores` objects and `isPreview` fallback logic. Production data from SSR props is rendered directly.
   - **Updated Public Metrics Badge (`tiktok-public-dashboard.tsx`)**: Updated badge text from `"Exact metrics only · statsV2"` to `"Exact public metrics"` across English and Thai locales to accurately reflect the multi-provider pipeline (`COUNTIK` → `TOKCOUNTER` → `TIKTOK_DIRECT`).
-  - **Client-Side Refresh Control**: Added interactive ↻ refresh buttons using Next.js `useRouter().refresh()` with spinning state animation on both the main dashboard and store detail views.
+  - **Persisted Timestamp Badge**: Displayed `overview.lastUpdatedAt` in header badge group, formatted in Asia/Bangkok time, grounded in real database `collectedAt` timestamps.
+  - **Complete Sorting Options**: Implemented robust sort handling for `Followers`, `1D growth`, `7D growth`, `30D growth`, and `Store Name (A-Z)`, properly sorting nulls to the bottom without treating missing baselines as zero.
+  - **Non-Blocking Refresh Transitions**: Upgraded refresh handler to React 19 `useTransition` with `startTransition(() => router.refresh())`. Prevents screen blanking and retains stale data while refresh is in-flight.
   - **Single-Store Query Optimization (`stores/[storeMasterId]/page.tsx`)**: Replaced `fetchTikTokPublicStores()` + array filter with `fetchTikTokPublicStore(storeMasterId)` single-store API call, reducing payload transfer.
   - **Loading Skeletons (`loading.tsx`)**: Created responsive, theme-aware animated pulse loading skeletons for `/tiktok` (header, 4 KPI cards, top-5 ranking, and store performance table) and `/tiktok/stores/[storeMasterId]` (header, profile info, 4 metrics cards, 3 growth cards, and sparkline chart).
   - **Error Boundaries (`error.tsx`)**: Implemented client-side error boundaries with localized user guidance, distinction between auth expiration (`UNAUTHORIZED`) and network/fetch failures, and retry handlers (`reset()`).
   - **Growth Metrics Integrity**: Verified that `0` denotes measured zero growth while `null` / unavailable baseline renders as `"—"` (em-dash), strictly preventing misleading conversions of missing historical baselines to zero.
 - **Checks Run & Passed**:
-  - `npx eslint` on all 8 TikTok dashboard files: 0 errors.
+  - `npx eslint` on all TikTok dashboard files: 0 errors.
   - `npm --prefix frontend run build`: passed cleanly (Turbopack, 44/44 pages compiled).
   - `npm --prefix frontend test`: 589/589 tests passed.
   - `npm --prefix backend run build`: passed cleanly (`prisma generate && nest build`).
   - `npx tsx --test src/tiktok/*.spec.ts`: 76/76 passed.
-  - Git commit: `fd2ccc0` (`feat(tiktok): connect analytics dashboard to live metrics`).
-- **Next Action**: Await user instructions for future enhancements. Do NOT push without permission.
+  - Live production DB audit: 148 active stores covered, 945,058 followers, 9,410,380 likes, 25,692 videos.
+  - Git commits: `fd2ccc0`, `b9fe143`, and `a9e3161`.
+- **Next Action**: Await user permission before pushing to GitHub.
 
 # 2026-09-17: TikTok Permanent Daily Public Metrics Automation & Launchd Scheduling [COMPLETED & VERIFIED]
 - **Current Task**: Deploy permanent daily TikTok public metrics automation using the Google Review operational pattern, stagger LaunchAgent scheduling, implement missed-snapshot detection, and verify clean runner execution.
