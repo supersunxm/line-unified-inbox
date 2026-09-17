@@ -4,7 +4,7 @@ export type LineChatNicknameInput = {
   status?: "ONLINE" | "INTERESTED" | "PURCHASED" | "FILM" | null;
   filmBrand?: string | null;
   onlineSource?: string | null;
-  paymentMethod?: "CASH" | "INSTALLMENT" | "CREDIT_CARD" | "OTHER" | null;
+  paymentMethod?: "CASH" | "INSTALLMENT" | "CREDIT_CARD" | "UFUND" | "SG_FINANCE" | "OTHER" | null;
   recordedAt?: Date | string | null;
   products?: readonly {
     customProductName?: string | null;
@@ -193,9 +193,13 @@ export function buildLineChatNickname(input: LineChatNicknameInput): string | nu
 
   const paymentLabel = input.paymentMethod === "CASH"
     ? "สด"
-    : input.paymentMethod === "INSTALLMENT"
+    : input.paymentMethod === "INSTALLMENT" || input.paymentMethod === "CREDIT_CARD"
       ? "ผ่อน"
-      : null;
+      : input.paymentMethod === "UFUND"
+        ? "Ufund"
+        : input.paymentMethod === "SG_FINANCE"
+          ? "SG"
+          : null;
   if (!paymentLabel) return null;
 
   if (!input.recordedAt) return null;

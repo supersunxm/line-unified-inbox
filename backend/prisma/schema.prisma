@@ -57,6 +57,8 @@ enum PaymentMethodType {
   CASH
   INSTALLMENT
   CREDIT_CARD
+  UFUND
+  SG_FINANCE
   OTHER
 }
 

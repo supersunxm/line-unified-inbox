@@ -319,6 +319,8 @@ class ConversationTagsBar extends StatelessWidget {
                                     '💵 ${appLocalizations(context).paymentCash}',
                                   'CREDIT_CARD' =>
                                     '💳 ${appLocalizations(context).paymentCreditCard}',
+                                  'UFUND' => '💳 Ufund',
+                                  'SG_FINANCE' => '💳 SG Finance',
                                   'OTHER' =>
                                     '🏷️ ${appLocalizations(context).paymentOther}',
                                   _ => sales.paymentMethod!,
@@ -540,6 +542,13 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
           : _onlineSource == null
               ? null
               : 'Other';
+
+  bool get _isInstallmentPayment => const <String>{
+        'INSTALLMENT',
+        'CREDIT_CARD',
+        'UFUND',
+        'SG_FINANCE',
+      }.contains(_paymentMethod);
 
   bool get _hasValidFilmBrand {
     if (_status != 'FILM') return false;
@@ -1058,6 +1067,24 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
       _paymentMethod = selected ? value : null;
       _dirty = true;
     });
+  }
+
+  void _setInstallmentSelected(bool selected) {
+    setState(() {
+      if (selected) {
+        if (!_isInstallmentPayment) {
+          _paymentMethod = 'CREDIT_CARD';
+        }
+      } else if (_isInstallmentPayment) {
+        _paymentMethod = null;
+      }
+      _dirty = true;
+    });
+  }
+
+  void _setInstallmentProvider(String value, bool selected) {
+    if (!selected) return;
+    _setPaymentMethod(value, true);
   }
 
   void _setStatus(String? status) {
@@ -1607,16 +1634,8 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                         _choice(
                           'INSTALLMENT',
                           '💳 ${l10n.installment}',
-                          _paymentMethod == 'INSTALLMENT',
-                          (selected) =>
-                              _setPaymentMethod('INSTALLMENT', selected),
-                        ),
-                        _choice(
-                          'CREDIT_CARD',
-                          '💳 ${l10n.paymentCreditCard}',
-                          _paymentMethod == 'CREDIT_CARD',
-                          (selected) =>
-                              _setPaymentMethod('CREDIT_CARD', selected),
+                          _isInstallmentPayment,
+                          _setInstallmentSelected,
                         ),
                         _choice(
                           'OTHER',
@@ -1626,6 +1645,45 @@ class _ConversationTagsSheetState extends State<ConversationTagsSheet> {
                         ),
                       ],
                     ),
+                    if (_isInstallmentPayment) ...[
+                      const SizedBox(height: AppSpacing.md),
+                      Text(
+                        'Installment Type',
+                        style: Theme.of(context)
+                            .textTheme
+                            .titleSmall
+                            ?.copyWith(fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(height: AppSpacing.xs),
+                      Wrap(
+                        spacing: AppSpacing.sm,
+                        runSpacing: AppSpacing.xs,
+                        children: [
+                          _choice(
+                            'CREDIT_CARD',
+                            '💳 ${l10n.paymentCreditCard}',
+                            _paymentMethod == 'INSTALLMENT' ||
+                                _paymentMethod == 'CREDIT_CARD',
+                            (selected) => _setInstallmentProvider(
+                                'CREDIT_CARD', selected),
+                          ),
+                          _choice(
+                            'UFUND',
+                            'Ufund',
+                            _paymentMethod == 'UFUND',
+                            (selected) =>
+                                _setInstallmentProvider('UFUND', selected),
+                          ),
+                          _choice(
+                            'SG_FINANCE',
+                            'SG Finance',
+                            _paymentMethod == 'SG_FINANCE',
+                            (selected) => _setInstallmentProvider(
+                                'SG_FINANCE', selected),
+                          ),
+                        ],
+                      ),
+                    ],
                     const SizedBox(height: AppSpacing.lg),
                   ],
                   if (_status != 'FILM' && _status != 'ONLINE') ...[

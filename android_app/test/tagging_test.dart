@@ -633,6 +633,15 @@ void main() {
     await tester.tap(find.widgetWithText(ChoiceChip, '○ 💳 Installment'));
     await tester.pumpAndSettle();
 
+    expect(find.text('Installment Type'), findsOneWidget);
+    expect(find.widgetWithText(ChoiceChip, '✓ 💳 Credit Card'), findsOneWidget);
+    expect(find.widgetWithText(ChoiceChip, '○ Ufund'), findsOneWidget);
+    expect(find.widgetWithText(ChoiceChip, '○ SG Finance'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(ChoiceChip, '○ Ufund'));
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(ChoiceChip, '✓ Ufund'), findsOneWidget);
+
     await tester.tap(find.text('+ Add Product').first);
     await tester.pumpAndSettle();
     await tester.tap(find.text('OPPO Reno16 Pro 5G').last);
@@ -655,7 +664,7 @@ void main() {
 
     expect(repository.currentSales?.status, 'PURCHASED');
     expect(repository.currentSales?.purchaseChannel, ['STORE']);
-    expect(repository.currentSales?.paymentMethod, 'INSTALLMENT');
+    expect(repository.currentSales?.paymentMethod, 'UFUND');
     expect(repository.currentSales?.products.length, 1);
   });
 
