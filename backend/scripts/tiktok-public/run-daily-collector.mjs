@@ -10,6 +10,7 @@ import {
   normalizeTikTokUsername,
 } from "./sheet-reader.mjs";
 import { extractAccountMetrics } from "./tokcounter-extractor.mjs";
+import { TikTokPublicProviderManager } from "./providers/provider-manager.mjs";
 import {
   getProductionPrismaClient,
   maskDatabaseUrl,
@@ -364,6 +365,11 @@ export async function runDailyCollector(cliOptions = {}) {
 
     const page = await context.newPage();
 
+    const providerManager = new TikTokPublicProviderManager({
+      logger,
+      priority: ["COUNTIK", "TOKCOUNTER", "TIKTOK_DIRECT"],
+    });
+
     const results = [];
     const successfulAccounts = [];
     const failedAccounts = [];
@@ -387,28 +393,55 @@ export async function runDailyCollector(cliOptions = {}) {
         continue;
       }
 
-      let extraction = await extractAccountMetrics(page, target.username, { timeoutMs: 25000 });
+      // Gather candidate usernames for this account (handle typos/hyphen differences)
+      const candidateUsernames = new Set();
+      candidateUsernames.add(target.username);
+      if (target.username.includes("-")) {
+        candidateUsernames.add(target.username.replace(/-/g, "_"));
+      }
+      for (const s of target.stores) {
+        if (s.rawUrl) {
+          const u = normalizeTikTokUsername(s.rawUrl);
+          if (u) candidateUsernames.add(u);
+        }
+        if (s.rawUser) {
+          const u = normalizeTikTokUsername(s.rawUser);
+          if (u) candidateUsernames.add(u);
+        }
+      }
 
-      // Handle Rate Limit with cooldown backoff and retry
+      let extraction = await providerManager.extractWithFailover(target.username, {
+        candidateUsernames: Array.from(candidateUsernames),
+        target,
+        page,
+        timeoutMs: 20000,
+      });
+
+      // Handle Rate Limit with cooldown backoff and retry if all providers fail
       if (extraction.status === "RATE_LIMITED") {
         logger.warn(
-          `  -> RATE LIMITED by TokCounter! Pausing collector for 60s cooldown before retrying @${target.username}...`
+          `  -> ALL PROVIDERS RATE LIMITED! Pausing collector for 60s cooldown before retrying @${target.username}...`
         );
         await new Promise((resolve) => setTimeout(resolve, 60000));
         logger.log(`  -> Retrying @${target.username} after cooldown...`);
-        const retryExtraction = await extractAccountMetrics(page, target.username, { timeoutMs: 25000 });
+        const retryExtraction = await providerManager.extractWithFailover(target.username, {
+          candidateUsernames: Array.from(candidateUsernames),
+          target,
+          page,
+          timeoutMs: 20000,
+        });
         if (retryExtraction.status === "SUCCESS") {
           extraction = retryExtraction;
         } else {
           logger.warn(
-            `  -> TokCounter rate limit remains active after cooldown. Halting current run to prevent hammering.`
+            `  -> Providers remain rate limited after cooldown. Halting current run to prevent hammering.`
           );
           failedAccounts.push({
             username: target.username,
             stores: target.stores,
             status: "RATE_LIMITED",
-            error: extraction.error || "TokCounter API returned 403 Forbidden / Rate Limit",
-            durationMs: extraction.durationMs,
+            error: extraction.error || "All providers rate limited",
+            durationMs: extraction.durationMs || 0,
           });
           results.push({ target, extraction });
 
@@ -420,7 +453,7 @@ export async function runDailyCollector(cliOptions = {}) {
                 username: remTarget.username,
                 stores: remTarget.stores,
                 status: "RATE_LIMITED",
-                error: "Run halted due to active TokCounter IP rate limit",
+                error: "Run halted due to active provider rate limit",
                 durationMs: 0,
               });
               results.push({
@@ -428,7 +461,7 @@ export async function runDailyCollector(cliOptions = {}) {
                 extraction: {
                   status: "RATE_LIMITED",
                   username: remTarget.username,
-                  error: "Run halted due to active TokCounter IP rate limit",
+                  error: "Run halted due to active provider rate limit",
                   durationMs: 0,
                 },
               });
@@ -448,7 +481,7 @@ export async function runDailyCollector(cliOptions = {}) {
 
       if (extraction.status === "SUCCESS") {
         logger.log(
-          `  -> SUCCESS: ${extraction.followerCount} followers (${extraction.precision}), ${extraction.followingCount} following, ${extraction.likesCount} likes (DOM), ${extraction.videoCount} videos (${extraction.durationMs}ms)`
+          `  -> SUCCESS (${extraction.source}): ${extraction.followerCount} followers (${extraction.precision}), ${extraction.followingCount ?? "-"} following, ${extraction.likesCount ?? "-"} likes, ${extraction.videoCount ?? "-"} videos (${extraction.durationMs}ms)`
         );
 
         // Database persistence
@@ -461,13 +494,14 @@ export async function runDailyCollector(cliOptions = {}) {
                 username: target.username,
                 displayName: extraction.displayName || null,
                 profileUrl: target.profileUrl,
-                source: "TOKCOUNTER",
+                source: extraction.source,
                 firstSeenAt: referenceNow,
                 lastCollectedAt: referenceNow,
               },
               update: {
                 displayName: extraction.displayName || undefined,
                 profileUrl: target.profileUrl,
+                source: extraction.source,
                 lastCollectedAt: referenceNow,
               },
             });
@@ -506,7 +540,7 @@ export async function runDailyCollector(cliOptions = {}) {
                 likesRaw: extraction.likesRaw,
                 videosRaw: extraction.videosRaw,
                 precision: extraction.precision,
-                source: "TOKCOUNTER",
+                source: extraction.source,
                 collectedAt: referenceNow,
               },
               update: {
@@ -519,7 +553,7 @@ export async function runDailyCollector(cliOptions = {}) {
                 likesRaw: extraction.likesRaw,
                 videosRaw: extraction.videosRaw,
                 precision: extraction.precision,
-                source: "TOKCOUNTER",
+                source: extraction.source,
                 collectedAt: referenceNow,
               },
             });
@@ -534,17 +568,18 @@ export async function runDailyCollector(cliOptions = {}) {
           followers: extraction.followerCount,
           precision: extraction.precision,
           durationMs: extraction.durationMs,
+          source: extraction.source,
         });
       } else {
         logger.warn(
-          `  -> FAILED: status=${extraction.status}, error=${extraction.error || "unknown"} (${extraction.durationMs}ms)`
+          `  -> FAILED: status=${extraction.status}, error=${extraction.error || "unknown"} (${extraction.durationMs || 0}ms)`
         );
         failedAccounts.push({
           username: target.username,
           stores: target.stores,
           status: extraction.status,
           error: extraction.error,
-          durationMs: extraction.durationMs,
+          durationMs: extraction.durationMs || 0,
         });
       }
 
@@ -553,11 +588,11 @@ export async function runDailyCollector(cliOptions = {}) {
         extraction,
       });
 
-      // Conservative pacing between sequential account navigations (8–15s jitter)
+      // Conservative pacing between sequential account extractions (8–15s jitter)
       if (index < targets.length - 1) {
         const delayMs = calculatePacingDelayMs(cliOptions.minDelayMs || 8000, cliOptions.maxDelayMs || 15000);
         logger.log(`  -> Conservative pause: waiting ${(delayMs / 1000).toFixed(1)}s before next account...`);
-        await page.waitForTimeout(delayMs);
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
       }
     }
 
