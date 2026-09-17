@@ -1,7 +1,7 @@
 name: line_oa_chat_hub
 description: Android client for OPPO LINE OA Chat.
 publish_to: none
-version: 1.1.31+51
+version: 1.1.32+52
 
 environment:
   sdk: ^3.4.0
