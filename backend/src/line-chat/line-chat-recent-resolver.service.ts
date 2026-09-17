@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger } from "@nestjs/common";
-import { Prisma } from "@prisma/client";
+import { MessageDeliveryStatus, MessageDirection, Prisma } from "@prisma/client";
 import { PrismaService } from "../prisma.service";
 import { LineChatSessionService } from "./line-chat-session.service";
 import type { LineChatDiscoveredChat } from "./line-chat.types";
@@ -15,7 +15,9 @@ const MAX_RECENT_CHATS = 125;
 export const RECENT_MAPPING_CACHE_TTL_MS = 60_000;
 const RECENT_MAPPING_FAILURE_CACHE_TTL_MS = 30_000;
 
-export type ResolverTargetTimestampSource = "MESSAGE_SENT_AT" | "CONVERSATION_LATEST_MESSAGE_AT";
+export type ResolverTargetTimestampSource = "MESSAGE_SENT_AT" | "CONVERSATION_LATEST_MESSAGE_AT" | "NONE";
+export type ResolverResolutionMethod = "TIMESTAMP_FINGERPRINT" | "NAME_ONLY" | "UNRESOLVED";
+export type ResolverAnchorDirection = "INBOUND" | "OUTBOUND" | "NONE";
 export type ResolverTimestampDeltaBucket =
   | "<=15s"
   | "16s-30s"
@@ -30,14 +32,18 @@ export type ResolverTimestampDeltaBucket =
 export interface LineChatRecentResolverDiagnostic {
   event: "line_chat_recent_resolver_diagnostic";
   resolutionStatus: LineChatRecentResolutionResult["status"];
+  resolutionMethod: ResolverResolutionMethod;
   conversationId: string;
   recentChatCount: number;
   validTimestampChatCount: number;
   exactNameMatchCount: number;
+  nameCandidateCount: number;
   timestampWithinToleranceCount: number;
   combinedMatchCount: number;
+  fingerprintMatchCount: number;
   closestExactNameTimestampDeltaBucket: ResolverTimestampDeltaBucket;
   targetTimestampSource: ResolverTargetTimestampSource;
+  anchorDirection: ResolverAnchorDirection;
   exactNameWithMissingTimestampCount: number;
 }
 
@@ -102,6 +108,12 @@ export type LineChatMappingEligibility = Pick<
   | "expectedSessionKey"
 >;
 
+type ResolverMessage = {
+  sentAt: Date;
+  direction: MessageDirection;
+  deliveryStatus: MessageDeliveryStatus;
+};
+
 type ResolverConversation = {
   id: string;
   storeId: string | null;
@@ -109,7 +121,7 @@ type ResolverConversation = {
   lineChatUserId: string | null;
   latestMessageAt: Date;
   customer: { displayName: string };
-  messages: Array<{ sentAt: Date }>;
+  messages: ResolverMessage[];
   store: { code: string | null; storeMaster: { externalStoreId: string | null } | null } | null;
   lineOfficialAccount: {
     name: string;
@@ -128,8 +140,25 @@ type BatchMappingConversation = {
   lineOfficialAccountId: string;
   lineChatUserId: string | null;
   customer: { displayName: string };
+  messages: ResolverMessage[];
   store: { code: string | null; storeMaster: { externalStoreId: string | null } | null } | null;
 };
+
+type ResolverAnchor = {
+  sentAt: Date;
+  direction: MessageDirection.INBOUND | MessageDirection.OUTBOUND;
+};
+
+type CandidateDecision =
+  | {
+      status: "RESOLVED";
+      candidate: LineChatDiscoveredChat;
+      method: Exclude<ResolverResolutionMethod, "UNRESOLVED">;
+    }
+  | {
+      status: "RESOLVE_NO_MATCH" | "RESOLVE_AMBIGUOUS";
+      method: "UNRESOLVED";
+    };
 
 function normalizeName(value: string | null | undefined): string {
   return (value ?? "").normalize("NFKC").trim().replace(/\s+/gu, " ").toLocaleLowerCase();
@@ -137,6 +166,38 @@ function normalizeName(value: string | null | undefined): string {
 
 function pilotStoreCode(store: { code: string | null; storeMaster: { externalStoreId: string | null } | null } | null): string {
   return store?.code?.trim() || store?.storeMaster?.externalStoreId?.trim() || "";
+}
+
+function usableMessageWhere(): Prisma.MessageWhereInput {
+  return {
+    OR: [
+      { direction: MessageDirection.INBOUND },
+      {
+        direction: MessageDirection.OUTBOUND,
+        deliveryStatus: MessageDeliveryStatus.DELIVERED,
+      },
+    ],
+  };
+}
+
+function selectResolverAnchor(messages: readonly ResolverMessage[]): ResolverAnchor | null {
+  const usable = messages
+    .filter((message) => (
+      message.direction === MessageDirection.INBOUND
+      || (
+        message.direction === MessageDirection.OUTBOUND
+        && message.deliveryStatus === MessageDeliveryStatus.DELIVERED
+      )
+    ))
+    .filter((message) => Number.isFinite(message.sentAt.getTime()))
+    .sort((a, b) => b.sentAt.getTime() - a.sentAt.getTime());
+
+  const message = usable[0];
+  if (!message) return null;
+  return {
+    sentAt: message.sentAt,
+    direction: message.direction,
+  };
 }
 
 function timestampDeltaBucket(deltaMs: number | null): ResolverTimestampDeltaBucket {
@@ -151,53 +212,103 @@ function timestampDeltaBucket(deltaMs: number | null): ResolverTimestampDeltaBuc
   return ">60m";
 }
 
+function chatTimestampMs(chat: LineChatDiscoveredChat): number | null {
+  if (!chat.lastMessageAt) return null;
+  const value = new Date(chat.lastMessageAt).getTime();
+  return Number.isFinite(value) ? value : null;
+}
+
+function chooseCandidate(
+  candidates: readonly LineChatDiscoveredChat[],
+  anchor: ResolverAnchor | null,
+): CandidateDecision {
+  if (candidates.length === 0) {
+    return { status: "RESOLVE_NO_MATCH", method: "UNRESOLVED" };
+  }
+
+  if (anchor) {
+    const anchorMs = anchor.sentAt.getTime();
+    const timestampMatches = candidates.filter((chat) => {
+      const candidateMs = chatTimestampMs(chat);
+      return candidateMs !== null && Math.abs(candidateMs - anchorMs) <= MATCH_TOLERANCE_MS;
+    });
+
+    if (timestampMatches.length === 1) {
+      return {
+        status: "RESOLVED",
+        candidate: timestampMatches[0],
+        method: "TIMESTAMP_FINGERPRINT",
+      };
+    }
+    if (timestampMatches.length > 1) {
+      return { status: "RESOLVE_AMBIGUOUS", method: "UNRESOLVED" };
+    }
+
+    // A confirmed local message timestamp is stronger evidence than display name.
+    // If the LINE candidate timeline disagrees, fail closed instead of falling
+    // back to a name-only match that could target the wrong same-name customer.
+    return { status: "RESOLVE_NO_MATCH", method: "UNRESOLVED" };
+  }
+
+  if (candidates.length === 1) {
+    return {
+      status: "RESOLVED",
+      candidate: candidates[0],
+      method: "NAME_ONLY",
+    };
+  }
+
+  return { status: "RESOLVE_AMBIGUOUS", method: "UNRESOLVED" };
+}
+
 function buildDiagnostic(
   conversationId: string,
   recentChats: readonly LineChatDiscoveredChat[],
   targetName: string,
-  targetTimestamp: Date,
-  targetTimestampSource: ResolverTargetTimestampSource,
+  anchor: ResolverAnchor | null,
   resolutionStatus: LineChatRecentResolutionResult["status"],
+  resolutionMethod: ResolverResolutionMethod,
 ): LineChatRecentResolverDiagnostic {
-  const targetMs = targetTimestamp.getTime();
-  const targetIsValid = Number.isFinite(targetMs);
-  const validTimestampChatCount = recentChats.filter((chat) => {
-    const value = chat.lastMessageAt ? new Date(chat.lastMessageAt).getTime() : NaN;
-    return Number.isFinite(value);
-  }).length;
+  const targetMs = anchor?.sentAt.getTime() ?? null;
+  const targetIsValid = targetMs !== null && Number.isFinite(targetMs);
+  const validTimestampChatCount = recentChats.filter((chat) => chatTimestampMs(chat) !== null).length;
   const exactNameChats = targetName
     ? recentChats.filter((chat) => normalizeName(chat.displayName) === targetName)
     : [];
   const timestampWithinToleranceCount = targetIsValid
     ? recentChats.filter((chat) => {
-      const value = chat.lastMessageAt ? new Date(chat.lastMessageAt).getTime() : NaN;
-      return Number.isFinite(value) && Math.abs(value - targetMs) <= MATCH_TOLERANCE_MS;
+      const value = chatTimestampMs(chat);
+      return value !== null && Math.abs(value - targetMs) <= MATCH_TOLERANCE_MS;
     }).length
     : 0;
   const combinedMatchCount = targetIsValid
     ? exactNameChats.filter((chat) => {
-      const value = chat.lastMessageAt ? new Date(chat.lastMessageAt).getTime() : NaN;
-      return Number.isFinite(value) && Math.abs(value - targetMs) <= MATCH_TOLERANCE_MS;
+      const value = chatTimestampMs(chat);
+      return value !== null && Math.abs(value - targetMs) <= MATCH_TOLERANCE_MS;
     }).length
     : 0;
   const exactNameDeltas = exactNameChats
     .map((chat) => {
-      const value = chat.lastMessageAt ? new Date(chat.lastMessageAt).getTime() : NaN;
-      return targetIsValid && Number.isFinite(value) ? Math.abs(value - targetMs) : null;
+      const value = chatTimestampMs(chat);
+      return targetIsValid && value !== null ? Math.abs(value - targetMs) : null;
     })
     .filter((value): value is number => value !== null);
   const closestDelta = exactNameDeltas.length > 0 ? Math.min(...exactNameDeltas) : null;
   return {
     event: "line_chat_recent_resolver_diagnostic",
     resolutionStatus,
+    resolutionMethod,
     conversationId,
     recentChatCount: recentChats.length,
     validTimestampChatCount,
     exactNameMatchCount: exactNameChats.length,
+    nameCandidateCount: exactNameChats.length,
     timestampWithinToleranceCount,
     combinedMatchCount,
+    fingerprintMatchCount: combinedMatchCount,
     closestExactNameTimestampDeltaBucket: timestampDeltaBucket(closestDelta),
-    targetTimestampSource,
+    targetTimestampSource: anchor ? "MESSAGE_SENT_AT" : "NONE",
+    anchorDirection: anchor?.direction ?? "NONE",
     exactNameWithMissingTimestampCount: exactNameChats.length - exactNameDeltas.length,
   };
 }
@@ -271,6 +382,8 @@ export class LineChatRecentResolverService {
   /**
    * Applies one snapshot to many unresolved conversations. Every write is
    * guarded by OA identity, a null mapping, and same-OA candidate uniqueness.
+   * Duplicate display names are separated by the timestamp of the latest
+   * confirmed local message whenever that evidence exists.
    */
   public async applySnapshotMappings(input: {
     lineOfficialAccountId: string;
@@ -317,6 +430,16 @@ export class LineChatRecentResolverService {
         lineOfficialAccountId: true,
         lineChatUserId: true,
         customer: { select: { displayName: true } },
+        messages: {
+          where: usableMessageWhere(),
+          orderBy: { sentAt: "desc" },
+          take: 1,
+          select: {
+            sentAt: true,
+            direction: true,
+            deliveryStatus: true,
+          },
+        },
         store: {
           select: {
             code: true,
@@ -347,6 +470,7 @@ export class LineChatRecentResolverService {
     };
     const proposed = new Map<string, string>();
     const proposedByChatId = new Map<string, string>();
+
     for (const conversation of conversations) {
       if (!isLineChatRealtimeResolverEligible({
         storeCode: pilotStoreCode(conversation.store),
@@ -357,29 +481,68 @@ export class LineChatRecentResolverService {
         result.unresolvedReasons.set(conversation.id, "RESOLVE_CONFLICT");
         continue;
       }
-      const candidates = candidatesByName.get(normalizeName(conversation.customer.displayName)) ?? [];
-      if (candidates.length === 0) {
+
+      const targetName = normalizeName(conversation.customer.displayName);
+      const candidates = candidatesByName.get(targetName) ?? [];
+      const anchor = selectResolverAnchor(conversation.messages);
+      const decision = chooseCandidate(candidates, anchor);
+
+      if (decision.status === "RESOLVE_NO_MATCH") {
         result.noMatchCount++;
         result.unresolvedReasons.set(conversation.id, "RESOLVE_NO_MATCH");
+        this.emitDiagnostic(buildDiagnostic(
+          conversation.id,
+          input.snapshot.chats,
+          targetName,
+          anchor,
+          decision.status,
+          decision.method,
+        ));
         continue;
       }
-      if (candidates.length > 1) {
+      if (decision.status === "RESOLVE_AMBIGUOUS") {
         result.ambiguousCount++;
         result.unresolvedReasons.set(conversation.id, "RESOLVE_AMBIGUOUS");
+        this.emitDiagnostic(buildDiagnostic(
+          conversation.id,
+          input.snapshot.chats,
+          targetName,
+          anchor,
+          decision.status,
+          decision.method,
+        ));
         continue;
       }
+
       result.candidateCount++;
-      const chatUserId = candidates[0].chatUserId;
+      const chatUserId = decision.candidate.chatUserId;
       const previousConversationId = proposedByChatId.get(chatUserId);
       if (previousConversationId) {
         proposed.delete(previousConversationId);
         result.conflictCount++;
         result.unresolvedReasons.set(previousConversationId, "RESOLVE_CONFLICT");
         result.unresolvedReasons.set(conversation.id, "RESOLVE_CONFLICT");
+        this.emitDiagnostic(buildDiagnostic(
+          conversation.id,
+          input.snapshot.chats,
+          targetName,
+          anchor,
+          "RESOLVE_CONFLICT",
+          "UNRESOLVED",
+        ));
         continue;
       }
+
       proposed.set(conversation.id, chatUserId);
       proposedByChatId.set(chatUserId, conversation.id);
+      this.emitDiagnostic(buildDiagnostic(
+        conversation.id,
+        input.snapshot.chats,
+        targetName,
+        anchor,
+        "RESOLVED",
+        decision.method,
+      ));
     }
 
     if (proposed.size === 0) return result;
@@ -436,6 +599,7 @@ export class LineChatRecentResolverService {
         }
       }
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+
     return result;
   }
 
@@ -450,9 +614,14 @@ export class LineChatRecentResolverService {
         latestMessageAt: true,
         customer: { select: { displayName: true } },
         messages: {
+          where: usableMessageWhere(),
           orderBy: { sentAt: "desc" },
           take: 1,
-          select: { sentAt: true },
+          select: {
+            sentAt: true,
+            direction: true,
+            deliveryStatus: true,
+          },
         },
         store: {
           select: {
@@ -472,7 +641,7 @@ export class LineChatRecentResolverService {
           },
         },
       },
-    });
+    }) as ResolverConversation | null;
 
     if (!conversation || conversation.lineOfficialAccountId !== input.lineOfficialAccountId) {
       return { status: "RESOLVE_CONFLICT" };
@@ -499,11 +668,7 @@ export class LineChatRecentResolverService {
     if (!eligible) return { status: "RESOLVE_CONFLICT" };
 
     const targetName = normalizeName(conversation.customer.displayName);
-    const targetMessage = conversation.messages[0]?.sentAt;
-    const targetTimestamp = targetMessage ?? conversation.latestMessageAt;
-    const targetTimestampSource: ResolverTargetTimestampSource = targetMessage
-      ? "MESSAGE_SENT_AT"
-      : "CONVERSATION_LATEST_MESSAGE_AT";
+    const anchor = selectResolverAnchor(conversation.messages);
 
     let snapshot = this.getFreshSnapshot({
       lineOfficialAccountId: input.lineOfficialAccountId,
@@ -514,12 +679,12 @@ export class LineChatRecentResolverService {
     const usedExistingSnapshot = Boolean(snapshot);
     snapshot ??= await this.refreshSnapshot({ ...input, force: false });
 
-    let result = await this.resolveFromSnapshot(conversation, input, snapshot, targetName, targetTimestamp, targetTimestampSource);
-    // A background NO_MATCH snapshot is deliberately not allowed to make a
+    let result = await this.resolveFromSnapshot(conversation, input, snapshot, targetName, anchor);
+    // A background unresolved snapshot is deliberately not allowed to make a
     // customer relay stale. Relay resolution gets one fresh bounded read.
     if (usedExistingSnapshot && ["RESOLVE_NO_MATCH", "RESOLVE_AMBIGUOUS", "RESOLVE_TRANSPORT"].includes(result.status)) {
       snapshot = await this.refreshSnapshot({ ...input, force: true });
-      result = await this.resolveFromSnapshot(conversation, input, snapshot, targetName, targetTimestamp, targetTimestampSource);
+      result = await this.resolveFromSnapshot(conversation, input, snapshot, targetName, anchor);
     }
     return result;
   }
@@ -592,35 +757,47 @@ export class LineChatRecentResolverService {
     input: ResolveRecentLineChatInput,
     snapshot: LineChatRecentMappingSnapshot,
     targetName: string,
-    targetTimestamp: Date,
-    targetTimestampSource: ResolverTargetTimestampSource,
+    anchor: ResolverAnchor | null,
   ): Promise<LineChatRecentResolutionResult> {
     if (snapshot.status === "FAILED") {
-      return snapshot.failureReason === "SESSION_AUTH" ? { status: "RESOLVE_SESSION_AUTH" } : { status: "RESOLVE_TRANSPORT" };
+      return snapshot.failureReason === "SESSION_AUTH"
+        ? { status: "RESOLVE_SESSION_AUTH" }
+        : { status: "RESOLVE_TRANSPORT" };
     }
-    // A tag save already identifies the target customer. Resolve only by a
-    // unique normalized customer-name match; timestamps remain diagnostic.
+
     const candidates = targetName
       ? snapshot.chats.filter((chat) => normalizeName(chat.displayName) === targetName)
       : [];
-    if (candidates.length === 0) {
-      const result = { status: "RESOLVE_NO_MATCH" } as const;
-      this.emitDiagnostic(buildDiagnostic(conversation.id, snapshot.chats, targetName, targetTimestamp, targetTimestampSource, result.status));
-      return result;
+    const decision = chooseCandidate(candidates, anchor);
+
+    if (decision.status !== "RESOLVED") {
+      this.emitDiagnostic(buildDiagnostic(
+        conversation.id,
+        snapshot.chats,
+        targetName,
+        anchor,
+        decision.status,
+        decision.method,
+      ));
+      return { status: decision.status };
     }
-    if (candidates.length > 1) {
-      const result = { status: "RESOLVE_AMBIGUOUS" } as const;
-      this.emitDiagnostic(buildDiagnostic(conversation.id, snapshot.chats, targetName, targetTimestamp, targetTimestampSource, result.status));
-      return result;
-    }
-    const resolvedId = candidates[0].chatUserId;
+
+    const resolvedId = decision.candidate.chatUserId;
     let result: LineChatRecentResolutionResult;
     try {
       result = await this.persistCandidateMapping(conversation.id, input.lineOfficialAccountId, resolvedId);
     } catch {
       result = { status: "RESOLVE_TRANSPORT" };
     }
-    this.emitDiagnostic(buildDiagnostic(conversation.id, snapshot.chats, targetName, targetTimestamp, targetTimestampSource, result.status));
+
+    this.emitDiagnostic(buildDiagnostic(
+      conversation.id,
+      snapshot.chats,
+      targetName,
+      anchor,
+      result.status,
+      result.status === "RESOLVED" ? decision.method : "UNRESOLVED",
+    ));
     return result;
   }
 
