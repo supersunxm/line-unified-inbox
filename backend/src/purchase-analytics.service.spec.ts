@@ -7,6 +7,7 @@ const baseRow = {
   id: "conversation-1",
   purchaseRecordedAt: new Date("2026-08-10T10:00:00.000Z"),
   sourceChannels: ["STORE"],
+  paymentMethod: "CREDIT_CARD",
   isInstallment: true,
   store: { id: "store-1", name: "Central", code: "C01" },
   purchaseRecordedBy: { id: "bm-1", displayName: "BM One" },
@@ -61,7 +62,30 @@ test("purchase analytics includes MANUAL data and excludes RULE products", async
   assert.deepEqual(result.products.map((item) => item.name), ["OPPO Find"]);
   assert.deepEqual(result.colors, [{ label: "Black", count: 1 }]);
   assert.deepEqual(result.channels, [{ label: "STORE", count: 1 }]);
-  assert.deepEqual(result.paymentMethods, [{ label: "INSTALLMENT", count: 1 }]);
+  assert.deepEqual(result.paymentMethods, [{ label: "CREDIT_CARD", count: 1 }]);
+});
+
+
+test("purchase analytics uses explicit payment methods and keeps legacy installment fallback", async () => {
+  const rows = [
+    { ...baseRow, id: "cash", paymentMethod: "CASH", isInstallment: false },
+    { ...baseRow, id: "card", paymentMethod: "CREDIT_CARD", isInstallment: true },
+    { ...baseRow, id: "sg", paymentMethod: "SG_FINANCE", isInstallment: true },
+    { ...baseRow, id: "ufund", paymentMethod: "UFUND", isInstallment: true },
+    { ...baseRow, id: "other", paymentMethod: "OTHER", isInstallment: false },
+    { ...baseRow, id: "legacy", paymentMethod: null, isInstallment: true },
+    { ...baseRow, id: "missing", paymentMethod: null, isInstallment: false },
+  ];
+  const result = await createService(rows).service.get({ id: "admin", role: "ADMIN" } as never);
+  assert.deepEqual(result.paymentMethods, [
+    { label: "CASH", count: 1 },
+    { label: "CREDIT_CARD", count: 1 },
+    { label: "INSTALLMENT", count: 1 },
+    { label: "OTHER", count: 1 },
+    { label: "SG_FINANCE", count: 1 },
+    { label: "UFUND", count: 1 },
+    { label: "UNSPECIFIED", count: 1 },
+  ]);
 });
 
 test("purchase analytics applies date filters to verified records", async () => {
