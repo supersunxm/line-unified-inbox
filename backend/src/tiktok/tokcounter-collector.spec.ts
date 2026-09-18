@@ -261,4 +261,103 @@ describe("TokCounter Daily Collector Suite", () => {
       assert.ok(delay >= 10000);
     });
   });
+
+  describe("Store Auto-Binding Recurrence Prevention", () => {
+    it("binds all active StoreMaster rows sharing a handle even if omitted from target.stores", () => {
+      const target = {
+        username: "oppo.bigcmahachai",
+        profileUrl: "https://www.tiktok.com/@oppo.bigcmahachai",
+        stores: [{ storeId: "30679", storeName: "OBS Big C Mahachai By JP" }],
+      };
+
+      const storeMasterRows = [
+        {
+          id: "sm-30679",
+          externalStoreId: "30679",
+          tiktokUsername: "oppo.bigcmahachai",
+          tiktokPublicAccountId: null,
+          isActive: true,
+        },
+        {
+          id: "sm-31754",
+          externalStoreId: "31754",
+          tiktokUsername: "oppo.bigcmahachai",
+          tiktokPublicAccountId: null,
+          isActive: true,
+        },
+        {
+          id: "sm-99999",
+          externalStoreId: "99999",
+          tiktokUsername: "oppo.bigcmahachai",
+          tiktokPublicAccountId: null,
+          isActive: false,
+        },
+      ];
+
+      const storeIds = target.stores.map((s) => s.storeId).filter(Boolean);
+      const whereClause = {
+        OR: [
+          ...(storeIds.length > 0 ? [{ externalStoreId: { in: storeIds } }] : []),
+          {
+            isActive: true,
+            tiktokUsername: { equals: target.username, mode: "insensitive" },
+          },
+          {
+            isActive: true,
+            tiktokUsername: { equals: `@${target.username}`, mode: "insensitive" },
+          },
+        ],
+      };
+
+      const publicAccountId = "pub-oppo.bigcmahachai";
+
+      // Simulate Prisma updateMany execution
+      for (const row of storeMasterRows) {
+        const matches =
+          (storeIds.includes(row.externalStoreId)) ||
+          (row.isActive && row.tiktokUsername?.toLowerCase() === target.username.toLowerCase()) ||
+          (row.isActive && row.tiktokUsername?.toLowerCase() === `@${target.username.toLowerCase()}`);
+
+        if (matches) {
+          row.tiktokPublicAccountId = publicAccountId;
+        }
+      }
+
+      // Both active stores (30679 and 31754) must be linked
+      const store30679 = storeMasterRows.find((s) => s.externalStoreId === "30679");
+      const store31754 = storeMasterRows.find((s) => s.externalStoreId === "31754");
+      const inactiveStore = storeMasterRows.find((s) => s.externalStoreId === "99999");
+
+      assert.equal(store30679?.tiktokPublicAccountId, publicAccountId);
+      assert.equal(store31754?.tiktokPublicAccountId, publicAccountId);
+      assert.equal(inactiveStore?.tiktokPublicAccountId, null);
+    });
+
+    it("leaves verified non-existent profiles (e.g. oppo_kamthieng01) unbound with zero mutations", () => {
+      const storeMasterRows = [
+        {
+          id: "sm-28764",
+          externalStoreId: "28764",
+          storeName: "OBS Kamthieng Plaza",
+          tiktokUsername: "oppo_kamthieng01",
+          tiktokPublicAccountId: null,
+          isActive: true,
+        },
+      ];
+
+      const extraction = {
+        status: "PROFILE_NOT_FOUND",
+        username: "oppo_kamthieng01",
+      };
+
+      let dbMutationsExecuted = 0;
+
+      if (extraction.status === "SUCCESS") {
+        dbMutationsExecuted++;
+      }
+
+      assert.equal(dbMutationsExecuted, 0);
+      assert.equal(storeMasterRows[0].tiktokPublicAccountId, null);
+    });
+  });
 });

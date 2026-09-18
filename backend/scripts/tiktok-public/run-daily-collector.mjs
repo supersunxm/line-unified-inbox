@@ -546,18 +546,28 @@ export async function runDailyCollector(cliOptions = {}) {
               },
             });
 
-            // Map associated StoreMaster rows
+            // Map associated StoreMaster rows (all matching stores, not only those explicitly listed in target.stores)
             const storeIds = target.stores.map((s) => s.storeId).filter(Boolean);
-            if (storeIds.length > 0) {
-              await prisma.storeMaster.updateMany({
-                where: { externalStoreId: { in: storeIds } },
-                data: {
-                  tiktokPublicAccountId: publicAccount.id,
-                  tiktokUsername: target.username,
-                  tiktokProfileUrl: target.profileUrl,
-                },
-              });
-            }
+            await prisma.storeMaster.updateMany({
+              where: {
+                OR: [
+                  ...(storeIds.length > 0 ? [{ externalStoreId: { in: storeIds } }] : []),
+                  {
+                    isActive: true,
+                    tiktokUsername: { equals: target.username, mode: "insensitive" },
+                  },
+                  {
+                    isActive: true,
+                    tiktokUsername: { equals: `@${target.username}`, mode: "insensitive" },
+                  },
+                ],
+              },
+              data: {
+                tiktokPublicAccountId: publicAccount.id,
+                tiktokUsername: target.username,
+                tiktokProfileUrl: target.profileUrl,
+              },
+            });
 
             // Upsert TikTokPublicDailyMetric (unique on accountId + metricDate)
             const metricDateObj = new Date(`${targetMetricDate}T00:00:00.000Z`);

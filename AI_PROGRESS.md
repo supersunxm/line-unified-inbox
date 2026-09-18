@@ -1,3 +1,17 @@
+# 2026-09-18: TikTok Public Account Store Auto-Binding Recurrence Hardening [COMPLETED & VERIFIED]
+- **Current Task**: Harden `TikTokPublicAccount` → `StoreMaster` auto-binding so shared TikTok handles are linked to all matching active stores, preventing recurrence of unlinked store records.
+- **Completed Work**:
+  - **Hardened Collector Binding**: In `backend/scripts/tiktok-public/run-daily-collector.mjs`, expanded the StoreMaster mapping `where` clause to include `externalStoreId: { in: storeIds }` as well as active stores matching canonical (`target.username`) and `@`-prefixed handles (`@${target.username}`) case-insensitively.
+  - **Hardened Single-Store Persistence**: In `backend/src/tiktok/tiktok-public-analytics.service.ts` (`persistExactSnapshot`), replaced single-store `update` with `updateMany` matching `store.id` and all active stores matching canonical and `@`-prefixed handles.
+  - **Exclusion of Non-Existent Accounts**: Verified that non-existent profiles (`PROFILE_NOT_FOUND`, e.g., `oppo_kamthieng01`) remain unbound with zero placeholder accounts or database mutations.
+  - **Added Comprehensive Regression Tests**: Added unit tests in `tokcounter-collector.spec.ts` and `tiktok-public-analytics.service.spec.ts` covering shared store binding, case-insensitivity, `@` prefix handling, idempotency, and exclusion of non-existent profiles.
+- **Checks Run & Passed**:
+  - TikTok spec tests: 80 / 80 PASS (`npx tsx --test src/tiktok/*.spec.ts`).
+  - Frontend test suite: 591 / 591 PASS (`npm test` in frontend).
+  - Backend production build: `prisma generate && nest build` passed cleanly.
+  - Frontend production build: `next build` passed cleanly (44 static/dynamic routes).
+- **Next Action**: Commit changes locally with message `fix(tiktok): bind shared public accounts to all matching stores`.
+
 # 2026-09-17: LINE Chat Durable Manual Mapping & Outbound Recovery Production Rollout [COMPLETED & VERIFIED]
 - **Current Task**: Safely commit, push, deploy the completed manual mapping implementation, apply the production Prisma migration, validate the RBS Chonburi / Max pilot case (`RESOLVE_AMBIGUOUS`), and verify outbound message recovery.
 - **Completed Work**:

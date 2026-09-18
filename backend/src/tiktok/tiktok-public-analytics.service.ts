@@ -229,8 +229,20 @@ export class TikTokPublicAnalyticsService {
         },
       });
 
-      await tx.storeMaster.update({
-        where: { id: store.id },
+      await tx.storeMaster.updateMany({
+        where: {
+          OR: [
+            { id: store.id },
+            {
+              isActive: true,
+              tiktokUsername: { equals: profile.username, mode: "insensitive" },
+            },
+            {
+              isActive: true,
+              tiktokUsername: { equals: `@${profile.username}`, mode: "insensitive" },
+            },
+          ],
+        },
         data: {
           tiktokPublicAccountId: publicAccount.id,
           tiktokUsername: profile.username,
