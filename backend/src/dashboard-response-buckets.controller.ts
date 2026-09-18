@@ -61,6 +61,10 @@ function matchesBucket(durationMinutes: number, bucket: ResponseBucket): boolean
   return durationMinutes >= 1440;
 }
 
+function responseWindowEnd(endDateExclusive: Date): Date {
+  return new Date(endDateExclusive.getTime() + 24 * 60 * 60 * 1000);
+}
+
 @Controller("dashboard")
 export class DashboardResponseBucketsController {
   constructor(
@@ -91,8 +95,9 @@ export class DashboardResponseBucketsController {
     const conversations = await this.prisma.conversation.findMany({
       where: {
         ...(storeFilter ? { storeId: storeFilter } : {}),
-        lineOfficialAccount: { accountType: "STORE" },
-        createdAt: { gte: range.startDate, lt: range.endDateExclusive },
+        isQa: false,
+        lineOfficialAccount: { accountType: "STORE", isActive: true, archivedAt: null },
+        messages: { some: { direction: "INBOUND", sentAt: { gte: range.startDate, lt: range.endDateExclusive } } },
       },
       select: {
         id: true,
@@ -101,6 +106,7 @@ export class DashboardResponseBucketsController {
         customer: { select: { displayName: true } },
         store: { select: { name: true } },
         messages: {
+          where: { sentAt: { gte: range.startDate, lt: responseWindowEnd(range.endDateExclusive) } },
           select: {
             direction: true,
             deliveryStatus: true,
@@ -117,8 +123,14 @@ export class DashboardResponseBucketsController {
     });
 
     const matched = conversations.flatMap((conversation) => {
-      const firstInbound = conversation.messages.find((message) => message.direction === "INBOUND");
-      const startAt = firstInbound?.sentAt ?? conversation.createdAt;
+      const firstInbound = conversation.messages.find(
+        (message) =>
+          message.direction === "INBOUND" &&
+          message.sentAt >= range.startDate &&
+          message.sentAt < range.endDateExclusive,
+      );
+      if (!firstInbound) return [];
+      const startAt = firstInbound.sentAt;
       const firstOutbound = findFirstDeliveredHumanReplyAfter(conversation.messages, startAt);
       const startTime = new Date(startAt).getTime();
       if (!firstOutbound) return [];
@@ -176,13 +188,15 @@ export class DashboardResponseBucketsController {
       : await this.prisma.conversation.findMany({
           where: {
             storeId: { in: storeIds },
-            lineOfficialAccount: { accountType: "STORE" },
-            createdAt: { gte: range.startDate, lt: range.endDateExclusive },
+            isQa: false,
+            lineOfficialAccount: { accountType: "STORE", isActive: true, archivedAt: null },
+            messages: { some: { direction: "INBOUND", sentAt: { gte: range.startDate, lt: range.endDateExclusive } } },
           },
           select: {
             storeId: true,
             createdAt: true,
             messages: {
+              where: { sentAt: { gte: range.startDate, lt: responseWindowEnd(range.endDateExclusive) } },
               select: { direction: true, deliveryStatus: true, sentAt: true, senderUserId: true, senderDisplayName: true, rawPayload: true },
               orderBy: { sentAt: "asc" },
             },
@@ -217,8 +231,17 @@ export class DashboardResponseBucketsController {
       if (!summary) continue;
       summary.total++;
 
-      const firstInbound = conversation.messages.find((message) => message.direction === "INBOUND");
-      const startAt = firstInbound?.sentAt ?? conversation.createdAt;
+      const firstInbound = conversation.messages.find(
+        (message) =>
+          message.direction === "INBOUND" &&
+          message.sentAt >= range.startDate &&
+          message.sentAt < range.endDateExclusive,
+      );
+      if (!firstInbound) {
+        summary.pending++;
+        continue;
+      }
+      const startAt = firstInbound.sentAt;
       const firstOutbound = findFirstDeliveredHumanReplyAfter(conversation.messages, startAt);
       if (!firstOutbound) {
         summary.pending++;
