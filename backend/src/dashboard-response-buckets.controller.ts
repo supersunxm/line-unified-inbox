@@ -2,6 +2,7 @@ import { BadRequestException, Controller, ForbiddenException, Get, Query, Req } 
 import type { AuthRequest } from "./auth/auth.guard";
 import { StoreAccessService } from "./auth/store-access.service";
 import { PrismaService } from "./prisma.service";
+import { findFirstDeliveredHumanReplyAfter } from "./conversation-reply-state";
 
 type ResponseBucket = "under4h" | "between4and12h" | "between12and24h" | "over24h";
 
@@ -102,8 +103,12 @@ export class DashboardResponseBucketsController {
         messages: {
           select: {
             direction: true,
+            deliveryStatus: true,
             originalText: true,
             sentAt: true,
+            senderUserId: true,
+            senderDisplayName: true,
+            rawPayload: true,
           },
           orderBy: { sentAt: "asc" },
         },
@@ -113,8 +118,9 @@ export class DashboardResponseBucketsController {
 
     const matched = conversations.flatMap((conversation) => {
       const firstInbound = conversation.messages.find((message) => message.direction === "INBOUND");
-      const firstOutbound = conversation.messages.find((message) => message.direction === "OUTBOUND");
-      const startTime = firstInbound ? new Date(firstInbound.sentAt).getTime() : new Date(conversation.createdAt).getTime();
+      const startAt = firstInbound?.sentAt ?? conversation.createdAt;
+      const firstOutbound = findFirstDeliveredHumanReplyAfter(conversation.messages, startAt);
+      const startTime = new Date(startAt).getTime();
       if (!firstOutbound) return [];
       const endTime = new Date(firstOutbound.sentAt).getTime();
       if (endTime < startTime) return [];
@@ -177,7 +183,7 @@ export class DashboardResponseBucketsController {
             storeId: true,
             createdAt: true,
             messages: {
-              select: { direction: true, sentAt: true },
+              select: { direction: true, deliveryStatus: true, sentAt: true, senderUserId: true, senderDisplayName: true, rawPayload: true },
               orderBy: { sentAt: "asc" },
             },
           },
@@ -212,13 +218,14 @@ export class DashboardResponseBucketsController {
       summary.total++;
 
       const firstInbound = conversation.messages.find((message) => message.direction === "INBOUND");
-      const firstOutbound = conversation.messages.find((message) => message.direction === "OUTBOUND");
+      const startAt = firstInbound?.sentAt ?? conversation.createdAt;
+      const firstOutbound = findFirstDeliveredHumanReplyAfter(conversation.messages, startAt);
       if (!firstOutbound) {
         summary.pending++;
         continue;
       }
 
-      const startTime = firstInbound ? new Date(firstInbound.sentAt).getTime() : new Date(conversation.createdAt).getTime();
+      const startTime = new Date(startAt).getTime();
       const endTime = new Date(firstOutbound.sentAt).getTime();
       if (endTime < startTime) {
         summary.pending++;
