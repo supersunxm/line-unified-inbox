@@ -122,3 +122,106 @@ describe("GoogleMapsDomAdapter contract: every method called by BatchAuditRunner
     assert.equal(typeof GoogleMapsDomAdapter.getReviewCardElements, "function");
   });
 });
+
+
+describe("Newest sorting safety gate", () => {
+  it("fails closed when a sort menu exists but no Newest option can be identified", async () => {
+    const originalDocument = globalThis.document;
+    let sortClicks = 0;
+
+    const sortButton = {
+      textContent: "Most relevant",
+      getAttribute: (name: string) => (name === "aria-label" ? "Sort reviews" : null),
+      click: () => {
+        sortClicks++;
+      },
+    };
+
+    const menuItems = [
+      {
+        textContent: "Most relevant",
+        getAttribute: () => null,
+        click: () => {},
+      },
+      {
+        textContent: "Highest rating",
+        getAttribute: () => null,
+        click: () => {},
+      },
+    ];
+
+    try {
+      (globalThis as any).document = {
+        querySelector: () => sortButton,
+        querySelectorAll: (selector: string) =>
+          selector.includes("menuitem") || selector.includes("role='option'") || selector.includes(".fxNQSb")
+            ? menuItems
+            : [],
+      };
+
+      const result = await GoogleMapsDomAdapter.ensureNewestSorting();
+      assert.equal(result.success, false);
+      assert.equal(result.reason, "NEWEST_OPTION_NOT_FOUND");
+      assert.equal(sortClicks, 1);
+    } finally {
+      (globalThis as any).document = originalDocument;
+    }
+  });
+
+  it("does not enter review scanning when Newest sorting cannot be confirmed", async () => {
+    const runner = new BatchAuditRunner() as any;
+
+    const originals = {
+      detectGoogleChallenge: GoogleMapsDomAdapter.detectGoogleChallenge,
+      getStoreName: GoogleMapsDomAdapter.getStoreName,
+      isReviewsPaneOpen: GoogleMapsDomAdapter.isReviewsPaneOpen,
+      isZeroReviewsPlace: GoogleMapsDomAdapter.isZeroReviewsPlace,
+      ensureNewestSorting: GoogleMapsDomAdapter.ensureNewestSorting,
+    };
+
+    let attention: any = null;
+    let scanCalled = false;
+
+    try {
+      GoogleMapsDomAdapter.detectGoogleChallenge = () => false;
+      GoogleMapsDomAdapter.getStoreName = () => "Test Store";
+      GoogleMapsDomAdapter.isReviewsPaneOpen = () => true;
+      GoogleMapsDomAdapter.isZeroReviewsPlace = () => false;
+      GoogleMapsDomAdapter.ensureNewestSorting = async () => ({
+        success: false,
+        reason: "NEWEST_SORT_NOT_CONFIRMED",
+      });
+
+      runner.sleep = async () => {};
+      runner.handleNeedsAttention = async (
+        storeId: string,
+        errorCode: string,
+        errorMessage: string,
+      ) => {
+        attention = { storeId, errorCode, errorMessage };
+      };
+      runner.scrollAndScanReviews = async () => {
+        scanCalled = true;
+        return null;
+      };
+
+      await runner.runForCurrentStore({
+        storeId: "store-971",
+        storeName: "OBS Future Park Rangsit",
+        targetMonth: "2026-09",
+        backendUrl: "https://example.invalid",
+      });
+
+      assert.equal(scanCalled, false);
+      assert.equal(attention?.storeId, "store-971");
+      assert.equal(attention?.errorCode, "NEWEST_SORT_NOT_CONFIRMED");
+      assert.match(attention?.errorMessage || "", /Could not confirm Google Maps review sorting as Newest/);
+    } finally {
+      GoogleMapsDomAdapter.detectGoogleChallenge = originals.detectGoogleChallenge;
+      GoogleMapsDomAdapter.getStoreName = originals.getStoreName;
+      GoogleMapsDomAdapter.isReviewsPaneOpen = originals.isReviewsPaneOpen;
+      GoogleMapsDomAdapter.isZeroReviewsPlace = originals.isZeroReviewsPlace;
+      GoogleMapsDomAdapter.ensureNewestSorting = originals.ensureNewestSorting;
+    }
+  });
+});
