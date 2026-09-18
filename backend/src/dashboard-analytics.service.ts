@@ -6,6 +6,7 @@ import {
   getPeriodDates,
 } from "./follower-insights/follower-aggregation.helper";
 import { formatDbDateToIso, getOffsetBangkokDateString, toUtcDateForDb } from "./follower-insights/date-utils";
+import { findFirstDeliveredHumanReplyAfter } from "./conversation-reply-state";
 
 export type AnalyticsPeriod = "today" | "7d" | "30d";
 
@@ -236,7 +237,7 @@ export class DashboardAnalyticsService {
           },
         },
         messages: {
-          select: { direction: true, sentAt: true },
+          select: { direction: true, deliveryStatus: true, sentAt: true, senderUserId: true, senderDisplayName: true, rawPayload: true },
           orderBy: { sentAt: "asc" },
         },
         topics: { select: { topicId: true } },
@@ -254,7 +255,7 @@ export class DashboardAnalyticsService {
         createdAt: { gte: yesterdayStart, lt: yesterdayEnd },
       },
       include: {
-        messages: { select: { direction: true, sentAt: true }, orderBy: { sentAt: "asc" } },
+        messages: { select: { direction: true, deliveryStatus: true, sentAt: true, senderUserId: true, senderDisplayName: true, rawPayload: true }, orderBy: { sentAt: "asc" } },
       },
     });
 
@@ -262,7 +263,7 @@ export class DashboardAnalyticsService {
     let yesterday24hReplied = 0;
     for (const conv of yesterdayConversations) {
       const firstIn = conv.messages.find((m) => m.direction === "INBOUND");
-      const firstOut = conv.messages.find((m) => m.direction === "OUTBOUND");
+      const firstOut = findFirstDeliveredHumanReplyAfter(conv.messages, firstIn?.sentAt ?? conv.createdAt);
       if (firstOut) {
         const startT = firstIn ? new Date(firstIn.sentAt).getTime() : new Date(conv.createdAt).getTime();
         const endT = new Date(firstOut.sentAt).getTime();
@@ -367,7 +368,7 @@ export class DashboardAnalyticsService {
       agg.hourlyMsgs[hour]++;
 
       const firstInbound = conv.messages.find((m) => m.direction === "INBOUND");
-      const firstOutbound = conv.messages.find((m) => m.direction === "OUTBOUND");
+      const firstOutbound = findFirstDeliveredHumanReplyAfter(conv.messages, firstInbound?.sentAt ?? conv.createdAt);
       const startTime = firstInbound ? new Date(firstInbound.sentAt).getTime() : createdTimeMs;
 
       if (firstOutbound) {
