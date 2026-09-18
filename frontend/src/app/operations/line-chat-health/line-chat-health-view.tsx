@@ -48,6 +48,13 @@ const tone = (value: string): "success" | "warning" | "danger" | "neutral" =>
         ? "warning"
         : "danger";
 
+const readinessTone = (value: string): "success" | "warning" | "danger" | "neutral" =>
+  value === "READY"
+    ? "success"
+    : value === "NEED_BOT_MAPPING" || value === "NEED_LOGIN"
+      ? "warning"
+      : "danger";
+
 const actionTone = (action: LineChatRecommendedAction): "success" | "warning" | "danger" | "neutral" | "info" => {
   switch (action) {
     case "RETRY_RECOMMENDED":
@@ -420,6 +427,84 @@ export function LineChatHealthView() {
           <div role="status" className="rounded-xl border border-[var(--app-success)]/30 bg-[var(--app-success-soft)] p-3 text-sm text-[var(--app-success)]">
             {notice}
           </div>
+        )}
+
+        {report && (
+          <Card>
+            <CardContent className="space-y-4 p-5">
+              <div>
+                <h2 className="text-lg font-semibold">Fleet readiness audit</h2>
+                <p className="text-sm text-[var(--app-text-secondary)]">
+                  Phase 0 audit for expanding direct customer links beyond the 7-store pilot. READY requires a complete OA/store mapping, chat bot ID, active authenticated session, and confirmed connected health.
+                </p>
+              </div>
+              <dl className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+                <div className="rounded-xl bg-[var(--app-surface-subtle)] p-3">
+                  <dt className="text-xs text-[var(--app-text-tertiary)]">Active store OAs</dt>
+                  <dd className="mt-1 text-xl font-semibold">{report.fleetReadiness.summary.totalStores}</dd>
+                </div>
+                <div className="rounded-xl bg-[var(--app-success-soft)] p-3">
+                  <dt className="text-xs text-[var(--app-text-tertiary)]">READY</dt>
+                  <dd className="mt-1 text-xl font-semibold">{report.fleetReadiness.summary.ready}</dd>
+                </div>
+                <div className="rounded-xl bg-[var(--app-surface-subtle)] p-3">
+                  <dt className="text-xs text-[var(--app-text-tertiary)]">Need bot mapping</dt>
+                  <dd className="mt-1 text-xl font-semibold">{report.fleetReadiness.summary.needBotMapping}</dd>
+                </div>
+                <div className="rounded-xl bg-[var(--app-surface-subtle)] p-3">
+                  <dt className="text-xs text-[var(--app-text-tertiary)]">Need login</dt>
+                  <dd className="mt-1 text-xl font-semibold">{report.fleetReadiness.summary.needLogin}</dd>
+                </div>
+                <div className="rounded-xl bg-[var(--app-surface-subtle)] p-3">
+                  <dt className="text-xs text-[var(--app-text-tertiary)]">Blocked</dt>
+                  <dd className="mt-1 text-xl font-semibold">{report.fleetReadiness.summary.blocked}</dd>
+                </div>
+              </dl>
+              <div className="text-xs text-[var(--app-text-tertiary)]">
+                Current 7-store pilot eligibility: {report.fleetReadiness.summary.currentlyPilotEligible} stores · Audit generated {formatDate(report.fleetReadiness.generatedAt)}
+              </div>
+              <TableContainer>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Store</TableHead>
+                      <TableHead>Readiness</TableHead>
+                      <TableHead>Bot</TableHead>
+                      <TableHead>Session</TableHead>
+                      <TableHead>Session health</TableHead>
+                      <TableHead>OA health</TableHead>
+                      <TableHead>Mapped conversations</TableHead>
+                      <TableHead>Pilot</TableHead>
+                      <TableHead>Blocker</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {report.fleetReadiness.stores.map((store) => (
+                      <TableRow key={store.lineOfficialAccountId}>
+                        <TableCell>
+                          <div className="font-medium">{store.storeName}</div>
+                          <div className="text-xs text-[var(--app-text-tertiary)]">{store.storeCode || "No Store ID"} · {store.lineOfficialAccountName}</div>
+                        </TableCell>
+                        <TableCell><Badge variant={readinessTone(store.status)} dot>{store.status}</Badge></TableCell>
+                        <TableCell>{store.hasChatBotId ? "✓" : "—"}</TableCell>
+                        <TableCell>{store.sessionKey ?? "—"}</TableCell>
+                        <TableCell><Badge variant={tone(store.sessionHealthStatus ?? "UNKNOWN")}>{store.sessionHealthStatus ?? "—"}</Badge></TableCell>
+                        <TableCell><Badge variant={tone(store.oaHealthStatus)}>{store.oaHealthStatus}</Badge></TableCell>
+                        <TableCell>
+                          {store.mappedConversations}/{store.totalConversations}
+                          {store.mappingCoveragePercent !== null ? <span className="ml-1 text-xs text-[var(--app-text-tertiary)]">({store.mappingCoveragePercent}%)</span> : null}
+                        </TableCell>
+                        <TableCell>{store.currentlyPilotEligible ? "7-store" : "—"}</TableCell>
+                        <TableCell className="max-w-[260px] text-xs text-[var(--app-text-secondary)]">
+                          {store.blockers.length ? store.blockers.join(", ") : "—"}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </CardContent>
+          </Card>
         )}
 
         {report && (
