@@ -79,6 +79,106 @@ void test("customer sales updates keep sales statuses in metadata instead of Fol
   assert.equal(activityWrites[0]?.data.actionType, "PURCHASE_INFORMATION_UPDATED");
 });
 
+
+
+void test("customer sales save promotes an existing detected product instead of creating a duplicate", async () => {
+  let upsertArgs: any;
+  let createCalled = false;
+  const tx = {
+    conversation: {
+      findUnique: async () => ({
+        id: "conversation-detected-product",
+        customerSalesStatus: "INTERESTED",
+        salesRecordedAt: new Date("2026-09-18T06:00:00.000Z"),
+        interestLevel: "HOT",
+        paymentMethod: null,
+        sourceChannels: [],
+        isInstallment: false,
+        products: [
+          {
+            productModelId: "model-reno16-pro",
+            productVariantId: null,
+          },
+        ],
+        salesProducts: [],
+      }),
+      update: async () => ({}),
+    },
+    productModel: {
+      findFirst: async () => ({ id: "model-reno16-pro", name: "OPPO Reno16 Pro 5G" }),
+    },
+    productVariant: {
+      findFirst: async () => ({
+        id: "variant-reno16-pro-12-256",
+        ram: "12GB",
+        rom: "256GB",
+        color: "Pop",
+      }),
+    },
+    conversationSalesProduct: {
+      deleteMany: async () => ({}),
+      createMany: async () => ({}),
+    },
+    conversationProduct: {
+      deleteMany: async () => ({}),
+      upsert: async (args: any) => {
+        upsertArgs = args;
+        return {};
+      },
+      create: async () => {
+        createCalled = true;
+        throw new Error("must not create a duplicate ConversationProduct");
+      },
+    },
+    activityHistory: { create: async () => ({}) },
+  };
+
+  const prisma = {
+    $transaction: async (callback: (client: typeof tx) => Promise<unknown>) => callback(tx),
+  };
+  const service = new MobileConversationsService(
+    prisma as never,
+    { assertConversationAccess: async () => "store-1" } as never,
+    {} as never,
+  );
+  (service as unknown as { get: () => Promise<unknown> }).get = async () => ({
+    id: "conversation-detected-product",
+  });
+
+  const result = await service.updateCustomerSalesInfo(user, "conversation-detected-product", {
+    status: "PURCHASED",
+    purchaseChannel: ["STORE"],
+    paymentMethod: "SG_FINANCE",
+    products: [
+      {
+        productModelId: "model-reno16-pro",
+        productVariantId: "variant-reno16-pro-12-256",
+        quantity: 1,
+        status: "PURCHASED",
+      },
+    ],
+  });
+
+  assert.deepEqual(result, { id: "conversation-detected-product" });
+  assert.equal(createCalled, false);
+  assert.deepEqual(upsertArgs?.where, {
+    conversationId_productModelId: {
+      conversationId: "conversation-detected-product",
+      productModelId: "model-reno16-pro",
+    },
+  });
+  assert.deepEqual(upsertArgs?.update, {
+    productVariantId: "variant-reno16-pro-12-256",
+    source: "MANUAL",
+    confidence: 1,
+    matchedPhrase: null,
+    detectionMethod: null,
+    sourceMessageId: null,
+  });
+  assert.equal(upsertArgs?.create.source, "MANUAL");
+  assert.equal(upsertArgs?.create.productVariantId, "variant-reno16-pro-12-256");
+});
+
 void test("customer sales info can be cleared back to an unclassified empty state", async () => {
   let conversationUpdate: Record<string, unknown> | undefined;
   let salesDeleteCount = 0;
