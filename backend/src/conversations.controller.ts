@@ -8,9 +8,38 @@ import type { AuthRequest } from "./auth/auth.guard";
 import { StoreAccessService } from "./auth/store-access.service";
 import { FOCUS_STORE_GROUP_ID } from "./focus-store-group";
 import { loadLatestManagerUrls, resolveLineOaManagerUrl } from "./store-master/line-oa-manager-url";
+import { LineChatRecentResolverService } from "./line-chat/line-chat-recent-resolver.service";
+import type { LineChatDiscoveredChat } from "./line-chat/line-chat.types";
 
 const LINE_CHAT_USER_ID_PATTERN = /^U[0-9a-f]{32}$/iu;
 const LINE_MANAGER_HOME = "https://manager.line.biz/";
+const LINE_CHAT_CANDIDATE_TIMEOUT_MS = 25_000;
+
+type DirectLineOaConversation = {
+  lineOfficialAccountId: string;
+  lineChatUserId: string | null;
+  lineOfficialAccount: {
+    id: string;
+    storeId: string | null;
+    accountType: string;
+    isActive: boolean;
+    archivedAt: Date | null;
+    chatBotId: string | null;
+    lineChatSession: {
+      sessionKey: string;
+      profileStorageKey: string | null;
+      status: string;
+    } | null;
+  };
+};
+
+type WorkerCandidateSnapshot = {
+  status: "READY" | "FAILED";
+  chats: LineChatDiscoveredChat[];
+  pagesFetched: number;
+  totalRawRecords: number;
+  failureReason?: "SESSION_AUTH" | "TRANSPORT";
+};
 
 function buildDirectLineOaManagerUrl(chatBotId: string | null | undefined, lineChatUserId: string | null | undefined): string | null {
   const botId = chatBotId?.trim() ?? "";
@@ -21,7 +50,117 @@ function buildDirectLineOaManagerUrl(chatBotId: string | null | undefined, lineC
 
 @Controller("conversations")
 export class ConversationsController {
-  constructor(private readonly service: ConversationsService, private readonly prisma: PrismaService, private readonly classification: ClassificationService, private readonly profiles: LineProfileService, private readonly storeAccess: StoreAccessService) { }
+  constructor(
+    private readonly service: ConversationsService,
+    private readonly prisma: PrismaService,
+    private readonly classification: ClassificationService,
+    private readonly profiles: LineProfileService,
+    private readonly storeAccess: StoreAccessService,
+    private readonly lineChatRecentResolver: LineChatRecentResolverService,
+  ) { }
+
+  private async fetchWorkerCandidateSnapshot(
+    conversation: DirectLineOaConversation,
+    force: boolean,
+  ): Promise<WorkerCandidateSnapshot | null> {
+    const workerUrl = process.env.LINE_CHAT_WORKER_INTERNAL_URL?.trim().replace(/\/+$/u, "");
+    const workerSecret = process.env.LINE_CHAT_WORKER_INTERNAL_SECRET?.trim();
+    const oa = conversation.lineOfficialAccount;
+    const session = oa.lineChatSession;
+    const botId = oa.chatBotId?.trim();
+    if (!workerUrl || !workerSecret || !botId || !session?.sessionKey.trim()) return null;
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), LINE_CHAT_CANDIDATE_TIMEOUT_MS);
+    try {
+      const response = await fetch(`${workerUrl}/internal/line-chat/candidates`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Line-Chat-Internal-Secret": workerSecret,
+        },
+        body: JSON.stringify({
+          lineOfficialAccountId: conversation.lineOfficialAccountId,
+          botId,
+          sessionKey: session.sessionKey.trim(),
+          profileStorageKey: session.profileStorageKey?.trim() || null,
+          force,
+        }),
+        signal: controller.signal,
+      });
+      if (!response.ok) return null;
+      const body = await response.json() as {
+        success?: boolean;
+        snapshot?: Partial<WorkerCandidateSnapshot>;
+      };
+      const snapshot = body.snapshot;
+      if (
+        !body.success
+        || (snapshot?.status !== "READY" && snapshot?.status !== "FAILED")
+        || !Array.isArray(snapshot.chats)
+      ) return null;
+      return {
+        status: snapshot.status,
+        chats: snapshot.chats,
+        pagesFetched: Number(snapshot.pagesFetched ?? 0),
+        totalRawRecords: Number(snapshot.totalRawRecords ?? 0),
+        failureReason: snapshot.failureReason,
+      };
+    } catch {
+      return null;
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  private async resolveDirectLineOaManagerUrlOnDemand(
+    conversationId: string,
+    conversation: DirectLineOaConversation,
+  ): Promise<string | null> {
+    const oa = conversation.lineOfficialAccount;
+    const session = oa.lineChatSession;
+    const botId = oa.chatBotId?.trim();
+    if (!botId || !session?.sessionKey.trim()) return null;
+
+    for (const force of [false, true]) {
+      const snapshot = await this.fetchWorkerCandidateSnapshot(conversation, force);
+      if (!snapshot || snapshot.status !== "READY") continue;
+
+      const now = new Date();
+      await this.lineChatRecentResolver.applySnapshotMappings({
+        lineOfficialAccountId: conversation.lineOfficialAccountId,
+        conversationIds: [conversationId],
+        snapshot: {
+          key: `${session.sessionKey.trim()}::${conversation.lineOfficialAccountId}::${botId}`,
+          status: "READY",
+          chats: snapshot.chats,
+          refreshedAt: now,
+          expiresAt: new Date(now.getTime() + 60_000),
+          pagesFetched: snapshot.pagesFetched,
+          totalRawRecords: snapshot.totalRawRecords,
+        },
+        eligibility: {
+          oaStoreId: oa.storeId,
+          oaAccountType: oa.accountType,
+          oaIsActive: oa.isActive,
+          oaArchivedAt: oa.archivedAt,
+          oaChatBotId: oa.chatBotId,
+          oaSessionKey: session.sessionKey,
+          oaSessionStatus: session.status,
+          expectedBotId: botId,
+          expectedSessionKey: session.sessionKey,
+        },
+      });
+
+      const mappedUserId = await this.lineChatRecentResolver.findExistingMapping({
+        conversationId,
+        lineOfficialAccountId: conversation.lineOfficialAccountId,
+      });
+      const directUrl = buildDirectLineOaManagerUrl(botId, mappedUserId);
+      if (directUrl) return directUrl;
+    }
+    return null;
+  }
   @Get() async list(@Query() query: ConversationQueryDto, @Req() req: AuthRequest) {
     const storeIds = await this.storeAccess.accessibleStoreIds(req.user!);
     if (query.storeId && query.storeId !== FOCUS_STORE_GROUP_ID) await this.storeAccess.assertStoreAccess(req.user!, query.storeId);
@@ -82,8 +221,25 @@ export class ConversationsController {
     const conversation = await this.prisma.conversation.findUnique({
       where: { id },
       select: {
+        lineOfficialAccountId: true,
         lineChatUserId: true,
-        lineOfficialAccount: { select: { chatBotId: true } },
+        lineOfficialAccount: {
+          select: {
+            id: true,
+            storeId: true,
+            accountType: true,
+            isActive: true,
+            archivedAt: true,
+            chatBotId: true,
+            lineChatSession: {
+              select: {
+                sessionKey: true,
+                profileStorageKey: true,
+                status: true,
+              },
+            },
+          },
+        },
         store: {
           select: {
             code: true,
@@ -98,6 +254,11 @@ export class ConversationsController {
       conversation?.lineChatUserId,
     );
     if (directUrl) return { url: directUrl, statusCode: 302 };
+
+    if (conversation) {
+      const resolvedDirectUrl = await this.resolveDirectLineOaManagerUrlOnDemand(id, conversation);
+      if (resolvedDirectUrl) return { url: resolvedDirectUrl, statusCode: 302 };
+    }
 
     if (conversation?.store) {
       const latestManagerUrls = await loadLatestManagerUrls(this.prisma, [conversation.store.code]);
