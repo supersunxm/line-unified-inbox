@@ -63,7 +63,7 @@ export class ConversationsController {
     conversation: DirectLineOaConversation,
     force: boolean,
   ): Promise<WorkerCandidateSnapshot | null> {
-    const workerUrl = process.env.LINE_CHAT_WORKER_INTERNAL_URL?.trim().replace(/\\\/+$/u, "");
+    const workerUrl = process.env.LINE_CHAT_WORKER_INTERNAL_URL?.trim().replace(/\/+$/u, "");
     const workerSecret = process.env.LINE_CHAT_WORKER_INTERNAL_SECRET?.trim();
     const oa = conversation.lineOfficialAccount;
     const session = oa.lineChatSession;
