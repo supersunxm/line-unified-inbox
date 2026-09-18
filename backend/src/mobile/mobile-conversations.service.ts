@@ -656,7 +656,36 @@ export class MobileConversationsService {
             await tx.conversationProduct.deleteMany({ where: { conversationId, source: "MANUAL" } });
           }
           const first = validatedProducts[0];
-          if (tx.conversationProduct?.create) {
+          // ConversationProduct is unique by (conversationId, productModelId).
+          // If AI/rule detection already created the same product, creating a
+          // second MANUAL row fails the whole customer-sales transaction.
+          // Promote the existing row to MANUAL instead of inserting a duplicate.
+          if (tx.conversationProduct?.upsert) {
+            await tx.conversationProduct.upsert({
+              where: {
+                conversationId_productModelId: {
+                  conversationId,
+                  productModelId: first.productModelId,
+                },
+              },
+              update: {
+                productVariantId: first.productVariantId,
+                source: "MANUAL",
+                confidence: 1,
+                matchedPhrase: null,
+                detectionMethod: null,
+                sourceMessageId: null,
+              },
+              create: {
+                conversationId,
+                productModelId: first.productModelId,
+                productVariantId: first.productVariantId,
+                source: "MANUAL",
+                confidence: 1,
+              },
+            });
+          } else if (tx.conversationProduct?.create) {
+            // Test-double compatibility only; Prisma always exposes upsert.
             await tx.conversationProduct.create({
               data: {
                 conversationId,
