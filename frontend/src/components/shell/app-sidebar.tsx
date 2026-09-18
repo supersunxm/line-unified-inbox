@@ -118,7 +118,7 @@ export function AppSidebar({ authUser, changeLanguage, currentSection, language,
     { href: "/greeting-messages", label: t.greetingMessages, icon: "greeting", section: "greeting-messages" },
     { href: "/admin/registrations", label: t.approval, icon: "approval", section: "admin-registrations" },
     { href: "/operations/line-chat-health", label: "LINE Chat Health", icon: "health", section: "line-chat-health" },
-    { href: "/tiktok", label: "TikTok", icon: "tiktok", tool: "tiktok" },
+    { href: "/tiktok", label: "TikTok Analytics", icon: "tiktok", tool: "tiktok" },
   ];
   const mainOaItems: NavItem[] = [
     { href: "/main-oa", label: t.mainOa, icon: "main-oa", section: "main-oa", active: (path) => path.startsWith("/main-oa") },
