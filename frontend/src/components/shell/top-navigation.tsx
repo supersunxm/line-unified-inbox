@@ -157,7 +157,7 @@ function MobileBottomNavigation({ authUser, currentSection, language, changeLang
             {can("admin-registrations") && <Link href="/admin/registrations" onClick={() => setMoreOpen(false)} className={sheetLinkClass}><span>{labels.approval}</span><span>›</span></Link>}
             {can("line-chat-health") && <Link href="/operations/line-chat-health" onClick={() => setMoreOpen(false)} className={sheetLinkClass}><span>LINE Chat Health</span><span>›</span></Link>}
             {can("main-oa") && <Link href="/main-oa" onClick={() => setMoreOpen(false)} className={sheetLinkClass}><span>{labels.mainOa}</span><span>›</span></Link>}
-            {canTool("tiktok") && <Link href="/tiktok" onClick={() => setMoreOpen(false)} className={sheetLinkClass}><span>TikTok</span><span>›</span></Link>}
+            {canTool("tiktok") && <Link href="/tiktok" onClick={() => setMoreOpen(false)} className={sheetLinkClass}><span>TikTok Analytics</span><span>›</span></Link>}
           </div>
 
           <div className="my-3 border-t border-[var(--app-border-subtle)]" />
