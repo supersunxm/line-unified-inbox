@@ -14,9 +14,15 @@ export function isMissingDistributionLabel(label: string) {
 }
 
 export function formatDistributionLabel(label: string) {
+  const normalized = label.trim().toUpperCase();
+  if (normalized === "CREDIT_CARD") return "Credit Card";
+  if (normalized === "SG_FINANCE") return "SG";
+  if (normalized === "UFUND") return "Ufund";
+  if (normalized === "INSTALLMENT") return "Installment (legacy)";
   return label
     .trim()
     .toLowerCase()
+    .replace(/_/g, " ")
     .replace(/\b\w/g, (character) => character.toUpperCase());
 }
 
