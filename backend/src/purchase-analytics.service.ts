@@ -9,6 +9,7 @@ type PurchaseAnalyticsRow = {
   id: string;
   purchaseRecordedAt: Date | null;
   sourceChannels: string[];
+  paymentMethod: string | null;
   isInstallment: boolean;
   store: { id: string; name: string; code: string | null };
   purchaseRecordedBy: { id: string; displayName: string } | null;
@@ -151,6 +152,7 @@ export class PurchaseAnalyticsService {
         id: true,
         purchaseRecordedAt: true,
         sourceChannels: true,
+        paymentMethod: true,
         isInstallment: true,
         store: { select: { id: true, name: true, code: true } },
         purchaseRecordedBy: { select: { id: true, displayName: true } },
@@ -190,7 +192,9 @@ export class PurchaseAnalyticsService {
 
       const rowChannels = row.sourceChannels.length > 0 ? row.sourceChannels : ["UNSPECIFIED"];
       for (const channel of rowChannels) increment(channels, channel);
-      increment(paymentMethods, row.isInstallment ? "INSTALLMENT" : "UNSPECIFIED");
+      // Prefer the explicit payment method selected in the tagging flow.
+      // Keep the old isInstallment boolean only as a compatibility fallback for legacy records.
+      increment(paymentMethods, row.paymentMethod ?? (row.isInstallment ? "INSTALLMENT" : "UNSPECIFIED"));
 
       const manualProducts = row.products.filter((product) => product.source === "MANUAL");
       for (const product of manualProducts) {
