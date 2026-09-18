@@ -62,7 +62,9 @@
     "seed:line-chat-test": "tsx --env-file=.env scripts/seed-line-chat-test.ts",
     "security:check": "sh scripts/security-check.sh",
     "db:backup": "sh -c '. ./.env && sh scripts/db-backup.sh'",
-    "db:restore": "sh -c '. ./.env && sh scripts/db-restore.sh \"$@\"' --"
+    "db:restore": "sh -c '. ./.env && sh scripts/db-restore.sh \"$@\"' --",
+    "conversation-reply-state:dry-run": "tsx --env-file=.env scripts/reconcile-conversation-reply-state.ts",
+    "conversation-reply-state:apply": "tsx --env-file=.env scripts/reconcile-conversation-reply-state.ts --apply"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1090.0",
