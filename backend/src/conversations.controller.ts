@@ -131,6 +131,7 @@ export class ConversationsController {
         lineOfficialAccountId: conversation.lineOfficialAccountId,
         conversationIds: [conversationId],
         snapshot: {
+          key: `${session.sessionKey.trim()}::${conversation.lineOfficialAccountId}::${botId}`,
           status: "READY",
           chats: snapshot.chats,
           refreshedAt: now,
