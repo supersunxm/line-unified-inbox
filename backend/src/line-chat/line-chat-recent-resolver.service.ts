@@ -12,6 +12,8 @@ import type { LineChatProfileOperationContext } from "./line-chat-profile-operat
 const MATCH_TOLERANCE_MS = 60_000;
 const MAX_RECENT_PAGES = 5;
 const MAX_RECENT_CHATS = 125;
+const EXPANDED_MAX_RECENT_PAGES = 20;
+const EXPANDED_MAX_RECENT_CHATS = 500;
 const MESSAGE_ANCHOR_LIMIT = 20;
 export const RECENT_MAPPING_CACHE_TTL_MS = 60_000;
 const RECENT_MAPPING_FAILURE_CACHE_TTL_MS = 30_000;
@@ -640,6 +642,10 @@ export class LineChatRecentResolverService {
       snapshot = await this.refreshSnapshot({ ...input, force: true });
       result = await this.resolveFromSnapshot(conversation, input, snapshot, targetName, targetTimestamp, targetTimestampSource);
     }
+    if (result.status === "RESOLVE_NO_MATCH") {
+      const expandedSnapshot = await this.refreshExpandedSnapshot(input);
+      result = await this.resolveFromSnapshot(conversation, input, expandedSnapshot, targetName, targetTimestamp, targetTimestampSource);
+    }
     return result;
   }
 
@@ -650,6 +656,65 @@ export class LineChatRecentResolverService {
   private getFreshSnapshot(input: Pick<RefreshRecentLineChatInput, "lineOfficialAccountId" | "botId" | "sessionKey" | "profilePath">): LineChatRecentMappingSnapshot | null {
     const snapshot = this.snapshots.get(this.snapshotKey(input));
     return snapshot && snapshot.expiresAt.getTime() > Date.now() ? snapshot : null;
+  }
+
+
+  private async refreshExpandedSnapshot(
+    input: RefreshRecentLineChatInput,
+  ): Promise<LineChatRecentMappingSnapshot> {
+    const key = this.snapshotKey(input);
+    let recent;
+    try {
+      recent = await this.sessionService.discoverRecentChats({
+        botId: input.botId,
+        profilePath: input.profilePath,
+        headless: true,
+        maxPages: EXPANDED_MAX_RECENT_PAGES,
+        maxChats: EXPANDED_MAX_RECENT_CHATS,
+        operationContext: input.operationContext,
+      });
+    } catch {
+      const refreshedAt = new Date();
+      return {
+        key,
+        status: "FAILED",
+        chats: [],
+        failureReason: "TRANSPORT",
+        pagesFetched: 0,
+        totalRawRecords: 0,
+        refreshedAt,
+        expiresAt: refreshedAt,
+      };
+    }
+    const refreshedAt = new Date();
+    if (recent.status === "FAILED") {
+      return {
+        key,
+        status: "FAILED",
+        chats: [],
+        failureReason: recent.failureReason === "SESSION_AUTH" ? "SESSION_AUTH" : "TRANSPORT",
+        pagesFetched: recent.pagesFetched,
+        totalRawRecords: recent.totalRawRecords,
+        refreshedAt,
+        expiresAt: refreshedAt,
+      };
+    }
+    this.logger.log(JSON.stringify({
+      event: "line_chat_recent_resolver_expanded_scan",
+      lineOfficialAccountId: input.lineOfficialAccountId,
+      recentChatCount: recent.chats.length,
+      pagesFetched: recent.pagesFetched,
+      totalRawRecords: recent.totalRawRecords,
+    }));
+    return {
+      key,
+      status: "READY",
+      chats: recent.chats,
+      pagesFetched: recent.pagesFetched,
+      totalRawRecords: recent.totalRawRecords,
+      refreshedAt,
+      expiresAt: refreshedAt,
+    };
   }
 
   private async performSnapshotRefresh(
