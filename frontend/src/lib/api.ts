@@ -118,7 +118,38 @@ export type LineChatOperationsSession = {
   recentFailures: LineChatSafeJobFailure[];
 };
 export type LineChatMappingQueueMetrics = { mappedReadyPending: number; waitingForMapping: number; oldestPendingAt: string | null };
-export type LineChatOperationsHealth = { timestamp: string; sessions: LineChatOperationsSession[]; queue: LineChatJobCounts; mapping: LineChatMappingQueueMetrics; rollout: { totalOas: number; enabledOas: number; disabledOas: number; missingChatBotId: number; missingSession: number } };
+export type LineChatFleetReadinessStatus = "READY" | "NEED_BOT_MAPPING" | "NEED_LOGIN" | "BLOCKED";
+export type LineChatFleetReadinessStore = {
+  lineOfficialAccountId: string;
+  lineOfficialAccountName: string;
+  storeId: string | null;
+  storeName: string;
+  storeCode: string;
+  status: LineChatFleetReadinessStatus;
+  blockers: string[];
+  hasChatBotId: boolean;
+  sessionKey: string | null;
+  sessionStatus: string | null;
+  sessionHealthStatus: string | null;
+  oaHealthStatus: string;
+  mappedConversations: number;
+  totalConversations: number;
+  mappingCoveragePercent: number | null;
+  currentlyPilotEligible: boolean;
+};
+export type LineChatFleetReadinessReport = {
+  generatedAt: string;
+  summary: {
+    totalStores: number;
+    ready: number;
+    needBotMapping: number;
+    needLogin: number;
+    blocked: number;
+    currentlyPilotEligible: number;
+  };
+  stores: LineChatFleetReadinessStore[];
+};
+export type LineChatOperationsHealth = { timestamp: string; sessions: LineChatOperationsSession[]; queue: LineChatJobCounts; mapping: LineChatMappingQueueMetrics; rollout: { totalOas: number; enabledOas: number; disabledOas: number; missingChatBotId: number; missingSession: number }; fleetReadiness: LineChatFleetReadinessReport };
 
 export type UnresolvedMappingReason = "RESOLVE_NO_MATCH" | "RESOLVE_AMBIGUOUS" | "RESOLVE_CONFLICT";
 
@@ -360,6 +391,7 @@ export const api = {
   systemStatus: (options?: ApiRequestOptions) => request<{ frontend: string; backendApi: string; database: string; lineWebhookEnabled: boolean; publicWebhookUrlConfigured: boolean; activeLineOaCount: number; connectedLineOaCount: number; lineOaIssueCount: number; lastValidWebhookReceived: string | null; lastStoreMasterImport: string | null; storeMasterRecordCount: number; classificationEngine: string; pilotMode: boolean }>("/operations/status", options),
   operationalErrors: (options?: ApiRequestOptions) => request<Array<{ id: string; feature: string; summary: string; resolved: boolean; createdAt: string }>>("/operations/errors", options),
   lineChatOperationsHealth: () => request<LineChatOperationsHealth>("/operations/line-chat-nickname/health", { cache: "no-store" }),
+  lineChatFleetReadiness: () => request<LineChatFleetReadinessReport>("/operations/line-chat-nickname/fleet-readiness", { cache: "no-store" }),
   retryLineChatFailedJobs: (sessionKey: string) => request<{ retriedCount: number }>(`/operations/line-chat-nickname/retry-failed?sessionKey=${encodeURIComponent(sessionKey)}`, { method: "POST" }),
   retryLineChatSelectedJobs: (payload: { sessionKey: string; jobIds: string[]; overrideNonRetryable?: boolean }) =>
     request<{ retriedCount: number; skippedCount: number; retriedJobIds: string[] }>("/operations/line-chat-nickname/retry-selected", {

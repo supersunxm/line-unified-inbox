@@ -100,6 +100,11 @@ export class LineChatOperationsController {
     return this.healthReconciliation.reconcile(report);
   }
 
+  @Get("fleet-readiness")
+  async getFleetReadiness() {
+    return this.operationsService.getFleetReadiness();
+  }
+
   @Post("retry-failed")
   async retryFailed(@Query("sessionKey") sessionKey?: string) {
     return this.operationsService.retryFailedJobs(sessionKey?.trim() || undefined);
