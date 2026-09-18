@@ -1,6 +1,7 @@
 import { Inject, Injectable, NotFoundException, Optional } from "@nestjs/common";
 import { PrismaService } from "../prisma.service";
-import { LineChatNicknameSyncJobStatus, LineChatSessionStatus } from "@prisma/client";
+import { LineAccountType, LineChatNicknameSyncJobStatus, LineChatSessionStatus } from "@prisma/client";
+import { LINE_CHAT_REALTIME_RESOLVER_ALLOWED_STORE_CODES } from "./line-chat-pilot.constants";
 import { LineChatAuthRecoveryService, type LineChatAuthRecoveryResult } from "./line-chat-auth-recovery.service";
 import type { LineChatProfileOperationKind } from "./line-chat-profile-operation-coordinator.service";
 
@@ -74,12 +75,47 @@ export interface LineChatRolloutSummary {
   missingSession: number;
 }
 
+export type LineChatFleetReadinessStatus = "READY" | "NEED_BOT_MAPPING" | "NEED_LOGIN" | "BLOCKED";
+
+export interface LineChatFleetReadinessStore {
+  lineOfficialAccountId: string;
+  lineOfficialAccountName: string;
+  storeId: string | null;
+  storeName: string;
+  storeCode: string;
+  status: LineChatFleetReadinessStatus;
+  blockers: string[];
+  hasChatBotId: boolean;
+  sessionKey: string | null;
+  sessionStatus: string | null;
+  sessionHealthStatus: string | null;
+  oaHealthStatus: string;
+  mappedConversations: number;
+  totalConversations: number;
+  mappingCoveragePercent: number | null;
+  currentlyPilotEligible: boolean;
+}
+
+export interface LineChatFleetReadinessReport {
+  generatedAt: string;
+  summary: {
+    totalStores: number;
+    ready: number;
+    needBotMapping: number;
+    needLogin: number;
+    blocked: number;
+    currentlyPilotEligible: number;
+  };
+  stores: LineChatFleetReadinessStore[];
+}
+
 export interface LineChatHealthReport {
   timestamp: string;
   sessions: LineChatSessionSummary[];
   queue: LineChatQueueMetrics;
   mapping: LineChatMappingQueueMetrics;
   rollout: LineChatRolloutSummary;
+  fleetReadiness: LineChatFleetReadinessReport;
 }
 
 export interface LineChatMappingQueueMetrics {
@@ -162,9 +198,147 @@ export class LineChatOperationsService {
     private readonly authRecovery?: LineChatAuthRecoveryService,
   ) {}
 
+
+  public async getFleetReadiness(): Promise<LineChatFleetReadinessReport> {
+    const [oas, conversationCounts, mappedConversationCounts] = await Promise.all([
+      this.prisma.lineOfficialAccount.findMany({
+        where: {
+          accountType: LineAccountType.STORE,
+          isActive: true,
+          archivedAt: null,
+        },
+        select: {
+          id: true,
+          name: true,
+          storeId: true,
+          chatBotId: true,
+          healthStatus: true,
+          healthFailureStage: true,
+          store: {
+            select: {
+              id: true,
+              name: true,
+              code: true,
+              isActive: true,
+              archivedAt: true,
+              storeMaster: { select: { externalStoreId: true } },
+            },
+          },
+          lineChatSession: {
+            select: {
+              sessionKey: true,
+              status: true,
+              healthStatus: true,
+              healthFailureStage: true,
+            },
+          },
+        },
+        orderBy: { name: "asc" },
+      }),
+      this.prisma.conversation.groupBy({
+        by: ["lineOfficialAccountId"],
+        _count: { id: true },
+      }),
+      this.prisma.conversation.groupBy({
+        by: ["lineOfficialAccountId"],
+        where: { lineChatUserId: { not: null } },
+        _count: { id: true },
+      }),
+    ]);
+
+    const totalByOa = new Map(conversationCounts.map((row) => [row.lineOfficialAccountId, row._count.id]));
+    const mappedByOa = new Map(mappedConversationCounts.map((row) => [row.lineOfficialAccountId, row._count.id]));
+    const pilotCodes = new Set<string>(LINE_CHAT_REALTIME_RESOLVER_ALLOWED_STORE_CODES as readonly string[]);
+
+    const stores: LineChatFleetReadinessStore[] = oas.map((oa) => {
+      const storeCode = oa.store?.code?.trim() || oa.store?.storeMaster?.externalStoreId?.trim() || "";
+      const blockers: string[] = [];
+      const hasChatBotId = Boolean(oa.chatBotId?.trim());
+      const session = oa.lineChatSession;
+
+      let status: LineChatFleetReadinessStatus = "READY";
+
+      if (!hasChatBotId) {
+        status = "NEED_BOT_MAPPING";
+        blockers.push("MISSING_CHAT_BOT_ID");
+      }
+
+      if (!oa.storeId || !oa.store || !storeCode) {
+        if (status === "READY") status = "BLOCKED";
+        blockers.push("STORE_MAPPING_INCOMPLETE");
+      } else if (!oa.store.isActive || oa.store.archivedAt) {
+        if (status === "READY") status = "BLOCKED";
+        blockers.push("STORE_INACTIVE");
+      }
+
+      if (!session) {
+        if (status === "READY") status = "BLOCKED";
+        blockers.push("MISSING_LINE_CHAT_SESSION");
+      } else {
+        const needsLogin =
+          session.status === LineChatSessionStatus.AUTH_REQUIRED
+          || session.healthStatus === "AUTH_REQUIRED"
+          || oa.healthStatus === "AUTH_REQUIRED"
+          || oa.healthStatus === "OA_ACCESS_LOST";
+        if (needsLogin) {
+          status = "NEED_LOGIN";
+          blockers.push("SESSION_RELOGIN_REQUIRED");
+        } else if (
+          session.status !== LineChatSessionStatus.ACTIVE
+          || session.healthStatus === "CONFIG_ERROR"
+          || oa.healthStatus === "CONFIG_ERROR"
+        ) {
+          if (status === "READY") status = "BLOCKED";
+          blockers.push("SESSION_OR_OA_CONFIG_NOT_READY");
+        } else if (session.healthStatus !== "CONNECTED" || oa.healthStatus !== "CONNECTED") {
+          if (status === "READY") status = "BLOCKED";
+          blockers.push("HEALTH_NOT_CONFIRMED_CONNECTED");
+        }
+      }
+
+      const totalConversations = totalByOa.get(oa.id) ?? 0;
+      const mappedConversations = mappedByOa.get(oa.id) ?? 0;
+      const mappingCoveragePercent = totalConversations > 0
+        ? Math.round((mappedConversations / totalConversations) * 10_000) / 100
+        : null;
+
+      return {
+        lineOfficialAccountId: oa.id,
+        lineOfficialAccountName: oa.name,
+        storeId: oa.storeId,
+        storeName: oa.store?.name ?? oa.name,
+        storeCode,
+        status,
+        blockers: [...new Set(blockers)],
+        hasChatBotId,
+        sessionKey: session?.sessionKey ?? null,
+        sessionStatus: session?.status ?? null,
+        sessionHealthStatus: session?.healthStatus ?? null,
+        oaHealthStatus: oa.healthStatus,
+        mappedConversations,
+        totalConversations,
+        mappingCoveragePercent,
+        currentlyPilotEligible: Boolean(storeCode && pilotCodes.has(storeCode)),
+      };
+    });
+
+    return {
+      generatedAt: new Date().toISOString(),
+      summary: {
+        totalStores: stores.length,
+        ready: stores.filter((store) => store.status === "READY").length,
+        needBotMapping: stores.filter((store) => store.status === "NEED_BOT_MAPPING").length,
+        needLogin: stores.filter((store) => store.status === "NEED_LOGIN").length,
+        blocked: stores.filter((store) => store.status === "BLOCKED").length,
+        currentlyPilotEligible: stores.filter((store) => store.currentlyPilotEligible).length,
+      },
+      stores,
+    };
+  }
+
   public async getHealthSummary(): Promise<LineChatHealthReport> {
     const now = new Date();
-    const [sessions, oas, queueCounts, sessionQueueCounts, activeLeases, recentFailures, mapping] = await Promise.all([
+    const [sessions, oas, queueCounts, sessionQueueCounts, activeLeases, recentFailures, mapping, fleetReadiness] = await Promise.all([
       this.prisma.lineChatSession.findMany({
         include: {
           lineOfficialAccounts: {
@@ -213,6 +387,7 @@ export class LineChatOperationsService {
         },
       }),
       this.getMappingQueueMetrics(),
+      this.getFleetReadiness(),
     ]);
 
     const queueMap: Record<LineChatNicknameSyncJobStatus, number> = {
@@ -320,6 +495,7 @@ export class LineChatOperationsService {
         missingChatBotId: missingBotIdCount,
         missingSession: missingSessionCount,
       },
+      fleetReadiness,
     };
   }
 
