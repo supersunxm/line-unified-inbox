@@ -245,11 +245,37 @@ export class BatchAuditRunner {
       }
 
       // 3. Ensure Newest Sorting
+      // Monthly coverage depends on descending review order. Never continue into
+      // scrolling unless the adapter positively confirms Newest / most-recent.
       this.notify("SETTING_NEWEST");
-      const sortRes = await GoogleMapsDomAdapter.ensureNewestSorting();
-      if (!sortRes.success) {
-        console.warn("[BatchAuditRunner] Could not confirm newest sorting:", sortRes.reason);
+      let sortRes: { success: boolean; reason?: string } = {
+        success: false,
+        reason: "NEWEST_SORT_NOT_ATTEMPTED",
+      };
+
+      for (let sortAttempt = 1; sortAttempt <= 2; sortAttempt++) {
+        sortRes = await GoogleMapsDomAdapter.ensureNewestSorting();
+        if (sortRes.success) break;
+
+        console.warn(
+          `[BatchAuditRunner] Newest sorting attempt ${sortAttempt}/2 failed:`,
+          sortRes.reason,
+        );
+        if (sortAttempt < 2) {
+          await this.sleep(700);
+        }
       }
+
+      if (!sortRes.success) {
+        await this.handleNeedsAttention(
+          storeInfo.storeId,
+          "NEWEST_SORT_NOT_CONFIRMED",
+          `Could not confirm Google Maps review sorting as Newest: ${sortRes.reason || "UNKNOWN"}`,
+          storeInfo.backendUrl,
+        );
+        return;
+      }
+
       await this.sleep(800);
 
       // 4. Progressive Scanning & Controlled Scrolling
