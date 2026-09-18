@@ -1,4 +1,4 @@
-import { ActivityActionType, BmReplyStatus, FollowUpStatus, Prisma } from "@prisma/client";
+import { ActivityActionType, BmReplyStatus, FollowUpStatus, MessageDeliveryStatus, MessageDirection, Prisma } from "@prisma/client";
 import type { AuthUser } from "./auth/auth.guard";
 import type { PrismaService } from "./prisma.service";
 
@@ -99,4 +99,50 @@ export async function reconcileStaffOutboundReplyState(
     });
   });
   return true;
+}
+
+
+export const AUTO_REPLY_BOT_DISPLAY_NAME = "Auto Reply Bot";
+
+export type ReplyEvaluationMessage = {
+  direction: MessageDirection | "INBOUND" | "OUTBOUND" | "SYSTEM";
+  deliveryStatus?: MessageDeliveryStatus | "DELIVERED" | "FAILED" | null;
+  sentAt: Date;
+  senderUserId?: string | null;
+  senderDisplayName?: string | null;
+  rawPayload?: unknown;
+};
+
+function hasAutoResponsePayload(message: ReplyEvaluationMessage): boolean {
+  if (!message.rawPayload || typeof message.rawPayload !== "object" || Array.isArray(message.rawPayload)) return false;
+  return (message.rawPayload as { source?: unknown }).source === "AUTO_RESPONSE";
+}
+
+export function isAutomatedOutboundMessage(message: ReplyEvaluationMessage): boolean {
+  return message.direction === MessageDirection.OUTBOUND &&
+    (message.senderDisplayName?.trim() === AUTO_REPLY_BOT_DISPLAY_NAME || hasAutoResponsePayload(message));
+}
+
+export function isDeliveredHumanOutbound(message: ReplyEvaluationMessage): boolean {
+  return message.direction === MessageDirection.OUTBOUND &&
+    message.deliveryStatus !== MessageDeliveryStatus.FAILED &&
+    Boolean(message.senderUserId) &&
+    !isAutomatedOutboundMessage(message);
+}
+
+export function findFirstDeliveredHumanReplyAfter(
+  messages: readonly ReplyEvaluationMessage[],
+  inboundAt: Date,
+): ReplyEvaluationMessage | undefined {
+  return messages.find((message) => isDeliveredHumanOutbound(message) && message.sentAt >= inboundAt);
+}
+
+export function findLatestInbound(messages: readonly ReplyEvaluationMessage[]): ReplyEvaluationMessage | undefined {
+  return [...messages].reverse().find((message) => message.direction === MessageDirection.INBOUND);
+}
+
+export function conversationNeedsReply(messages: readonly ReplyEvaluationMessage[]): boolean {
+  const latestInbound = findLatestInbound(messages);
+  if (!latestInbound) return false;
+  return !messages.some((message) => isDeliveredHumanOutbound(message) && message.sentAt >= latestInbound.sentAt);
 }
