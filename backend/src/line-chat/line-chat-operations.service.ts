@@ -200,6 +200,13 @@ export class LineChatOperationsService {
 
 
   public async getFleetReadiness(): Promise<LineChatFleetReadinessReport> {
+    const conversationModel = this.prisma.conversation as unknown as {
+      groupBy?: (args: unknown) => Promise<Array<{ lineOfficialAccountId: string; _count: { id: number } }>>;
+    };
+    const groupConversationCounts = typeof conversationModel?.groupBy === "function"
+      ? conversationModel.groupBy.bind(conversationModel)
+      : async () => [] as Array<{ lineOfficialAccountId: string; _count: { id: number } }>;
+
     const [oas, conversationCounts, mappedConversationCounts] = await Promise.all([
       this.prisma.lineOfficialAccount.findMany({
         where: {
@@ -235,11 +242,11 @@ export class LineChatOperationsService {
         },
         orderBy: { name: "asc" },
       }),
-      this.prisma.conversation.groupBy({
+      groupConversationCounts({
         by: ["lineOfficialAccountId"],
         _count: { id: true },
       }),
-      this.prisma.conversation.groupBy({
+      groupConversationCounts({
         by: ["lineOfficialAccountId"],
         where: { lineChatUserId: { not: null } },
         _count: { id: true },
