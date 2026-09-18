@@ -6,6 +6,7 @@ import type { AuthUser } from "../auth/auth.guard";
 import { StoreAccessService } from "../auth/store-access.service";
 import { bangkokDateRangeToUtcBounds, getOffsetBangkokDateString, getTodayBangkokDateString } from "../follower-insights/date-utils";
 import { PrismaService } from "../prisma.service";
+import { AUTO_REPLY_BOT_DISPLAY_NAME, findFirstDeliveredHumanReplyAfter, isAutomatedOutboundMessage, isDeliveredHumanOutbound } from "../conversation-reply-state";
 import { isUsableCustomerVoiceAnalysis } from "./customer-voice-analyzer";
 import { CUSTOMER_VOICE_ANALYSIS_VERSION, type CustomerVoiceTopic } from "./customer-voice-taxonomy";
 import {
@@ -29,7 +30,6 @@ import {
 } from "./store-insights.types";
 
 export const STORE_INSIGHTS_TIMEZONE = "Asia/Bangkok" as const;
-export const AUTO_REPLY_BOT_DISPLAY_NAME = "Auto Reply Bot";
 const MAX_PERIOD_DAYS = 90;
 const MAX_EXPORT_CONVERSATIONS = 100_000;
 const MINUTE = 60;
@@ -48,6 +48,7 @@ const conversationSelect = {
       id: true,
       direction: true,
       sentAt: true,
+      deliveryStatus: true,
       senderUserId: true,
       senderDisplayName: true,
       sender: { select: { id: true, displayName: true } },
@@ -141,21 +142,18 @@ function effectiveSenderName(message: MessageRow): string | null {
   return message.sender?.displayName?.trim() || message.senderDisplayName?.trim() || null;
 }
 
-function hasAutoResponsePayload(message: MessageRow): boolean {
-  if (!message.rawPayload || typeof message.rawPayload !== "object" || Array.isArray(message.rawPayload)) return false;
-  const source = (message.rawPayload as { source?: unknown }).source;
-  return source === "AUTO_RESPONSE";
-}
-
 function isAutomatedOutbound(message: MessageRow): boolean {
-  return message.direction === MessageDirection.OUTBOUND &&
-    (effectiveSenderName(message) === AUTO_REPLY_BOT_DISPLAY_NAME || hasAutoResponsePayload(message));
+  return isAutomatedOutboundMessage({
+    ...message,
+    senderDisplayName: effectiveSenderName(message),
+  });
 }
 
 function isHumanOutbound(message: MessageRow): boolean {
-  return message.direction === MessageDirection.OUTBOUND &&
-    Boolean(message.senderUserId) &&
-    effectiveSenderName(message) !== AUTO_REPLY_BOT_DISPLAY_NAME;
+  return isDeliveredHumanOutbound({
+    ...message,
+    senderDisplayName: effectiveSenderName(message),
+  });
 }
 
 function isAmbiguousOutbound(message: MessageRow): boolean {
@@ -275,7 +273,10 @@ function buildResponseCases(conversations: ConversationRow[], period: Pick<Perio
 
     const firstInbound = inbound[0];
     if (!firstInbound) continue;
-    const humanReply = conversation.messages.find((message) => isHumanOutbound(message) && message.sentAt >= firstInbound.sentAt);
+    const humanReply = findFirstDeliveredHumanReplyAfter(
+      conversation.messages.map((message) => ({ ...message, senderDisplayName: effectiveSenderName(message) })),
+      firstInbound.sentAt,
+    ) as MessageRow | undefined;
     const durationSeconds = humanReply
       ? Math.max(0, (humanReply.sentAt.getTime() - firstInbound.sentAt.getTime()) / 1000)
       : null;
