@@ -44,6 +44,7 @@ function chat(id = CHAT_ID, name = "  สมชาย   OPPO ", offsetMs = 30_00
 function fixture(options: {
   conversation?: ReturnType<typeof conversation>;
   chats?: ReturnType<typeof chat>[];
+  expandedChats?: ReturnType<typeof chat>[];
   discoveryStatus?: "READY" | "FAILED";
   failureReason?: "SESSION_AUTH" | "TRANSPORT";
   conflict?: boolean;
@@ -80,9 +81,17 @@ function fixture(options: {
   const session = {
     discoverRecentChats: async (input: Record<string, unknown>) => {
       discoveryInputs.push(input);
-      return options.discoveryStatus === "FAILED"
-        ? { status: "FAILED", chats: [], pagesFetched: 0, totalRawRecords: 0, failureReason: options.failureReason }
-        : { status: "READY", chats: options.chats ?? [chat()], pagesFetched: 5, totalRawRecords: 125 };
+      if (options.discoveryStatus === "FAILED") {
+        return { status: "FAILED", chats: [], pagesFetched: 0, totalRawRecords: 0, failureReason: options.failureReason };
+      }
+      const expanded = Number(input.maxChats ?? 0) > 125;
+      const chats = expanded ? (options.expandedChats ?? options.chats ?? [chat()]) : (options.chats ?? [chat()]);
+      return {
+        status: "READY",
+        chats,
+        pagesFetched: expanded ? 20 : 5,
+        totalRawRecords: expanded ? 500 : 125,
+      };
     },
   };
   const service = new LineChatRecentResolverService(prisma as never, session as never);
@@ -123,6 +132,25 @@ test("unique normalized exact customer name resolves with a guarded write", asyn
     where: { id: "conversation-1", lineOfficialAccountId: "oa-1", lineChatUserId: null },
     data: { lineChatUserId: CHAT_ID },
   });
+});
+
+
+test("no-match retries with an expanded recent-chat scan before failing", async () => {
+  const value = fixture({
+    chats: [chat(CHAT_ID_2, "different customer")],
+    expandedChats: [
+      chat(CHAT_ID_2, "different customer"),
+      chat(CHAT_ID, "สมชาย Oppo"),
+    ],
+  });
+  const result = await value.service.resolve(input);
+  assert.deepEqual(result, { status: "RESOLVED", lineChatUserId: CHAT_ID });
+  assert.equal(value.discoveryInputs.length, 2);
+  assert.equal(value.discoveryInputs[0].maxPages, 5);
+  assert.equal(value.discoveryInputs[0].maxChats, 125);
+  assert.equal(value.discoveryInputs[1].maxPages, 20);
+  assert.equal(value.discoveryInputs[1].maxChats, 500);
+  assert.equal(value.writes.length, 1);
 });
 
 test("message timestamps never determine pilot candidate selection", async (t) => {
