@@ -10,9 +10,7 @@ import {
   ServiceUnavailableException,
 } from "@nestjs/common";
 import {
-  ActivityActionType,
   BmReplyStatus,
-  FollowUpStatus,
   MessageDirection,
   MessageType,
   Prisma,
@@ -26,6 +24,7 @@ import { ownerTrackingInboundFilter } from "../owner-tracking";
 import { PrismaService } from "../prisma.service";
 import { RealtimeEventService } from "../realtime/realtime-event.service";
 import { createVideoPreviewPng } from "./mobile-video-preview";
+import { persistStaffOutboundReplyState, reconcileStaffOutboundReplyState } from "../conversation-reply-state";
 
 export const MOBILE_VIDEO_MAX_BYTES = 30 * 1024 * 1024;
 const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -81,7 +80,10 @@ export class MobileVideoService {
       where: { externalMessageId: dedupeExternalId },
       include: { media: true },
     });
-    if (prior) return this.response(prior, true);
+    if (prior) {
+      await reconcileStaffOutboundReplyState(this.prisma, { conversationId, sentAt: prior.sentAt, actor: user });
+      return this.response(prior, true);
+    }
 
     const conversation = await this.prisma.conversation.findUnique({
       where: { id: conversationId },
@@ -164,33 +166,15 @@ export class MobileVideoService {
             processingStatus: "READY",
           },
         });
-        await tx.conversation.update({
-          where: { id: conversation.id },
-          data: {
-            latestMessageAt: sentAt,
-            bmReplyStatus: BmReplyStatus.REPLIED,
-            followUpStatus: FollowUpStatus.COMPLETED,
-          },
+        const state = await persistStaffOutboundReplyState(tx, {
+          conversationId: conversation.id,
+          previousBmReplyStatus: conversation.bmReplyStatus,
+          previousFollowUpStatus: conversation.followUpStatus,
+          actor: user,
+          sentAt,
+          description: `Customer video sent via LINE (PUSH); storeId=${conversation.storeId}; lineOfficialAccountId=${conversation.lineOfficialAccountId}`,
         });
-        if (ownerTracked) {
-          const ownerUpdate = await tx.conversation.updateMany({
-            where: { id: conversation.id, ownerUserId: null },
-            data: { ownerUserId: user.id },
-          });
-          ownerAssigned = ownerUpdate.count === 1;
-        }
-        await tx.activityHistory.create({
-          data: {
-            conversationId: conversation.id,
-            actionType: ActivityActionType.STATUS_CHANGED,
-            previousStatus: conversation.followUpStatus,
-            newStatus: FollowUpStatus.COMPLETED,
-            previousBmReplyStatus: conversation.bmReplyStatus,
-            newBmReplyStatus: BmReplyStatus.REPLIED,
-            createdByName: user.displayName,
-            description: `Customer video sent via LINE (PUSH); storeId=${conversation.storeId}; lineOfficialAccountId=${conversation.lineOfficialAccountId}`,
-          },
-        });
+        ownerAssigned = state.ownerAssigned;
         return message;
       });
 
@@ -237,7 +221,10 @@ export class MobileVideoService {
           where: { externalMessageId: dedupeExternalId },
           include: { media: true },
         });
-        if (existing) return this.response(existing, true);
+        if (existing) {
+          await reconcileStaffOutboundReplyState(this.prisma, { conversationId, sentAt: existing.sentAt, actor: user });
+          return this.response(existing, true);
+        }
       }
       this.logger.error(`LINE accepted outbound video but persistence failed for conversation ${conversation.id}`);
       throw error;

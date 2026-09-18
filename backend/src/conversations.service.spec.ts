@@ -49,7 +49,8 @@ void test("sendImage accepts a valid PNG with generic multipart MIME", async () 
     $transaction: async (callback: (tx: any) => Promise<unknown>) => callback({
       message: { create: async ({ data }: { data: Record<string, unknown> }) => ({ id: "message-generic", ...data }) },
       messageMedia: { create: async ({ data }: { data: Record<string, unknown> }) => { storedMime = data.mimeType as string; return data; } },
-      conversation: { update: async ({ data }: { data: Record<string, unknown> }) => data },
+      conversation: { update: async ({ data }: { data: Record<string, unknown> }) => data, updateMany: async () => ({ count: 1 }) },
+      activityHistory: { create: async () => ({}) },
     }),
   } as unknown as PrismaService;
   const service = new ConversationsService(prisma, noopOperations, { decrypt: () => "token" } as CredentialEncryptionService, { pushImage: async () => ({ requestId: "request", acceptedRequestId: null, externalMessageId: "line-image", duplicateAccepted: false }) } as unknown as LineMessagingService, { put: async (_key: string, _body: Buffer, mime: string) => ({ provider: "s3", fileId: "key", mimeType: mime, size: png.length }) } as never);
@@ -64,6 +65,7 @@ void test("sendImage accepts a valid PNG with generic multipart MIME", async () 
 void test("sendMessage resolves the conversation OA token, persists outbound text, marks REPLIED, and audits only after LINE accepts", async () => {
   const writes: string[] = [];
   let persistedData: Record<string, unknown> | undefined;
+  let activityCreatedByUserId: string | undefined;
   const conversation = {
     id: "conversation-send", customerId: "customer-send", storeId: "store-send", lineOfficialAccountId: "oa-send",
     latestMessageAt: new Date(), priority: "NORMAL", prioritySource: "SYSTEM", followUpStatus: "FOLLOW_UP", bmReplyStatus: "NOT_REPLIED",
@@ -79,7 +81,7 @@ void test("sendMessage resolves the conversation OA token, persists outbound tex
     $transaction: async (callback: (tx: unknown) => Promise<unknown>) => callback({
       message: { create: ({ data }: { data: Record<string, unknown> }) => { persistedData = data; writes.push("message"); return Promise.resolve(persisted); } },
       conversation: { update: ({ data }: { data: { bmReplyStatus: string } }) => { writes.push(`status:${data.bmReplyStatus}`); return Promise.resolve(conversation); } },
-      activityHistory: { create: ({ data }: { data: { description: string; createdByName: string } }) => { writes.push(`audit:${data.createdByName}:${data.description}`); return Promise.resolve({}); } },
+      activityHistory: { create: ({ data }: { data: { description: string; createdByName: string; createdByUserId?: string } }) => { activityCreatedByUserId = data.createdByUserId; writes.push(`audit:${data.createdByName}:${data.description}`); return Promise.resolve({}); } },
     }),
   } as unknown as PrismaService;
   const encryption = { decrypt: (value: string) => { assert.equal(value, "encrypted-correct-token"); return "correct-oa-token"; } } as CredentialEncryptionService;
@@ -97,6 +99,7 @@ void test("sendMessage resolves the conversation OA token, persists outbound tex
   assert.equal(persistedData?.senderUserId, "admin");
   assert.equal(persistedData?.senderDisplayName, "Operator");
   assert.equal(result.bmReplyStatus, "REPLIED");
+  assert.equal(activityCreatedByUserId, "admin");
   assert.deepEqual(writes.map((value) => value.split(":")[0]), ["message", "status", "audit"]);
   assert.equal(writes.join(" ").includes("correct-oa-token"), false);
 });
@@ -122,7 +125,7 @@ void test("sendMessage does not persist or mark REPLIED when LINE rejects the pu
 });
 
 void test("first successful human reply assigns owner once and later staff replies do not steal it", async () => {
-  const events: Array<{ conversation?: { owner?: unknown } }> = [];
+  const events: Array<{ conversation?: { owner?: unknown; bmReplyStatus?: string } }> = [];
   const owner = { id: "bm-a", displayName: "BM A", isActive: true, status: "ACTIVE", memberships: [{ storeId: "store" }] };
   const baseConversation = {
     id: "conversation-owner", storeId: "store", lineOfficialAccountId: "oa", followUpStatus: "FOLLOW_UP", bmReplyStatus: "NOT_REPLIED",
@@ -161,9 +164,10 @@ void test("first successful human reply assigns owner once and later staff repli
     { id: "bm-a", displayName: "BM A" },
     { id: "bm-a", displayName: "BM A" },
   ]);
+  assert.deepEqual(events.map((event) => event.conversation?.bmReplyStatus), ["REPLIED", "REPLIED"]);
 });
 
-void test("legacy conversation does not become owned from a successful reply alone", async () => {
+void test("legacy conversation is assigned to the first staff member who replies", async () => {
   let ownerUpdateCalls = 0;
   const conversation = {
     id: "conversation-legacy-owner", storeId: "store", lineOfficialAccountId: "oa", followUpStatus: "FOLLOW_UP", bmReplyStatus: "NOT_REPLIED",
@@ -194,7 +198,47 @@ void test("legacy conversation does not become owned from a successful reply alo
   );
 
   await service.sendMessage("conversation-legacy-owner", { text: "reply", idempotencyKey: "123e4567-e89b-42d3-a456-426614174012" }, { id: "bm-a", email: "bm@example.com", displayName: "BM A", role: UserRole.VIEWER, isActive: true });
-  assert.equal(ownerUpdateCalls, 0);
+  assert.equal(ownerUpdateCalls, 1);
+});
+
+void test("idempotent outbound retry repairs reply status and owner before returning the persisted message", async () => {
+  const priorMessage = {
+    id: "persisted-outbound",
+    conversationId: "conversation-retry-state",
+    externalMessageId: "outbound:123e4567-e89b-42d3-a456-426614174013",
+    direction: "OUTBOUND",
+    messageType: "TEXT",
+    originalText: "Already delivered",
+    sentAt: new Date("2026-09-18T06:30:00.000Z"),
+  };
+  let conversationUpdate: Record<string, unknown> | undefined;
+  let ownerUpdate: Record<string, unknown> | undefined;
+  let activity: Record<string, unknown> | undefined;
+  const prisma = {
+    message: { findUnique: async () => priorMessage },
+    conversation: {
+      findUnique: async () => ({ id: priorMessage.conversationId, bmReplyStatus: "NOT_REPLIED", followUpStatus: "FOLLOW_UP", ownerUserId: null }),
+    },
+    $transaction: async (callback: (tx: any) => Promise<unknown>) => callback({
+      conversation: {
+        update: async ({ data }: { data: Record<string, unknown> }) => { conversationUpdate = data; return data; },
+        updateMany: async ({ data }: { data: Record<string, unknown> }) => { ownerUpdate = data; return { count: 1 }; },
+      },
+      activityHistory: { create: async ({ data }: { data: Record<string, unknown> }) => { activity = data; return data; } },
+    }),
+  } as unknown as PrismaService;
+  const service = new ConversationsService(prisma, noopOperations);
+  const result = await service.sendMessage(
+    priorMessage.conversationId,
+    { text: priorMessage.originalText, idempotencyKey: "123e4567-e89b-42d3-a456-426614174013" },
+    { id: "bm-retry", email: "retry@example.com", displayName: "Retry Staff", role: UserRole.VIEWER, isActive: true },
+  );
+
+  assert.equal(result.duplicate, true);
+  assert.equal(conversationUpdate?.bmReplyStatus, "REPLIED");
+  assert.equal(conversationUpdate?.latestMessageAt, priorMessage.sentAt);
+  assert.deepEqual(ownerUpdate, { ownerUserId: "bm-retry" });
+  assert.equal(activity?.createdByUserId, "bm-retry");
 });
 
 void test("sendImage validates content, persists media, sender, and REPLIED status", async () => {
@@ -206,7 +250,8 @@ void test("sendImage validates content, persists media, sender, and REPLIED stat
     $transaction: async (callback: (tx: any) => Promise<unknown>) => callback({
       message: { create: async ({ data }: { data: Record<string, unknown> }) => ({ id: "message-image", ...data }) },
       messageMedia: { create: async ({ data }: { data: Record<string, unknown> }) => { mediaData = data; return data; } },
-      conversation: { update: async ({ data }: { data: Record<string, unknown> }) => data },
+      conversation: { update: async ({ data }: { data: Record<string, unknown> }) => data, updateMany: async () => ({ count: 1 }) },
+      activityHistory: { create: async () => ({}) },
     }),
   } as unknown as PrismaService;
   const service = new ConversationsService(prisma, noopOperations, { decrypt: () => "token" } as CredentialEncryptionService, { pushImage: async () => ({ requestId: "request", acceptedRequestId: null, externalMessageId: "line-image", duplicateAccepted: false }) } as unknown as LineMessagingService, { put: async () => ({ provider: "s3", fileId: "key", mimeType: "image/png", size: 8 }) } as never);
@@ -784,7 +829,7 @@ void test("sendMessage uses Reply API when a fresh unused replyToken is availabl
           return { id: "out-msg-1", ...data };
         },
       },
-      conversation: { update: async ({ data }: { data: any }) => data },
+      conversation: { update: async ({ data }: { data: any }) => data, updateMany: async () => ({ count: 1 }) },
       activityHistory: { create: async () => ({}) },
     }),
   } as unknown as PrismaService;
@@ -1005,7 +1050,8 @@ void test("sendImage uses Reply API when unused reply token is available", async
     $transaction: async (cb: any) => cb({
       message: { create: async ({ data }: { data: any }) => ({ id: "out-msg-img-reply", ...data }) },
       messageMedia: { create: async () => ({}) },
-      conversation: { update: async ({ data }: { data: any }) => data },
+      conversation: { update: async ({ data }: { data: any }) => data, updateMany: async () => ({ count: 1 }) },
+      activityHistory: { create: async () => ({}) },
     }),
   } as unknown as PrismaService;
 

@@ -1,5 +1,5 @@
 import { BadRequestException, ForbiddenException, Injectable, Optional, ServiceUnavailableException } from "@nestjs/common";
-import { ActivityActionType, BmReplyStatus, FollowUpStatus, MessageDirection, MessageType, Prisma } from "@prisma/client";
+import { BmReplyStatus, MessageDirection, MessageType, Prisma } from "@prisma/client";
 import { randomUUID } from "node:crypto";
 import type { AuthUser } from "../auth/auth.guard";
 import { StoreAccessService } from "../auth/store-access.service";
@@ -10,6 +10,7 @@ import { PDF_MIME_TYPE, PdfValidationError, readPdfMaxBytes, validatePdfBuffer }
 import { ownerTrackingInboundFilter } from "../owner-tracking";
 import { PrismaService } from "../prisma.service";
 import { RealtimeEventService } from "../realtime/realtime-event.service";
+import { persistStaffOutboundReplyState, reconcileStaffOutboundReplyState } from "../conversation-reply-state";
 
 @Injectable()
 export class MobilePdfSendService {
@@ -63,6 +64,7 @@ export class MobilePdfSendService {
       include: { media: true },
     });
     if (existing) {
+      await reconcileStaffOutboundReplyState(this.prisma, { conversationId, sentAt: existing.sentAt, actor: user });
       return {
         message: this.presentMessage(existing),
         bmReplyStatus: BmReplyStatus.REPLIED,
@@ -145,33 +147,15 @@ export class MobilePdfSendService {
             processingStatus: "READY",
           },
         });
-        await tx.conversation.update({
-          where: { id: conversation.id },
-          data: {
-            latestMessageAt: sentAt,
-            bmReplyStatus: BmReplyStatus.REPLIED,
-            followUpStatus: FollowUpStatus.COMPLETED,
-          },
+        const state = await persistStaffOutboundReplyState(tx, {
+          conversationId: conversation.id,
+          previousBmReplyStatus: conversation.bmReplyStatus,
+          previousFollowUpStatus: conversation.followUpStatus,
+          actor: user,
+          sentAt,
+          description: `Customer PDF sent via LINE OA Manager Manual Chat; storeId=${conversation.storeId}; lineOfficialAccountId=${conversation.lineOfficialAccountId}`,
         });
-        if (ownerTracked) {
-          const result = await tx.conversation.updateMany({
-            where: { id: conversation.id, ownerUserId: null },
-            data: { ownerUserId: user.id },
-          });
-          ownerAssigned = result.count === 1;
-        }
-        await tx.activityHistory.create({
-          data: {
-            conversationId: conversation.id,
-            actionType: ActivityActionType.STATUS_CHANGED,
-            previousStatus: conversation.followUpStatus,
-            newStatus: FollowUpStatus.COMPLETED,
-            previousBmReplyStatus: conversation.bmReplyStatus,
-            newBmReplyStatus: BmReplyStatus.REPLIED,
-            createdByName: user.displayName,
-            description: `Customer PDF sent via LINE OA Manager Manual Chat; storeId=${conversation.storeId}; lineOfficialAccountId=${conversation.lineOfficialAccountId}`,
-          },
-        });
+        ownerAssigned = state.ownerAssigned;
         return message;
       });
     } catch (error) {
@@ -181,6 +165,7 @@ export class MobilePdfSendService {
           include: { media: true },
         });
         if (duplicate) {
+          await reconcileStaffOutboundReplyState(this.prisma, { conversationId, sentAt: duplicate.sentAt, actor: user });
           return {
             message: this.presentMessage(duplicate),
             bmReplyStatus: BmReplyStatus.REPLIED,

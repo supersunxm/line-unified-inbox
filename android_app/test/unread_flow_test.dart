@@ -30,6 +30,7 @@ class FakeConversationRepository extends ConversationRepository {
   List<ChatMessage> olderDetailMessages = const [];
   String? detailNextCursor;
   String replyStatus = 'NOT_REPLIED';
+  ConversationOwner? detailOwner;
   List<ConversationSummary>? customItems;
   final List<String?> detailBeforeCalls = [];
 
@@ -75,6 +76,7 @@ class FakeConversationRepository extends ConversationRepository {
       nextCursor: loadingOlder ? null : detailNextCursor,
       unreadCount: unreadCount,
       bmReplyStatus: replyStatus,
+      owner: detailOwner,
     );
   }
 
@@ -83,6 +85,7 @@ class FakeConversationRepository extends ConversationRepository {
       String id, String text, String idempotencyKey) async {
     replyCalls += 1;
     replyStatus = 'REPLIED';
+    detailOwner = const ConversationOwner(id: 'bm', displayName: 'BM');
     final message = ChatMessage(
       id: 'outbound-message',
       text: text,
@@ -664,7 +667,7 @@ void main() {
     await events.close();
   });
 
-  testWidgets('successful text send merges the response without reloading',
+  testWidgets('successful text send refreshes canonical reply state',
       (tester) async {
     final repository = FakeConversationRepository();
 
@@ -680,7 +683,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(repository.replyCalls, 1);
-    expect(repository.detailCalls, 1);
+    expect(repository.detailCalls, 2);
     expect(find.text('Reply now'), findsOneWidget);
   });
 

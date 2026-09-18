@@ -485,6 +485,23 @@ class _ChatPageState extends State<ChatPage> {
       _pendingPdfs.removeWhere((item) => item.key == idempotencyKey);
       _detail = detail.copyWith(messages: messages, bmReplyStatus: 'REPLIED');
     });
+    unawaited(_refreshReplyStateAfterSend());
+  }
+
+  Future<void> _refreshReplyStateAfterSend() async {
+    try {
+      final latest = await widget.repository.detail(widget.conversationId,
+          limit: 1);
+      if (!mounted || _detail == null) return;
+      setState(() => _detail = _detail!.copyWith(
+            bmReplyStatus: latest.bmReplyStatus ?? _detail!.bmReplyStatus,
+            owner: latest.owner,
+            ownerTracked: latest.ownerTracked,
+          ));
+    } catch (_) {
+      // The local REPLIED state and realtime event remain visible; the next
+      // normal conversation load will reconcile any transient refresh error.
+    }
   }
 
   Future<void> _showConversationActions() async {

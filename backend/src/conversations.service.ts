@@ -16,6 +16,7 @@ import { buildAiInsight, buildCustomerSalesInformation, buildOperationalState, b
 import { RealtimeEventService } from "./realtime/realtime-event.service";
 import { stickerPresentationFromRawPayload } from "./messages/sticker-message";
 import { serializeConversationOwner } from "./conversation-owner";
+import { persistStaffOutboundReplyState, reconcileStaffOutboundReplyState } from "./conversation-reply-state";
 import { ownerTrackingInboundFilter } from "./owner-tracking";
 import { FOCUS_STORE_GROUP_ID, isFocusStoreReference } from "./focus-store-group";
 import { randomUUID } from "node:crypto";
@@ -77,22 +78,6 @@ export function getReplyTokenAgeBucket(ageMs: number): string {
   if (ageMs < 300_000) return "2-5 minutes";
   if (ageMs < 600_000) return "5-10 minutes";
   return "> 10 minutes";
-}
-
-async function isOwnerTrackedForTransaction(
-  tx: unknown,
-  conversationId: string,
-  fallback: boolean,
-): Promise<boolean> {
-  const messageDelegate = (tx as {
-    message?: {
-      count?: (args: { where: unknown }) => Promise<number>;
-    };
-  }).message;
-  if (typeof messageDelegate?.count !== "function") return fallback;
-  return (await messageDelegate.count({
-    where: { conversationId, ...ownerTrackingInboundFilter() },
-  })) > 0;
 }
 
 export function detectImageMime(buffer: Buffer): string | null {
@@ -714,7 +699,10 @@ export class ConversationsService {
 
     const dedupeExternalId = `outbound:${dto.idempotencyKey}`;
     const priorMessage = await this.prisma.message.findUnique({ where: { externalMessageId: dedupeExternalId } });
-    if (priorMessage) return { message: this.safeMessage(priorMessage), bmReplyStatus: BmReplyStatus.REPLIED, duplicate: true };
+    if (priorMessage) {
+      await reconcileStaffOutboundReplyState(this.prisma, { conversationId: id, sentAt: priorMessage.sentAt, actor: operator });
+      return { message: this.safeMessage(priorMessage), bmReplyStatus: BmReplyStatus.REPLIED, duplicate: true };
+    }
 
     const conversation = await this.prisma.conversation.findUnique({
       where: { id },
@@ -842,7 +830,7 @@ export class ConversationsService {
 
     const sentAt = new Date();
     let ownerAssigned = false;
-    let ownerTracked = conversation._count?.messages === undefined ? true : conversation._count.messages > 0;
+    const ownerTracked = conversation._count?.messages === undefined ? true : conversation._count.messages > 0;
     try {
       const message = await this.prisma.$transaction(async (tx) => {
         const created = typeof tx.message?.upsert === "function"
@@ -900,41 +888,26 @@ export class ConversationsService {
                 },
               },
             });
-        await tx.conversation.update({
-          where: { id: conversation.id },
-          data: { latestMessageAt: sentAt, bmReplyStatus: BmReplyStatus.REPLIED, followUpStatus: FollowUpStatus.COMPLETED },
+        const state = await persistStaffOutboundReplyState(tx, {
+          conversationId: conversation.id,
+          previousBmReplyStatus: conversation.bmReplyStatus,
+          previousFollowUpStatus: conversation.followUpStatus,
+          actor: operator,
+          sentAt,
+          description: `Customer message sent via LINE (${deliveryMethod}); storeId=${conversation.storeId}; lineOfficialAccountId=${conversation.lineOfficialAccountId}`,
         });
-        ownerTracked = await isOwnerTrackedForTransaction(tx, conversation.id, ownerTracked);
-        if (ownerTracked && typeof tx.conversation.updateMany === "function") {
-          const ownerUpdate = await tx.conversation.updateMany({
-            where: { id: conversation.id, ownerUserId: null },
-            data: { ownerUserId: operator.id },
-          });
-          ownerAssigned = ownerUpdate.count === 1;
-        }
-        await tx.activityHistory.create({
-          data: {
-            conversationId: conversation.id,
-            actionType: ActivityActionType.STATUS_CHANGED,
-            previousStatus: conversation.followUpStatus,
-            newStatus: FollowUpStatus.COMPLETED,
-            previousBmReplyStatus: conversation.bmReplyStatus,
-            newBmReplyStatus: BmReplyStatus.REPLIED,
-            createdByName: operator.displayName,
-            description: `Customer message sent via LINE (${deliveryMethod}); storeId=${conversation.storeId}; lineOfficialAccountId=${conversation.lineOfficialAccountId}`,
-          },
-        });
+        ownerAssigned = state.ownerAssigned;
         return created;
       });
       const owner = ownerAssigned
         ? { id: operator.id, displayName: operator.displayName?.trim() || "Staff" }
         : serializeConversationOwner(conversation.owner, conversation.storeId);
-      this.publishOutboundMessage({ ...conversation, ownerTracked }, message, null, owner);
+      this.publishOutboundMessage({ ...conversation, bmReplyStatus: BmReplyStatus.REPLIED, ownerTracked }, message, null, owner);
       return { message: this.safeMessage(message), bmReplyStatus: BmReplyStatus.REPLIED, duplicate: lineResult.duplicateAccepted };
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
         const existing = await this.prisma.message.findUnique({ where: { externalMessageId: dedupeExternalId } });
-        if (existing) return { message: this.safeMessage(existing), bmReplyStatus: BmReplyStatus.REPLIED, duplicate: true };
+        if (existing) { await reconcileStaffOutboundReplyState(this.prisma, { conversationId: id, sentAt: existing.sentAt, actor: operator }); return { message: this.safeMessage(existing), bmReplyStatus: BmReplyStatus.REPLIED, duplicate: true }; }
       }
       Logger.error(`LINE accepted outbound message but persistence failed for conversation ${conversation.id}`, undefined, "ConversationsService");
       throw new InternalServerErrorException("LINE รับข้อความแล้ว แต่บันทึกประวัติไม่สำเร็จ กรุณาลองส่งคำขอเดิมอีกครั้ง");
@@ -977,6 +950,7 @@ export class ConversationsService {
     // Idempotency check: If message is already DELIVERED or has LINE providerMessageId,
     // prevent duplicate customer-facing send!
     if (message.deliveryStatus === MessageDeliveryStatus.DELIVERED) {
+      await reconcileStaffOutboundReplyState(this.prisma, { conversationId, sentAt: message.sentAt, actor: operator });
       return { message: this.safeMessage(message), bmReplyStatus: BmReplyStatus.REPLIED, duplicate: true };
     }
 
@@ -986,6 +960,7 @@ export class ConversationsService {
         where: { id: message.id },
         data: { deliveryStatus: MessageDeliveryStatus.DELIVERED },
       });
+      await reconcileStaffOutboundReplyState(this.prisma, { conversationId, sentAt: marked.sentAt, actor: operator });
       return { message: this.safeMessage(marked), bmReplyStatus: BmReplyStatus.REPLIED, duplicate: true };
     }
 
@@ -1026,7 +1001,7 @@ export class ConversationsService {
 
     const sentAt = new Date();
     let ownerAssigned = false;
-    let ownerTracked = conversation._count?.messages === undefined ? true : conversation._count.messages > 0;
+    const ownerTracked = conversation._count?.messages === undefined ? true : conversation._count.messages > 0;
 
     const updated = await this.prisma.$transaction(async (tx) => {
       const saved = await tx.message.update({
@@ -1046,32 +1021,15 @@ export class ConversationsService {
         },
       });
 
-      await tx.conversation.update({
-        where: { id: conversation.id },
-        data: { latestMessageAt: sentAt, bmReplyStatus: BmReplyStatus.REPLIED, followUpStatus: FollowUpStatus.COMPLETED },
+      const state = await persistStaffOutboundReplyState(tx, {
+        conversationId: conversation.id,
+        previousBmReplyStatus: conversation.bmReplyStatus,
+        previousFollowUpStatus: conversation.followUpStatus,
+        actor: operator,
+        sentAt,
+        description: `Retried failed customer message sent via LINE (PUSH); storeId=${conversation.storeId}; lineOfficialAccountId=${conversation.lineOfficialAccountId}`,
       });
-
-      ownerTracked = await isOwnerTrackedForTransaction(tx, conversation.id, ownerTracked);
-      if (ownerTracked && typeof tx.conversation.updateMany === "function") {
-        const ownerUpdate = await tx.conversation.updateMany({
-          where: { id: conversation.id, ownerUserId: null },
-          data: { ownerUserId: operator.id },
-        });
-        ownerAssigned = ownerUpdate.count === 1;
-      }
-
-      await tx.activityHistory.create({
-        data: {
-          conversationId: conversation.id,
-          actionType: ActivityActionType.STATUS_CHANGED,
-          previousStatus: conversation.followUpStatus,
-          newStatus: FollowUpStatus.COMPLETED,
-          previousBmReplyStatus: conversation.bmReplyStatus,
-          newBmReplyStatus: BmReplyStatus.REPLIED,
-          createdByName: operator.displayName,
-          description: `Retried failed customer message sent via LINE (PUSH); storeId=${conversation.storeId}; lineOfficialAccountId=${conversation.lineOfficialAccountId}`,
-        },
-      });
+      ownerAssigned = state.ownerAssigned;
 
       return saved;
     });
@@ -1079,7 +1037,7 @@ export class ConversationsService {
     const owner = ownerAssigned
       ? { id: operator.id, displayName: operator.displayName?.trim() || "Staff" }
       : serializeConversationOwner(conversation.owner, conversation.storeId);
-    this.publishOutboundMessage({ ...conversation, ownerTracked }, updated, null, owner);
+    this.publishOutboundMessage({ ...conversation, bmReplyStatus: BmReplyStatus.REPLIED, ownerTracked }, updated, null, owner);
     return { message: this.safeMessage(updated), bmReplyStatus: BmReplyStatus.REPLIED, duplicate: lineResult.duplicateAccepted };
   }
 
@@ -1093,7 +1051,10 @@ export class ConversationsService {
     if (declaredMime && declaredMime !== "application/octet-stream" && declaredMime !== mime) throw new BadRequestException("Image content does not match its MIME type");
     const dedupeExternalId = `outbound:${idempotencyKey}`;
     const priorMessage = await this.prisma.message.findUnique({ where: { externalMessageId: dedupeExternalId }, include: { media: true } });
-    if (priorMessage) return { message: this.safeMessage(priorMessage), bmReplyStatus: BmReplyStatus.REPLIED, duplicate: true };
+    if (priorMessage) {
+      await reconcileStaffOutboundReplyState(this.prisma, { conversationId: id, sentAt: priorMessage.sentAt, actor: operator });
+      return { message: this.safeMessage(priorMessage), bmReplyStatus: BmReplyStatus.REPLIED, duplicate: true };
+    }
     if (!this.media) throw new ServiceUnavailableException("Media storage is unavailable");
     const conversation = await this.prisma.conversation.findUnique({ where: { id }, include: { customer: true, lineOfficialAccount: true, store: true, owner: { select: { id: true, displayName: true, isActive: true, status: true, role: true, canAccessAllStores: true, memberships: { where: { status: "ACTIVE", store: { isActive: true, archivedAt: null } }, select: { storeId: true } } } }, _count: { select: { messages: { where: ownerTrackingInboundFilter() } } } } });
     if (!conversation) throw new NotFoundException("ไม่พบการสนทนา");
@@ -1182,25 +1143,28 @@ export class ConversationsService {
 
       const sentAt = new Date();
       let ownerAssigned = false;
-      let ownerTracked = conversation._count?.messages === undefined ? true : conversation._count.messages > 0;
+      const ownerTracked = conversation._count?.messages === undefined ? true : conversation._count.messages > 0;
       const created = await this.prisma.$transaction(async (tx) => {
         const message = await tx.message.create({ data: { conversationId: conversation.id, externalMessageId: dedupeExternalId, direction: MessageDirection.OUTBOUND, messageType: MessageType.IMAGE, originalText: "[Image]", sentAt, senderUserId: operator.id, senderDisplayName: operator.displayName?.trim() || "Store", rawPayload: { provider: "LINE", deliveryMethod, providerMessageId: lineResult.externalMessageId, requestId: lineResult.requestId, acceptedRequestId: lineResult.acceptedRequestId } } });
         await tx.messageMedia.create({ data: { messageId: message.id, providerMessageId: dedupeExternalId, mediaType: MessageType.IMAGE, mimeType: stored.mimeType, objectKey, provider: stored.provider, fileId: stored.fileId, fileSize: stored.size, processingStatus: "READY" } });
-        await tx.conversation.update({ where: { id: conversation.id }, data: { latestMessageAt: sentAt, bmReplyStatus: BmReplyStatus.REPLIED, followUpStatus: FollowUpStatus.COMPLETED } });
-        ownerTracked = await isOwnerTrackedForTransaction(tx, conversation.id, ownerTracked);
-        if (ownerTracked && typeof tx.conversation.updateMany === "function") {
-          const ownerUpdate = await tx.conversation.updateMany({ where: { id: conversation.id, ownerUserId: null }, data: { ownerUserId: operator.id } });
-          ownerAssigned = ownerUpdate.count === 1;
-        }
+        const state = await persistStaffOutboundReplyState(tx, {
+          conversationId: conversation.id,
+          previousBmReplyStatus: conversation.bmReplyStatus,
+          previousFollowUpStatus: conversation.followUpStatus,
+          actor: operator,
+          sentAt,
+          description: `Customer image sent via LINE (${deliveryMethod}); storeId=${conversation.storeId}; lineOfficialAccountId=${conversation.lineOfficialAccountId}`,
+        });
+        ownerAssigned = state.ownerAssigned;
         return message;
       });
       const owner = ownerAssigned
         ? { id: operator.id, displayName: operator.displayName?.trim() || "Staff" }
         : serializeConversationOwner(conversation.owner, conversation.storeId);
-      this.publishOutboundMessage({ ...conversation, ownerTracked }, created, { processingStatus: "READY", mimeType: stored.mimeType, fileSize: stored.size }, owner);
+      this.publishOutboundMessage({ ...conversation, bmReplyStatus: BmReplyStatus.REPLIED, ownerTracked }, created, { processingStatus: "READY", mimeType: stored.mimeType, fileSize: stored.size }, owner);
       return { message: this.safeMessage({ ...created, media: { processingStatus: "READY", mimeType: stored.mimeType, fileSize: stored.size } }), bmReplyStatus: BmReplyStatus.REPLIED, duplicate: lineResult.duplicateAccepted };
     } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") { const existing = await this.prisma.message.findUnique({ where: { externalMessageId: dedupeExternalId }, include: { media: true } }); if (existing) return { message: this.safeMessage(existing), bmReplyStatus: BmReplyStatus.REPLIED, duplicate: true }; }
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") { const existing = await this.prisma.message.findUnique({ where: { externalMessageId: dedupeExternalId }, include: { media: true } }); if (existing) { await reconcileStaffOutboundReplyState(this.prisma, { conversationId: id, sentAt: existing.sentAt, actor: operator }); return { message: this.safeMessage(existing), bmReplyStatus: BmReplyStatus.REPLIED, duplicate: true }; } }
       throw error;
     }
   }
@@ -1219,7 +1183,10 @@ export class ConversationsService {
     }
     const dedupeExternalId = `outbound:${idempotencyKey}`;
     const priorMessage = await this.prisma.message.findUnique({ where: { externalMessageId: dedupeExternalId }, include: { media: true } });
-    if (priorMessage) return { message: this.safeMessage(priorMessage), bmReplyStatus: BmReplyStatus.REPLIED, duplicate: true };
+    if (priorMessage) {
+      await reconcileStaffOutboundReplyState(this.prisma, { conversationId: id, sentAt: priorMessage.sentAt, actor: operator });
+      return { message: this.safeMessage(priorMessage), bmReplyStatus: BmReplyStatus.REPLIED, duplicate: true };
+    }
     if (!this.media) throw new ServiceUnavailableException("Media storage is unavailable");
     const conversation = await this.prisma.conversation.findUnique({ where: { id }, include: { customer: true, lineOfficialAccount: true, store: true, owner: { select: { id: true, displayName: true, isActive: true, status: true, role: true, canAccessAllStores: true, memberships: { where: { status: "ACTIVE", store: { isActive: true, archivedAt: null } }, select: { storeId: true } } } }, _count: { select: { messages: { where: ownerTrackingInboundFilter() } } } } });
     if (!conversation) throw new NotFoundException("ไม่พบการสนทนา");
@@ -1260,27 +1227,29 @@ export class ConversationsService {
 
       const sentAt = new Date();
       let ownerAssigned = false;
-      let ownerTracked = conversation._count?.messages === undefined ? true : conversation._count.messages > 0;
+      const ownerTracked = conversation._count?.messages === undefined ? true : conversation._count.messages > 0;
       const created = await this.prisma.$transaction(async (tx) => {
         const message = await tx.message.create({ data: { conversationId: conversation.id, externalMessageId: dedupeExternalId, direction: MessageDirection.OUTBOUND, messageType: MessageType.FILE, originalText: `[PDF: ${pdf.filename}]`, fileName: pdf.filename, sentAt, senderUserId: operator.id, senderDisplayName: operator.displayName?.trim() || "Store", rawPayload: { provider: "LINE", deliveryMethod, providerMessageId: lineResult.externalMessageId, requestId: lineResult.requestId, acceptedRequestId: lineResult.acceptedRequestId, fileType: PDF_MIME_TYPE } } });
         await tx.messageMedia.create({ data: { id: documentToken, messageId: message.id, providerMessageId: dedupeExternalId, mediaType: MessageType.FILE, mimeType: PDF_MIME_TYPE, objectKey: stored.provider === "google-drive" ? null : objectKey, provider: stored.provider, fileId: stored.fileId, fileSize: stored.size, processingStatus: "READY" } });
-        await tx.conversation.update({ where: { id: conversation.id }, data: { latestMessageAt: sentAt, bmReplyStatus: BmReplyStatus.REPLIED, followUpStatus: FollowUpStatus.COMPLETED } });
-        ownerTracked = await isOwnerTrackedForTransaction(tx, conversation.id, ownerTracked);
-        if (ownerTracked && typeof tx.conversation.updateMany === "function") {
-          const ownerUpdate = await tx.conversation.updateMany({ where: { id: conversation.id, ownerUserId: null }, data: { ownerUserId: operator.id } });
-          ownerAssigned = ownerUpdate.count === 1;
-        }
-        await tx.activityHistory.create({ data: { conversationId: conversation.id, actionType: ActivityActionType.STATUS_CHANGED, previousStatus: conversation.followUpStatus, newStatus: FollowUpStatus.COMPLETED, previousBmReplyStatus: conversation.bmReplyStatus, newBmReplyStatus: BmReplyStatus.REPLIED, createdByName: operator.displayName, description: `Customer PDF sent via LINE (${deliveryMethod}); storeId=${conversation.storeId}; lineOfficialAccountId=${conversation.lineOfficialAccountId}` } });
+        const state = await persistStaffOutboundReplyState(tx, {
+          conversationId: conversation.id,
+          previousBmReplyStatus: conversation.bmReplyStatus,
+          previousFollowUpStatus: conversation.followUpStatus,
+          actor: operator,
+          sentAt,
+          description: `Customer PDF sent via LINE (${deliveryMethod}); storeId=${conversation.storeId}; lineOfficialAccountId=${conversation.lineOfficialAccountId}`,
+        });
+        ownerAssigned = state.ownerAssigned;
         return message;
       });
       const owner = ownerAssigned ? { id: operator.id, displayName: operator.displayName?.trim() || "Staff" } : serializeConversationOwner(conversation.owner, conversation.storeId);
       const media = { processingStatus: "READY", mimeType: PDF_MIME_TYPE, fileSize: stored.size };
-      this.publishOutboundMessage({ ...conversation, ownerTracked }, created, media, owner);
+      this.publishOutboundMessage({ ...conversation, bmReplyStatus: BmReplyStatus.REPLIED, ownerTracked }, created, media, owner);
       return { message: this.safeMessage({ ...created, media }), bmReplyStatus: BmReplyStatus.REPLIED, duplicate: lineResult.duplicateAccepted };
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
         const existing = await this.prisma.message.findUnique({ where: { externalMessageId: dedupeExternalId }, include: { media: true } });
-        if (existing) return { message: this.safeMessage(existing), bmReplyStatus: BmReplyStatus.REPLIED, duplicate: true };
+        if (existing) { await reconcileStaffOutboundReplyState(this.prisma, { conversationId: id, sentAt: existing.sentAt, actor: operator }); return { message: this.safeMessage(existing), bmReplyStatus: BmReplyStatus.REPLIED, duplicate: true }; }
       }
       throw error;
     }
