@@ -35,7 +35,8 @@ class MessageBubble extends StatelessWidget {
         ? message?.sender?.displayName
         : appLocalizations(context).customer;
     final footerText = footer?.trim();
-    final isFailed = footerText?.toLowerCase().contains('fail') ?? false;
+    final isFailed = message?.deliveryStatus == 'FAILED' ||
+        (footerText?.toLowerCase().contains('fail') ?? false);
     final isSending = footerText?.toLowerCase().contains('sending') ?? false;
     final bubbleColor =
         outbound ? AppColors.primaryContainer : AppColors.surface;
