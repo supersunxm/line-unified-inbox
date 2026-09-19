@@ -1,28 +1,24 @@
-# 2026-09-19: P0 Production Reliability — Urgent Safety Correction: Mandatory Conversation Allowlist for Durable Queue Canary [COMPLETED & READY FOR DEPLOYMENT]
-- **Current Task**: Enforce strict secondary allowlist `LINE_CHAT_DURABLE_SEND_QUEUE_CONVERSATION_IDS` alongside `LINE_CHAT_DURABLE_SEND_QUEUE_STORE_CODES` for the durable send queue canary. Permanently exclude customer "Max" (`9cf223e4-194a-47ce-b795-1192a22d3928`). Permit only test conversation `OBS-Sunx2` in Store 28375.
-- **Identified Canary Conversation**:
-  - `conversationId`: `a04560a5-8658-493b-9b18-c992adc2b683`
-  - `customer.displayName`: `OBS-Sunx2`
-  - `store.code`: `28375`
-  - `store.name`: `OBS Robinson Chonburi By OPPO`
-  - `lineChatUserId`: `U36d0a9ecbd355eca7cc1f10769d49de3`
-  - `lineOfficialAccount.name`: `OPPO BS RBS Chonburi`
-  - `lineOfficialAccount.chatBotId`: `U729972869a565723cb7fcf7ea28bbc43`
-  - Verified: Exactly 1 matching conversation found in production DB. Max (`9cf223e4-194a-47ce-b795-1192a22d3928`) is permanently excluded.
-- **Completed Work**:
-  - Added `getLineChatDurableSendQueueConversationIds()` and `isLineChatDurableSendQueueConversationEnabled()` to `backend/src/line-chat/line-chat-pilot.constants.ts`.
-  - Fail-closed tri-condition guard: requires `LINE_CHAT_DURABLE_SEND_QUEUE_ENABLED === 'true'`, storeCode in `LINE_CHAT_DURABLE_SEND_QUEUE_STORE_CODES`, and conversationId in `LINE_CHAT_DURABLE_SEND_QUEUE_CONVERSATION_IDS`. Missing, empty, whitespace-only, or malformed allowlists fail closed.
-  - Ingress check in `LineChatMessageSendQueueService.enqueueText()`: calls `this.isConversationEnabled({ storeCode, conversationId: conversation.id })`.
-  - Egress check in `LineChatMessageSendWorkerService.processSend()`: checks `isLineChatDurableSendQueueConversationEnabled({ storeCode, conversationId: job.conversationId })` for all sends and retries.
-  - Added 14 comprehensive unit tests in `backend/src/line-chat/line-chat-durable-send-queue-allowlist.spec.ts`.
-- **Checks Run & Passed**:
-  - Allowlist unit tests: 14/14 passed (`backend/src/line-chat/line-chat-durable-send-queue-allowlist.spec.ts`).
-  - Related line-chat specs: 8/8 passed.
-  - Backend ESLint on modified files: 0 errors, 0 warnings.
-  - Backend build: `npm run build` (`prisma generate && nest build`) passed cleanly.
-  - Flutter analysis: `flutter analyze` passed with 0 issues.
-  - Full Flutter test suite: 306/306 passed (`flutter test`).
-- **Next Action**: Request explicit user authorization to commit and push changes to GitHub / deploy to Railway, configure environment variables, and perform single canary send TEST DURABLE QUEUE 002 on OBS-Sunx2.
+# 2026-09-19: P0 Production Reliability — Durable Queue Canary Normal Send (TEST DURABLE QUEUE 002) [COMPLETED & VERIFIED]
+- **Current Task**: Execute single normal canary send (`TEST DURABLE QUEUE 002`) exclusively on test conversation `OBS-Sunx2` in Store 28375 (`a04560a5-8658-493b-9b18-c992adc2b683`) after deploying the mandatory conversation allowlist.
+- **Canary Pre-Flight Check Results**:
+  - `OBS-Sunx2` (`a04560a5-8658-493b-9b18-c992adc2b683`): **ACCEPTED** (`isAccepted: true`)
+  - `Max` (`9cf223e4-194a-47ce-b795-1192a22d3928`): **REJECTED** (`isAccepted: false`)
+  - Random Store 28375 conversation (`046cf201-bce9-4525-a9a1-6d509e59da92`): **REJECTED** (`isAccepted: false`)
+  - Other store conversation (`4f66eeb4-1b93-469c-bc0a-086fb97cc89a`, store 28799): **REJECTED** (`isAccepted: false`)
+- **Canary Execution & Checkpoints (TEST DURABLE QUEUE 002)**:
+  - Sent via Android Studio Emulator (`emulator-5554`) in `OBS-Sunx2` conversation only.
+  - **One outgoing bubble only**: Confirmed (0 duplicate bubbles).
+  - **PENDING shows ✓**: Captured screenshot showing single checkmark (`✓`) at `17:31`.
+  - **Exactly one Message**: Confirmed in DB (`id: 4284ea67-4528-490a-a04e-57a543d102c7`).
+  - **Exactly one SendJob**: Confirmed in DB (`id: 37193692-1919-47fe-8360-6ffcad8bc4d2`, `status: DELIVERED`, `attemptCount: 1`).
+  - **Exactly one initial DeliveryAttempt**: Confirmed in DB (`id: 793168f0-e7b4-4296-8445-50ef186a7c84`, `attemptNo: 1`, `status: DELIVERED`).
+  - **Exactly one customer-facing Manager send**: Relayed through `LineChatMessageSendWorkerService` and confirmed delivered at `2026-09-19T10:32:06.906Z`.
+  - **Exact text in LINE Manager**: Confirmed `TEST DURABLE QUEUE 002`.
+  - **Message becomes DELIVERED**: Database `deliveryStatus` updated to `DELIVERED`.
+  - **Same bubble changes to ✓✓**: Polling updated same bubble in-place to double checkmark (`✓✓`) at `17:32`.
+  - **Conversation becomes REPLIED**: Verified `bmReplyStatus: REPLIED`.
+  - **Zero touch on other conversations**: Verified `otherSendJobsCount: 0`, `maxMessagesCountInLast10Minutes: 0`.
+- **Status**: STOPPED immediately as instructed. No retry/failure tests run. No production Android release created. Max permanently untouched.
 
 # 2026-09-18: TikTok Public Account Store Auto-Binding Recurrence Hardening [COMPLETED & VERIFIED]
 - **Current Task**: Harden `TikTokPublicAccount` → `StoreMaster` auto-binding so shared TikTok handles are linked to all matching active stores, preventing recurrence of unlinked store records.
