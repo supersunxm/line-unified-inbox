@@ -659,6 +659,18 @@ class ConversationRepository {
     }
   }
 
+  Future<ChatMessage?> retryFailedMessage(
+      String conversationId, String messageId) async {
+    final result = await _api.post(
+      '/conversations/$conversationId/messages/$messageId/retry',
+      body: const <String, dynamic>{},
+    );
+    final rawMessage = result['message'];
+    return rawMessage is Map
+        ? ChatMessage.fromJson(Map<String, dynamic>.from(rawMessage))
+        : null;
+  }
+
   Future<Uint8List> media(String url) => _api.getBytes(url);
   Future<ChatMessage?> sendImage(
           String id, Uint8List bytes, String filename, String idempotencyKey,
