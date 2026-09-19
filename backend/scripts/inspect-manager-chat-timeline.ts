@@ -5,20 +5,27 @@ import { LineChatManagerMessageRelayWorkerService } from "../src/line-chat/line-
 
 async function main(): Promise<void> {
   process.env.LINE_CHAT_NICKNAME_MAINTENANCE_MODE = "true";
-  const conversationId = process.env.LINE_CHAT_TIMELINE_DIAGNOSTIC_CONVERSATION_ID?.trim() || "";
-  if (!conversationId) throw new Error("MISSING_CONVERSATION_ID");
+  const conversationIds = (process.env.LINE_CHAT_TIMELINE_DIAGNOSTIC_CONVERSATION_IDS
+    || process.env.LINE_CHAT_TIMELINE_DIAGNOSTIC_CONVERSATION_ID
+    || "")
+    .split("|")
+    .map((value) => value.trim())
+    .filter(Boolean);
+  if (conversationIds.length === 0) throw new Error("MISSING_CONVERSATION_ID");
 
   const app = await NestFactory.createApplicationContext(LineChatNicknameWorkerModule, {
     logger: ["error", "warn", "log"],
   });
   try {
     const relay = app.get(LineChatManagerMessageRelayWorkerService);
-    const result = await relay.inspectVisibleChatTimeline({ conversationId });
-    console.log(JSON.stringify({
-      event: "line_chat_manager_timeline_diagnostic",
-      conversationId,
-      result,
-    }));
+    for (const conversationId of conversationIds) {
+      const result = await relay.inspectVisibleChatTimeline({ conversationId });
+      console.log(JSON.stringify({
+        event: "line_chat_manager_timeline_diagnostic",
+        conversationId,
+        result,
+      }));
+    }
   } finally {
     await app.close();
   }
