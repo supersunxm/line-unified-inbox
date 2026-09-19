@@ -429,7 +429,7 @@ async function main(): Promise<void> {
               customerName: original.conversation.customer.displayName,
               exactDeliveryCount: exact.length,
               managerOutboundAfterOriginal: outbound.length,
-              canonicalManagerMessageId,
+              canonicalManagerMessageId: canonicalManagerId,
               canonicalAt: canonicalAt.toISOString(),
               finalReplyState: targetBmReplyStatus,
               apply,
