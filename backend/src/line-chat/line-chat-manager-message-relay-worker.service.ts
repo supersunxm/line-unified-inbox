@@ -34,6 +34,10 @@ const COMPOSER_SELECTORS = [
   'textarea',
 ] as const;
 const SEND_BUTTON_SELECTORS = [
+  'input[type="submit"][value*="send" i]',
+  'input[type="button"][value*="send" i]',
+  'input[type="submit"][value*="ส่ง"]',
+  'input[type="button"][value*="ส่ง"]',
   'button[aria-label*="send" i]',
   'button[title*="send" i]',
   '[role="button"][aria-label*="send" i]',
