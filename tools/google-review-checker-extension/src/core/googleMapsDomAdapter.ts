@@ -586,99 +586,98 @@ export class GoogleMapsDomAdapter {
   static async ensureNewestSorting(): Promise<{ success: boolean; reason?: string }> {
     if (typeof document === "undefined") return { success: false, reason: "NO_DOM" };
 
-    // Find sort trigger button
-    let sortBtn = document.querySelector(
-      "button.HQzyZ, button[aria-label*='Sort reviews' i], button[aria-label*='Sort' i], button[aria-label*='เรียงตาม' i], button[aria-label*='จัดเรียง' i], button[aria-label*='เกี่ยวข้องที่สุด' i], button[aria-label*='ใหม่ที่สุด' i], button[data-value*='Sort' i], [jsaction*='reviewChart.sort' i]",
-    ) as HTMLElement | null;
+    const isNewestLabel = (value: string | null | undefined): boolean => {
+      const text = (value || "").trim().toLowerCase();
+      return (
+        text.includes("newest") ||
+        text.includes("ใหม่ที่สุด") ||
+        text.includes("ใหม่ล่าสุด") ||
+        text.includes("ล่าสุด") ||
+        text.includes("most recent")
+      );
+    };
+
+    const findSortButton = (): HTMLElement | null => {
+      let button = document.querySelector(
+        "button.HQzyZ, button[aria-label*='Sort reviews' i], button[aria-label*='Sort' i], button[aria-label*='เรียงตาม' i], button[aria-label*='จัดเรียง' i], button[aria-label*='เกี่ยวข้องที่สุด' i], button[aria-label*='ใหม่ที่สุด' i], button[aria-label*='ใหม่ล่าสุด' i], button[aria-label*='ล่าสุด' i], button[data-value*='Sort' i], [jsaction*='reviewChart.sort' i]",
+      ) as HTMLElement | null;
+
+      if (!button) {
+        button = (Array.from(document.querySelectorAll("button, div[role='button']")).find((candidate) => {
+          const text = (candidate.textContent || "").trim();
+          const aria = (candidate.getAttribute("aria-label") || "").trim();
+          return (
+            text.includes("เกี่ยวข้องที่สุด") ||
+            text.includes("ใหม่ที่สุด") ||
+            text.includes("ใหม่ล่าสุด") ||
+            text.includes("ล่าสุด") ||
+            text.includes("เรียง") ||
+            text.includes("Sort") ||
+            aria.includes("เกี่ยวข้องที่สุด") ||
+            aria.includes("ใหม่ที่สุด") ||
+            aria.includes("ใหม่ล่าสุด") ||
+            aria.includes("ล่าสุด") ||
+            aria.includes("เรียง") ||
+            aria.includes("Sort")
+          );
+        }) as HTMLElement | null) || null;
+      }
+
+      return button;
+    };
+
+    const isButtonConfirmedNewest = (button: HTMLElement | null): boolean =>
+      !!button &&
+      (isNewestLabel(button.textContent) || isNewestLabel(button.getAttribute("aria-label")));
+
+    const sortBtn = findSortButton();
 
     if (!sortBtn) {
-      sortBtn = (Array.from(document.querySelectorAll("button, div[role='button']")).find((b) => {
-        const t = (b.textContent || "").trim();
-        const a = (b.getAttribute("aria-label") || "").trim();
-        return (
-          t.includes("เกี่ยวข้องที่สุด") ||
-          t.includes("ใหม่ที่สุด") ||
-          t.includes("เรียง") ||
-          t.includes("Sort") ||
-          a.includes("เกี่ยวข้องที่สุด") ||
-          a.includes("ใหม่ที่สุด") ||
-          a.includes("เรียง") ||
-          a.includes("Sort")
-        );
-      }) as HTMLElement | null) || null;
-    }
-
-    if (!sortBtn) {
-      // If reviews are present but no sort button, check if only a few reviews exist (< 5 reviews often has no sort button)
+      // Google Maps sometimes omits the sort control when the complete review set is tiny.
+      // In that case ordering cannot affect coverage because every available review is already present.
       const cards = this.getReviewCardElements();
       if (cards.length > 0 && cards.length <= 5) {
-        return { success: true };
+        return { success: true, reason: "SORT_NOT_REQUIRED_SMALL_REVIEW_SET" };
       }
       return { success: false, reason: "SORT_BUTTON_NOT_FOUND" };
     }
 
-    // Check if already sorted by Newest
-    const currentSortText = sortBtn.textContent?.trim().toLowerCase() || "";
-    const currentSortAria = sortBtn.getAttribute("aria-label")?.toLowerCase() || "";
-    const isAlreadyNewest =
-      currentSortText.includes("newest") ||
-      currentSortText.includes("ใหม่ที่สุด") ||
-      currentSortText.includes("ล่าสุด") ||
-      currentSortText.includes("most recent") ||
-      currentSortAria.includes("newest") ||
-      currentSortAria.includes("ใหม่ที่สุด") ||
-      currentSortAria.includes("ล่าสุด");
-
-    if (isAlreadyNewest) {
+    if (isButtonConfirmedNewest(sortBtn)) {
       return { success: true };
     }
 
-    // Open sort menu
+    // Open the sort menu.
     sortBtn.click();
-    await new Promise((resolve) => setTimeout(resolve, 600));
+    await new Promise((resolve) => setTimeout(resolve, 700));
 
-    // Look for menu item with Newest
     const menuItems = Array.from(
-      document.querySelectorAll("[role='menuitemradio'], [role='menuitem'], div[role='menuitemradio'], [role='option'], .fxNQSb"),
+      document.querySelectorAll(
+        "[role='menuitemradio'], [role='menuitem'], div[role='menuitemradio'], [role='option'], .fxNQSb",
+      ),
     ) as HTMLElement[];
 
-    const newestOption = menuItems.find((el) => {
-      const text = (el.textContent || "").toLowerCase();
-      const aria = (el.getAttribute("aria-label") || "").toLowerCase();
-      return (
-        text.includes("newest") ||
-        text.includes("ใหม่ที่สุด") ||
-        text.includes("ล่าสุด") ||
-        text.includes("most recent") ||
-        aria.includes("newest") ||
-        aria.includes("ใหม่ที่สุด") ||
-        aria.includes("ล่าสุด")
-      );
-    }) || menuItems[1]; // Index 1 is standard "Newest" on Google Maps
+    // Fail closed: never rely on menu position. Google Maps can reorder or add sort options.
+    const newestOption = menuItems.find(
+      (item) =>
+        isNewestLabel(item.textContent) ||
+        isNewestLabel(item.getAttribute("aria-label")),
+    );
 
-    if (newestOption) {
-      newestOption.click();
-      await new Promise((resolve) => setTimeout(resolve, 1200));
-
-      // Verify sort button reflects newest
-      const sortBtnAfter = document.querySelector(
-        "button.HQzyZ, button[aria-label*='Sort' i], button[aria-label*='เรียงตาม' i], button[aria-label*='ใหม่ที่สุด' i]",
-      );
-      const textAfter = sortBtnAfter?.textContent?.trim().toLowerCase() || "";
-      const ariaAfter = sortBtnAfter?.getAttribute("aria-label")?.toLowerCase() || "";
-      if (
-        textAfter.includes("ใหม่ที่สุด") ||
-        textAfter.includes("ล่าสุด") ||
-        textAfter.includes("newest") ||
-        ariaAfter.includes("ใหม่ที่สุด") ||
-        ariaAfter.includes("ล่าสุด") ||
-        ariaAfter.includes("newest")
-      ) {
-        return { success: true };
-      }
-      return { success: true };
+    if (!newestOption) {
+      return { success: false, reason: "NEWEST_OPTION_NOT_FOUND" };
     }
 
-    return { success: false, reason: "NEWEST_OPTION_NOT_FOUND" };
+    newestOption.click();
+
+    // Google Maps updates the sort button asynchronously after the menu closes.
+    // Poll and require visible confirmation before allowing the audit to scroll.
+    for (let attempt = 0; attempt < 12; attempt++) {
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      if (isButtonConfirmedNewest(findSortButton())) {
+        return { success: true };
+      }
+    }
+
+    return { success: false, reason: "NEWEST_SORT_NOT_CONFIRMED" };
   }
 }
