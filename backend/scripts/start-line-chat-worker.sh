@@ -74,6 +74,15 @@ if [ "${LINE_CHAT_RECOVER_CONFIRMED_OUTBOUNDS_ENABLED:-false}" = "true" ]; then
   echo "{\"event\":\"confirmed_outbound_recovery_bootstrap_finished\",\"exitCode\":${RECOVERY_EXIT_CODE}}"
 fi
 
+if [ "${LINE_CHAT_AUDIT_MANAGER_OUTBOUNDS_ENABLED:-false}" = "true" ]; then
+  echo "{\"event\":\"manager_outbound_delivery_audit_bootstrap_started\"}"
+  set +e
+  npx tsx scripts/audit-manager-outbound-delivery.ts
+  AUDIT_EXIT_CODE=$?
+  set -e
+  echo "{\"event\":\"manager_outbound_delivery_audit_bootstrap_finished\",\"exitCode\":${AUDIT_EXIT_CODE}}"
+fi
+
 if [ "${LINE_CHAT_MANUAL_READINESS_DRY_RUN_ENABLED:-false}" = "true" ]; then
   STORES="${LINE_CHAT_MANUAL_READINESS_DRY_RUN_STORES:-}"
   OUTPUT="${LINE_CHAT_MANUAL_READINESS_DRY_RUN_OUTPUT:-/tmp/line-chat-manual-readiness.csv}"
