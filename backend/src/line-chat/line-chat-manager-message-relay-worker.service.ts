@@ -144,6 +144,134 @@ export class LineChatManagerMessageRelayWorkerService {
    * or mutates message/conversation state.
    */
 
+
+  public async inspectVisibleChatTimeline(input: {
+    conversationId: string;
+  }): Promise<
+    | { handled: false }
+    | {
+        handled: true;
+        storeCode: string;
+        lineChatUserId: string | null;
+        items: Array<Record<string, unknown>>;
+      }
+  > {
+    const conversation = await this.loadConversation(input.conversationId.trim());
+    if (!conversation) return { handled: false };
+
+    const storeCode = storeCodeOf(conversation);
+    this.assertRelayConfiguration(conversation, storeCode);
+    const lineChatUserId = conversation.lineChatUserId?.trim() || "";
+    if (!lineChatUserId) {
+      return { handled: true, storeCode, lineChatUserId: null, items: [] };
+    }
+
+    const oa = conversation.lineOfficialAccount;
+    const session = oa.lineChatSession!;
+    const botId = oa.chatBotId!.trim();
+    const profilePath = this.sessionService.resolveProfilePath(session);
+
+    const inspection = await this.coordinator.withProfileOperation(
+      { sessionId: session.id, operationKind: "MANUAL_DIAGNOSTIC" },
+      async (operationContext) => {
+        operationContext.assertOwnership();
+        let context: BrowserContext | null = null;
+        try {
+          context = await this.sessionService.launchManagedPersistentContext(profilePath, {
+            profilePath,
+            headless: true,
+            viewport: { width: 1280, height: 800 },
+            args: [
+              "--no-sandbox",
+              "--disable-setuid-sandbox",
+              "--disable-blink-features=AutomationControlled",
+            ],
+          });
+          const page = context.pages()[0] || await context.newPage();
+          const targetUrl = this.sessionService.buildChatRefererUrl(botId, lineChatUserId);
+          await page.goto(targetUrl, { waitUntil: "domcontentloaded", timeout: 15_000 }).catch(() => {});
+          await page.waitForLoadState("networkidle", { timeout: 5_000 }).catch(() => {});
+
+          const auth = await confirmLineManagerAuthentication(
+            () => this.sessionService.probeApiAuthentication(context!),
+            (ms) => page.waitForTimeout(ms),
+          );
+          if (auth.outcome !== "AUTHENTICATED") {
+            throw new ServiceUnavailableException("ยังยืนยันสถานะการเข้าสู่ระบบ LINE OA Manager ไม่ได้");
+          }
+
+          const composer = await this.findComposer(page, COMPOSER_WAIT_MS);
+          const composerBox = composer ? await composer.boundingBox().catch(() => null) : null;
+          const maxY = composerBox?.y ?? 720;
+
+          const items: Array<Record<string, unknown>> = [];
+          for (const frame of page.frames()) {
+            const rows = await frame.locator("div,span,p,a,time").evaluateAll(
+              (elements, cutoffY) => {
+                const normalize = (value: string): string =>
+                  value.normalize("NFKC").replace(/\s+/g, " ").trim();
+                const result: Array<Record<string, unknown>> = [];
+                for (const element of elements) {
+                  const rect = element.getBoundingClientRect();
+                  const style = window.getComputedStyle(element);
+                  if (
+                    rect.width <= 0
+                    || rect.height <= 0
+                    || rect.bottom <= 55
+                    || rect.top >= Number(cutoffY)
+                    || rect.right <= 280
+                    || style.display === "none"
+                    || style.visibility === "hidden"
+                    || Number(style.opacity || "1") === 0
+                  ) continue;
+
+                  const raw = normalize(element.textContent || "");
+                  if (!raw || raw.length > 800) continue;
+                  const childSame = Array.from(element.children).some(
+                    (child) => normalize(child.textContent || "") === raw,
+                  );
+                  if (childSame) continue;
+
+                  result.push({
+                    text: raw,
+                    x: Math.round(rect.x),
+                    y: Math.round(rect.y),
+                    width: Math.round(rect.width),
+                    height: Math.round(rect.height),
+                    tagName: element.tagName,
+                    className: typeof element.className === "string" ? element.className.slice(0, 240) : null,
+                    parentClass: element.parentElement && typeof element.parentElement.className === "string"
+                      ? element.parentElement.className.slice(0, 240)
+                      : null,
+                  });
+                }
+                return result;
+              },
+              maxY,
+            ).catch(() => []);
+            items.push(...rows);
+          }
+
+          items.sort((a, b) => Number(a.y ?? 0) - Number(b.y ?? 0) || Number(a.x ?? 0) - Number(b.x ?? 0));
+          return items.slice(-160);
+        } finally {
+          if (context) await this.sessionService.closeManagedPersistentContext(context, profilePath).catch(() => {});
+        }
+      },
+    );
+
+    if (!inspection.acquired) {
+      throw new ServiceUnavailableException("LINE OA Manager กำลังทำงานอื่นอยู่ กรุณาลองอีกครั้งในอีกสักครู่");
+    }
+
+    return {
+      handled: true,
+      storeCode,
+      lineChatUserId,
+      items: inspection.value,
+    };
+  }
+
   public async inspectComposerControls(input: {
     conversationId: string;
   }): Promise<
