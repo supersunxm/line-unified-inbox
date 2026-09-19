@@ -699,10 +699,14 @@ export class ConversationsService {
 
     const dedupeExternalId = `outbound:${dto.idempotencyKey}`;
     const priorMessage = await this.prisma.message.findUnique({ where: { externalMessageId: dedupeExternalId } });
-    if (priorMessage) {
+    if (priorMessage?.deliveryStatus === MessageDeliveryStatus.DELIVERED) {
       await reconcileStaffOutboundReplyState(this.prisma, { conversationId: id, sentAt: priorMessage.sentAt, actor: operator });
       return { message: this.safeMessage(priorMessage), bmReplyStatus: BmReplyStatus.REPLIED, duplicate: true };
     }
+    // A persisted FAILED attempt is not a successful idempotent replay.
+    // Continue through the normal transport path with the same logical send so
+    // the original staff text is actually retried and the existing row can be
+    // promoted to DELIVERED only after verified delivery.
 
     const conversation = await this.prisma.conversation.findUnique({
       where: { id },
