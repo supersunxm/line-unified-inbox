@@ -334,6 +334,58 @@ export class LineChatManagerMessageRelayWorkerService {
           targetChatIdMasked: `${input.lineChatUserId.slice(0, 4)}...${input.lineChatUserId.slice(-4)}`,
           sendControlFound: Boolean(sendButton),
         }));
+
+        // First recover by reloading the exact target chat. A send can reach
+        // LINE Manager while the headless DOM misses the newly rendered bubble.
+        // Never resend until the refreshed chat still proves the outbound text
+        // is absent relative to the pre-send baseline.
+        await page.goto(targetUrl, { waitUntil: "domcontentloaded", timeout: 15_000 }).catch(() => {});
+        await page.waitForLoadState("networkidle", { timeout: 5_000 }).catch(() => {});
+        const recoveryComposer = await this.findComposer(page, COMPOSER_WAIT_MS);
+        if (recoveryComposer) {
+          const refreshedOutboundCount = await this.countOutboundExactText(page, recoveryComposer, input.text);
+          if (refreshedOutboundCount > beforeOutboundCount) {
+            this.logger.log(JSON.stringify({
+              event: "line_chat_manager_message_delivery_verified_after_reload",
+              storeCode: input.storeCode,
+              targetChatIdMasked: `${input.lineChatUserId.slice(0, 4)}...${input.lineChatUserId.slice(-4)}`,
+            }));
+            return;
+          }
+
+          // The exact original staff message is still absent after a fresh
+          // target-chat load. Retry it once while holding the same profile
+          // operation lock, then require normal delivery verification.
+          this.logger.warn(JSON.stringify({
+            event: "line_chat_manager_message_auto_retry_started",
+            storeCode: input.storeCode,
+            targetChatIdMasked: `${input.lineChatUserId.slice(0, 4)}...${input.lineChatUserId.slice(-4)}`,
+          }));
+          await this.focusComposer(recoveryComposer);
+          await this.fillComposer(recoveryComposer, page, input.text);
+          const recoverySendButton = await this.findSendButton(page, recoveryComposer);
+          if (recoverySendButton) {
+            await recoverySendButton.click({ timeout: 5_000 });
+          } else {
+            await this.focusComposer(recoveryComposer);
+            await page.keyboard.press("Enter");
+          }
+          const retryVerified = await this.waitForDeliveryVerification(
+            page,
+            recoveryComposer,
+            input.text,
+            refreshedOutboundCount,
+          );
+          if (retryVerified) {
+            this.logger.log(JSON.stringify({
+              event: "line_chat_manager_message_auto_retry_success",
+              storeCode: input.storeCode,
+              targetChatIdMasked: `${input.lineChatUserId.slice(0, 4)}...${input.lineChatUserId.slice(-4)}`,
+            }));
+            return;
+          }
+        }
+
         throw new ServiceUnavailableException("ยังยืนยันการส่งจาก LINE OA Manager ไม่ได้ จึงไม่บันทึกข้อความว่าส่งสำเร็จ");
       }
     } catch (error) {
