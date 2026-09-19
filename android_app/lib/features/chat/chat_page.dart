@@ -458,6 +458,7 @@ class _ChatPageState extends State<ChatPage> {
         fileName: current.fileName,
         sender: current.sender,
         media: updatedMedia,
+        deliveryStatus: current.deliveryStatus,
         idempotencyKey: current.idempotencyKey);
     setState(() => _detail = detail.copyWith(messages: messages));
   }
@@ -471,8 +472,25 @@ class _ChatPageState extends State<ChatPage> {
   void _mergeSentMessage(ChatMessage? message, String idempotencyKey) {
     final detail = _detail;
     if (detail == null) return;
+
+    if (message == null || message.deliveryStatus == 'FAILED') {
+      setState(() {
+        for (final pending in _pending) {
+          if (pending.key == idempotencyKey) pending.state = ReplyState.failed;
+        }
+        for (final pending in _pendingImages) {
+          if (pending.key == idempotencyKey) pending.state = ReplyState.failed;
+        }
+        for (final pending in _pendingPdfs) {
+          if (pending.key == idempotencyKey) pending.state = ReplyState.failed;
+        }
+        _error = 'Message could not be sent';
+      });
+      return;
+    }
+
     final messages = [...detail.messages];
-    if (message != null && !messages.any((item) => item.id == message.id)) {
+    if (!messages.any((item) => item.id == message.id)) {
       messages.add(message);
       messages.sort((left, right) {
         final timestamp = left.sentAt.compareTo(right.sentAt);
