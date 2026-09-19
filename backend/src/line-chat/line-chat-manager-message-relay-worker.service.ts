@@ -134,6 +134,81 @@ export class LineChatManagerMessageRelayWorkerService {
   }
 
 
+  /**
+   * Read-only inspection of one mapped Manager chat.
+   * This method never types, clicks a send control, resolves/persists mappings,
+   * or mutates message/conversation state.
+   */
+  public async inspectTextPresence(input: {
+    conversationId: string;
+    text: string;
+  }): Promise<
+    | { handled: false }
+    | {
+        handled: true;
+        presence: "PRESENT" | "NOT_PRESENT" | "UNMAPPED";
+        outboundExactCount: number;
+        lineChatUserId: string | null;
+      }
+  > {
+    const conversation = await this.loadConversation(input.conversationId.trim());
+    if (!conversation) return { handled: false };
+
+    const storeCode = storeCodeOf(conversation);
+    this.assertRelayConfiguration(conversation, storeCode);
+
+    const lineChatUserId = conversation.lineChatUserId?.trim() || "";
+    if (!lineChatUserId) {
+      return {
+        handled: true,
+        presence: "UNMAPPED",
+        outboundExactCount: 0,
+        lineChatUserId: null,
+      };
+    }
+
+    const oa = conversation.lineOfficialAccount;
+    const session = oa.lineChatSession!;
+    const botId = oa.chatBotId!.trim();
+    const profilePath = this.sessionService.resolveProfilePath(session);
+
+    const inspection = await this.coordinator.withProfileOperation(
+      { sessionId: session.id, operationKind: "MANUAL_DIAGNOSTIC" },
+      async (operationContext) => {
+        operationContext.assertOwnership();
+        const result = await this.inspectViaManager({
+          storeCode,
+          botId,
+          lineChatUserId,
+          profilePath,
+          text: input.text,
+        });
+        operationContext.assertOwnership();
+        return result;
+      },
+    );
+    if (!inspection.acquired) {
+      throw new ServiceUnavailableException("LINE OA Manager กำลังทำงานอื่นอยู่ กรุณาลองอีกครั้งในอีกสักครู่");
+    }
+
+    const result = {
+      handled: true as const,
+      presence: inspection.value.outboundExactCount > 0 ? "PRESENT" as const : "NOT_PRESENT" as const,
+      outboundExactCount: inspection.value.outboundExactCount,
+      lineChatUserId,
+    };
+    this.logger.log(JSON.stringify({
+      event: "line_chat_manager_text_presence_inspected",
+      storeCode,
+      conversationId: conversation.id,
+      presence: result.presence,
+      outboundExactCount: result.outboundExactCount,
+      lineChatUserIdMasked: `${lineChatUserId.slice(0, 4)}...${lineChatUserId.slice(-4)}`,
+    }));
+    return result;
+  }
+
+
   public async recoverTextIfMissing(input: {
     conversationId: string;
     text: string;
@@ -328,7 +403,69 @@ export class LineChatManagerMessageRelayWorkerService {
     }
   }
 
-  private async sendViaManager(input: {
+
+  private async inspectViaManager(input: {
+    storeCode: string;
+    botId: string;
+    lineChatUserId: string;
+    profilePath: string;
+    text: string;
+  }): Promise<{ outboundExactCount: number }> {
+    if (!fs.existsSync(input.profilePath)) {
+      throw new ServiceUnavailableException(`ไม่พบ session ของ LINE OA Manager ร้าน ${input.storeCode} กรุณา login ใหม่`);
+    }
+
+    let context: BrowserContext | null = null;
+    try {
+      context = await this.sessionService.launchManagedPersistentContext(input.profilePath, {
+        profilePath: input.profilePath,
+        headless: true,
+        viewport: { width: 1280, height: 800 },
+        args: [
+          "--no-sandbox",
+          "--disable-setuid-sandbox",
+          "--disable-blink-features=AutomationControlled",
+        ],
+      });
+      const page = context.pages()[0] || await context.newPage();
+      const targetUrl = this.sessionService.buildChatRefererUrl(input.botId, input.lineChatUserId);
+      await page.goto(targetUrl, { waitUntil: "domcontentloaded", timeout: 15_000 }).catch(() => {});
+      await page.waitForLoadState("networkidle", { timeout: 5_000 }).catch(() => {});
+
+      const auth = await confirmLineManagerAuthentication(
+        () => this.sessionService.probeApiAuthentication(context!),
+        (ms) => page.waitForTimeout(ms),
+      );
+      if (auth.outcome === "AUTH_EXPIRED") {
+        throw new ServiceUnavailableException(`session ของ LINE OA Manager ร้าน ${input.storeCode} หมดอายุ กรุณา login ใหม่`);
+      }
+      if (auth.outcome === "INCONCLUSIVE") {
+        throw new ServiceUnavailableException("ยังยืนยันสถานะการเข้าสู่ระบบ LINE OA Manager ไม่ได้");
+      }
+
+      const composer = await this.findComposer(page, COMPOSER_WAIT_MS);
+      if (!composer) {
+        await this.logComposerDiagnostics(page, input.storeCode, input.lineChatUserId);
+        throw new ServiceUnavailableException("ไม่พบช่องพิมพ์ข้อความใน LINE OA Manager กรุณาตรวจสอบหน้า chat.line.biz");
+      }
+
+      return {
+        outboundExactCount: await this.countOutboundExactText(page, composer, input.text),
+      };
+    } catch (error) {
+      if (isProfileBrowserBusyError(error)) {
+        throw new ServiceUnavailableException("PROFILE_BROWSER_BUSY");
+      }
+      if (error instanceof ServiceUnavailableException) throw error;
+      throw new ServiceUnavailableException(
+        `ตรวจสอบข้อความใน LINE OA Manager ไม่สำเร็จ: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    } finally {
+      if (context) await this.sessionService.closeManagedPersistentContext(context, input.profilePath).catch(() => {});
+    }
+  }
+
+private async sendViaManager(input: {
     storeCode: string;
     botId: string;
     lineChatUserId: string;
