@@ -138,6 +138,160 @@ export class LineChatManagerMessageRelayWorkerService {
   }
 
 
+  public async inspectOutboundActivitySince(input: {
+    conversationId: string;
+    after: Date;
+  }): Promise<
+    | { handled: false }
+    | {
+        handled: true;
+        lineChatUserId: string | null;
+        events: Array<{
+          managerMessageId: string;
+          text: string;
+          sentAt: Date;
+          bizId: string | null;
+          ownerName: string | null;
+        }>;
+      }
+  > {
+    const conversation = await this.loadConversation(input.conversationId.trim());
+    if (!conversation) return { handled: false };
+
+    const storeCode = storeCodeOf(conversation);
+    if (!isLineChatManagerRelayStoreEnabled(storeCode)) return { handled: false };
+    this.assertRelayConfiguration(conversation, storeCode);
+
+    const lineChatUserId = conversation.lineChatUserId?.trim() || "";
+    if (!lineChatUserId) {
+      return { handled: true, lineChatUserId: null, events: [] };
+    }
+
+    const oa = conversation.lineOfficialAccount;
+    const session = oa.lineChatSession!;
+    const botId = oa.chatBotId!.trim();
+    const profilePath = this.sessionService.resolveProfilePath(session);
+
+    const inspection = await this.coordinator.withProfileOperation(
+      { sessionId: session.id, operationKind: "MANUAL_DIAGNOSTIC" },
+      async (operationContext) => {
+        operationContext.assertOwnership();
+        if (!fs.existsSync(profilePath)) {
+          throw new ServiceUnavailableException(`ไม่พบ session ของ LINE OA Manager ร้าน ${storeCode} กรุณา login ใหม่`);
+        }
+
+        let context: BrowserContext | null = null;
+        try {
+          context = await this.sessionService.launchManagedPersistentContext(profilePath, {
+            profilePath,
+            headless: true,
+            viewport: { width: 1280, height: 800 },
+            args: [
+              "--no-sandbox",
+              "--disable-setuid-sandbox",
+              "--disable-blink-features=AutomationControlled",
+            ],
+          });
+          const page = context.pages()[0] || await context.newPage();
+          const targetUrl = this.sessionService.buildChatRefererUrl(botId, lineChatUserId);
+          await page.goto(targetUrl, { waitUntil: "domcontentloaded", timeout: 15_000 }).catch(() => {});
+          await page.waitForLoadState("networkidle", { timeout: 5_000 }).catch(() => {});
+
+          const auth = await confirmLineManagerAuthentication(
+            () => this.sessionService.probeApiAuthentication(context!),
+            (ms) => page.waitForTimeout(ms),
+          );
+          if (auth.outcome !== "AUTHENTICATED") {
+            throw new ServiceUnavailableException("ยังยืนยันสถานะการเข้าสู่ระบบ LINE OA Manager ไม่ได้");
+          }
+
+          const historyUrl = `https://chat.line.biz/api/v3/bots/${encodeURIComponent(botId)}/chats/${encodeURIComponent(lineChatUserId)}/messages`;
+          const ownersUrl = `https://chat.line.biz/api/v1/bots/${encodeURIComponent(botId)}/owners`;
+          const result = await page.evaluate(async ({ historyUrl, ownersUrl, afterMs }) => {
+            const [historyResponse, ownersResponse] = await Promise.all([
+              fetch(historyUrl, { credentials: "include" }),
+              fetch(ownersUrl, { credentials: "include" }),
+            ]);
+            if (!historyResponse.ok) {
+              return { ok: false, events: [] as Array<{ id: string; text: string; timestamp: number; bizId: string | null; ownerName: string | null }> };
+            }
+
+            const history = await historyResponse.json() as {
+              list?: Array<{
+                type?: string;
+                timestamp?: number;
+                bizId?: string;
+                message?: { id?: string; type?: string; text?: string };
+              }>;
+            };
+            let owners: Array<{ bizId?: string; name?: string }> = [];
+            if (ownersResponse.ok) {
+              const ownerBody = await ownersResponse.json() as { list?: Array<{ bizId?: string; name?: string }> };
+              owners = ownerBody.list ?? [];
+            }
+            const ownerByBizId = new Map(
+              owners
+                .filter((owner) => typeof owner.bizId === "string")
+                .map((owner) => [owner.bizId!, typeof owner.name === "string" ? owner.name.trim() : ""]),
+            );
+
+            const events = (history.list ?? [])
+              .filter((item) =>
+                item.type === "messageSent"
+                && item.message?.type === "text"
+                && typeof item.message.id === "string"
+                && typeof item.message.text === "string"
+                && Number(item.timestamp) >= afterMs
+                && item.bizId !== "__AUTO_RESPONSE"
+              )
+              .sort((a, b) => Number(a.timestamp) - Number(b.timestamp))
+              .map((item) => ({
+                id: item.message!.id!,
+                text: item.message!.text!,
+                timestamp: Number(item.timestamp),
+                bizId: typeof item.bizId === "string" ? item.bizId : null,
+                ownerName: typeof item.bizId === "string"
+                  ? ownerByBizId.get(item.bizId) || null
+                  : null,
+              }));
+
+            return { ok: true, events };
+          }, {
+            historyUrl,
+            ownersUrl,
+            afterMs: input.after.getTime() - 2_000,
+          });
+
+          operationContext.assertOwnership();
+          return result;
+        } finally {
+          if (context) {
+            await this.sessionService.closeManagedPersistentContext(context, profilePath).catch(() => {});
+          }
+        }
+      },
+    );
+
+    if (!inspection.acquired) {
+      throw new ServiceUnavailableException("LINE OA Manager กำลังทำงานอื่นอยู่ กรุณาลองอีกครั้งในอีกสักครู่");
+    }
+    if (!inspection.value.ok) {
+      throw new ServiceUnavailableException("อ่านประวัติข้อความจาก LINE OA Manager ไม่สำเร็จ");
+    }
+
+    return {
+      handled: true,
+      lineChatUserId,
+      events: inspection.value.events.map((event) => ({
+        managerMessageId: event.id,
+        text: event.text,
+        sentAt: new Date(event.timestamp),
+        bizId: event.bizId,
+        ownerName: event.ownerName,
+      })),
+    };
+  }
+
   public async inspectTextPresenceSince(input: {
     conversationId: string;
     text: string;
