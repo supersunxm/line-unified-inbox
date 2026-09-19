@@ -1053,6 +1053,16 @@ export class ConversationsService {
     }
 
     const conversation = message.conversation;
+    const retryKey = message.externalMessageId?.replace(/^outbound:/, "") || randomUUID();
+
+    const queued = await this.tryQueueManagerText(
+      conversation,
+      message.originalText,
+      retryKey,
+      operator,
+    );
+    if (queued) return queued;
+
     if (!conversation.customer.lineUserId) {
       throw new BadRequestException("ไม่พบ LINE User ID ของลูกค้า");
     }
@@ -1070,8 +1080,6 @@ export class ConversationsService {
     } catch {
       throw new ServiceUnavailableException("ไม่สามารถอ่าน Channel Access Token ของร้านนี้ได้");
     }
-
-    const retryKey = message.externalMessageId?.replace(/^outbound:/, "") || randomUUID();
 
     const lineResult = await this.lineMessaging.pushText({
       accessToken,
