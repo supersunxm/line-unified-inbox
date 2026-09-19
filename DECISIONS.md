@@ -1,5 +1,8 @@
 # LINE OA Black App Durable Send Queue Store & Conversation Allowlist Architecture (2026-09-19)
 
+- **Verification-Delay Safety Invariant**:
+  When a customer-facing send action has executed against LINE OA Manager (e.g., `sendButton.click()` or keyboard Enter), any subsequent verification timeout or transport ambiguity must transition the job to `VERIFY_PENDING`. Under no circumstances may a verification retry reissue a customer-facing send action. The worker is restricted to read-only polling against LINE Manager message history. Only upon confirmed presence does the message and job transition to `DELIVERED`, storing `managerMessageId` and updating the conversation reply status to `REPLIED`.
+
 - **Mandatory Secondary Conversation Allowlist (`LINE_CHAT_DURABLE_SEND_QUEUE_CONVERSATION_IDS`)**:
   Following the safety incident where test traffic reached real customer "Max", store-level gating alone was deemed insufficient. Rollout requires ALL THREE conditions:
   1. `LINE_CHAT_DURABLE_SEND_QUEUE_ENABLED === "true"`

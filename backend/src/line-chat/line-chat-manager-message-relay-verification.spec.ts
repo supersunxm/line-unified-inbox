@@ -25,7 +25,7 @@ test("all phase2 manager layouts prefer the same sole textarea primitive as Cent
   assert.match(source, /if \(soleTextarea\) return soleTextarea/);
   assert.match(fallbackSource, /count !== 1/);
   assert.match(fallbackSource, /search\|ค้นหา/);
-  assert.match(fallbackSource, /metadata\.disabled/);
+  assert.match(fallbackSource, /editable/);
   assert.match(fallbackSource, /return textarea/);
 });
 
@@ -51,11 +51,10 @@ test("unverified manager sends fail closed instead of being persisted as sent", 
 });
 
 
-test("manager relay reloads the target chat and retries the exact text once before failing", () => {
+test("manager relay reloads the target chat and enters verify pending without auto resending", () => {
   assert.match(source, /line_chat_manager_message_delivery_verified_after_reload/);
-  assert.match(source, /line_chat_manager_message_auto_retry_started/);
-  assert.match(source, /line_chat_manager_message_auto_retry_success/);
+  assert.match(source, /line_chat_manager_message_verify_pending/);
   assert.match(source, /await page\.goto\(targetUrl/);
   assert.match(source, /refreshedOutboundCount > beforeOutboundCount/);
-  assert.match(source, /waitForDeliveryVerification\(\s*page,\s*recoveryComposer/);
 });
+

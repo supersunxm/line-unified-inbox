@@ -1,3 +1,13 @@
+# 2026-09-19: P0 Production Reliability — Verification-Delay Safety Canary (TEST DURABLE VERIFY DELAY 003) [IN PROGRESS]
+- **Current Task**: Execute controlled verification-delay canary test (`TEST DURABLE VERIFY DELAY 003`) exclusively on test conversation `OBS-Sunx2` in Store 28375 (`a04560a5-8658-493b-9b18-c992adc2b683`).
+- **Goal**: Prove that when a customer-facing send action has physically completed but verification is temporarily delayed/unavailable, the system NEVER blindly resends the message. The job transitions through `VERIFY_PENDING`, retries read-only history verification, and marks `DELIVERED` with `managerMessageId` once confirmed.
+- **Invariants Enforced**:
+  - Exactly one customer-facing Manager send action.
+  - Zero resend during `VERIFY_PENDING`.
+  - Android UI shows `✓` while pending, and transitions to `✓✓` only upon confirmed delivery.
+  - Conversation reply status transitions to `REPLIED` only after confirmed delivery.
+  - Max and all other conversations receive zero traffic.
+
 # 2026-09-19: P0 Production Reliability — Durable Queue Canary Normal Send (TEST DURABLE QUEUE 002) [COMPLETED & VERIFIED]
 - **Current Task**: Execute single normal canary send (`TEST DURABLE QUEUE 002`) exclusively on test conversation `OBS-Sunx2` in Store 28375 (`a04560a5-8658-493b-9b18-c992adc2b683`) after deploying the mandatory conversation allowlist.
 - **Canary Pre-Flight Check Results**:

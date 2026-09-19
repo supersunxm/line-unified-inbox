@@ -48,6 +48,8 @@ const SEND_BUTTON_SELECTORS = [
   '[role="button"][title*="ส่ง"]',
 ] as const;
 
+let testDurableVerifyDelayAttemptCount = 0;
+
 type RelayConversation = {
   id: string;
   storeId: string | null;
@@ -306,6 +308,18 @@ export class LineChatManagerMessageRelayWorkerService {
         managerSentAt: Date | null;
       }
   > {
+    if (input.text.trim() === "TEST DURABLE VERIFY DELAY 003") {
+      testDurableVerifyDelayAttemptCount++;
+      if (testDurableVerifyDelayAttemptCount <= 1) {
+        this.logger.warn(JSON.stringify({
+          event: "line_chat_manager_test_simulated_verify_retry_in_progress",
+          attempt: testDurableVerifyDelayAttemptCount,
+          text: input.text,
+        }));
+        throw new ServiceUnavailableException("TEST_SIMULATED_VERIFY_UNAVAILABLE: verification retry temporarily unavailable");
+      }
+    }
+
     const conversation = await this.loadConversation(input.conversationId.trim());
     if (!conversation) return { handled: false };
 
@@ -1130,6 +1144,17 @@ private async sendViaManager(input: {
         }));
         await this.focusComposer(composer);
         await page.keyboard.press("Enter");
+      }
+
+      if (input.text.trim() === "TEST DURABLE VERIFY DELAY 003") {
+        testDurableVerifyDelayAttemptCount = 0;
+        await page.waitForTimeout(1_000);
+        this.logger.warn(JSON.stringify({
+          event: "line_chat_manager_test_simulated_verify_delay",
+          storeCode: input.storeCode,
+          text: input.text,
+        }));
+        throw new ServiceUnavailableException("TEST_SIMULATED_VERIFY_DELAY: initial post-send verification unavailable");
       }
 
       const verified = await this.waitForDeliveryVerification(
