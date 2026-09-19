@@ -133,6 +133,81 @@ export class LineChatManagerMessageRelayWorkerService {
     }
   }
 
+
+  public async recoverTextIfMissing(input: {
+    conversationId: string;
+    text: string;
+  }): Promise<{ handled: false } | { handled: true; alreadyPresent: boolean; lineChatUserId: string }> {
+    const conversation = await this.loadConversation(input.conversationId.trim());
+    if (!conversation) return { handled: false };
+
+    const storeCode = storeCodeOf(conversation);
+    if (!isLineChatManagerRelayStoreEnabled(storeCode)) return { handled: false };
+
+    this.assertRelayConfiguration(conversation, storeCode);
+    const oa = conversation.lineOfficialAccount;
+    const session = oa.lineChatSession!;
+    const botId = oa.chatBotId!.trim();
+    const profilePath = this.sessionService.resolveProfilePath(session);
+    let lineChatUserId = conversation.lineChatUserId?.trim() || "";
+
+    if (!lineChatUserId) {
+      const resolution = await this.coordinator.withProfileOperation(
+        { sessionId: session.id, operationKind: "RECENT_RESOLUTION" },
+        (operationContext) => this.recentResolver.resolve({
+          conversationId: conversation.id,
+          lineOfficialAccountId: oa.id,
+          botId,
+          sessionKey: session.sessionKey,
+          profilePath,
+          operationContext,
+        }),
+      );
+      if (!resolution.acquired) {
+        throw new ServiceUnavailableException("LINE OA Manager กำลังทำงานอื่นอยู่ กรุณาลองอีกครั้งในอีกสักครู่");
+      }
+      if (resolution.value.status !== "RESOLVED") {
+        throw new ServiceUnavailableException(
+          `ยังจับคู่ลูกค้ากับ LINE OA Manager ไม่สำเร็จ (${resolution.value.status}) กรุณาลองอีกครั้งหลังลูกค้าส่งข้อความใหม่`,
+        );
+      }
+      lineChatUserId = resolution.value.lineChatUserId;
+    }
+
+    const recovery = await this.coordinator.withProfileOperation(
+      { sessionId: session.id, operationKind: "MANUAL_DIAGNOSTIC" },
+      async (operationContext) => {
+        operationContext.assertOwnership();
+        const result = await this.sendViaManager({
+          storeCode,
+          botId,
+          lineChatUserId,
+          profilePath,
+          text: input.text,
+          skipIfTextAlreadyPresent: true,
+        });
+        operationContext.assertOwnership();
+        return result;
+      },
+    );
+    if (!recovery.acquired) {
+      throw new ServiceUnavailableException("LINE OA Manager กำลังทำงานอื่นอยู่ กรุณาลองส่งอีกครั้งในอีกสักครู่");
+    }
+
+    this.logger.log(JSON.stringify({
+      event: "line_chat_manager_confirmed_outbound_recovery",
+      storeCode,
+      conversationId: conversation.id,
+      alreadyPresent: recovery.value.alreadyPresent,
+      lineChatUserIdMasked: `${lineChatUserId.slice(0, 4)}...${lineChatUserId.slice(-4)}`,
+    }));
+    return {
+      handled: true,
+      alreadyPresent: recovery.value.alreadyPresent,
+      lineChatUserId,
+    };
+  }
+
   private async executeRelay(
     conversation: RelayConversation,
     storeCode: string,
@@ -259,7 +334,8 @@ export class LineChatManagerMessageRelayWorkerService {
     lineChatUserId: string;
     profilePath: string;
     text: string;
-  }): Promise<void> {
+    skipIfTextAlreadyPresent?: boolean;
+  }): Promise<{ alreadyPresent: boolean }> {
     if (!fs.existsSync(input.profilePath)) {
       throw new ServiceUnavailableException(`ไม่พบ session ของ LINE OA Manager ร้าน ${input.storeCode} กรุณา login ใหม่`);
     }
@@ -305,6 +381,14 @@ export class LineChatManagerMessageRelayWorkerService {
       }
 
       const beforeOutboundCount = await this.countOutboundExactText(page, composer, input.text);
+      if (input.skipIfTextAlreadyPresent && beforeOutboundCount > 0) {
+        this.logger.log(JSON.stringify({
+          event: "line_chat_manager_recovery_text_already_present",
+          storeCode: input.storeCode,
+          targetChatIdMasked: `${input.lineChatUserId.slice(0, 4)}...${input.lineChatUserId.slice(-4)}`,
+        }));
+        return { alreadyPresent: true };
+      }
       await this.focusComposer(composer);
       await this.fillComposer(composer, page, input.text);
 
@@ -350,7 +434,7 @@ export class LineChatManagerMessageRelayWorkerService {
               storeCode: input.storeCode,
               targetChatIdMasked: `${input.lineChatUserId.slice(0, 4)}...${input.lineChatUserId.slice(-4)}`,
             }));
-            return;
+            return { alreadyPresent: false };
           }
 
           // The exact original staff message is still absent after a fresh
@@ -382,12 +466,13 @@ export class LineChatManagerMessageRelayWorkerService {
               storeCode: input.storeCode,
               targetChatIdMasked: `${input.lineChatUserId.slice(0, 4)}...${input.lineChatUserId.slice(-4)}`,
             }));
-            return;
+            return { alreadyPresent: false };
           }
         }
 
         throw new ServiceUnavailableException("ยังยืนยันการส่งจาก LINE OA Manager ไม่ได้ จึงไม่บันทึกข้อความว่าส่งสำเร็จ");
       }
+      return { alreadyPresent: false };
     } catch (error) {
       if (isProfileBrowserBusyError(error)) {
         throw new ServiceUnavailableException("PROFILE_BROWSER_BUSY");
