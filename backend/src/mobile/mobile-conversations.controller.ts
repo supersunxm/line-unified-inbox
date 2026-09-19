@@ -80,6 +80,15 @@ export class MobileConversationsController {
   @Post(":id/messages")
   send(@Req() request: AuthRequest, @Param("id") id: string, @Body() dto: SendConversationMessageDto) { return this.conversations.send(request.user!, id, dto); }
 
+  @Post(":id/messages/:messageId/retry")
+  retryMessage(
+    @Req() request: AuthRequest,
+    @Param("id") id: string,
+    @Param("messageId") messageId: string,
+  ) {
+    return this.conversations.retryFailedMessage(request.user!, id, messageId);
+  }
+
   @Post(":id/images")
   @UseInterceptors(FileInterceptor("image"))
   sendImage(@Req() request: AuthRequest, @Param("id") id: string, @UploadedFile() file: { buffer: Buffer; mimetype: string; size: number } | undefined, @Body("idempotencyKey") idempotencyKey: string) {
