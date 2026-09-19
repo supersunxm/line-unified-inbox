@@ -36,7 +36,6 @@ import { LineChatMessageSendWorkerService } from "./line-chat-message-send-worke
     LineChatHealthSchedulerService,
     LineChatWebhookIdentityMapperService,
     LineChatHistoricalMappingBackfillService,
-    LineChatMessageSendWorkerService,
     LineChatNicknameWorkerService,
     LineChatAuthRecoveryService,
     LineChatManagerMessageRelayWorkerService,
