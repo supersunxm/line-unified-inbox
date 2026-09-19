@@ -152,7 +152,9 @@ class MessageTimeline extends StatelessWidget {
       footer: outbound
           ? message.deliveryStatus == 'FAILED'
               ? appLocalizations(context).failedRetry
-              : appLocalizations(context).sent
+              : message.deliveryStatus == 'PENDING'
+                  ? '✓'
+                  : '✓✓'
           : null,
       content: sticker
           ? StickerBubble(sticker: message.sticker)
