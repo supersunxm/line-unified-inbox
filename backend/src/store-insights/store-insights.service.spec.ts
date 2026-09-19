@@ -10,6 +10,7 @@ function message(id: string, direction: "INBOUND" | "OUTBOUND" | "SYSTEM", sentA
     id,
     direction,
     messageType: "TEXT",
+    deliveryStatus: "DELIVERED",
     sentAt: new Date(sentAt),
     senderUserId: null,
     senderDisplayName: null,
@@ -238,6 +239,27 @@ test("staff text, image, and mobile video messages are attributable, while bots 
   assert.equal(result.dataQuality.ambiguousOutboundCount, 1);
   assert.equal(result.available, false);
   assert.equal(result.repliedWithin24Hours.percentage, null);
+});
+
+test("failed attributed human outbound is excluded from SLA without making data quality ambiguous", async () => {
+  const { service } = buildService([
+    conversation("c-failed", "customer-failed", "Failed Customer", [
+      message("in-failed", "INBOUND", "2026-09-05T03:00:00.000Z"),
+      message("out-failed", "OUTBOUND", "2026-09-05T03:05:00.000Z", {
+        deliveryStatus: "FAILED",
+        senderUserId: "staff-1",
+        senderDisplayName: "Staff One",
+      }),
+    ]),
+  ]);
+
+  const result = await service.getResponsePerformance(user, "store-1", { from: "2026-09-05", to: "2026-09-05" });
+
+  assert.equal(result.available, true);
+  assert.equal(result.dataQuality.ambiguousOutboundCount, 0);
+  assert.equal(result.repliedWithin24Hours.count, 0);
+  assert.equal(result.unanswered.count, 1);
+  assert.equal(result.repliedWithin24Hours.percentage, 0);
 });
 
 test("ambiguous historical outbound attribution fails closed for response KPIs", async () => {
