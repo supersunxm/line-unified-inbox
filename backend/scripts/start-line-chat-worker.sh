@@ -75,6 +75,15 @@ if [ "${LINE_CHAT_RECOVER_CONFIRMED_OUTBOUNDS_ENABLED:-false}" = "true" ]; then
   echo "{\"event\":\"confirmed_outbound_recovery_bootstrap_finished\",\"exitCode\":${RECOVERY_EXIT_CODE}}"
 fi
 
+if [ "${LINE_CHAT_MESSAGE_API_INSPECT_ENABLED:-false}" = "true" ]; then
+  echo "{\"event\":\"line_chat_message_api_inspection_bootstrap_started\"}"
+  set +e
+  npx tsx scripts/inspect-manager-message-api.ts
+  MESSAGE_API_INSPECT_EXIT_CODE=$?
+  set -e
+  echo "{\"event\":\"line_chat_message_api_inspection_bootstrap_finished\",\"exitCode\":${MESSAGE_API_INSPECT_EXIT_CODE}}"
+fi
+
 if [ "${LINE_CHAT_API_DIAGNOSTIC_ENABLED:-false}" = "true" ]; then
   echo "{\"event\":\"line_chat_manager_api_diagnostic_bootstrap_started\"}"
   set +e
