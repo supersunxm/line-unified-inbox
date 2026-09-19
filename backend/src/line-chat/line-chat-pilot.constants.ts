@@ -202,3 +202,26 @@ export function isLineChatRealtimeResolverEligible(
   const cleanStoreCode = (params.storeCode ?? "").trim();
   return (LINE_CHAT_REALTIME_RESOLVER_ALLOWED_STORE_CODES as readonly string[]).includes(cleanStoreCode);
 }
+
+export function isLineChatCanaryPreSendFailureEnabled(input: {
+  storeCode?: string | null;
+  conversationId?: string | null;
+  text?: string | null;
+  env?: {
+    enabled?: string;
+  };
+}): boolean {
+  const flag = (input.env?.enabled ?? process.env.LINE_CHAT_CANARY_FORCE_PRE_SEND_FAILURE_ENABLED)?.trim();
+  if (flag !== "true") return false;
+
+  const CANARY_STORE_CODE = "28375";
+  const CANARY_CONVERSATION_ID = "a04560a5-8658-493b-9b18-c992adc2b683";
+  const CANARY_TEST_TEXT = "TEST DURABLE PRE-SEND FAIL 004";
+
+  if ((input.storeCode ?? "").trim() !== CANARY_STORE_CODE) return false;
+  if ((input.conversationId ?? "").trim() !== CANARY_CONVERSATION_ID) return false;
+  if ((input.text ?? "").trim() !== CANARY_TEST_TEXT) return false;
+
+  return true;
+}
+

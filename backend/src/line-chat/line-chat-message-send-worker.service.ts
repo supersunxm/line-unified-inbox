@@ -9,7 +9,10 @@ import { hostname } from "node:os";
 import { PrismaService } from "../prisma.service";
 import { persistStaffOutboundReplyState } from "../conversation-reply-state";
 import { LineChatManagerMessageRelayWorkerService } from "./line-chat-manager-message-relay-worker.service";
-import { isLineChatDurableSendQueueConversationEnabled } from "./line-chat-pilot.constants";
+import {
+  isLineChatCanaryPreSendFailureEnabled,
+  isLineChatDurableSendQueueConversationEnabled,
+} from "./line-chat-pilot.constants";
 
 const POLL_INTERVAL_MS = 1_500;
 const JOB_LEASE_MS = 90_000;
@@ -35,14 +38,6 @@ function isDefinitelyPreSendBusy(message: string): boolean {
   return (
     message.includes("is busy with another operation")
     || message.includes("กำลังทำงานอื่นอยู่")
-  );
-}
-
-function isNonRetryableBeforeSend(message: string): boolean {
-  return (
-    message.includes("ไม่พร้อมใช้งาน")
-    || message.includes("ยังไม่ได้เชื่อมต่อกับ worker")
-    || message.includes("LINE_CHAT_WORKER_INTERNAL_URL")
   );
 }
 
@@ -305,6 +300,7 @@ export class LineChatMessageSendWorkerService implements OnModuleInit, OnModuleD
 
     const startedAt = new Date();
     const attemptNo = job.attemptCount + 1;
+    let sendActionInitiated = false;
     const attempt = await this.prisma.$transaction(async (tx) => {
       await tx.lineChatMessageSendJob.update({
         where: { id: job.id },
@@ -321,16 +317,38 @@ export class LineChatMessageSendWorkerService implements OnModuleInit, OnModuleD
           attemptNo,
           status: MessageDeliveryAttemptStatus.PROCESSING,
           startedAt,
-          sendActionAt: startedAt,
+          sendActionAt: null,
         },
       });
     });
 
     try {
+      if (isLineChatCanaryPreSendFailureEnabled({
+        storeCode,
+        conversationId: job.conversationId,
+        text: job.message.originalText,
+      })) {
+        this.logger.warn(JSON.stringify({
+          event: "line_chat_manager_test_controlled_pre_send_failure",
+          jobId: job.id,
+          conversationId: job.conversationId,
+          storeCode,
+          text: job.message.originalText,
+        }));
+        throw new Error("CONTROLLED_CANARY_PRE_SEND_FAILURE: simulated pre-send failure for canary 004");
+      }
+
       const result = await this.managerRelay.relayText({
         conversationId: job.conversationId,
         text: job.message.originalText,
         idempotencyKey: job.idempotencyKey,
+        onSendAction: async (actionAt: Date) => {
+          sendActionInitiated = true;
+          await this.prisma.messageDeliveryAttempt.update({
+            where: { id: attempt.id },
+            data: { sendActionAt: actionAt },
+          });
+        },
       });
       if (!result.handled) {
         throw new Error("MANAGER_RELAY_NOT_HANDLED");
@@ -363,7 +381,9 @@ export class LineChatMessageSendWorkerService implements OnModuleInit, OnModuleD
         return;
       }
 
-      if (isNonRetryableBeforeSend(message)) {
+      // If customer-facing send action was NEVER initiated, this is definitely a pre-send failure.
+      // Must fail closed with attempt status FAILED and sendActionAt = null.
+      if (!sendActionInitiated) {
         await this.markFailed(job.id, attempt.id, message);
         return;
       }

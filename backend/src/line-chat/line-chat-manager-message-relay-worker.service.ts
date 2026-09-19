@@ -48,8 +48,6 @@ const SEND_BUTTON_SELECTORS = [
   '[role="button"][title*="ส่ง"]',
 ] as const;
 
-let testDurableVerifyDelayAttemptCount = 0;
-
 type RelayConversation = {
   id: string;
   storeId: string | null;
@@ -105,6 +103,7 @@ export class LineChatManagerMessageRelayWorkerService {
     conversationId: string;
     text: string;
     idempotencyKey: string;
+    onSendAction?: (actionAt: Date) => Promise<void>;
   }): Promise<ManagerRelayResult> {
     const conversation = await this.loadConversation(input.conversationId.trim());
     if (!conversation) return { handled: false };
@@ -130,7 +129,13 @@ export class LineChatManagerMessageRelayWorkerService {
       return result.handled ? { ...result, duplicate: true } : result;
     }
 
-    const operation = this.executeRelay(conversation, storeCode, input.text, dedupeKey);
+    const operation = this.executeRelay(
+      conversation,
+      storeCode,
+      input.text,
+      dedupeKey,
+      input.onSendAction,
+    );
     this.inFlight.set(dedupeKey, operation);
     try {
       return await operation;
@@ -308,18 +313,6 @@ export class LineChatManagerMessageRelayWorkerService {
         managerSentAt: Date | null;
       }
   > {
-    if (input.text.trim() === "TEST DURABLE VERIFY DELAY 003") {
-      testDurableVerifyDelayAttemptCount++;
-      if (testDurableVerifyDelayAttemptCount <= 1) {
-        this.logger.warn(JSON.stringify({
-          event: "line_chat_manager_test_simulated_verify_retry_in_progress",
-          attempt: testDurableVerifyDelayAttemptCount,
-          text: input.text,
-        }));
-        throw new ServiceUnavailableException("TEST_SIMULATED_VERIFY_UNAVAILABLE: verification retry temporarily unavailable");
-      }
-    }
-
     const conversation = await this.loadConversation(input.conversationId.trim());
     if (!conversation) return { handled: false };
 
@@ -665,7 +658,7 @@ export class LineChatManagerMessageRelayWorkerService {
           for (const frame of page.frames()) {
             const rows = await frame.locator("button,[role='button'],input[type='button'],input[type='submit']").evaluateAll(
               (elements, composerRect) => {
-                const c = composerRect as { x: number; y: number; width: number; height: number } | null;
+                const c = composerRect;
                 return elements.map((element) => {
                   const rect = element.getBoundingClientRect();
                   const style = window.getComputedStyle(element);
@@ -875,6 +868,7 @@ export class LineChatManagerMessageRelayWorkerService {
     storeCode: string,
     text: string,
     dedupeKey: string,
+    onSendAction?: (actionAt: Date) => Promise<void>,
   ): Promise<ManagerRelayResult> {
     const oa = conversation.lineOfficialAccount;
     const session = oa.lineChatSession!;
@@ -909,7 +903,14 @@ export class LineChatManagerMessageRelayWorkerService {
       { sessionId: session.id, operationKind: "MANUAL_DIAGNOSTIC" },
       async (operationContext) => {
         operationContext.assertOwnership();
-        await this.sendViaManager({ storeCode, botId, lineChatUserId, profilePath, text });
+        await this.sendViaManager({
+          storeCode,
+          botId,
+          lineChatUserId,
+          profilePath,
+          text,
+          onSendAction,
+        });
         operationContext.assertOwnership();
       },
     );
@@ -1069,6 +1070,7 @@ private async sendViaManager(input: {
     profilePath: string;
     text: string;
     skipIfTextAlreadyPresent?: boolean;
+    onSendAction?: (actionAt: Date) => Promise<void>;
   }): Promise<{ alreadyPresent: boolean }> {
     if (!fs.existsSync(input.profilePath)) {
       throw new ServiceUnavailableException(`ไม่พบ session ของ LINE OA Manager ร้าน ${input.storeCode} กรุณา login ใหม่`);
@@ -1128,6 +1130,12 @@ private async sendViaManager(input: {
       await this.focusComposer(composer);
       await this.fillComposer(composer, page, input.text);
 
+      if (input.onSendAction) {
+        await input.onSendAction(new Date()).catch((err) => {
+          this.logger.warn(`Failed to record sendActionAt: ${err}`);
+        });
+      }
+
       const sendButton = await this.findSendButton(page, composer);
       if (sendButton) {
         this.logger.log(JSON.stringify({
@@ -1144,17 +1152,6 @@ private async sendViaManager(input: {
         }));
         await this.focusComposer(composer);
         await page.keyboard.press("Enter");
-      }
-
-      if (input.text.trim() === "TEST DURABLE VERIFY DELAY 003") {
-        testDurableVerifyDelayAttemptCount = 0;
-        await page.waitForTimeout(1_000);
-        this.logger.warn(JSON.stringify({
-          event: "line_chat_manager_test_simulated_verify_delay",
-          storeCode: input.storeCode,
-          text: input.text,
-        }));
-        throw new ServiceUnavailableException("TEST_SIMULATED_VERIFY_DELAY: initial post-send verification unavailable");
       }
 
       const verified = await this.waitForDeliveryVerification(

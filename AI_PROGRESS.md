@@ -1,3 +1,24 @@
+# 2026-09-19: P0 Production Reliability — Known Pre-Send Failure Canary (TEST DURABLE PRE-SEND FAIL 004) [IN PROGRESS]
+- **Current Task**: Prepare and execute controlled known pre-send failure canary test (`TEST DURABLE PRE-SEND FAIL 004`) exclusively on test conversation `OBS-Sunx2` in Store 28375 (`a04560a5-8658-493b-9b18-c992adc2b683`).
+- **Phase A (`sendActionAt` Semantics)**:
+  - Fixed `MessageDeliveryAttempt.sendActionAt` initialization to `null`.
+  - Registered `onSendAction` callback in `relayText` to record `sendActionAt` strictly when a customer-facing send action is initiated against LINE OA Manager.
+  - Failures before send action (profile busy, missing session, unmapped conversation, or canary pre-send failure) strictly leave `sendActionAt = null` and fail closed.
+  - Failures during verification after send action retain `sendActionAt` and transition to `VERIFY_PENDING`.
+- **Phase B (Canary 003 Hook Removal)**:
+  - Fully removed all verification delay simulation code and counters from `LineChatManagerMessageRelayWorkerService`.
+- **Phase C (Canary 004 Pre-Send Failure Mechanism)**:
+  - Implemented `isLineChatCanaryPreSendFailureEnabled` gated by 4 concurrent conditions:
+    1. `LINE_CHAT_CANARY_FORCE_PRE_SEND_FAILURE_ENABLED === "true"`
+    2. Store code: `28375`
+    3. Conversation ID: `a04560a5-8658-493b-9b18-c992adc2b683`
+    4. Text: `TEST DURABLE PRE-SEND FAIL 004`
+- **Verification & Tests**:
+  - Added unit test suite `line-chat-delivery-attempt-timing.spec.ts` (12/12 PASS).
+  - Validated allowlist specs and verification specs (32/32 PASS).
+  - Clean TypeScript build (`npm run build` PASS) and zero lint errors on modified files.
+- **Next Step**: Commit changes locally, request user approval to push to `origin/main` to deploy to Railway, configure temporary env var on worker, and execute Canary 004 on Android emulator.
+
 # 2026-09-19: P0 Production Reliability — Verification-Delay Safety Canary (TEST DURABLE VERIFY DELAY 003) [COMPLETED & VERIFIED]
 - **Current Task**: Execute controlled verification-delay canary test (`TEST DURABLE VERIFY DELAY 003`) exclusively on test conversation `OBS-Sunx2` in Store 28375 (`a04560a5-8658-493b-9b18-c992adc2b683`).
 - **Goal**: Prove that when a customer-facing send action has physically completed but verification is temporarily delayed/unavailable, the system NEVER blindly resends the message.

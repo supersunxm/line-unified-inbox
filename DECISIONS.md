@@ -1,3 +1,18 @@
+# LINE OA Black App Durable Send Queue Delivery Attempt Timing & Pre-Send Failure Architecture (2026-09-19)
+
+- **Strict `sendActionAt` Timing Semantics**:
+  `MessageDeliveryAttempt.sendActionAt` strictly represents the timestamp when a customer-facing send action was actually initiated against LINE OA Manager (e.g., right before clicking the Manager send button or dispatching keyboard Enter).
+  - **Pre-Send Invariant**: For any failure that occurs before a customer-facing send action is initiated—including profile busy, missing session, unmapped customer conversation, configuration rejection, or deliberate canary pre-send failure—`sendActionAt` MUST remain `null`.
+  - **Post-Send Verification Invariant**: Only when a send action was actually initiated is `sendActionAt` populated. If verification is subsequently delayed or inconclusive, the attempt enters `VERIFY_PENDING` with `sendActionAt` preserved, preventing duplicate customer-facing sends.
+
+- **Controlled Known Pre-Send Failure Canary Mechanism (Canary 004)**:
+  To safely validate pre-send failure handling and retry ergonomics without breaking production operations or affecting real customers, the pre-send failure injection is strictly isolated and gated by 4 concurrent conditions:
+  1. Temporary environment variable: `LINE_CHAT_CANARY_FORCE_PRE_SEND_FAILURE_ENABLED === "true"`
+  2. Store allowlist: Store `28375` (OBS Robinson Chonburi)
+  3. Authorized canary conversation: `a04560a5-8658-493b-9b18-c992adc2b683` (Customer `OBS-Sunx2`)
+  4. Exact test payload: `TEST DURABLE PRE-SEND FAIL 004`
+  Any mismatch immediately bypasses the simulation and fails closed. The failure is thrown before any Manager browser navigation, composer interaction, or send action.
+
 # LINE OA Black App Durable Send Queue Store & Conversation Allowlist Architecture (2026-09-19)
 
 - **Verification-Delay Safety Invariant**:
