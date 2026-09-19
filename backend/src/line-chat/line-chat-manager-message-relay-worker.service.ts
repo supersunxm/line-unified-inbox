@@ -138,6 +138,143 @@ export class LineChatManagerMessageRelayWorkerService {
   }
 
 
+  public async inspectTextPresenceSince(input: {
+    conversationId: string;
+    text: string;
+    after: Date;
+  }): Promise<
+    | { handled: false }
+    | {
+        handled: true;
+        presence: "PRESENT" | "NOT_PRESENT" | "UNMAPPED";
+        lineChatUserId: string | null;
+        managerMessageId: string | null;
+        managerSentAt: Date | null;
+      }
+  > {
+    const conversation = await this.loadConversation(input.conversationId.trim());
+    if (!conversation) return { handled: false };
+
+    const storeCode = storeCodeOf(conversation);
+    if (!isLineChatManagerRelayStoreEnabled(storeCode)) return { handled: false };
+    this.assertRelayConfiguration(conversation, storeCode);
+
+    const lineChatUserId = conversation.lineChatUserId?.trim() || "";
+    if (!lineChatUserId) {
+      return {
+        handled: true,
+        presence: "UNMAPPED",
+        lineChatUserId: null,
+        managerMessageId: null,
+        managerSentAt: null,
+      };
+    }
+
+    const oa = conversation.lineOfficialAccount;
+    const session = oa.lineChatSession!;
+    const botId = oa.chatBotId!.trim();
+    const profilePath = this.sessionService.resolveProfilePath(session);
+
+    const inspection = await this.coordinator.withProfileOperation(
+      { sessionId: session.id, operationKind: "MANUAL_DIAGNOSTIC" },
+      async (operationContext) => {
+        operationContext.assertOwnership();
+        if (!fs.existsSync(profilePath)) {
+          throw new ServiceUnavailableException(`ไม่พบ session ของ LINE OA Manager ร้าน ${storeCode} กรุณา login ใหม่`);
+        }
+
+        let context: BrowserContext | null = null;
+        try {
+          context = await this.sessionService.launchManagedPersistentContext(profilePath, {
+            profilePath,
+            headless: true,
+            viewport: { width: 1280, height: 800 },
+            args: [
+              "--no-sandbox",
+              "--disable-setuid-sandbox",
+              "--disable-blink-features=AutomationControlled",
+            ],
+          });
+          const page = context.pages()[0] || await context.newPage();
+          const targetUrl = this.sessionService.buildChatRefererUrl(botId, lineChatUserId);
+          await page.goto(targetUrl, { waitUntil: "domcontentloaded", timeout: 15_000 }).catch(() => {});
+          await page.waitForLoadState("networkidle", { timeout: 5_000 }).catch(() => {});
+
+          const auth = await confirmLineManagerAuthentication(
+            () => this.sessionService.probeApiAuthentication(context!),
+            (ms) => page.waitForTimeout(ms),
+          );
+          if (auth.outcome !== "AUTHENTICATED") {
+            throw new ServiceUnavailableException("ยังยืนยันสถานะการเข้าสู่ระบบ LINE OA Manager ไม่ได้");
+          }
+
+          const historyUrl = `https://chat.line.biz/api/v3/bots/${encodeURIComponent(botId)}/chats/${encodeURIComponent(lineChatUserId)}/messages`;
+          const result = await page.evaluate(async ({ url, expected, afterMs }) => {
+            const response = await fetch(url, { credentials: "include" });
+            if (!response.ok) return { ok: false, match: null };
+            const body = await response.json() as {
+              list?: Array<{
+                type?: string;
+                timestamp?: number;
+                message?: { id?: string; type?: string; text?: string };
+              }>;
+            };
+            const matches = (body.list ?? [])
+              .filter((item) =>
+                item.type === "messageSent"
+                && item.message?.type === "text"
+                && item.message?.text === expected
+                && typeof item.message.id === "string"
+                && Number(item.timestamp) >= afterMs
+              )
+              .sort((a, b) => Number(a.timestamp) - Number(b.timestamp));
+            const match = matches[0];
+            return {
+              ok: true,
+              match: match
+                ? { id: match.message!.id!, timestamp: Number(match.timestamp) }
+                : null,
+            };
+          }, {
+            url: historyUrl,
+            expected: input.text,
+            afterMs: input.after.getTime() - 2_000,
+          });
+
+          operationContext.assertOwnership();
+          return result;
+        } finally {
+          if (context) {
+            await this.sessionService.closeManagedPersistentContext(context, profilePath).catch(() => {});
+          }
+        }
+      },
+    );
+
+    if (!inspection.acquired) {
+      throw new ServiceUnavailableException("LINE OA Manager กำลังทำงานอื่นอยู่ กรุณาลองอีกครั้งในอีกสักครู่");
+    }
+    if (!inspection.value.ok) {
+      throw new ServiceUnavailableException("อ่านประวัติข้อความจาก LINE OA Manager ไม่สำเร็จ");
+    }
+
+    return inspection.value.match
+      ? {
+          handled: true,
+          presence: "PRESENT",
+          lineChatUserId,
+          managerMessageId: inspection.value.match.id,
+          managerSentAt: new Date(inspection.value.match.timestamp),
+        }
+      : {
+          handled: true,
+          presence: "NOT_PRESENT",
+          lineChatUserId,
+          managerMessageId: null,
+          managerSentAt: null,
+        };
+  }
+
   /**
    * Read-only inspection of one mapped Manager chat.
    * This method never types, clicks a send control, resolves/persists mappings,
@@ -877,39 +1014,15 @@ private async sendViaManager(input: {
             return { alreadyPresent: false };
           }
 
-          // The exact original staff message is still absent after a fresh
-          // target-chat load. Retry it once while holding the same profile
-          // operation lock, then require normal delivery verification.
+          // Do not auto-resend after an ambiguous result. Verification is
+          // retried by the durable queue without another customer-facing send.
           this.logger.warn(JSON.stringify({
-            event: "line_chat_manager_message_auto_retry_started",
+            event: "line_chat_manager_message_verify_pending",
             storeCode: input.storeCode,
             targetChatIdMasked: `${input.lineChatUserId.slice(0, 4)}...${input.lineChatUserId.slice(-4)}`,
-          }));
-          await this.focusComposer(recoveryComposer);
-          await this.fillComposer(recoveryComposer, page, input.text);
-          const recoverySendButton = await this.findSendButton(page, recoveryComposer);
-          if (recoverySendButton) {
-            await recoverySendButton.click({ timeout: 5_000 });
-          } else {
-            await this.focusComposer(recoveryComposer);
-            await page.keyboard.press("Enter");
-          }
-          const retryVerified = await this.waitForDeliveryVerification(
-            page,
-            recoveryComposer,
-            input.botId,
-            input.lineChatUserId,
-            input.text,
             refreshedOutboundCount,
-          );
-          if (retryVerified) {
-            this.logger.log(JSON.stringify({
-              event: "line_chat_manager_message_auto_retry_success",
-              storeCode: input.storeCode,
-              targetChatIdMasked: `${input.lineChatUserId.slice(0, 4)}...${input.lineChatUserId.slice(-4)}`,
-            }));
-            return { alreadyPresent: false };
-          }
+            beforeOutboundCount,
+          }));
         }
 
         throw new ServiceUnavailableException("ยังยืนยันการส่งจาก LINE OA Manager ไม่ได้ จึงไม่บันทึกข้อความว่าส่งสำเร็จ");
