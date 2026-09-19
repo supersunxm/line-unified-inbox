@@ -1,0 +1,542 @@
+import { Inject, Injectable, Logger, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
+import {
+  LineChatMessageSendJobStatus,
+  MessageDeliveryAttemptStatus,
+  MessageDeliveryStatus,
+  Prisma,
+} from "@prisma/client";
+import { hostname } from "node:os";
+import { PrismaService } from "../prisma.service";
+import { persistStaffOutboundReplyState } from "../conversation-reply-state";
+import { LineChatManagerMessageRelayWorkerService } from "./line-chat-manager-message-relay-worker.service";
+
+const POLL_INTERVAL_MS = 1_500;
+const JOB_LEASE_MS = 90_000;
+const MAX_PARALLEL_PROFILES = 4;
+const VERIFY_BACKOFF_MS = [3_000, 5_000, 10_000, 20_000] as const;
+const MAX_VERIFY_ATTEMPTS = VERIFY_BACKOFF_MS.length;
+
+function jsonObject(value: Prisma.JsonValue | null): Record<string, Prisma.JsonValue> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return value as Record<string, Prisma.JsonValue>;
+}
+
+function errorText(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function isDefinitelyPreSendBusy(message: string): boolean {
+  return message.includes("PROFILE_BROWSER_BUSY")
+    || message.includes("LINE OA Manager กำลังทำงานอื่นอยู่");
+}
+
+function isNonRetryableBeforeSend(message: string): boolean {
+  return message.includes("AUTH_REQUIRED")
+    || message.includes("หมดอายุ")
+    || message.includes("ยังจับคู่ลูกค้ากับ LINE OA Manager ไม่สำเร็จ")
+    || message.includes("การตั้งค่า LINE OA Manager")
+    || message.includes("ไม่พบ session ของ LINE OA Manager");
+}
+
+@Injectable()
+export class LineChatMessageSendWorkerService implements OnModuleInit, OnModuleDestroy {
+  private readonly logger = new Logger(LineChatMessageSendWorkerService.name);
+  private readonly workerId = `${process.env.RAILWAY_SERVICE_NAME?.trim() || "local"}:${process.env.RAILWAY_REPLICA_ID?.trim() || hostname()}:${process.pid}:send-queue`;
+  private timer: NodeJS.Timeout | null = null;
+  private processing = false;
+
+  constructor(
+    @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(LineChatManagerMessageRelayWorkerService)
+    private readonly managerRelay: LineChatManagerMessageRelayWorkerService,
+  ) {}
+
+  onModuleInit(): void {
+    if (
+      process.env.NODE_ENV === "test"
+      || process.env.LINE_CHAT_NICKNAME_MAINTENANCE_MODE === "true"
+      || process.env.LINE_CHAT_DURABLE_SEND_QUEUE_ENABLED !== "true"
+    ) {
+      return;
+    }
+
+    this.logger.log(JSON.stringify({
+      event: "line_chat_message_send_worker_started",
+      workerId: this.workerId,
+    }));
+    this.timer = setInterval(() => void this.processCycle(), POLL_INTERVAL_MS);
+    void this.processCycle();
+  }
+
+  onModuleDestroy(): void {
+    if (this.timer) clearInterval(this.timer);
+    this.timer = null;
+  }
+
+  async recoverStuckJobs(): Promise<number> {
+    const now = new Date();
+    const stuck = await this.prisma.lineChatMessageSendJob.findMany({
+      where: {
+        status: LineChatMessageSendJobStatus.PROCESSING,
+        lockedUntil: { lt: now },
+      },
+      take: 50,
+      select: { id: true, messageId: true },
+    });
+
+    for (const job of stuck) {
+      await this.prisma.$transaction([
+        this.prisma.lineChatMessageSendJob.update({
+          where: { id: job.id },
+          data: {
+            status: LineChatMessageSendJobStatus.VERIFY_PENDING,
+            scheduledAt: now,
+            workerId: null,
+            claimedAt: null,
+            lockedUntil: null,
+            lastError: "WORKER_LEASE_EXPIRED_VERIFY_BEFORE_ANY_RESEND",
+          },
+        }),
+        this.prisma.message.update({
+          where: { id: job.messageId },
+          data: { deliveryStatus: MessageDeliveryStatus.PENDING },
+        }),
+      ]);
+    }
+
+    if (stuck.length > 0) {
+      this.logger.warn(JSON.stringify({
+        event: "line_chat_message_send_stuck_jobs_recovered",
+        count: stuck.length,
+      }));
+    }
+    return stuck.length;
+  }
+
+  async processCycle(): Promise<number> {
+    if (this.processing) return 0;
+    this.processing = true;
+    try {
+      await this.recoverStuckJobs();
+      const now = new Date();
+      const candidates = await this.prisma.lineChatMessageSendJob.findMany({
+        where: {
+          status: {
+            in: [
+              LineChatMessageSendJobStatus.QUEUED,
+              LineChatMessageSendJobStatus.VERIFY_PENDING,
+            ],
+          },
+          scheduledAt: { lte: now },
+        },
+        orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+        take: 50,
+      });
+
+      const bySession = new Map<string, (typeof candidates)[number]>();
+      for (const job of candidates) {
+        if (!bySession.has(job.lineChatSessionId)) {
+          bySession.set(job.lineChatSessionId, job);
+        }
+      }
+      const selected = [...bySession.values()].slice(0, MAX_PARALLEL_PROFILES);
+      const results = await Promise.all(selected.map((job) => this.claimAndProcess(job)));
+      return results.filter(Boolean).length;
+    } catch (error) {
+      this.logger.error(JSON.stringify({
+        event: "line_chat_message_send_cycle_failed",
+        error: errorText(error),
+      }));
+      return 0;
+    } finally {
+      this.processing = false;
+    }
+  }
+
+  private async claimAndProcess(job: {
+    id: string;
+    status: LineChatMessageSendJobStatus;
+  }): Promise<boolean> {
+    const now = new Date();
+    const claimed = await this.prisma.lineChatMessageSendJob.updateMany({
+      where: {
+        id: job.id,
+        status: job.status,
+        scheduledAt: { lte: now },
+      },
+      data: {
+        status: LineChatMessageSendJobStatus.PROCESSING,
+        workerId: this.workerId,
+        claimedAt: now,
+        lockedUntil: new Date(now.getTime() + JOB_LEASE_MS),
+      },
+    });
+    if (claimed.count === 0) return false;
+
+    if (job.status === LineChatMessageSendJobStatus.VERIFY_PENDING) {
+      await this.processVerification(job.id);
+    } else {
+      await this.processSend(job.id);
+    }
+    return true;
+  }
+
+  private async processSend(jobId: string): Promise<void> {
+    const job = await this.prisma.lineChatMessageSendJob.findUnique({
+      where: { id: jobId },
+      include: {
+        message: {
+          select: {
+            id: true,
+            conversationId: true,
+            originalText: true,
+            rawPayload: true,
+            senderUserId: true,
+            senderDisplayName: true,
+            sentAt: true,
+          },
+        },
+      },
+    });
+    if (!job) return;
+
+    const startedAt = new Date();
+    const attemptNo = job.attemptCount + 1;
+    const attempt = await this.prisma.$transaction(async (tx) => {
+      await tx.lineChatMessageSendJob.update({
+        where: { id: job.id },
+        data: {
+          attemptCount: { increment: 1 },
+          sendStartedAt: startedAt,
+          lastError: null,
+        },
+      });
+      return tx.messageDeliveryAttempt.create({
+        data: {
+          messageId: job.messageId,
+          sendJobId: job.id,
+          attemptNo,
+          status: MessageDeliveryAttemptStatus.PROCESSING,
+          startedAt,
+          sendActionAt: startedAt,
+        },
+      });
+    });
+
+    try {
+      const result = await this.managerRelay.relayText({
+        conversationId: job.conversationId,
+        text: job.message.originalText,
+        idempotencyKey: job.idempotencyKey,
+      });
+      if (!result.handled) {
+        throw new Error("MANAGER_RELAY_NOT_HANDLED");
+      }
+      await this.markDelivered(job.id, attempt.id, null, new Date());
+    } catch (error) {
+      const message = errorText(error);
+      if (isDefinitelyPreSendBusy(message)) {
+        await this.prisma.$transaction([
+          this.prisma.lineChatMessageSendJob.update({
+            where: { id: job.id },
+            data: {
+              status: LineChatMessageSendJobStatus.QUEUED,
+              scheduledAt: new Date(Date.now() + 3_000),
+              workerId: null,
+              claimedAt: null,
+              lockedUntil: null,
+              lastError: message.slice(0, 500),
+            },
+          }),
+          this.prisma.messageDeliveryAttempt.update({
+            where: { id: attempt.id },
+            data: {
+              status: MessageDeliveryAttemptStatus.FAILED,
+              finishedAt: new Date(),
+              failureReason: "PROFILE_BUSY_BEFORE_SEND",
+            },
+          }),
+        ]);
+        return;
+      }
+
+      if (isNonRetryableBeforeSend(message)) {
+        await this.markFailed(job.id, attempt.id, message);
+        return;
+      }
+
+      // Any ambiguous transport/composer/verification error is verify-only.
+      // Never issue another customer-facing send automatically.
+      await this.prisma.$transaction([
+        this.prisma.lineChatMessageSendJob.update({
+          where: { id: job.id },
+          data: {
+            status: LineChatMessageSendJobStatus.VERIFY_PENDING,
+            scheduledAt: new Date(Date.now() + VERIFY_BACKOFF_MS[0]),
+            verifyAttemptCount: 0,
+            workerId: null,
+            claimedAt: null,
+            lockedUntil: null,
+            lastError: message.slice(0, 500),
+          },
+        }),
+        this.prisma.messageDeliveryAttempt.update({
+          where: { id: attempt.id },
+          data: {
+            status: MessageDeliveryAttemptStatus.VERIFY_PENDING,
+            failureReason: message.slice(0, 500),
+          },
+        }),
+        this.prisma.message.update({
+          where: { id: job.messageId },
+          data: {
+            deliveryStatus: MessageDeliveryStatus.PENDING,
+            rawPayload: {
+              ...jsonObject(job.message.rawPayload),
+              queueState: "VERIFY_PENDING",
+              lastSendError: message.slice(0, 500),
+            } as Prisma.InputJsonValue,
+          },
+        }),
+      ]);
+    }
+  }
+
+  private async processVerification(jobId: string): Promise<void> {
+    const job = await this.prisma.lineChatMessageSendJob.findUnique({
+      where: { id: jobId },
+      include: {
+        message: {
+          select: {
+            id: true,
+            originalText: true,
+            rawPayload: true,
+            senderUserId: true,
+            senderDisplayName: true,
+            sentAt: true,
+          },
+        },
+        attempts: {
+          where: { status: MessageDeliveryAttemptStatus.VERIFY_PENDING },
+          orderBy: { attemptNo: "desc" },
+          take: 1,
+        },
+      },
+    });
+    if (!job) return;
+
+    const verifyNo = job.verifyAttemptCount + 1;
+    const after = job.sendStartedAt ?? job.claimedAt ?? job.createdAt;
+
+    try {
+      const result = await this.managerRelay.inspectTextPresenceSince({
+        conversationId: job.conversationId,
+        text: job.message.originalText,
+        after,
+      });
+
+      if (result.handled && result.presence === "PRESENT") {
+        await this.markDelivered(
+          job.id,
+          job.attempts[0]?.id ?? null,
+          result.managerMessageId,
+          result.managerSentAt ?? new Date(),
+        );
+        return;
+      }
+
+      if (verifyNo < MAX_VERIFY_ATTEMPTS) {
+        const delay = VERIFY_BACKOFF_MS[Math.min(verifyNo, VERIFY_BACKOFF_MS.length - 1)];
+        await this.prisma.lineChatMessageSendJob.update({
+          where: { id: job.id },
+          data: {
+            status: LineChatMessageSendJobStatus.VERIFY_PENDING,
+            verifyAttemptCount: verifyNo,
+            lastVerifiedAt: new Date(),
+            scheduledAt: new Date(Date.now() + delay),
+            workerId: null,
+            claimedAt: null,
+            lockedUntil: null,
+            lastError: result.handled ? result.presence : "VERIFY_NOT_HANDLED",
+          },
+        });
+        return;
+      }
+
+      await this.markFailed(
+        job.id,
+        job.attempts[0]?.id ?? null,
+        "LINE_MANAGER_MESSAGE_NOT_FOUND_AFTER_VERIFY_WINDOW",
+      );
+    } catch (error) {
+      const message = errorText(error);
+      if (verifyNo < MAX_VERIFY_ATTEMPTS) {
+        const delay = VERIFY_BACKOFF_MS[Math.min(verifyNo, VERIFY_BACKOFF_MS.length - 1)];
+        await this.prisma.lineChatMessageSendJob.update({
+          where: { id: job.id },
+          data: {
+            status: LineChatMessageSendJobStatus.VERIFY_PENDING,
+            verifyAttemptCount: verifyNo,
+            lastVerifiedAt: new Date(),
+            scheduledAt: new Date(Date.now() + delay),
+            workerId: null,
+            claimedAt: null,
+            lockedUntil: null,
+            lastError: message.slice(0, 500),
+          },
+        });
+        return;
+      }
+      await this.markFailed(job.id, job.attempts[0]?.id ?? null, message);
+    }
+  }
+
+  private async markDelivered(
+    jobId: string,
+    attemptId: string | null,
+    managerMessageId: string | null,
+    confirmedAt: Date,
+  ): Promise<void> {
+    const job = await this.prisma.lineChatMessageSendJob.findUnique({
+      where: { id: jobId },
+      include: {
+        message: {
+          select: {
+            id: true,
+            conversationId: true,
+            rawPayload: true,
+            senderUserId: true,
+            senderDisplayName: true,
+          },
+        },
+        conversation: {
+          select: {
+            id: true,
+            bmReplyStatus: true,
+            followUpStatus: true,
+          },
+        },
+      },
+    });
+    if (!job) return;
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.message.update({
+        where: { id: job.messageId },
+        data: {
+          deliveryStatus: MessageDeliveryStatus.DELIVERED,
+          sentAt: confirmedAt,
+          rawPayload: {
+            ...jsonObject(job.message.rawPayload),
+            queueState: "DELIVERED",
+            confirmedAt: confirmedAt.toISOString(),
+            managerMessageId,
+          } as Prisma.InputJsonValue,
+        },
+      });
+      await tx.lineChatMessageSendJob.update({
+        where: { id: job.id },
+        data: {
+          status: LineChatMessageSendJobStatus.DELIVERED,
+          managerMessageId,
+          lastVerifiedAt: confirmedAt,
+          completedAt: new Date(),
+          workerId: null,
+          claimedAt: null,
+          lockedUntil: null,
+          lastError: null,
+        },
+      });
+      if (attemptId) {
+        await tx.messageDeliveryAttempt.update({
+          where: { id: attemptId },
+          data: {
+            status: MessageDeliveryAttemptStatus.DELIVERED,
+            verifiedAt: confirmedAt,
+            finishedAt: new Date(),
+            managerMessageId,
+            failureReason: null,
+          },
+        });
+      }
+
+      if (job.message.senderUserId) {
+        await persistStaffOutboundReplyState(tx, {
+          conversationId: job.conversationId,
+          previousBmReplyStatus: job.conversation.bmReplyStatus,
+          previousFollowUpStatus: job.conversation.followUpStatus,
+          actor: {
+            id: job.message.senderUserId,
+            displayName: job.message.senderDisplayName?.trim() || "Staff",
+          },
+          sentAt: confirmedAt,
+          description: "Customer message confirmed by LINE OA Manager message history",
+        });
+      }
+    });
+
+    this.logger.log(JSON.stringify({
+      event: "line_chat_message_send_delivered",
+      jobId: job.id,
+      messageId: job.messageId,
+      conversationId: job.conversationId,
+      managerMessageId,
+    }));
+  }
+
+  private async markFailed(
+    jobId: string,
+    attemptId: string | null,
+    reason: string,
+  ): Promise<void> {
+    const job = await this.prisma.lineChatMessageSendJob.findUnique({
+      where: { id: jobId },
+      include: { message: { select: { id: true, rawPayload: true } } },
+    });
+    if (!job) return;
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.message.update({
+        where: { id: job.messageId },
+        data: {
+          deliveryStatus: MessageDeliveryStatus.FAILED,
+          rawPayload: {
+            ...jsonObject(job.message.rawPayload),
+            queueState: "FAILED",
+            failedAt: new Date().toISOString(),
+            error: reason.slice(0, 500),
+          } as Prisma.InputJsonValue,
+        },
+      });
+      await tx.lineChatMessageSendJob.update({
+        where: { id: job.id },
+        data: {
+          status: LineChatMessageSendJobStatus.FAILED,
+          completedAt: new Date(),
+          workerId: null,
+          claimedAt: null,
+          lockedUntil: null,
+          lastError: reason.slice(0, 500),
+        },
+      });
+      if (attemptId) {
+        await tx.messageDeliveryAttempt.update({
+          where: { id: attemptId },
+          data: {
+            status: MessageDeliveryAttemptStatus.FAILED,
+            finishedAt: new Date(),
+            failureReason: reason.slice(0, 500),
+          },
+        });
+      }
+    });
+
+    this.logger.warn(JSON.stringify({
+      event: "line_chat_message_send_failed",
+      jobId: job.id,
+      messageId: job.messageId,
+      conversationId: job.conversationId,
+      reason: reason.slice(0, 250),
+    }));
+  }
+}
