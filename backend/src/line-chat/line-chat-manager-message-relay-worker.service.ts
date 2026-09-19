@@ -206,12 +206,16 @@ export class LineChatManagerMessageRelayWorkerService {
 
           const items: Array<Record<string, unknown>> = [];
           for (const frame of page.frames()) {
-            const rows = await frame.locator("div,span,p,a,time").evaluateAll(
-              (elements, cutoffY) => {
-                const normalize = (value: string): string =>
-                  value.normalize("NFKC").replace(/\s+/g, " ").trim();
-                const result: Array<Record<string, unknown>> = [];
-                for (const element of elements) {
+            const rows = await frame.evaluate((cutoffY) => {
+              const normalize = (value: string): string =>
+                value.normalize("NFKC").replace(/\s+/g, " ").trim();
+              const result: Array<Record<string, unknown>> = [];
+              const seen = new Set<Element>();
+
+              const visitRoot = (root: Document | ShadowRoot): void => {
+                for (const element of Array.from(root.querySelectorAll("*"))) {
+                  if (seen.has(element)) continue;
+                  seen.add(element);
                   const rect = element.getBoundingClientRect();
                   const style = window.getComputedStyle(element);
                   if (
@@ -223,32 +227,41 @@ export class LineChatManagerMessageRelayWorkerService {
                     || style.display === "none"
                     || style.visibility === "hidden"
                     || Number(style.opacity || "1") === 0
-                  ) continue;
+                  ) {
+                    const shadow = (element as HTMLElement).shadowRoot;
+                    if (shadow) visitRoot(shadow);
+                    continue;
+                  }
 
-                  const raw = normalize(element.textContent || "");
-                  if (!raw || raw.length > 800) continue;
-                  const childSame = Array.from(element.children).some(
-                    (child) => normalize(child.textContent || "") === raw,
+                  const directText = normalize(
+                    Array.from(element.childNodes)
+                      .filter((node) => node.nodeType === Node.TEXT_NODE)
+                      .map((node) => node.textContent || "")
+                      .join(" "),
                   );
-                  if (childSame) continue;
+                  if (directText && directText.length <= 800) {
+                    result.push({
+                      text: directText,
+                      x: Math.round(rect.x),
+                      y: Math.round(rect.y),
+                      width: Math.round(rect.width),
+                      height: Math.round(rect.height),
+                      tagName: element.tagName,
+                      className: typeof element.className === "string" ? element.className.slice(0, 240) : null,
+                      parentClass: element.parentElement && typeof element.parentElement.className === "string"
+                        ? element.parentElement.className.slice(0, 240)
+                        : null,
+                    });
+                  }
 
-                  result.push({
-                    text: raw,
-                    x: Math.round(rect.x),
-                    y: Math.round(rect.y),
-                    width: Math.round(rect.width),
-                    height: Math.round(rect.height),
-                    tagName: element.tagName,
-                    className: typeof element.className === "string" ? element.className.slice(0, 240) : null,
-                    parentClass: element.parentElement && typeof element.parentElement.className === "string"
-                      ? element.parentElement.className.slice(0, 240)
-                      : null,
-                  });
+                  const shadow = (element as HTMLElement).shadowRoot;
+                  if (shadow) visitRoot(shadow);
                 }
-                return result;
-              },
-              maxY,
-            ).catch(() => []);
+              };
+
+              visitRoot(document);
+              return result;
+            }, maxY).catch(() => []);
             items.push(...rows);
           }
 
