@@ -177,6 +177,17 @@ export class LineChatMessageSendQueueService {
                 lineChatSessionId: session.id,
                 lineChatUserId: conversation.lineChatUserId,
                 idempotencyKey: input.idempotencyKey,
+                // A legacy FAILED row predates the durable queue. Seed one
+                // historical attempt so the worker performs Manager-history
+                // precheck before any customer-facing retry.
+                attemptCount:
+                  existing.deliveryStatus === MessageDeliveryStatus.FAILED
+                    ? 1
+                    : 0,
+                lastError:
+                  existing.deliveryStatus === MessageDeliveryStatus.FAILED
+                    ? "LEGACY_FAILED_RETRY_REQUIRES_PRECHECK"
+                    : null,
               },
             });
 
