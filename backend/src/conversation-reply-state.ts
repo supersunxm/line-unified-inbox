@@ -125,7 +125,7 @@ export function isAutomatedOutboundMessage(message: ReplyEvaluationMessage): boo
 
 export function isDeliveredHumanOutbound(message: ReplyEvaluationMessage): boolean {
   return message.direction === MessageDirection.OUTBOUND &&
-    message.deliveryStatus !== MessageDeliveryStatus.FAILED &&
+    message.deliveryStatus === MessageDeliveryStatus.DELIVERED &&
     Boolean(message.senderUserId) &&
     !isAutomatedOutboundMessage(message);
 }
