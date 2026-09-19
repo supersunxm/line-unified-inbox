@@ -497,13 +497,84 @@ class _ChatPageState extends State<ChatPage> {
         return timestamp == 0 ? left.id.compareTo(right.id) : timestamp;
       });
     }
+
+    final queued = message.deliveryStatus == 'PENDING';
     setState(() {
       _pending.removeWhere((item) => item.key == idempotencyKey);
       _pendingImages.removeWhere((item) => item.key == idempotencyKey);
       _pendingPdfs.removeWhere((item) => item.key == idempotencyKey);
-      _detail = detail.copyWith(messages: messages, bmReplyStatus: 'REPLIED');
+      _detail = detail.copyWith(
+        messages: messages,
+        bmReplyStatus: queued ? detail.bmReplyStatus : 'REPLIED',
+      );
     });
+
+    if (queued) {
+      unawaited(_pollQueuedDelivery(message.id));
+      return;
+    }
     unawaited(_refreshReplyStateAfterSend());
+  }
+
+  Future<void> _pollQueuedDelivery(String messageId) async {
+    const delays = <Duration>[
+      Duration(seconds: 1),
+      Duration(seconds: 2),
+      Duration(seconds: 3),
+      Duration(seconds: 5),
+      Duration(seconds: 8),
+      Duration(seconds: 13),
+      Duration(seconds: 21),
+    ];
+
+    for (final delay in delays) {
+      await Future<void>.delayed(delay);
+      if (!mounted) return;
+
+      try {
+        final latest = await widget.repository.detail(
+          widget.conversationId,
+          limit: 20,
+        );
+        if (!mounted || _detail == null) return;
+
+        ChatMessage? refreshed;
+        for (final item in latest.messages) {
+          if (item.id == messageId) {
+            refreshed = item;
+            break;
+          }
+        }
+        if (refreshed == null) continue;
+
+        final detail = _detail!;
+        final messages = [...detail.messages];
+        final index = messages.indexWhere((item) => item.id == messageId);
+        if (index >= 0) {
+          messages[index] = refreshed;
+        } else {
+          messages.add(refreshed);
+          messages.sort((left, right) {
+            final timestamp = left.sentAt.compareTo(right.sentAt);
+            return timestamp == 0 ? left.id.compareTo(right.id) : timestamp;
+          });
+        }
+
+        setState(() {
+          _detail = detail.copyWith(
+            messages: messages,
+            bmReplyStatus: latest.bmReplyStatus ?? detail.bmReplyStatus,
+            owner: latest.owner,
+            ownerTracked: latest.ownerTracked,
+          );
+        });
+
+        if (refreshed.deliveryStatus != 'PENDING') return;
+      } catch (_) {
+        // Keep the persisted PENDING state visible. A later poll or normal
+        // conversation refresh will reconcile the authoritative DB state.
+      }
+    }
   }
 
   Future<void> _refreshReplyStateAfterSend() async {
