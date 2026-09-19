@@ -725,6 +725,16 @@ export class LineChatManagerMessageRelayWorkerService {
         throw new ServiceUnavailableException("ยังยืนยันสถานะการเข้าสู่ระบบ LINE OA Manager ไม่ได้");
       }
 
+      const apiCount = await this.countOutboundExactTextViaApi(
+        page,
+        input.botId,
+        input.lineChatUserId,
+        input.text,
+      );
+      if (apiCount !== null) {
+        return { outboundExactCount: apiCount };
+      }
+
       const composer = await this.findComposer(page, COMPOSER_WAIT_MS);
       if (!composer) {
         await this.logComposerDiagnostics(page, input.storeCode, input.lineChatUserId);
@@ -799,7 +809,9 @@ private async sendViaManager(input: {
         throw new ServiceUnavailableException("ไม่พบช่องพิมพ์ข้อความใน LINE OA Manager กรุณาตรวจสอบหน้า chat.line.biz");
       }
 
-      const beforeOutboundCount = await this.countOutboundExactText(page, composer, input.text);
+      const beforeOutboundCount =
+        await this.countOutboundExactTextViaApi(page, input.botId, input.lineChatUserId, input.text)
+        ?? await this.countOutboundExactText(page, composer, input.text);
       if (input.skipIfTextAlreadyPresent && beforeOutboundCount > 0) {
         this.logger.log(JSON.stringify({
           event: "line_chat_manager_recovery_text_already_present",
@@ -829,7 +841,14 @@ private async sendViaManager(input: {
         await page.keyboard.press("Enter");
       }
 
-      const verified = await this.waitForDeliveryVerification(page, composer, input.text, beforeOutboundCount);
+      const verified = await this.waitForDeliveryVerification(
+        page,
+        composer,
+        input.botId,
+        input.lineChatUserId,
+        input.text,
+        beforeOutboundCount,
+      );
       if (!verified) {
         this.logger.warn(JSON.stringify({
           event: "line_chat_manager_message_delivery_not_verified",
@@ -846,7 +865,9 @@ private async sendViaManager(input: {
         await page.waitForLoadState("networkidle", { timeout: 5_000 }).catch(() => {});
         const recoveryComposer = await this.findComposer(page, COMPOSER_WAIT_MS);
         if (recoveryComposer) {
-          const refreshedOutboundCount = await this.countOutboundExactText(page, recoveryComposer, input.text);
+          const refreshedOutboundCount =
+            await this.countOutboundExactTextViaApi(page, input.botId, input.lineChatUserId, input.text)
+            ?? await this.countOutboundExactText(page, recoveryComposer, input.text);
           if (refreshedOutboundCount > beforeOutboundCount) {
             this.logger.log(JSON.stringify({
               event: "line_chat_manager_message_delivery_verified_after_reload",
@@ -876,6 +897,8 @@ private async sendViaManager(input: {
           const retryVerified = await this.waitForDeliveryVerification(
             page,
             recoveryComposer,
+            input.botId,
+            input.lineChatUserId,
             input.text,
             refreshedOutboundCount,
           );
@@ -1036,6 +1059,42 @@ private async sendViaManager(input: {
     return best && best.score >= 6 ? best.locator : null;
   }
 
+  private async countOutboundExactTextViaApi(
+    page: Page,
+    botId: string,
+    lineChatUserId: string,
+    text: string,
+  ): Promise<number | null> {
+    const targetUrl = `https://chat.line.biz/api/v3/bots/${encodeURIComponent(botId)}/chats/${encodeURIComponent(lineChatUserId)}/messages`;
+    const target = text.normalize("NFKC").replace(/\s+/g, " ").trim();
+    if (!target) return 0;
+
+    try {
+      const result = await page.evaluate(async ({ url, expected }) => {
+        const normalize = (value: string): string =>
+          value.normalize("NFKC").replace(/\s+/g, " ").trim();
+        const response = await fetch(url, { credentials: "include" });
+        if (!response.ok) return { ok: false, count: 0 };
+        const body = await response.json() as {
+          list?: Array<{
+            type?: string;
+            message?: { type?: string; text?: string };
+          }>;
+        };
+        const count = (body.list ?? []).filter((item) =>
+          item?.type === "messageSent"
+          && item?.message?.type === "text"
+          && typeof item.message.text === "string"
+          && normalize(item.message.text) === expected
+        ).length;
+        return { ok: true, count };
+      }, { url: targetUrl, expected: target });
+      return result.ok ? result.count : null;
+    } catch {
+      return null;
+    }
+  }
+
   private async countOutboundExactText(page: Page, composer: Locator, text: string): Promise<number> {
     const viewportWidth = page.viewportSize()?.width ?? 1280;
     const composerBox = await composer.boundingBox().catch(() => null);
@@ -1119,12 +1178,21 @@ private async sendViaManager(input: {
   private async waitForDeliveryVerification(
     page: Page,
     composer: Locator,
+    botId: string,
+    lineChatUserId: string,
     text: string,
     beforeOutboundCount: number,
   ): Promise<boolean> {
     const deadline = Date.now() + 10_000;
     while (Date.now() < deadline) {
-      const outboundCount = await this.countOutboundExactText(page, composer, text);
+      const apiCount = await this.countOutboundExactTextViaApi(page, botId, lineChatUserId, text);
+      if (apiCount !== null && apiCount > beforeOutboundCount) {
+        return true;
+      }
+
+      const outboundCount = apiCount === null
+        ? await this.countOutboundExactText(page, composer, text)
+        : apiCount;
       let composerCleared = false;
       try {
         composerCleared = (await composer.inputValue()) === "";
