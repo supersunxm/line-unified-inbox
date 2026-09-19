@@ -156,8 +156,16 @@ function isHumanOutbound(message: MessageRow): boolean {
   });
 }
 
+function isHumanAttributedOutbound(message: MessageRow): boolean {
+  return message.direction === MessageDirection.OUTBOUND
+    && Boolean(message.senderUserId)
+    && !isAutomatedOutbound(message);
+}
+
 function isAmbiguousOutbound(message: MessageRow): boolean {
-  return message.direction === MessageDirection.OUTBOUND && !isHumanOutbound(message) && !isAutomatedOutbound(message);
+  return message.direction === MessageDirection.OUTBOUND
+    && !isAutomatedOutbound(message)
+    && !isHumanAttributedOutbound(message);
 }
 
 function parseIsoDate(value: string | undefined, fallback: string): string {
