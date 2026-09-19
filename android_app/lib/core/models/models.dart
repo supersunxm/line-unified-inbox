@@ -660,6 +660,7 @@ class ChatMessage {
       this.sender,
       this.sticker,
       this.media,
+      this.deliveryStatus,
       this.idempotencyKey});
   final String id;
   final String text;
@@ -670,6 +671,7 @@ class ChatMessage {
   final MessageSender? sender;
   final StickerPresentation? sticker;
   final ChatMedia? media;
+  final String? deliveryStatus;
   final String? idempotencyKey;
   factory ChatMessage.fromJson(Map<String, dynamic> json) => ChatMessage(
       id: json['id'] as String,
@@ -682,6 +684,9 @@ class ChatMessage {
       sticker: StickerPresentation.fromJson(
           json['sticker'] as Map<String, dynamic>?),
       media: ChatMedia.fromJson(json['media'] as Map<String, dynamic>?),
+      deliveryStatus: json['deliveryStatus'] is String
+          ? (json['deliveryStatus'] as String).toUpperCase()
+          : null,
       idempotencyKey: json['idempotencyKey'] is String
           ? json['idempotencyKey'] as String
           : json['externalMessageId'] is String &&
