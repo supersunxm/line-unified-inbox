@@ -1,6 +1,6 @@
 import "reflect-metadata";
 import { NestFactory } from "@nestjs/core";
-import { MessageDeliveryStatus, MessageDirection, MessageType, Prisma, PrismaClient } from "@prisma/client";
+import { MessageDeliveryStatus, MessageDirection, MessageType, Prisma } from "@prisma/client";
 import { LineChatNicknameWorkerModule } from "../src/line-chat/line-chat-nickname-worker.module";
 import { LineChatManagerMessageRelayWorkerService } from "../src/line-chat/line-chat-manager-message-relay-worker.service";
 import { PrismaService } from "../src/prisma.service";
