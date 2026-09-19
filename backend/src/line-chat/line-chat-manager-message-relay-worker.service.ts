@@ -758,6 +758,8 @@ private async sendViaManager(input: {
     const viewportWidth = page.viewportSize()?.width ?? 1280;
     const composerBox = await composer.boundingBox().catch(() => null);
     let total = 0;
+
+    // Fast path for ordinary single-node text.
     for (const frame of page.frames()) {
       const matches = frame.getByText(text, { exact: true });
       const count = Math.min(await matches.count().catch(() => 0), 20);
@@ -771,6 +773,64 @@ private async sendViaManager(input: {
         if (horizontalCenter >= viewportWidth * 0.5 && aboveComposer) total += 1;
       }
     }
+    if (total > 0) return total;
+
+    // LINE Manager can render one logical message across nested nodes
+    // (for example text + a clickable URL). getByText(exact:true) can miss
+    // those bubbles even though the full rendered text is present. Fall back
+    // to normalized textContent matching and count only the smallest matching
+    // visible elements on the outbound/right side.
+    const normalize = (value: string): string =>
+      value.normalize("NFKC").replace(/\s+/g, " ").trim();
+    const normalizedTarget = normalize(text);
+    if (!normalizedTarget) return 0;
+
+    for (const frame of page.frames()) {
+      const boxes = await frame.locator("body").evaluate((body, target) => {
+        const normalizeText = (value: string): string =>
+          value.normalize("NFKC").replace(/\s+/g, " ").trim();
+        const selectors = "div,span,p,a,pre,li";
+        const nodes = Array.from(body.querySelectorAll(selectors));
+        const matches: Array<{ x: number; y: number; width: number; height: number }> = [];
+
+        for (const element of nodes) {
+          const value = normalizeText(element.textContent ?? "");
+          if (value !== target) continue;
+
+          const rect = element.getBoundingClientRect();
+          const style = window.getComputedStyle(element);
+          if (
+            rect.width <= 0
+            || rect.height <= 0
+            || style.display === "none"
+            || style.visibility === "hidden"
+            || Number(style.opacity || "1") === 0
+          ) continue;
+
+          // Prefer the smallest DOM node that still represents the whole
+          // logical message so nested wrappers do not double-count.
+          const childHasSameText = Array.from(element.children).some((child) =>
+            normalizeText(child.textContent ?? "") === target,
+          );
+          if (childHasSameText) continue;
+
+          matches.push({
+            x: rect.x,
+            y: rect.y,
+            width: rect.width,
+            height: rect.height,
+          });
+        }
+        return matches;
+      }, normalizedTarget).catch(() => []);
+
+      for (const box of boxes) {
+        const horizontalCenter = box.x + box.width / 2;
+        const aboveComposer = !composerBox || box.y + box.height <= composerBox.y + 4;
+        if (horizontalCenter >= viewportWidth * 0.5 && aboveComposer) total += 1;
+      }
+    }
+
     return total;
   }
 
