@@ -314,6 +314,20 @@ export class MobileConversationsService {
     };
   }
 
+  async retryFailedMessage(
+    user: AuthUser,
+    conversationId: string,
+    messageId: string,
+  ) {
+    this.assertCanReply(user);
+    await this.storeAccess.assertConversationAccess(user, conversationId);
+    return this.conversations.retryFailedMessage(
+      conversationId,
+      messageId,
+      user,
+    );
+  }
+
   async markRead(user: AuthUser, conversationId: string) {
     await this.storeAccess.assertConversationAccess(user, conversationId);
     await this.prisma.pushNotification.updateMany({
