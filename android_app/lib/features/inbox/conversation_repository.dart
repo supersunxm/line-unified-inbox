@@ -662,7 +662,7 @@ class ConversationRepository {
   Future<ChatMessage?> retryFailedMessage(
       String conversationId, String messageId) async {
     final result = await _api.post(
-      '/conversations/$conversationId/messages/$messageId/retry',
+      '/mobile/conversations/$conversationId/messages/$messageId/retry',
       body: const <String, dynamic>{},
     );
     final rawMessage = result['message'];
