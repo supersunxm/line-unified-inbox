@@ -139,6 +139,143 @@ export class LineChatManagerMessageRelayWorkerService {
    * This method never types, clicks a send control, resolves/persists mappings,
    * or mutates message/conversation state.
    */
+
+  public async inspectComposerControls(input: {
+    conversationId: string;
+  }): Promise<
+    | { handled: false }
+    | {
+        handled: true;
+        storeCode: string;
+        lineChatUserId: string | null;
+        composer: Record<string, unknown> | null;
+        controls: Array<Record<string, unknown>>;
+      }
+  > {
+    const conversation = await this.loadConversation(input.conversationId.trim());
+    if (!conversation) return { handled: false };
+
+    const storeCode = storeCodeOf(conversation);
+    this.assertRelayConfiguration(conversation, storeCode);
+    const lineChatUserId = conversation.lineChatUserId?.trim() || "";
+    if (!lineChatUserId) {
+      return { handled: true, storeCode, lineChatUserId: null, composer: null, controls: [] };
+    }
+
+    const oa = conversation.lineOfficialAccount;
+    const session = oa.lineChatSession!;
+    const botId = oa.chatBotId!.trim();
+    const profilePath = this.sessionService.resolveProfilePath(session);
+
+    const inspection = await this.coordinator.withProfileOperation(
+      { sessionId: session.id, operationKind: "MANUAL_DIAGNOSTIC" },
+      async (operationContext) => {
+        operationContext.assertOwnership();
+        let context: BrowserContext | null = null;
+        try {
+          context = await this.sessionService.launchManagedPersistentContext(profilePath, {
+            profilePath,
+            headless: true,
+            viewport: { width: 1280, height: 800 },
+            args: [
+              "--no-sandbox",
+              "--disable-setuid-sandbox",
+              "--disable-blink-features=AutomationControlled",
+            ],
+          });
+          const page = context.pages()[0] || await context.newPage();
+          const targetUrl = this.sessionService.buildChatRefererUrl(botId, lineChatUserId);
+          await page.goto(targetUrl, { waitUntil: "domcontentloaded", timeout: 15_000 }).catch(() => {});
+          await page.waitForLoadState("networkidle", { timeout: 5_000 }).catch(() => {});
+          const auth = await confirmLineManagerAuthentication(
+            () => this.sessionService.probeApiAuthentication(context!),
+            (ms) => page.waitForTimeout(ms),
+          );
+          if (auth.outcome !== "AUTHENTICATED") {
+            throw new ServiceUnavailableException("ยังยืนยันสถานะการเข้าสู่ระบบ LINE OA Manager ไม่ได้");
+          }
+
+          const composer = await this.findComposer(page, COMPOSER_WAIT_MS);
+          if (!composer) {
+            return { composer: null, controls: [] as Array<Record<string, unknown>> };
+          }
+          const composerBox = await composer.boundingBox().catch(() => null);
+          const composerMeta = await composer.evaluate((element) => ({
+            tagName: element.tagName,
+            role: element.getAttribute("role"),
+            type: element.getAttribute("type"),
+            ariaLabel: element.getAttribute("aria-label"),
+            title: element.getAttribute("title"),
+            placeholder: element.getAttribute("placeholder"),
+            className: typeof element.className === "string" ? element.className.slice(0, 300) : null,
+            outerHtmlPrefix: element.outerHTML.slice(0, 500),
+          })).catch(() => ({}));
+
+          const controls: Array<Record<string, unknown>> = [];
+          for (const frame of page.frames()) {
+            const rows = await frame.locator("button,[role='button'],input[type='button'],input[type='submit']").evaluateAll(
+              (elements, composerRect) => {
+                const c = composerRect as { x: number; y: number; width: number; height: number } | null;
+                return elements.map((element) => {
+                  const rect = element.getBoundingClientRect();
+                  const style = window.getComputedStyle(element);
+                  const visible = rect.width > 0 && rect.height > 0
+                    && style.display !== "none"
+                    && style.visibility !== "hidden"
+                    && Number(style.opacity || "1") !== 0;
+                  const centerX = rect.x + rect.width / 2;
+                  const centerY = rect.y + rect.height / 2;
+                  const composerCenterX = c ? c.x + c.width / 2 : 0;
+                  const composerCenterY = c ? c.y + c.height / 2 : 0;
+                  const distance = c
+                    ? Math.hypot(centerX - composerCenterX, centerY - composerCenterY)
+                    : 99999;
+                  return {
+                    visible,
+                    tagName: element.tagName,
+                    role: element.getAttribute("role"),
+                    type: element.getAttribute("type"),
+                    ariaLabel: element.getAttribute("aria-label"),
+                    title: element.getAttribute("title"),
+                    text: (element.textContent || "").trim().slice(0, 120),
+                    className: typeof element.className === "string" ? element.className.slice(0, 260) : null,
+                    disabled: (element as HTMLButtonElement).disabled ?? false,
+                    x: Math.round(rect.x),
+                    y: Math.round(rect.y),
+                    width: Math.round(rect.width),
+                    height: Math.round(rect.height),
+                    distance: Math.round(distance),
+                    htmlPrefix: element.outerHTML.slice(0, 500),
+                  };
+                }).filter((row) => row.visible);
+              },
+              composerBox,
+            ).catch(() => []);
+            controls.push(...rows);
+          }
+          controls.sort((a, b) => Number(a.distance ?? 99999) - Number(b.distance ?? 99999));
+          return { composer: { ...composerMeta, box: composerBox }, controls: controls.slice(0, 30) };
+        } finally {
+          if (context) {
+            await this.sessionService.closeManagedPersistentContext(context, profilePath).catch(() => {});
+          }
+        }
+      },
+    );
+
+    if (!inspection.acquired) {
+      throw new ServiceUnavailableException("LINE OA Manager กำลังทำงานอื่นอยู่ กรุณาลองอีกครั้งในอีกสักครู่");
+    }
+
+    return {
+      handled: true,
+      storeCode,
+      lineChatUserId,
+      composer: inspection.value.composer,
+      controls: inspection.value.controls,
+    };
+  }
+
   public async inspectTextPresence(input: {
     conversationId: string;
     text: string;
