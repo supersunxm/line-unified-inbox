@@ -16,6 +16,9 @@ const MAX_PARALLEL_PROFILES = 4;
 const VERIFY_BACKOFF_MS = [3_000, 5_000, 10_000, 20_000] as const;
 const MAX_VERIFY_ATTEMPTS = VERIFY_BACKOFF_MS.length;
 
+// Safety invariant: an ambiguous customer-facing send transitions to
+// VERIFY_PENDING. The worker must never auto-resend from that state.
+
 function jsonObject(value: Prisma.JsonValue | null): Record<string, Prisma.JsonValue> {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
   return value as Record<string, Prisma.JsonValue>;
