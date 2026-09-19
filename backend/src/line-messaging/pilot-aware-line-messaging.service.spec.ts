@@ -108,7 +108,7 @@ test("manager relay failures before or outside delivery verification still fail 
   }
 });
 
-test("post-send text verification gaps are reconciled for every Manager-relay store", async () => {
+test("post-send text verification gaps fail closed for every Manager-relay store", async () => {
   const relay = { relayText: async () => { throw managerTextDeliveryNotVerifiedError; } };
   const service = new PilotAwareLineMessagingService(relay as any);
   const original = LineMessagingService.prototype.pushText;
@@ -119,13 +119,13 @@ test("post-send text verification gaps are reconciled for every Manager-relay st
   };
   try {
     for (const storeName of ["OPPO Central World", "OPPO Bangkapi", "OPPO BS RBS Chonburi", "Future rollout store"]) {
-      const result = await service.pushText({
-        ...input,
-        context: { ...input.context, storeName },
-      });
-      assert.equal(result.requestId, null);
-      assert.equal(result.externalMessageId, null);
-      assert.equal(result.duplicateAccepted, false);
+      await assert.rejects(
+        () => service.pushText({
+          ...input,
+          context: { ...input.context, storeName },
+        }),
+        /ยังยืนยันการส่งจาก LINE OA Manager ไม่ได้/,
+      );
     }
     assert.equal(pushCalls, 0);
   } finally {
@@ -133,7 +133,7 @@ test("post-send text verification gaps are reconciled for every Manager-relay st
   }
 });
 
-test("post-send image verification gaps are reconciled for every Manager-relay store", async () => {
+test("post-send image verification gaps fail closed for every Manager-relay store", async () => {
   const relay = { relayImage: async () => { throw managerImageDeliveryNotVerifiedError; } };
   const service = new PilotAwareLineMessagingService(relay as any);
   const original = LineMessagingService.prototype.pushImage;
@@ -143,11 +143,11 @@ test("post-send image verification gaps are reconciled for every Manager-relay s
     throw new Error("Push API must not be used for an image Manager recovery path");
   };
   try {
-    const result = await service.pushImage(imageInput);
+    await assert.rejects(
+      () => service.pushImage(imageInput),
+      /ยังยืนยันการส่งรูปจาก LINE OA Manager ไม่ได้/,
+    );
     assert.equal(pushCalls, 0);
-    assert.equal(result.requestId, null);
-    assert.equal(result.externalMessageId, null);
-    assert.equal(result.duplicateAccepted, false);
   } finally {
     LineMessagingService.prototype.pushImage = original;
   }
