@@ -22,6 +22,7 @@ import { FOCUS_STORE_GROUP_ID, isFocusStoreReference } from "./focus-store-group
 import { randomUUID } from "node:crypto";
 import { createPdfDocumentUrl } from "./media/pdf-document-url";
 import { PDF_MIME_TYPE, readPdfMaxBytes, validatePdfBuffer, PdfValidationError } from "./media/pdf-media";
+import { LineChatMessageSendQueueService } from "./line-chat/line-chat-message-send-queue.service";
 
 const conversationBaseInclude = {
   customer: true,
@@ -99,7 +100,55 @@ export class ConversationsService {
     private readonly storeAccess?: StoreAccessService,
     private readonly auditLog?: AuditLogService,
     private readonly realtime?: RealtimeEventService,
+    private readonly durableSendQueue?: LineChatMessageSendQueueService,
   ) { }
+
+  private async tryQueueManagerText(
+    conversation: {
+      id: string;
+      storeId: string | null;
+      bmReplyStatus: BmReplyStatus;
+      owner?: { id: string; displayName: string } | null;
+      store?: { id: string; name: string } | null;
+      _count?: { messages?: number };
+    },
+    text: string,
+    idempotencyKey: string,
+    operator: AuthUser,
+  ) {
+    if (!this.durableSendQueue) return null;
+    const queued = await this.durableSendQueue.enqueueText({
+      conversationId: conversation.id,
+      text,
+      idempotencyKey,
+      actor: operator,
+    });
+    if (!queued.handled) return null;
+
+    const ownerTracked = conversation._count?.messages === undefined
+      ? true
+      : conversation._count.messages > 0;
+    if (!queued.duplicate) {
+      this.publishOutboundMessage(
+        {
+          ...conversation,
+          ownerTracked,
+          bmReplyStatus: conversation.bmReplyStatus,
+        },
+        queued.message,
+        null,
+        conversation.owner ?? null,
+      );
+    }
+
+    return {
+      message: this.safeMessage(queued.message),
+      bmReplyStatus: conversation.bmReplyStatus,
+      duplicate: queued.duplicate,
+      queued: true,
+      sendJobId: queued.jobId,
+    };
+  }
 
   private async resolveFocusStoreIds(accessibleStoreIds: string[] | null): Promise<string[]> {
     const candidates = await this.prisma.store.findMany({
@@ -713,6 +762,14 @@ export class ConversationsService {
       include: { customer: true, lineOfficialAccount: true, store: true, owner: { select: { id: true, displayName: true, isActive: true, status: true, role: true, canAccessAllStores: true, memberships: { where: { status: "ACTIVE", store: { isActive: true, archivedAt: null } }, select: { storeId: true } } } }, _count: { select: { messages: { where: ownerTrackingInboundFilter() } } } },
     });
     if (!conversation) throw new NotFoundException("ไม่พบการสนทนา");
+    if (priorMessage?.deliveryStatus === MessageDeliveryStatus.PENDING) {
+      return {
+        message: this.safeMessage(priorMessage),
+        bmReplyStatus: conversation.bmReplyStatus,
+        duplicate: true,
+        queued: true,
+      };
+    }
     if (!conversation.customer.lineUserId) throw new BadRequestException("ไม่พบ LINE User ID ของลูกค้า");
     const oa = conversation.lineOfficialAccount;
     if (!oa || oa.archivedAt || !oa.isActive) throw new BadRequestException("LINE Official Account นี้ไม่ได้เปิดใช้งาน");
@@ -752,6 +809,14 @@ export class ConversationsService {
           };
           deliveryMethod = "REPLY";
         } else if (replyRes.invalidReplyToken) {
+          const queued = await this.tryQueueManagerText(
+            conversation,
+            text,
+            dto.idempotencyKey,
+            operator,
+          );
+          if (queued) return queued;
+
           lineResult = await this.lineMessaging.pushText({
             accessToken,
             lineUserId: conversation.customer.lineUserId,
@@ -773,6 +838,14 @@ export class ConversationsService {
           throw new ServiceUnavailableException("ส่งข้อความไม่สำเร็จ กรุณาลองอีกครั้ง");
         }
       } else {
+        const queued = await this.tryQueueManagerText(
+          conversation,
+          text,
+          dto.idempotencyKey,
+          operator,
+        );
+        if (queued) return queued;
+
         lineResult = await this.lineMessaging.pushText({
           accessToken,
           lineUserId: conversation.customer.lineUserId,
@@ -911,7 +984,18 @@ export class ConversationsService {
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
         const existing = await this.prisma.message.findUnique({ where: { externalMessageId: dedupeExternalId } });
-        if (existing) { await reconcileStaffOutboundReplyState(this.prisma, { conversationId: id, sentAt: existing.sentAt, actor: operator }); return { message: this.safeMessage(existing), bmReplyStatus: BmReplyStatus.REPLIED, duplicate: true }; }
+        if (existing?.deliveryStatus === MessageDeliveryStatus.DELIVERED) {
+          await reconcileStaffOutboundReplyState(this.prisma, { conversationId: id, sentAt: existing.sentAt, actor: operator });
+          return { message: this.safeMessage(existing), bmReplyStatus: BmReplyStatus.REPLIED, duplicate: true };
+        }
+        if (existing) {
+          return {
+            message: this.safeMessage(existing),
+            bmReplyStatus: conversation.bmReplyStatus,
+            duplicate: true,
+            queued: existing.deliveryStatus === MessageDeliveryStatus.PENDING,
+          };
+        }
       }
       Logger.error(`LINE accepted outbound message but persistence failed for conversation ${conversation.id}`, undefined, "ConversationsService");
       throw new InternalServerErrorException("LINE รับข้อความแล้ว แต่บันทึกประวัติไม่สำเร็จ กรุณาลองส่งคำขอเดิมอีกครั้ง");
