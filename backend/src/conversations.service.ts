@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, InternalServerErrorException, Logger, NotFoundException, ServiceUnavailableException } from "@nestjs/common";
+import { BadRequestException, ForbiddenException, Injectable, InternalServerErrorException, Logger, NotFoundException, Optional, ServiceUnavailableException } from "@nestjs/common";
 import { ActivityActionType, BmReplyStatus, FollowUpStatus, MessageDeliveryStatus, MessageDirection, MessageType, Prisma, UserStatus } from "@prisma/client";
 import { BulkMarkRepliedByFilterDto, BulkUpdateBmReplyStatusDto, ConversationQueryDto, CreateNoteDto, SendConversationMessageDto } from "./dto";
 import { OperationsService } from "./operations/operations.service";
@@ -100,7 +100,7 @@ export class ConversationsService {
     private readonly storeAccess?: StoreAccessService,
     private readonly auditLog?: AuditLogService,
     private readonly realtime?: RealtimeEventService,
-    private readonly durableSendQueue?: LineChatMessageSendQueueService,
+    @Optional() private readonly durableSendQueue?: LineChatMessageSendQueueService,
   ) { }
 
   private async tryQueueManagerText(
