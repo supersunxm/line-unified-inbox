@@ -12,6 +12,7 @@ import {
 type Args = {
   storeCode: string;
   customerNames: string[];
+  conversationIds: string[];
   from: Date;
   to: Date;
   apply: boolean;
@@ -30,6 +31,10 @@ function parseArgs(argv: string[]): Args {
     .split("|")
     .map((item) => item.trim())
     .filter(Boolean);
+  const conversationIds = (value("conversation-ids") || "")
+    .split("|")
+    .map((item) => item.trim())
+    .filter(Boolean);
   const fromRaw = value("from")?.trim() || "";
   const toRaw = value("to")?.trim() || "";
   const from = new Date(fromRaw);
@@ -37,11 +42,13 @@ function parseArgs(argv: string[]): Args {
   const apply = argv.includes("--apply");
 
   if (!storeCode) throw new Error("MISSING_STORE");
-  if (customerNames.length === 0) throw new Error("MISSING_CUSTOMERS");
+  if (customerNames.length === 0 && conversationIds.length === 0) {
+    throw new Error("MISSING_TARGETS");
+  }
   if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime()) || from >= to) {
     throw new Error("INVALID_TIME_WINDOW");
   }
-  return { storeCode, customerNames, from, to, apply };
+  return { storeCode, customerNames, conversationIds, from, to, apply };
 }
 
 function isAutoResponse(rawPayload: unknown): boolean {
@@ -66,13 +73,20 @@ async function main(): Promise<void> {
 
   const conversations = await prisma.conversation.findMany({
     where: {
-      customer: { displayName: { in: args.customerNames } },
       store: {
         OR: [
           { code: args.storeCode },
           { storeMaster: { externalStoreId: args.storeCode } },
         ],
       },
+      OR: [
+        ...(args.customerNames.length > 0
+          ? [{ customer: { displayName: { in: args.customerNames } } }]
+          : []),
+        ...(args.conversationIds.length > 0
+          ? [{ id: { in: args.conversationIds } }]
+          : []),
+      ],
     },
     select: {
       id: true,
@@ -109,55 +123,35 @@ async function main(): Promise<void> {
   let failures = 0;
   let recovered = 0;
   let alreadyPresent = 0;
+  const processedMessageIds = new Set<string>();
 
-  for (const targetName of args.customerNames) {
-    const targetConversations = conversations.filter(
-      (conversation) => conversation.customer.displayName === targetName,
-    );
-    const candidates: Array<{
-      conversationId: string;
-      storeName: string;
-      message: (typeof targetConversations)[number]["messages"][number];
-    }> = [];
+  const processCandidate = async (input: {
+    targetLabel: string;
+    customerName: string;
+    conversationId: string;
+    storeName: string;
+    message: {
+      id: string;
+      externalMessageId: string | null;
+      deliveryStatus: MessageDeliveryStatus;
+      originalText: string;
+      sentAt: Date;
+      senderUserId: string | null;
+      senderDisplayName: string | null;
+      rawPayload: Prisma.JsonValue | null;
+    };
+  }): Promise<void> => {
+    const message = input.message;
+    if (processedMessageIds.has(message.id)) return;
+    processedMessageIds.add(message.id);
 
-    for (const conversation of targetConversations) {
-      const byText = new Map<string, (typeof conversation.messages)[number]>();
-      for (const message of conversation.messages) {
-        const text = message.originalText.trim();
-        if (!text) continue;
-        if (message.senderDisplayName?.trim() === AUTO_REPLY_BOT_DISPLAY_NAME) continue;
-        if (isAutoResponse(message.rawPayload)) continue;
-        byText.set(text, message);
-      }
-      for (const message of byText.values()) {
-        candidates.push({
-          conversationId: conversation.id,
-          storeName: conversation.store?.name || args.storeCode,
-          message,
-        });
-      }
-    }
-
-    if (candidates.length !== 1) {
-      console.log(JSON.stringify({
-        event: "confirmed_outbound_recovery_target_ambiguous",
-        customerName: targetName,
-        storeCode: args.storeCode,
-        candidateCount: candidates.length,
-        conversationIds: [...new Set(candidates.map((candidate) => candidate.conversationId))],
-      }));
-      failures += 1;
-      continue;
-    }
-
-    const candidate = candidates[0];
-    const message = candidate.message;
     console.log(JSON.stringify({
       event: "confirmed_outbound_recovery_candidate",
-      customerName: targetName,
+      targetLabel: input.targetLabel,
+      customerName: input.customerName,
       storeCode: args.storeCode,
-      storeName: candidate.storeName,
-      conversationId: candidate.conversationId,
+      storeName: input.storeName,
+      conversationId: input.conversationId,
       messageId: message.id,
       deliveryStatus: message.deliveryStatus,
       sentAt: message.sentAt.toISOString(),
@@ -165,11 +159,11 @@ async function main(): Promise<void> {
       apply: args.apply,
     }));
 
-    if (!args.apply) continue;
+    if (!args.apply) return;
 
     try {
       const result = await relay.recoverTextIfMissing({
-        conversationId: candidate.conversationId,
+        conversationId: input.conversationId,
         text: message.originalText,
       });
       if (!result.handled) throw new Error("NOT_MANAGER_RELAY_CONVERSATION");
@@ -195,7 +189,7 @@ async function main(): Promise<void> {
       });
 
       await reconcileStaffOutboundReplyState(prisma, {
-        conversationId: candidate.conversationId,
+        conversationId: input.conversationId,
         sentAt: effectiveSentAt,
         actor: {
           id: message.senderUserId!,
@@ -208,8 +202,9 @@ async function main(): Promise<void> {
 
       console.log(JSON.stringify({
         event: "confirmed_outbound_recovery_success",
-        customerName: targetName,
-        conversationId: candidate.conversationId,
+        targetLabel: input.targetLabel,
+        customerName: input.customerName,
+        conversationId: input.conversationId,
         messageId: message.id,
         alreadyPresent: result.alreadyPresent,
         resent: !result.alreadyPresent,
@@ -219,18 +214,119 @@ async function main(): Promise<void> {
       failures += 1;
       console.log(JSON.stringify({
         event: "confirmed_outbound_recovery_failed",
-        customerName: targetName,
-        conversationId: candidate.conversationId,
+        targetLabel: input.targetLabel,
+        customerName: input.customerName,
+        conversationId: input.conversationId,
         messageId: message.id,
         error: error instanceof Error ? error.message : String(error),
       }));
     }
+  };
+
+  for (const targetName of args.customerNames) {
+    const targetConversations = conversations.filter(
+      (conversation) => conversation.customer.displayName === targetName,
+    );
+    const candidates: Array<{
+      conversationId: string;
+      customerName: string;
+      storeName: string;
+      message: (typeof targetConversations)[number]["messages"][number];
+    }> = [];
+
+    for (const conversation of targetConversations) {
+      const byText = new Map<string, (typeof conversation.messages)[number]>();
+      for (const message of conversation.messages) {
+        const text = message.originalText.trim();
+        if (!text) continue;
+        if (message.senderDisplayName?.trim() === AUTO_REPLY_BOT_DISPLAY_NAME) continue;
+        if (isAutoResponse(message.rawPayload)) continue;
+        byText.set(text, message);
+      }
+      for (const message of byText.values()) {
+        candidates.push({
+          conversationId: conversation.id,
+          customerName: conversation.customer.displayName,
+          storeName: conversation.store?.name || args.storeCode,
+          message,
+        });
+      }
+    }
+
+    if (candidates.length !== 1) {
+      console.log(JSON.stringify({
+        event: "confirmed_outbound_recovery_target_ambiguous",
+        targetLabel: `customer:${targetName}`,
+        customerName: targetName,
+        storeCode: args.storeCode,
+        candidateCount: candidates.length,
+        conversationIds: [...new Set(candidates.map((candidate) => candidate.conversationId))],
+      }));
+      failures += 1;
+      continue;
+    }
+
+    const candidate = candidates[0];
+    await processCandidate({
+      targetLabel: `customer:${targetName}`,
+      customerName: candidate.customerName,
+      conversationId: candidate.conversationId,
+      storeName: candidate.storeName,
+      message: candidate.message,
+    });
+  }
+
+  for (const conversationId of args.conversationIds) {
+    const conversation = conversations.find((item) => item.id === conversationId);
+    if (!conversation) {
+      console.log(JSON.stringify({
+        event: "confirmed_outbound_recovery_target_ambiguous",
+        targetLabel: `conversation:${conversationId}`,
+        storeCode: args.storeCode,
+        candidateCount: 0,
+        conversationIds: [],
+      }));
+      failures += 1;
+      continue;
+    }
+
+    const byText = new Map<string, (typeof conversation.messages)[number]>();
+    for (const message of conversation.messages) {
+      const text = message.originalText.trim();
+      if (!text) continue;
+      if (message.senderDisplayName?.trim() === AUTO_REPLY_BOT_DISPLAY_NAME) continue;
+      if (isAutoResponse(message.rawPayload)) continue;
+      byText.set(text, message);
+    }
+    const candidates = [...byText.values()];
+    if (candidates.length !== 1) {
+      console.log(JSON.stringify({
+        event: "confirmed_outbound_recovery_target_ambiguous",
+        targetLabel: `conversation:${conversationId}`,
+        customerName: conversation.customer.displayName,
+        storeCode: args.storeCode,
+        candidateCount: candidates.length,
+        messageIds: candidates.map((message) => message.id),
+        textPreviews: candidates.map((message) => message.originalText.slice(0, 160)),
+      }));
+      failures += 1;
+      continue;
+    }
+
+    await processCandidate({
+      targetLabel: `conversation:${conversationId}`,
+      customerName: conversation.customer.displayName,
+      conversationId,
+      storeName: conversation.store?.name || args.storeCode,
+      message: candidates[0],
+    });
   }
 
   console.log(JSON.stringify({
     event: "confirmed_outbound_recovery_complete",
     storeCode: args.storeCode,
     requestedCustomers: args.customerNames.length,
+    requestedConversations: args.conversationIds.length,
     apply: args.apply,
     recovered,
     alreadyPresent,
