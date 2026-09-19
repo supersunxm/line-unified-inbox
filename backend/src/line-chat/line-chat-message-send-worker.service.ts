@@ -18,6 +18,7 @@ const MAX_VERIFY_ATTEMPTS = VERIFY_BACKOFF_MS.length;
 
 // Safety invariant: an ambiguous customer-facing send transitions to
 // VERIFY_PENDING. The worker must never auto-resend from that state.
+// Deployment touch: rebuild after Railway usage-limit increase (2026-09-19).
 
 function jsonObject(value: Prisma.JsonValue | null): Record<string, Prisma.JsonValue> {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
