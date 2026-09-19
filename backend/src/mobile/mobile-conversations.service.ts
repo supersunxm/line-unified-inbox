@@ -100,7 +100,17 @@ export class MobileConversationsService {
               productModel: { select: { name: true } },
             },
           },
-          messages: { orderBy: [{ sentAt: "desc" }, { id: "desc" }], take: 1, select: { id: true, direction: true, messageType: true, originalText: true, rawPayload: true, sentAt: true } },
+          messages: {
+            where: {
+              NOT: {
+                direction: "OUTBOUND",
+                deliveryStatus: "FAILED",
+              },
+            },
+            orderBy: [{ sentAt: "desc" }, { id: "desc" }],
+            take: 1,
+            select: { id: true, direction: true, messageType: true, originalText: true, rawPayload: true, sentAt: true },
+          },
           _count: { select: { messages: { where: ownerTrackingInboundFilter() }, pushNotifications: { where: { userId: user.id, readAt: null } } } },
         },
       }),
