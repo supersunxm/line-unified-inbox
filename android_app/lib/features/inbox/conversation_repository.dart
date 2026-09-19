@@ -624,7 +624,8 @@ class ConversationRepository {
           if (json['externalMessageId'] == expectedExternalId) {
             final deliveryStatus =
                 (json['deliveryStatus'] as String?)?.toUpperCase();
-            if (deliveryStatus == 'DELIVERED') {
+            if (deliveryStatus == 'DELIVERED' ||
+                deliveryStatus == 'PENDING') {
               return ChatMessage.fromJson(json);
             }
             if (deliveryStatus == 'FAILED') {
