@@ -228,8 +228,14 @@ export class MobileConversationsService {
       },
     });
     if (!conversation) throw new NotFoundException("Conversation not found");
+    const visibleMessages = conversation.messages.filter((message) => {
+      if (!message.rawPayload || typeof message.rawPayload !== "object" || Array.isArray(message.rawPayload)) {
+        return true;
+      }
+      return (message.rawPayload as Record<string, unknown>).hiddenFromTimeline !== true;
+    });
     const hasEarlier = conversation.messages.length > query.limit;
-    const pageMessages = conversation.messages.slice(0, query.limit).reverse();
+    const pageMessages = visibleMessages.slice(0, query.limit).reverse();
     const oldest = pageMessages[0];
     const priority = this.priority
       ? (await this.priority.forConversationIds(user, [conversation.id])).get(conversation.id) ?? EMPTY_OPERATIONAL_PRIORITY
