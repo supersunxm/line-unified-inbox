@@ -25,25 +25,18 @@ function isManagerDeliveryVerificationGap(
   return error.message.includes(expectedMessage);
 }
 
-function recoverManagerDeliveryVerificationGap(
+function logManagerDeliveryVerificationGap(
   input: LineTextInput | LineImageInput,
   messageType: ManagerMessageType,
-): PushMessageResult {
+): void {
   Logger.warn(JSON.stringify({
-    event: "line_chat_manager_delivery_verification_gap_recovered",
+    event: "line_chat_manager_delivery_verification_gap_failed_closed",
     conversationId: input.context?.conversationId ?? null,
     storeId: input.context?.storeId ?? null,
     storeName: input.context?.storeName ?? null,
     messageType,
     recoveryScope: "ALL_MANAGER_RELAY_STORES",
   }), "PilotAwareLineMessagingService");
-
-  return {
-    requestId: null,
-    acceptedRequestId: null,
-    externalMessageId: null,
-    duplicateAccepted: false,
-  };
 }
 
 /**
@@ -73,14 +66,13 @@ export class PilotAwareLineMessagingService extends LineMessagingService {
         idempotencyKey: input.retryKey,
       });
     } catch (error) {
-      // This exact worker error is emitted only after a send action was already
-      // performed but the headless DOM could not prove the new outbound bubble
-      // appeared. Treat that narrow post-send ambiguity as accepted for every
-      // Manager-relay store so ConversationsService persists the outbound row.
-      // Pre-send, authentication, mapping, composer, worker, and other transport
-      // failures still fail closed and never fall back to Push API.
-      if (!isManagerDeliveryVerificationGap(error, "TEXT")) throw error;
-      return recoverManagerDeliveryVerificationGap(input, "TEXT");
+      // A post-send verification gap is NOT delivery success. The worker owns
+      // recovery/verification; if it still cannot prove delivery, fail closed
+      // so ConversationsService never persists a false DELIVERED row.
+      if (isManagerDeliveryVerificationGap(error, "TEXT")) {
+        logManagerDeliveryVerificationGap(input, "TEXT");
+      }
+      throw error;
     }
 
     if (!relay.handled) return super.pushText(input);
@@ -111,11 +103,10 @@ export class PilotAwareLineMessagingService extends LineMessagingService {
         idempotencyKey: input.retryKey,
       });
     } catch (error) {
-      // Images have the same post-send ambiguity class. Recover only the exact
-      // worker verification-gap error after the Manager send action; every other
-      // image relay error still fails closed.
-      if (!isManagerDeliveryVerificationGap(error, "IMAGE")) throw error;
-      return recoverManagerDeliveryVerificationGap(input, "IMAGE");
+      if (isManagerDeliveryVerificationGap(error, "IMAGE")) {
+        logManagerDeliveryVerificationGap(input, "IMAGE");
+      }
+      throw error;
     }
 
     if (!relay.handled) return super.pushImage(input);
