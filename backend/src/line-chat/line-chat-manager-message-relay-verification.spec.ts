@@ -49,3 +49,13 @@ test("unverified manager sends fail closed instead of being persisted as sent", 
   assert.match(source, /line_chat_manager_message_delivery_not_verified/);
   assert.match(source, /ยังยืนยันการส่งจาก LINE OA Manager ไม่ได้ จึงไม่บันทึกข้อความว่าส่งสำเร็จ/);
 });
+
+
+test("manager relay reloads the target chat and retries the exact text once before failing", () => {
+  assert.match(source, /line_chat_manager_message_delivery_verified_after_reload/);
+  assert.match(source, /line_chat_manager_message_auto_retry_started/);
+  assert.match(source, /line_chat_manager_message_auto_retry_success/);
+  assert.match(source, /await page\.goto\(targetUrl/);
+  assert.match(source, /refreshedOutboundCount > beforeOutboundCount/);
+  assert.match(source, /waitForDeliveryVerification\(\s*page,\s*recoveryComposer/);
+});
