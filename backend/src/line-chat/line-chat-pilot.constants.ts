@@ -74,6 +74,39 @@ export function getLineChatManagerRelayStoreConfig(storeCode: string | null | un
   return LINE_CHAT_MANAGER_RELAY_STORE_CONFIG[cleanStoreCode] ?? null;
 }
 
+/**
+ * Durable send queue is rolled out store-by-store via LINE_CHAT_DURABLE_SEND_QUEUE_STORE_CODES.
+ * Empty or missing allowlist MUST NOT mean "all stores" (fail closed).
+ */
+export function getLineChatDurableSendQueueStoreCodes(
+  raw = process.env.LINE_CHAT_DURABLE_SEND_QUEUE_STORE_CODES,
+): ReadonlySet<string> {
+  if (!raw) return new Set();
+  const codes = raw
+    .split(",")
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0);
+  return new Set(codes);
+}
+
+export function isLineChatDurableSendQueueStoreEnabled(
+  storeCode: string | null | undefined,
+  env: {
+    enabled?: string;
+    storeCodes?: string;
+  } = {
+    enabled: process.env.LINE_CHAT_DURABLE_SEND_QUEUE_ENABLED,
+    storeCodes: process.env.LINE_CHAT_DURABLE_SEND_QUEUE_STORE_CODES,
+  },
+): boolean {
+  if (env.enabled !== "true") return false;
+  const cleanStoreCode = (storeCode ?? "").trim();
+  if (!cleanStoreCode) return false;
+  const allowlist = getLineChatDurableSendQueueStoreCodes(env.storeCodes);
+  if (allowlist.size === 0) return false;
+  return allowlist.has(cleanStoreCode);
+}
+
 export interface LineChatRealtimeResolverEligibilityParams {
   storeCode: string | null | undefined;
   conversationStoreId: string | null | undefined;

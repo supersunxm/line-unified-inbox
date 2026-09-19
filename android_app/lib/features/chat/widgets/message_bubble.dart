@@ -36,7 +36,9 @@ class MessageBubble extends StatelessWidget {
         : appLocalizations(context).customer;
     final footerText = footer?.trim();
     final isFailed = message?.deliveryStatus == 'FAILED' ||
-        (footerText?.toLowerCase().contains('fail') ?? false);
+        (footerText?.toLowerCase().contains('fail') ?? false) ||
+        (footerText?.contains('ไม่สำเร็จ') ?? false) ||
+        (footerText?.contains('ล้มเหลว') ?? false);
     final isSending = footerText?.toLowerCase().contains('sending') ?? false;
     final isDeliveryCheck = footerText == '✓' || footerText == '✓✓';
     final bubbleColor =
@@ -81,9 +83,10 @@ class MessageBubble extends StatelessWidget {
                     ),
                 child: content ?? MessageLinkText(text: text),
               ),
-              const SizedBox(height: AppSpacing.xs),
-              Row(
-                mainAxisSize: MainAxisSize.min,
+              Wrap(
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: AppSpacing.xs,
+                runSpacing: 2,
                 children: [
                   Text(
                     _time(timestamp),
@@ -93,27 +96,71 @@ class MessageBubble extends StatelessWidget {
                   ),
                   if (footerText != null && footerText.isNotEmpty) ...[
                     const SizedBox(width: AppSpacing.sm),
-                    if (onRetry == null) ...[
+                    if (isFailed) ...[
+                      const Icon(
+                        Icons.error_outline,
+                        size: 14,
+                        color: AppColors.error,
+                      ),
+                      const SizedBox(width: AppSpacing.xs),
+                      Text(
+                        footerText == '✓' || footerText == '✓✓'
+                            ? 'ส่งไม่สำเร็จ'
+                            : footerText,
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                              color: AppColors.error,
+                              fontWeight: FontWeight.w600,
+                            ),
+                      ),
+                      if (onRetry != null) ...[
+                        const SizedBox(width: AppSpacing.xs),
+                        InkWell(
+                          onTap: onRetry,
+                          borderRadius: BorderRadius.circular(4),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 4,
+                              vertical: 2,
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(
+                                  Icons.refresh,
+                                  size: 13,
+                                  color: AppColors.primary,
+                                ),
+                                const SizedBox(width: 2),
+                                Text(
+                                  appLocalizations(context).retry,
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .labelSmall
+                                      ?.copyWith(
+                                        color: AppColors.primary,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ] else if (onRetry == null) ...[
                       if (!isDeliveryCheck) ...[
                         Icon(
-                          isFailed
-                              ? Icons.error_outline
-                              : isSending
-                                  ? Icons.schedule_outlined
-                                  : Icons.done_all,
+                          isSending
+                              ? Icons.schedule_outlined
+                              : Icons.done_all,
                           size: 14,
-                          color: isFailed
-                              ? AppColors.error
-                              : AppColors.textSecondary,
+                          color: AppColors.textSecondary,
                         ),
                         const SizedBox(width: AppSpacing.xs),
                       ],
                       Text(
                         footerText,
                         style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                              color: isFailed
-                                  ? AppColors.error
-                                  : AppColors.textSecondary,
+                              color: AppColors.textSecondary,
                               fontWeight: isDeliveryCheck
                                   ? FontWeight.w700
                                   : null,

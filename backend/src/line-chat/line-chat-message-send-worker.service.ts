@@ -9,6 +9,7 @@ import { hostname } from "node:os";
 import { PrismaService } from "../prisma.service";
 import { persistStaffOutboundReplyState } from "../conversation-reply-state";
 import { LineChatManagerMessageRelayWorkerService } from "./line-chat-manager-message-relay-worker.service";
+import { isLineChatDurableSendQueueStoreEnabled } from "./line-chat-pilot.constants";
 
 const POLL_INTERVAL_MS = 1_500;
 const JOB_LEASE_MS = 90_000;
@@ -26,20 +27,23 @@ function jsonObject(value: Prisma.JsonValue | null): Record<string, Prisma.JsonV
 }
 
 function errorText(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+  if (error instanceof Error) return error.message;
+  return String(error);
 }
 
 function isDefinitelyPreSendBusy(message: string): boolean {
-  return message.includes("PROFILE_BROWSER_BUSY")
-    || message.includes("LINE OA Manager กำลังทำงานอื่นอยู่");
+  return (
+    message.includes("is busy with another operation")
+    || message.includes("กำลังทำงานอื่นอยู่")
+  );
 }
 
 function isNonRetryableBeforeSend(message: string): boolean {
-  return message.includes("AUTH_REQUIRED")
-    || message.includes("หมดอายุ")
-    || message.includes("ยังจับคู่ลูกค้ากับ LINE OA Manager ไม่สำเร็จ")
-    || message.includes("การตั้งค่า LINE OA Manager")
-    || message.includes("ไม่พบ session ของ LINE OA Manager");
+  return (
+    message.includes("ไม่พร้อมใช้งาน")
+    || message.includes("ยังไม่ได้เชื่อมต่อกับ worker")
+    || message.includes("LINE_CHAT_WORKER_INTERNAL_URL")
+  );
 }
 
 type ManagerOutboundEvent = {
@@ -109,9 +113,16 @@ export class LineChatMessageSendWorkerService implements OnModuleInit, OnModuleD
             lastError: "WORKER_LEASE_EXPIRED_VERIFY_BEFORE_ANY_RESEND",
           },
         }),
-        this.prisma.message.update({
-          where: { id: job.messageId },
-          data: { deliveryStatus: MessageDeliveryStatus.PENDING },
+        this.prisma.messageDeliveryAttempt.updateMany({
+          where: {
+            sendJobId: job.id,
+            status: MessageDeliveryAttemptStatus.PROCESSING,
+          },
+          data: {
+            status: MessageDeliveryAttemptStatus.VERIFY_PENDING,
+            finishedAt: now,
+            failureReason: "WORKER_LEASE_EXPIRED_VERIFY_BEFORE_ANY_RESEND",
+          },
         }),
       ]);
     }
@@ -197,6 +208,16 @@ export class LineChatMessageSendWorkerService implements OnModuleInit, OnModuleD
     const job = await this.prisma.lineChatMessageSendJob.findUnique({
       where: { id: jobId },
       include: {
+        conversation: {
+          select: {
+            store: {
+              select: {
+                code: true,
+                storeMaster: { select: { externalStoreId: true } },
+              },
+            },
+          },
+        },
         message: {
           select: {
             id: true,
@@ -211,6 +232,18 @@ export class LineChatMessageSendWorkerService implements OnModuleInit, OnModuleD
       },
     });
     if (!job) return;
+
+    const storeCode = job.conversation?.store?.code?.trim()
+      || job.conversation?.store?.storeMaster?.externalStoreId?.trim()
+      || "";
+    if (!isLineChatDurableSendQueueStoreEnabled(storeCode)) {
+      this.logger.warn(JSON.stringify({
+        event: "line_chat_message_send_job_store_not_allowlisted",
+        jobId: job.id,
+        storeCode,
+      }));
+      return;
+    }
 
     // A previously attempted job is a manual retry/recovery. Re-read Manager
     // history before any customer-facing resend. If the original text already
@@ -361,7 +394,7 @@ export class LineChatMessageSendWorkerService implements OnModuleInit, OnModuleD
               ...jsonObject(job.message.rawPayload),
               queueState: "VERIFY_PENDING",
               lastSendError: message.slice(0, 500),
-            } as Prisma.InputJsonValue,
+            },
           },
         }),
       ]);
@@ -531,7 +564,7 @@ export class LineChatMessageSendWorkerService implements OnModuleInit, OnModuleD
               managerMessageId: event.managerMessageId,
               managerBizId: event.bizId,
               reconciledAt: new Date().toISOString(),
-            } as Prisma.InputJsonValue,
+            },
           },
           create: {
             conversationId: job.conversationId,
@@ -551,7 +584,7 @@ export class LineChatMessageSendWorkerService implements OnModuleInit, OnModuleD
               managerMessageId: event.managerMessageId,
               managerBizId: event.bizId,
               reconciledAt: new Date().toISOString(),
-            } as Prisma.InputJsonValue,
+            },
           },
         });
 
@@ -580,7 +613,7 @@ export class LineChatMessageSendWorkerService implements OnModuleInit, OnModuleD
             supersededByManagerMessageIds: events.map(
               (event) => event.managerMessageId,
             ),
-          } as Prisma.InputJsonValue,
+          },
         },
       });
 
@@ -668,7 +701,7 @@ export class LineChatMessageSendWorkerService implements OnModuleInit, OnModuleD
             queueState: "DELIVERED",
             confirmedAt: confirmedAt.toISOString(),
             managerMessageId,
-          } as Prisma.InputJsonValue,
+          },
         },
       });
       await tx.lineChatMessageSendJob.update({
@@ -742,7 +775,7 @@ export class LineChatMessageSendWorkerService implements OnModuleInit, OnModuleD
             queueState: "FAILED",
             failedAt: new Date().toISOString(),
             error: reason.slice(0, 500),
-          } as Prisma.InputJsonValue,
+          },
         },
       });
       await tx.lineChatMessageSendJob.update({

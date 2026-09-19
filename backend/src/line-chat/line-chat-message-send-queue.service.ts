@@ -10,6 +10,7 @@ import {
 import { PrismaService } from "../prisma.service";
 import {
   getLineChatManagerRelayStoreConfig,
+  isLineChatDurableSendQueueStoreEnabled,
   isLineChatManagerRelayStoreEnabled,
 } from "./line-chat-pilot.constants";
 
@@ -46,6 +47,10 @@ export class LineChatMessageSendQueueService {
 
   enabled(): boolean {
     return process.env.LINE_CHAT_DURABLE_SEND_QUEUE_ENABLED === "true";
+  }
+
+  isStoreEnabled(storeCode: string | null | undefined): boolean {
+    return isLineChatDurableSendQueueStoreEnabled(storeCode);
   }
 
   async enqueueText(input: {
@@ -95,6 +100,7 @@ export class LineChatMessageSendQueueService {
     const storeCode = conversation.store?.code?.trim()
       || conversation.store?.storeMaster?.externalStoreId?.trim()
       || "";
+    if (!this.isStoreEnabled(storeCode)) return { handled: false };
     if (!isLineChatManagerRelayStoreEnabled(storeCode)) return { handled: false };
 
     const config = getLineChatManagerRelayStoreConfig(storeCode);

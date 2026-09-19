@@ -473,7 +473,7 @@ class _ChatPageState extends State<ChatPage> {
     final detail = _detail;
     if (detail == null) return;
 
-    if (message == null || message.deliveryStatus == 'FAILED') {
+    if (message == null) {
       setState(() {
         for (final pending in _pending) {
           if (pending.key == idempotencyKey) pending.state = ReplyState.failed;
@@ -490,7 +490,10 @@ class _ChatPageState extends State<ChatPage> {
     }
 
     final messages = [...detail.messages];
-    if (!messages.any((item) => item.id == message.id)) {
+    final index = messages.indexWhere((item) => item.id == message.id);
+    if (index >= 0) {
+      messages[index] = message;
+    } else {
       messages.add(message);
       messages.sort((left, right) {
         final timestamp = left.sentAt.compareTo(right.sentAt);
@@ -545,9 +548,39 @@ class _ChatPageState extends State<ChatPage> {
             break;
           }
         }
-        if (refreshed == null) continue;
 
         final detail = _detail!;
+        if (refreshed == null) {
+          // If the message is no longer returned in latest messages, it may have
+          // been superseded (hiddenFromTimeline on backend). Reconcile with
+          // latest messages so imported Manager replies appear and the stale
+          // message disappears without leaving a phantom bubble.
+          final hasNewerOrEqual = latest.messages.any(
+            (item) => item.sentAt.isAfter(DateTime.now().subtract(const Duration(minutes: 10))),
+          );
+          if (hasNewerOrEqual) {
+            final withoutStale = detail.messages.where((item) => item.id != messageId).toList();
+            final seen = withoutStale.map((item) => item.id).toSet();
+            final merged = [
+              ...withoutStale,
+              ...latest.messages.where((item) => !seen.contains(item.id)),
+            ];
+            merged.sort((left, right) {
+              final timestamp = left.sentAt.compareTo(right.sentAt);
+              return timestamp == 0 ? left.id.compareTo(right.id) : timestamp;
+            });
+            setState(() {
+              _detail = detail.copyWith(
+                messages: merged,
+                bmReplyStatus: latest.bmReplyStatus ?? detail.bmReplyStatus,
+                owner: latest.owner,
+                ownerTracked: latest.ownerTracked,
+              );
+            });
+            return;
+          }
+          continue;
+        }
         final messages = [...detail.messages];
         final index = messages.indexWhere((item) => item.id == messageId);
         if (index >= 0) {
@@ -1353,17 +1386,18 @@ class _ChatPageState extends State<ChatPage> {
       });
 
       final queued = message.deliveryStatus == 'PENDING';
+      final delivered = message.deliveryStatus == 'DELIVERED';
       setState(() {
         _detail = detail.copyWith(
           messages: messages,
-          bmReplyStatus: queued ? detail.bmReplyStatus : 'REPLIED',
+          bmReplyStatus: delivered ? 'REPLIED' : detail.bmReplyStatus,
         );
         _error = null;
       });
 
       if (queued) {
         unawaited(_pollQueuedDelivery(message.id));
-      } else {
+      } else if (delivered) {
         unawaited(_refreshReplyStateAfterSend());
       }
     } on ApiException catch (error) {

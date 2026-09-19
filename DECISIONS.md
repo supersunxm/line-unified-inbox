@@ -1,3 +1,22 @@
+# LINE OA Black App Durable Send Queue Store Allowlist & Delivery UX Architecture (2026-09-19)
+
+- **Store-Scoped Allowlist Gating (`LINE_CHAT_DURABLE_SEND_QUEUE_STORE_CODES`)**:
+  To protect production operations across non-canary stores while validating the new durable send queue architecture, rollout is gated on a per-store basis via `LINE_CHAT_DURABLE_SEND_QUEUE_STORE_CODES`.
+  - **Fail-Closed Semantics**: An unset, empty, whitespace-only, or non-matching store code strictly evaluates to `false`. Missing configuration never defaults to "all stores".
+  - **Dual-Layer Enforcement**: Gating is enforced at ingress in `LineChatMessageSendQueueService.enqueueText` (preventing `LineChatMessageSendJob` creation) and re-verified at execution in `LineChatMessageSendWorkerService.processSend` (preventing any customer-facing send action if a job is somehow queued for an un-allowlisted store).
+
+- **Delivery UX & Message Status Semantics in Android Debug App**:
+  - **No Read Receipts**: Outbound delivery statuses are mapped to checkmarks:
+    - `PENDING`: Displays single checkmark (`✓`).
+    - `DELIVERED`: Displays double checkmarks (`✓✓`). This strictly denotes confirmed persistence into LINE OA Manager message history; it never implies that the customer has read the message.
+    - `FAILED`: Displays `Icons.error_outline` in error red, Thai label `"ส่งไม่สำเร็จ"`, and an interactive `[↻ ลองอีกครั้ง]` retry action.
+  - **Bubble Layout Resilience**: Converted outbound message footer row from `Row` to `Wrap(crossAxisAlignment: WrapCrossAlignment.center)` to eliminate `RenderFlex` pixel overflow on short/narrow bubbles when displaying timestamp, error icon, Thai error copy, and retry action.
+  - **Reply KPI Gating**: Conversation reply status (`bmReplyStatus`) remains unchanged while an outbound message is in `PENDING` state. The conversation visually becomes `REPLIED` only after confirmed delivery (`DELIVERED`).
+
+- **Safe Retry & Stale Message Reconciliation**:
+  - Retrying a failed message invokes `ConversationRepository.retryFailedMessage` directly without creating duplicate local bubbles.
+  - If a failed message was superseded by another staff reply in LINE Manager (marked `hiddenFromTimeline: true` on the backend), Flutter polling removes the stale failed bubble from the conversation detail and merges the imported Manager replies.
+
 # LINE Chat Durable Manual Mapping & Outbound Message Recovery Architecture (2026-09-17)
 
 - **Single Canonical Identity Source (`Conversation.lineChatUserId`)**:

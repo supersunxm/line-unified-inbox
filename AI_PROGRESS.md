@@ -1,3 +1,44 @@
+# 2026-09-19: P0 Production Reliability — Store Allowlist & Flutter Delivery UX for Durable Queue Canary [COMPLETED & READY FOR CANARY]
+- **Current Task**: Make the durable send queue testable safely from the Android DEBUG app for canary Store 28375 (OBS Robinson Chonburi By OPPO) without affecting other stores. Implement store allowlist gating, finish Flutter delivery UX (✓, ✓✓, "ส่งไม่สำเร็จ" + retry), safe retry handling, and verify all preflight safety checks.
+- **Completed Work**:
+  - **Phase 1 — Store Allowlist**:
+    - Added `getLineChatDurableSendQueueStoreCodes()` and `isLineChatDurableSendQueueStoreEnabled()` to `backend/src/line-chat/line-chat-pilot.constants.ts`.
+    - Gated send job creation in `LineChatMessageSendQueueService.enqueueText(input)`.
+    - Gated worker processing in `LineChatMessageSendWorkerService.processSend(jobId)`.
+    - Fail-closed semantics: disabled flag, missing/empty allowlist, or non-allowlisted store preserves existing production behavior.
+    - Added 8 unit tests in `backend/src/line-chat/line-chat-durable-send-queue-allowlist.spec.ts` covering disabled flag, missing allowlist, non-allowlisted store, store 28375, multiple stores, whitespace/duplicates, and service gating.
+  - **Phase 2 — Android Debug Delivery UX**:
+    - Updated `MessageBubble` footer in `android_app/lib/features/chat/widgets/message_bubble.dart`:
+      - `PENDING` displays single `✓`.
+      - `DELIVERED` displays double `✓✓` (LINE Manager confirmed delivery, no read receipt implication).
+      - `FAILED` displays `Icons.error_outline` in error red, Thai copy `"ส่งไม่สำเร็จ"`, and `[↻ ลองอีกครั้ง]` when `onRetry != null`.
+      - Converted footer layout to `Wrap(crossAxisAlignment: WrapCrossAlignment.center)` to eliminate `RenderFlex` overflow on narrow bubbles.
+    - Updated `MessageTimeline` in `android_app/lib/features/chat/widgets/message_timeline.dart` to map failed outbound messages and pending rows to `"ส่งไม่สำเร็จ"`.
+    - Updated `ChatPage` in `android_app/lib/features/chat/chat_page.dart`:
+      - Optimistic outbound bubble added immediately upon Send.
+      - If backend returns `PENDING`, displays `✓` and keeps `bmReplyStatus` unchanged (conversation does not become visually "Replied" while pending).
+      - Starts `_pollQueuedDelivery` to poll canonical state without creating duplicate local bubbles.
+      - When backend transitions to `DELIVERED`, same bubble updates to `✓✓` and reply state converges.
+      - If backend transitions to `FAILED`, same bubble updates to `"ส่งไม่สำเร็จ"` with retry action.
+  - **Phase 3 — Safe Retry UX**:
+    - In `_retryPersistedMessage`, calls backend endpoint `widget.repository.retryFailedMessage(conversationId, messageId)` without pre-creating local duplicate bubbles.
+    - In `_pollQueuedDelivery`, handles superseded messages (`hiddenFromTimeline` on backend): removes stale failed bubble and reconciles imported Manager replies.
+  - **Phase 5 — Safety Preflight Verification**:
+    - Confirmed only store code 28375 can enter durable queue; all other stores fail closed to existing behavior.
+    - Verified all worker bootstrap scripts in `backend/scripts/start-line-chat-worker.sh` default to disabled (`false`).
+    - Verified `LineChatMessageSendWorkerService` performs read-only presence audit in `VERIFY_PENDING` and never automatically resends.
+    - Verified designated canary conversation in production DB: ID `9cf223e4-194a-47ce-b795-1192a22d3928`, Store `28375` (OBS Robinson Chonburi By OPPO), Customer Max (`Uabf5b5217d6f288057b2a0046622a510`).
+- **Checks Run & Passed**:
+  - Allowlist unit tests: 8/8 passed (`backend/src/line-chat/line-chat-durable-send-queue-allowlist.spec.ts`).
+  - Related line-chat specs: 8/8 passed.
+  - Targeted backend ESLint: 0 errors, 0 warnings on modified/new backend files.
+  - Backend build: `npm run build` (`prisma generate && nest build`) passed cleanly.
+  - Flutter widget tests: 5/5 passed in `android_app/test/durable_delivery_ux_test.dart`.
+  - Full Flutter test suite: 306/306 passed (`flutter test`).
+  - Flutter analysis: `flutter analyze` passed with 0 issues.
+  - Debug APK build: `flutter build apk --debug` succeeded (`build/app/outputs/flutter-apk/app-debug.apk`).
+- **Next Action**: Request user authorization to deploy backend allowlist and execute Phase 4 canary NORMAL SEND test (`TEST DURABLE QUEUE 001`).
+
 # 2026-09-18: TikTok Public Account Store Auto-Binding Recurrence Hardening [COMPLETED & VERIFIED]
 - **Current Task**: Harden `TikTokPublicAccount` → `StoreMaster` auto-binding so shared TikTok handles are linked to all matching active stores, preventing recurrence of unlinked store records.
 - **Completed Work**:

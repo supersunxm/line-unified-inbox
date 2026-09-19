@@ -153,7 +153,7 @@ class MessageTimeline extends StatelessWidget {
       message: message,
       footer: outbound
           ? message.deliveryStatus == 'FAILED'
-              ? appLocalizations(context).failedRetry
+              ? 'ส่งไม่สำเร็จ'
               : message.deliveryStatus == 'PENDING'
                   ? '✓'
                   : '✓✓'
@@ -280,7 +280,7 @@ class MessageTimeline extends StatelessWidget {
       timestamp: DateTime.now(),
       footer: pending.isSending
           ? appLocalizations(context).sending
-          : appLocalizations(context).failedRetry,
+          : 'ส่งไม่สำเร็จ',
       onRetry: pending.isSending || onRetryMessage == null
           ? null
           : () => onRetryMessage!(pending.key),
