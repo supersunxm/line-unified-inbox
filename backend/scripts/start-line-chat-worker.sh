@@ -74,6 +74,15 @@ if [ "${LINE_CHAT_RECOVER_CONFIRMED_OUTBOUNDS_ENABLED:-false}" = "true" ]; then
   echo "{\"event\":\"confirmed_outbound_recovery_bootstrap_finished\",\"exitCode\":${RECOVERY_EXIT_CODE}}"
 fi
 
+if [ "${LINE_CHAT_VERIFY_FAILED_OUTBOUNDS_ENABLED:-false}" = "true" ]; then
+  echo "{\"event\":\"failed_manager_outbound_presence_audit_bootstrap_started\"}"
+  set +e
+  npx tsx scripts/inspect-failed-manager-outbounds.ts
+  PRESENCE_AUDIT_EXIT_CODE=$?
+  set -e
+  echo "{\"event\":\"failed_manager_outbound_presence_audit_bootstrap_finished\",\"exitCode\":${PRESENCE_AUDIT_EXIT_CODE}}"
+fi
+
 if [ "${LINE_CHAT_AUDIT_MANAGER_OUTBOUNDS_ENABLED:-false}" = "true" ]; then
   echo "{\"event\":\"manager_outbound_delivery_audit_bootstrap_started\"}"
   set +e
