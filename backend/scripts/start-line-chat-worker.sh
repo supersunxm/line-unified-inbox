@@ -75,6 +75,15 @@ if [ "${LINE_CHAT_RECOVER_CONFIRMED_OUTBOUNDS_ENABLED:-false}" = "true" ]; then
   echo "{\"event\":\"confirmed_outbound_recovery_bootstrap_finished\",\"exitCode\":${RECOVERY_EXIT_CODE}}"
 fi
 
+if [ "${LINE_CHAT_TIMELINE_DIAGNOSTIC_ENABLED:-false}" = "true" ]; then
+  echo "{\"event\":\"line_chat_manager_timeline_diagnostic_bootstrap_started\"}"
+  set +e
+  npx tsx scripts/inspect-manager-chat-timeline.ts
+  TIMELINE_DIAGNOSTIC_EXIT_CODE=$?
+  set -e
+  echo "{\"event\":\"line_chat_manager_timeline_diagnostic_bootstrap_finished\",\"exitCode\":${TIMELINE_DIAGNOSTIC_EXIT_CODE}}"
+fi
+
 if [ "${LINE_CHAT_COMPOSER_DIAGNOSTIC_ENABLED:-false}" = "true" ]; then
   echo "{\"event\":\"line_chat_manager_composer_control_diagnostic_bootstrap_started\"}"
   set +e
