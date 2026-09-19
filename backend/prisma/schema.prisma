@@ -115,6 +115,7 @@ enum MessageDirection {
 }
 
 enum MessageDeliveryStatus {
+  PENDING
   DELIVERED
   FAILED
 }
@@ -713,6 +714,7 @@ model LineOfficialAccount {
   healthSessionSnapshotAt     DateTime?
   lineChatSession             LineChatSession?                   @relation(fields: [lineChatSessionId], references: [id], onDelete: SetNull)
   nicknameSyncJobs            LineChatNicknameSyncJob[]
+  messageSendJobs             LineChatMessageSendJob[]
   healthEvents                LineChatHealthEvent[]               @relation("LineChatHealthEventOa")
 
   @@index([storeId, isActive])
@@ -913,6 +915,7 @@ model Conversation {
   pushNotifications     PushNotification[]
   autoResponseExecutions AutoResponseExecution[]     @relation("ConversationAutoResponseExecutions")
   nicknameSyncJobs      LineChatNicknameSyncJob[]
+  messageSendJobs       LineChatMessageSendJob[]
 
   @@index([latestMessageAt])
   @@index([followUpStatus])
@@ -963,6 +966,8 @@ model Message {
   translationFeedback      MessageTranslationFeedback[]
   pushNotifications        PushNotification[]
   autoResponseExecutions   AutoResponseExecution[]      @relation("AutoResponseSourceMessage")
+  lineChatSendJob          LineChatMessageSendJob?
+  deliveryAttempts         MessageDeliveryAttempt[]
 
   @@index([conversationId, sentAt])
   @@index([conversationId, deliveryStatus])
@@ -2093,6 +2098,21 @@ enum LineChatNicknameSyncJobStatus {
   SUPERSEDED
 }
 
+enum LineChatMessageSendJobStatus {
+  QUEUED
+  PROCESSING
+  VERIFY_PENDING
+  DELIVERED
+  FAILED
+}
+
+enum MessageDeliveryAttemptStatus {
+  PROCESSING
+  VERIFY_PENDING
+  DELIVERED
+  FAILED
+}
+
 enum LineChatSessionStatus {
   ACTIVE
   INACTIVE
@@ -2187,6 +2207,7 @@ model LineChatSession {
   lineOfficialAccounts LineOfficialAccount[]
   profileOperationLease LineChatProfileOperationLease?
   healthEvents          LineChatHealthEvent[] @relation("LineChatHealthEventSession")
+  messageSendJobs       LineChatMessageSendJob[]
 
   @@index([status])
 }
@@ -2257,6 +2278,67 @@ model LineChatNicknameSyncJob {
   @@index([lineOfficialAccountId, status])
   @@index([lineChatUserId])
   @@index([createdAt])
+}
+
+
+model LineChatMessageSendJob {
+  id                    String                       @id @default(uuid())
+  messageId             String                       @unique
+  conversationId        String
+  lineOfficialAccountId String
+  lineChatSessionId     String
+  lineChatUserId        String?
+  idempotencyKey        String                       @unique
+  status                LineChatMessageSendJobStatus @default(QUEUED)
+  attemptCount          Int                          @default(0)
+  verifyAttemptCount    Int                          @default(0)
+  maxAttempts           Int                          @default(3)
+  workerId              String?
+  claimedAt             DateTime?
+  lockedUntil           DateTime?
+  scheduledAt           DateTime                     @default(now())
+  sendStartedAt         DateTime?
+  lastVerifiedAt        DateTime?
+  managerMessageId      String?
+  lastError             String?
+  completedAt           DateTime?
+  createdAt             DateTime                     @default(now())
+  updatedAt             DateTime                     @updatedAt
+
+  message             Message             @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  conversation        Conversation        @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  lineOfficialAccount LineOfficialAccount @relation(fields: [lineOfficialAccountId], references: [id], onDelete: Cascade)
+  lineChatSession     LineChatSession     @relation(fields: [lineChatSessionId], references: [id], onDelete: Cascade)
+  attempts            MessageDeliveryAttempt[]
+
+  @@index([status, scheduledAt, createdAt])
+  @@index([status, lockedUntil])
+  @@index([lineChatSessionId, status, scheduledAt])
+  @@index([conversationId, status])
+  @@index([lineOfficialAccountId, status])
+}
+
+model MessageDeliveryAttempt {
+  id               String                       @id @default(uuid())
+  messageId        String
+  sendJobId        String?
+  attemptNo        Int
+  status           MessageDeliveryAttemptStatus @default(PROCESSING)
+  startedAt        DateTime                     @default(now())
+  sendActionAt     DateTime?
+  verifiedAt       DateTime?
+  finishedAt       DateTime?
+  failureReason    String?
+  managerMessageId String?
+  createdAt        DateTime                     @default(now())
+  updatedAt        DateTime                     @updatedAt
+
+  message Message                 @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  sendJob LineChatMessageSendJob? @relation(fields: [sendJobId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, attemptNo])
+  @@index([sendJobId, status])
+  @@index([messageId, createdAt])
 }
 
 model GoogleReviewKpiResult {
