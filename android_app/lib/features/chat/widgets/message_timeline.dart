@@ -149,7 +149,11 @@ class MessageTimeline extends StatelessWidget {
       outbound: outbound,
       timestamp: message.sentAt.toLocal(),
       message: message,
-      footer: outbound ? appLocalizations(context).sent : null,
+      footer: outbound
+          ? message.deliveryStatus == 'FAILED'
+              ? appLocalizations(context).failedRetry
+              : appLocalizations(context).sent
+          : null,
       content: sticker
           ? StickerBubble(sticker: message.sticker)
           : image
