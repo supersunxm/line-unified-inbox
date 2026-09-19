@@ -51,7 +51,8 @@ if [ "${LINE_CHAT_ENSURE_MANUAL_RESPONSE_ENABLED:-false}" = "true" ]; then
   echo "{\"event\":\"line_chat_response_method_bootstrap_finished\",\"exitCode\":${RESPONSE_EXIT_CODE}}"
 fi
 
-# One-shot confirmed outbound recovery. Disabled by default and scoped by explicit targets.\nif [ "${LINE_CHAT_RECOVER_CONFIRMED_OUTBOUNDS_ENABLED:-false}" = "true" ]; then
+# One-shot confirmed outbound recovery. Disabled by default and scoped by explicit targets.
+if [ "${LINE_CHAT_RECOVER_CONFIRMED_OUTBOUNDS_ENABLED:-false}" = "true" ]; then
   RECOVERY_STORE="${LINE_CHAT_RECOVER_CONFIRMED_OUTBOUNDS_STORE:-27627}"
   RECOVERY_CUSTOMERS="${LINE_CHAT_RECOVER_CONFIRMED_OUTBOUNDS_CUSTOMERS:-}"
   RECOVERY_CONVERSATIONS="${LINE_CHAT_RECOVER_CONFIRMED_OUTBOUNDS_CONVERSATIONS:-}"
