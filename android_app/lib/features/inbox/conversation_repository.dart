@@ -622,7 +622,14 @@ class ConversationRepository {
           if (raw is! Map) continue;
           final json = Map<String, dynamic>.from(raw);
           if (json['externalMessageId'] == expectedExternalId) {
-            return ChatMessage.fromJson(json);
+            final deliveryStatus =
+                (json['deliveryStatus'] as String?)?.toUpperCase();
+            if (deliveryStatus == 'DELIVERED') {
+              return ChatMessage.fromJson(json);
+            }
+            if (deliveryStatus == 'FAILED') {
+              return null;
+            }
           }
         }
       } catch (_) {
