@@ -1272,6 +1272,7 @@ class _ChatPageState extends State<ChatPage> {
                           mediaBytes: _mediaBytes,
                           onLoadOlder: _loadOlder,
                           onRetryMessage: _retryPending,
+                          onRetryPersistedMessage: _retryPersistedMessage,
                           onOpenImage: (bytes, mimeType) =>
                               Navigator.of(context).push(MaterialPageRoute(
                                   builder: (_) => _ImageViewer(
@@ -1329,6 +1330,48 @@ class _ChatPageState extends State<ChatPage> {
                       onSend: widget.canReply ? _send : null)
                 ]));
           }));
+
+  Future<void> _retryPersistedMessage(String messageId) async {
+    try {
+      final message = await widget.repository.retryFailedMessage(
+        widget.conversationId,
+        messageId,
+      );
+      if (!mounted || message == null || _detail == null) return;
+
+      final detail = _detail!;
+      final messages = [...detail.messages];
+      final index = messages.indexWhere((item) => item.id == message.id);
+      if (index >= 0) {
+        messages[index] = message;
+      } else {
+        messages.add(message);
+      }
+      messages.sort((left, right) {
+        final timestamp = left.sentAt.compareTo(right.sentAt);
+        return timestamp == 0 ? left.id.compareTo(right.id) : timestamp;
+      });
+
+      final queued = message.deliveryStatus == 'PENDING';
+      setState(() {
+        _detail = detail.copyWith(
+          messages: messages,
+          bmReplyStatus: queued ? detail.bmReplyStatus : 'REPLIED',
+        );
+        _error = null;
+      });
+
+      if (queued) {
+        unawaited(_pollQueuedDelivery(message.id));
+      } else {
+        unawaited(_refreshReplyStateAfterSend());
+      }
+    } on ApiException catch (error) {
+      if (mounted) setState(() => _error = error.message);
+    } catch (_) {
+      if (mounted) setState(() => _error = 'Unable to retry message');
+    }
+  }
 
   void _retryPending(String key) {
     for (final pending in _pending) {
