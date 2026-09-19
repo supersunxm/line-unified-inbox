@@ -47,6 +47,7 @@ class MessageTimeline extends StatelessWidget {
     required this.mediaBytes,
     this.onLoadOlder,
     this.onRetryMessage,
+    this.onRetryPersistedMessage,
     this.onOpenImage,
     this.onLoadMedia,
     this.onLoadVideo,
@@ -62,6 +63,7 @@ class MessageTimeline extends StatelessWidget {
   final Map<String, Uint8List> mediaBytes;
   final VoidCallback? onLoadOlder;
   final ValueChanged<String>? onRetryMessage;
+  final ValueChanged<String>? onRetryPersistedMessage;
   final OpenImageCallback? onOpenImage;
   final void Function(ChatMedia media, String messageId)? onLoadMedia;
   final Future<Uint8List> Function(ChatMedia media, String messageId)?
@@ -155,6 +157,11 @@ class MessageTimeline extends StatelessWidget {
               : message.deliveryStatus == 'PENDING'
                   ? '✓'
                   : '✓✓'
+          : null,
+      onRetry: outbound &&
+              message.deliveryStatus == 'FAILED' &&
+              onRetryPersistedMessage != null
+          ? () => onRetryPersistedMessage!(message.id)
           : null,
       content: sticker
           ? StickerBubble(sticker: message.sticker)
