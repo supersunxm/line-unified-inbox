@@ -51,6 +51,27 @@ if [ "${LINE_CHAT_ENSURE_MANUAL_RESPONSE_ENABLED:-false}" = "true" ]; then
   echo "{\"event\":\"line_chat_response_method_bootstrap_finished\",\"exitCode\":${RESPONSE_EXIT_CODE}}"
 fi
 
+if [ "${LINE_CHAT_RECOVER_CONFIRMED_OUTBOUNDS_ENABLED:-false}" = "true" ]; then
+  RECOVERY_STORE="${LINE_CHAT_RECOVER_CONFIRMED_OUTBOUNDS_STORE:-27627}"
+  RECOVERY_CUSTOMERS="${LINE_CHAT_RECOVER_CONFIRMED_OUTBOUNDS_CUSTOMERS:-}"
+  RECOVERY_FROM="${LINE_CHAT_RECOVER_CONFIRMED_OUTBOUNDS_FROM:-}"
+  RECOVERY_TO="${LINE_CHAT_RECOVER_CONFIRMED_OUTBOUNDS_TO:-}"
+  RECOVERY_APPLY="${LINE_CHAT_RECOVER_CONFIRMED_OUTBOUNDS_APPLY:-false}"
+
+  echo "{\"event\":\"confirmed_outbound_recovery_bootstrap_started\",\"store\":\"${RECOVERY_STORE}\",\"apply\":\"${RECOVERY_APPLY}\"}"
+
+  set +e
+  if [ "$RECOVERY_APPLY" = "true" ]; then
+    npx tsx scripts/recover-confirmed-failed-outbounds.ts --store="$RECOVERY_STORE" --customers="$RECOVERY_CUSTOMERS" --from="$RECOVERY_FROM" --to="$RECOVERY_TO" --apply
+  else
+    npx tsx scripts/recover-confirmed-failed-outbounds.ts --store="$RECOVERY_STORE" --customers="$RECOVERY_CUSTOMERS" --from="$RECOVERY_FROM" --to="$RECOVERY_TO"
+  fi
+  RECOVERY_EXIT_CODE=$?
+  set -e
+
+  echo "{\"event\":\"confirmed_outbound_recovery_bootstrap_finished\",\"exitCode\":${RECOVERY_EXIT_CODE}}"
+fi
+
 if [ "${LINE_CHAT_MANUAL_READINESS_DRY_RUN_ENABLED:-false}" = "true" ]; then
   STORES="${LINE_CHAT_MANUAL_READINESS_DRY_RUN_STORES:-}"
   OUTPUT="${LINE_CHAT_MANUAL_READINESS_DRY_RUN_OUTPUT:-/tmp/line-chat-manual-readiness.csv}"
