@@ -54,6 +54,7 @@ fi
 if [ "${LINE_CHAT_RECOVER_CONFIRMED_OUTBOUNDS_ENABLED:-false}" = "true" ]; then
   RECOVERY_STORE="${LINE_CHAT_RECOVER_CONFIRMED_OUTBOUNDS_STORE:-27627}"
   RECOVERY_CUSTOMERS="${LINE_CHAT_RECOVER_CONFIRMED_OUTBOUNDS_CUSTOMERS:-}"
+  RECOVERY_CONVERSATIONS="${LINE_CHAT_RECOVER_CONFIRMED_OUTBOUNDS_CONVERSATIONS:-}"
   RECOVERY_FROM="${LINE_CHAT_RECOVER_CONFIRMED_OUTBOUNDS_FROM:-}"
   RECOVERY_TO="${LINE_CHAT_RECOVER_CONFIRMED_OUTBOUNDS_TO:-}"
   RECOVERY_APPLY="${LINE_CHAT_RECOVER_CONFIRMED_OUTBOUNDS_APPLY:-false}"
@@ -62,9 +63,9 @@ if [ "${LINE_CHAT_RECOVER_CONFIRMED_OUTBOUNDS_ENABLED:-false}" = "true" ]; then
 
   set +e
   if [ "$RECOVERY_APPLY" = "true" ]; then
-    npx tsx scripts/recover-confirmed-failed-outbounds.ts --store="$RECOVERY_STORE" --customers="$RECOVERY_CUSTOMERS" --from="$RECOVERY_FROM" --to="$RECOVERY_TO" --apply
+    npx tsx scripts/recover-confirmed-failed-outbounds.ts --store="$RECOVERY_STORE" --customers="$RECOVERY_CUSTOMERS" --conversation-ids="$RECOVERY_CONVERSATIONS" --from="$RECOVERY_FROM" --to="$RECOVERY_TO" --apply
   else
-    npx tsx scripts/recover-confirmed-failed-outbounds.ts --store="$RECOVERY_STORE" --customers="$RECOVERY_CUSTOMERS" --from="$RECOVERY_FROM" --to="$RECOVERY_TO"
+    npx tsx scripts/recover-confirmed-failed-outbounds.ts --store="$RECOVERY_STORE" --customers="$RECOVERY_CUSTOMERS" --conversation-ids="$RECOVERY_CONVERSATIONS" --from="$RECOVERY_FROM" --to="$RECOVERY_TO"
   fi
   RECOVERY_EXIT_CODE=$?
   set -e
