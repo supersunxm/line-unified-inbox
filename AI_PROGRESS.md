@@ -1,12 +1,37 @@
-# 2026-09-19: P0 Production Reliability — Verification-Delay Safety Canary (TEST DURABLE VERIFY DELAY 003) [IN PROGRESS]
+# 2026-09-19: P0 Production Reliability — Verification-Delay Safety Canary (TEST DURABLE VERIFY DELAY 003) [COMPLETED & VERIFIED]
 - **Current Task**: Execute controlled verification-delay canary test (`TEST DURABLE VERIFY DELAY 003`) exclusively on test conversation `OBS-Sunx2` in Store 28375 (`a04560a5-8658-493b-9b18-c992adc2b683`).
-- **Goal**: Prove that when a customer-facing send action has physically completed but verification is temporarily delayed/unavailable, the system NEVER blindly resends the message. The job transitions through `VERIFY_PENDING`, retries read-only history verification, and marks `DELIVERED` with `managerMessageId` once confirmed.
-- **Invariants Enforced**:
-  - Exactly one customer-facing Manager send action.
-  - Zero resend during `VERIFY_PENDING`.
-  - Android UI shows `✓` while pending, and transitions to `✓✓` only upon confirmed delivery.
-  - Conversation reply status transitions to `REPLIED` only after confirmed delivery.
-  - Max and all other conversations receive zero traffic.
+- **Goal**: Prove that when a customer-facing send action has physically completed but verification is temporarily delayed/unavailable, the system NEVER blindly resends the message.
+- **Canary Execution & Checkpoint Evidence**:
+  - **Android Single Checkmark (✓)**: Captured at `17:51` during `VERIFY_PENDING` (`scratch/emulator_check_pending_003.png`).
+  - **Message Row**:
+    - ID: `aba6b2bd-9dba-48ea-aaf3-1748451784b2`
+    - Initial `deliveryStatus`: `PENDING` (with `queueState: "VERIFY_PENDING"`, `lastSendError: "TEST_SIMULATED_VERIFY_DELAY: initial post-send verification unavailable"`)
+    - Final `deliveryStatus`: `DELIVERED`
+    - Stored `managerMessageId`: `632473869696892998`
+    - `sentAt`: `2026-09-19T10:51:47.337Z`
+  - **SendJob Row**:
+    - ID: `64567ab4-f282-495a-87a4-1921519a0474`
+    - Final `status`: `DELIVERED`
+    - `attemptCount`: `1` (strictly 1 customer-facing send attempt)
+    - `verifyAttemptCount`: `1` (demonstrates transition through `VERIFY_PENDING` retry)
+    - Stored `managerMessageId`: `632473869696892998`
+    - `completedAt`: `2026-09-19T10:52:09.560Z`
+  - **DeliveryAttempt Row**:
+    - ID: `decce2fe-0c3a-4ea6-a750-9c4a89ac6ecd`
+    - `attemptNo`: `1`
+    - Final `status`: `DELIVERED`
+    - `verifiedAt`: `2026-09-19T10:51:47.337Z`
+    - `managerMessageId`: `632473869696892998`
+  - **Worker Logs Verification**:
+    - Line 10:51:47 AM: Exactly ONE `line_chat_manager_send_action` (`action: "SEND_BUTTON"`).
+    - Line 10:51:48 AM: `line_chat_manager_test_simulated_verify_delay` triggered `VERIFY_PENDING`.
+    - Line 10:51:56 AM: `line_chat_manager_test_simulated_verify_retry_in_progress` (attempt 1 read-only check failed with delay). NO second send action.
+    - Line 10:52:09 AM: `line_chat_message_send_delivered` with `managerMessageId: "632473869696892998"`. NO second send action.
+  - **Android Double Checkmark (✓✓)**: Captured at `17:52` (`scratch/emulator_delivered_check_003.png`), single bubble updated in place with `Replied` badge.
+  - **Conversation Status**: `bmReplyStatus: REPLIED`, `followUpStatus: COMPLETED`, `latestMessageAt: 2026-09-19T10:51:47.337Z`.
+  - **Manager Message History Exact-Match Count**: Exactly 1 (no duplicate copy in LINE Manager).
+  - **Other Conversations & Max**: Zero traffic (`otherSendJobsCount: 0`, `maxMessagesCountInLast15Minutes: 0`).
+- **Status**: STOPPED immediately as instructed. No other test messages sent. No production Android release created. Max permanently untouched.
 
 # 2026-09-19: P0 Production Reliability — Durable Queue Canary Normal Send (TEST DURABLE QUEUE 002) [COMPLETED & VERIFIED]
 - **Current Task**: Execute single normal canary send (`TEST DURABLE QUEUE 002`) exclusively on test conversation `OBS-Sunx2` in Store 28375 (`a04560a5-8658-493b-9b18-c992adc2b683`) after deploying the mandatory conversation allowlist.
