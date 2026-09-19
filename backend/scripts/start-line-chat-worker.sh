@@ -75,6 +75,15 @@ if [ "${LINE_CHAT_RECOVER_CONFIRMED_OUTBOUNDS_ENABLED:-false}" = "true" ]; then
   echo "{\"event\":\"confirmed_outbound_recovery_bootstrap_finished\",\"exitCode\":${RECOVERY_EXIT_CODE}}"
 fi
 
+if [ "${LINE_CHAT_MANAGER_HISTORY_SYNC_ENABLED:-false}" = "true" ]; then
+  echo "{\"event\":\"manager_history_sync_bootstrap_started\"}"
+  set +e
+  npx tsx scripts/sync-manager-history-to-black-app.ts
+  MANAGER_HISTORY_SYNC_EXIT_CODE=$?
+  set -e
+  echo "{\"event\":\"manager_history_sync_bootstrap_finished\",\"exitCode\":${MANAGER_HISTORY_SYNC_EXIT_CODE}}"
+fi
+
 if [ "${LINE_CHAT_MESSAGE_API_INSPECT_ENABLED:-false}" = "true" ]; then
   echo "{\"event\":\"line_chat_message_api_inspection_bootstrap_started\"}"
   set +e
