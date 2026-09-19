@@ -9,7 +9,7 @@ import { hostname } from "node:os";
 import { PrismaService } from "../prisma.service";
 import { persistStaffOutboundReplyState } from "../conversation-reply-state";
 import { LineChatManagerMessageRelayWorkerService } from "./line-chat-manager-message-relay-worker.service";
-import { isLineChatDurableSendQueueStoreEnabled } from "./line-chat-pilot.constants";
+import { isLineChatDurableSendQueueConversationEnabled } from "./line-chat-pilot.constants";
 
 const POLL_INTERVAL_MS = 1_500;
 const JOB_LEASE_MS = 90_000;
@@ -236,10 +236,14 @@ export class LineChatMessageSendWorkerService implements OnModuleInit, OnModuleD
     const storeCode = job.conversation?.store?.code?.trim()
       || job.conversation?.store?.storeMaster?.externalStoreId?.trim()
       || "";
-    if (!isLineChatDurableSendQueueStoreEnabled(storeCode)) {
+    if (!isLineChatDurableSendQueueConversationEnabled({
+      storeCode,
+      conversationId: job.conversationId,
+    })) {
       this.logger.warn(JSON.stringify({
-        event: "line_chat_message_send_job_store_not_allowlisted",
+        event: "line_chat_message_send_job_conversation_not_allowlisted",
         jobId: job.id,
+        conversationId: job.conversationId,
         storeCode,
       }));
       return;

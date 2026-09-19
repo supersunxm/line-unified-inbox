@@ -1,4 +1,13 @@
-# LINE OA Black App Durable Send Queue Store Allowlist & Delivery UX Architecture (2026-09-19)
+# LINE OA Black App Durable Send Queue Store & Conversation Allowlist Architecture (2026-09-19)
+
+- **Mandatory Secondary Conversation Allowlist (`LINE_CHAT_DURABLE_SEND_QUEUE_CONVERSATION_IDS`)**:
+  Following the safety incident where test traffic reached real customer "Max", store-level gating alone was deemed insufficient. Rollout requires ALL THREE conditions:
+  1. `LINE_CHAT_DURABLE_SEND_QUEUE_ENABLED === "true"`
+  2. `storeCode` in `LINE_CHAT_DURABLE_SEND_QUEUE_STORE_CODES`
+  3. `conversationId` in `LINE_CHAT_DURABLE_SEND_QUEUE_CONVERSATION_IDS`
+  - **Fail-Closed Semantics**: If the conversation allowlist is unset, empty, whitespace-only, or malformed, no conversation may enter the durable queue. Missing configuration strictly fails closed and NEVER defaults to "all conversations".
+  - **Dual-Layer & Retry Gating**: Gating is enforced at queue ingress (`enqueueText`) and worker egress (`processSend`). Retries must never bypass conversation gating.
+  - **Sole Allowed Canary Conversation**: Customer `OBS-Sunx2` in Store `28375` (`conversationId: a04560a5-8658-493b-9b18-c992adc2b683`). Real customer "Max" (`9cf223e4-194a-47ce-b795-1192a22d3928`) and all other conversations are strictly excluded from canary traffic.
 
 - **Store-Scoped Allowlist Gating (`LINE_CHAT_DURABLE_SEND_QUEUE_STORE_CODES`)**:
   To protect production operations across non-canary stores while validating the new durable send queue architecture, rollout is gated on a per-store basis via `LINE_CHAT_DURABLE_SEND_QUEUE_STORE_CODES`.

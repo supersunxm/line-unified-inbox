@@ -107,6 +107,56 @@ export function isLineChatDurableSendQueueStoreEnabled(
   return allowlist.has(cleanStoreCode);
 }
 
+/**
+ * Durable send queue conversation allowlist via LINE_CHAT_DURABLE_SEND_QUEUE_CONVERSATION_IDS.
+ * Empty or missing allowlist MUST NOT mean "all conversations" (fail closed).
+ */
+export function getLineChatDurableSendQueueConversationIds(
+  raw = process.env.LINE_CHAT_DURABLE_SEND_QUEUE_CONVERSATION_IDS,
+): ReadonlySet<string> {
+  if (!raw) return new Set();
+  const ids = raw
+    .split(",")
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0);
+  return new Set(ids);
+}
+
+export function isLineChatDurableSendQueueConversationEnabled(
+  params: {
+    storeCode: string | null | undefined;
+    conversationId: string | null | undefined;
+  },
+  env: {
+    enabled?: string;
+    storeCodes?: string;
+    conversationIds?: string;
+  } = {
+    enabled: process.env.LINE_CHAT_DURABLE_SEND_QUEUE_ENABLED,
+    storeCodes: process.env.LINE_CHAT_DURABLE_SEND_QUEUE_STORE_CODES,
+    conversationIds: process.env.LINE_CHAT_DURABLE_SEND_QUEUE_CONVERSATION_IDS,
+  },
+): boolean {
+  if (
+    !isLineChatDurableSendQueueStoreEnabled(params.storeCode, {
+      enabled: env.enabled,
+      storeCodes: env.storeCodes,
+    })
+  ) {
+    return false;
+  }
+
+  const cleanConversationId = (params.conversationId ?? "").trim();
+  if (!cleanConversationId) return false;
+
+  const conversationAllowlist = getLineChatDurableSendQueueConversationIds(
+    env.conversationIds,
+  );
+  if (conversationAllowlist.size === 0) return false;
+
+  return conversationAllowlist.has(cleanConversationId);
+}
+
 export interface LineChatRealtimeResolverEligibilityParams {
   storeCode: string | null | undefined;
   conversationStoreId: string | null | undefined;
