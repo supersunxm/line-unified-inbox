@@ -13,6 +13,7 @@ type Args = {
   storeCode: string;
   customerNames: string[];
   conversationIds: string[];
+  messageIds: string[];
   from: Date;
   to: Date;
   apply: boolean;
@@ -35,6 +36,10 @@ function parseArgs(argv: string[]): Args {
     .split("|")
     .map((item) => item.trim())
     .filter(Boolean);
+  const messageIds = (value("message-ids") || "")
+    .split("|")
+    .map((item) => item.trim())
+    .filter(Boolean);
   const fromRaw = value("from")?.trim() || "";
   const toRaw = value("to")?.trim() || "";
   const from = new Date(fromRaw);
@@ -42,13 +47,13 @@ function parseArgs(argv: string[]): Args {
   const apply = argv.includes("--apply");
 
   if (!storeCode) throw new Error("MISSING_STORE");
-  if (customerNames.length === 0 && conversationIds.length === 0) {
+  if (customerNames.length === 0 && conversationIds.length === 0 && messageIds.length === 0) {
     throw new Error("MISSING_TARGETS");
   }
   if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime()) || from >= to) {
     throw new Error("INVALID_TIME_WINDOW");
   }
-  return { storeCode, customerNames, conversationIds, from, to, apply };
+  return { storeCode, customerNames, conversationIds, messageIds, from, to, apply };
 }
 
 function isAutoResponse(rawPayload: unknown): boolean {
@@ -85,6 +90,9 @@ async function main(): Promise<void> {
           : []),
         ...(args.conversationIds.length > 0
           ? [{ id: { in: args.conversationIds } }]
+          : []),
+        ...(args.messageIds.length > 0
+          ? [{ messages: { some: { id: { in: args.messageIds } } } }]
           : []),
       ],
     },
@@ -276,6 +284,52 @@ async function main(): Promise<void> {
     });
   }
 
+  for (const messageId of args.messageIds) {
+    const conversation = conversations.find((item) =>
+      item.messages.some((message) => message.id === messageId),
+    );
+    const message = conversation?.messages.find((item) => item.id === messageId);
+
+    if (!conversation || !message) {
+      console.log(JSON.stringify({
+        event: "confirmed_outbound_recovery_target_ambiguous",
+        targetLabel: `message:${messageId}`,
+        storeCode: args.storeCode,
+        candidateCount: 0,
+        conversationIds: [],
+      }));
+      failures += 1;
+      continue;
+    }
+
+    const text = message.originalText.trim();
+    if (
+      !text
+      || !message.senderUserId
+      || message.senderDisplayName?.trim() === AUTO_REPLY_BOT_DISPLAY_NAME
+      || isAutoResponse(message.rawPayload)
+    ) {
+      console.log(JSON.stringify({
+        event: "confirmed_outbound_recovery_target_ambiguous",
+        targetLabel: `message:${messageId}`,
+        customerName: conversation.customer.displayName,
+        storeCode: args.storeCode,
+        candidateCount: 0,
+        reason: "INELIGIBLE_MESSAGE",
+      }));
+      failures += 1;
+      continue;
+    }
+
+    await processCandidate({
+      targetLabel: `message:${messageId}`,
+      customerName: conversation.customer.displayName,
+      conversationId: conversation.id,
+      storeName: conversation.store?.name || args.storeCode,
+      message,
+    });
+  }
+
   for (const conversationId of args.conversationIds) {
     const conversation = conversations.find((item) => item.id === conversationId);
     if (!conversation) {
@@ -327,6 +381,7 @@ async function main(): Promise<void> {
     storeCode: args.storeCode,
     requestedCustomers: args.customerNames.length,
     requestedConversations: args.conversationIds.length,
+    requestedMessages: args.messageIds.length,
     apply: args.apply,
     recovered,
     alreadyPresent,
