@@ -38,6 +38,7 @@ class MessageBubble extends StatelessWidget {
     final isFailed = message?.deliveryStatus == 'FAILED' ||
         (footerText?.toLowerCase().contains('fail') ?? false);
     final isSending = footerText?.toLowerCase().contains('sending') ?? false;
+    final isDeliveryCheck = footerText == '✓' || footerText == '✓✓';
     final bubbleColor =
         outbound ? AppColors.primaryContainer : AppColors.surface;
     final borderColor =
@@ -93,24 +94,29 @@ class MessageBubble extends StatelessWidget {
                   if (footerText != null && footerText.isNotEmpty) ...[
                     const SizedBox(width: AppSpacing.sm),
                     if (onRetry == null) ...[
-                      Icon(
-                        isFailed
-                            ? Icons.error_outline
-                            : isSending
-                                ? Icons.schedule_outlined
-                                : Icons.done_all,
-                        size: 14,
-                        color: isFailed
-                            ? AppColors.error
-                            : AppColors.textSecondary,
-                      ),
-                      const SizedBox(width: AppSpacing.xs),
+                      if (!isDeliveryCheck) ...[
+                        Icon(
+                          isFailed
+                              ? Icons.error_outline
+                              : isSending
+                                  ? Icons.schedule_outlined
+                                  : Icons.done_all,
+                          size: 14,
+                          color: isFailed
+                              ? AppColors.error
+                              : AppColors.textSecondary,
+                        ),
+                        const SizedBox(width: AppSpacing.xs),
+                      ],
                       Text(
                         footerText,
                         style: Theme.of(context).textTheme.labelSmall?.copyWith(
                               color: isFailed
                                   ? AppColors.error
                                   : AppColors.textSecondary,
+                              fontWeight: isDeliveryCheck
+                                  ? FontWeight.w700
+                                  : null,
                             ),
                       ),
                     ] else
