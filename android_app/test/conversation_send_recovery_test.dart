@@ -29,9 +29,45 @@ class _LostResponseApiClient extends ApiClient {
           'id': 'message-1',
           'direction': 'OUTBOUND',
           'messageType': 'TEXT',
+          'deliveryStatus': 'DELIVERED',
           'originalText': 'hello',
           'sentAt': '2026-09-12T09:00:00.000Z',
           'externalMessageId': 'outbound:send-key-1',
+        }
+      ],
+    };
+  }
+}
+
+class _PersistedFailedSendApiClient extends ApiClient {
+  _PersistedFailedSendApiClient() : super(TokenStore());
+
+  int postCalls = 0;
+  int getCalls = 0;
+
+  @override
+  Future<Map<String, dynamic>> post(String path,
+      {Map<String, dynamic>? body,
+      bool authenticated = true,
+      bool handleSessionExpiry = true}) async {
+    postCalls += 1;
+    throw ApiException(503, 'SERVICE_UNAVAILABLE', 'Manager relay failed');
+  }
+
+  @override
+  Future<Map<String, dynamic>> get(String path,
+      {Map<String, String>? query, bool authenticated = true}) async {
+    getCalls += 1;
+    return {
+      'items': [
+        {
+          'id': 'message-failed-1',
+          'direction': 'OUTBOUND',
+          'deliveryStatus': 'FAILED',
+          'messageType': 'TEXT',
+          'originalText': 'hello',
+          'sentAt': '2026-09-19T03:56:20.000Z',
+          'externalMessageId': 'outbound:send-key-failed',
         }
       ],
     };
@@ -74,6 +110,23 @@ void main() {
     expect(api.postCalls, 1,
         reason: 'reconciliation must not create a second outbound send');
     expect(api.getCalls, 1);
+  });
+
+  test('reply never recovers a persisted FAILED outbound as sent', () async {
+    final api = _PersistedFailedSendApiClient();
+    final repository = ConversationRepository(api);
+
+    await expectLater(
+      repository.reply(
+          'conversation-1', 'hello', 'send-key-failed'),
+      throwsA(isA<ApiException>().having(
+          (error) => error.statusCode, 'statusCode', 503)),
+    );
+
+    expect(api.postCalls, 1,
+        reason: 'a failed persisted attempt must not trigger a duplicate send');
+    expect(api.getCalls, 1,
+        reason: 'FAILED is authoritative and should stop reconciliation');
   });
 
   test('reply does not reconcile deterministic client errors', () async {
