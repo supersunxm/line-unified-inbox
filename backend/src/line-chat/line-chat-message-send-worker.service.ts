@@ -38,6 +38,14 @@ function isNonRetryableBeforeSend(message: string): boolean {
     || message.includes("ไม่พบ session ของ LINE OA Manager");
 }
 
+type ManagerOutboundEvent = {
+  managerMessageId: string;
+  text: string;
+  sentAt: Date;
+  bizId: string | null;
+  ownerName: string | null;
+};
+
 @Injectable()
 export class LineChatMessageSendWorkerService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(LineChatMessageSendWorkerService.name);
@@ -199,6 +207,60 @@ export class LineChatMessageSendWorkerService implements OnModuleInit, OnModuleD
       },
     });
     if (!job) return;
+
+    // A previously attempted job is a manual retry/recovery. Re-read Manager
+    // history before any customer-facing resend. If the original text already
+    // exists, confirm it. If another staff reply exists, import that reply and
+    // suppress the stale unsent draft instead of sending it late.
+    if (job.attemptCount > 0) {
+      try {
+        const activity = await this.managerRelay.inspectOutboundActivitySince({
+          conversationId: job.conversationId,
+          after: job.message.sentAt,
+        });
+        if (activity.handled) {
+          const exact = activity.events.find(
+            (event) => event.text === job.message.originalText,
+          );
+          if (exact) {
+            await this.markDelivered(
+              job.id,
+              null,
+              exact.managerMessageId,
+              exact.sentAt,
+            );
+            this.logger.log(JSON.stringify({
+              event: "line_chat_message_retry_precheck_exact_found",
+              jobId: job.id,
+              messageId: job.messageId,
+              conversationId: job.conversationId,
+              managerMessageId: exact.managerMessageId,
+            }));
+            return;
+          }
+
+          if (activity.events.length > 0) {
+            await this.supersedeWithManagerReplies(job.id, activity.events);
+            return;
+          }
+        }
+      } catch (error) {
+        // Fail safe: a retry may not send until the source-of-truth precheck
+        // succeeds. Requeue for another read-only check rather than guessing.
+        await this.prisma.lineChatMessageSendJob.update({
+          where: { id: job.id },
+          data: {
+            status: LineChatMessageSendJobStatus.QUEUED,
+            scheduledAt: new Date(Date.now() + 5_000),
+            workerId: null,
+            claimedAt: null,
+            lockedUntil: null,
+            lastError: `RETRY_PRECHECK_FAILED: ${errorText(error).slice(0, 420)}`,
+          },
+        });
+        return;
+      }
+    }
 
     const startedAt = new Date();
     const attemptNo = job.attemptCount + 1;
@@ -389,6 +451,177 @@ export class LineChatMessageSendWorkerService implements OnModuleInit, OnModuleD
       }
       await this.markFailed(job.id, job.attempts[0]?.id ?? null, message);
     }
+  }
+
+  private async supersedeWithManagerReplies(
+    jobId: string,
+    events: ManagerOutboundEvent[],
+  ): Promise<void> {
+    const job = await this.prisma.lineChatMessageSendJob.findUnique({
+      where: { id: jobId },
+      include: {
+        message: {
+          select: {
+            id: true,
+            conversationId: true,
+            rawPayload: true,
+            senderUserId: true,
+            senderDisplayName: true,
+          },
+        },
+        conversation: {
+          select: {
+            id: true,
+            bmReplyStatus: true,
+            followUpStatus: true,
+            latestMessageAt: true,
+          },
+        },
+      },
+    });
+    if (!job) return;
+
+    const ownerNames = [...new Set(
+      events
+        .map((event) => event.ownerName?.trim())
+        .filter((name): name is string => Boolean(name)),
+    )];
+    const users = ownerNames.length > 0
+      ? await this.prisma.user.findMany({
+          where: {
+            displayName: { in: ownerNames },
+            isActive: true,
+          },
+          select: { id: true, displayName: true },
+        })
+      : [];
+    const userByName = new Map(users.map((user) => [user.displayName.trim(), user]));
+
+    let latestImportedAt = job.conversation.latestMessageAt;
+    let latestAttributed: {
+      userId: string;
+      displayName: string;
+      sentAt: Date;
+    } | null = null;
+
+    await this.prisma.$transaction(async (tx) => {
+      for (const event of events) {
+        const externalMessageId = `line-chat-manager:${event.managerMessageId}`;
+        const matchedUser = event.ownerName
+          ? userByName.get(event.ownerName.trim())
+          : undefined;
+
+        await tx.message.upsert({
+          where: { externalMessageId },
+          update: {
+            deliveryStatus: MessageDeliveryStatus.DELIVERED,
+            originalText: event.text,
+            sentAt: event.sentAt,
+            senderUserId: matchedUser?.id ?? undefined,
+            senderDisplayName: matchedUser?.displayName
+              ?? event.ownerName
+              ?? "LINE OA Manager",
+            rawPayload: {
+              provider: "LINE_MANAGER",
+              source: "LINE_CHAT_MANAGER_RECONCILIATION",
+              managerMessageId: event.managerMessageId,
+              managerBizId: event.bizId,
+              reconciledAt: new Date().toISOString(),
+            } as Prisma.InputJsonValue,
+          },
+          create: {
+            conversationId: job.conversationId,
+            externalMessageId,
+            direction: "OUTBOUND",
+            deliveryStatus: MessageDeliveryStatus.DELIVERED,
+            messageType: "TEXT",
+            originalText: event.text,
+            sentAt: event.sentAt,
+            senderUserId: matchedUser?.id ?? null,
+            senderDisplayName: matchedUser?.displayName
+              ?? event.ownerName
+              ?? "LINE OA Manager",
+            rawPayload: {
+              provider: "LINE_MANAGER",
+              source: "LINE_CHAT_MANAGER_RECONCILIATION",
+              managerMessageId: event.managerMessageId,
+              managerBizId: event.bizId,
+              reconciledAt: new Date().toISOString(),
+            } as Prisma.InputJsonValue,
+          },
+        });
+
+        if (event.sentAt > latestImportedAt) latestImportedAt = event.sentAt;
+        if (
+          matchedUser
+          && (!latestAttributed || event.sentAt > latestAttributed.sentAt)
+        ) {
+          latestAttributed = {
+            userId: matchedUser.id,
+            displayName: matchedUser.displayName,
+            sentAt: event.sentAt,
+          };
+        }
+      }
+
+      await tx.message.update({
+        where: { id: job.messageId },
+        data: {
+          deliveryStatus: MessageDeliveryStatus.FAILED,
+          rawPayload: {
+            ...jsonObject(job.message.rawPayload),
+            queueState: "SUPERSEDED",
+            hiddenFromTimeline: true,
+            supersededAt: new Date().toISOString(),
+            supersededByManagerMessageIds: events.map(
+              (event) => event.managerMessageId,
+            ),
+          } as Prisma.InputJsonValue,
+        },
+      });
+
+      await tx.lineChatMessageSendJob.update({
+        where: { id: job.id },
+        data: {
+          status: LineChatMessageSendJobStatus.FAILED,
+          completedAt: new Date(),
+          workerId: null,
+          claimedAt: null,
+          lockedUntil: null,
+          lastError: "SUPERSEDED_BY_MANAGER_REPLY",
+        },
+      });
+
+      await tx.conversation.update({
+        where: { id: job.conversationId },
+        data: {
+          latestMessageAt: latestImportedAt,
+        },
+      });
+
+      if (latestAttributed) {
+        await persistStaffOutboundReplyState(tx, {
+          conversationId: job.conversationId,
+          previousBmReplyStatus: job.conversation.bmReplyStatus,
+          previousFollowUpStatus: job.conversation.followUpStatus,
+          actor: {
+            id: latestAttributed.userId,
+            displayName: latestAttributed.displayName,
+          },
+          sentAt: latestAttributed.sentAt,
+          description: "Reconciled staff reply already present in LINE OA Manager; stale retry suppressed",
+        });
+      }
+    });
+
+    this.logger.log(JSON.stringify({
+      event: "line_chat_message_retry_suppressed_by_manager_reply",
+      jobId: job.id,
+      messageId: job.messageId,
+      conversationId: job.conversationId,
+      importedCount: events.length,
+      attributed: Boolean(latestAttributed),
+    }));
   }
 
   private async markDelivered(
