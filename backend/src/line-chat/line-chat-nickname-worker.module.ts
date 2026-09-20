@@ -16,6 +16,7 @@ import { LineChatNovncRecoveryWorkerService } from "./line-chat-novnc-recovery-w
 import { LineChatWebhookIdentityMapperService } from "./line-chat-webhook-identity-mapper.service";
 import { LineChatHistoricalMappingBackfillService } from "./line-chat-historical-mapping-backfill.service";
 import { LineChatMessageSendWorkerService } from "./line-chat-message-send-worker.service";
+import { LineChatMirrorService } from "./line-chat-mirror.service";
 
 /**
  * Composition root for the dedicated nickname worker process.
@@ -42,6 +43,7 @@ import { LineChatMessageSendWorkerService } from "./line-chat-message-send-worke
     LineChatManagerImageRelayWorkerService,
     LineChatNovncRecoveryWorkerService,
     LineChatMessageSendWorkerService,
+    LineChatMirrorService,
   ],
   exports: [
     LineChatNicknameWorkerService,
@@ -49,6 +51,7 @@ import { LineChatMessageSendWorkerService } from "./line-chat-message-send-worke
     LineChatManagerMessageRelayWorkerService,
     LineChatManagerImageRelayWorkerService,
     LineChatNovncRecoveryWorkerService,
+    LineChatMirrorService,
   ],
 })
 export class LineChatNicknameWorkerModule {}
