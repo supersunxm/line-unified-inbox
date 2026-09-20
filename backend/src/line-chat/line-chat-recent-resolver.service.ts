@@ -583,11 +583,19 @@ export class LineChatRecentResolverService {
         lineOfficialAccountId: true,
         lineChatUserId: true,
         latestMessageAt: true,
-        customer: { select: { displayName: true } },
+        customer: { select: { displayName: true, lineUserId: true } },
         messages: {
+          where: { direction: "INBOUND" },
           orderBy: { sentAt: "desc" },
           take: MESSAGE_ANCHOR_LIMIT,
-          select: { direction: true, deliveryStatus: true, sentAt: true },
+          select: {
+            direction: true,
+            deliveryStatus: true,
+            externalMessageId: true,
+            messageType: true,
+            originalText: true,
+            sentAt: true,
+          },
         },
         store: {
           select: {
@@ -852,10 +860,33 @@ export class LineChatRecentResolverService {
 
     if (!inbound) return { status: "RESOLVE_NO_MATCH" };
 
+    const timestampCandidates = snapshot.chats.filter((chat) => {
+      if (!chat.lastMessageAt) return false;
+      const managerTimestamp = new Date(chat.lastMessageAt).getTime();
+      return Number.isFinite(managerTimestamp)
+        && Math.abs(managerTimestamp - inbound.sentAt.getTime()) <= MATCH_TOLERANCE_MS;
+    });
+
+    if (timestampCandidates.length === 0) {
+      this.logger.log(JSON.stringify({
+        event: "line_chat_inbound_fingerprint_resolution",
+        conversationId: conversation.id,
+        lineOfficialAccountId: conversation.lineOfficialAccountId,
+        candidateChatCount: snapshot.chats.length,
+        timestampCandidateCount: 0,
+        scannedChats: 0,
+        failedChats: 0,
+        matchCount: 0,
+        matchMethod: null,
+        resolutionStatus: "RESOLVE_NO_MATCH",
+      }));
+      return { status: "RESOLVE_NO_MATCH" };
+    }
+
     const match = await this.sessionService.findInboundMessageFingerprintMatches({
       botId: input.botId,
       profilePath: input.profilePath,
-      chats: snapshot.chats,
+      chats: timestampCandidates,
       externalMessageId: inbound.externalMessageId,
       messageType: inbound.messageType?.toString() ?? null,
       text: inbound.originalText,
@@ -870,6 +901,7 @@ export class LineChatRecentResolverService {
         conversationId: conversation.id,
         lineOfficialAccountId: conversation.lineOfficialAccountId,
         candidateChatCount: snapshot.chats.length,
+        timestampCandidateCount: timestampCandidates.length,
         scannedChats: match.scannedChats,
         failedChats: match.failedChats,
         matchCount: 0,
@@ -919,6 +951,7 @@ export class LineChatRecentResolverService {
       conversationId: conversation.id,
       lineOfficialAccountId: conversation.lineOfficialAccountId,
       candidateChatCount: snapshot.chats.length,
+      timestampCandidateCount: timestampCandidates.length,
       scannedChats: match.scannedChats,
       failedChats: match.failedChats,
       matchCount: 0,
