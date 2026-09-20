@@ -11,6 +11,21 @@ export type AndroidRelease = {
 
 export const androidReleases: AndroidRelease[] = [
   {
+    version: "1.1.34",
+    build: 54,
+    releasedAt: "2026-09-20",
+    releasedAtDisplay: "20 กันยายน 2026",
+    size: "60.1 MB",
+    fileName: "oppo-line-oa-chat-v1.1.34-production.apk",
+    sha256: "9cc03520df0bf00b078179707e0524b3a5b43bbad294bae1c37fa9f92b0a6763",
+    notes: [
+      "ปรับการ reconcile สถานะการส่งให้รอผลยืนยันจาก backend ได้นานขึ้น",
+      "ป้องกันข้อความซ้ำเมื่อซิงก์ข้อความที่ถูกแทนที่",
+      "ปรับปรุงสถานะ ✓ และ ✓✓ ให้ตรงกับหลักฐานการส่ง",
+      "ปรับปรุงความปลอดภัยของ Retry และ lifecycle ของหน้าแชท",
+    ],
+  },
+  {
   version: "1.1.33",
   build: 53,
   releasedAt: "2026-09-18",
