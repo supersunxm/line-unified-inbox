@@ -14,7 +14,14 @@ function conversation(overrides: Record<string, unknown> = {}) {
     lineChatUserId: null,
     latestMessageAt: MESSAGE_AT,
     customer: { displayName: "สมชาย Oppo" },
-    messages: [{ sentAt: MESSAGE_AT }],
+    messages: [{
+      direction: "INBOUND",
+      deliveryStatus: "DELIVERED",
+      externalMessageId: "line-message-1",
+      messageType: "TEXT",
+      originalText: "สวัสดีครับ",
+      sentAt: MESSAGE_AT,
+    }],
     store: { code: "28375", storeMaster: null },
     lineOfficialAccount: {
       name: "OPPO BS RBS Chonburi",
@@ -47,6 +54,9 @@ function fixture(options: {
   expandedChats?: ReturnType<typeof chat>[];
   discoveryStatus?: "READY" | "FAILED";
   failureReason?: "SESSION_AUTH" | "TRANSPORT";
+  fingerprintMatches?: string[];
+  fingerprintStatus?: "READY" | "FAILED";
+  fingerprintMatchMethod?: "MESSAGE_ID" | "TEXT_TIMESTAMP" | null;
   conflict?: boolean;
   writeCount?: number;
   racedMapping?: string | null;
@@ -93,6 +103,30 @@ function fixture(options: {
         totalRawRecords: expanded ? 500 : 125,
       };
     },
+    findInboundMessageFingerprintMatches: async (input: { chats: readonly ReturnType<typeof chat>[] }) => ({
+      status: options.fingerprintStatus ?? "READY",
+      matches: options.fingerprintStatus === "FAILED" ? [] : (options.fingerprintMatches ?? []),
+      scannedChats: input.chats.length,
+      failedChats: options.fingerprintStatus === "FAILED" ? input.chats.length : 0,
+      matchMethod: options.fingerprintStatus === "FAILED"
+        ? null
+        : (options.fingerprintMatchMethod ?? (options.fingerprintMatches?.length ? "MESSAGE_ID" : null)),
+    }),
+    discoverChats: async () => ({
+      botId: input.botId,
+      endpoint: "https://chat.line.biz/api/v2/bots/test/chats",
+      responseShape: "list",
+      enumerationStatus: "COMPLETE",
+      chats: options.expandedChats ?? options.chats ?? [chat()],
+      pagesFetched: 1,
+      totalRawRecords: (options.expandedChats ?? options.chats ?? [chat()]).length,
+      validUserChats: (options.expandedChats ?? options.chats ?? [chat()]).length,
+      ignoredNonUserRecords: 0,
+      invalidUserRecords: 0,
+      duplicateIds: 0,
+      conflictingDuplicates: 0,
+      nextTerminationObserved: true,
+    }),
   };
   const service = new LineChatRecentResolverService(prisma as never, session as never);
   (service as unknown as { logger: { log: (message: string) => void } }).logger = {
@@ -133,6 +167,23 @@ test("unique normalized exact customer name resolves with a guarded write", asyn
     data: { lineChatUserId: CHAT_ID },
   });
 });
+
+test("inbound LINE message ID resolves before display-name matching", async () => {
+  const value = fixture({
+    chats: [chat(CHAT_ID, "different customer", 0)],
+    fingerprintMatches: [CHAT_ID],
+    fingerprintMatchMethod: "MESSAGE_ID",
+  });
+  const result = await value.service.resolve(input);
+  assert.deepEqual(result, { status: "RESOLVED", lineChatUserId: CHAT_ID });
+  assert.equal(value.writes.length, 1);
+  const fingerprintDiagnostic = value.diagnostics
+    .map((payload) => JSON.parse(payload) as Record<string, unknown>)
+    .find((payload) => payload.event === "line_chat_inbound_fingerprint_resolution");
+  assert.equal(fingerprintDiagnostic?.matchMethod, "MESSAGE_ID");
+  assert.equal(fingerprintDiagnostic?.resolutionStatus, "RESOLVED");
+});
+
 
 
 test("no-match retries with an expanded recent-chat scan before failing", async () => {
