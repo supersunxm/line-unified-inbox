@@ -1,9 +1,8 @@
-# 2026-09-20: Deterministic Worker Restart Canary and Long-Pending Reconciliation
+# 2026-09-20: Worker Restart Canary B002 Outcome and Cleanup
 
-- Keep the temporary pause hook exact-gated to Store `28375`, conversation `cb6dc791-ef0e-45f0-bb33-96c9b638c9a0`, and text `INTERNAL WORKER RESTART B 002`. It runs only after `sendActionAt` persistence and before final delivery persistence.
-- Use a 15-minute pause for the approved crash-window canary so the old worker cannot naturally reach `markDelivered` before an intentional replacement deployment. Normal production sends and the 90-second `JOB_LEASE_MS` remain unchanged.
-- The replacement worker may start with the pause flag enabled because `VERIFY_PENDING` recovery calls Manager-history inspection only; it must never call `relayText` or create Attempt 2.
-- Flutter keeps a persisted PENDING bubble visible while polling canonical conversation state for 5:53 with a 30-second cap. Only canonical `DELIVERED`, `FAILED`, or deterministic supersession changes the bubble; poll generations are invalidated on disposal/navigation.
+- The B002 restart canary was terminal but not a rollout pass: `PROFILE_BUSY_BEFORE_SEND` caused Attempt 1 to fail before send, and the automatic requeue created Attempt 2. The final records are preserved as audit history; they must not be rewritten to simulate the required one-attempt outcome.
+- The paused worker was replaced while the pause flag remained enabled. Lease recovery used the existing Manager evidence and completed without a post-restart relay/send action. The temporary pause flag and exact B002 pause hook were removed after terminal recovery.
+- The durable queue remains restricted to Store `28375` and the two authorized test conversations. P0 Manager-evidence fail-closed behavior, VERIFY_PENDING recovery, and the Android long-pending reconciliation remain production code.
 
 # LINE OA Black App Durable Send Queue Delivery Attempt Timing & Pre-Send Failure Architecture (2026-09-19)
 

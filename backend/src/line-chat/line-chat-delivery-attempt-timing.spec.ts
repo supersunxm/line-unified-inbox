@@ -6,7 +6,6 @@ import {
   LineChatMessageSendJobStatus,
 } from "@prisma/client";
 import {
-  isLineChatCanaryPauseAfterSendEnabled,
   isLineChatCanaryPreSendFailureEnabled,
 } from "./line-chat-pilot.constants";
 import { LineChatMessageSendWorkerService } from "./line-chat-message-send-worker.service";
@@ -107,56 +106,6 @@ test("Canary 004 pre-send failure gate requires all 4 conditions", async (t) => 
     );
     assert.equal(
       isLineChatCanaryPreSendFailureEnabled({ ...valid, text: "" }),
-      false,
-    );
-  });
-});
-
-test("Canary worker restart pause gate requires the exact flag, store, conversation, and text", async (t) => {
-  const valid = {
-    storeCode: "28375",
-    conversationId: "cb6dc791-ef0e-45f0-bb33-96c9b638c9a0",
-    text: "INTERNAL WORKER RESTART B 002",
-    env: { enabled: "true" },
-  };
-
-  await t.test("matches only when every condition is exact", () => {
-    assert.equal(isLineChatCanaryPauseAfterSendEnabled(valid), true);
-  });
-
-  await t.test("fails closed when the flag is absent, false, or empty", () => {
-    assert.equal(
-      isLineChatCanaryPauseAfterSendEnabled({ ...valid, env: { enabled: undefined } }),
-      false,
-    );
-    assert.equal(
-      isLineChatCanaryPauseAfterSendEnabled({ ...valid, env: { enabled: "false" } }),
-      false,
-    );
-    assert.equal(
-      isLineChatCanaryPauseAfterSendEnabled({ ...valid, env: { enabled: "" } }),
-      false,
-    );
-  });
-
-  await t.test("fails closed for the wrong store, conversation, or text", () => {
-    assert.equal(
-      isLineChatCanaryPauseAfterSendEnabled({ ...valid, storeCode: "25610" }),
-      false,
-    );
-    assert.equal(
-      isLineChatCanaryPauseAfterSendEnabled({
-        ...valid,
-        conversationId: "9cf223e4-194a-47ce-b795-1192a22d3928",
-      }),
-      false,
-    );
-    assert.equal(
-      isLineChatCanaryPauseAfterSendEnabled({ ...valid, text: "INTERNAL DURABLE TEST B 001" }),
-      false,
-    );
-    assert.equal(
-      isLineChatCanaryPauseAfterSendEnabled({ ...valid, text: "INTERNAL WORKER RESTART B 001" }),
       false,
     );
   });
@@ -372,66 +321,6 @@ test("Delivery attempt sendActionAt timing semantics", async (t) => {
       assert.equal(attempt.managerMessageId, "manager-message-1");
       assert.equal(messages[messages.length - 1].deliveryStatus, MessageDeliveryStatus.DELIVERED);
       assert.equal(jobs[jobs.length - 1].managerMessageId, "manager-message-1");
-    },
-  );
-
-  await t.test(
-    "exact pause hook runs after sendActionAt persistence and before markDelivered",
-    async () => {
-      const { attempts, mockPrisma, jobRecord } = createTestFixture("INTERNAL WORKER RESTART B 002");
-      const sendTime = new Date("2026-09-19T18:00:00.000Z");
-      const testConversationId = "cb6dc791-ef0e-45f0-bb33-96c9b638c9a0";
-      jobRecord.conversationId = testConversationId;
-      jobRecord.conversation.id = testConversationId;
-      process.env.LINE_CHAT_DURABLE_SEND_QUEUE_CONVERSATION_IDS =
-        `a04560a5-8658-493b-9b18-c992adc2b683,${testConversationId}`;
-      process.env.LINE_CHAT_CANARY_PAUSE_AFTER_SEND_ENABLED = "true";
-
-      const ordering: string[] = [];
-      let releasePause: (() => void) | null = null;
-      let resolvePauseEntered: (() => void) | null = null;
-      const pauseEntered = new Promise<void>((resolve) => {
-        resolvePauseEntered = resolve;
-      });
-      const mockRelay: any = {
-        relayText: async (input: any) => {
-          await input.onSendAction(sendTime);
-          return {
-            handled: true,
-            duplicate: false,
-            lineChatUserId: "U123",
-            managerMessageId: "manager-message-restart-1",
-            managerSentAt: sendTime,
-            verificationSource: "MANAGER_API",
-          };
-        },
-      };
-      const worker = new LineChatMessageSendWorkerService(mockPrisma, mockRelay);
-      (worker as any).pauseAfterSendBeforeDeliveryPersist = async (input: any) => {
-        ordering.push("pause");
-        assert.equal(input.attemptId, "attempt-1");
-        assert.equal(input.sendActionAt, sendTime);
-        assert.equal(attempts[0].sendActionAt, sendTime);
-        resolvePauseEntered?.();
-        await new Promise<void>((resolve) => {
-          releasePause = resolve;
-        });
-      };
-      (worker as any).markDelivered = async () => {
-        ordering.push("markDelivered");
-      };
-
-      const processing = (worker as any).processSend(jobRecord.id);
-      await pauseEntered;
-      assert.deepEqual(ordering, ["pause"]);
-      assert.equal(attempts[0].sendActionAt, sendTime);
-      assert.equal(attempts[0].status, MessageDeliveryAttemptStatus.PROCESSING);
-      assert.equal(releasePause !== null, true);
-      releasePause?.();
-      await processing;
-
-      assert.deepEqual(ordering, ["pause", "markDelivered"]);
-      assert.equal(attempts.length, 1);
     },
   );
 

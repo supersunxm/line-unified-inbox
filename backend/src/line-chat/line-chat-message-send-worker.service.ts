@@ -11,7 +11,6 @@ import { persistStaffOutboundReplyState } from "../conversation-reply-state";
 import { LineChatManagerMessageRelayWorkerService } from "./line-chat-manager-message-relay-worker.service";
 import {
   isLineChatCanaryPreSendFailureEnabled,
-  isLineChatCanaryPauseAfterSendEnabled,
   isLineChatDurableSendQueueConversationEnabled,
 } from "./line-chat-pilot.constants";
 
@@ -20,11 +19,6 @@ const JOB_LEASE_MS = 90_000;
 const MAX_PARALLEL_PROFILES = 4;
 const VERIFY_BACKOFF_MS = [3_000, 5_000, 10_000, 20_000] as const;
 const MAX_VERIFY_ATTEMPTS = VERIFY_BACKOFF_MS.length;
-// Long enough to keep the old process in the crash window while the approved
-// replacement deployment starts. This is exact-gated to the B002 canary and
-// is never used by normal production sends.
-const CANARY_PAUSE_AFTER_SEND_MS = 15 * 60_000;
-
 // Safety invariant: an ambiguous customer-facing send transitions to
 // VERIFY_PENDING. The worker must never auto-resend from that state.
 // Deployment touch: rebuild after Railway usage-limit increase (2026-09-19).
@@ -317,7 +311,6 @@ export class LineChatMessageSendWorkerService implements OnModuleInit, OnModuleD
     const startedAt = new Date();
     const attemptNo = job.attemptCount + 1;
     let sendActionInitiated = false;
-    let sendActionAt: Date | null = null;
     const attempt = await this.prisma.$transaction(async (tx) => {
       await tx.lineChatMessageSendJob.update({
         where: { id: job.id },
@@ -361,7 +354,6 @@ export class LineChatMessageSendWorkerService implements OnModuleInit, OnModuleD
         idempotencyKey: job.idempotencyKey,
         onSendAction: async (actionAt: Date) => {
           sendActionInitiated = true;
-          sendActionAt = actionAt;
           await this.prisma.messageDeliveryAttempt.update({
             where: { id: attempt.id },
             data: { sendActionAt: actionAt },
@@ -374,15 +366,6 @@ export class LineChatMessageSendWorkerService implements OnModuleInit, OnModuleD
       if (!hasManagerDeliveryEvidence(result)) {
         throw new Error("MANAGER_DELIVERY_EVIDENCE_REQUIRED");
       }
-      await this.pauseAfterSendBeforeDeliveryPersist({
-        jobId: job.id,
-        messageId: job.messageId,
-        conversationId: job.conversationId,
-        storeCode,
-        text: job.message.originalText,
-        attemptId: attempt.id,
-        sendActionAt,
-      });
       await this.markDelivered(job.id, attempt.id, result.managerMessageId, result.managerSentAt);
     } catch (error) {
       const message = errorText(error);
@@ -453,33 +436,6 @@ export class LineChatMessageSendWorkerService implements OnModuleInit, OnModuleD
         }),
       ]);
     }
-  }
-
-  private async pauseAfterSendBeforeDeliveryPersist(input: {
-    jobId: string;
-    messageId: string;
-    conversationId: string;
-    storeCode: string;
-    text: string;
-    attemptId: string;
-    sendActionAt: Date | null;
-  }): Promise<void> {
-    if (!isLineChatCanaryPauseAfterSendEnabled(input) || !(input.sendActionAt instanceof Date)) {
-      return;
-    }
-
-    this.logger.warn(JSON.stringify({
-      event: "line_chat_canary_pause_after_send_before_delivery_persist",
-      jobId: input.jobId,
-      messageId: input.messageId,
-      conversationId: input.conversationId,
-      attemptId: input.attemptId,
-      sendActionAt: input.sendActionAt.toISOString(),
-    }));
-
-    await new Promise<void>((resolve) => {
-      setTimeout(resolve, CANARY_PAUSE_AFTER_SEND_MS);
-    });
   }
 
   private async processVerification(jobId: string): Promise<void> {

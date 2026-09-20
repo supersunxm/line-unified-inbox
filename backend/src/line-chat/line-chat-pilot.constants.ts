@@ -229,26 +229,3 @@ export function isLineChatCanaryPreSendFailureEnabled(input: {
 
   return true;
 }
-
-export const LINE_CHAT_CANARY_PAUSE_AFTER_SEND_STORE_CODE = "28375";
-export const LINE_CHAT_CANARY_PAUSE_AFTER_SEND_CONVERSATION_ID =
-  "cb6dc791-ef0e-45f0-bb33-96c9b638c9a0";
-export const LINE_CHAT_CANARY_PAUSE_AFTER_SEND_TEXT = "INTERNAL WORKER RESTART B 002";
-
-export function isLineChatCanaryPauseAfterSendEnabled(input: {
-  storeCode?: string | null;
-  conversationId?: string | null;
-  text?: string | null;
-  env?: {
-    enabled?: string;
-  };
-}): boolean {
-  const flag = (input.env?.enabled ?? process.env.LINE_CHAT_CANARY_PAUSE_AFTER_SEND_ENABLED)?.trim();
-  if (flag !== "true") return false;
-
-  return (
-    (input.storeCode ?? "").trim() === LINE_CHAT_CANARY_PAUSE_AFTER_SEND_STORE_CODE
-    && (input.conversationId ?? "").trim() === LINE_CHAT_CANARY_PAUSE_AFTER_SEND_CONVERSATION_ID
-    && (input.text ?? "").trim() === LINE_CHAT_CANARY_PAUSE_AFTER_SEND_TEXT
-  );
-}
