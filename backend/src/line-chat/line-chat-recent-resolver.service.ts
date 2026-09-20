@@ -649,6 +649,119 @@ export class LineChatRecentResolverService {
     return result;
   }
 
+  /**
+   * Read-only-reconciliation fallback for conversations that already have a
+   * confirmed human reply in LINE OA Manager but lack a durable chat mapping.
+   *
+   * This deliberately ignores timestamp drift, but only when the customer's
+   * normalized display name has exactly one candidate in the same OA. It is
+   * never used by the customer-facing send path; callers must inspect Manager
+   * history before changing reply state.
+   */
+  public async resolveUniqueNameForReconciliation(
+    conversationId: string,
+  ): Promise<LineChatRecentResolutionResult> {
+    const conversation = await this.prisma.conversation.findUnique({
+      where: { id: conversationId.trim() },
+      select: {
+        id: true,
+        storeId: true,
+        lineOfficialAccountId: true,
+        lineChatUserId: true,
+        customer: { select: { displayName: true } },
+        store: {
+          select: {
+            code: true,
+            storeMaster: { select: { externalStoreId: true } },
+          },
+        },
+        lineOfficialAccount: {
+          select: {
+            storeId: true,
+            accountType: true,
+            isActive: true,
+            archivedAt: true,
+            chatBotId: true,
+            lineChatSession: {
+              select: {
+                sessionKey: true,
+                status: true,
+                profilePath: true,
+                profileStorageKey: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!conversation) return { status: "RESOLVE_CONFLICT" };
+    if (conversation.lineChatUserId?.trim()) {
+      return { status: "RESOLVED", lineChatUserId: conversation.lineChatUserId.trim() };
+    }
+
+    const oa = conversation.lineOfficialAccount;
+    const session = oa.lineChatSession;
+    const botId = oa.chatBotId?.trim() || "";
+    const sessionKey = session?.sessionKey?.trim() || "";
+    if (!session || !botId || !sessionKey) return { status: "RESOLVE_CONFLICT" };
+
+    const storeCode = pilotStoreCode(conversation.store);
+    const eligible = isLineChatRealtimeResolverEligible({
+      storeCode,
+      conversationStoreId: conversation.storeId,
+      oaStoreId: oa.storeId,
+      oaAccountType: oa.accountType,
+      oaIsActive: oa.isActive,
+      oaArchivedAt: oa.archivedAt,
+      oaChatBotId: oa.chatBotId,
+      oaSessionKey: session.sessionKey,
+      oaSessionStatus: session.status,
+      expectedBotId: botId,
+      expectedSessionKey: sessionKey,
+    });
+    if (!eligible) return { status: "RESOLVE_CONFLICT" };
+
+    const profilePath = this.sessionService.resolveProfilePath(session);
+    const snapshot = await this.refreshExpandedSnapshot({
+      lineOfficialAccountId: conversation.lineOfficialAccountId,
+      botId,
+      sessionKey,
+      profilePath,
+    });
+    if (snapshot.status === "FAILED") {
+      return snapshot.failureReason === "SESSION_AUTH"
+        ? { status: "RESOLVE_SESSION_AUTH" }
+        : { status: "RESOLVE_TRANSPORT" };
+    }
+
+    const targetName = normalizeName(conversation.customer.displayName);
+    const exactMatches = targetName
+      ? snapshot.chats.filter((chat) => normalizeName(chat.displayName) === targetName)
+      : [];
+    if (exactMatches.length === 0) return { status: "RESOLVE_NO_MATCH" };
+    if (exactMatches.length !== 1) return { status: "RESOLVE_AMBIGUOUS" };
+
+    const resolvedId = exactMatches[0].chatUserId;
+    const result = await this.persistCandidateMapping(
+      conversation.id,
+      conversation.lineOfficialAccountId,
+      resolvedId,
+    );
+    this.logger.log(JSON.stringify({
+      event: "line_chat_reconciliation_unique_name_resolution",
+      conversationId: conversation.id,
+      lineOfficialAccountId: conversation.lineOfficialAccountId,
+      storeCode,
+      exactNameMatchCount: exactMatches.length,
+      resolutionStatus: result.status,
+      lineChatUserIdMasked: result.status === "RESOLVED"
+        ? `${result.lineChatUserId.slice(0, 4)}...${result.lineChatUserId.slice(-4)}`
+        : null,
+    }));
+    return result;
+  }
+
   private snapshotKey(input: Pick<RefreshRecentLineChatInput, "lineOfficialAccountId" | "botId" | "sessionKey">): string {
     return `${input.sessionKey.trim()}::${input.lineOfficialAccountId.trim()}::${input.botId.trim()}`;
   }
