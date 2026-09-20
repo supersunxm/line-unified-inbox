@@ -366,6 +366,7 @@ export class LineChatSessionService {
     profilePath: string;
     headless?: boolean;
     customLauncher?: ContextLauncher;
+    operationContext?: import("./line-chat-profile-operation-coordinator.service").LineChatProfileOperationContext;
   }): Promise<LineChatDiscoveryResult> {
     return this.discoverChatPages(input, 200, 10_000, false);
   }
