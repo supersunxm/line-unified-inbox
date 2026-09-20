@@ -355,6 +355,7 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
       };
     }
 
+    let syncFailure: string | null = null;
     const operation = await this.coordinator.withProfileOperation(
       { sessionId: session.id, operationKind: "MIRROR_SYNC" },
       async (operationContext) => {
@@ -369,6 +370,13 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
         });
         operationContext.assertOwnership();
         if (recent.status !== "READY") {
+          this.targetCache.delete(oa.id);
+          this.logger.warn(JSON.stringify({
+            event: "line_chat_mirror_target_cache_evicted",
+            lineOfficialAccountId: oa.id,
+            reason: `RECENT_DISCOVERY_${recent.failureReason ?? "FAILED"}`,
+            sessionKey: session.sessionKey,
+          }));
           throw new Error(`RECENT_DISCOVERY_${recent.failureReason ?? "FAILED"}`);
         }
 
@@ -451,7 +459,32 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
         });
       },
       { waitForLock: false },
-    );
+    ).catch((error) => {
+      syncFailure = safeError(error);
+      return null;
+    });
+
+    if (!operation) {
+      const durationMs = Date.now() - startedAtMs;
+      await this.markStoreFailure({
+        lineOfficialAccountId: oa.id,
+        status: LineChatMirrorSyncStatus.FAILED,
+        errorCode: "MIRROR_SYNC_FAILED",
+        errorMessage: syncFailure ?? "Mirror sync failed.",
+        durationMs,
+      });
+      return {
+        storeCode: effectiveStoreCode,
+        status: LineChatMirrorSyncStatus.FAILED,
+        recentChatsObserved: 0,
+        historiesFetched: 0,
+        messagesObserved: 0,
+        messagesInsertedOrUpdated: 0,
+        pendingChats: await this.countPendingChats(oa.id),
+        unknownDirectionEvents: 0,
+        durationMs,
+      };
+    }
 
     if (!operation.acquired) {
       const durationMs = Date.now() - startedAtMs;
@@ -643,6 +676,7 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
         async (operationContext) => {
           operationContext.assertOwnership();
           let context: BrowserContext | null = null;
+          let resolvedBotId: string | null = null;
           try {
             context = await this.sessionService.launchManagedPersistentContext(
               profilePath,
@@ -669,9 +703,9 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
               () => this.sessionService.probeApiAuthentication(context!),
               (ms) => page.waitForTimeout(ms),
             );
-            if (auth.outcome !== "AUTHENTICATED") return null;
-            operationContext.assertOwnership();
-            return managerBotIdFromRedirect(page.url());
+            if (auth.outcome === "AUTHENTICATED") {
+              resolvedBotId = managerBotIdFromRedirect(page.url());
+            }
           } finally {
             if (context) {
               await this.sessionService
@@ -679,6 +713,28 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
                 .catch(() => {});
             }
           }
+
+          if (!resolvedBotId) return null;
+          operationContext.assertOwnership();
+          const verification = await this.sessionService.discoverRecentChats({
+            botId: resolvedBotId,
+            profilePath,
+            headless: true,
+            maxPages: 1,
+            maxChats: 5,
+            operationContext,
+          });
+          operationContext.assertOwnership();
+          if (verification.status !== "READY") {
+            this.logger.warn(JSON.stringify({
+              event: "line_chat_mirror_target_candidate_rejected",
+              sessionKey: session.sessionKey,
+              reason: `RECENT_DISCOVERY_${verification.failureReason ?? "FAILED"}`,
+              botIdMasked: `${resolvedBotId.slice(0, 4)}...${resolvedBotId.slice(-4)}`,
+            }));
+            return null;
+          }
+          return resolvedBotId;
         },
         { waitForLock: false },
       );
