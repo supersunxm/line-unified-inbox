@@ -88,10 +88,12 @@ test("LineChatOperationsService: getHealthSummary aggregates non-secret metrics"
   assert.equal(health.sessions[0].browserOperationKind, null);
   assert.equal(health.sessions[0].browserBusyUntil, null);
   assert.equal(health.sessions[0].jobs.success, 10);
-  assert.deepEqual(Object.keys(health.sessions[0].recentFailures[0]).sort(), ["attemptCount", "conversationId", "createdAt", "failureCategory", "failureStage", "isAutoFixable", "jobId", "oaId", "oaName", "recommendedAction", "updatedAt"]);
+  assert.deepEqual(Object.keys(health.sessions[0].recentFailures[0]).sort(), ["attemptCount", "conversationId", "createdAt", "failureCategory", "failureStage", "isActionable", "isAutoFixable", "jobId", "oaId", "oaName", "recommendedAction", "resolutionState", "updatedAt"]);
   assert.equal(health.sessions[0].recentFailures[0].failureStage, "RESOLVE_NO_MATCH");
   assert.equal(health.sessions[0].recentFailures[0].recommendedAction, "MANUAL_REVIEW");
   assert.equal(health.sessions[0].recentFailures[0].isAutoFixable, false);
+  assert.equal(health.sessions[0].recentFailures[0].resolutionState, "ACTIVE");
+  assert.equal(health.sessions[0].recentFailures[0].isActionable, false);
   assert.equal(health.sessions[0].recentFailures[1].failureStage, null);
   assert.doesNotMatch(JSON.stringify(health), /cookie=secret|profiles\/private|customer message/);
 
@@ -241,9 +243,9 @@ test("LineChatOperationsService: retrySelectedJobs re-validates retryability on 
         assert.deepEqual(args.where.status, { in: [LineChatNicknameSyncJobStatus.FAILED, LineChatNicknameSyncJobStatus.FAILED_AUTH] });
 
         return [
-          { id: "job-trans", status: "FAILED", lastError: "RESOLVE_TRANSPORT", attemptCount: 1 },
-          { id: "job-exec-1", status: "FAILED", lastError: "HTTP 500", attemptCount: 1 },
-          { id: "job-valid", status: "FAILED", lastError: "RESOLVE_NO_MATCH", attemptCount: 1 },
+          { id: "job-trans", status: "FAILED", lastError: "RESOLVE_TRANSPORT", attemptCount: 1, updatedAt: new Date() },
+          { id: "job-exec-1", status: "FAILED", lastError: "HTTP 500", attemptCount: 1, updatedAt: new Date() },
+          { id: "job-valid", status: "FAILED", lastError: "RESOLVE_NO_MATCH", attemptCount: 1, updatedAt: new Date() },
         ];
       },
       updateMany: async (args: any) => {
@@ -267,7 +269,7 @@ test("LineChatOperationsService: retrySelectedJobs re-validates retryability on 
   assert.deepEqual(result.retriedJobIds.sort(), ["job-exec-1", "job-trans"]);
   assert.deepEqual(updatedIds.sort(), ["job-exec-1", "job-trans"]);
 
-  // With overrideNonRetryable: true, all matched failed jobs are retried
+  // Existing server override behavior remains unchanged; the dashboard never invokes it.
   updatedIds = [];
   const overrideResult = await ops.retrySelectedJobs({
     sessionKey: "profile-b",
@@ -294,12 +296,12 @@ test("LineChatOperationsService: fixRetryableFailures selects only safe auto-fix
     },
     lineChatNicknameSyncJob: {
       findMany: async () => [
-        { id: "job-1-trans", status: "FAILED", lastError: "RESOLVE_TRANSPORT", attemptCount: 1 },
-        { id: "job-2-timeout", status: "FAILED", lastError: "ETIMEDOUT", attemptCount: 1 },
-        { id: "job-3-exec-fresh", status: "FAILED", lastError: "HTTP 500", attemptCount: 1 },
-        { id: "job-4-exec-maxed", status: "FAILED", lastError: "HTTP 500", attemptCount: 2 }, // already had 1 retry -> not auto-fixable!
-        { id: "job-5-val", status: "FAILED", lastError: "RESOLVE_NO_MATCH", attemptCount: 1 },
-        { id: "job-6-auth", status: "FAILED_AUTH", lastError: "UNAUTHENTICATED", attemptCount: 1 },
+        { id: "job-1-trans", status: "FAILED", lastError: "RESOLVE_TRANSPORT", attemptCount: 1, updatedAt: new Date() },
+        { id: "job-2-timeout", status: "FAILED", lastError: "ETIMEDOUT", attemptCount: 1, updatedAt: new Date() },
+        { id: "job-3-exec-fresh", status: "FAILED", lastError: "HTTP 500", attemptCount: 1, updatedAt: new Date() },
+        { id: "job-4-exec-maxed", status: "FAILED", lastError: "HTTP 500", attemptCount: 2, updatedAt: new Date() }, // already had 1 retry -> not auto-fixable!
+        { id: "job-5-val", status: "FAILED", lastError: "RESOLVE_NO_MATCH", attemptCount: 1, updatedAt: new Date() },
+        { id: "job-6-auth", status: "FAILED_AUTH", lastError: "UNAUTHENTICATED", attemptCount: 1, updatedAt: new Date() },
       ],
       updateMany: async (args: any) => {
         updatedIds.push(...args.where.id.in);

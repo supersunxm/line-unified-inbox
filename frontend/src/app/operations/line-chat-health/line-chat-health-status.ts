@@ -68,11 +68,36 @@ export function getOverallHealth(session: LineChatOperationsSession): OverallHea
       reason: "The LINE session requires operator re-authentication.",
     };
   }
+  if (session.status !== "ACTIVE" || session.browserState === "UNKNOWN") {
+    return {
+      tone: "danger",
+      label: "Unhealthy",
+      reason: session.browserState === "UNKNOWN"
+        ? "The Chromium profile is not currently usable."
+        : "The LINE session is not active.",
+    };
+  }
+  if (session.browserState === "RECOVERING") {
+    return {
+      tone: "warning",
+      label: "Degraded",
+      reason: "The Chromium profile is recovering and may be temporarily unavailable.",
+    };
+  }
   if (session.activeProfileLeases > 1 || session.healthFailureStage === "PROFILE_LOCK") {
     return {
       tone: "warning",
       label: "Lease or coordinator issue",
       reason: "Profile access is blocked or has more than one active lease.",
+    };
+  }
+  if (session.healthStatus === "DEGRADED") {
+    return {
+      tone: "warning",
+      label: "Degraded",
+      reason: session.healthFailureStage
+        ? `The latest health check reported a recoverable issue (${session.healthFailureStage}).`
+        : "The latest health check reported a recoverable issue.",
     };
   }
   if (session.healthStatus !== "CONNECTED" || session.healthFailureStage) {
@@ -82,12 +107,23 @@ export function getOverallHealth(session: LineChatOperationsSession): OverallHea
       reason: "The latest session health evidence is not connected.",
     };
   }
-  if (session.jobs.failed + session.jobs.failedAuth > 0) {
+  if (session.activeJobRisk === "CRITICAL" || (session.activeStuckJobs ?? 0) > 0) {
     return {
       tone: "warning",
-      label: "Connected with job failures",
-      reason: "The session is connected; individual jobs need review.",
+      label: "Degraded",
+      reason: "The session is connected, but an active job has exceeded the operational recovery threshold.",
     };
   }
-  return { tone: "success", label: "Healthy", reason: "Session and job queue are healthy." };
+  if (session.activeJobRisk === "WARNING") {
+    return {
+      tone: "warning",
+      label: "Degraded",
+      reason: "The session is connected, but an active job is older than the normal operational window.",
+    };
+  }
+  return {
+    tone: "success",
+    label: "Healthy",
+    reason: "Session, browser, and current health checks are operational. Job outcomes remain available in history.",
+  };
 }

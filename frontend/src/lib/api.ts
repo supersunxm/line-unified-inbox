@@ -93,6 +93,7 @@ export type LineChatRecommendedAction =
   | "MANUAL_REVIEW"
   | "SYSTEM_ATTENTION"
   | "INVESTIGATE";
+export type LineChatJobActivityRisk = "NORMAL" | "WARNING" | "CRITICAL";
 export type LineChatJobCounts = { pending: number; processing: number; success: number; failed: number; failedAuth: number; superseded: number; total: number };
 export type LineChatSafeJobFailure = {
   jobId: string;
@@ -106,6 +107,8 @@ export type LineChatSafeJobFailure = {
   conversationId: string | null;
   recommendedAction: LineChatRecommendedAction;
   isAutoFixable: boolean;
+  resolutionState?: "ACTIVE" | "HISTORICAL";
+  isActionable?: boolean;
 };
 export type LineChatBrowserState = "AVAILABLE" | "BUSY" | "RECOVERING" | "UNKNOWN";
 export type LineChatOperationsSession = {
@@ -116,6 +119,11 @@ export type LineChatOperationsSession = {
   lastAuthenticatedAt: string | null; lastSuccessfulRequestAt: string | null; lastAuthFailureAt: string | null;
   healthLastCheckedAt: string | null; healthLastHealthyAt: string | null; jobs: LineChatJobCounts;
   recentFailures: LineChatSafeJobFailure[];
+  activeJobRisk?: LineChatJobActivityRisk;
+  activeStuckJobs?: number;
+  activeActionableFailures?: number;
+  historicalFailures?: number;
+  retryEligibleCount?: number;
 };
 export type LineChatMappingQueueMetrics = { mappedReadyPending: number; waitingForMapping: number; oldestPendingAt: string | null };
 export type LineChatFleetReadinessStatus = "READY" | "NEED_BOT_MAPPING" | "NEED_LOGIN" | "BLOCKED";

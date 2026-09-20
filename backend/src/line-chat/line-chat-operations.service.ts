@@ -4,6 +4,11 @@ import { LineAccountType, LineChatNicknameSyncJobStatus, LineChatSessionStatus }
 import { LINE_CHAT_REALTIME_RESOLVER_ALLOWED_STORE_CODES } from "./line-chat-pilot.constants";
 import { LineChatAuthRecoveryService, type LineChatAuthRecoveryResult } from "./line-chat-auth-recovery.service";
 import type { LineChatProfileOperationKind } from "./line-chat-profile-operation-coordinator.service";
+import {
+  isRecentLineChatFailure,
+  summarizeActiveLineChatJobs,
+  type LineChatJobActivityRisk,
+} from "./line-chat-health-semantics";
 
 export type LineChatBrowserState = "AVAILABLE" | "BUSY" | "RECOVERING" | "UNKNOWN";
 
@@ -31,6 +36,11 @@ export interface LineChatSessionSummary {
   authRecoveryCooldownRemainingMs?: number;
   jobs: LineChatQueueMetrics;
   recentFailures: LineChatSafeJobFailure[];
+  activeJobRisk: LineChatJobActivityRisk;
+  activeStuckJobs: number;
+  activeActionableFailures: number;
+  historicalFailures: number;
+  retryEligibleCount: number;
 }
 
 export type LineChatFailureCategory = "AUTHENTICATION" | "TRANSPORT" | "EXECUTION" | "VALIDATION" | "TIMEOUT" | "PROFILE_LOCK" | "COORDINATOR" | "UNKNOWN";
@@ -55,6 +65,8 @@ export interface LineChatSafeJobFailure {
   conversationId: string | null;
   recommendedAction: LineChatRecommendedAction;
   isAutoFixable: boolean;
+  resolutionState: "ACTIVE" | "HISTORICAL";
+  isActionable: boolean;
 }
 
 export interface LineChatQueueMetrics {
@@ -205,7 +217,7 @@ export class LineChatOperationsService {
     };
     const groupConversationCounts = typeof conversationModel?.groupBy === "function"
       ? conversationModel.groupBy.bind(conversationModel)
-      : async () => [] as Array<{ lineOfficialAccountId: string; _count: { id: number } }>;
+      : () => Promise.resolve([] as Array<{ lineOfficialAccountId: string; _count: { id: number } }>);
 
     const [oas, conversationCounts, mappedConversationCounts] = await Promise.all([
       this.prisma.lineOfficialAccount.findMany({
@@ -345,7 +357,7 @@ export class LineChatOperationsService {
 
   public async getHealthSummary(): Promise<LineChatHealthReport> {
     const now = new Date();
-    const [sessions, oas, queueCounts, sessionQueueCounts, activeLeases, recentFailures, mapping, fleetReadiness] = await Promise.all([
+    const [sessions, oas, queueCounts, sessionQueueCounts, activeLeases, activeJobs, recentFailures, mapping, fleetReadiness] = await Promise.all([
       this.prisma.lineChatSession.findMany({
         include: {
           lineOfficialAccounts: {
@@ -377,6 +389,18 @@ export class LineChatOperationsService {
       this.prisma.lineChatProfileOperationLease.findMany({
         where: { leaseUntil: { gt: now } },
         select: { lineChatSessionId: true, operationKind: true, leaseUntil: true },
+      }),
+      this.prisma.lineChatNicknameSyncJob.findMany({
+        where: { status: { in: [LineChatNicknameSyncJobStatus.PENDING, LineChatNicknameSyncJobStatus.PROCESSING] } },
+        select: {
+          lineOfficialAccountId: true,
+          status: true,
+          createdAt: true,
+          updatedAt: true,
+          scheduledAt: true,
+          claimedAt: true,
+          lockedUntil: true,
+        },
       }),
       this.prisma.lineChatNicknameSyncJob.findMany({
         where: { status: { in: [LineChatNicknameSyncJobStatus.FAILED_AUTH, LineChatNicknameSyncJobStatus.FAILED] } },
@@ -420,6 +444,31 @@ export class LineChatOperationsService {
       }
       const leases = activeLeases.filter((lease) => lease.lineChatSessionId === s.id);
       const activeLease = leases[0];
+      const sessionActiveJobs = activeJobs
+        .filter((job) => oaIds.has(job.lineOfficialAccountId))
+        .filter((job) => job.scheduledAt instanceof Date && job.createdAt instanceof Date && job.updatedAt instanceof Date);
+      const activeJobSummary = summarizeActiveLineChatJobs(sessionActiveJobs, now);
+      const sessionFailures = recentFailures.filter((job) => job.lineOfficialAccount.lineChatSessionId === s.id);
+      const mappedFailures = sessionFailures.slice(0, 50).map((job) => {
+        const failureCategory = classifyLineChatJobFailure(job.status, job.lastError);
+        const { action, isAutoFixable } = getRecommendedAction(failureCategory, job.attemptCount);
+        const isActive = isRecentLineChatFailure(job.updatedAt, now);
+        return {
+          jobId: job.id,
+          oaId: job.lineOfficialAccount.id,
+          oaName: job.lineOfficialAccount.name,
+          failureCategory,
+          failureStage: ["RESOLVE_NO_MATCH", "RESOLVE_AMBIGUOUS", "RESOLVE_CONFLICT", "RESOLVE_SESSION_AUTH", "RESOLVE_TRANSPORT"].includes(job.lastError ?? "") ? job.lastError : null,
+          attemptCount: job.attemptCount,
+          createdAt: job.createdAt.toISOString(),
+          updatedAt: job.updatedAt.toISOString(),
+          conversationId: job.conversationId || null,
+          recommendedAction: action,
+          isAutoFixable,
+          resolutionState: isActive ? "ACTIVE" as const : "HISTORICAL" as const,
+          isActionable: isActive && isAutoFixable,
+        };
+      });
       return {
         id: s.id,
         sessionKey: s.sessionKey,
@@ -443,26 +492,12 @@ export class LineChatOperationsService {
         authRecoveryInProgress: this.authRecovery?.isRecoveryInProgress(s.id) ?? false,
         authRecoveryCooldownRemainingMs: this.authRecovery?.getCooldownRemainingMs(s.id) ?? 0,
         jobs,
-        recentFailures: recentFailures
-          .filter((job) => job.lineOfficialAccount.lineChatSessionId === s.id)
-          .slice(0, 50)
-          .map((job) => {
-            const failureCategory = classifyLineChatJobFailure(job.status, job.lastError);
-            const { action, isAutoFixable } = getRecommendedAction(failureCategory, job.attemptCount);
-            return {
-              jobId: job.id,
-              oaId: job.lineOfficialAccount.id,
-              oaName: job.lineOfficialAccount.name,
-              failureCategory,
-              failureStage: ["RESOLVE_NO_MATCH", "RESOLVE_AMBIGUOUS", "RESOLVE_CONFLICT", "RESOLVE_SESSION_AUTH", "RESOLVE_TRANSPORT"].includes(job.lastError ?? "") ? job.lastError : null,
-              attemptCount: job.attemptCount,
-              createdAt: job.createdAt.toISOString(),
-              updatedAt: job.updatedAt.toISOString(),
-              conversationId: job.conversationId || null,
-              recommendedAction: action,
-              isAutoFixable,
-            };
-          }),
+        recentFailures: mappedFailures,
+        activeJobRisk: activeJobSummary.risk,
+        activeStuckJobs: activeJobSummary.criticalJobs,
+        activeActionableFailures: mappedFailures.filter((failure) => failure.resolutionState === "ACTIVE").length,
+        historicalFailures: mappedFailures.filter((failure) => failure.resolutionState === "HISTORICAL").length,
+        retryEligibleCount: mappedFailures.filter((failure) => failure.isActionable).length,
       };
     });
 
