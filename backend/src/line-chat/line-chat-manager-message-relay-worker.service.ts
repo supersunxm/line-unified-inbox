@@ -161,7 +161,9 @@ export class LineChatManagerMessageRelayWorkerService {
         lineChatUserId: string | null;
         events: Array<{
           managerMessageId: string;
+          messageType: string;
           text: string;
+          fileName: string | null;
           sentAt: Date;
           bizId: string | null;
           ownerName: string | null;
@@ -226,7 +228,7 @@ export class LineChatManagerMessageRelayWorkerService {
               fetch(ownersUrl, { credentials: "include" }),
             ]);
             if (!historyResponse.ok) {
-              return { ok: false, events: [] as Array<{ id: string; text: string; timestamp: number; bizId: string | null; ownerName: string | null }> };
+              return { ok: false, events: [] as Array<{ id: string; messageType: string; text: string; fileName: string | null; timestamp: number; bizId: string | null; ownerName: string | null }> };
             }
 
             const history = await historyResponse.json() as {
@@ -234,7 +236,7 @@ export class LineChatManagerMessageRelayWorkerService {
                 type?: string;
                 timestamp?: number;
                 bizId?: string;
-                message?: { id?: string; type?: string; text?: string };
+                message?: { id?: string; type?: string; text?: string; fileName?: string; name?: string };
               }>;
             };
             let owners: Array<{ bizId?: string; name?: string }> = [];
@@ -251,22 +253,38 @@ export class LineChatManagerMessageRelayWorkerService {
             const events = (history.list ?? [])
               .filter((item) =>
                 item.type === "messageSent"
-                && item.message?.type === "text"
-                && typeof item.message.id === "string"
-                && typeof item.message.text === "string"
+                && typeof item.message?.id === "string"
+                && Number.isFinite(Number(item.timestamp))
                 && Number(item.timestamp) >= afterMs
                 && item.bizId !== "__AUTO_RESPONSE"
               )
               .sort((a, b) => Number(a.timestamp) - Number(b.timestamp))
-              .map((item) => ({
-                id: item.message!.id!,
-                text: item.message!.text!,
-                timestamp: Number(item.timestamp),
-                bizId: typeof item.bizId === "string" ? item.bizId : null,
-                ownerName: typeof item.bizId === "string"
-                  ? ownerByBizId.get(item.bizId) || null
-                  : null,
-              }));
+              .map((item) => {
+                const messageType = typeof item.message?.type === "string"
+                  ? item.message.type.toLowerCase()
+                  : "unsupported";
+                const fileName = typeof item.message?.fileName === "string"
+                  ? item.message.fileName
+                  : typeof item.message?.name === "string"
+                    ? item.message.name
+                    : null;
+                const text = typeof item.message?.text === "string"
+                  ? item.message.text
+                  : fileName
+                    ? `[File: ${fileName}]`
+                    : `[${messageType}]`;
+                return {
+                  id: item.message!.id!,
+                  messageType,
+                  text,
+                  fileName,
+                  timestamp: Number(item.timestamp),
+                  bizId: typeof item.bizId === "string" ? item.bizId : null,
+                  ownerName: typeof item.bizId === "string"
+                    ? ownerByBizId.get(item.bizId) || null
+                    : null,
+                };
+              });
 
             return { ok: true, events };
           }, {
@@ -297,7 +315,9 @@ export class LineChatManagerMessageRelayWorkerService {
       lineChatUserId,
       events: inspection.value.events.map((event) => ({
         managerMessageId: event.id,
+        messageType: event.messageType,
         text: event.text,
+        fileName: event.fileName,
         sentAt: new Date(event.timestamp),
         bizId: event.bizId,
         ownerName: event.ownerName,
