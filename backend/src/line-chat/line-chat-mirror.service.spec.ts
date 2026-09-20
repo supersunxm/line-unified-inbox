@@ -1,0 +1,83 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { LineChatMirrorDirection } from "@prisma/client";
+import {
+  configuredLineChatMirrorStoreCodes,
+  isLineChatMirrorEnabled,
+  lineChatMirrorIntervalMs,
+  lineChatMirrorMaxChangedChatsPerCycle,
+  mirrorDirectionForManagerEvent,
+} from "./line-chat-mirror.service";
+
+function withEnv(
+  values: Record<string, string | undefined>,
+  callback: () => void,
+): void {
+  const previous = new Map<string, string | undefined>();
+  for (const [key, value] of Object.entries(values)) {
+    previous.set(key, process.env[key]);
+    if (value === undefined) delete process.env[key];
+    else process.env[key] = value;
+  }
+  try {
+    callback();
+  } finally {
+    for (const [key, value] of previous) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+}
+
+test("Project B mirror pilot parses and deduplicates configured store codes", () => {
+  withEnv(
+    { LINE_CHAT_MIRROR_STORE_CODES: "20789, 29113;20789 29737" },
+    () => {
+      assert.deepEqual(
+        configuredLineChatMirrorStoreCodes(),
+        ["20789", "29113", "29737"],
+      );
+    },
+  );
+});
+
+test("Project B mirror remains opt-in", () => {
+  withEnv({ LINE_CHAT_MIRROR_ENABLED: undefined }, () => {
+    assert.equal(isLineChatMirrorEnabled(), false);
+  });
+  withEnv({ LINE_CHAT_MIRROR_ENABLED: "true" }, () => {
+    assert.equal(isLineChatMirrorEnabled(), true);
+  });
+});
+
+test("Project B mirror cadence and per-cycle history work are bounded", () => {
+  withEnv(
+    {
+      LINE_CHAT_MIRROR_INTERVAL_MS: "1000",
+      LINE_CHAT_MIRROR_MAX_CHANGED_CHATS_PER_CYCLE: "500",
+    },
+    () => {
+      assert.equal(lineChatMirrorIntervalMs(), 30_000);
+      assert.equal(lineChatMirrorMaxChangedChatsPerCycle(), 50);
+    },
+  );
+});
+
+test("Manager history direction classification is fail-closed", () => {
+  assert.equal(
+    mirrorDirectionForManagerEvent("messageSent"),
+    LineChatMirrorDirection.OUTBOUND,
+  );
+  assert.equal(
+    mirrorDirectionForManagerEvent("messageReceived"),
+    LineChatMirrorDirection.INBOUND,
+  );
+  assert.equal(
+    mirrorDirectionForManagerEvent("someFutureEvent"),
+    LineChatMirrorDirection.UNKNOWN,
+  );
+  assert.equal(
+    mirrorDirectionForManagerEvent(undefined),
+    LineChatMirrorDirection.UNKNOWN,
+  );
+});

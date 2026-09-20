@@ -8,6 +8,7 @@ import { LineChatNovncRecoveryService } from "./line-chat-novnc-recovery.service
 import { LineChatPendingControlService } from "./line-chat-pending-control.service";
 import { LineChatHealthReconciliationService } from "./line-chat-health-reconciliation.service";
 import { LineChatManualMappingService } from "./line-chat-manual-mapping.service";
+import { LineChatMirrorStatusService } from "./line-chat-mirror-status.service";
 import type { AuthRequest } from "../auth/auth.guard";
 import { Req } from "@nestjs/common";
 
@@ -63,6 +64,7 @@ export class LineChatOperationsController {
     private readonly pendingControl: LineChatPendingControlService,
     private readonly healthReconciliation: LineChatHealthReconciliationService,
     private readonly manualMappingService: LineChatManualMappingService,
+    private readonly mirrorStatusService: LineChatMirrorStatusService,
   ) {}
 
   @Get("unresolved-backlog")
@@ -103,6 +105,11 @@ export class LineChatOperationsController {
   @Get("fleet-readiness")
   async getFleetReadiness() {
     return this.operationsService.getFleetReadiness();
+  }
+
+  @Get("mirror-status")
+  async getMirrorStatus() {
+    return this.mirrorStatusService.getStatus();
   }
 
   @Post("retry-failed")

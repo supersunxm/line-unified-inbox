@@ -16,6 +16,7 @@ import { LineChatPendingControlService } from "./line-chat-pending-control.servi
 import { LineChatHealthReconciliationService } from "./line-chat-health-reconciliation.service";
 import { LineChatManualMappingService } from "./line-chat-manual-mapping.service";
 import { LineChatMessageSendQueueService } from "./line-chat-message-send-queue.service";
+import { LineChatMirrorStatusService } from "./line-chat-mirror-status.service";
 
 @Global()
 @Module({
@@ -36,6 +37,7 @@ import { LineChatMessageSendQueueService } from "./line-chat-message-send-queue.
     LineChatHealthReconciliationService,
     LineChatManualMappingService,
     LineChatMessageSendQueueService,
+    LineChatMirrorStatusService,
   ],
   exports: [
     LineChatSessionService,
@@ -52,6 +54,7 @@ import { LineChatMessageSendQueueService } from "./line-chat-message-send-queue.
     LineChatHealthReconciliationService,
     LineChatManualMappingService,
     LineChatMessageSendQueueService,
+    LineChatMirrorStatusService,
   ],
 })
 export class LineChatModule {}

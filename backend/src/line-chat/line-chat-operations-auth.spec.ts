@@ -121,6 +121,8 @@ test("Operations Security: Health summary output never exposes sensitive credent
     undefined as never,
     undefined as never,
     { reconcile: async (report: unknown) => report } as never,
+    undefined as never,
+    undefined as never,
   );
   const report = await controller.getHealth();
 
