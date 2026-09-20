@@ -507,6 +507,37 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
       },
     });
 
+    const [storedDirectionRows, storedEventTypeRows, storedMessageTypeRows] = await Promise.all([
+      this.prisma.lineChatMirrorMessage.groupBy({
+        by: ["direction"],
+        where: { lineOfficialAccountId: oa.id },
+        _count: { _all: true },
+      }),
+      this.prisma.lineChatMirrorMessage.groupBy({
+        by: ["eventType"],
+        where: { lineOfficialAccountId: oa.id },
+        _count: { _all: true },
+      }),
+      this.prisma.lineChatMirrorMessage.groupBy({
+        by: ["messageType"],
+        where: { lineOfficialAccountId: oa.id },
+        _count: { _all: true },
+      }),
+    ]);
+    const storedDirectionBreakdown = Object.fromEntries(
+      storedDirectionRows.map((row) => [row.direction, row._count._all]),
+    );
+    const storedEventTypeBreakdown = Object.fromEntries(
+      storedEventTypeRows
+        .map((row) => [row.eventType, row._count._all] as const)
+        .sort(([left], [right]) => left.localeCompare(right)),
+    );
+    const storedMessageTypeBreakdown = Object.fromEntries(
+      storedMessageTypeRows
+        .map((row) => [row.messageType ?? "null", row._count._all] as const)
+        .sort(([left], [right]) => left.localeCompare(right)),
+    );
+
     const result: LineChatMirrorCycleResult = {
       storeCode: effectiveStoreCode,
       status,
@@ -521,6 +552,10 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
     this.logger.log(JSON.stringify({
       event: "line_chat_mirror_store_cycle_completed",
       ...result,
+      messagesStored,
+      storedDirectionBreakdown,
+      storedEventTypeBreakdown,
+      storedMessageTypeBreakdown,
     }));
     return result;
   }
