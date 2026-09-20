@@ -647,32 +647,63 @@ export class LineChatRecentResolverService {
     const usedExistingSnapshot = Boolean(snapshot);
     snapshot ??= await this.refreshSnapshot({ ...input, force: false });
 
-    let result = await this.resolveFromSnapshot(conversation, input, snapshot, targetName, targetTimestamp, targetTimestampSource);
-    if (["RESOLVE_NO_MATCH", "RESOLVE_AMBIGUOUS"].includes(result.status)) {
-      const fingerprintResult = await this.resolveFromInboundFingerprint(conversation, input, snapshot);
-      if (fingerprintResult.status === "RESOLVED" || fingerprintResult.status === "RESOLVE_AMBIGUOUS") {
+    let fingerprintResult = await this.resolveFromInboundFingerprint(conversation, input, snapshot);
+    if (
+      fingerprintResult.status === "RESOLVED"
+      || fingerprintResult.status === "RESOLVE_AMBIGUOUS"
+      || fingerprintResult.status === "RESOLVE_TRANSPORT"
+    ) {
+      return fingerprintResult;
+    }
+
+    let result = await this.resolveFromSnapshot(
+      conversation,
+      input,
+      snapshot,
+      targetName,
+      targetTimestamp,
+      targetTimestampSource,
+    );
+
+    if (usedExistingSnapshot && ["RESOLVE_NO_MATCH", "RESOLVE_AMBIGUOUS"].includes(result.status)) {
+      snapshot = await this.refreshSnapshot({ ...input, force: true });
+      fingerprintResult = await this.resolveFromInboundFingerprint(conversation, input, snapshot);
+      if (
+        fingerprintResult.status === "RESOLVED"
+        || fingerprintResult.status === "RESOLVE_AMBIGUOUS"
+        || fingerprintResult.status === "RESOLVE_TRANSPORT"
+      ) {
         return fingerprintResult;
       }
+      result = await this.resolveFromSnapshot(
+        conversation,
+        input,
+        snapshot,
+        targetName,
+        targetTimestamp,
+        targetTimestampSource,
+      );
     }
-    if (usedExistingSnapshot && ["RESOLVE_NO_MATCH", "RESOLVE_AMBIGUOUS", "RESOLVE_TRANSPORT"].includes(result.status)) {
-      snapshot = await this.refreshSnapshot({ ...input, force: true });
-      result = await this.resolveFromSnapshot(conversation, input, snapshot, targetName, targetTimestamp, targetTimestampSource);
-      if (["RESOLVE_NO_MATCH", "RESOLVE_AMBIGUOUS"].includes(result.status)) {
-        const fingerprintResult = await this.resolveFromInboundFingerprint(conversation, input, snapshot);
-        if (fingerprintResult.status === "RESOLVED" || fingerprintResult.status === "RESOLVE_AMBIGUOUS") {
-          return fingerprintResult;
-        }
-      }
-    }
+
     if (result.status === "RESOLVE_NO_MATCH" || result.status === "RESOLVE_AMBIGUOUS") {
       const expandedSnapshot = await this.refreshExpandedSnapshot(input);
-      result = await this.resolveFromSnapshot(conversation, input, expandedSnapshot, targetName, targetTimestamp, targetTimestampSource);
-      if (["RESOLVE_NO_MATCH", "RESOLVE_AMBIGUOUS"].includes(result.status)) {
-        const fingerprintResult = await this.resolveFromInboundFingerprint(conversation, input, expandedSnapshot);
-        if (fingerprintResult.status === "RESOLVED" || fingerprintResult.status === "RESOLVE_AMBIGUOUS") {
-          return fingerprintResult;
-        }
+      fingerprintResult = await this.resolveFromInboundFingerprint(conversation, input, expandedSnapshot);
+      if (
+        fingerprintResult.status === "RESOLVED"
+        || fingerprintResult.status === "RESOLVE_AMBIGUOUS"
+        || fingerprintResult.status === "RESOLVE_TRANSPORT"
+      ) {
+        return fingerprintResult;
       }
+      result = await this.resolveFromSnapshot(
+        conversation,
+        input,
+        expandedSnapshot,
+        targetName,
+        targetTimestamp,
+        targetTimestampSource,
+      );
+
       if (
         (result.status === "RESOLVE_NO_MATCH" || result.status === "RESOLVE_AMBIGUOUS")
         && expandedSnapshot.status === "READY"
@@ -680,13 +711,22 @@ export class LineChatRecentResolverService {
         && expandedSnapshot.chats.length >= EXPANDED_MAX_RECENT_CHATS
       ) {
         const fullSnapshot = await this.refreshFullSnapshot(input);
-        result = await this.resolveFromSnapshot(conversation, input, fullSnapshot, targetName, targetTimestamp, targetTimestampSource);
-        if (["RESOLVE_NO_MATCH", "RESOLVE_AMBIGUOUS"].includes(result.status)) {
-          const fingerprintResult = await this.resolveFromInboundFingerprint(conversation, input, fullSnapshot);
-          if (fingerprintResult.status === "RESOLVED" || fingerprintResult.status === "RESOLVE_AMBIGUOUS") {
-            return fingerprintResult;
-          }
+        fingerprintResult = await this.resolveFromInboundFingerprint(conversation, input, fullSnapshot);
+        if (
+          fingerprintResult.status === "RESOLVED"
+          || fingerprintResult.status === "RESOLVE_AMBIGUOUS"
+          || fingerprintResult.status === "RESOLVE_TRANSPORT"
+        ) {
+          return fingerprintResult;
         }
+        result = await this.resolveFromSnapshot(
+          conversation,
+          input,
+          fullSnapshot,
+          targetName,
+          targetTimestamp,
+          targetTimestampSource,
+        );
       }
     }
     return result;
