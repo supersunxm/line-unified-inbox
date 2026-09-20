@@ -126,7 +126,7 @@ type ResolverConversation = {
   lineOfficialAccountId: string;
   lineChatUserId: string | null;
   latestMessageAt: Date;
-  customer: { displayName: string };
+  customer: { displayName: string; lineUserId?: string | null };
   messages: ResolverMessage[];
   store: { code: string | null; storeMaster: { externalStoreId: string | null } | null } | null;
   lineOfficialAccount: {
