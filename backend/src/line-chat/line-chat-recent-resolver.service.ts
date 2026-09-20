@@ -645,6 +645,15 @@ export class LineChatRecentResolverService {
     if (result.status === "RESOLVE_NO_MATCH") {
       const expandedSnapshot = await this.refreshExpandedSnapshot(input);
       result = await this.resolveFromSnapshot(conversation, input, expandedSnapshot, targetName, targetTimestamp, targetTimestampSource);
+      if (
+        result.status === "RESOLVE_NO_MATCH"
+        && expandedSnapshot.status === "READY"
+        && expandedSnapshot.pagesFetched >= EXPANDED_MAX_RECENT_PAGES
+        && expandedSnapshot.chats.length >= EXPANDED_MAX_RECENT_CHATS
+      ) {
+        const fullSnapshot = await this.refreshFullSnapshot(input);
+        result = await this.resolveFromSnapshot(conversation, input, fullSnapshot, targetName, targetTimestamp, targetTimestampSource);
+      }
     }
     return result;
   }
@@ -771,6 +780,69 @@ export class LineChatRecentResolverService {
     return snapshot && snapshot.expiresAt.getTime() > Date.now() ? snapshot : null;
   }
 
+
+  private async refreshFullSnapshot(
+    input: RefreshRecentLineChatInput,
+  ): Promise<LineChatRecentMappingSnapshot> {
+    const key = this.snapshotKey(input);
+    let discovery;
+    try {
+      discovery = await this.sessionService.discoverChats({
+        botId: input.botId,
+        profilePath: input.profilePath,
+        headless: true,
+        operationContext: input.operationContext,
+      });
+    } catch {
+      const refreshedAt = new Date();
+      return {
+        key,
+        status: "FAILED",
+        chats: [],
+        failureReason: "TRANSPORT",
+        pagesFetched: 0,
+        totalRawRecords: 0,
+        refreshedAt,
+        expiresAt: refreshedAt,
+      };
+    }
+
+    const refreshedAt = new Date();
+    if (
+      discovery.pagesFetched === 0
+      || discovery.invalidUserRecords > 0
+      || discovery.conflictingDuplicates > 0
+    ) {
+      return {
+        key,
+        status: "FAILED",
+        chats: [],
+        failureReason: "TRANSPORT",
+        pagesFetched: discovery.pagesFetched,
+        totalRawRecords: discovery.totalRawRecords,
+        refreshedAt,
+        expiresAt: refreshedAt,
+      };
+    }
+
+    this.logger.log(JSON.stringify({
+      event: "line_chat_recent_resolver_full_scan",
+      lineOfficialAccountId: input.lineOfficialAccountId,
+      recentChatCount: discovery.chats.length,
+      pagesFetched: discovery.pagesFetched,
+      totalRawRecords: discovery.totalRawRecords,
+      enumerationStatus: discovery.enumerationStatus,
+    }));
+    return {
+      key,
+      status: "READY",
+      chats: discovery.chats,
+      pagesFetched: discovery.pagesFetched,
+      totalRawRecords: discovery.totalRawRecords,
+      refreshedAt,
+      expiresAt: refreshedAt,
+    };
+  }
 
   private async refreshExpandedSnapshot(
     input: RefreshRecentLineChatInput,
