@@ -12,7 +12,8 @@ export type LineChatProfileOperationKind =
   | "RECENT_RESOLUTION"
   | "HEALTH_SESSION"
   | "HEALTH_OA"
-  | "MANUAL_DIAGNOSTIC";
+  | "MANUAL_DIAGNOSTIC"
+  | "MIRROR_SYNC";
 
 export interface LineChatProfileOperationContext {
   readonly sessionId: string;
@@ -92,6 +93,7 @@ const OPERATION_PRIORITY: Record<LineChatProfileOperationKind, number> = {
   NICKNAME_UPDATE: 100,
   HEALTH_SESSION: 50,
   HEALTH_OA: 50,
+  MIRROR_SYNC: 25,
 };
 
 @Injectable()
