@@ -727,18 +727,42 @@ export class LineChatRecentResolverService {
       operationContext: input.operationContext,
     });
 
-    let resolutionStatus: LineChatRecentResolutionResult["status"] = "RESOLVE_NO_MATCH";
     if (match.status === "FAILED") {
-      resolutionStatus = "RESOLVE_TRANSPORT";
-    } else if (match.matches.length > 1) {
-      resolutionStatus = "RESOLVE_AMBIGUOUS";
-    } else if (match.matches.length === 1) {
+      this.logger.log(JSON.stringify({
+        event: "line_chat_inbound_fingerprint_resolution",
+        conversationId: conversation.id,
+        lineOfficialAccountId: conversation.lineOfficialAccountId,
+        candidateChatCount: snapshot.chats.length,
+        scannedChats: match.scannedChats,
+        failedChats: match.failedChats,
+        matchCount: 0,
+        matchMethod: null,
+        resolutionStatus: "RESOLVE_TRANSPORT",
+      }));
+      return { status: "RESOLVE_TRANSPORT" };
+    }
+
+    if (match.matches.length > 1) {
+      this.logger.log(JSON.stringify({
+        event: "line_chat_inbound_fingerprint_resolution",
+        conversationId: conversation.id,
+        lineOfficialAccountId: conversation.lineOfficialAccountId,
+        candidateChatCount: snapshot.chats.length,
+        scannedChats: match.scannedChats,
+        failedChats: match.failedChats,
+        matchCount: match.matches.length,
+        matchMethod: match.matchMethod,
+        resolutionStatus: "RESOLVE_AMBIGUOUS",
+      }));
+      return { status: "RESOLVE_AMBIGUOUS" };
+    }
+
+    if (match.matches.length === 1) {
       const persisted = await this.persistCandidateMapping(
         conversation.id,
         conversation.lineOfficialAccountId,
         match.matches[0],
       );
-      resolutionStatus = persisted.status;
       this.logger.log(JSON.stringify({
         event: "line_chat_inbound_fingerprint_resolution",
         conversationId: conversation.id,
@@ -760,11 +784,11 @@ export class LineChatRecentResolverService {
       candidateChatCount: snapshot.chats.length,
       scannedChats: match.scannedChats,
       failedChats: match.failedChats,
-      matchCount: match.matches.length,
-      matchMethod: match.matchMethod,
-      resolutionStatus,
+      matchCount: 0,
+      matchMethod: null,
+      resolutionStatus: "RESOLVE_NO_MATCH",
     }));
-    return { status: resolutionStatus };
+    return { status: "RESOLVE_NO_MATCH" };
   }
 
   /**
