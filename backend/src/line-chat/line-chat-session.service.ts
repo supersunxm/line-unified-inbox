@@ -383,8 +383,11 @@ export class LineChatSessionService {
     maxChats?: number;
     operationContext?: import("./line-chat-profile-operation-coordinator.service").LineChatProfileOperationContext;
   }): Promise<LineChatRecentDiscoveryResult> {
-    const maxPages = Math.min(5, Math.max(1, input.maxPages ?? 5));
-    const maxChats = Math.min(125, Math.max(1, input.maxChats ?? 125));
+    // Keep the default realtime window small, but allow the resolver's explicit
+    // expanded fallback to search deeper for older conversations. This remains
+    // bounded to protect the shared LINE OA Manager profile.
+    const maxPages = Math.min(20, Math.max(1, input.maxPages ?? 5));
+    const maxChats = Math.min(500, Math.max(1, input.maxChats ?? 125));
     const result = await this.discoverChatPages(input, maxPages, maxChats, true);
     const failure = result.pagesFetched === 0
       || Boolean(result.enumerationError)
