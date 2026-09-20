@@ -6,6 +6,8 @@ import {
   isLineChatMirrorEnabled,
   lineChatMirrorIntervalMs,
   lineChatMirrorMaxChangedChatsPerCycle,
+  managerAccountKeyFromInputs,
+  managerBotIdFromRedirect,
   mirrorDirectionForManagerEvent,
 } from "./line-chat-mirror.service";
 
@@ -79,5 +81,59 @@ test("Manager history direction classification is fail-closed", () => {
   assert.equal(
     mirrorDirectionForManagerEvent(undefined),
     LineChatMirrorDirection.UNKNOWN,
+  );
+});
+
+
+test("Project B mirror derives Manager account key from configured account URL or Basic ID", () => {
+  assert.equal(
+    managerAccountKeyFromInputs({
+      storeManagerUrl: "https://manager.line.biz/account/@688zunxx",
+      basicId: "@fallback",
+    }),
+    "@688zunxx",
+  );
+  assert.equal(
+    managerAccountKeyFromInputs({
+      lineChatWorkspaceUrl: "https://chat.line.biz/account/@123abcd",
+      storeManagerUrl: "https://manager.line.biz/account/@fallback",
+    }),
+    "@123abcd",
+  );
+  assert.equal(
+    managerAccountKeyFromInputs({ basicId: "@912xjbyi" }),
+    "@912xjbyi",
+  );
+  assert.equal(
+    managerAccountKeyFromInputs({
+      storeManagerUrl: "https://evil.example/account/@bad",
+      basicId: null,
+    }),
+    null,
+  );
+});
+
+test("Project B mirror accepts only canonical LINE chat bot redirects", () => {
+  assert.equal(
+    managerBotIdFromRedirect(
+      "https://chat.line.biz/U0123456789abcdef0123456789abcdef",
+    ),
+    "U0123456789abcdef0123456789abcdef",
+  );
+  assert.equal(
+    managerBotIdFromRedirect(
+      "https://chat.line.biz/U0123456789abcdef0123456789abcdef/chat/Ucustomer",
+    ),
+    "U0123456789abcdef0123456789abcdef",
+  );
+  assert.equal(
+    managerBotIdFromRedirect("https://chat.line.biz/account/@688zunxx"),
+    null,
+  );
+  assert.equal(
+    managerBotIdFromRedirect(
+      "https://evil.example/U0123456789abcdef0123456789abcdef",
+    ),
+    null,
   );
 });
