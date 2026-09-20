@@ -113,6 +113,9 @@ export type LineChatMappingEligibility = Pick<
 type ResolverMessage = {
   direction?: string | null;
   deliveryStatus?: string | null;
+  externalMessageId?: string | null;
+  messageType?: string | null;
+  originalText?: string | null;
   sentAt: Date;
 };
 
@@ -434,7 +437,14 @@ export class LineChatRecentResolverService {
         messages: {
           orderBy: { sentAt: "desc" },
           take: MESSAGE_ANCHOR_LIMIT,
-          select: { direction: true, deliveryStatus: true, sentAt: true },
+          select: {
+            direction: true,
+            deliveryStatus: true,
+            externalMessageId: true,
+            messageType: true,
+            originalText: true,
+            sentAt: true,
+          },
         },
         store: {
           select: {
@@ -638,24 +648,123 @@ export class LineChatRecentResolverService {
     snapshot ??= await this.refreshSnapshot({ ...input, force: false });
 
     let result = await this.resolveFromSnapshot(conversation, input, snapshot, targetName, targetTimestamp, targetTimestampSource);
+    if (["RESOLVE_NO_MATCH", "RESOLVE_AMBIGUOUS"].includes(result.status)) {
+      const fingerprintResult = await this.resolveFromInboundFingerprint(conversation, input, snapshot);
+      if (fingerprintResult.status === "RESOLVED" || fingerprintResult.status === "RESOLVE_AMBIGUOUS") {
+        return fingerprintResult;
+      }
+    }
     if (usedExistingSnapshot && ["RESOLVE_NO_MATCH", "RESOLVE_AMBIGUOUS", "RESOLVE_TRANSPORT"].includes(result.status)) {
       snapshot = await this.refreshSnapshot({ ...input, force: true });
       result = await this.resolveFromSnapshot(conversation, input, snapshot, targetName, targetTimestamp, targetTimestampSource);
+      if (["RESOLVE_NO_MATCH", "RESOLVE_AMBIGUOUS"].includes(result.status)) {
+        const fingerprintResult = await this.resolveFromInboundFingerprint(conversation, input, snapshot);
+        if (fingerprintResult.status === "RESOLVED" || fingerprintResult.status === "RESOLVE_AMBIGUOUS") {
+          return fingerprintResult;
+        }
+      }
     }
-    if (result.status === "RESOLVE_NO_MATCH") {
+    if (result.status === "RESOLVE_NO_MATCH" || result.status === "RESOLVE_AMBIGUOUS") {
       const expandedSnapshot = await this.refreshExpandedSnapshot(input);
       result = await this.resolveFromSnapshot(conversation, input, expandedSnapshot, targetName, targetTimestamp, targetTimestampSource);
+      if (["RESOLVE_NO_MATCH", "RESOLVE_AMBIGUOUS"].includes(result.status)) {
+        const fingerprintResult = await this.resolveFromInboundFingerprint(conversation, input, expandedSnapshot);
+        if (fingerprintResult.status === "RESOLVED" || fingerprintResult.status === "RESOLVE_AMBIGUOUS") {
+          return fingerprintResult;
+        }
+      }
       if (
-        result.status === "RESOLVE_NO_MATCH"
+        (result.status === "RESOLVE_NO_MATCH" || result.status === "RESOLVE_AMBIGUOUS")
         && expandedSnapshot.status === "READY"
         && expandedSnapshot.pagesFetched >= EXPANDED_MAX_RECENT_PAGES
         && expandedSnapshot.chats.length >= EXPANDED_MAX_RECENT_CHATS
       ) {
         const fullSnapshot = await this.refreshFullSnapshot(input);
         result = await this.resolveFromSnapshot(conversation, input, fullSnapshot, targetName, targetTimestamp, targetTimestampSource);
+        if (["RESOLVE_NO_MATCH", "RESOLVE_AMBIGUOUS"].includes(result.status)) {
+          const fingerprintResult = await this.resolveFromInboundFingerprint(conversation, input, fullSnapshot);
+          if (fingerprintResult.status === "RESOLVED" || fingerprintResult.status === "RESOLVE_AMBIGUOUS") {
+            return fingerprintResult;
+          }
+        }
       }
     }
     return result;
+  }
+
+  private async resolveFromInboundFingerprint(
+    conversation: ResolverConversation,
+    input: ResolveRecentLineChatInput,
+    snapshot: LineChatRecentMappingSnapshot,
+  ): Promise<LineChatRecentResolutionResult> {
+    if (snapshot.status !== "READY" || snapshot.chats.length === 0) {
+      return { status: "RESOLVE_NO_MATCH" };
+    }
+
+    const inbound = conversation.messages
+      .filter((message) => message.direction === "INBOUND" && validDate(message.sentAt))
+      .sort((left, right) => right.sentAt.getTime() - left.sentAt.getTime())
+      .find((message) =>
+        Boolean(message.externalMessageId?.trim())
+        || (
+          message.messageType?.toString().trim().toLowerCase() === "text"
+          && typeof message.originalText === "string"
+          && message.originalText.length > 0
+        )
+      );
+
+    if (!inbound) return { status: "RESOLVE_NO_MATCH" };
+
+    const match = await this.sessionService.findInboundMessageFingerprintMatches({
+      botId: input.botId,
+      profilePath: input.profilePath,
+      chats: snapshot.chats,
+      externalMessageId: inbound.externalMessageId,
+      messageType: inbound.messageType?.toString() ?? null,
+      text: inbound.originalText,
+      sentAt: inbound.sentAt,
+      headless: true,
+      operationContext: input.operationContext,
+    });
+
+    let resolutionStatus: LineChatRecentResolutionResult["status"] = "RESOLVE_NO_MATCH";
+    if (match.status === "FAILED") {
+      resolutionStatus = "RESOLVE_TRANSPORT";
+    } else if (match.matches.length > 1) {
+      resolutionStatus = "RESOLVE_AMBIGUOUS";
+    } else if (match.matches.length === 1) {
+      const persisted = await this.persistCandidateMapping(
+        conversation.id,
+        conversation.lineOfficialAccountId,
+        match.matches[0],
+      );
+      resolutionStatus = persisted.status;
+      this.logger.log(JSON.stringify({
+        event: "line_chat_inbound_fingerprint_resolution",
+        conversationId: conversation.id,
+        lineOfficialAccountId: conversation.lineOfficialAccountId,
+        candidateChatCount: snapshot.chats.length,
+        scannedChats: match.scannedChats,
+        failedChats: match.failedChats,
+        matchCount: match.matches.length,
+        matchMethod: match.matchMethod,
+        resolutionStatus: persisted.status,
+      }));
+      return persisted;
+    }
+
+    this.logger.log(JSON.stringify({
+      event: "line_chat_inbound_fingerprint_resolution",
+      conversationId: conversation.id,
+      lineOfficialAccountId: conversation.lineOfficialAccountId,
+      candidateChatCount: snapshot.chats.length,
+      scannedChats: match.scannedChats,
+      failedChats: match.failedChats,
+      matchCount: match.matches.length,
+      matchMethod: match.matchMethod,
+      resolutionStatus,
+    }));
+    return { status: resolutionStatus };
   }
 
   /**
