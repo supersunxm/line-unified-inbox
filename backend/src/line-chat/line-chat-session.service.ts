@@ -505,75 +505,80 @@ export class LineChatSessionService {
         };
       }
 
-      const requestContext = context.request;
-      if (!requestContext || typeof requestContext.get !== "function") {
-        return {
-          status: "FAILED",
-          matches: [],
-          scannedChats,
-          failedChats: chatIds.length,
-          matchMethod: null,
-        };
-      }
+      const page = context.pages()[0] || await context.newPage();
+      await page.goto(`https://chat.line.biz/${encodeURIComponent(botId)}`, {
+        waitUntil: "domcontentloaded",
+        timeout: 15_000,
+      }).catch(() => {});
 
       for (let offset = 0; offset < chatIds.length; offset += batchSize) {
         input.operationContext?.assertOwnership();
         const batch = chatIds.slice(offset, offset + batchSize);
-        const results = await Promise.all(batch.map(async (chatUserId) => {
-          const historyUrl =
-            `https://chat.line.biz/api/v3/bots/${encodeURIComponent(botId)}/chats/${encodeURIComponent(chatUserId)}/messages`;
-          try {
-            const response = await requestContext.get(historyUrl, {
-              headers: { Accept: "application/json, text/plain, */*" },
-              timeout: 15_000,
-            });
-            if (response.status() !== 200) {
-              return { chatUserId, ok: false as const, idMatch: false, textMatch: false };
-            }
-            const body = await response.json() as {
-              list?: Array<{
-                type?: string;
-                timestamp?: number;
-                message?: {
-                  id?: string;
+        const results = await page.evaluate(async (args) => {
+          return Promise.all(args.chatIds.map(async (chatUserId) => {
+            const historyUrl =
+              `https://chat.line.biz/api/v3/bots/${encodeURIComponent(args.botId)}/chats/${encodeURIComponent(chatUserId)}/messages`;
+            try {
+              const response = await fetch(historyUrl, {
+                credentials: "include",
+                headers: { Accept: "application/json, text/plain, */*" },
+              });
+              if (!response.ok) {
+                return { chatUserId, ok: false, idMatch: false, textMatch: false };
+              }
+              const body = await response.json() as {
+                list?: Array<{
                   type?: string;
-                  text?: string;
-                };
-              }>;
-            };
-            let idMatch = false;
-            let textMatch = false;
-            for (const item of body.list ?? []) {
-              if (item.type !== "messageReceived") continue;
-              const managerMessageId = typeof item.message?.id === "string"
-                ? item.message.id.trim()
-                : "";
-              if (externalMessageId && managerMessageId === externalMessageId) {
-                idMatch = true;
-                break;
+                  timestamp?: number;
+                  message?: {
+                    id?: string;
+                    type?: string;
+                    text?: string;
+                  };
+                }>;
+              };
+              let idMatch = false;
+              let textMatch = false;
+              for (const item of body.list ?? []) {
+                if (item.type !== "messageReceived") continue;
+                const managerMessageId = typeof item.message?.id === "string"
+                  ? item.message.id.trim()
+                  : "";
+                if (args.externalMessageId && managerMessageId === args.externalMessageId) {
+                  idMatch = true;
+                  break;
+                }
+                if (!args.canUseTextFallback) continue;
+                const managerType = typeof item.message?.type === "string"
+                  ? item.message.type.trim().toLowerCase()
+                  : "";
+                const managerText = typeof item.message?.text === "string"
+                  ? item.message.text
+                  : "";
+                const managerTimestamp = Number(item.timestamp);
+                if (
+                  managerType === args.targetType
+                  && managerText === args.targetText
+                  && Number.isFinite(managerTimestamp)
+                  && Math.abs(managerTimestamp - args.targetMs) <= 15_000
+                ) {
+                  textMatch = true;
+                }
               }
-              if (!canUseTextFallback) continue;
-              const managerType = typeof item.message?.type === "string"
-                ? item.message.type.trim().toLowerCase()
-                : "";
-              const managerText = typeof item.message?.text === "string"
-                ? item.message.text
-                : "";
-              const managerTimestamp = Number(item.timestamp);
-              if (
-                managerType === targetType
-                && managerText === targetText
-                && Number.isFinite(managerTimestamp)
-                && Math.abs(managerTimestamp - targetMs) <= 15_000
-              ) {
-                textMatch = true;
-              }
+              return { chatUserId, ok: true, idMatch, textMatch };
+            } catch {
+              return { chatUserId, ok: false, idMatch: false, textMatch: false };
             }
-            return { chatUserId, ok: true as const, idMatch, textMatch };
-          } catch {
-            return { chatUserId, ok: false as const, idMatch: false, textMatch: false };
-          }
-        }));
+          }));
+        }, {
+          chatIds: batch,
+          botId,
+          externalMessageId,
+          canUseTextFallback,
+          targetType,
+          targetText,
+          targetMs,
+        });
 
         scannedChats += results.length;
         for (const result of results) {
