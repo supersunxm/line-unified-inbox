@@ -712,6 +712,8 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
     let messagesInsertedOrUpdated = 0;
     let unknownDirectionEvents = 0;
     let historyFailures = 0;
+    const eventTypeCounts = new Map<string, number>();
+    const messageTypeCounts = new Map<string, number>();
 
     try {
       context = await this.sessionService.launchManagedPersistentContext(
@@ -827,6 +829,18 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
               ? item.type.trim()
               : "unknown";
             const direction = mirrorDirectionForManagerEvent(eventType);
+            eventTypeCounts.set(
+              eventType,
+              (eventTypeCounts.get(eventType) ?? 0) + 1,
+            );
+            const rawMessageType = typeof item.message?.type === "string"
+              ? item.message.type.trim()
+              : "";
+            const safeMessageType = rawMessageType || "unknown";
+            messageTypeCounts.set(
+              safeMessageType,
+              (messageTypeCounts.get(safeMessageType) ?? 0) + 1,
+            );
             if (direction === LineChatMirrorDirection.UNKNOWN) {
               unknownDirectionEvents += 1;
             }
@@ -840,9 +854,7 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
               managerMessageId: messageId,
               eventType,
               direction,
-              messageType: typeof item.message?.type === "string"
-                ? item.message.type
-                : null,
+              messageType: rawMessageType || null,
               text: typeof item.message?.text === "string"
                 ? item.message.text
                 : null,
@@ -923,6 +935,22 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
           .catch(() => {});
       }
     }
+
+    const eventTypeBreakdown = Object.fromEntries(
+      [...eventTypeCounts.entries()].sort(([left], [right]) => left.localeCompare(right)),
+    );
+    const messageTypeBreakdown = Object.fromEntries(
+      [...messageTypeCounts.entries()].sort(([left], [right]) => left.localeCompare(right)),
+    );
+    this.logger.log(JSON.stringify({
+      event: "line_chat_mirror_history_shape_observed",
+      lineOfficialAccountId: input.lineOfficialAccountId,
+      historiesFetched,
+      messagesObserved,
+      unknownDirectionEvents,
+      eventTypeBreakdown,
+      messageTypeBreakdown,
+    }));
 
     return {
       recentChatsObserved: await this.prisma.lineChatMirrorChat.count({
