@@ -484,6 +484,7 @@ export class LineChatNicknameWorkerService implements OnModuleInit, OnModuleDest
       value: await callback(testContext),
       sessionId,
       operationKind,
+      requestId: "test-only",
     };
   }
 

@@ -5,7 +5,12 @@ import {
   PROFILE_OPERATION_LEASE_DURATION_MS,
 } from "./line-chat-profile-operation-coordinator.service";
 
-type Lease = { id: string; ownerToken: string; leaseUntil: Date };
+type Lease = {
+  id: string;
+  ownerToken: string;
+  acquiredAt: Date;
+  leaseUntil: Date;
+};
 
 function createFakePrisma() {
   const leases = new Map<string, Lease>();
@@ -20,6 +25,7 @@ function createFakePrisma() {
         const lease = {
           id: `lease-${++sequence}`,
           ownerToken,
+          acquiredAt: new Date(),
           leaseUntil: new Date(Date.now() + PROFILE_OPERATION_LEASE_DURATION_MS),
         };
         leases.set(sessionId, lease);

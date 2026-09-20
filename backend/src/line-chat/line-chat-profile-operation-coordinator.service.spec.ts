@@ -11,6 +11,8 @@ type LeaseRow = {
   id: string;
   sessionId: string;
   ownerToken: string;
+  operationKind: "NICKNAME_UPDATE";
+  acquiredAt: Date;
   leaseUntil: Date;
 };
 
@@ -26,7 +28,7 @@ type CoordinatorInternals = {
     sessionId: string,
     ownerToken: string,
     operationKind: "NICKNAME_UPDATE",
-  ) => Promise<{ id: string; ownerToken: string; leaseUntil: Date } | null>;
+  ) => Promise<{ id: string; ownerToken: string; acquiredAt: Date; leaseUntil: Date } | null>;
   renewDatabaseLease: (sessionId: string, ownerToken: string) => Promise<boolean>;
   releaseDatabaseLease: (sessionId: string, ownerToken: string) => Promise<void>;
 };
@@ -73,10 +75,17 @@ function createFakePrisma() {
           id: `lease-${++sequence}`,
           sessionId,
           ownerToken,
+          operationKind: "NICKNAME_UPDATE",
+          acquiredAt: databaseNow(),
           leaseUntil: new Date(clock.nowMs + PROFILE_OPERATION_LEASE_DURATION_MS),
         };
         leases.set(sessionId, row);
-        return [{ id: row.id, ownerToken: row.ownerToken, leaseUntil: row.leaseUntil }];
+        return [{
+          id: row.id,
+          ownerToken: row.ownerToken,
+          acquiredAt: row.acquiredAt,
+          leaseUntil: row.leaseUntil,
+        }];
       }
 
       if (query.includes("UPDATE \"LineChatProfileOperationLease\"")) {
@@ -94,6 +103,17 @@ function createFakePrisma() {
         if (!existing || existing.ownerToken !== ownerToken || existing.leaseUntil <= databaseNow()) return [];
         existing.leaseUntil = new Date(clock.nowMs + PROFILE_OPERATION_LEASE_DURATION_MS);
         return [{ id: existing.id }];
+      }
+
+      if (query.includes("SELECT \"operationKind\", \"acquiredAt\", \"leaseUntil\"")) {
+        const sessionId = String(values[0]);
+        const existing = leases.get(sessionId);
+        if (!existing || existing.leaseUntil <= databaseNow()) return [];
+        return [{
+          operationKind: existing.operationKind,
+          acquiredAt: existing.acquiredAt,
+          leaseUntil: existing.leaseUntil,
+        }];
       }
 
       throw new Error(`Unexpected fake query: ${query}`);
@@ -139,6 +159,51 @@ test("coordinator blocks concurrent operations for the same session", async () =
   releaseFirst();
   const firstResult = await first;
   assert.equal(firstResult.acquired, true);
+});
+
+test("contention logs correlate acquisition, busy owner, release, and durations without secrets", async () => {
+  const prisma = createFakePrisma();
+  const coordinator = new LineChatProfileOperationCoordinator(prisma as never);
+  const events: Array<Record<string, unknown>> = [];
+  (coordinator as unknown as { logger: { log: (value: string) => void; warn: (value: string) => void } }).logger = {
+    log: (value) => events.push(JSON.parse(value) as Record<string, unknown>),
+    warn: (value) => events.push(JSON.parse(value) as Record<string, unknown>),
+  };
+  let releaseFirst!: () => void;
+  const firstHold = new Promise<void>((resolve) => { releaseFirst = resolve; });
+  const first = coordinator.withProfileOperation(
+    { sessionId: "session-a", operationKind: "NICKNAME_UPDATE" },
+    async () => firstHold,
+  );
+
+  await new Promise((resolve) => setImmediate(resolve));
+  const second = await coordinator.withProfileOperation(
+    { sessionId: "session-a", operationKind: "HEALTH_SESSION" },
+    async () => "must-not-run",
+  );
+  assert.equal(second.acquired, false);
+  releaseFirst();
+  assert.equal((await first).acquired, true);
+
+  const acquired = events.find((event) => event.event === "line_chat_profile_operation_acquired");
+  const busy = events.find((event) => event.event === "line_chat_profile_operation_busy");
+  const released = events.find((event) => event.event === "line_chat_profile_operation_released");
+  assert.ok(acquired);
+  assert.ok(busy);
+  assert.ok(released);
+  assert.equal(busy?.holderOperationKind, "NICKNAME_UPDATE");
+  assert.equal(busy?.holderRequestId, acquired?.requestId);
+  assert.equal(released?.requestId, acquired?.requestId);
+  assert.equal(typeof acquired?.acquiredAt, "string");
+  assert.equal(typeof busy?.holderAcquiredAt, "string");
+  assert.equal(typeof busy?.waitedMs, "number");
+  assert.equal(typeof released?.heldMs, "number");
+  assert.ok(Number(busy?.waitedMs) >= 0);
+  assert.ok(Number(released?.heldMs) >= 0);
+
+  const serialized = JSON.stringify(events);
+  assert.doesNotMatch(serialized, /ownerToken|cookie|credential|password|authorization|messageText|localStorage/i);
+  assert.doesNotMatch(serialized, /owner-a|owner-b|secret|token-value/i);
 });
 
 test("different sessions operate concurrently", async () => {
@@ -238,6 +303,12 @@ test("database lease fences foreign release and permits expired takeover", async
     async () => "must-not-run",
   );
   assert.equal(contender.acquired, false);
+  if (!contender.acquired) {
+    assert.equal(contender.busyStage, "DATABASE_LEASE");
+    assert.equal(contender.holderOperationKind, "NICKNAME_UPDATE");
+    assert.ok(contender.holderAcquiredAt instanceof Date);
+    assert.ok(contender.holderLeaseUntil instanceof Date);
+  }
   lease.ownerToken = "foreign-owner";
   replaceOwner();
   await assert.rejects(first, /lease was lost/);

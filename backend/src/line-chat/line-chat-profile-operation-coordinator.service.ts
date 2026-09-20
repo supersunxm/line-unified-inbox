@@ -27,6 +27,13 @@ export interface ProfileOperationBusyResult {
   retryAfterMs: number;
   sessionId: string;
   operationKind: LineChatProfileOperationKind;
+  requestId: string;
+  busyStage: "LOCAL_LOCK" | "DATABASE_LEASE";
+  waitedMs: number;
+  holderOperationKind?: LineChatProfileOperationKind;
+  holderRequestId?: string;
+  holderAcquiredAt?: Date;
+  holderLeaseUntil?: Date;
 }
 
 export interface ProfileOperationAcquiredResult<T> {
@@ -34,6 +41,7 @@ export interface ProfileOperationAcquiredResult<T> {
   value: T;
   sessionId: string;
   operationKind: LineChatProfileOperationKind;
+  requestId: string;
 }
 
 export type ProfileOperationResult<T> =
@@ -49,10 +57,15 @@ export class ProfileOperationLeaseLostError extends Error {
 
 interface LocalLock {
   release: () => void;
+  operationKind: LineChatProfileOperationKind;
+  requestId: string;
+  acquiredAt: Date;
 }
 
 interface LocalWaiter {
   id: string;
+  requestId: string;
+  requestedAtMs: number;
   operationKind: LineChatProfileOperationKind;
   priority: number;
   sequence: number;
@@ -63,6 +76,13 @@ interface LocalWaiter {
 interface DatabaseLease {
   id: string;
   ownerToken: string;
+  acquiredAt: Date;
+  leaseUntil: Date;
+}
+
+interface ActiveDatabaseLease {
+  operationKind: LineChatProfileOperationKind;
+  acquiredAt: Date;
   leaseUntil: Date;
 }
 
@@ -95,8 +115,22 @@ export class LineChatProfileOperationCoordinator {
   }, callback: (context: LineChatProfileOperationContext) => Promise<T>, options: {
     waitForLock?: boolean;
   } = {}): Promise<ProfileOperationResult<T>> {
-    const localLock = await this.acquireLocalLock(input.sessionId, input.operationKind, options.waitForLock !== false);
-    if (!localLock) return this.busy(input);
+    const requestId = randomUUID();
+    const requestedAtMs = Date.now();
+    const localLock = await this.acquireLocalLock(
+      input.sessionId,
+      input.operationKind,
+      requestId,
+      options.waitForLock !== false,
+    );
+    if (!localLock) {
+      return this.busy(input, {
+        requestId,
+        busyStage: "LOCAL_LOCK",
+        waitedMs: Date.now() - requestedAtMs,
+        holder: this.localLocks.get(input.sessionId),
+      });
+    }
 
     const ownerToken = randomUUID();
     let lease: DatabaseLease | null = null;
@@ -105,7 +139,24 @@ export class LineChatProfileOperationCoordinator {
 
     try {
       lease = await this.acquireDatabaseLease(input.sessionId, ownerToken, input.operationKind);
-      if (!lease) return this.busy(input);
+      if (!lease) {
+        const holder = await this.readActiveDatabaseLease(input.sessionId).catch(() => null);
+        return this.busy(input, {
+          requestId,
+          busyStage: "DATABASE_LEASE",
+          waitedMs: Date.now() - requestedAtMs,
+          holder,
+        });
+      }
+
+      this.logger.log(JSON.stringify({
+        event: "line_chat_profile_operation_acquired",
+        sessionId: input.sessionId,
+        operationKind: input.operationKind,
+        requestId,
+        acquiredAt: lease.acquiredAt.toISOString(),
+        waitedMs: Date.now() - requestedAtMs,
+      }));
 
       const context: LineChatProfileOperationContext = {
         sessionId: input.sessionId,
@@ -138,6 +189,7 @@ export class LineChatProfileOperationCoordinator {
         value,
         sessionId: input.sessionId,
         operationKind: input.operationKind,
+        requestId,
       };
     } finally {
       if (heartbeatTimer) clearInterval(heartbeatTimer);
@@ -151,6 +203,14 @@ export class LineChatProfileOperationCoordinator {
           }));
         });
       }
+      this.logger.log(JSON.stringify({
+        event: "line_chat_profile_operation_released",
+        sessionId: input.sessionId,
+        operationKind: input.operationKind,
+        requestId,
+        acquiredAt: lease?.acquiredAt?.toISOString() ?? localLock.acquiredAt.toISOString(),
+        heldMs: Date.now() - localLock.acquiredAt.getTime(),
+      }));
       localLock.release();
     }
   }
@@ -158,14 +218,43 @@ export class LineChatProfileOperationCoordinator {
   private busy(input: {
     sessionId: string;
     operationKind: LineChatProfileOperationKind;
+  }, details: {
+    requestId: string;
+    busyStage: "LOCAL_LOCK" | "DATABASE_LEASE";
+    waitedMs: number;
+    holder?: LocalLock | ActiveDatabaseLease | null;
   }): ProfileOperationBusyResult {
-    return {
+    const holder = details.holder;
+    const result: ProfileOperationBusyResult = {
       acquired: false,
       reason: "PROFILE_OPERATION_BUSY",
       retryAfterMs: PROFILE_OPERATION_RETRY_AFTER_MS,
       sessionId: input.sessionId,
       operationKind: input.operationKind,
+      requestId: details.requestId,
+      busyStage: details.busyStage,
+      waitedMs: details.waitedMs,
     };
+    if (holder) {
+      result.holderOperationKind = holder.operationKind;
+      result.holderAcquiredAt = holder.acquiredAt;
+      if ("leaseUntil" in holder) result.holderLeaseUntil = holder.leaseUntil;
+      if ("requestId" in holder) result.holderRequestId = holder.requestId;
+    }
+    this.logger.warn(JSON.stringify({
+      event: "line_chat_profile_operation_busy",
+      sessionId: input.sessionId,
+      operationKind: input.operationKind,
+      requestId: details.requestId,
+      busyStage: details.busyStage,
+      waitedMs: details.waitedMs,
+      retryAfterMs: PROFILE_OPERATION_RETRY_AFTER_MS,
+      holderOperationKind: result.holderOperationKind,
+      holderRequestId: result.holderRequestId,
+      holderAcquiredAt: result.holderAcquiredAt?.toISOString(),
+      holderLeaseUntil: result.holderLeaseUntil?.toISOString(),
+    }));
+    return result;
   }
 
   private waitBudgetMs(operationKind: LineChatProfileOperationKind): number {
@@ -177,9 +266,10 @@ export class LineChatProfileOperationCoordinator {
   private async acquireLocalLock(
     sessionId: string,
     operationKind: LineChatProfileOperationKind,
+    requestId: string,
     waitForLock: boolean,
   ): Promise<LocalLock | null> {
-    const immediate = this.tryAcquireLocalLock(sessionId);
+    const immediate = this.tryAcquireLocalLock(sessionId, operationKind, requestId);
     if (immediate) return immediate;
 
     const waitMs = waitForLock ? this.waitBudgetMs(operationKind) : 0;
@@ -188,6 +278,8 @@ export class LineChatProfileOperationCoordinator {
     return new Promise<LocalLock | null>((resolve) => {
       const waiter: LocalWaiter = {
         id: randomUUID(),
+        requestId,
+        requestedAtMs: Date.now(),
         operationKind,
         priority: OPERATION_PRIORITY[operationKind],
         sequence: this.waiterSequence++,
@@ -209,7 +301,9 @@ export class LineChatProfileOperationCoordinator {
           event: "line_chat_profile_operation_priority_wait_timeout",
           sessionId,
           operationKind,
+          requestId,
           waitMs,
+          waitedMs: Date.now() - waiter.requestedAtMs,
         }));
         resolve(null);
       }, waitMs);
@@ -218,19 +312,32 @@ export class LineChatProfileOperationCoordinator {
         event: "line_chat_profile_operation_priority_waiting",
         sessionId,
         operationKind,
+        requestId,
         waitMs,
       }));
     });
   }
 
-  private tryAcquireLocalLock(sessionId: string): LocalLock | null {
+  private tryAcquireLocalLock(
+    sessionId: string,
+    operationKind: LineChatProfileOperationKind,
+    requestId: string,
+  ): LocalLock | null {
     if (this.localLocks.has(sessionId)) return null;
-    return this.createLocalLock(sessionId);
+    return this.createLocalLock(sessionId, operationKind, requestId);
   }
 
-  private createLocalLock(sessionId: string): LocalLock {
+  private createLocalLock(
+    sessionId: string,
+    operationKind: LineChatProfileOperationKind,
+    requestId: string,
+  ): LocalLock {
     let released = false;
+    const acquiredAt = new Date();
     const lock: LocalLock = {
+      operationKind,
+      requestId,
+      acquiredAt,
       release: () => {
         if (released) return;
         released = true;
@@ -253,11 +360,14 @@ export class LineChatProfileOperationCoordinator {
     if (waiters.length === 0) this.localWaiters.delete(sessionId);
     if (next.timer) clearTimeout(next.timer);
 
-    const lock = this.createLocalLock(sessionId);
+    const lock = this.createLocalLock(sessionId, next.operationKind, next.requestId);
     this.logger.log(JSON.stringify({
       event: "line_chat_profile_operation_priority_granted",
       sessionId,
       operationKind: next.operationKind,
+      requestId: next.requestId,
+      acquiredAt: lock.acquiredAt.toISOString(),
+      waitedMs: Date.now() - next.requestedAtMs,
       remainingWaiters: waiters.length,
     }));
     next.resolve(lock);
@@ -281,11 +391,22 @@ export class LineChatProfileOperationCoordinator {
             "leaseUntil" = EXCLUDED."leaseUntil",
             "updatedAt" = CURRENT_TIMESTAMP
         WHERE "LineChatProfileOperationLease"."leaseUntil" <= CURRENT_TIMESTAMP
-      RETURNING "id", "ownerToken", "leaseUntil"
+      RETURNING "id", "ownerToken", "acquiredAt", "leaseUntil"
     `;
     const acquired = rows[0];
     if (!acquired || acquired.ownerToken !== ownerToken) return null;
     return acquired;
+  }
+
+  private async readActiveDatabaseLease(sessionId: string): Promise<ActiveDatabaseLease | null> {
+    const rows = await this.prisma.$queryRaw<ActiveDatabaseLease[]>`
+      SELECT "operationKind", "acquiredAt", "leaseUntil"
+      FROM "LineChatProfileOperationLease"
+      WHERE "lineChatSessionId" = ${sessionId}
+        AND "leaseUntil" > CURRENT_TIMESTAMP
+      LIMIT 1
+    `;
+    return rows[0] ?? null;
   }
 
   private async renewDatabaseLease(sessionId: string, ownerToken: string): Promise<boolean> {
