@@ -1,14 +1,20 @@
 import { Inject, Injectable, Logger, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
 import {
+  ActivityActionType,
+  BmReplyStatus,
+  FollowUpStatus,
   LineChatMessageSendJobStatus,
   MessageDeliveryAttemptStatus,
   MessageDeliveryStatus,
+  MessageDirection,
+  MessageType,
   Prisma,
 } from "@prisma/client";
 import { hostname } from "node:os";
 import { PrismaService } from "../prisma.service";
 import { persistStaffOutboundReplyState } from "../conversation-reply-state";
 import { LineChatManagerMessageRelayWorkerService } from "./line-chat-manager-message-relay-worker.service";
+import { LineChatRecentResolverService } from "./line-chat-recent-resolver.service";
 import {
   isLineChatCanaryPreSendFailureEnabled,
   isLineChatDurableSendQueueConversationEnabled,
@@ -19,6 +25,7 @@ const JOB_LEASE_MS = 90_000;
 const MAX_PARALLEL_PROFILES = 4;
 const VERIFY_BACKOFF_MS = [3_000, 5_000, 10_000, 20_000] as const;
 const MAX_VERIFY_ATTEMPTS = VERIFY_BACKOFF_MS.length;
+const FAILED_REPLY_RECONCILIATION_DELAY_MS = 12_000;
 // Safety invariant: an ambiguous customer-facing send transitions to
 // VERIFY_PENDING. The worker must never auto-resend from that state.
 // Deployment touch: rebuild after Railway usage-limit increase (2026-09-19).
@@ -40,9 +47,35 @@ function isDefinitelyPreSendBusy(message: string): boolean {
   );
 }
 
+function configuredFailedReplyReconciliationConversationIds(): string[] {
+  const raw = process.env.LINE_CHAT_FAILED_REPLY_RECONCILIATION_CONVERSATION_IDS?.trim();
+  if (!raw) return [];
+  return [...new Set(
+    raw
+      .split(/[\s,;]+/u)
+      .map((value) => value.trim())
+      .filter(Boolean),
+  )];
+}
+
+function managerEventMessageType(value: string): MessageType {
+  switch (value.trim().toLowerCase()) {
+    case "text": return MessageType.TEXT;
+    case "image": return MessageType.IMAGE;
+    case "video": return MessageType.VIDEO;
+    case "audio": return MessageType.AUDIO;
+    case "file": return MessageType.FILE;
+    case "location": return MessageType.LOCATION;
+    case "sticker": return MessageType.STICKER;
+    default: return MessageType.UNSUPPORTED;
+  }
+}
+
 type ManagerOutboundEvent = {
   managerMessageId: string;
+  messageType: string;
   text: string;
+  fileName: string | null;
   sentAt: Date;
   bizId: string | null;
   ownerName: string | null;
@@ -64,12 +97,15 @@ export class LineChatMessageSendWorkerService implements OnModuleInit, OnModuleD
   private readonly logger = new Logger(LineChatMessageSendWorkerService.name);
   private readonly workerId = `${process.env.RAILWAY_SERVICE_NAME?.trim() || "local"}:${process.env.RAILWAY_REPLICA_ID?.trim() || hostname()}:${process.pid}:send-queue`;
   private timer: NodeJS.Timeout | null = null;
+  private reconciliationTimer: NodeJS.Timeout | null = null;
   private processing = false;
 
   constructor(
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(LineChatManagerMessageRelayWorkerService)
     private readonly managerRelay: LineChatManagerMessageRelayWorkerService,
+    @Inject(LineChatRecentResolverService)
+    private readonly recentResolver: LineChatRecentResolverService,
   ) {}
 
   onModuleInit(): void {
@@ -87,11 +123,21 @@ export class LineChatMessageSendWorkerService implements OnModuleInit, OnModuleD
     }));
     this.timer = setInterval(() => void this.processCycle(), POLL_INTERVAL_MS);
     void this.processCycle();
+
+    if (configuredFailedReplyReconciliationConversationIds().length > 0) {
+      this.reconciliationTimer = setTimeout(
+        () => void this.reconcileConfiguredFailedReplies(),
+        FAILED_REPLY_RECONCILIATION_DELAY_MS,
+      );
+      this.reconciliationTimer.unref?.();
+    }
   }
 
   onModuleDestroy(): void {
     if (this.timer) clearInterval(this.timer);
+    if (this.reconciliationTimer) clearTimeout(this.reconciliationTimer);
     this.timer = null;
+    this.reconciliationTimer = null;
   }
 
   async recoverStuckJobs(): Promise<number> {
@@ -139,6 +185,113 @@ export class LineChatMessageSendWorkerService implements OnModuleInit, OnModuleD
       }));
     }
     return stuck.length;
+  }
+
+  public async reconcileConfiguredFailedReplies(): Promise<void> {
+    const conversationIds = configuredFailedReplyReconciliationConversationIds();
+    if (conversationIds.length === 0) return;
+
+    this.logger.log(JSON.stringify({
+      event: "line_chat_failed_reply_reconciliation_started",
+      conversationCount: conversationIds.length,
+    }));
+
+    for (const conversationId of conversationIds) {
+      try {
+        await this.reconcileFailedConversation(conversationId);
+      } catch (error) {
+        this.logger.warn(JSON.stringify({
+          event: "line_chat_failed_reply_reconciliation_failed",
+          conversationId,
+          error: errorText(error).slice(0, 500),
+        }));
+      }
+    }
+  }
+
+  private async reconcileFailedConversation(conversationId: string): Promise<void> {
+    const conversation = await this.prisma.conversation.findUnique({
+      where: { id: conversationId },
+      select: {
+        id: true,
+        lineChatUserId: true,
+      },
+    });
+    if (!conversation) {
+      this.logger.warn(JSON.stringify({
+        event: "line_chat_failed_reply_reconciliation_skipped",
+        conversationId,
+        reason: "CONVERSATION_NOT_FOUND",
+      }));
+      return;
+    }
+
+    if (!conversation.lineChatUserId?.trim()) {
+      const resolution = await this.recentResolver.resolveUniqueNameForReconciliation(conversationId);
+      if (resolution.status !== "RESOLVED") {
+        this.logger.warn(JSON.stringify({
+          event: "line_chat_failed_reply_reconciliation_skipped",
+          conversationId,
+          reason: resolution.status,
+        }));
+        return;
+      }
+    }
+
+    const failedJobs = await this.prisma.lineChatMessageSendJob.findMany({
+      where: {
+        conversationId,
+        status: LineChatMessageSendJobStatus.FAILED,
+        message: {
+          deliveryStatus: MessageDeliveryStatus.FAILED,
+        },
+      },
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+      take: 20,
+      include: {
+        message: {
+          select: {
+            id: true,
+            sentAt: true,
+            deliveryStatus: true,
+            rawPayload: true,
+          },
+        },
+      },
+    });
+
+    let reconciled = 0;
+    for (const job of failedJobs) {
+      const payload = jsonObject(job.message.rawPayload);
+      if (payload.hiddenFromTimeline === true) continue;
+
+      const inboundAnchor = await this.prisma.message.findFirst({
+        where: {
+          conversationId,
+          direction: MessageDirection.INBOUND,
+          sentAt: { lte: job.message.sentAt },
+        },
+        orderBy: [{ sentAt: "desc" }, { id: "desc" }],
+        select: { sentAt: true },
+      });
+      if (!inboundAnchor) continue;
+
+      const activity = await this.managerRelay.inspectOutboundActivitySince({
+        conversationId,
+        after: inboundAnchor.sentAt,
+      });
+      if (!activity.handled || activity.events.length === 0) continue;
+
+      await this.supersedeWithManagerReplies(job.id, activity.events);
+      reconciled += 1;
+    }
+
+    this.logger.log(JSON.stringify({
+      event: "line_chat_failed_reply_reconciliation_completed",
+      conversationId,
+      failedJobsChecked: failedJobs.length,
+      reconciled,
+    }));
   }
 
   async processCycle(): Promise<number> {
@@ -597,7 +750,9 @@ export class LineChatMessageSendWorkerService implements OnModuleInit, OnModuleD
           where: { externalMessageId },
           update: {
             deliveryStatus: MessageDeliveryStatus.DELIVERED,
+            messageType: managerEventMessageType(event.messageType),
             originalText: event.text,
+            fileName: event.fileName,
             sentAt: event.sentAt,
             senderUserId: matchedUser?.id ?? undefined,
             senderDisplayName: matchedUser?.displayName
@@ -614,10 +769,11 @@ export class LineChatMessageSendWorkerService implements OnModuleInit, OnModuleD
           create: {
             conversationId: job.conversationId,
             externalMessageId,
-            direction: "OUTBOUND",
+            direction: MessageDirection.OUTBOUND,
             deliveryStatus: MessageDeliveryStatus.DELIVERED,
-            messageType: "TEXT",
+            messageType: managerEventMessageType(event.messageType),
             originalText: event.text,
+            fileName: event.fileName,
             sentAt: event.sentAt,
             senderUserId: matchedUser?.id ?? null,
             senderDisplayName: matchedUser?.displayName
@@ -678,6 +834,12 @@ export class LineChatMessageSendWorkerService implements OnModuleInit, OnModuleD
         where: { id: job.conversationId },
         data: {
           latestMessageAt: latestImportedAt,
+          ...(!latestAttributed
+            ? {
+                bmReplyStatus: BmReplyStatus.REPLIED,
+                followUpStatus: FollowUpStatus.COMPLETED,
+              }
+            : {}),
         },
       });
 
@@ -692,6 +854,30 @@ export class LineChatMessageSendWorkerService implements OnModuleInit, OnModuleD
           },
           sentAt: latestAttributed.sentAt,
           description: "Reconciled staff reply already present in LINE OA Manager; stale retry suppressed",
+        });
+      } else if (
+        job.conversation.bmReplyStatus !== BmReplyStatus.REPLIED
+        || job.conversation.followUpStatus !== FollowUpStatus.COMPLETED
+      ) {
+        const latestEvent = events.reduce(
+          (latest, event) => event.sentAt > latest.sentAt ? event : latest,
+          events[0],
+        );
+        await tx.activityHistory.create({
+          data: {
+            conversationId: job.conversationId,
+            actionType: ActivityActionType.STATUS_CHANGED,
+            previousStatus: job.conversation.followUpStatus,
+            newStatus: FollowUpStatus.COMPLETED,
+            previousBmReplyStatus: job.conversation.bmReplyStatus,
+            newBmReplyStatus: BmReplyStatus.REPLIED,
+            createdByName: latestEvent.ownerName?.trim() || "LINE OA Manager",
+            description: "Reconciled human reply already present in LINE OA Manager; stale failed bubble hidden",
+            metadata: {
+              source: "LINE_CHAT_MANAGER_RECONCILIATION",
+              managerMessageIds: events.map((event) => event.managerMessageId),
+            },
+          },
         });
       }
     });
