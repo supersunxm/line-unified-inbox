@@ -19,6 +19,7 @@ import 'widgets/conversation_info_page.dart';
 import 'widgets/conversation_tags_sheet.dart';
 import 'widgets/message_timeline.dart';
 import 'pdf_attachment.dart';
+import 'chat_delivery_reconciliation.dart';
 
 enum ReplyState { sending, failed }
 
@@ -167,6 +168,7 @@ class _ChatPageState extends State<ChatPage> {
   bool _paginationEnabled = false;
   bool _programmaticScroll = false;
   int _scrollGeneration = 0;
+  int _queuedDeliveryPollGeneration = 0;
   bool _openedNotified = false;
   StreamSubscription<Map<String, dynamic>>? _eventsSubscription;
 
@@ -179,13 +181,25 @@ class _ChatPageState extends State<ChatPage> {
 
   @override
   void dispose() {
+    _queuedDeliveryPollGeneration += 1;
     _eventsSubscription?.cancel();
     _text.dispose();
     _scroll.dispose();
     super.dispose();
   }
 
+  @override
+  void didUpdateWidget(covariant ChatPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.conversationId != widget.conversationId ||
+        oldWidget.repository != widget.repository) {
+      _openedNotified = false;
+      _load();
+    }
+  }
+
   void _load() {
+    _queuedDeliveryPollGeneration += 1;
     final request = widget.repository.detail(widget.conversationId);
     setState(() {
       _detail = null;
@@ -520,89 +534,56 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   Future<void> _pollQueuedDelivery(String messageId) async {
-    const delays = <Duration>[
-      Duration(seconds: 1),
-      Duration(seconds: 2),
-      Duration(seconds: 3),
-      Duration(seconds: 5),
-      Duration(seconds: 8),
-      Duration(seconds: 13),
-      Duration(seconds: 21),
-    ];
+    final pollGeneration = _queuedDeliveryPollGeneration;
 
-    for (final delay in delays) {
+    final targetSentAt = _detail?.messages
+        .where((message) => message.id == messageId)
+        .firstOrNull
+        ?.sentAt;
+    if (targetSentAt == null) return;
+
+    for (final delay in queuedDeliveryPollDelays) {
       await Future<void>.delayed(delay);
-      if (!mounted) return;
+      if (!canApplyQueuedDeliveryPollResult(
+        mounted: mounted,
+        pollGeneration: pollGeneration,
+        currentGeneration: _queuedDeliveryPollGeneration,
+      )) {
+        return;
+      }
 
       try {
         final latest = await widget.repository.detail(
           widget.conversationId,
           limit: 20,
         );
-        if (!mounted || _detail == null) return;
-
-        ChatMessage? refreshed;
-        for (final item in latest.messages) {
-          if (item.id == messageId) {
-            refreshed = item;
-            break;
-          }
+        if (!canApplyQueuedDeliveryPollResult(
+              mounted: mounted,
+              pollGeneration: pollGeneration,
+              currentGeneration: _queuedDeliveryPollGeneration,
+            ) ||
+            _detail == null) {
+          return;
         }
 
-        final detail = _detail!;
-        if (refreshed == null) {
-          // If the message is no longer returned in latest messages, it may have
-          // been superseded (hiddenFromTimeline on backend). Reconcile with
-          // latest messages so imported Manager replies appear and the stale
-          // message disappears without leaving a phantom bubble.
-          final hasNewerOrEqual = latest.messages.any(
-            (item) => item.sentAt.isAfter(DateTime.now().subtract(const Duration(minutes: 10))),
-          );
-          if (hasNewerOrEqual) {
-            final withoutStale = detail.messages.where((item) => item.id != messageId).toList();
-            final seen = withoutStale.map((item) => item.id).toSet();
-            final merged = [
-              ...withoutStale,
-              ...latest.messages.where((item) => !seen.contains(item.id)),
-            ];
-            merged.sort((left, right) {
-              final timestamp = left.sentAt.compareTo(right.sentAt);
-              return timestamp == 0 ? left.id.compareTo(right.id) : timestamp;
-            });
-            setState(() {
-              _detail = detail.copyWith(
-                messages: merged,
-                bmReplyStatus: latest.bmReplyStatus ?? detail.bmReplyStatus,
-                owner: latest.owner,
-                ownerTracked: latest.ownerTracked,
-              );
-            });
-            return;
-          }
-          continue;
+        final reconciliation = reconcileQueuedDelivery(
+          current: _detail!,
+          latest: latest,
+          messageId: messageId,
+          targetSentAt: targetSentAt,
+        );
+        if (!canApplyQueuedDeliveryPollResult(
+          mounted: mounted,
+          pollGeneration: pollGeneration,
+          currentGeneration: _queuedDeliveryPollGeneration,
+        )) {
+          return;
         }
-        final messages = [...detail.messages];
-        final index = messages.indexWhere((item) => item.id == messageId);
-        if (index >= 0) {
-          messages[index] = refreshed;
-        } else {
-          messages.add(refreshed);
-          messages.sort((left, right) {
-            final timestamp = left.sentAt.compareTo(right.sentAt);
-            return timestamp == 0 ? left.id.compareTo(right.id) : timestamp;
-          });
-        }
-
         setState(() {
-          _detail = detail.copyWith(
-            messages: messages,
-            bmReplyStatus: latest.bmReplyStatus ?? detail.bmReplyStatus,
-            owner: latest.owner,
-            ownerTracked: latest.ownerTracked,
-          );
+          _detail = reconciliation.detail;
         });
 
-        if (refreshed.deliveryStatus != 'PENDING') return;
+        if (reconciliation.stopPolling) return;
       } catch (_) {
         // Keep the persisted PENDING state visible. A later poll or normal
         // conversation refresh will reconcile the authoritative DB state.
@@ -612,8 +593,8 @@ class _ChatPageState extends State<ChatPage> {
 
   Future<void> _refreshReplyStateAfterSend() async {
     try {
-      final latest = await widget.repository.detail(widget.conversationId,
-          limit: 1);
+      final latest =
+          await widget.repository.detail(widget.conversationId, limit: 1);
       if (!mounted || _detail == null) return;
       setState(() => _detail = _detail!.copyWith(
             bmReplyStatus: latest.bmReplyStatus ?? _detail!.bmReplyStatus,

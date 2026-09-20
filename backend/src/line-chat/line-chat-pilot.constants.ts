@@ -209,6 +209,7 @@ export function isLineChatCanaryPreSendFailureEnabled(input: {
   text?: string | null;
   env?: {
     enabled?: string;
+    testText?: string;
   };
 }): boolean {
   const flag = (input.env?.enabled ?? process.env.LINE_CHAT_CANARY_FORCE_PRE_SEND_FAILURE_ENABLED)?.trim();
@@ -216,12 +217,38 @@ export function isLineChatCanaryPreSendFailureEnabled(input: {
 
   const CANARY_STORE_CODE = "28375";
   const CANARY_CONVERSATION_ID = "a04560a5-8658-493b-9b18-c992adc2b683";
-  const CANARY_TEST_TEXT = "TEST DURABLE PRE-SEND FAIL 004";
+  const canaryTestText = (
+    input.env?.testText
+    ?? process.env.LINE_CHAT_CANARY_FORCE_PRE_SEND_FAILURE_TEXT
+  )?.trim();
+  if (!canaryTestText) return false;
 
   if ((input.storeCode ?? "").trim() !== CANARY_STORE_CODE) return false;
   if ((input.conversationId ?? "").trim() !== CANARY_CONVERSATION_ID) return false;
-  if ((input.text ?? "").trim() !== CANARY_TEST_TEXT) return false;
+  if ((input.text ?? "").trim() !== canaryTestText) return false;
 
   return true;
 }
 
+export const LINE_CHAT_CANARY_PAUSE_AFTER_SEND_STORE_CODE = "28375";
+export const LINE_CHAT_CANARY_PAUSE_AFTER_SEND_CONVERSATION_ID =
+  "cb6dc791-ef0e-45f0-bb33-96c9b638c9a0";
+export const LINE_CHAT_CANARY_PAUSE_AFTER_SEND_TEXT = "INTERNAL WORKER RESTART B 002";
+
+export function isLineChatCanaryPauseAfterSendEnabled(input: {
+  storeCode?: string | null;
+  conversationId?: string | null;
+  text?: string | null;
+  env?: {
+    enabled?: string;
+  };
+}): boolean {
+  const flag = (input.env?.enabled ?? process.env.LINE_CHAT_CANARY_PAUSE_AFTER_SEND_ENABLED)?.trim();
+  if (flag !== "true") return false;
+
+  return (
+    (input.storeCode ?? "").trim() === LINE_CHAT_CANARY_PAUSE_AFTER_SEND_STORE_CODE
+    && (input.conversationId ?? "").trim() === LINE_CHAT_CANARY_PAUSE_AFTER_SEND_CONVERSATION_ID
+    && (input.text ?? "").trim() === LINE_CHAT_CANARY_PAUSE_AFTER_SEND_TEXT
+  );
+}

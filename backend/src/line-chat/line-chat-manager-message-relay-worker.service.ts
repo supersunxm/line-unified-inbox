@@ -12,7 +12,10 @@ import {
   isLineChatManagerRelayStoreEnabled,
 } from "./line-chat-pilot.constants";
 import { findSoleManagerTextarea } from "./line-chat-composer-fallback";
-import type { ManagerRelayResult } from "./line-chat-manager-message-relay.service";
+import type {
+  ManagerDeliveryEvidence,
+  ManagerRelayResult,
+} from "./line-chat-manager-message-relay.service";
 import { isProfileBrowserBusyError } from "./line-chat-session.service";
 
 const RELAY_DEDUPE_TTL_MS = 15 * 60_000;
@@ -120,6 +123,9 @@ export class LineChatManagerMessageRelayWorkerService {
         handled: true,
         duplicate: true,
         lineChatUserId: conversation.lineChatUserId?.trim() || "resolved-on-prior-attempt",
+        managerMessageId: null,
+        managerSentAt: null,
+        verificationSource: null,
       };
     }
 
@@ -903,7 +909,7 @@ export class LineChatManagerMessageRelayWorkerService {
       { sessionId: session.id, operationKind: "MANUAL_DIAGNOSTIC" },
       async (operationContext) => {
         operationContext.assertOwnership();
-        await this.sendViaManager({
+        const result = await this.sendViaManager({
           storeCode,
           botId,
           lineChatUserId,
@@ -912,6 +918,7 @@ export class LineChatManagerMessageRelayWorkerService {
           onSendAction,
         });
         operationContext.assertOwnership();
+        return result;
       },
     );
     if (!sendOperation.acquired) {
@@ -927,7 +934,14 @@ export class LineChatManagerMessageRelayWorkerService {
       sessionKey: session.sessionKey,
       lineChatUserIdMasked: `${lineChatUserId.slice(0, 4)}...${lineChatUserId.slice(-4)}`,
     }));
-    return { handled: true, duplicate: false, lineChatUserId };
+    return {
+      handled: true,
+      duplicate: false,
+      lineChatUserId,
+      managerMessageId: sendOperation.value.evidence?.managerMessageId ?? null,
+      managerSentAt: sendOperation.value.evidence?.managerSentAt ?? null,
+      verificationSource: sendOperation.value.evidence?.verificationSource ?? null,
+    };
   }
 
   private async loadConversation(id: string): Promise<RelayConversation | null> {
@@ -1063,7 +1077,7 @@ export class LineChatManagerMessageRelayWorkerService {
     }
   }
 
-private async sendViaManager(input: {
+  private async sendViaManager(input: {
     storeCode: string;
     botId: string;
     lineChatUserId: string;
@@ -1071,7 +1085,7 @@ private async sendViaManager(input: {
     text: string;
     skipIfTextAlreadyPresent?: boolean;
     onSendAction?: (actionAt: Date) => Promise<void>;
-  }): Promise<{ alreadyPresent: boolean }> {
+  }): Promise<{ alreadyPresent: boolean; evidence: ManagerDeliveryEvidence | null }> {
     if (!fs.existsSync(input.profilePath)) {
       throw new ServiceUnavailableException(`ไม่พบ session ของ LINE OA Manager ร้าน ${input.storeCode} กรุณา login ใหม่`);
     }
@@ -1125,13 +1139,14 @@ private async sendViaManager(input: {
           storeCode: input.storeCode,
           targetChatIdMasked: `${input.lineChatUserId.slice(0, 4)}...${input.lineChatUserId.slice(-4)}`,
         }));
-        return { alreadyPresent: true };
+        return { alreadyPresent: true, evidence: null };
       }
       await this.focusComposer(composer);
       await this.fillComposer(composer, page, input.text);
 
+      const sendActionAt = new Date();
       if (input.onSendAction) {
-        await input.onSendAction(new Date()).catch((err) => {
+        await input.onSendAction(sendActionAt).catch((err) => {
           this.logger.warn(`Failed to record sendActionAt: ${err}`);
         });
       }
@@ -1156,11 +1171,10 @@ private async sendViaManager(input: {
 
       const verified = await this.waitForDeliveryVerification(
         page,
-        composer,
         input.botId,
         input.lineChatUserId,
         input.text,
-        beforeOutboundCount,
+        sendActionAt,
       );
       if (!verified) {
         this.logger.warn(JSON.stringify({
@@ -1176,34 +1190,35 @@ private async sendViaManager(input: {
         // is absent relative to the pre-send baseline.
         await page.goto(targetUrl, { waitUntil: "domcontentloaded", timeout: 15_000 }).catch(() => {});
         await page.waitForLoadState("networkidle", { timeout: 5_000 }).catch(() => {});
-        const recoveryComposer = await this.findComposer(page, COMPOSER_WAIT_MS);
-        if (recoveryComposer) {
-          const refreshedOutboundCount =
-            await this.countOutboundExactTextViaApi(page, input.botId, input.lineChatUserId, input.text)
-            ?? await this.countOutboundExactText(page, recoveryComposer, input.text);
-          if (refreshedOutboundCount > beforeOutboundCount) {
+        const recoveryEvidence = await this.findOutboundExactTextViaApi(
+          page,
+          input.botId,
+          input.lineChatUserId,
+          input.text,
+          sendActionAt.getTime() - 2_000,
+        );
+        if (recoveryEvidence) {
             this.logger.log(JSON.stringify({
               event: "line_chat_manager_message_delivery_verified_after_reload",
               storeCode: input.storeCode,
               targetChatIdMasked: `${input.lineChatUserId.slice(0, 4)}...${input.lineChatUserId.slice(-4)}`,
+              managerMessageId: recoveryEvidence.managerMessageId,
             }));
-            return { alreadyPresent: false };
-          }
-
-          // Do not auto-resend after an ambiguous result. Verification is
-          // retried by the durable queue without another customer-facing send.
-          this.logger.warn(JSON.stringify({
-            event: "line_chat_manager_message_verify_pending",
-            storeCode: input.storeCode,
-            targetChatIdMasked: `${input.lineChatUserId.slice(0, 4)}...${input.lineChatUserId.slice(-4)}`,
-            refreshedOutboundCount,
-            beforeOutboundCount,
-          }));
+            return { alreadyPresent: false, evidence: recoveryEvidence };
         }
+
+        // Do not auto-resend after an ambiguous result. Verification is
+        // retried by the durable queue without another customer-facing send.
+        this.logger.warn(JSON.stringify({
+          event: "line_chat_manager_message_verify_pending",
+          storeCode: input.storeCode,
+          targetChatIdMasked: `${input.lineChatUserId.slice(0, 4)}...${input.lineChatUserId.slice(-4)}`,
+          beforeOutboundCount,
+        }));
 
         throw new ServiceUnavailableException("ยังยืนยันการส่งจาก LINE OA Manager ไม่ได้ จึงไม่บันทึกข้อความว่าส่งสำเร็จ");
       }
-      return { alreadyPresent: false };
+      return { alreadyPresent: false, evidence: verified };
     } catch (error) {
       if (isProfileBrowserBusyError(error)) {
         throw new ServiceUnavailableException("PROFILE_BROWSER_BUSY");
@@ -1466,32 +1481,75 @@ private async sendViaManager(input: {
 
   private async waitForDeliveryVerification(
     page: Page,
-    composer: Locator,
     botId: string,
     lineChatUserId: string,
     text: string,
-    beforeOutboundCount: number,
-  ): Promise<boolean> {
+    sendActionAt: Date,
+  ): Promise<ManagerDeliveryEvidence | null> {
     const deadline = Date.now() + 10_000;
     while (Date.now() < deadline) {
-      const apiCount = await this.countOutboundExactTextViaApi(page, botId, lineChatUserId, text);
-      if (apiCount !== null && apiCount > beforeOutboundCount) {
-        return true;
-      }
-
-      const outboundCount = apiCount === null
-        ? await this.countOutboundExactText(page, composer, text)
-        : apiCount;
-      let composerCleared = false;
-      try {
-        composerCleared = (await composer.inputValue()) === "";
-      } catch {
-        composerCleared = ((await composer.textContent().catch(() => "")) ?? "").trim() === "";
-      }
-      if (composerCleared && outboundCount > beforeOutboundCount) return true;
+      const evidence = await this.findOutboundExactTextViaApi(
+        page,
+        botId,
+        lineChatUserId,
+        text,
+        sendActionAt.getTime() - 2_000,
+      );
+      if (evidence) return evidence;
       await page.waitForTimeout(250);
     }
-    return false;
+    return null;
+  }
+
+  private async findOutboundExactTextViaApi(
+    page: Page,
+    botId: string,
+    lineChatUserId: string,
+    text: string,
+    afterMs: number,
+  ): Promise<ManagerDeliveryEvidence | null> {
+    const historyUrl = `https://chat.line.biz/api/v3/bots/${encodeURIComponent(botId)}/chats/${encodeURIComponent(lineChatUserId)}/messages`;
+    const result = await page.evaluate(async ({ url, expected, cutoff }) => {
+      const response = await fetch(url, { credentials: "include" });
+      if (!response.ok) return null;
+      const body = await response.json() as {
+        list?: Array<{
+          type?: string;
+          timestamp?: number;
+          bizId?: string;
+          message?: { id?: string; type?: string; text?: string };
+        }>;
+      };
+      const normalize = (value: string): string =>
+        value.normalize("NFKC").replace(/\s+/g, " ").trim();
+      const match = (body.list ?? [])
+        .filter((item) =>
+          item.type === "messageSent"
+          && item.bizId !== "__AUTO_RESPONSE"
+          && item.message?.type === "text"
+          && typeof item.message.id === "string"
+          && Boolean(item.message.id.trim())
+          && typeof item.message.text === "string"
+          && normalize(item.message.text) === normalize(expected)
+          && Number.isFinite(Number(item.timestamp))
+          && Number(item.timestamp) >= cutoff
+        )
+        .sort((a, b) => Number(a.timestamp) - Number(b.timestamp))[0];
+      if (!match?.message?.id || !Number.isFinite(Number(match.timestamp))) return null;
+      return {
+        managerMessageId: match.message.id.trim(),
+        managerSentAt: new Date(Number(match.timestamp)).toISOString(),
+      };
+    }, { url: historyUrl, expected: text, cutoff: afterMs });
+
+    if (!result) return null;
+    const managerSentAt = new Date(result.managerSentAt);
+    if (!Number.isFinite(managerSentAt.getTime())) return null;
+    return {
+      managerMessageId: result.managerMessageId,
+      managerSentAt,
+      verificationSource: "MANAGER_API",
+    };
   }
 
   private async logComposerDiagnostics(page: Page, storeCode: string, lineChatUserId: string): Promise<void> {

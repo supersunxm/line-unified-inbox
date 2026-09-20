@@ -115,33 +115,41 @@ class MessageBubble extends StatelessWidget {
                       if (onRetry != null) ...[
                         const SizedBox(width: AppSpacing.xs),
                         InkWell(
+                          key: const ValueKey<String>('message-bubble-retry'),
                           onTap: onRetry,
                           borderRadius: BorderRadius.circular(4),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 4,
-                              vertical: 2,
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(
+                              minHeight: 48,
                             ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Icon(
-                                  Icons.refresh,
-                                  size: 13,
-                                  color: AppColors.primary,
+                            child: Center(
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 4,
+                                  vertical: 2,
                                 ),
-                                const SizedBox(width: 2),
-                                Text(
-                                  appLocalizations(context).retry,
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .labelSmall
-                                      ?.copyWith(
-                                        color: AppColors.primary,
-                                        fontWeight: FontWeight.w700,
-                                      ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(
+                                      Icons.refresh,
+                                      size: 13,
+                                      color: AppColors.primary,
+                                    ),
+                                    const SizedBox(width: 2),
+                                    Text(
+                                      appLocalizations(context).retry,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .labelSmall
+                                          ?.copyWith(
+                                            color: AppColors.primary,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                    ),
+                                  ],
                                 ),
-                              ],
+                              ),
                             ),
                           ),
                         ),
@@ -149,9 +157,7 @@ class MessageBubble extends StatelessWidget {
                     ] else if (onRetry == null) ...[
                       if (!isDeliveryCheck) ...[
                         Icon(
-                          isSending
-                              ? Icons.schedule_outlined
-                              : Icons.done_all,
+                          isSending ? Icons.schedule_outlined : Icons.done_all,
                           size: 14,
                           color: AppColors.textSecondary,
                         ),
@@ -161,9 +167,8 @@ class MessageBubble extends StatelessWidget {
                         footerText,
                         style: Theme.of(context).textTheme.labelSmall?.copyWith(
                               color: AppColors.textSecondary,
-                              fontWeight: isDeliveryCheck
-                                  ? FontWeight.w700
-                                  : null,
+                              fontWeight:
+                                  isDeliveryCheck ? FontWeight.w700 : null,
                             ),
                       ),
                     ] else

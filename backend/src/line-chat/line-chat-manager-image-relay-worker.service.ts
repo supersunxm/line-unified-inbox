@@ -157,6 +157,9 @@ export class LineChatManagerImageRelayWorkerService {
         handled: true,
         duplicate: true,
         lineChatUserId: conversation.lineChatUserId?.trim() || "resolved-on-prior-attempt",
+        managerMessageId: null,
+        managerSentAt: null,
+        verificationSource: null,
       };
     }
 
@@ -233,7 +236,14 @@ export class LineChatManagerImageRelayWorkerService {
       mimeType: image.mimeType,
       fileSize: image.buffer.length,
     }));
-    return { handled: true, duplicate: false, lineChatUserId };
+    return {
+      handled: true,
+      duplicate: false,
+      lineChatUserId,
+      managerMessageId: null,
+      managerSentAt: null,
+      verificationSource: null,
+    };
   }
 
   private async downloadImage(imageUrl: string): Promise<{ buffer: Buffer; mimeType: string; filename: string }> {

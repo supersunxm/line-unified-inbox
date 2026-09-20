@@ -11,6 +11,7 @@ import { persistStaffOutboundReplyState } from "../conversation-reply-state";
 import { LineChatManagerMessageRelayWorkerService } from "./line-chat-manager-message-relay-worker.service";
 import {
   isLineChatCanaryPreSendFailureEnabled,
+  isLineChatCanaryPauseAfterSendEnabled,
   isLineChatDurableSendQueueConversationEnabled,
 } from "./line-chat-pilot.constants";
 
@@ -19,6 +20,10 @@ const JOB_LEASE_MS = 90_000;
 const MAX_PARALLEL_PROFILES = 4;
 const VERIFY_BACKOFF_MS = [3_000, 5_000, 10_000, 20_000] as const;
 const MAX_VERIFY_ATTEMPTS = VERIFY_BACKOFF_MS.length;
+// Long enough to keep the old process in the crash window while the approved
+// replacement deployment starts. This is exact-gated to the B002 canary and
+// is never used by normal production sends.
+const CANARY_PAUSE_AFTER_SEND_MS = 15 * 60_000;
 
 // Safety invariant: an ambiguous customer-facing send transitions to
 // VERIFY_PENDING. The worker must never auto-resend from that state.
@@ -48,6 +53,17 @@ type ManagerOutboundEvent = {
   bizId: string | null;
   ownerName: string | null;
 };
+
+function hasManagerDeliveryEvidence(input: {
+  managerMessageId: string | null;
+  managerSentAt: Date | null;
+}): input is { managerMessageId: string; managerSentAt: Date } {
+  return Boolean(
+    input.managerMessageId?.trim()
+    && input.managerSentAt instanceof Date
+    && Number.isFinite(input.managerSentAt.getTime()),
+  );
+}
 
 @Injectable()
 export class LineChatMessageSendWorkerService implements OnModuleInit, OnModuleDestroy {
@@ -301,6 +317,7 @@ export class LineChatMessageSendWorkerService implements OnModuleInit, OnModuleD
     const startedAt = new Date();
     const attemptNo = job.attemptCount + 1;
     let sendActionInitiated = false;
+    let sendActionAt: Date | null = null;
     const attempt = await this.prisma.$transaction(async (tx) => {
       await tx.lineChatMessageSendJob.update({
         where: { id: job.id },
@@ -335,7 +352,7 @@ export class LineChatMessageSendWorkerService implements OnModuleInit, OnModuleD
           storeCode,
           text: job.message.originalText,
         }));
-        throw new Error("CONTROLLED_CANARY_PRE_SEND_FAILURE: simulated pre-send failure for canary 004");
+        throw new Error("CONTROLLED_CANARY_PRE_SEND_FAILURE: simulated pre-send failure for configured test text");
       }
 
       const result = await this.managerRelay.relayText({
@@ -344,6 +361,7 @@ export class LineChatMessageSendWorkerService implements OnModuleInit, OnModuleD
         idempotencyKey: job.idempotencyKey,
         onSendAction: async (actionAt: Date) => {
           sendActionInitiated = true;
+          sendActionAt = actionAt;
           await this.prisma.messageDeliveryAttempt.update({
             where: { id: attempt.id },
             data: { sendActionAt: actionAt },
@@ -353,7 +371,19 @@ export class LineChatMessageSendWorkerService implements OnModuleInit, OnModuleD
       if (!result.handled) {
         throw new Error("MANAGER_RELAY_NOT_HANDLED");
       }
-      await this.markDelivered(job.id, attempt.id, null, new Date());
+      if (!hasManagerDeliveryEvidence(result)) {
+        throw new Error("MANAGER_DELIVERY_EVIDENCE_REQUIRED");
+      }
+      await this.pauseAfterSendBeforeDeliveryPersist({
+        jobId: job.id,
+        messageId: job.messageId,
+        conversationId: job.conversationId,
+        storeCode,
+        text: job.message.originalText,
+        attemptId: attempt.id,
+        sendActionAt,
+      });
+      await this.markDelivered(job.id, attempt.id, result.managerMessageId, result.managerSentAt);
     } catch (error) {
       const message = errorText(error);
       if (isDefinitelyPreSendBusy(message)) {
@@ -425,6 +455,33 @@ export class LineChatMessageSendWorkerService implements OnModuleInit, OnModuleD
     }
   }
 
+  private async pauseAfterSendBeforeDeliveryPersist(input: {
+    jobId: string;
+    messageId: string;
+    conversationId: string;
+    storeCode: string;
+    text: string;
+    attemptId: string;
+    sendActionAt: Date | null;
+  }): Promise<void> {
+    if (!isLineChatCanaryPauseAfterSendEnabled(input) || !(input.sendActionAt instanceof Date)) {
+      return;
+    }
+
+    this.logger.warn(JSON.stringify({
+      event: "line_chat_canary_pause_after_send_before_delivery_persist",
+      jobId: input.jobId,
+      messageId: input.messageId,
+      conversationId: input.conversationId,
+      attemptId: input.attemptId,
+      sendActionAt: input.sendActionAt.toISOString(),
+    }));
+
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, CANARY_PAUSE_AFTER_SEND_MS);
+    });
+  }
+
   private async processVerification(jobId: string): Promise<void> {
     const job = await this.prisma.lineChatMessageSendJob.findUnique({
       where: { id: jobId },
@@ -458,12 +515,16 @@ export class LineChatMessageSendWorkerService implements OnModuleInit, OnModuleD
         after,
       });
 
-      if (result.handled && result.presence === "PRESENT") {
+      if (
+        result.handled
+        && result.presence === "PRESENT"
+        && hasManagerDeliveryEvidence(result)
+      ) {
         await this.markDelivered(
           job.id,
           job.attempts[0]?.id ?? null,
           result.managerMessageId,
-          result.managerSentAt ?? new Date(),
+          result.managerSentAt,
         );
         return;
       }
@@ -480,7 +541,11 @@ export class LineChatMessageSendWorkerService implements OnModuleInit, OnModuleD
             workerId: null,
             claimedAt: null,
             lockedUntil: null,
-            lastError: result.handled ? result.presence : "VERIFY_NOT_HANDLED",
+            lastError: result.handled && result.presence === "PRESENT"
+              ? "MANAGER_DELIVERY_EVIDENCE_INCOMPLETE"
+              : result.handled
+                ? result.presence
+                : "VERIFY_NOT_HANDLED",
           },
         });
         return;
@@ -688,9 +753,17 @@ export class LineChatMessageSendWorkerService implements OnModuleInit, OnModuleD
   private async markDelivered(
     jobId: string,
     attemptId: string | null,
-    managerMessageId: string | null,
+    managerMessageId: string,
     confirmedAt: Date,
   ): Promise<void> {
+    const normalizedManagerMessageId = managerMessageId.trim();
+    if (!normalizedManagerMessageId) {
+      throw new Error("MANAGER_DELIVERY_EVIDENCE_REQUIRED");
+    }
+    if (!(confirmedAt instanceof Date) || !Number.isFinite(confirmedAt.getTime())) {
+      throw new Error("MANAGER_DELIVERY_TIMESTAMP_REQUIRED");
+    }
+
     const job = await this.prisma.lineChatMessageSendJob.findUnique({
       where: { id: jobId },
       include: {
@@ -724,7 +797,7 @@ export class LineChatMessageSendWorkerService implements OnModuleInit, OnModuleD
             ...jsonObject(job.message.rawPayload),
             queueState: "DELIVERED",
             confirmedAt: confirmedAt.toISOString(),
-            managerMessageId,
+            managerMessageId: normalizedManagerMessageId,
           },
         },
       });
@@ -732,7 +805,7 @@ export class LineChatMessageSendWorkerService implements OnModuleInit, OnModuleD
         where: { id: job.id },
         data: {
           status: LineChatMessageSendJobStatus.DELIVERED,
-          managerMessageId,
+          managerMessageId: normalizedManagerMessageId,
           lastVerifiedAt: confirmedAt,
           completedAt: new Date(),
           workerId: null,
@@ -748,7 +821,7 @@ export class LineChatMessageSendWorkerService implements OnModuleInit, OnModuleD
             status: MessageDeliveryAttemptStatus.DELIVERED,
             verifiedAt: confirmedAt,
             finishedAt: new Date(),
-            managerMessageId,
+            managerMessageId: normalizedManagerMessageId,
             failureReason: null,
           },
         });
@@ -774,7 +847,7 @@ export class LineChatMessageSendWorkerService implements OnModuleInit, OnModuleD
       jobId: job.id,
       messageId: job.messageId,
       conversationId: job.conversationId,
-      managerMessageId,
+      managerMessageId: normalizedManagerMessageId,
     }));
   }
 

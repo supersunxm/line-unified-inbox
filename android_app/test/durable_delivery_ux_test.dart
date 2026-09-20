@@ -16,7 +16,8 @@ void main() {
   }
 
   group('Durable Send Queue Delivery UX & Bubble Presentation', () {
-    testWidgets('PENDING outbound message shows ✓ checkmark without implying read',
+    testWidgets(
+        'PENDING outbound message shows ✓ checkmark without implying read',
         (tester) async {
       final message = ChatMessage(
         id: 'msg-pending-1',
@@ -45,7 +46,8 @@ void main() {
       expect(find.byIcon(Icons.done_all), findsNothing);
     });
 
-    testWidgets('DELIVERED outbound message shows ✓✓ confirmed delivery checkmark',
+    testWidgets(
+        'DELIVERED outbound message shows ✓✓ confirmed delivery checkmark',
         (tester) async {
       final message = ChatMessage(
         id: 'msg-delivered-1',
@@ -73,8 +75,7 @@ void main() {
       expect(find.byIcon(Icons.done_all), findsNothing);
     });
 
-    testWidgets(
-        'FAILED outbound message shows "ส่งไม่สำเร็จ" and retry action',
+    testWidgets('FAILED outbound message shows "ส่งไม่สำเร็จ" and retry action',
         (tester) async {
       final message = ChatMessage(
         id: 'msg-failed-1',
@@ -104,8 +105,12 @@ void main() {
       expect(find.text('ลองอีกครั้ง'), findsOneWidget);
       expect(find.byIcon(Icons.refresh), findsOneWidget);
 
-      // Tapping retry triggers onRetry callback
-      await tester.tap(find.text('ลองอีกครั้ง'));
+      // The visible Retry control has a normal accessible touch target.
+      final retryAction = find.byKey(
+        const ValueKey<String>('message-bubble-retry'),
+      );
+      expect(tester.getSize(retryAction).height, greaterThanOrEqualTo(48));
+      await tester.tapAt(tester.getCenter(retryAction));
       await tester.pump();
       expect(retried, isTrue);
     });

@@ -35,7 +35,7 @@ function secretMatches(received: string | string[] | undefined, expected: string
 }
 
 async function readJsonBody(request: IncomingMessage): Promise<unknown> {
-  const chunks: Buffer[] = [];
+  const chunks: Uint8Array[] = [];
   let total = 0;
   for await (const chunk of request) {
     const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
@@ -150,7 +150,8 @@ async function bootstrap() {
   const internalSecret = process.env.LINE_CHAT_WORKER_INTERNAL_SECRET?.trim() || "";
   const internalPort = Number(process.env.LINE_CHAT_INTERNAL_PORT || "3002");
 
-  const server = createServer(async (request, response) => {
+  const server = createServer((request, response) => {
+    void (async () => {
     let activeRelayContext: ManagerRelayConversationSnapshot | null = null;
     let activeConversationId = "";
     try {
@@ -291,7 +292,15 @@ async function bootstrap() {
         writeJson(response, 409, { success: false, handled: false, error: "NOT_PILOT_CONVERSATION" });
         return;
       }
-      writeJson(response, 200, { success: true, handled: true, duplicate: result.duplicate, lineChatUserId: result.lineChatUserId });
+      writeJson(response, 200, {
+        success: true,
+        handled: true,
+        duplicate: result.duplicate,
+        lineChatUserId: result.lineChatUserId,
+        managerMessageId: result.managerMessageId,
+        managerSentAt: result.managerSentAt?.toISOString() ?? null,
+        verificationSource: result.verificationSource,
+      });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       logger.warn(JSON.stringify({ event: "line_chat_internal_relay_request_failed", error: message }));
@@ -304,6 +313,7 @@ async function bootstrap() {
         relayContexts.delete(activeConversationId);
       }
     }
+    })();
   });
 
   server.on("upgrade", (request, socket, head) => {

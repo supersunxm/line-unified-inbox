@@ -16,7 +16,10 @@ test("manager relay only accepts a real outbound bubble as delivery evidence", (
   assert.match(source, /countOutboundExactText/);
   assert.match(source, /horizontalCenter >= viewportWidth \* 0\.5/);
   assert.match(source, /aboveComposer/);
-  assert.match(source, /outboundCount > beforeOutboundCount/);
+  assert.match(source, /findOutboundExactTextViaApi/);
+  assert.match(source, /item\.type === "messageSent"/);
+  assert.match(source, /managerMessageId/);
+  assert.match(source, /verificationSource: "MANAGER_API"/);
   assert.doesNotMatch(source, /composerCleared && count > beforeCount/);
 });
 
@@ -55,6 +58,6 @@ test("manager relay reloads the target chat and enters verify pending without au
   assert.match(source, /line_chat_manager_message_delivery_verified_after_reload/);
   assert.match(source, /line_chat_manager_message_verify_pending/);
   assert.match(source, /await page\.goto\(targetUrl/);
-  assert.match(source, /refreshedOutboundCount > beforeOutboundCount/);
+  assert.match(source, /const recoveryEvidence = await this\.findOutboundExactTextViaApi/);
+  assert.match(source, /return \{ alreadyPresent: false, evidence: recoveryEvidence \}/);
 });
-

@@ -1,0 +1,14 @@
+.git
+.codex
+.android
+android_app
+frontend
+scratch
+.runtime
+**/node_modules
+**/build
+backend/dist
+backend/local-data
+backend/backups
+*.log
+.DS_Store

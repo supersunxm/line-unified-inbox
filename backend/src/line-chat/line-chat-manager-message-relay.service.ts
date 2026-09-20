@@ -6,9 +6,22 @@ import {
   isLineChatManagerRelayStoreEnabled,
 } from "./line-chat-pilot.constants";
 
+export type ManagerDeliveryEvidence = {
+  managerMessageId: string;
+  managerSentAt: Date;
+  verificationSource: "MANAGER_API";
+};
+
 export type ManagerRelayResult =
   | { handled: false }
-  | { handled: true; duplicate: boolean; lineChatUserId: string };
+  | {
+      handled: true;
+      duplicate: boolean;
+      lineChatUserId: string;
+      managerMessageId: string | null;
+      managerSentAt: Date | null;
+      verificationSource: "MANAGER_API" | null;
+    };
 
 export type ManagerRelayConversationSnapshot = {
   id: string;
@@ -151,6 +164,9 @@ export class LineChatManagerMessageRelayService {
         handled?: boolean;
         duplicate?: boolean;
         lineChatUserId?: string;
+        managerMessageId?: string | null;
+        managerSentAt?: string | null;
+        verificationSource?: "MANAGER_API" | null;
         error?: string;
       } = {};
       try {
@@ -166,6 +182,19 @@ export class LineChatManagerMessageRelayService {
         && typeof body.lineChatUserId === "string"
         && body.lineChatUserId.trim()
       ) {
+        const managerMessageId = typeof body.managerMessageId === "string"
+          && body.managerMessageId.trim()
+          ? body.managerMessageId.trim()
+          : null;
+        const managerSentAt = typeof body.managerSentAt === "string"
+          ? new Date(body.managerSentAt)
+          : null;
+        const hasEvidence = Boolean(
+          managerMessageId
+          && managerSentAt
+          && Number.isFinite(managerSentAt.getTime())
+          && body.verificationSource === "MANAGER_API",
+        );
         this.logger.log(JSON.stringify({
           event: input.mediaType === "IMAGE"
             ? "line_chat_manager_image_relay_api_success"
@@ -175,11 +204,15 @@ export class LineChatManagerMessageRelayService {
           lineOfficialAccountId: conversation.lineOfficialAccount.id,
           sessionKey: conversation.lineOfficialAccount.lineChatSession?.sessionKey ?? null,
           duplicate: body.duplicate === true,
+          managerDeliveryEvidence: hasEvidence,
         }));
         return {
           handled: true,
           duplicate: body.duplicate === true,
           lineChatUserId: body.lineChatUserId.trim(),
+          managerMessageId: hasEvidence ? managerMessageId : null,
+          managerSentAt: hasEvidence ? managerSentAt : null,
+          verificationSource: hasEvidence ? "MANAGER_API" : null,
         };
       }
 
@@ -254,7 +287,7 @@ export class LineChatManagerMessageRelayService {
           },
         },
       },
-    }) as Promise<RelayConversation | null>;
+    });
   }
 
   private toWorkerSnapshot(

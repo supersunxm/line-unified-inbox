@@ -1,3 +1,10 @@
+# 2026-09-20: Deterministic Worker Restart Canary and Long-Pending Reconciliation
+
+- Keep the temporary pause hook exact-gated to Store `28375`, conversation `cb6dc791-ef0e-45f0-bb33-96c9b638c9a0`, and text `INTERNAL WORKER RESTART B 002`. It runs only after `sendActionAt` persistence and before final delivery persistence.
+- Use a 15-minute pause for the approved crash-window canary so the old worker cannot naturally reach `markDelivered` before an intentional replacement deployment. Normal production sends and the 90-second `JOB_LEASE_MS` remain unchanged.
+- The replacement worker may start with the pause flag enabled because `VERIFY_PENDING` recovery calls Manager-history inspection only; it must never call `relayText` or create Attempt 2.
+- Flutter keeps a persisted PENDING bubble visible while polling canonical conversation state for 5:53 with a 30-second cap. Only canonical `DELIVERED`, `FAILED`, or deterministic supersession changes the bubble; poll generations are invalidated on disposal/navigation.
+
 # LINE OA Black App Durable Send Queue Delivery Attempt Timing & Pre-Send Failure Architecture (2026-09-19)
 
 - **Strict `sendActionAt` Timing Semantics**:
@@ -2617,6 +2624,13 @@ Keep `StoreMaster.tiktokProfileUrl` as the only persisted TikTok profile URL. Po
 - Use `prisma migrate resolve --rolled-back` only after confirming the failed state and zero-step execution, then let the normal Railway pre-deploy `prisma migrate deploy` apply the corrected migration.
 - Do not delete migration history, reset/recreate the production database, modify Flutter/UI code, or alter the Android artifact.
 
+# 2026-09-19: Durable LINE Manager delivery evidence contract
+
+- Treat a customer-facing Manager send as `DELIVERED` only when the exact normalized text is confirmed by the Manager history API with a concrete message ID and valid timestamp. Composer clearing, DOM bubbles, or an outbound count increase without identity are insufficient evidence.
+- Preserve `sendActionAt` after an ambiguous send, transition the job and attempt to `VERIFY_PENDING`, and never auto-resend from verification uncertainty. A later read-only history check may close the same attempt only with the same concrete Manager message ID written to Message, SendJob, and DeliveryAttempt.
+- When a delayed Manager history event proves that an existing false-null-ID `DELIVERED` record did send, reconcile the existing audit rows in place; do not create a second Message or DeliveryAttempt and do not downgrade the record.
+- Use a repository-root `.railwayignore` for local source uploads so the existing backend `/backend` root and worker Dockerfile path remain authoritative without uploading local dependencies, builds, emulator artifacts, or profiles.
+
 ## 2026-09-15: P0 production reliability investigation
 
 - Treat the shared `ApplicationWorkspace` supporting-data poll as the proven reliability issue. The production request pattern exactly matches the source: every 12 seconds, every desktop `AuthorizedWorkspace` route fetched all shared datasets and then issued one webhook diagnostic request per LINE OA account. Do not change individual page UI or backend data contracts as the first response.
@@ -2697,3 +2711,10 @@ Keep `StoreMaster.tiktokProfileUrl` as the only persisted TikTok profile URL. Po
 - Persist `bmReplyStatus=REPLIED`, `followUpStatus=COMPLETED`, and `latestMessageAt` together with an activity actor record. Use `ownerUserId IS NULL` as the only assignment condition so legacy conversations are assignable on their first staff reply while existing owners remain unchanged. Do not add `repliedAt` or `repliedByUserId` because the current schema has no such fields; `latestMessageAt`, `Message.sentAt`, and the activity actor are the established equivalents.
 - Build outbound realtime events from the post-send state (`REPLIED` plus the effective owner), never from the pre-send conversation snapshot. Keep Flutter’s local optimistic state and add a canonical detail refresh after success as a convergence fallback; do not infer persisted reply status from UI state.
 - Keep inbound webhook reset logic authoritative for customer messages (`REPLIED` → `NOT_REPLIED`) and keep system/bot messages outside the staff transition. No schema migration or production data backfill is necessary.
+
+## 2026-09-20: Worker restart / lease recovery canary readiness
+
+- Keep the crash-window hook scoped to the worker and to the exact authorized Test B store, conversation, and text. Do not pause before Manager send-action persistence, do not add a backend-wide flag, and do not alter the durable queue allowlist.
+- Deploy the hook image before enabling its runtime flag, then restart the same worker image so live `/proc/1/environ` evidence proves the flag is actually loaded. Require runtime health, exact A+B allowlist values, and absence of the prior failure flag before any canary send.
+- Use the existing 90-second lease recovery contract: an expired `PROCESSING` job becomes `VERIFY_PENDING`, and the replacement worker performs Manager-history verification only. It must not call `relayText` or create Attempt 2 while resolving the ambiguous send window.
+- Stop after read-only preflight. No customer-facing send is authorized until a separate explicit approval is received.

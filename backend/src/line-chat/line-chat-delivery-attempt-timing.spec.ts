@@ -6,6 +6,7 @@ import {
   LineChatMessageSendJobStatus,
 } from "@prisma/client";
 import {
+  isLineChatCanaryPauseAfterSendEnabled,
   isLineChatCanaryPreSendFailureEnabled,
 } from "./line-chat-pilot.constants";
 import { LineChatMessageSendWorkerService } from "./line-chat-message-send-worker.service";
@@ -15,7 +16,10 @@ test("Canary 004 pre-send failure gate requires all 4 conditions", async (t) => 
     storeCode: "28375",
     conversationId: "a04560a5-8658-493b-9b18-c992adc2b683",
     text: "TEST DURABLE PRE-SEND FAIL 004",
-    env: { enabled: "true" },
+    env: {
+      enabled: "true",
+      testText: "TEST DURABLE PRE-SEND FAIL 004",
+    },
   };
 
   await t.test("matches when all 4 conditions are met", () => {
@@ -33,6 +37,31 @@ test("Canary 004 pre-send failure gate requires all 4 conditions", async (t) => 
     );
     assert.equal(
       isLineChatCanaryPreSendFailureEnabled({ ...valid, env: { enabled: "" } }),
+      false,
+    );
+  });
+
+  await t.test("fails closed when the configured test text is absent or does not match", () => {
+    assert.equal(
+      isLineChatCanaryPreSendFailureEnabled({
+        ...valid,
+        env: { enabled: "true", testText: undefined },
+      }),
+      false,
+    );
+    assert.equal(
+      isLineChatCanaryPreSendFailureEnabled({
+        ...valid,
+        text: "TEST DURABLE STALE RETRY 007",
+        env: { enabled: "true", testText: "TEST DURABLE STALE RETRY 007" },
+      }),
+      true,
+    );
+    assert.equal(
+      isLineChatCanaryPreSendFailureEnabled({
+        ...valid,
+        env: { enabled: "true", testText: "TEST DURABLE STALE RETRY 007" },
+      }),
       false,
     );
   });
@@ -78,6 +107,56 @@ test("Canary 004 pre-send failure gate requires all 4 conditions", async (t) => 
     );
     assert.equal(
       isLineChatCanaryPreSendFailureEnabled({ ...valid, text: "" }),
+      false,
+    );
+  });
+});
+
+test("Canary worker restart pause gate requires the exact flag, store, conversation, and text", async (t) => {
+  const valid = {
+    storeCode: "28375",
+    conversationId: "cb6dc791-ef0e-45f0-bb33-96c9b638c9a0",
+    text: "INTERNAL WORKER RESTART B 002",
+    env: { enabled: "true" },
+  };
+
+  await t.test("matches only when every condition is exact", () => {
+    assert.equal(isLineChatCanaryPauseAfterSendEnabled(valid), true);
+  });
+
+  await t.test("fails closed when the flag is absent, false, or empty", () => {
+    assert.equal(
+      isLineChatCanaryPauseAfterSendEnabled({ ...valid, env: { enabled: undefined } }),
+      false,
+    );
+    assert.equal(
+      isLineChatCanaryPauseAfterSendEnabled({ ...valid, env: { enabled: "false" } }),
+      false,
+    );
+    assert.equal(
+      isLineChatCanaryPauseAfterSendEnabled({ ...valid, env: { enabled: "" } }),
+      false,
+    );
+  });
+
+  await t.test("fails closed for the wrong store, conversation, or text", () => {
+    assert.equal(
+      isLineChatCanaryPauseAfterSendEnabled({ ...valid, storeCode: "25610" }),
+      false,
+    );
+    assert.equal(
+      isLineChatCanaryPauseAfterSendEnabled({
+        ...valid,
+        conversationId: "9cf223e4-194a-47ce-b795-1192a22d3928",
+      }),
+      false,
+    );
+    assert.equal(
+      isLineChatCanaryPauseAfterSendEnabled({ ...valid, text: "INTERNAL DURABLE TEST B 001" }),
+      false,
+    );
+    assert.equal(
+      isLineChatCanaryPauseAfterSendEnabled({ ...valid, text: "INTERNAL WORKER RESTART B 001" }),
       false,
     );
   });
@@ -185,6 +264,7 @@ test("Delivery attempt sendActionAt timing semantics", async (t) => {
 
       const worker = new LineChatMessageSendWorkerService(mockPrisma, mockRelay);
       process.env.LINE_CHAT_CANARY_FORCE_PRE_SEND_FAILURE_ENABLED = "true";
+      process.env.LINE_CHAT_CANARY_FORCE_PRE_SEND_FAILURE_TEXT = "TEST DURABLE PRE-SEND FAIL 004";
 
       await (worker as any).processSend(jobRecord.id);
 
@@ -261,7 +341,7 @@ test("Delivery attempt sendActionAt timing semantics", async (t) => {
   await t.test(
     "actual send path sets sendActionAt before Manager response",
     async () => {
-      const { attempts, mockPrisma, jobRecord } = createTestFixture("Hello world");
+      const { attempts, jobs, messages, mockPrisma, jobRecord } = createTestFixture("Hello world");
       const sendTime = new Date("2026-09-19T18:00:00.000Z");
 
       const mockRelay: any = {
@@ -269,13 +349,18 @@ test("Delivery attempt sendActionAt timing semantics", async (t) => {
           assert.ok(input.onSendAction, "onSendAction callback must be provided");
           // Callback invoked right before clicking send / pressing Enter
           await input.onSendAction(sendTime);
-          return { handled: true, duplicate: false, lineChatUserId: "U123" };
+          return {
+            handled: true,
+            duplicate: false,
+            lineChatUserId: "U123",
+            managerMessageId: "manager-message-1",
+            managerSentAt: sendTime,
+            verificationSource: "MANAGER_API",
+          };
         },
       };
 
       const worker = new LineChatMessageSendWorkerService(mockPrisma, mockRelay);
-      // Mock markDelivered dependencies
-      (worker as any).markDelivered = async () => {};
 
       await (worker as any).processSend(jobRecord.id);
 
@@ -283,6 +368,185 @@ test("Delivery attempt sendActionAt timing semantics", async (t) => {
       const attempt = attempts[0];
       assert.ok(attempt.startedAt instanceof Date);
       assert.equal(attempt.sendActionAt, sendTime, "sendActionAt MUST be populated when send action occurs");
+      assert.equal(attempt.status, MessageDeliveryAttemptStatus.DELIVERED);
+      assert.equal(attempt.managerMessageId, "manager-message-1");
+      assert.equal(messages[messages.length - 1].deliveryStatus, MessageDeliveryStatus.DELIVERED);
+      assert.equal(jobs[jobs.length - 1].managerMessageId, "manager-message-1");
+    },
+  );
+
+  await t.test(
+    "exact pause hook runs after sendActionAt persistence and before markDelivered",
+    async () => {
+      const { attempts, mockPrisma, jobRecord } = createTestFixture("INTERNAL WORKER RESTART B 002");
+      const sendTime = new Date("2026-09-19T18:00:00.000Z");
+      const testConversationId = "cb6dc791-ef0e-45f0-bb33-96c9b638c9a0";
+      jobRecord.conversationId = testConversationId;
+      jobRecord.conversation.id = testConversationId;
+      process.env.LINE_CHAT_DURABLE_SEND_QUEUE_CONVERSATION_IDS =
+        `a04560a5-8658-493b-9b18-c992adc2b683,${testConversationId}`;
+      process.env.LINE_CHAT_CANARY_PAUSE_AFTER_SEND_ENABLED = "true";
+
+      const ordering: string[] = [];
+      let releasePause: (() => void) | null = null;
+      let resolvePauseEntered: (() => void) | null = null;
+      const pauseEntered = new Promise<void>((resolve) => {
+        resolvePauseEntered = resolve;
+      });
+      const mockRelay: any = {
+        relayText: async (input: any) => {
+          await input.onSendAction(sendTime);
+          return {
+            handled: true,
+            duplicate: false,
+            lineChatUserId: "U123",
+            managerMessageId: "manager-message-restart-1",
+            managerSentAt: sendTime,
+            verificationSource: "MANAGER_API",
+          };
+        },
+      };
+      const worker = new LineChatMessageSendWorkerService(mockPrisma, mockRelay);
+      (worker as any).pauseAfterSendBeforeDeliveryPersist = async (input: any) => {
+        ordering.push("pause");
+        assert.equal(input.attemptId, "attempt-1");
+        assert.equal(input.sendActionAt, sendTime);
+        assert.equal(attempts[0].sendActionAt, sendTime);
+        resolvePauseEntered?.();
+        await new Promise<void>((resolve) => {
+          releasePause = resolve;
+        });
+      };
+      (worker as any).markDelivered = async () => {
+        ordering.push("markDelivered");
+      };
+
+      const processing = (worker as any).processSend(jobRecord.id);
+      await pauseEntered;
+      assert.deepEqual(ordering, ["pause"]);
+      assert.equal(attempts[0].sendActionAt, sendTime);
+      assert.equal(attempts[0].status, MessageDeliveryAttemptStatus.PROCESSING);
+      assert.equal(releasePause !== null, true);
+      releasePause?.();
+      await processing;
+
+      assert.deepEqual(ordering, ["pause", "markDelivered"]);
+      assert.equal(attempts.length, 1);
+    },
+  );
+
+  await t.test(
+    "handled relay without concrete Manager evidence remains VERIFY_PENDING",
+    async () => {
+      const { attempts, jobs, messages, mockPrisma, jobRecord } = createTestFixture("Hello world");
+      const sendTime = new Date("2026-09-19T18:00:00.000Z");
+
+      const mockRelay: any = {
+        relayText: async (input: any) => {
+          await input.onSendAction(sendTime);
+          return {
+            handled: true,
+            duplicate: false,
+            lineChatUserId: "U123",
+            managerMessageId: null,
+            managerSentAt: null,
+            verificationSource: null,
+          };
+        },
+      };
+
+      const worker = new LineChatMessageSendWorkerService(mockPrisma, mockRelay);
+      await (worker as any).processSend(jobRecord.id);
+
+      assert.equal(attempts[0].sendActionAt, sendTime);
+      assert.equal(attempts[0].status, MessageDeliveryAttemptStatus.VERIFY_PENDING);
+      assert.equal(jobs[jobs.length - 1].status, LineChatMessageSendJobStatus.VERIFY_PENDING);
+      assert.equal(messages[messages.length - 1].deliveryStatus, MessageDeliveryStatus.PENDING);
+      assert.equal(jobs[jobs.length - 1].lastError, "MANAGER_DELIVERY_EVIDENCE_REQUIRED");
+    },
+  );
+
+  await t.test(
+    "markDelivered rejects blank Manager message evidence at runtime",
+    async () => {
+      const { mockPrisma } = createTestFixture("Hello world");
+      const worker = new LineChatMessageSendWorkerService(mockPrisma, {});
+
+      await assert.rejects(
+        () => (worker as any).markDelivered("job-1", null, "   ", new Date()),
+        /MANAGER_DELIVERY_EVIDENCE_REQUIRED/,
+      );
+    },
+  );
+
+  await t.test(
+    "PRESENT verification without ID does not deliver or resend",
+    async () => {
+      const { attempts, jobs, messages, mockPrisma, jobRecord } = createTestFixture("Hello world");
+      const pendingAttempt = {
+        id: "attempt-1",
+        status: MessageDeliveryAttemptStatus.VERIFY_PENDING,
+        attemptNo: 1,
+        sendActionAt: new Date("2026-09-19T18:00:00.000Z"),
+      };
+      attempts.push(pendingAttempt);
+      jobRecord.attempts = [pendingAttempt];
+      jobRecord.attemptCount = 1;
+      jobRecord.verifyAttemptCount = 0;
+      jobRecord.sendStartedAt = new Date("2026-09-19T18:00:00.000Z");
+      let relayCalls = 0;
+      const mockRelay: any = {
+        inspectTextPresenceSince: async () => ({
+          handled: true,
+          presence: "PRESENT",
+          lineChatUserId: "U123",
+          managerMessageId: null,
+          managerSentAt: null,
+        }),
+        relayText: async () => {
+          relayCalls += 1;
+          throw new Error("relayText must not be called during verification");
+        },
+      };
+
+      const worker = new LineChatMessageSendWorkerService(mockPrisma, mockRelay);
+      await (worker as any).processVerification(jobRecord.id);
+
+      assert.equal(relayCalls, 0);
+      assert.equal(pendingAttempt.status, MessageDeliveryAttemptStatus.VERIFY_PENDING);
+      assert.equal(jobs[jobs.length - 1].status, LineChatMessageSendJobStatus.VERIFY_PENDING);
+      assert.equal(messages.length, 0, "verification uncertainty must not rewrite Message as delivered");
+    },
+  );
+
+  await t.test(
+    "delivery records share the same concrete Manager message ID",
+    async () => {
+      const { attempts, jobs, messages, mockPrisma, jobRecord } = createTestFixture("Hello world");
+      const managerSentAt = new Date("2026-09-19T18:00:00.000Z");
+      const mockRelay: any = {
+        relayText: async (input: any) => {
+          await input.onSendAction(managerSentAt);
+          return {
+            handled: true,
+            duplicate: false,
+            lineChatUserId: "U123",
+            managerMessageId: "manager-message-shared",
+            managerSentAt,
+            verificationSource: "MANAGER_API",
+          };
+        },
+      };
+
+      const worker = new LineChatMessageSendWorkerService(mockPrisma, mockRelay);
+      await (worker as any).processSend(jobRecord.id);
+
+      assert.equal(attempts[0].managerMessageId, "manager-message-shared");
+      assert.equal(jobs[jobs.length - 1].managerMessageId, "manager-message-shared");
+      assert.equal(
+        messages[messages.length - 1].rawPayload.managerMessageId,
+        "manager-message-shared",
+      );
     },
   );
 

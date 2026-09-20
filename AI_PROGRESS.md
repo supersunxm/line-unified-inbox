@@ -1,23 +1,195 @@
-# 2026-09-19: P0 Production Reliability — Known Pre-Send Failure Canary (TEST DURABLE PRE-SEND FAIL 004) [IN PROGRESS]
+# 2026-09-20: Rollout Readiness — Restart Canary Hardening [PRE-SEND; NO SEND]
+- **Scope**: Hardened the exact Store 28375 / Test B conversation crash-window canary only. Historical B001 Message `62dd1f25-7006-4d75-8b66-c420dbe36408`, SendJob `9f979982-2116-4189-aa78-3ab557985839`, and Manager ID `632567453125706059` remain untouched.
+- **Worker**: Pause gate now targets only `INTERNAL WORKER RESTART B 002` and uses a 15-minute pause after persisted `sendActionAt`, before `markDelivered`; P0 Manager-evidence guards and VERIFY_PENDING recovery remain intact.
+- **Android**: Canonical PENDING reconciliation now uses capped 30-second polling for a 5:53 horizon, deduplicates by Message ID, stops on canonical terminal state, and invalidates stale poll generations on disposal/navigation.
+- **Verification**: Focused backend reliability tests passed `44/44`; Flutter reconciliation/UX tests passed `14/14`; backend lint/build, Flutter analyze, and debug APK build passed.
+- **Deployment/preflight**: Local-source worker deployment `24f361a9-1d72-44f2-b707-48c123a22eb9` succeeded, then flag-enabled replacement `899cd4ba-73e7-4519-8e98-71864cf97056` succeeded; the prior worker was removed. Live PID reports queue enabled, Store `28375`, exactly Test A + Test B allowlist, `LINE_CHAT_CANARY_PAUSE_AFTER_SEND_ENABLED=true`, and prior failure flag absent. Worker health and backend health/readiness are 200; `profile-b` is `ACTIVE`/`CONNECTED` with HTTP 200. Manager direct URL is canonical and B002 exact count is `0`; active durable jobs are `0`.
+- **Source provenance**: No commit was created. The deployed local source is the uncommitted worktree based on `b98b051fa76e69f04957f6359d20a6a76a1781f5`; the compiled artifact contains the P0 evidence guard, lease-recovery marker, Manager-history verification path, and B002 gate.
+- **Current status**: **STOPPED before send.** No B002 message has been sent, no Retry was tapped, no production Android release was created, and no historical audit rows were changed. Explicit approval is required before any canary execution.
+
+# 2026-09-19: P0 Production Reliability — Canary 007 UI reconciliation fix [COMPLETED; STOPPED]
+- **Scope**: Fixed only the Android UI reconciliation defect after the already-completed Canary 007 backend safety path. No Retry, customer-facing send, rollout, or production release was performed.
+- **Phase 1 evidence**: Left and reopened the authorized conversation, then repeated the check after installing the production-configured DEBUG APK on the existing `emulator-5554`. The fresh canonical detail load shows the stale `TEST DURABLE STALE RETRY 007` bubble absent and `TEST MANAGER FOLLOWUP 007` exactly once with `✓✓`; the known Canary 002/003/004/006 messages remain visible. Capture: `scratch/canary007_postfix_final.png`.
+- **Root cause**: `_pollQueuedDelivery()` used a `DateTime.now() - 10 minutes` heuristic when a superseded target was absent from the canonical response. The valid Manager replacement was older than that arbitrary window, so the stale local bubble remained and the imported reply was not merged.
+- **Fix**: Added `chat_delivery_reconciliation.dart`. Reconciliation now retains the target sentAt, removes an absent target only when the canonical response time window covers it, retains it when it is outside a limited page, merges by Message ID, deduplicates, sorts by `sentAt` then ID, and updates conversation metadata. No current-clock, text, or display-name heuristic remains. Enlarged the nested Retry InkWell to a normal accessible target without changing its visual label/icon.
+- **Verification**: Focused Flutter tests passed `11/11`; full Flutter suite passed `312` tests; changed-scope `flutter analyze` reported no issues; debug APK build passed with production API configuration and was installed in place without clearing app data. The Retry widget test proves a normal center tap invokes the callback once and the target is at least 48dp high.
+- **Production-state preservation**: Read-only DB verification after UI validation still shows the stale Message `FAILED`/`SUPERSEDED`/`hiddenFromTimeline=true`, SendJob `FAILED` with `attemptCount=1` and `SUPERSEDED_BY_MANAGER_REPLY`, exactly one failed DeliveryAttempt with null send evidence, and exactly one imported OUTBOUND Manager Message with external ID `line-chat-manager:632497665292370341`. Recent other jobs, other Store 28375 jobs, Max messages, and all recent jobs were `0`.
+- **Status**: **STOPPED immediately after UI fix verification.** Do not tap Retry, send another message, create a production Android release, or start another canary.
+
+# 2026-09-19: P0 Production Reliability — Canary 007 Phase D approved Retry [STOPPED; BACKEND PASSED; UI CONVERGENCE GAP]
+- **Preflight**: Deployed worker `inspectOutboundActivitySince` returned `handled=true` with exactly one newer event, `TEST MANAGER FOLLOWUP 007`, Manager ID `632497665292370341`, valid timestamp `2026-09-19T14:48:10.672Z`, biz ID `2d8bddc3-0da7-48d4-ad6e-33ff3ef1f455`, and owner `OBS-Sunx2`; stale Manager text count was `0`, follow-up count `1`. Backend/worker runtime failure flags were absent, durable allowlists remained exactly Store `28375` plus the authorized conversation, and Max/other durable-job counts were `0`.
+- **Execution**: Fresh screenshot located the rendered footer Retry control; exactly one tap was issued at `(890,2130)`, centered on the green refresh icon/`Retry` label. The prior missed coordinate `(850,2075)` was not reused. No second tap, manual endpoint call, rebuild, reinstall, reset, or additional customer-facing action occurred.
+- **Backend evidence**: The exact retry POST was observed with HTTP `201`. Worker logs recorded `line_chat_message_retry_suppressed_by_manager_reply` for the target SendJob and Message with `importedCount=1`; no customer-facing send-action event was observed.
+- **Final durable records**: Message `75f06a86-357f-4dde-96ad-6842d2bfdcc2` remains `FAILED` with `queueState=SUPERSEDED`, `hiddenFromTimeline=true`, and `supersededByManagerMessageIds=[632497665292370341]`. SendJob `be7cf2e1-823a-4e9a-9653-3abf03505fa2` remains `FAILED`, `attemptCount=1`, `lastError=SUPERSEDED_BY_MANAGER_REPLY`. DeliveryAttempt `f0ce27e3-f5b3-46bf-814f-4ed5b9ff7826` remains the sole attempt, `FAILED`, with null `sendActionAt`, `verifiedAt`, and `managerMessageId`.
+- **Imported Manager record**: Exactly one production OUTBOUND Message exists for the follow-up with external ID `line-chat-manager:632497665292370341`, delivery `DELIVERED`, and the expected text/Manager ID. The final exact worker-path inspection still returned stale Manager text `0` and follow-up count `1`.
+- **Isolation**: Other durable jobs `0`, other Store 28375 durable jobs `0`, and Max messages `0` in the verification window.
+- **Android observation**: The final screenshot/accessibility dump did not yet converge: the stale bubble remains visible with a single check and the imported follow-up is not rendered. This is a UI refresh/convergence discrepancy after the backend-suppressed retry; no further UI action was taken.
+- **Status**: **Stopped immediately after the one successful Retry invocation.** Do not retry again or broaden rollout.
+
+# 2026-09-19: P0 Production Reliability — Canary 007 Phase D single-tap diagnosis [STOPPED; CLASSIFICATION A]
+- **Execution**: On `emulator-5554`, exactly one raw coordinate tap was issued during the existing failed-bubble state. No second tap, retry endpoint invocation, rebuild, reinstall, reset, or data mutation was performed.
+- **Timestamp evidence**: The exact shell timestamp of the raw `adb input tap` was not persisted. The pre-retry screenshot was captured at `22:05:51 +0700`; the unchanged post-tap screenshot was captured at `22:14:09 +0700`, so the tap occurred in that observed interval immediately before the post-tap capture.
+- **Classification A — UI tap missed the nested Retry hit target**: The accessibility hierarchy exposed only the merged failed-bubble node, `content-desc="...ส่งไม่สำเร็จ\nRetry"`, `clickable=true`, bounds `[32,1967][1049,2177]`; it did not expose a separate nested Retry InkWell. Source inspection confirms the actual Retry control is a small footer `InkWell` with its own child padding inside the bubble, not the full bubble rectangle. The unchanged screenshot still shows the failed bubble and Retry control.
+- **Android evidence**: The app process had no `retry_ui_tapped`, `_retryPersistedMessage`, ApiClient POST, ApiException, or retry-network log entries in the `22:14 +0700` minute. The current source has no such runtime instrumentation, so this is absence-of-event evidence rather than a positive callback trace.
+- **Backend evidence**: Railway HTTP logs for `15:12:00Z`–`15:16:00Z` contain no POST to `/mobile/conversations/a04560a5-8658-493b-9b18-c992adc2b683/messages/75f06a86-357f-4dde-96ad-6842d2bfdcc2/retry`; backend application logs also contain no target retry/error marker. The only HTTP event in the window was an unrelated LINE webhook.
+- **Installed build evidence**: Package `click.lineoppo.chat` is a debuggable `1.1.33+53` build (`versionCode=53`), and the pulled installed APK SHA-256 exactly matches `android_app/build/app/outputs/flutter-apk/app-debug.apk`. Its Flutter snapshot contains `_retryPersistedMessage`, `retryFailedMessage`, and `/mobile/conversations/.../messages/.../retry`.
+- **State preservation**: Message `75f06a86-357f-4dde-96ad-6842d2bfdcc2`, SendJob `be7cf2e1-823a-4e9a-9653-3abf03505fa2`, and the sole DeliveryAttempt remain unchanged (`FAILED`, `attemptCount=1`, no Attempt 2, no supersession, no send action, no imported Manager reply). No customer-facing send occurred.
+- **Status**: **Stopped after read-only diagnosis.** Do not tap Retry again without explicit approval and a retargeted control coordinate or instrumentation build.
+
+# 2026-09-19: P0 Production Reliability — Canary 007 Phase D precheck [READY; RETRY NOT TAPPED]
+- **Current Task**: Validate the deployed Retry precheck for stale Message `75f06a86-357f-4dde-96ad-6842d2bfdcc2`; do not tap Retry until separately authorized.
+- **Exact worker diagnostic**: Invoked the deployed `LineChatManagerMessageRelayWorkerService.inspectOutboundActivitySince` through a separate `NODE_ENV=test` Nest application context, using conversation `a04560a5-8658-493b-9b18-c992adc2b683` and stale timestamp `2026-09-19T13:43:52.770Z`. Result: `handled=true`; exactly one event; text `TEST MANAGER FOLLOWUP 007`; `managerMessageId=632497665292370341`; `sentAt=2026-09-19T14:48:10.672Z`; `bizId=2d8bddc3-0da7-48d4-ad6e-33ff3ef1f455`; `ownerName=OBS-Sunx2`. The stale text was absent.
+- **Post-diagnostic preservation**: SendJob remains `FAILED`, `attemptCount=1`, and `managerMessageId=null`; the only DeliveryAttempt remains `FAILED` with `sendActionAt=null`, `verifiedAt=null`, and `managerMessageId=null`. No customer-facing send action, new durable job, Max traffic, or other-conversation job occurred.
+- **Status**: **READY for explicit Retry approval.** No Retry was tapped.
+
+# 2026-09-19: P0 Production Reliability — Canary 007 Phase B [COMPLETED & STOPPED]
+- **Current Task**: Execute the approved manual human-staff follow-up in the verified LINE OA Manager conversation only; do not tap Retry or create a durable queue job.
+- **Execution**: Reopened the canonical Manager route from the black-app mapping, verified OA `OPPO BS RBS Chonburi` (`@673lcfmk`), direct bot/user URL, and customer `OBS-Sunx2`. Sent exactly one Manager message `TEST MANAGER FOLLOWUP 007` at the UI time `21:48`; Manager event ID/data-id is `632497665292370341`.
+- **Manager evidence**: Exact follow-up count is `1`; exact stale text `TEST DURABLE STALE RETRY 007` count is `0`. The direct Manager reply did not create a production Message or LineChatMessageSendJob row.
+- **Durable audit preservation**: Stale Message `75f06a86-357f-4dde-96ad-6842d2bfdcc2` remains `FAILED`; stale SendJob `be7cf2e1-823a-4e9a-9653-3abf03505fa2` remains `FAILED` with `attemptCount=1` and null Manager ID; Attempt `f0ce27e3-f5b3-46bf-814f-4ed5b9ff7826` remains `FAILED` with `sendActionAt=null`, `verifiedAt=null`, and `managerMessageId=null`.
+- **Isolation/runtime**: In the final verification window, Max messages/jobs were `0`, other Store 28375 jobs were `0`, all other durable jobs were `0`, and both backend and worker runtime diagnostics reported the temporary failure flag absent. No Retry was tapped and no durable queue action was performed.
+- **Status**: **STOPPED immediately after Canary 007 Phase B evidence.** Do not proceed to the Retry/superseded canary without a new explicit authorization.
+
+# 2026-09-19: P0 Production Reliability — Canary 007 Phase A [PAUSED BEFORE RETRY]
+- **Current Task**: Canary 007 stale-failed-message / staff-already-replied safety test for Store `28375`, conversation `a04560a5-8658-493b-9b18-c992adc2b683`; no Max or other customer traffic.
+- **Source/deployment**: The pre-send gate now requires the explicit enabled flag, the authorized store/conversation, and the exact configured `LINE_CHAT_CANARY_FORCE_PRE_SEND_FAILURE_TEXT`. Focused tests passed `54/54`, changed-file lint passed, and backend build passed. Backend and worker were redeployed; health/readiness checks returned 200.
+- **Phase A**: With temporary variables enabled only for the authorized services, exactly one `TEST DURABLE STALE RETRY 007` message was sent from `emulator-5554`. Message `75f06a86-357f-4dde-96ad-6842d2bfdcc2` is `FAILED`; SendJob `be7cf2e1-823a-4e9a-9653-3abf03505fa2` is `FAILED`, `attemptCount=1`; Attempt `f0ce27e3-f5b3-46bf-814f-4ed5b9ff7826` is `FAILED` with `sendActionAt=null`, `verifiedAt=null`, and `managerMessageId=null`. Manager stale-text count remains `0`.
+- **Failure evidence**: Worker logs show `line_chat_manager_test_controlled_pre_send_failure` followed by `line_chat_message_send_failed`, with no send-action or delivery event. Failed bubble capture: `scratch/canary007_failed_before_retry.png`.
+- **Cleanup/pre-Retry state**: Both temporary variables were deleted. Fresh backend and worker runtimes report both failure keys absent; backend readiness and worker health remain 200. Allowlists remain exactly Store `28375` plus the authorized conversation. Final pre-Retry read-only isolation counts are other jobs `0`, other Store 28375 jobs `0`, and Max messages `0`; follow-up text count is `0`.
+- **Blocker**: The authenticated `chat.line.biz` session is Business ID `Sunn-OBS`, whose account search has no authorized `OPPO BS RBS Chonburi` account (the target OA basic ID is `@673lcfmk`). No human follow-up was sent, and Retry was not tapped. Awaiting the authorized Manager account/session before Phase B.
+- **Status**: **STOPPED before Retry due to missing authorized Manager account access.**
+
+# 2026-09-19: P0 Production Reliability — Post-fix normal send Canary 006 [COMPLETED & STOPPED]
+- **Current Task**: Execute one authorized post-fix production canary for `OBS-Sunx2` only; stop before the superseded/staff-already-replied canary.
+- **Preflight**: Existing `emulator-5554` was confirmed as `device`; backend health/readiness and worker health returned HTTP 200. Durable queue allowlists remained restricted to store `28375` and conversation `a04560a5-8658-493b-9b18-c992adc2b683`; the temporary failure flag was absent from both configuration listings and the newly running worker runtime. Manager exact-text count for `TEST DURABLE POST FIX 006` was `0`; other jobs, other Store 28375 jobs, and Max messages were `0` in the baseline window. Conversation was `REPLIED / COMPLETED` as allowed.
+- **Execution**: Entered exactly `TEST DURABLE POST FIX 006` in the existing authorized conversation and tapped the existing Send reply control exactly once. No production Android release, emulator reset, reinstall, logout, retry, Max traffic, or other customer action was performed. The separate PENDING bubble was not observable because delivery completed quickly; the immediate post-tap screenshot was preserved without inferring PENDING from it.
+- **Final records**: Exactly one new Message `208af776-03c6-4d5a-b4de-7d4ed217df78`, one SendJob `d2cdb3d6-fdc9-451d-8996-5fa0a8c3b7ca`, and one DeliveryAttempt `7c7784bd-13e5-40ec-a30a-e724435193e1`. All are `DELIVERED`; SendJob `attemptCount=1`; attempt has `sendActionAt` and `verifiedAt` populated. Message raw payload, SendJob, and Attempt all contain the same non-empty Manager ID `632489361610899493`.
+- **Manager/UI evidence**: Read-only Manager history returned exactly one matching event for owner `OBS-Sunx2`, with ID `632489361610899493` and sent time `2026-09-19T13:25:41.328Z`. Final emulator UI shows the new bubble with `✓✓`. Captures: `scratch/canary006_pre_send.png`, `scratch/canary006_pending.png`, and `scratch/canary006_final.png`.
+- **Worker/isolation evidence**: Worker logs show exactly one target `line_chat_manager_send_action` for store `28375`, followed by the target relay success and `line_chat_message_send_delivered` with the same Manager ID. Final read-only isolation counts: other durable jobs `0`, other Store 28375 jobs `0`, Max messages `0`; exact Manager/DB text count is `1` with no duplicate.
+- **Status**: **STOPPED immediately after Canary 006 completed successfully.** No superseded/staff-already-replied canary was initiated.
+
+# 2026-09-19: P0 Durable LINE Manager send queue false-delivery fix [COMPLETED; STOPPED]
+- **Current Task**: Stop customer-facing retry testing after Canary 005 exposed a false `DELIVERED` state, make Manager delivery evidence mandatory, reconcile the existing audit record, deploy, and stop before the superseded/staff-already-replied canary.
+- **Root Cause**: `line-chat-manager-message-relay-worker.service.ts` treated outbound-count/composer-cleared UI evidence as delivery, and the durable worker called `markDelivered` with a null Manager message ID.
+- **Fix**: Manager text relay now accepts delivery only from a concrete exact `messageSent` history event with `managerMessageId`, `managerSentAt`, and `verificationSource=MANAGER_API`. The queue rejects missing/blank evidence, keeps post-action ambiguity in `VERIFY_PENDING` without auto-resend, and `markDelivered` has runtime ID/timestamp assertions. Regression tests cover no-ID pending, no-resend verification, shared IDs, and blank-ID rejection.
+- **Pre-deploy verification**: Fresh read-only Manager history found one delayed exact event for the target text: ID `632482851078275382`, sent at `2026-09-19T12:21:00.768Z`, owner `OBS-Sunx2`. No retry or send was performed during repair.
+- **Audit reconciliation**: Existing Message `383507ef-443c-49b3-8515-ba14370699b2`, SendJob `9bafb963-bd63-4d03-828e-e576665a18ac`, and Attempt 3 were preserved as `DELIVERED` and updated with the same concrete Manager ID/timestamp. Attempts 1 and 2 remain unchanged `FAILED` with `sendActionAt=null` and `managerMessageId=null`; `attemptCount=3`; exact DB text count is `1`.
+- **Deployment and runtime**: Backend deployment `039292c0-a13a-4a07-b50d-5d317a507cbd` and worker deployment `5b0026fb-19b3-465c-b75c-13c34f45a2c4` are `SUCCESS`; prior containers were removed. Backend health/readiness and worker health returned 200. New backend and worker runtime diagnostics both reported `LINE_CHAT_CANARY_FORCE_PRE_SEND_FAILURE_ENABLED` present `false`; worker startup was normal.
+- **Checks**: Backend build passed. Focused LINE durable queue/Manager relay/nickname worker suite passed `53/53`; changed-file ESLint passed. Repository-wide ESLint remains an existing baseline failure (`731` unrelated diagnostics outside the changed files). Final Manager history still has exactly one matching event; other jobs, other Store 28375 jobs, and Max messages are `0`. Refresh screenshot: `scratch/canary_005_reconciled_refresh_loaded.png`.
+- **Status**: **STOPPED.** No further Retry tap, no customer-facing send during repair/deployment, and no superseded/staff-already-replied canary was initiated.
+
+# 2026-09-19: P0 Production Reliability — Manual Retry Canary 005 [COMPLETED; ACCEPTANCE FAILED; STOPPED]
+- **Current Task**: Execute the explicitly approved next retry for the existing failed `TEST DURABLE PRE-SEND FAIL 004` Message in `OBS-Sunx2`; stop immediately after verification and do not run the superseded-retry canary.
+- **Pre-flight and Execution**:
+  - `emulator-5554` was the only device and remained unchanged; no reinstall, reset, logout, or new message composition occurred.
+  - Final preflight passed: Manager exact-text count `0`, no newer human staff outbound, durable allowlists unchanged, runtime failure flag absent from both backend and worker PID 1 environments, Max untouched, and Attempts 1–2 preserved.
+  - Captured `scratch/canary_005_attempt3_pre_retry.png` before the tap and `scratch/canary_005_attempt3_after_tap.png` during the one-check pending state.
+  - Exactly one effective Retry tap was issued on the existing failed bubble; no second Message row was created.
+- **Final Records**:
+  - Same Message ID `383507ef-443c-49b3-8515-ba14370699b2`; `deliveryStatus=DELIVERED`, queue state `DELIVERED`, exact text row count `1`.
+  - Same SendJob ID `9bafb963-bd63-4d03-828e-e576665a18ac`; `status=DELIVERED`, `attemptCount=3`, `managerMessageId=null`.
+  - Attempt 1: `FAILED`, controlled Canary 004 failure, `sendActionAt=null`, `managerMessageId=null`.
+  - Attempt 2: `FAILED`, stale-runtime Canary 005 failure, `sendActionAt=null`, `managerMessageId=null`.
+  - Attempt 3: `DELIVERED`, `sendActionAt` populated, `managerMessageId=null`.
+  - Final UI screenshot `scratch/canary_005_attempt3_final.png` still shows one check (`✓`), not `✓✓`.
+- **Manager and Isolation Evidence**:
+  - Execution-window worker logs show exactly one `line_chat_manager_send_action` at `12:21:00Z`, followed by `line_chat_message_send_delivered` for the target at `12:21:06Z`; the delivery log also reports `managerMessageId=null`.
+  - Final read-only Manager inspection returned `exactTextCount=0` and no matching event; required exact-text count `1` and persisted Manager ID were not achieved.
+  - During the Retry execution window, other durable jobs `0`, other-conversation messages `0`, and Max messages `0`.
+- **Status**: **STOPPED immediately after Canary 005 completed with acceptance failure.** No further Retry, source change, audit-row rewrite, or superseded/staff-already-replied canary was initiated.
+
+# 2026-09-19: P0 Production Reliability — Canary 005 Runtime Refresh [READY; RETRY NOT TAPPED]
+- **Current Task**: Refresh the backend and worker runtimes after Canary 005 exposed stale process configuration; do not retry until separately authorized.
+- **Configuration and Deployment**:
+  - Railway configuration was rechecked on both `line-unified-inbox` and `line-chat-nickname-worker`; `LINE_CHAT_CANARY_FORCE_PRE_SEND_FAILURE_ENABLED` is absent.
+  - Fresh redeploys completed successfully: backend deployment `331e98b2-1792-4951-9379-0946fc010bc7`, worker deployment `ccd0b0af-a26d-4e7b-bffe-b895b742d692`.
+  - Previous backend and worker deployments were replaced; new instances are running.
+  - No source code was changed for the runtime refresh.
+- **Runtime Evidence**:
+  - Backend `/health` returned HTTP 200 `healthy`; `/health/readiness` returned HTTP 200 `ready`.
+  - Worker status is `RUNNING`; startup logs recorded `line_chat_nickname_worker_started` and `line_chat_message_send_worker_started` with no startup error.
+  - PID 1 environment diagnostics in both newly deployed containers reported `LINE_CHAT_CANARY_FORCE_PRE_SEND_FAILURE_ENABLED present=false` and did not print unrelated environment values.
+- **Post-refresh Read-only Preflight**:
+  - Durable queue allowlists remain enabled only for store `28375` and the authorized OBS-Sunx2 conversation; Max and other conversations remain outside the allowlist.
+  - Manager exact-text count remains `0`; no newer human staff outbound exists.
+  - Historical Message and SendJob remain unchanged with `attemptCount=2`; Attempt 1 and Attempt 2 are both `FAILED`, each with `sendActionAt=null` and `managerMessageId=null`.
+  - Max messages, other SendJobs, and other Store 28375 SendJobs in the verification window are all `0`.
+  - Conversation remains `REPLIED / COMPLETED`.
+- **Status**: **READY for explicit approval of the next retry.** No Retry tap or customer-facing send was performed after the runtime refresh.
+
+# 2026-09-19: P0 Production Reliability — Manual Retry Canary 005 [FAILED CLOSED & STOPPED]
+- **Current Task**: Execute the authorized single retry of `TEST DURABLE PRE-SEND FAIL 004` for `OBS-Sunx2` only, using the existing `emulator-5554`; stop immediately after Canary 005.
+- **Device and Pre-flight**:
+  - `adb devices` confirmed exactly `emulator-5554 device`; no emulator was created, booted, reset, reinstalled, cleared, or logged out.
+  - Backend and worker allowlists were unchanged and restricted to store `28375` and the authorized conversation.
+  - Current Railway variable listings showed `LINE_CHAT_CANARY_FORCE_PRE_SEND_FAILURE_ENABLED` absent on both services.
+  - Pre-retry baseline was `bmReplyStatus=REPLIED`, `followUpStatus=COMPLETED`; target Message and SendJob were the existing failed records; exact Manager-history count was `0`; no newer human staff outbound existed; isolation counts for other SendJobs, other Store 28375 SendJobs, and Max messages were all `0`.
+- **Execution**:
+  - Captured `scratch/canary_005_pre_retry.png` with the existing failed bubble and Retry control.
+  - The first coordinate did not hit the nested Retry button and left the database unchanged. One subsequent tap hit the Retry button exactly once; it was the only accepted retry request.
+  - The bubble briefly moved to the non-failed one-check state, then the durable worker created Attempt 2 and failed it before send action.
+- **Final Verification**:
+  - Same Message ID `383507ef-443c-49b3-8515-ba14370699b2`; exact text row count remained `1`.
+  - Same SendJob ID `9bafb963-bd63-4d03-828e-e576665a18ac`; `attemptCount=2`, final status `FAILED`, `managerMessageId=null`.
+  - Attempt 1 remained `FAILED` with `sendActionAt=null`; Attempt 2 was `FAILED` with `sendActionAt=null` and `managerMessageId=null`.
+  - Manager history remained `exactTextCount=0`; no newer human staff outbound; other SendJobs, other Store 28375 SendJobs, and Max messages remained `0`.
+  - Conversation remained `REPLIED / COMPLETED`, consistent with the corrected acceptance criteria.
+  - Worker logs recorded `line_chat_manager_test_controlled_pre_send_failure` and no customer-facing send-action or delivery event.
+- **Root Cause**: Read-only runtime inspection showed both the backend and worker processes still had `LINE_CHAT_CANARY_FORCE_PRE_SEND_FAILURE_ENABLED=true`, despite the current Railway variable listings reporting the key absent. This runtime/configuration drift caused Attempt 2 to fail closed before `sendActionAt`.
+- **Status**: **STOPPED immediately after Canary 005 failed closed.** No additional retry, superseded-retry canary, production Android release, or Max/customer traffic was initiated.
+
+# 2026-09-19: P0 Production Reliability — Manual Retry Canary 005 [STOPPED ON HANDOFF DISCREPANCY]
+- **Current Task**: Pre-flight the authorized manual retry of `TEST DURABLE PRE-SEND FAIL 004` for `OBS-Sunx2` only; stop before retry if live state differs from the handoff.
+- **Pre-flight Completed at 18:28 Bangkok**:
+  - Backend and worker production deployments are both `b98b051f` (`fix(line-chat): fix sendActionAt semantics, neutralize canary 003, and add canary 004 pre-send failure gate`); active instances are running.
+  - Backend and worker durable queue configuration is exactly restricted to `enabled=true`, store `28375`, conversation `a04560a5-8658-493b-9b18-c992adc2b683`.
+  - `LINE_CHAT_CANARY_FORCE_PRE_SEND_FAILURE_ENABLED` is absent from both services.
+  - Target Message `383507ef-443c-49b3-8515-ba14370699b2` is `FAILED`; target SendJob `9bafb963-bd63-4d03-828e-e576665a18ac` is `FAILED`, `attemptCount=1`; Attempt 1 is `FAILED` with `sendActionAt=null` and `managerMessageId=null`.
+  - Production read-only LINE Manager history precheck returned `exactTextCount=0` for `TEST DURABLE PRE-SEND FAIL 004` and no outbound events after the failed message timestamp.
+  - No newer human staff outbound exists in the target conversation; other Store 28375 conversations have `0` SendJobs in the last 15 minutes; Max has `0` messages in the last 15 minutes.
+- **Blocking Discrepancy**: Live target conversation reports `bmReplyStatus=REPLIED` and `followUpStatus=COMPLETED`, while the handoff says Canary 004 did not update the conversation to `REPLIED`.
+- **Status**: **STOPPED before tapping Retry**. No customer-facing send, no retry attempt, and no Manager mutation performed. Awaiting clarification/reconciliation of the conversation status discrepancy.
+
+# 2026-09-19: P0 Production Reliability — Known Pre-Send Failure Canary (TEST DURABLE PRE-SEND FAIL 004) [COMPLETED & VERIFIED]
 - **Current Task**: Prepare and execute controlled known pre-send failure canary test (`TEST DURABLE PRE-SEND FAIL 004`) exclusively on test conversation `OBS-Sunx2` in Store 28375 (`a04560a5-8658-493b-9b18-c992adc2b683`).
-- **Phase A (`sendActionAt` Semantics)**:
-  - Fixed `MessageDeliveryAttempt.sendActionAt` initialization to `null`.
-  - Registered `onSendAction` callback in `relayText` to record `sendActionAt` strictly when a customer-facing send action is initiated against LINE OA Manager.
-  - Failures before send action (profile busy, missing session, unmapped conversation, or canary pre-send failure) strictly leave `sendActionAt = null` and fail closed.
-  - Failures during verification after send action retain `sendActionAt` and transition to `VERIFY_PENDING`.
-- **Phase B (Canary 003 Hook Removal)**:
-  - Fully removed all verification delay simulation code and counters from `LineChatManagerMessageRelayWorkerService`.
-- **Phase C (Canary 004 Pre-Send Failure Mechanism)**:
-  - Implemented `isLineChatCanaryPreSendFailureEnabled` gated by 4 concurrent conditions:
-    1. `LINE_CHAT_CANARY_FORCE_PRE_SEND_FAILURE_ENABLED === "true"`
-    2. Store code: `28375`
-    3. Conversation ID: `a04560a5-8658-493b-9b18-c992adc2b683`
-    4. Text: `TEST DURABLE PRE-SEND FAIL 004`
-- **Verification & Tests**:
-  - Added unit test suite `line-chat-delivery-attempt-timing.spec.ts` (12/12 PASS).
-  - Validated allowlist specs and verification specs (32/32 PASS).
-  - Clean TypeScript build (`npm run build` PASS) and zero lint errors on modified files.
-- **Next Step**: Commit changes locally, request user approval to push to `origin/main` to deploy to Railway, configure temporary env var on worker, and execute Canary 004 on Android emulator.
+- **Canary Execution & Checkpoint Evidence**:
+  - **Android Bubble State**: Captured screenshot (`canary_004_failed_bubble.png`) at `18:19`.
+    - Exactly one outbound bubble rendered.
+    - Transitions to `FAILED`.
+    - Displays: `! ส่งไม่สำเร็จ` in error red and `↻ Retry` action button.
+    - Conversation `bmReplyStatus` did NOT update to REPLIED as a result of this send.
+  - **Message Row**:
+    - ID: `383507ef-443c-49b3-8515-ba14370699b2`
+    - `deliveryStatus`: `FAILED`
+    - `rawPayload.queueState`: `"FAILED"`
+    - `rawPayload.error`: `"CONTROLLED_CANARY_PRE_SEND_FAILURE: simulated pre-send failure for canary 004"`
+    - `sentAt`: `2026-09-19T11:19:11.338Z`
+  - **SendJob Row**:
+    - ID: `9bafb963-bd63-4d03-828e-e576665a18ac`
+    - `status`: `FAILED`
+    - `attemptCount`: `1`
+    - `verifyAttemptCount`: `0`
+    - `managerMessageId`: `null`
+    - `lastError`: `"CONTROLLED_CANARY_PRE_SEND_FAILURE: simulated pre-send failure for canary 004"`
+  - **DeliveryAttempt Row**:
+    - ID: `d9cb31df-8b3c-47d0-8c42-22db7cb71280`
+    - `attemptNo`: `1`
+    - `status`: `FAILED`
+    - `startedAt`: `2026-09-19T11:19:11.674Z` (populated)
+    - `sendActionAt`: `null` (VERIFIED NULL on pre-send failure)
+    - `managerMessageId`: `null` (VERIFIED NULL)
+    - `failureReason`: `"CONTROLLED_CANARY_PRE_SEND_FAILURE: simulated pre-send failure for canary 004"`
+  - **Worker Egress & Send Actions**:
+    - Line 11:19:11 AM: Logged `line_chat_manager_test_controlled_pre_send_failure` followed by `line_chat_message_send_failed`.
+    - Customer-facing Manager send actions: Exactly `0`.
+  - **LINE Manager Exact Match Count**:
+    - `TEST DURABLE PRE-SEND FAIL 004` exact-match count = `0`.
+  - **Isolation**:
+    - Zero SendJobs created for other conversations during the window (`otherSendJobsCount: 0`).
+    - Zero messages sent to Max (`maxMessagesCountInLast15Minutes: 0`).
+  - **Temporary Failure Flag Teardown**:
+    - `LINE_CHAT_CANARY_FORCE_PRE_SEND_FAILURE_ENABLED` deleted from both `line-chat-nickname-worker` and `line-unified-inbox`.
+- **Status**: STOPPED immediately. Did NOT tap Retry. Awaiting approval for test 005.
 
 # 2026-09-19: P0 Production Reliability — Verification-Delay Safety Canary (TEST DURABLE VERIFY DELAY 003) [COMPLETED & VERIFIED]
 - **Current Task**: Execute controlled verification-delay canary test (`TEST DURABLE VERIFY DELAY 003`) exclusively on test conversation `OBS-Sunx2` in Store 28375 (`a04560a5-8658-493b-9b18-c992adc2b683`).
@@ -5285,3 +5457,12 @@ Waiver scope: focused PIN/auth tests pass **26/26**, focused Flutter PIN tests p
 - Verification passed: affected backend tests **77/77**, full Flutter suite **300/300**, `flutter analyze`, Android debug APK build, changed-backend-file ESLint, backend build, and `git diff --check`. Full backend suite remains **2044/2053 passed** with 9 unrelated baseline failures in auth/LINE-chat health and manager-relay tests; repository-wide lint remains a pre-existing baseline failure (737 errors, 2 warnings), while changed backend files lint clean.
 - Runtime health was attempted through `npm run dev:status` and `npm run health`, but Docker PostgreSQL is unavailable, backend port 3001 is free, and port 3000 is occupied by an unidentified process. No service was force-killed or started on a fallback port. No production migration, deployment, or production data mutation is required or was performed.
 - Existing unrelated worktree changes, including `docs/executive-guide/` and Google review tooling, remain untouched. Next action: review/commit through the normal authorized workflow; do not deploy until this patch is approved.
+
+# Current task: Rollout Readiness — Worker Restart / Lease Recovery Canary
+
+- Added an exact-gated, worker-only pause hook immediately after successful Manager send-action persistence and before durable `DELIVERED` persistence for the authorized Test B text. The hook logs only job/message/conversation/attempt IDs and `sendActionAt`, then waits without calling `process.exit`.
+- Added focused coverage for the exact gate, post-send/pre-delivery ordering, expired `PROCESSING` recovery to `VERIFY_PENDING`, verification-only recovery, no resend, one attempt, and unchanged `attemptCount`. Focused tests passed **24/24**; changed-file ESLint, backend build, and `git diff --check` passed.
+- Deployed the worker-only hook image successfully as Railway deployment `fed0ef43-64a7-4c83-a8da-e7203cfb8e92`, then restarted the same image with the pause flag as deployment `a1e86992-fac5-49f6-aeb5-f3d9117cf3dc`; both completed successfully and the prior worker was replaced. The live worker reports health 200 and a start time after the restart.
+- Live worker and backend processes report durable queue enabled, store allowlist `28375`, exactly the two authorized Test A/Test B conversation IDs, and the old pre-send failure flag absent. The pause flag is present only in the live worker runtime. Backend deployment `634a1907-7255-4465-a3ae-7c616a23eb95` remains healthy; public health/readiness and local worker health returned 200.
+- Read-only preflight passed: Manager OA is `OPPO BS RBS Chonburi`, Manager exact-text baseline for `INTERNAL WORKER RESTART B 001` is **0**, global active durable jobs are **0**, Test A/B/Max snapshots are unchanged, and Max/non-authorized recent traffic is **0**. Profile B is `ACTIVE`/`CONNECTED` with HTTP 200 health.
+- No customer-facing message has been sent and the Android emulator has not been touched for this canary. Next action: await explicit approval before sending the single Test B message.
