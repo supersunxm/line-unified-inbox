@@ -47,3 +47,9 @@ test("Broadcast composer supports per-store message variables with preflight val
   assert.match(viewCode, /MISSING_TEMPLATE_VARIABLES/);
   assert.match(viewCode, /missingVariables\.join/);
 });
+
+
+test("Broadcast composer exposes an explicit add-another-message control", () => {
+  assert.match(viewCode, /\+ Add another text message/);
+  assert.match(viewCode, /onClick=\{addTextMessage\}/);
+});
