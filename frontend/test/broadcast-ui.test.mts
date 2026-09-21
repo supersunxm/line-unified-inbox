@@ -47,3 +47,12 @@ test("Broadcast composer supports per-store message variables with preflight val
   assert.match(viewCode, /MISSING_TEMPLATE_VARIABLES/);
   assert.match(viewCode, /missingVariables\.join/);
 });
+
+
+test("Broadcast composer enables Rich Message selection from the existing library", () => {
+  assert.match(viewCode, /richMessageApi\.list\(false\)/);
+  assert.match(viewCode, />Rich message<\/button>/);
+  assert.match(viewCode, /type:\s*"rich_message"/);
+  assert.match(viewCode, /richMessageId:\s*message\.richMessageId/);
+  assert.match(viewCode, /จัดการคลัง Rich Message/);
+});

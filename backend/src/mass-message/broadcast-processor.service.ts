@@ -9,6 +9,7 @@ import { randomUUID } from "node:crypto";
 import { CredentialEncryptionService } from "../credentials/credential-encryption.service";
 import { LineMessagingService } from "../line-messaging/line-messaging.service";
 import { PrismaService } from "../prisma.service";
+import { RichMessageService } from "../rich-message/rich-message.service";
 import {
   buildFriendshipDemographicFilter,
   validateBroadcastMessages,
@@ -32,6 +33,7 @@ export class BroadcastProcessorService {
     private readonly prisma: PrismaService,
     private readonly encryption: CredentialEncryptionService,
     private readonly lineMessaging: LineMessagingService,
+    private readonly richMessages: RichMessageService,
   ) {}
 
   async processCampaign(campaignId: string): Promise<void> {
@@ -115,6 +117,24 @@ export class BroadcastProcessorService {
         return;
       }
 
+      let lineMessages: unknown[];
+      try {
+        lineMessages = await Promise.all(
+          messages.map(async (message) =>
+            message.type === "rich_message"
+              ? this.richMessages.buildLineImagemap(message.richMessageId)
+              : message,
+          ),
+        );
+      } catch (error) {
+        await this.failDelivery(
+          delivery.id,
+          "RICH_MESSAGE_UNAVAILABLE",
+          error instanceof Error ? error.message : "Rich Message is unavailable",
+        );
+        return;
+      }
+
       const batch =
         existingBatch ??
         (await this.prisma.massMessageBatch.create({
@@ -149,7 +169,7 @@ export class BroadcastProcessorService {
           if (campaign.audienceType === MassMessageAudienceType.ALL_FRIENDS) {
             const result = await this.lineMessaging.broadcast({
               accessToken,
-              messages,
+              messages: lineMessages,
               retryKey: batch.retryKey,
             });
             await this.prisma.massMessageBatch.update({
@@ -178,7 +198,7 @@ export class BroadcastProcessorService {
             };
             const result = await this.lineMessaging.narrowcast({
               accessToken,
-              messages,
+              messages: lineMessages,
               demographic: buildFriendshipDemographicFilter(targeting.periods),
               limit,
               retryKey: batch.retryKey,
