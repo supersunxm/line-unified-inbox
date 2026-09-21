@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const viewCode = readFileSync(
-  new URL("../src/app/mass-messages/mass-messages-view.tsx", import.meta.url),
+  new URL("../src/app/broadcast/broadcast-view.tsx", import.meta.url),
   "utf8",
 );
 const routeCode = readFileSync(
@@ -16,7 +16,7 @@ const sidebarCode = readFileSync(
 );
 
 test("Broadcast route uses the existing authorized mass-message workspace", () => {
-  assert.match(routeCode, /AuthorizedWorkspace section="mass-messages"/);
+  assert.match(routeCode, /AuthorizedWorkspace section="broadcast"/);
   assert.match(sidebarCode, /href: "\/broadcast"/);
 });
 
