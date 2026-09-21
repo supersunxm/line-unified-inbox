@@ -1,4 +1,5 @@
-import sharp from "sharp";
+type SharpFactory = typeof import("sharp")["default"];
+const sharp = require("sharp") as SharpFactory;
 import {
   BadRequestException,
   Injectable,
