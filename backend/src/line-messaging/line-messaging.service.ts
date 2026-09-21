@@ -12,6 +12,31 @@ export type MulticastMessageResult = {
   acceptedRequestId: string | null;
   duplicateAccepted: boolean;
 };
+export type BroadcastMessageResult = MulticastMessageResult;
+export type LineBroadcastInput = {
+  accessToken: string;
+  messages: unknown[];
+  retryKey: string;
+  notificationDisabled?: boolean;
+};
+export type LineNarrowcastInput = LineBroadcastInput & {
+  demographic: Record<string, unknown>;
+  limit?: {
+    max?: number;
+    upToRemainingQuota?: boolean;
+    forbidPartialDelivery?: boolean;
+  };
+};
+export type LineNarrowcastProgress = {
+  phase: "waiting" | "sending" | "succeeded" | "failed";
+  successCount?: number;
+  failureCount?: number;
+  targetCount?: number;
+  failedDescription?: string;
+  errorCode?: number;
+  acceptedTime?: string;
+  completedTime?: string;
+};
 export type LinePushDiagnosticContext = {
   conversationId?: string;
   userId?: string;
@@ -343,6 +368,139 @@ export class LineMessagingService {
         throw new BadGatewayException(`LINE ปฏิเสธการส่งข้อความ${errDetail}`);
       }
       throw new ServiceUnavailableException("ส่งข้อความไม่สำเร็จ กรุณาลองอีกครั้ง");
+    }
+
+    return {
+      requestId: response.headers.get("x-line-request-id"),
+      acceptedRequestId: response.headers.get("x-line-accepted-request-id"),
+      duplicateAccepted,
+    };
+  }
+
+  async broadcast(input: LineBroadcastInput): Promise<BroadcastMessageResult> {
+    return this.sendOfficialAccountBroadcast("broadcast", input);
+  }
+
+  async narrowcast(input: LineNarrowcastInput): Promise<BroadcastMessageResult> {
+    return this.sendOfficialAccountBroadcast("narrowcast", input);
+  }
+
+  async getNarrowcastProgress(input: {
+    accessToken: string;
+    requestId: string;
+  }): Promise<LineNarrowcastProgress> {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15_000);
+    let response: Response;
+    try {
+      const url = new URL("https://api.line.me/v2/bot/message/progress/narrowcast");
+      url.searchParams.set("requestId", input.requestId);
+      response = await fetch(url, {
+        method: "GET",
+        headers: { Authorization: "Bearer " + input.accessToken },
+        signal: controller.signal,
+      });
+    } catch (error) {
+      throw new ServiceUnavailableException(
+        "ตรวจสอบสถานะ Narrowcast ไม่สำเร็จ: " +
+          (error instanceof Error ? error.message : "network error"),
+      );
+    } finally {
+      clearTimeout(timeout);
+    }
+
+    if (!response.ok) {
+      let rawBody = "";
+      try { rawBody = await response.text(); } catch { /* ignore */ }
+      if (response.status === 401) {
+        throw new BadGatewayException("Channel Access Token ของร้านนี้ไม่ถูกต้องหรือหมดอายุ");
+      }
+      throw new BadGatewayException(
+        "LINE ปฏิเสธการตรวจสอบสถานะ Narrowcast" + (rawBody ? ": " + rawBody : ""),
+      );
+    }
+    return (await response.json()) as LineNarrowcastProgress;
+  }
+
+  private async sendOfficialAccountBroadcast(
+    mode: "broadcast" | "narrowcast",
+    input: LineBroadcastInput | LineNarrowcastInput,
+  ): Promise<BroadcastMessageResult> {
+    if (!input.messages.length || input.messages.length > 5) {
+      throw new BadRequestException("Broadcast messages must be between 1 and 5 message objects");
+    }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15_000);
+    let response: Response;
+    const body: Record<string, unknown> = {
+      messages: input.messages,
+      notificationDisabled: input.notificationDisabled ?? false,
+    };
+
+    if (mode === "narrowcast") {
+      const narrow = input as LineNarrowcastInput;
+      body.filter = { demographic: narrow.demographic };
+      if (narrow.limit) body.limit = narrow.limit;
+    }
+
+    try {
+      response = await fetch("https://api.line.me/v2/bot/message/" + mode, {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + input.accessToken,
+          "Content-Type": "application/json",
+          "X-Line-Retry-Key": input.retryKey,
+        },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+    } catch (error) {
+      Logger.warn(
+        "[LineMessaging] Network failure during " + mode + ": " +
+          (error instanceof Error ? error.message : "unknown"),
+        "LineMessagingService",
+      );
+      throw new ServiceUnavailableException("ส่ง Broadcast ไม่สำเร็จ กรุณาลองอีกครั้ง");
+    } finally {
+      clearTimeout(timeout);
+    }
+
+    const duplicateAccepted =
+      response.status === 409 && Boolean(response.headers.get("x-line-accepted-request-id"));
+    if (!response.ok && !duplicateAccepted) {
+      let rawBody = "";
+      let errorJson: LineErrorBody | null = null;
+      try {
+        rawBody = await response.text();
+        errorJson = parseLineErrorBody(rawBody);
+      } catch {
+        /* ignore */
+      }
+      if (response.status === 401) {
+        throw new BadGatewayException("Channel Access Token ของร้านนี้ไม่ถูกต้องหรือหมดอายุ");
+      }
+      if (response.status === 429) {
+        throw new HttpException(
+          "LINE จำกัดการส่งหรือโควต้ารายเดือนของร้านนี้ไม่เพียงพอ",
+          HttpStatus.TOO_MANY_REQUESTS,
+        );
+      }
+      const detailsStr = errorJson?.details
+        ?.map((detail) => (detail.property || "field") + ": " + (detail.message || "invalid"))
+        .join(", ");
+      const errDetail = errorJson?.message
+        ? ": " + errorJson.message + (detailsStr ? " (" + detailsStr + ")" : "")
+        : rawBody
+          ? ": " + rawBody
+          : "";
+      if (response.status === 403) {
+        throw new HttpException(
+          "LINE ไม่อนุญาต Targeting สำหรับร้านนี้" + errDetail,
+          HttpStatus.FORBIDDEN,
+        );
+      }
+      throw new BadGatewayException("LINE ปฏิเสธการส่ง Broadcast" + errDetail);
     }
 
     return {

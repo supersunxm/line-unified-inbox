@@ -2728,3 +2728,14 @@ Keep `StoreMaster.tiktokProfileUrl` as the only persisted TikTok profile URL. Po
 **Safety behavior:** Mirror-only status blocks text/retry/image/PDF sends, blocks new durable queue jobs, and makes existing durable send jobs terminal before any send action. Historical message/job evidence is preserved for later mirror reconciliation. Project B mirror remains read-only.
 
 **Rollback:** Remove a store from the mirror-only allowlist only after explicitly deciding to restore black-app transport for that store. Do not delete the legacy transport code during the observation period.
+
+
+## 2026-09-21: Multi-store Broadcast uses official LINE Messaging API per OA
+
+- Treat one HQ Broadcast campaign as an orchestration container only. Every selected store executes independently with that store's own Channel Access Token; never route multiple stores through one OA credential.
+- Use LINE `/broadcast` for All friends and `/narrowcast` for Friendship period targeting. Keep targeting exact: if a store cannot execute the requested demographic filter, mark it blocked/failed and never widen it to All friends.
+- Normalize contiguous Friendship period buckets into the smallest equivalent LINE demographic range. In particular, 180–364 days plus 365+ is `subscriptionPeriod >= day_180`; non-contiguous selections use demographic OR operators.
+- Persist narrowcast request IDs and reconcile asynchronous progress before calling a store successful. Retry only failed/partial stores, with a fresh retry key for a user-requested new delivery attempt; already-successful stores are never resent.
+- Scheduled campaigns remain durable in PostgreSQL and are picked up by the backend scheduler after restart. Per-delivery batch claiming plus the unique store-delivery batch key is the duplicate-send guard if multiple scheduler ticks overlap.
+- Keep the existing Mass Message customer-ID multicast path intact for legacy internal audiences. The new official Broadcast path is a separate service/controller over the same campaign audit tables.
+- Do not emulate LINE OA Manager “Send test” by sending to an arbitrary customer. Leave the control disabled until an explicit safe test-recipient identity is available.

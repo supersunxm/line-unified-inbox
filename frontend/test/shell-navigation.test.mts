@@ -22,7 +22,7 @@ test("AppSidebar renders primary navigation links with aria-current='page'", () 
     "/admin/purchase-analytics",
     "/follower-insights",
     "/friend-source-links",
-    "/mass-messages",
+    "/broadcast",
   ]) {
     assert.match(appSidebarCode, new RegExp(`href: "${route.replace("?", "\\?")}`));
   }
@@ -172,7 +172,7 @@ test("TopNavigation search wrapper and controls do not expand invisibly or inter
     "/admin/registrations",
     "/follower-insights",
     "/friend-source-links",
-    "/mass-messages",
+    "/broadcast",
   ]) {
     assert.match(appSidebarCode, new RegExp(`href: "${href}"`));
   }

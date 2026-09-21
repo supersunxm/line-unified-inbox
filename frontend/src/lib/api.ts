@@ -698,6 +698,33 @@ export const api = {
     request<import("@/types/api").ImpactSummary>(`/dashboard/action-impact?period=${encodeURIComponent(period || "today")}`),
   getOperationalMemory: (period?: string) =>
     request<import("@/types/api").OperationalMemorySummary>(`/dashboard/operational-memory?period=${encodeURIComponent(period || "today")}`),
+  previewBroadcast: (input: import("@/types/api").BroadcastPreviewInput) =>
+    request<import("@/types/api").BroadcastPreviewResult>("/broadcasts/preview", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+  saveBroadcastDraft: (input: import("@/types/api").BroadcastCreateInput) =>
+    request<import("@/types/api").BroadcastCampaignDetail>("/broadcasts/draft", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+  createBroadcast: (input: import("@/types/api").BroadcastCreateInput) =>
+    request<import("@/types/api").BroadcastCampaignDetail>("/broadcasts", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+  getBroadcastCampaign: (id: string) =>
+    request<import("@/types/api").BroadcastCampaignDetail>(`/broadcasts/${encodeURIComponent(id)}`),
+  listBroadcastCampaigns: (limit = 20, offset = 0) =>
+    request<{ items: import("@/types/api").BroadcastCampaignDetail[]; total: number }>(
+      `/broadcasts?limit=${limit}&offset=${offset}`,
+    ),
+  retryFailedBroadcast: (id: string) =>
+    request<import("@/types/api").BroadcastCampaignDetail>(
+      `/broadcasts/${encodeURIComponent(id)}/retry-failed`,
+      { method: "POST" },
+    ),
+
   uploadMassMessageImage: (file: File) => {
     const formData = new FormData();
     formData.append("file", file);

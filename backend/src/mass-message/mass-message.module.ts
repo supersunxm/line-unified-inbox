@@ -7,20 +7,31 @@ import { MassMessageController } from "./mass-message.controller";
 import { MassMessageService } from "./mass-message.service";
 import { MassMessageScopeService } from "./mass-message-scope.service";
 import { MassMessageProcessorService } from "./mass-message-processor.service";
+import { BroadcastController } from "./broadcast.controller";
+import { BroadcastService } from "./broadcast.service";
+import { BroadcastScopeService } from "./broadcast-scope.service";
+import { BroadcastProcessorService } from "./broadcast-processor.service";
+import { BroadcastSchedulerService } from "./broadcast-scheduler.service";
 
 @Module({
   imports: [PrismaModule, AuthModule, CredentialsModule],
-  controllers: [MassMessageController],
+  controllers: [MassMessageController, BroadcastController],
   providers: [
     MassMessageService,
     MassMessageScopeService,
     MassMessageProcessorService,
+    BroadcastService,
+    BroadcastScopeService,
+    BroadcastProcessorService,
+    BroadcastSchedulerService,
     LineMessagingService,
   ],
   exports: [
     MassMessageService,
     MassMessageScopeService,
     MassMessageProcessorService,
+    BroadcastService,
+    BroadcastProcessorService,
   ],
 })
 export class MassMessageModule {}
