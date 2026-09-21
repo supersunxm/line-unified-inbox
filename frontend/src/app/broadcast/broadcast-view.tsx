@@ -40,6 +40,11 @@ type DraftMessage = DraftTextMessage | DraftImageMessage;
 type ViewMode = "compose" | "progress" | "history";
 type StoreStatusFilter = "ALL" | "READY" | "BLOCKED";
 
+const STORE_VARIABLES = [
+  { token: "{{storeName}}", label: "ชื่อร้าน" },
+  { token: "{{storeLocationText}}", label: "สถานที่ร้าน" },
+] as const;
+
 const PERIODS: Array<{ key: BroadcastFriendshipPeriod; label: string }> = [
   { key: "LE_6", label: "6 days or less" },
   { key: "D7_29", label: "Between 7 and 29 days" },
@@ -82,6 +87,7 @@ function reasonText(reason: string | null) {
     INVALID_CONNECTION: "LINE OA ยังไม่พร้อมใช้งาน",
     STORE_NOT_ACTIVE: "ร้านไม่ Active",
     UNAUTHORIZED: "ไม่มีสิทธิ์เข้าถึงร้าน",
+    MISSING_TEMPLATE_VARIABLES: "ข้อมูลตัวแปรของร้านไม่ครบ",
   };
   return reason ? labels[reason] ?? reason : "";
 }
@@ -91,6 +97,7 @@ function warningText(code: string) {
     TARGET_REACH_UNKNOWN: "ยังไม่มีข้อมูล Target reach ล่าสุด — LINE จะตรวจอีกครั้งตอนส่งจริง",
     FOLLOWER_SNAPSHOT_MISSING: "ยังไม่มี follower snapshot",
     FOLLOWER_SNAPSHOT_STALE: "follower snapshot เก่ากว่า 7 วัน",
+    MISSING_TEMPLATE_VARIABLES: "ข้อมูลตัวแปรของร้านไม่ครบ",
   };
   return labels[code] ?? code;
 }
@@ -98,6 +105,7 @@ function warningText(code: string) {
 export function BroadcastView({ language, userRole }: Props) {
   const defaults = useMemo(() => tomorrowDefaults(), []);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
+  const textAreaRefs = useRef<Record<string, HTMLTextAreaElement | null>>({});
 
   const [viewMode, setViewMode] = useState<ViewMode>("compose");
   const [stores, setStores] = useState<ApiStore[]>([]);
@@ -171,6 +179,18 @@ export function BroadcastView({ language, userRole }: Props) {
     ...(storeMode === "ALL" ? {} : { storeIds: Array.from(selectedStoreIds) }),
   }), [storeMode, selectedStoreIds]);
 
+  const payloadMessages = useMemo<BroadcastMessageItem[]>(() => messages.flatMap((message) => {
+    if (message.type === "text") {
+      const text = message.text.trim();
+      return text ? [{ type: "text" as const, text }] : [];
+    }
+    return [{
+      type: "image" as const,
+      originalContentUrl: message.originalContentUrl,
+      previewImageUrl: message.previewImageUrl,
+    }];
+  }), [messages]);
+
   useEffect(() => {
     if (stores.length === 0) return;
     if (storeMode !== "ALL" && selectedStoreIds.size === 0) {
@@ -186,7 +206,7 @@ export function BroadcastView({ language, userRole }: Props) {
     const timer = window.setTimeout(() => {
       setPreviewLoading(true);
       setPreviewError(null);
-      void api.previewBroadcast({ storeSelection, targeting, advanced })
+      void api.previewBroadcast({ storeSelection, targeting, advanced, messages: payloadMessages })
         .then((result) => {
           if (!cancelled) setPreview(result);
         })
@@ -205,7 +225,7 @@ export function BroadcastView({ language, userRole }: Props) {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [advanced, periods.size, selectedStoreIds.size, storeMode, storeSelection, stores.length, targetMode, targeting]);
+  }, [advanced, payloadMessages, periods.size, selectedStoreIds.size, storeMode, storeSelection, stores.length, targetMode, targeting]);
 
   useEffect(() => {
     if (viewMode !== "progress" || !activeCampaign) return;
@@ -240,18 +260,6 @@ export function BroadcastView({ language, userRole }: Props) {
     });
     return showAllStores ? rows : rows.slice(0, 10);
   }, [previewByStore, showAllStores, storeSearch, storeStatusFilter, stores]);
-
-  const payloadMessages = useMemo<BroadcastMessageItem[]>(() => messages.flatMap((message) => {
-    if (message.type === "text") {
-      const text = message.text.trim();
-      return text ? [{ type: "text" as const, text }] : [];
-    }
-    return [{
-      type: "image" as const,
-      originalContentUrl: message.originalContentUrl,
-      previewImageUrl: message.previewImageUrl,
-    }];
-  }), [messages]);
 
   const schedule = useMemo<BroadcastSchedule>(() => {
     if (scheduleMode === "NOW") return { mode: "NOW" };
@@ -313,6 +321,30 @@ export function BroadcastView({ language, userRole }: Props) {
     setMessages((current) => current.map((message) =>
       message.id === id && message.type === "text" ? { ...message, text } : message,
     ));
+  };
+
+  const insertStoreVariable = (id: string, token: string) => {
+    const textarea = textAreaRefs.current[id];
+    const start = textarea?.selectionStart;
+    const end = textarea?.selectionEnd;
+    let nextCursor: number | null = null;
+
+    setMessages((current) => current.map((message) => {
+      if (message.id !== id || message.type !== "text") return message;
+      const from = typeof start === "number" ? start : message.text.length;
+      const to = typeof end === "number" ? end : from;
+      const nextText = message.text.slice(0, from) + token + message.text.slice(to);
+      if (nextText.length > 5000) return message;
+      nextCursor = from + token.length;
+      return { ...message, text: nextText };
+    }));
+
+    window.requestAnimationFrame(() => {
+      const current = textAreaRefs.current[id];
+      if (!current || nextCursor === null) return;
+      current.focus();
+      current.setSelectionRange(nextCursor, nextCursor);
+    });
   };
 
   const addTextMessage = () => {
@@ -697,7 +729,29 @@ export function BroadcastView({ language, userRole }: Props) {
                       </div>
                       {message.type === "text" ? (
                         <>
-                          <textarea value={message.text} maxLength={5000} onChange={(event) => updateTextMessage(message.id, event.target.value)} placeholder="พิมพ์ข้อความที่ต้องการส่ง…" className="app-input min-h-28 w-full resize-y rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] p-3 text-sm" />
+                          <textarea
+                            ref={(node) => { textAreaRefs.current[message.id] = node; }}
+                            value={message.text}
+                            maxLength={5000}
+                            onChange={(event) => updateTextMessage(message.id, event.target.value)}
+                            placeholder="พิมพ์ข้อความที่ต้องการส่ง…"
+                            className="app-input min-h-28 w-full resize-y rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] p-3 text-sm"
+                          />
+                          <div className="mt-2 flex flex-wrap items-center gap-2">
+                            <span className="text-[10px] font-semibold text-[var(--app-text-tertiary)]">Personalize by store:</span>
+                            {STORE_VARIABLES.map((variable) => (
+                              <button
+                                key={variable.token}
+                                type="button"
+                                onClick={() => insertStoreVariable(message.id, variable.token)}
+                                className="rounded-full border border-[var(--app-border)] bg-[var(--app-surface)] px-2.5 py-1 text-[11px] font-medium text-[var(--app-text-secondary)] hover:border-[var(--app-accent)] hover:text-[var(--app-accent)]"
+                                title={"แทรก " + variable.label}
+                              >
+                                {variable.token}
+                              </button>
+                            ))}
+                            <span className="text-[10px] text-[var(--app-text-tertiary)]">ระบบจะแทนค่าตามร้านตอนส่งจริง</span>
+                          </div>
                           <div className="mt-1 text-right text-[10px] text-[var(--app-text-tertiary)]">{message.text.length}/5000</div>
                         </>
                       ) : (
@@ -760,7 +814,10 @@ export function BroadcastView({ language, userRole }: Props) {
                     <div className="text-sm font-semibold text-amber-800">{preview?.blockedStoreCount} stores blocked</div>
                     <div className="mt-2 grid gap-1 text-xs text-amber-800 md:grid-cols-2">
                       {(preview?.stores ?? []).filter((item) => item.status === "BLOCKED").slice(0, 8).map((item) => (
-                        <div key={item.storeId}>{item.storeName}: {reasonText(item.skipReason)}</div>
+                        <div key={item.storeId}>
+                          {item.storeName}: {reasonText(item.skipReason)}
+                          {item.missingVariables.length > 0 ? " (" + item.missingVariables.join(", ") + ")" : ""}
+                        </div>
                       ))}
                     </div>
                   </div>
