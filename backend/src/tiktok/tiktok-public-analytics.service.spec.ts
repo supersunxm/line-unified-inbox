@@ -4,6 +4,7 @@ import {
   assertExactTikTokPublicProfile,
   calculateTikTokGrowth,
   getBangkokMetricDate,
+  metricOnDate,
   TikTokPublicAnalyticsService,
 } from "./tiktok-public-analytics.service";
 import { TikTokPublicProfile } from "./tiktok-public-profile";
@@ -66,6 +67,48 @@ test("growth returns absolute and percentage change", () => {
     absolute: 10,
     percent: null,
   });
+});
+
+test("daily growth baseline requires the exact previous metric date", () => {
+  const metrics = [
+    {
+      metricDate: "2026-09-18T00:00:00.000Z",
+      followerCount: 100,
+      followingCount: 0,
+      likesCount: 0,
+      videoCount: 0,
+      fetchedAt: "2026-09-19T02:30:00.000+07:00",
+    },
+    {
+      metricDate: "2026-09-19T00:00:00.000Z",
+      followerCount: 110,
+      followingCount: 0,
+      likesCount: 0,
+      videoCount: 0,
+      fetchedAt: "2026-09-20T02:30:00.000+07:00",
+    },
+    {
+      metricDate: "2026-09-20T00:00:00.000Z",
+      followerCount: 125,
+      followingCount: 0,
+      likesCount: 0,
+      videoCount: 0,
+      fetchedAt: "2026-09-21T02:30:00.000+07:00",
+    },
+  ];
+
+  const previousDay = metricOnDate(metrics, "2026-09-19");
+  assert.equal(previousDay?.followerCount, 110);
+  assert.deepEqual(calculateTikTokGrowth(125, previousDay?.followerCount ?? null), {
+    absolute: 15,
+    percent: 13.64,
+  });
+
+  // No fallback: a missing 19 Sep snapshot must not silently use 18 Sep.
+  const withoutPreviousDay = metrics.filter(
+    (metric) => String(metric.metricDate).slice(0, 10) !== "2026-09-19",
+  );
+  assert.equal(metricOnDate(withoutPreviousDay, "2026-09-19"), null);
 });
 
 test("persistExactSnapshot binds shared TikTokPublicAccount to all matching active StoreMaster rows", async () => {
