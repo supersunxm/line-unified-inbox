@@ -38,3 +38,12 @@ test("Broadcast UI uses official broadcast API client and preserves blocked-stor
   assert.match(viewCode, /api\.retryFailedBroadcast/);
   assert.match(viewCode, /will never be widened automatically/);
 });
+
+
+test("Broadcast composer supports per-store message variables with preflight validation", () => {
+  assert.match(viewCode, /\{\{storeName\}\}/);
+  assert.match(viewCode, /\{\{storeLocationText\}\}/);
+  assert.match(viewCode, /messages:\s*payloadMessages/);
+  assert.match(viewCode, /MISSING_TEMPLATE_VARIABLES/);
+  assert.match(viewCode, /missingVariables\.join/);
+});
