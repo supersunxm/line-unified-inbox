@@ -774,7 +774,17 @@ export function BroadcastView({ language, userRole }: Props) {
                     </div>
                   ))}
                 </div>
-                <div className="mt-2 text-xs text-[var(--app-text-tertiary)]">{messages.length}/5 message objects</div>
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                  <button
+                    type="button"
+                    disabled={messages.length >= 5}
+                    onClick={addTextMessage}
+                    className="rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] px-4 py-2 text-sm font-semibold text-[var(--app-text-primary)] hover:border-[var(--app-accent)] hover:text-[var(--app-accent)] disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    + Add another text message
+                  </button>
+                  <div className="text-xs text-[var(--app-text-tertiary)]">{messages.length}/5 message objects</div>
+                </div>
               </div>
             </section>
 
