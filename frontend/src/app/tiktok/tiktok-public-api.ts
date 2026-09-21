@@ -22,6 +22,7 @@ export type TikTokPublicDashboardStore = {
   videoCount: number;
   profileUrl: string;
   lastFetchedAt: string;
+  latestMetricDate: string | null;
   growth: {
     daily: TikTokPublicGrowthValue;
     sevenDay: TikTokPublicGrowthValue;
