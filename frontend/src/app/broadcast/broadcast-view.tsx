@@ -885,7 +885,7 @@ export function BroadcastView({ language, userRole }: Props) {
                 <div className="min-h-[480px] space-y-3 p-3">
                   {payloadMessages.length === 0 ? <div className="pt-20 text-center text-xs text-slate-500">Your message preview will appear here</div> : payloadMessages.map((message, index) => (
                     message.type === "text" ? (
-                      <div key={index} className="max-w-[86%] rounded-2xl rounded-tl-md bg-white p-3 text-sm leading-5 text-slate-900 shadow-sm">{message.text}</div>
+                      <div key={index} className="max-w-[86%] whitespace-pre-wrap break-words rounded-2xl rounded-tl-md bg-white p-3 text-sm leading-5 text-slate-900 shadow-sm">{message.text}</div>
                     ) : (
                       <div key={index} className="max-w-[92%] overflow-hidden rounded-2xl bg-white shadow-sm"><img src={message.previewImageUrl} alt="" className="w-full object-cover" /></div>
                     )
