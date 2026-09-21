@@ -34,6 +34,21 @@ function growth(value: number | null, locale: string) {
   return signed(value, locale);
 }
 
+function shiftMetricDate(date: string, days: number) {
+  const value = new Date(`${date}T00:00:00.000Z`);
+  value.setUTCDate(value.getUTCDate() + days);
+  return value.toISOString().slice(0, 10);
+}
+
+function formatMetricDate(date: string, locale: string) {
+  return new Intl.DateTimeFormat(locale, {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(`${date}T00:00:00.000Z`));
+}
+
 function GrowthPill({ value, locale }: { value: number | null; locale: string }) {
   const className = value === null
     ? "bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500"
@@ -260,8 +275,8 @@ export function TikTokPublicDashboard({ overview, stores }: Props) {
     ranking: "Top 5 สาขา",
     rankingSub: "เรียงตามจำนวนผู้ติดตามสูงสุด",
     viewAll: "ดูทั้งหมด",
-    dailyOverview: "การเปลี่ยนแปลงผู้ติดตามวันนี้",
-    dailyOverviewSub: "คำนวณเฉพาะสาขาที่มีข้อมูลเปรียบเทียบจริง",
+    dailyOverview: "การเติบโตผู้ติดตามรายวัน",
+    dailyOverviewSub: "เทียบ Snapshot ล่าสุดกับ Snapshot ของวันก่อนหน้า",
     gainers: "เพิ่มขึ้น",
     losers: "ลดลง",
     flat: "คงที่",
@@ -290,7 +305,7 @@ export function TikTokPublicDashboard({ overview, stores }: Props) {
     refresh: "รีเฟรชข้อมูล",
     result: "สาขาที่แสดง",
     followersWord: "ผู้ติดตาม",
-    baselineCoverage: "สาขามี Baseline วันนี้",
+    baselineCoverage: "สาขามีข้อมูลวันก่อนหน้าสำหรับเปรียบเทียบ",
   } : {
     eyebrow: "OPPO RETAIL",
     title: "TikTok Analytics",
@@ -303,8 +318,8 @@ export function TikTokPublicDashboard({ overview, stores }: Props) {
     ranking: "Top 5 stores",
     rankingSub: "Ranked by follower count",
     viewAll: "View all",
-    dailyOverview: "Today's follower movement",
-    dailyOverviewSub: "Calculated only from stores with a real comparison baseline",
+    dailyOverview: "Daily follower growth",
+    dailyOverviewSub: "Latest snapshot compared with the previous daily snapshot",
     gainers: "Gained",
     losers: "Declined",
     flat: "No change",
@@ -333,11 +348,14 @@ export function TikTokPublicDashboard({ overview, stores }: Props) {
     refresh: "Refresh",
     result: "stores shown",
     followersWord: "followers",
-    baselineCoverage: "stores have today's baseline",
+    baselineCoverage: "stores have a previous-day baseline",
   };
 
   const dailyGrowthText = dailySummary.comparable > 0
     ? `${signed(dailySummary.delta, locale)}${dailySummary.percent === null ? "" : ` (${dailySummary.percent >= 0 ? "+" : ""}${dailySummary.percent.toFixed(2)}%)`}`
+    : null;
+  const comparisonLabel = overview.latestMetricDate
+    ? `${formatMetricDate(overview.latestMetricDate, locale)} vs ${formatMetricDate(shiftMetricDate(overview.latestMetricDate, -1), locale)}`
     : null;
 
   return (
@@ -421,7 +439,9 @@ export function TikTokPublicDashboard({ overview, stores }: Props) {
           <div className="rounded-[24px] border border-slate-200/70 bg-white p-5 shadow-[0_10px_28px_rgba(15,23,42,0.045)] dark:border-white/10 dark:bg-slate-900 sm:p-6">
             <div>
               <h2 className="text-lg font-bold tracking-tight text-slate-950 dark:text-white">{text.dailyOverview}</h2>
-              <p className="mt-1 text-xs text-slate-400">{text.dailyOverviewSub}</p>
+              <p className="mt-1 text-xs text-slate-400">
+                {text.dailyOverviewSub}{comparisonLabel ? ` · ${comparisonLabel}` : ""}
+              </p>
             </div>
 
             <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
