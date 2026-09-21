@@ -1004,9 +1004,9 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
                 direction: event.direction,
                 messageType: event.messageType,
                 text: event.text,
-                fileName,
-                bizId,
-                ownerName,
+                fileName: event.fileName,
+                bizId: event.bizId,
+                ownerName: event.ownerName,
                 sentAt: event.sentAt,
               },
               // Keep the existing read-only mirror safe during staggered
