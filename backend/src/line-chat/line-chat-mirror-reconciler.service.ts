@@ -28,6 +28,7 @@ const MAX_BATCH_SIZE = 1_000;
 const START_DELAY_MS = 15_000;
 const IDENTITY_EVIDENCE_LIMIT = 100;
 const MIN_IDENTITY_MATCHES = 3;
+const INBOUND_MAPPING_EVIDENCE_LIMIT = 25;
 const CONTENT_TIME_TOLERANCE_MS = 2_000;
 
 type MirrorRow = {
@@ -46,7 +47,11 @@ type MirrorRow = {
 };
 
 type MappingResult =
-  | { status: "MAPPED"; conversationId: string; source: "DIRECT_LINE_CHAT_USER_ID" | "VERIFIED_WEBHOOK_USER_ID" }
+  | {
+      status: "MAPPED";
+      conversationId: string;
+      source: "DIRECT_LINE_CHAT_USER_ID" | "EXACT_INBOUND_MESSAGE_ID" | "VERIFIED_WEBHOOK_USER_ID";
+    }
   | { status: "UNMAPPED"; reason: string }
   | { status: "AMBIGUOUS"; reason: string };
 
@@ -63,6 +68,7 @@ export interface LineChatMirrorReconcileCycleResult {
   apply: boolean;
   scanned: number;
   directMapped: number;
+  messageIdMapped: number;
   identityMapped: number;
   identityEquivalenceVerified: boolean;
   identityEvidenceMatches: number;
@@ -314,6 +320,7 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
       apply,
       scanned: rows.length,
       directMapped: 0,
+      messageIdMapped: 0,
       identityMapped: 0,
       identityEquivalenceVerified: false,
       identityEvidenceMatches: 0,
@@ -387,6 +394,7 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
         }
 
         if (mapping.source === "DIRECT_LINE_CHAT_USER_ID") result.directMapped += 1;
+        else if (mapping.source === "EXACT_INBOUND_MESSAGE_ID") result.messageIdMapped += 1;
         else result.identityMapped += 1;
 
         if (row.direction === LineChatMirrorDirection.UNKNOWN) {
@@ -586,6 +594,9 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
       return { status: "AMBIGUOUS", reason: "MULTIPLE_DIRECT_LINE_CHAT_USER_ID_CONVERSATIONS" };
     }
 
+    const exactInboundMapping = await this.resolveByExactInboundMessageEvidence(input);
+    if (exactInboundMapping) return exactInboundMapping;
+
     if (!input.identityEquivalent) {
       return { status: "UNMAPPED", reason: "WEBHOOK_MANAGER_USER_ID_EQUIVALENCE_NOT_VERIFIED" };
     }
@@ -646,6 +657,127 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
       status: "MAPPED",
       conversationId: candidate.id,
       source: "VERIFIED_WEBHOOK_USER_ID",
+    };
+  }
+
+  private async resolveByExactInboundMessageEvidence(input: {
+    lineOfficialAccountId: string;
+    storeId: string;
+    lineChatUserId: string;
+    apply: boolean;
+  }): Promise<MappingResult | null> {
+    const mirrorInbound = await this.prisma.lineChatMirrorMessage.findMany({
+      where: {
+        lineOfficialAccountId: input.lineOfficialAccountId,
+        lineChatUserId: input.lineChatUserId,
+        direction: LineChatMirrorDirection.INBOUND,
+      },
+      orderBy: [{ sentAt: "desc" }, { id: "desc" }],
+      take: INBOUND_MAPPING_EVIDENCE_LIMIT,
+      select: { managerMessageId: true },
+    });
+    const managerMessageIds = [...new Set(
+      mirrorInbound
+        .map((row) => row.managerMessageId?.trim())
+        .filter((value): value is string => Boolean(value)),
+    )];
+    if (managerMessageIds.length === 0) return null;
+
+    const canonicalEvidence = await this.prisma.message.findMany({
+      where: {
+        externalMessageId: { in: managerMessageIds },
+        direction: MessageDirection.INBOUND,
+        conversation: {
+          lineOfficialAccountId: input.lineOfficialAccountId,
+          storeId: input.storeId,
+        },
+      },
+      select: {
+        conversationId: true,
+        externalMessageId: true,
+      },
+    });
+    const conversationIds = [...new Set(canonicalEvidence.map((row) => row.conversationId))];
+    if (conversationIds.length === 0) return null;
+    if (conversationIds.length > 1) {
+      return {
+        status: "AMBIGUOUS",
+        reason: "EXACT_INBOUND_MESSAGE_IDS_POINT_TO_MULTIPLE_CONVERSATIONS",
+      };
+    }
+
+    const conversationId = conversationIds[0];
+    const conversation = await this.prisma.conversation.findUnique({
+      where: { id: conversationId },
+      select: { id: true, lineOfficialAccountId: true, storeId: true, lineChatUserId: true },
+    });
+    if (
+      !conversation
+      || conversation.lineOfficialAccountId !== input.lineOfficialAccountId
+      || conversation.storeId !== input.storeId
+    ) {
+      return {
+        status: "AMBIGUOUS",
+        reason: "EXACT_INBOUND_MESSAGE_CONVERSATION_SCOPE_CHANGED",
+      };
+    }
+    if (
+      conversation.lineChatUserId
+      && conversation.lineChatUserId.trim() !== input.lineChatUserId
+    ) {
+      return {
+        status: "AMBIGUOUS",
+        reason: "EXACT_INBOUND_MESSAGE_CONFLICTS_WITH_EXISTING_MANAGER_MAPPING",
+      };
+    }
+
+    if (input.apply && !conversation.lineChatUserId) {
+      const conflict = await this.prisma.conversation.findFirst({
+        where: {
+          lineOfficialAccountId: input.lineOfficialAccountId,
+          lineChatUserId: input.lineChatUserId,
+          NOT: { id: conversation.id },
+        },
+        select: { id: true },
+      });
+      if (conflict) {
+        return {
+          status: "AMBIGUOUS",
+          reason: "MANAGER_USER_ID_ALREADY_MAPPED_TO_OTHER_CONVERSATION",
+        };
+      }
+
+      const written = await this.prisma.conversation.updateMany({
+        where: {
+          id: conversation.id,
+          lineOfficialAccountId: input.lineOfficialAccountId,
+          storeId: input.storeId,
+          lineChatUserId: null,
+        },
+        data: {
+          lineChatUserId: input.lineChatUserId,
+          lineChatMappingSource: "PROJECT_B_EXACT_INBOUND_MESSAGE_ID",
+          lineChatMappedAt: new Date(),
+        },
+      });
+      if (written.count !== 1) {
+        const current = await this.prisma.conversation.findUnique({
+          where: { id: conversation.id },
+          select: { lineChatUserId: true },
+        });
+        if (current?.lineChatUserId?.trim() !== input.lineChatUserId) {
+          return {
+            status: "AMBIGUOUS",
+            reason: "CANONICAL_MAPPING_CHANGED_DURING_EXACT_MESSAGE_RECONCILIATION",
+          };
+        }
+      }
+    }
+
+    return {
+      status: "MAPPED",
+      conversationId,
+      source: "EXACT_INBOUND_MESSAGE_ID",
     };
   }
 
