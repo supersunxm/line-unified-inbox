@@ -86,7 +86,7 @@ jobs:
         run: npx tsx --test src/purchase-analytics.service.spec.ts src/purchase-broadcast-audience.service.spec.ts src/purchase-broadcast-composer.service.spec.ts src/mass-message/mass-message-selected-users-guard.spec.ts
 
       - name: Multi-store Broadcast targeting regression tests
-        run: npx tsx --test src/mass-message/broadcast-targeting.spec.ts
+        run: npx tsx --test src/mass-message/broadcast-targeting.spec.ts src/mass-message/broadcast-store-variables.spec.ts src/mass-message/broadcast-controller.spec.ts
 
       - name: Executive dashboard regression tests
         run: npx tsx --test src/dashboard-executive.service.spec.ts
@@ -129,6 +129,14 @@ jobs:
           if [ "$COUPON_CODE" != "401" ]; then
             echo "Expected unauthenticated GET /coupons to return 401, got $COUPON_CODE"
             cat /tmp/coupon-unauthorized.json || true
+            cat /tmp/backend.log
+            exit 1
+          fi
+
+          BROADCAST_PREVIEW_CODE="$(curl -sS -X POST -H 'Content-Type: application/json' -d '{}' -o /tmp/broadcast-preview-unauthorized.json -w '%{http_code}' http://127.0.0.1:3001/broadcasts/preview || true)"
+          if [ "$BROADCAST_PREVIEW_CODE" != "401" ]; then
+            echo "Expected unauthenticated POST /broadcasts/preview to return 401, got $BROADCAST_PREVIEW_CODE"
+            cat /tmp/broadcast-preview-unauthorized.json || true
             cat /tmp/backend.log
             exit 1
           fi
