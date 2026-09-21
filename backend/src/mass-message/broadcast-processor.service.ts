@@ -12,10 +12,10 @@ import { PrismaService } from "../prisma.service";
 import { buildFriendshipDemographicFilter } from "./broadcast-targeting";
 import type { BroadcastCampaignPayload } from "./broadcast.types";
 
-const BROADCAST_AUDIENCES = [
+const BROADCAST_AUDIENCES: ReadonlySet<MassMessageAudienceType> = new Set([
   MassMessageAudienceType.ALL_FRIENDS,
   MassMessageAudienceType.FRIENDSHIP_PERIOD,
-];
+]);
 
 @Injectable()
 export class BroadcastProcessorService {
@@ -37,7 +37,7 @@ export class BroadcastProcessorService {
         },
       },
     });
-    if (!campaign || !BROADCAST_AUDIENCES.includes(campaign.audienceType)) return;
+    if (!campaign || !BROADCAST_AUDIENCES.has(campaign.audienceType)) return;
     if (campaign.status === MassMessageCampaignStatus.DRAFT || campaign.status === MassMessageCampaignStatus.CANCELLED) return;
     if (campaign.scheduledAt && campaign.scheduledAt.getTime() > Date.now()) return;
 
@@ -200,7 +200,7 @@ export class BroadcastProcessorService {
         },
       },
     });
-    if (!campaign || !BROADCAST_AUDIENCES.includes(campaign.audienceType)) return;
+    if (!campaign || !BROADCAST_AUDIENCES.has(campaign.audienceType)) return;
 
     if (campaign.audienceType === MassMessageAudienceType.FRIENDSHIP_PERIOD) {
       const running = campaign.storeDeliveries.filter(
@@ -297,8 +297,10 @@ export class BroadcastProcessorService {
     });
 
     if (
-      deliveries.some((delivery) =>
-        [MassMessageStoreDeliveryStatus.PENDING, MassMessageStoreDeliveryStatus.RUNNING].includes(delivery.status),
+      deliveries.some(
+        (delivery) =>
+          delivery.status === MassMessageStoreDeliveryStatus.PENDING ||
+          delivery.status === MassMessageStoreDeliveryStatus.RUNNING,
       )
     ) {
       await this.prisma.massMessageCampaign.update({
@@ -315,7 +317,7 @@ export class BroadcastProcessorService {
     const totalSuccess = deliveries.reduce((sum, item) => sum + item.successCount, 0);
     const totalFailed = deliveries.reduce((sum, item) => sum + item.failedCount, 0);
 
-    let status = MassMessageCampaignStatus.COMPLETED;
+    let status: MassMessageCampaignStatus = MassMessageCampaignStatus.COMPLETED;
     if (deliverable.length > 0) {
       const allSuccess = deliverable.every((item) => item.status === MassMessageStoreDeliveryStatus.SUCCESS);
       const allFailed = deliverable.every((item) => item.status === MassMessageStoreDeliveryStatus.FAILED);
