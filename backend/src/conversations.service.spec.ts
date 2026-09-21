@@ -20,6 +20,38 @@ void test("message sender serialization uses the canonical User relation and nev
   assert.equal(resolveMessageSender({ direction: MessageDirection.INBOUND, senderUserId: "user-1", senderDisplayName: "Should not show" }), null);
 });
 
+
+void test("Project B Manager mirror keeps the Manager-visible responder name even without an internal user link", () => {
+  assert.deepEqual(
+    resolveMessageSender({
+      direction: MessageDirection.OUTBOUND,
+      senderUserId: null,
+      senderDisplayName: "DOWN CX197",
+      sender: null,
+      rawPayload: {
+        provider: "LINE_MANAGER",
+        source: "LINE_MANAGER_MIRROR",
+        responderIdentitySource: "LINE_MANAGER_OWNER_NAME",
+      },
+    }),
+    { userId: null, displayName: "DOWN CX197" },
+  );
+
+  assert.deepEqual(
+    resolveMessageSender({
+      direction: MessageDirection.OUTBOUND,
+      senderUserId: "legacy-user",
+      senderDisplayName: "28375 PC Pub",
+      sender: { id: "legacy-user", displayName: "Old App User Name" },
+      rawPayload: {
+        provider: "LINE_MANAGER",
+        source: "LINE_MANAGER_MIRROR",
+      },
+    }),
+    { userId: "legacy-user", displayName: "28375 PC Pub" },
+  );
+});
+
 void test("outbound realtime event carries the persisted sender without exposing User fields", () => {
   const events: unknown[] = [];
   const service = new ConversationsService({} as never, noopOperations, undefined, undefined, undefined, undefined, undefined, { publish: (event: unknown) => events.push(event) } as never);
