@@ -78,6 +78,17 @@ export class BroadcastProcessorService {
       }
 
       const payload = campaign.messagePayload as unknown as BroadcastCampaignPayload;
+      const existingBatch = await this.prisma.massMessageBatch.findUnique({
+        where: { storeDeliveryId_batchIndex: { storeDeliveryId: delivery.id, batchIndex: 0 } },
+      });
+
+      if (existingBatch?.status === MassMessageBatchStatus.SUCCESS) {
+        if (campaign.audienceType === MassMessageAudienceType.ALL_FRIENDS) {
+          await this.markBroadcastAccepted(delivery.id, delivery.recipientCount);
+        }
+        return;
+      }
+
       const variableContext = buildBroadcastStoreVariableContext({
         store: delivery.store,
         lineOfficialAccount: delivery.lineOfficialAccount,
@@ -92,7 +103,7 @@ export class BroadcastProcessorService {
         return;
       }
 
-      let messages;
+      let messages: ReturnType<typeof validateBroadcastMessages>;
       try {
         messages = validateBroadcastMessages(rendered.messages);
       } catch (error) {
@@ -101,17 +112,6 @@ export class BroadcastProcessorService {
           "INVALID_RESOLVED_MESSAGE",
           error instanceof Error ? error.message : "Resolved broadcast message is invalid",
         );
-        return;
-      }
-
-      const existingBatch = await this.prisma.massMessageBatch.findUnique({
-        where: { storeDeliveryId_batchIndex: { storeDeliveryId: delivery.id, batchIndex: 0 } },
-      });
-
-      if (existingBatch?.status === MassMessageBatchStatus.SUCCESS) {
-        if (campaign.audienceType === MassMessageAudienceType.ALL_FRIENDS) {
-          await this.markBroadcastAccepted(delivery.id, delivery.recipientCount);
-        }
         return;
       }
 
