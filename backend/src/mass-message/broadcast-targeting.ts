@@ -29,6 +29,10 @@ export type BroadcastMessage =
       previewImageUrl: string;
       originalObjectKey?: string;
       previewObjectKey?: string;
+    }
+  | {
+      type: "rich_message";
+      richMessageId: string;
     };
 
 const ORDER: FriendshipPeriodKey[] = [
@@ -166,6 +170,14 @@ export function validateBroadcastMessages(messages: unknown[]): BroadcastMessage
           ? { previewObjectKey: item.previewObjectKey.trim() }
           : {}),
       };
+    }
+    if (item.type === "rich_message") {
+      const richMessageId =
+        typeof item.richMessageId === "string" ? item.richMessageId.trim() : "";
+      if (!richMessageId) {
+        throw new BadRequestException("Rich Message ID is required");
+      }
+      return { type: "rich_message", richMessageId };
     }
     throw new BadRequestException("Unsupported broadcast message type: " + String(item.type));
   });
