@@ -1451,6 +1451,8 @@ enum MassMessageAudienceType {
   NOTIFIED_BM
   REPLIED
   SELECTED_USERS
+  ALL_FRIENDS
+  FRIENDSHIP_PERIOD
 }
 
 enum MassMessageStoreMode {
@@ -1507,6 +1509,7 @@ model MassMessageCampaign {
   failedRecipientCount    Int @default(0)
 
   errorMessage String?
+  scheduledAt  DateTime?
   startedAt    DateTime?
   completedAt  DateTime?
   createdAt    DateTime  @default(now())
@@ -1515,6 +1518,7 @@ model MassMessageCampaign {
   storeDeliveries MassMessageStoreDelivery[]
 
   @@index([status, createdAt])
+  @@index([status, scheduledAt])
   @@index([createdById])
   @@index([campaignRequestId])
 }
