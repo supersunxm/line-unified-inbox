@@ -56,7 +56,12 @@ export class BroadcastService {
     this.assertRequestId(input.campaignRequestId);
     const targeting = validateBroadcastTargeting(input.targeting);
     const advanced = normalizeBroadcastAdvanced(input.advanced);
-    const schedule = input.schedule ?? { mode: "NOW" as const };
+    const draftScheduledAt = input.schedule?.mode === "SCHEDULED"
+      ? resolveScheduledAt(input.schedule)
+      : null;
+    const schedule = draftScheduledAt
+      ? { mode: "SCHEDULED" as const, scheduledAt: draftScheduledAt.toISOString() }
+      : { mode: "NOW" as const };
     const messages = Array.isArray(input.messages) && input.messages.length > 0
       ? validateBroadcastMessages(input.messages)
       : [];
@@ -82,7 +87,7 @@ export class BroadcastService {
             storeMode: input.storeSelection.mode,
             selectedStoreIds: input.storeSelection.storeIds ?? [],
             messagePayload: payload as unknown as Prisma.InputJsonValue,
-            scheduledAt: schedule.mode === "SCHEDULED" ? new Date(schedule.scheduledAt) : null,
+            scheduledAt: draftScheduledAt,
           },
         })
       : await this.prisma.massMessageCampaign.create({
@@ -95,7 +100,7 @@ export class BroadcastService {
             messagePayload: payload as unknown as Prisma.InputJsonValue,
             status: MassMessageCampaignStatus.DRAFT,
             createdById: user.id,
-            scheduledAt: schedule.mode === "SCHEDULED" ? new Date(schedule.scheduledAt) : null,
+            scheduledAt: draftScheduledAt,
           },
         });
 
@@ -207,7 +212,17 @@ export class BroadcastService {
 
   async getCampaign(id: string, user: AuthUser) {
     void user;
-    await this.processor.reconcileCampaign(id);
+    const current = await this.prisma.massMessageCampaign.findUnique({
+      where: { id },
+      select: { status: true, audienceType: true },
+    });
+    if (
+      current &&
+      current.status === MassMessageCampaignStatus.RUNNING &&
+      BROADCAST_AUDIENCES.includes(current.audienceType)
+    ) {
+      await this.processor.reconcileCampaign(id);
+    }
     const campaign = await this.prisma.massMessageCampaign.findUnique({
       where: { id },
       include: {
@@ -378,6 +393,7 @@ export class BroadcastService {
       schedule: payload.broadcast?.schedule ?? null,
       messages: payload.messages ?? [],
       scheduledAt: campaign.scheduledAt?.toISOString?.() ?? null,
+      errorMessage: campaign.errorMessage ?? null,
       startedAt: campaign.startedAt?.toISOString?.() ?? null,
       completedAt: campaign.completedAt?.toISOString?.() ?? null,
       createdAt: campaign.createdAt?.toISOString?.() ?? campaign.createdAt,
