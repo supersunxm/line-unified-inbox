@@ -140,6 +140,12 @@ export function mirrorCanonicalExternalId(managerMessageId: string): string {
   return `line-chat-manager:${managerMessageId}`;
 }
 
+export function managerResponderDisplayName(
+  ownerName: string | null | undefined,
+): string {
+  return ownerName?.trim() || "LINE OA Manager Staff";
+}
+
 export function selectUniqueExactInboundConversationId(
   conversationIds: readonly string[],
 ):
@@ -884,11 +890,13 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
           originalText: mirrorCanonicalText(input.row),
           fileName: input.row.fileName,
           senderUserId: input.automated ? null : input.attributedUser?.id ?? null,
+          // For Project B, LINE OA Manager is the source of truth for
+          // responder identity shown in statistics. Keep any internal user link
+          // only as metadata/ownership; never replace the Manager-visible name
+          // with the legacy app user display name.
           senderDisplayName: input.automated
             ? AUTO_REPLY_BOT_DISPLAY_NAME
-            : input.attributedUser?.displayName
-              ?? input.row.ownerName?.trim()
-              ?? "LINE OA Manager Staff",
+            : managerResponderDisplayName(input.row.ownerName),
           sentAt: input.row.sentAt,
           rawPayload: {
             provider: "LINE_MANAGER",
@@ -897,6 +905,8 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
             managerMessageId: input.row.managerMessageId,
             managerBizId: input.row.bizId,
             managerOwnerName: input.row.ownerName,
+            responderIdentitySource: input.automated ? "AUTO_RESPONSE" : "LINE_MANAGER_OWNER_NAME",
+            internalUserLinkId: input.automated ? null : input.attributedUser?.id ?? null,
             mirroredAt: now.toISOString(),
           },
         },

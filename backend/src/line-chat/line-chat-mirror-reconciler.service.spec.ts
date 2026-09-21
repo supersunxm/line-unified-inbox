@@ -9,6 +9,7 @@ import {
   lineChatMirrorReconcileBatchSize,
   lineChatMirrorReconcileIntervalMs,
   lineChatMirrorReconcileSince,
+  managerResponderDisplayName,
   mirrorCanonicalExternalId,
   mirrorCanonicalText,
   selectUniqueExactInboundConversationId,
@@ -132,4 +133,11 @@ test("exact inbound Manager-message evidence maps only when every match points t
     selectUniqueExactInboundConversationId(["conversation-a", "conversation-b"]),
     { status: "AMBIGUOUS" },
   );
+});
+
+
+test("Project B statistics identity keeps the LINE OA Manager-visible responder name", () => {
+  assert.equal(managerResponderDisplayName("  OBS-Sunx2  "), "OBS-Sunx2");
+  assert.equal(managerResponderDisplayName("28375 PC Pub"), "28375 PC Pub");
+  assert.equal(managerResponderDisplayName(null), "LINE OA Manager Staff");
 });
