@@ -116,6 +116,7 @@ export class LineChatProfileOperationCoordinator {
     operationKind: LineChatProfileOperationKind;
   }, callback: (context: LineChatProfileOperationContext) => Promise<T>, options: {
     waitForLock?: boolean;
+    waitForLockMs?: number;
   } = {}): Promise<ProfileOperationResult<T>> {
     const requestId = randomUUID();
     const requestedAtMs = Date.now();
@@ -124,6 +125,7 @@ export class LineChatProfileOperationCoordinator {
       input.operationKind,
       requestId,
       options.waitForLock !== false,
+      options.waitForLockMs,
     );
     if (!localLock) {
       return this.busy(input, {
@@ -259,7 +261,14 @@ export class LineChatProfileOperationCoordinator {
     return result;
   }
 
-  private waitBudgetMs(operationKind: LineChatProfileOperationKind): number {
+  private waitBudgetMs(
+    operationKind: LineChatProfileOperationKind,
+    overrideMs?: number,
+  ): number {
+    if (overrideMs !== undefined) {
+      if (!Number.isFinite(overrideMs) || overrideMs <= 0) return 0;
+      return Math.min(PROFILE_OPERATION_HIGH_PRIORITY_WAIT_MS, Math.floor(overrideMs));
+    }
     return operationKind === "MANUAL_DIAGNOSTIC" || operationKind === "RECENT_RESOLUTION"
       ? PROFILE_OPERATION_HIGH_PRIORITY_WAIT_MS
       : 0;
@@ -270,11 +279,12 @@ export class LineChatProfileOperationCoordinator {
     operationKind: LineChatProfileOperationKind,
     requestId: string,
     waitForLock: boolean,
+    waitForLockMs?: number,
   ): Promise<LocalLock | null> {
     const immediate = this.tryAcquireLocalLock(sessionId, operationKind, requestId);
     if (immediate) return immediate;
 
-    const waitMs = waitForLock ? this.waitBudgetMs(operationKind) : 0;
+    const waitMs = waitForLock ? this.waitBudgetMs(operationKind, waitForLockMs) : 0;
     if (waitMs <= 0) return null;
 
     return new Promise<LocalLock | null>((resolve) => {
