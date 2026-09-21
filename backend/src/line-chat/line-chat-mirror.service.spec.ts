@@ -75,6 +75,10 @@ test("Manager history direction classification is fail-closed", () => {
     LineChatMirrorDirection.INBOUND,
   );
   assert.equal(
+    mirrorDirectionForManagerEvent("message"),
+    LineChatMirrorDirection.INBOUND,
+  );
+  assert.equal(
     mirrorDirectionForManagerEvent("someFutureEvent"),
     LineChatMirrorDirection.UNKNOWN,
   );
