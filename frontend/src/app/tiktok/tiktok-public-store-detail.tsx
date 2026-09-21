@@ -144,7 +144,11 @@ export function TikTokPublicStoreDetail({ store, history }: Props) {
               <div className="text-xs font-semibold text-[var(--app-text-tertiary)]">{label}</div>
               <div className="mt-2 text-2xl font-bold">{growthText(value.absolute)}</div>
               <div className="mt-1 text-xs text-[var(--app-text-secondary)]">
-                {value.percent === null ? labels.noBaseline : `${value.percent > 0 ? "+" : ""}${value.percent.toFixed(2)}%`}
+                {value.absolute === null
+                  ? labels.noBaseline
+                  : value.percent === null
+                    ? "—%"
+                    : `${value.percent > 0 ? "+" : ""}${value.percent.toFixed(2)}%`}
               </div>
               {comparison && <div className="mt-2 text-xs text-[var(--app-text-tertiary)]">{comparison}</div>}
             </div>
