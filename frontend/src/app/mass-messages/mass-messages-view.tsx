@@ -130,7 +130,6 @@ export function MassMessagesView({ language, userRole }: Props) {
   const [previewError, setPreviewError] = useState<string | null>(null);
 
   const [campaignRequestId, setCampaignRequestId] = useState(createId());
-  const [campaignTitle, setCampaignTitle] = useState("");
   const [draftSaving, setDraftSaving] = useState(false);
   const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null);
 
@@ -141,7 +140,6 @@ export function MassMessagesView({ language, userRole }: Props) {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [pageError, setPageError] = useState<string | null>(null);
 
-  const th = language === "th";
   const canSend = userRole === "ADMIN";
 
   useEffect(() => {
@@ -257,13 +255,16 @@ export function MassMessagesView({ language, userRole }: Props) {
 
   const schedule = useMemo<BroadcastSchedule>(() => {
     if (scheduleMode === "NOW") return { mode: "NOW" };
-    const date = new Date(scheduleDate + "T" + scheduleTime + ":00");
-    return { mode: "SCHEDULED", scheduledAt: date.toISOString() };
+    const timestamp = new Date(scheduleDate + "T" + scheduleTime + ":00").getTime();
+    return {
+      mode: "SCHEDULED",
+      scheduledAt: Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : "",
+    };
   }, [scheduleDate, scheduleMode, scheduleTime]);
 
   const createInput = (): BroadcastCreateInput => ({
     campaignRequestId,
-    title: campaignTitle.trim() || recipientLabel.trim() || undefined,
+    title: recipientLabel.trim() || undefined,
     storeSelection,
     targeting,
     advanced,
