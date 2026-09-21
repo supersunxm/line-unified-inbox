@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { PrismaService } from "../prisma.service";
 import { LineChatSessionService } from "./line-chat-session.service";
 import type { LineChatDiscoveredChat } from "./line-chat.types";
+import { isLineChatUserId } from "./line-chat-chat-discovery";
 import {
   isLineChatRealtimeResolverEligible,
 } from "./line-chat-pilot.constants";
@@ -113,6 +114,9 @@ export type LineChatMappingEligibility = Pick<
 type ResolverMessage = {
   direction?: string | null;
   deliveryStatus?: string | null;
+  externalMessageId?: string | null;
+  messageType?: string | null;
+  originalText?: string | null;
   sentAt: Date;
 };
 
@@ -122,7 +126,7 @@ type ResolverConversation = {
   lineOfficialAccountId: string;
   lineChatUserId: string | null;
   latestMessageAt: Date;
-  customer: { displayName: string };
+  customer: { displayName: string; lineUserId?: string | null };
   messages: ResolverMessage[];
   store: { code: string | null; storeMaster: { externalStoreId: string | null } | null } | null;
   lineOfficialAccount: {
@@ -430,11 +434,19 @@ export class LineChatRecentResolverService {
         lineOfficialAccountId: true,
         lineChatUserId: true,
         latestMessageAt: true,
-        customer: { select: { displayName: true } },
+        customer: { select: { displayName: true, lineUserId: true } },
         messages: {
+          where: { direction: "INBOUND" },
           orderBy: { sentAt: "desc" },
           take: MESSAGE_ANCHOR_LIMIT,
-          select: { direction: true, deliveryStatus: true, sentAt: true },
+          select: {
+            direction: true,
+            deliveryStatus: true,
+            externalMessageId: true,
+            messageType: true,
+            originalText: true,
+            sentAt: true,
+          },
         },
         store: {
           select: {
@@ -571,11 +583,19 @@ export class LineChatRecentResolverService {
         lineOfficialAccountId: true,
         lineChatUserId: true,
         latestMessageAt: true,
-        customer: { select: { displayName: true } },
+        customer: { select: { displayName: true, lineUserId: true } },
         messages: {
+          where: { direction: "INBOUND" },
           orderBy: { sentAt: "desc" },
           take: MESSAGE_ANCHOR_LIMIT,
-          select: { direction: true, deliveryStatus: true, sentAt: true },
+          select: {
+            direction: true,
+            deliveryStatus: true,
+            externalMessageId: true,
+            messageType: true,
+            originalText: true,
+            sentAt: true,
+          },
         },
         store: {
           select: {
@@ -621,6 +641,15 @@ export class LineChatRecentResolverService {
     });
     if (!eligible) return { status: "RESOLVE_CONFLICT" };
 
+    const directIdentity = await this.resolveVerifiedWebhookIdentity(conversation, input);
+    if (
+      directIdentity.status === "RESOLVED"
+      || directIdentity.status === "RESOLVE_AMBIGUOUS"
+      || directIdentity.status === "RESOLVE_CONFLICT"
+    ) {
+      return directIdentity;
+    }
+
     const targetName = normalizeName(conversation.customer.displayName);
     const targetMessage = conversation.messages[0]?.sentAt;
     const targetTimestamp = targetMessage ?? conversation.latestMessageAt;
@@ -637,15 +666,411 @@ export class LineChatRecentResolverService {
     const usedExistingSnapshot = Boolean(snapshot);
     snapshot ??= await this.refreshSnapshot({ ...input, force: false });
 
-    let result = await this.resolveFromSnapshot(conversation, input, snapshot, targetName, targetTimestamp, targetTimestampSource);
-    if (usedExistingSnapshot && ["RESOLVE_NO_MATCH", "RESOLVE_AMBIGUOUS", "RESOLVE_TRANSPORT"].includes(result.status)) {
+    let fingerprintResult = await this.resolveFromInboundFingerprint(conversation, input, snapshot);
+    if (
+      fingerprintResult.status === "RESOLVED"
+      || fingerprintResult.status === "RESOLVE_AMBIGUOUS"
+      || fingerprintResult.status === "RESOLVE_TRANSPORT"
+    ) {
+      return fingerprintResult;
+    }
+
+    let result = await this.resolveFromSnapshot(
+      conversation,
+      input,
+      snapshot,
+      targetName,
+      targetTimestamp,
+      targetTimestampSource,
+    );
+
+    if (usedExistingSnapshot && ["RESOLVE_NO_MATCH", "RESOLVE_AMBIGUOUS"].includes(result.status)) {
       snapshot = await this.refreshSnapshot({ ...input, force: true });
-      result = await this.resolveFromSnapshot(conversation, input, snapshot, targetName, targetTimestamp, targetTimestampSource);
+      fingerprintResult = await this.resolveFromInboundFingerprint(conversation, input, snapshot);
+      if (
+        fingerprintResult.status === "RESOLVED"
+        || fingerprintResult.status === "RESOLVE_AMBIGUOUS"
+        || fingerprintResult.status === "RESOLVE_TRANSPORT"
+      ) {
+        return fingerprintResult;
+      }
+      result = await this.resolveFromSnapshot(
+        conversation,
+        input,
+        snapshot,
+        targetName,
+        targetTimestamp,
+        targetTimestampSource,
+      );
     }
-    if (result.status === "RESOLVE_NO_MATCH") {
+
+    if (result.status === "RESOLVE_NO_MATCH" || result.status === "RESOLVE_AMBIGUOUS") {
       const expandedSnapshot = await this.refreshExpandedSnapshot(input);
-      result = await this.resolveFromSnapshot(conversation, input, expandedSnapshot, targetName, targetTimestamp, targetTimestampSource);
+      fingerprintResult = await this.resolveFromInboundFingerprint(conversation, input, expandedSnapshot);
+      if (
+        fingerprintResult.status === "RESOLVED"
+        || fingerprintResult.status === "RESOLVE_AMBIGUOUS"
+        || fingerprintResult.status === "RESOLVE_TRANSPORT"
+      ) {
+        return fingerprintResult;
+      }
+      result = await this.resolveFromSnapshot(
+        conversation,
+        input,
+        expandedSnapshot,
+        targetName,
+        targetTimestamp,
+        targetTimestampSource,
+      );
+
+      if (
+        (result.status === "RESOLVE_NO_MATCH" || result.status === "RESOLVE_AMBIGUOUS")
+        && expandedSnapshot.status === "READY"
+        && expandedSnapshot.pagesFetched >= EXPANDED_MAX_RECENT_PAGES
+        && expandedSnapshot.chats.length >= EXPANDED_MAX_RECENT_CHATS
+      ) {
+        const fullSnapshot = await this.refreshFullSnapshot(input);
+        fingerprintResult = await this.resolveFromInboundFingerprint(conversation, input, fullSnapshot);
+        if (
+          fingerprintResult.status === "RESOLVED"
+          || fingerprintResult.status === "RESOLVE_AMBIGUOUS"
+          || fingerprintResult.status === "RESOLVE_TRANSPORT"
+        ) {
+          return fingerprintResult;
+        }
+        result = await this.resolveFromSnapshot(
+          conversation,
+          input,
+          fullSnapshot,
+          targetName,
+          targetTimestamp,
+          targetTimestampSource,
+        );
+      }
     }
+    return result;
+  }
+
+  private async resolveVerifiedWebhookIdentity(
+    conversation: ResolverConversation,
+    input: ResolveRecentLineChatInput,
+  ): Promise<LineChatRecentResolutionResult> {
+    const candidate = conversation.customer.lineUserId?.trim() || "";
+    if (!isLineChatUserId(candidate)) return { status: "RESOLVE_NO_MATCH" };
+
+    const inbound = conversation.messages
+      .filter((message) => validDate(message.sentAt))
+      .find((message) =>
+        Boolean(message.externalMessageId?.trim())
+        || (
+          message.messageType?.toString().trim().toLowerCase() === "text"
+          && typeof message.originalText === "string"
+          && message.originalText.length > 0
+        )
+      );
+    if (!inbound) return { status: "RESOLVE_NO_MATCH" };
+
+    const verification = await this.sessionService.findInboundMessageFingerprintMatches({
+      botId: input.botId,
+      profilePath: input.profilePath,
+      chats: [{
+        chatUserId: candidate,
+        displayName: null,
+        lastMessageText: null,
+        lastMessageAt: null,
+        lastMessageDirection: null,
+      }],
+      externalMessageId: inbound.externalMessageId,
+      messageType: inbound.messageType?.toString() ?? null,
+      text: inbound.originalText,
+      sentAt: inbound.sentAt,
+      headless: true,
+      operationContext: input.operationContext,
+    });
+
+    if (verification.status === "FAILED") {
+      this.logger.log(JSON.stringify({
+        event: "line_chat_webhook_identity_fingerprint_verification",
+        conversationId: conversation.id,
+        lineOfficialAccountId: conversation.lineOfficialAccountId,
+        candidateCount: 1,
+        scannedChats: verification.scannedChats,
+        failedChats: verification.failedChats,
+        matchCount: 0,
+        matchMethod: null,
+        resolutionStatus: "RESOLVE_TRANSPORT",
+      }));
+      return { status: "RESOLVE_TRANSPORT" };
+    }
+
+    if (verification.matches.length !== 1 || verification.matches[0] !== candidate) {
+      this.logger.log(JSON.stringify({
+        event: "line_chat_webhook_identity_fingerprint_verification",
+        conversationId: conversation.id,
+        lineOfficialAccountId: conversation.lineOfficialAccountId,
+        candidateCount: 1,
+        scannedChats: verification.scannedChats,
+        failedChats: verification.failedChats,
+        matchCount: verification.matches.length,
+        matchMethod: verification.matchMethod,
+        resolutionStatus: "RESOLVE_NO_MATCH",
+      }));
+      return { status: "RESOLVE_NO_MATCH" };
+    }
+
+    const persisted = await this.persistCandidateMapping(
+      conversation.id,
+      conversation.lineOfficialAccountId,
+      candidate,
+    );
+    this.logger.log(JSON.stringify({
+      event: "line_chat_webhook_identity_fingerprint_verification",
+      conversationId: conversation.id,
+      lineOfficialAccountId: conversation.lineOfficialAccountId,
+      candidateCount: 1,
+      scannedChats: verification.scannedChats,
+      failedChats: verification.failedChats,
+      matchCount: 1,
+      matchMethod: verification.matchMethod,
+      resolutionStatus: persisted.status,
+    }));
+    return persisted;
+  }
+
+  private async resolveFromInboundFingerprint(
+    conversation: ResolverConversation,
+    input: ResolveRecentLineChatInput,
+    snapshot: LineChatRecentMappingSnapshot,
+  ): Promise<LineChatRecentResolutionResult> {
+    if (snapshot.status !== "READY" || snapshot.chats.length === 0) {
+      return { status: "RESOLVE_NO_MATCH" };
+    }
+
+    const inbound = conversation.messages
+      .filter((message) => message.direction === "INBOUND" && validDate(message.sentAt))
+      .sort((left, right) => right.sentAt.getTime() - left.sentAt.getTime())
+      .find((message) =>
+        Boolean(message.externalMessageId?.trim())
+        || (
+          message.messageType?.toString().trim().toLowerCase() === "text"
+          && typeof message.originalText === "string"
+          && message.originalText.length > 0
+        )
+      );
+
+    if (!inbound) return { status: "RESOLVE_NO_MATCH" };
+
+    const timestampCandidates = snapshot.chats.filter((chat) => {
+      if (!chat.lastMessageAt) return false;
+      const managerTimestamp = new Date(chat.lastMessageAt).getTime();
+      return Number.isFinite(managerTimestamp)
+        && Math.abs(managerTimestamp - inbound.sentAt.getTime()) <= MATCH_TOLERANCE_MS;
+    });
+
+    if (timestampCandidates.length === 0) {
+      this.logger.log(JSON.stringify({
+        event: "line_chat_inbound_fingerprint_resolution",
+        conversationId: conversation.id,
+        lineOfficialAccountId: conversation.lineOfficialAccountId,
+        candidateChatCount: snapshot.chats.length,
+        timestampCandidateCount: 0,
+        scannedChats: 0,
+        failedChats: 0,
+        matchCount: 0,
+        matchMethod: null,
+        resolutionStatus: "RESOLVE_NO_MATCH",
+      }));
+      return { status: "RESOLVE_NO_MATCH" };
+    }
+
+    const match = await this.sessionService.findInboundMessageFingerprintMatches({
+      botId: input.botId,
+      profilePath: input.profilePath,
+      chats: timestampCandidates,
+      externalMessageId: inbound.externalMessageId,
+      messageType: inbound.messageType?.toString() ?? null,
+      text: inbound.originalText,
+      sentAt: inbound.sentAt,
+      headless: true,
+      operationContext: input.operationContext,
+    });
+
+    if (match.status === "FAILED") {
+      this.logger.log(JSON.stringify({
+        event: "line_chat_inbound_fingerprint_resolution",
+        conversationId: conversation.id,
+        lineOfficialAccountId: conversation.lineOfficialAccountId,
+        candidateChatCount: snapshot.chats.length,
+        timestampCandidateCount: timestampCandidates.length,
+        scannedChats: match.scannedChats,
+        failedChats: match.failedChats,
+        matchCount: 0,
+        matchMethod: null,
+        resolutionStatus: "RESOLVE_TRANSPORT",
+      }));
+      return { status: "RESOLVE_TRANSPORT" };
+    }
+
+    if (match.matches.length > 1) {
+      this.logger.log(JSON.stringify({
+        event: "line_chat_inbound_fingerprint_resolution",
+        conversationId: conversation.id,
+        lineOfficialAccountId: conversation.lineOfficialAccountId,
+        candidateChatCount: snapshot.chats.length,
+        scannedChats: match.scannedChats,
+        failedChats: match.failedChats,
+        matchCount: match.matches.length,
+        matchMethod: match.matchMethod,
+        resolutionStatus: "RESOLVE_AMBIGUOUS",
+      }));
+      return { status: "RESOLVE_AMBIGUOUS" };
+    }
+
+    if (match.matches.length === 1) {
+      const persisted = await this.persistCandidateMapping(
+        conversation.id,
+        conversation.lineOfficialAccountId,
+        match.matches[0],
+      );
+      this.logger.log(JSON.stringify({
+        event: "line_chat_inbound_fingerprint_resolution",
+        conversationId: conversation.id,
+        lineOfficialAccountId: conversation.lineOfficialAccountId,
+        candidateChatCount: snapshot.chats.length,
+        scannedChats: match.scannedChats,
+        failedChats: match.failedChats,
+        matchCount: match.matches.length,
+        matchMethod: match.matchMethod,
+        resolutionStatus: persisted.status,
+      }));
+      return persisted;
+    }
+
+    this.logger.log(JSON.stringify({
+      event: "line_chat_inbound_fingerprint_resolution",
+      conversationId: conversation.id,
+      lineOfficialAccountId: conversation.lineOfficialAccountId,
+      candidateChatCount: snapshot.chats.length,
+      timestampCandidateCount: timestampCandidates.length,
+      scannedChats: match.scannedChats,
+      failedChats: match.failedChats,
+      matchCount: 0,
+      matchMethod: null,
+      resolutionStatus: "RESOLVE_NO_MATCH",
+    }));
+    return { status: "RESOLVE_NO_MATCH" };
+  }
+
+  /**
+   * Read-only-reconciliation fallback for conversations that already have a
+   * confirmed human reply in LINE OA Manager but lack a durable chat mapping.
+   *
+   * This deliberately ignores timestamp drift, but only when the customer's
+   * normalized display name has exactly one candidate in the same OA. It is
+   * never used by the customer-facing send path; callers must inspect Manager
+   * history before changing reply state.
+   */
+  public async resolveUniqueNameForReconciliation(
+    conversationId: string,
+  ): Promise<LineChatRecentResolutionResult> {
+    const conversation = await this.prisma.conversation.findUnique({
+      where: { id: conversationId.trim() },
+      select: {
+        id: true,
+        storeId: true,
+        lineOfficialAccountId: true,
+        lineChatUserId: true,
+        customer: { select: { displayName: true } },
+        store: {
+          select: {
+            code: true,
+            storeMaster: { select: { externalStoreId: true } },
+          },
+        },
+        lineOfficialAccount: {
+          select: {
+            storeId: true,
+            accountType: true,
+            isActive: true,
+            archivedAt: true,
+            chatBotId: true,
+            lineChatSession: {
+              select: {
+                sessionKey: true,
+                status: true,
+                profilePath: true,
+                profileStorageKey: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!conversation) return { status: "RESOLVE_CONFLICT" };
+    if (conversation.lineChatUserId?.trim()) {
+      return { status: "RESOLVED", lineChatUserId: conversation.lineChatUserId.trim() };
+    }
+
+    const oa = conversation.lineOfficialAccount;
+    const session = oa.lineChatSession;
+    const botId = oa.chatBotId?.trim() || "";
+    const sessionKey = session?.sessionKey?.trim() || "";
+    if (!session || !botId || !sessionKey) return { status: "RESOLVE_CONFLICT" };
+
+    const storeCode = pilotStoreCode(conversation.store);
+    const eligible = isLineChatRealtimeResolverEligible({
+      storeCode,
+      conversationStoreId: conversation.storeId,
+      oaStoreId: oa.storeId,
+      oaAccountType: oa.accountType,
+      oaIsActive: oa.isActive,
+      oaArchivedAt: oa.archivedAt,
+      oaChatBotId: oa.chatBotId,
+      oaSessionKey: session.sessionKey,
+      oaSessionStatus: session.status,
+      expectedBotId: botId,
+      expectedSessionKey: sessionKey,
+    });
+    if (!eligible) return { status: "RESOLVE_CONFLICT" };
+
+    const profilePath = this.sessionService.resolveProfilePath(session);
+    const snapshot = await this.refreshExpandedSnapshot({
+      lineOfficialAccountId: conversation.lineOfficialAccountId,
+      botId,
+      sessionKey,
+      profilePath,
+    });
+    if (snapshot.status === "FAILED") {
+      return snapshot.failureReason === "SESSION_AUTH"
+        ? { status: "RESOLVE_SESSION_AUTH" }
+        : { status: "RESOLVE_TRANSPORT" };
+    }
+
+    const targetName = normalizeName(conversation.customer.displayName);
+    const exactMatches = targetName
+      ? snapshot.chats.filter((chat) => normalizeName(chat.displayName) === targetName)
+      : [];
+    if (exactMatches.length === 0) return { status: "RESOLVE_NO_MATCH" };
+    if (exactMatches.length !== 1) return { status: "RESOLVE_AMBIGUOUS" };
+
+    const resolvedId = exactMatches[0].chatUserId;
+    const result = await this.persistCandidateMapping(
+      conversation.id,
+      conversation.lineOfficialAccountId,
+      resolvedId,
+    );
+    this.logger.log(JSON.stringify({
+      event: "line_chat_reconciliation_unique_name_resolution",
+      conversationId: conversation.id,
+      lineOfficialAccountId: conversation.lineOfficialAccountId,
+      storeCode,
+      exactNameMatchCount: exactMatches.length,
+      resolutionStatus: result.status,
+      lineChatUserIdMasked: result.status === "RESOLVED"
+        ? `${result.lineChatUserId.slice(0, 4)}...${result.lineChatUserId.slice(-4)}`
+        : null,
+    }));
     return result;
   }
 
@@ -658,6 +1083,69 @@ export class LineChatRecentResolverService {
     return snapshot && snapshot.expiresAt.getTime() > Date.now() ? snapshot : null;
   }
 
+
+  private async refreshFullSnapshot(
+    input: RefreshRecentLineChatInput,
+  ): Promise<LineChatRecentMappingSnapshot> {
+    const key = this.snapshotKey(input);
+    let discovery;
+    try {
+      discovery = await this.sessionService.discoverChats({
+        botId: input.botId,
+        profilePath: input.profilePath,
+        headless: true,
+        operationContext: input.operationContext,
+      });
+    } catch {
+      const refreshedAt = new Date();
+      return {
+        key,
+        status: "FAILED",
+        chats: [],
+        failureReason: "TRANSPORT",
+        pagesFetched: 0,
+        totalRawRecords: 0,
+        refreshedAt,
+        expiresAt: refreshedAt,
+      };
+    }
+
+    const refreshedAt = new Date();
+    if (
+      discovery.pagesFetched === 0
+      || discovery.invalidUserRecords > 0
+      || discovery.conflictingDuplicates > 0
+    ) {
+      return {
+        key,
+        status: "FAILED",
+        chats: [],
+        failureReason: "TRANSPORT",
+        pagesFetched: discovery.pagesFetched,
+        totalRawRecords: discovery.totalRawRecords,
+        refreshedAt,
+        expiresAt: refreshedAt,
+      };
+    }
+
+    this.logger.log(JSON.stringify({
+      event: "line_chat_recent_resolver_full_scan",
+      lineOfficialAccountId: input.lineOfficialAccountId,
+      recentChatCount: discovery.chats.length,
+      pagesFetched: discovery.pagesFetched,
+      totalRawRecords: discovery.totalRawRecords,
+      enumerationStatus: discovery.enumerationStatus,
+    }));
+    return {
+      key,
+      status: "READY",
+      chats: discovery.chats,
+      pagesFetched: discovery.pagesFetched,
+      totalRawRecords: discovery.totalRawRecords,
+      refreshedAt,
+      expiresAt: refreshedAt,
+    };
+  }
 
   private async refreshExpandedSnapshot(
     input: RefreshRecentLineChatInput,

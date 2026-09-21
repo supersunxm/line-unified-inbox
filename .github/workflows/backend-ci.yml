@@ -58,8 +58,14 @@ jobs:
       - name: Lint regression scope
         run: npx eslint "src/coupons/**/*.ts" "src/app-version/**/*.ts" "src/mobile/mobile-conversations.service.ts" "src/mobile/mobile-customer-sales-activity.spec.ts" "src/mobile/mobile-video-preview.ts" "src/mobile/mobile-video-preview.spec.ts" "src/conversation-data-contract.ts" "src/conversation-data-contract.spec.ts" "src/purchase-analytics.controller.ts" "src/purchase-analytics.dto.ts" "src/purchase-analytics.service.ts" "src/purchase-analytics.service.spec.ts" "src/purchase-broadcast-audience.dto.ts" "src/purchase-broadcast-audience.service.ts" "src/purchase-broadcast-audience.service.spec.ts" "src/purchase-broadcast-composer.service.spec.ts" "src/mass-message/mass-message.controller.ts" "src/mass-message/mass-message-selected-users-guard.spec.ts" "src/dashboard.controller.ts" "src/dashboard-executive.service.ts" "src/dashboard-executive.service.spec.ts" "src/app.module.ts" "src/line-chat/line-chat-session-health-probe.service.ts" "src/line-chat/line-chat-session-health-probe.spec.ts" "src/line-chat/line-chat-health-probe.cli.ts" "src/line-chat/line-chat-health-probe.cli.spec.ts" "src/line-chat/line-chat-oa-health-probe.service.ts" "src/line-chat/line-chat-oa-health-probe.spec.ts" "src/line-chat/line-chat-oa-health-probe.cli.ts" "src/line-chat/line-chat-oa-health-probe.cli.spec.ts" "src/line-chat/line-chat-health-scheduler.service.ts" "src/line-chat/line-chat-health-scheduler.spec.ts" "src/line-chat/line-chat-operations.controller.ts" "src/line-chat/line-chat-operations-auth.spec.ts" "src/line-chat/line-chat.module.ts" "src/line-chat/line-chat-nickname-worker.module.ts" "src/google-review-kpi/google-review-kpi.controller.ts" "src/google-review-kpi/google-review-kpi-canonical-export.spec.ts"
 
+      - name: Mirror cutover lint
+        run: npx eslint "src/conversations.service.ts" "src/line-chat/line-chat-pilot.constants.ts" "src/line-chat/line-chat-message-send-queue.service.ts" "src/line-chat/line-chat-message-send-worker.service.ts" "src/line-chat/line-chat-manager-message-relay.service.ts" "src/line-chat/line-chat-manager-message-relay-worker.service.ts" "src/line-chat/line-chat-manager-image-relay-worker.service.ts" "src/line-chat/line-chat-mirror.service.ts" "src/line-chat/line-chat-mirror.service.spec.ts" "src/line-chat/line-chat-mirror-reconciler.service.ts" "src/line-chat/line-chat-mirror-reconciler.service.spec.ts" "src/line-chat/line-chat-store-oa-selector.ts" "src/line-chat/line-chat-store-oa-selector.spec.ts" "src/line-chat/line-chat-mirror-cutover.spec.ts" "src/line-chat/line-chat-recent-resolver.service.spec.ts"
+
+      - name: Mirror cutover regression tests
+        run: npx tsx --test src/line-chat/line-chat-mirror-cutover.spec.ts src/line-chat/line-chat-mirror-reconciler.service.spec.ts src/line-chat/line-chat-store-oa-selector.spec.ts
+
       - name: LINE chat health regression tests
-        run: npx tsx --test src/line-chat/line-chat-health.spec.ts src/line-chat/line-chat-profile-operation-coordinator.service.spec.ts src/line-chat/line-chat-session-health-probe.spec.ts src/line-chat/line-chat-health-probe.cli.spec.ts src/line-chat/line-chat-oa-health-probe.spec.ts src/line-chat/line-chat-oa-health-probe.cli.spec.ts src/line-chat/line-chat-health-scheduler.spec.ts src/line-chat/line-chat-operations-auth.spec.ts src/line-chat/line-chat-nickname-worker.service.spec.ts src/line-chat/line-chat-recent-resolver.service.spec.ts
+        run: npx tsx --test src/line-chat/line-chat-health.spec.ts src/line-chat/line-chat-profile-operation-coordinator.service.spec.ts src/line-chat/line-chat-session-health-probe.spec.ts src/line-chat/line-chat-health-probe.cli.spec.ts src/line-chat/line-chat-oa-health-probe.spec.ts src/line-chat/line-chat-oa-health-probe.cli.spec.ts src/line-chat/line-chat-health-scheduler.spec.ts src/line-chat/line-chat-operations-auth.spec.ts src/line-chat/line-chat-nickname-worker.service.spec.ts src/line-chat/line-chat-recent-resolver.service.spec.ts src/line-chat/line-chat-mirror.service.spec.ts
 
       - name: Coupon unit tests
         run: npx tsx --test src/coupons/*.spec.ts
@@ -78,6 +84,9 @@ jobs:
 
       - name: Purchase intelligence and broadcast audience regression tests
         run: npx tsx --test src/purchase-analytics.service.spec.ts src/purchase-broadcast-audience.service.spec.ts src/purchase-broadcast-composer.service.spec.ts src/mass-message/mass-message-selected-users-guard.spec.ts
+
+      - name: Multi-store Broadcast targeting regression tests
+        run: npx tsx --test src/mass-message/broadcast-targeting.spec.ts
 
       - name: Executive dashboard regression tests
         run: npx tsx --test src/dashboard-executive.service.spec.ts
@@ -157,7 +166,7 @@ jobs:
         run: npx eslint "src/app/coupons/**/*.tsx" "src/app/admin/purchase-analytics/page.tsx" "src/app/mass-messages/page.tsx" "src/app/mass-messages/purchase-broadcast-draft-banner.tsx" "src/app/mass-messages/purchase-broadcast-composer.tsx" "src/app/mass-messages/drafts/[campaignId]/page.tsx" "src/app/dashboard/dashboard-view.tsx" "src/app/dashboard/executive-dashboard-v2.tsx" "src/lib/coupon-api.ts" "src/types/coupons.ts" "src/app/primary-navigation.ts" "src/components/shell/top-navigation.tsx"
 
       - name: Purchase broadcast audience UI regression tests
-        run: node --test --experimental-strip-types test/purchase-broadcast-audience.test.mts test/purchase-broadcast-composer.test.mts
+        run: node --test --experimental-strip-types test/purchase-broadcast-audience.test.mts test/purchase-broadcast-composer.test.mts test/broadcast-ui.test.mts
 
       - name: Executive dashboard UI regression tests
         run: node --test --experimental-strip-types test/dashboard-executive-v2.test.mts

@@ -366,6 +366,7 @@ export class LineChatSessionService {
     profilePath: string;
     headless?: boolean;
     customLauncher?: ContextLauncher;
+    operationContext?: import("./line-chat-profile-operation-coordinator.service").LineChatProfileOperationContext;
   }): Promise<LineChatDiscoveryResult> {
     return this.discoverChatPages(input, 200, 10_000, false);
   }
@@ -383,8 +384,11 @@ export class LineChatSessionService {
     maxChats?: number;
     operationContext?: import("./line-chat-profile-operation-coordinator.service").LineChatProfileOperationContext;
   }): Promise<LineChatRecentDiscoveryResult> {
-    const maxPages = Math.min(5, Math.max(1, input.maxPages ?? 5));
-    const maxChats = Math.min(125, Math.max(1, input.maxChats ?? 125));
+    // Keep the default realtime window small, but allow the resolver's explicit
+    // expanded fallback to search deeper for older conversations. This remains
+    // bounded to protect the shared LINE OA Manager profile.
+    const maxPages = Math.min(20, Math.max(1, input.maxPages ?? 5));
+    const maxChats = Math.min(500, Math.max(1, input.maxChats ?? 125));
     const result = await this.discoverChatPages(input, maxPages, maxChats, true);
     const failure = result.pagesFetched === 0
       || Boolean(result.enumerationError)
@@ -406,6 +410,225 @@ export class LineChatSessionService {
       pagesFetched: result.pagesFetched,
       totalRawRecords: result.totalRawRecords,
     };
+  }
+
+  /**
+   * Finds a Manager chat from a webhook inbound-message fingerprint.
+   * Exact LINE message ID is authoritative. Text fallback is fail-closed and
+   * requires exact text/type plus a tight timestamp match across every scanned
+   * candidate.
+   */
+  public async findInboundMessageFingerprintMatches(input: {
+    botId: string;
+    profilePath: string;
+    chats: readonly LineChatDiscoveredChat[];
+    externalMessageId?: string | null;
+    messageType?: string | null;
+    text?: string | null;
+    sentAt: Date;
+    headless?: boolean;
+    customLauncher?: ContextLauncher;
+    operationContext?: import("./line-chat-profile-operation-coordinator.service").LineChatProfileOperationContext;
+  }): Promise<
+    | {
+        status: "READY";
+        matches: string[];
+        scannedChats: number;
+        failedChats: number;
+        matchMethod: "MESSAGE_ID" | "TEXT_TIMESTAMP" | null;
+      }
+    | {
+        status: "FAILED";
+        matches: [];
+        scannedChats: number;
+        failedChats: number;
+        matchMethod: null;
+      }
+  > {
+    const botId = input.botId.trim();
+    const externalMessageId = input.externalMessageId?.trim() || "";
+    const targetType = input.messageType?.trim().toLowerCase() || "";
+    const targetText = input.text ?? "";
+    const targetMs = input.sentAt.getTime();
+    const canUseTextFallback =
+      targetType === "text"
+      && targetText.length > 0
+      && Number.isFinite(targetMs);
+
+    const chatIds = [...new Set(
+      input.chats
+        .map((chat) => chat.chatUserId?.trim())
+        .filter((value): value is string => Boolean(value)),
+    )];
+    if (!botId || chatIds.length === 0 || (!externalMessageId && !canUseTextFallback)) {
+      return {
+        status: "READY",
+        matches: [],
+        scannedChats: 0,
+        failedChats: 0,
+        matchMethod: null,
+      };
+    }
+
+    const resolvedProfile = path.resolve(input.profilePath);
+    if (!fs.existsSync(resolvedProfile)) {
+      return {
+        status: "FAILED",
+        matches: [],
+        scannedChats: 0,
+        failedChats: chatIds.length,
+        matchMethod: null,
+      };
+    }
+
+    const launcher = input.customLauncher ?? this.defaultLauncher;
+    input.operationContext?.assertOwnership();
+    const context = await launcher(resolvedProfile, {
+      profilePath: resolvedProfile,
+      headless: input.headless ?? true,
+    });
+
+    let scannedChats = 0;
+    let failedChats = 0;
+    const textMatches: string[] = [];
+    const batchSize = 20;
+
+    try {
+      const auth = await this.probeApiAuthentication(context);
+      if (auth.authenticated !== "YES") {
+        return {
+          status: "FAILED",
+          matches: [],
+          scannedChats,
+          failedChats: chatIds.length,
+          matchMethod: null,
+        };
+      }
+
+      const page = context.pages()[0] || await context.newPage();
+      await page.goto(`https://chat.line.biz/${encodeURIComponent(botId)}`, {
+        waitUntil: "domcontentloaded",
+        timeout: 15_000,
+      }).catch(() => {});
+
+      for (let offset = 0; offset < chatIds.length; offset += batchSize) {
+        input.operationContext?.assertOwnership();
+        const batch = chatIds.slice(offset, offset + batchSize);
+        const results = await page.evaluate(async (args) => {
+          return Promise.all(args.chatIds.map(async (chatUserId) => {
+            const historyUrl =
+              `https://chat.line.biz/api/v3/bots/${encodeURIComponent(args.botId)}/chats/${encodeURIComponent(chatUserId)}/messages`;
+            try {
+              const response = await fetch(historyUrl, {
+                credentials: "include",
+                headers: { Accept: "application/json, text/plain, */*" },
+              });
+              if (!response.ok) {
+                return { chatUserId, ok: false, idMatch: false, textMatch: false };
+              }
+              const body = await response.json() as {
+                list?: Array<{
+                  type?: string;
+                  timestamp?: number;
+                  message?: {
+                    id?: string;
+                    type?: string;
+                    text?: string;
+                  };
+                }>;
+              };
+              let idMatch = false;
+              let textMatch = false;
+              for (const item of body.list ?? []) {
+                if (item.type !== "messageReceived") continue;
+                const managerMessageId = typeof item.message?.id === "string"
+                  ? item.message.id.trim()
+                  : "";
+                if (args.externalMessageId && managerMessageId === args.externalMessageId) {
+                  idMatch = true;
+                  break;
+                }
+                if (!args.canUseTextFallback) continue;
+                const managerType = typeof item.message?.type === "string"
+                  ? item.message.type.trim().toLowerCase()
+                  : "";
+                const managerText = typeof item.message?.text === "string"
+                  ? item.message.text
+                  : "";
+                const managerTimestamp = Number(item.timestamp);
+                if (
+                  managerType === args.targetType
+                  && managerText === args.targetText
+                  && Number.isFinite(managerTimestamp)
+                  && Math.abs(managerTimestamp - args.targetMs) <= 15_000
+                ) {
+                  textMatch = true;
+                }
+              }
+              return { chatUserId, ok: true, idMatch, textMatch };
+            } catch {
+              return { chatUserId, ok: false, idMatch: false, textMatch: false };
+            }
+          }));
+        }, {
+          chatIds: batch,
+          botId,
+          externalMessageId,
+          canUseTextFallback,
+          targetType,
+          targetText,
+          targetMs,
+        });
+
+        scannedChats += results.length;
+        for (const result of results) {
+          if (!result.ok) {
+            failedChats += 1;
+            continue;
+          }
+          if (result.idMatch) {
+            return {
+              status: "READY",
+              matches: [result.chatUserId],
+              scannedChats,
+              failedChats,
+              matchMethod: "MESSAGE_ID",
+            };
+          }
+          if (result.textMatch) textMatches.push(result.chatUserId);
+        }
+
+        if (textMatches.length > 1) {
+          return {
+            status: "READY",
+            matches: [...new Set(textMatches)],
+            scannedChats,
+            failedChats,
+            matchMethod: "TEXT_TIMESTAMP",
+          };
+        }
+      }
+
+      if (failedChats > 0) {
+        return {
+          status: "FAILED",
+          matches: [],
+          scannedChats,
+          failedChats,
+          matchMethod: null,
+        };
+      }
+
+      return {
+        status: "READY",
+        matches: [...new Set(textMatches)],
+        scannedChats,
+        failedChats,
+        matchMethod: textMatches.length > 0 ? "TEXT_TIMESTAMP" : null,
+      };
+    } finally {
+      await this.closeManagedPersistentContext(context, resolvedProfile).catch(() => {});
+    }
   }
 
   private async discoverChatPages(input: {

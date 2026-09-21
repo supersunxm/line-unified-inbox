@@ -1451,6 +1451,8 @@ enum MassMessageAudienceType {
   NOTIFIED_BM
   REPLIED
   SELECTED_USERS
+  ALL_FRIENDS
+  FRIENDSHIP_PERIOD
 }
 
 enum MassMessageStoreMode {
@@ -1507,6 +1509,7 @@ model MassMessageCampaign {
   failedRecipientCount    Int @default(0)
 
   errorMessage String?
+  scheduledAt  DateTime?
   startedAt    DateTime?
   completedAt  DateTime?
   createdAt    DateTime  @default(now())
@@ -1515,6 +1518,7 @@ model MassMessageCampaign {
   storeDeliveries MassMessageStoreDelivery[]
 
   @@index([status, createdAt])
+  @@index([status, scheduledAt])
   @@index([createdById])
   @@index([campaignRequestId])
 }
@@ -2179,6 +2183,32 @@ enum LineChatProfileOperationKind {
   HEALTH_SESSION
   HEALTH_OA
   MANUAL_DIAGNOSTIC
+  MIRROR_SYNC
+}
+
+enum LineChatMirrorSyncStatus {
+  IDLE
+  RUNNING
+  SUCCESS
+  PARTIAL
+  FAILED
+}
+
+enum LineChatMirrorDirection {
+  INBOUND
+  OUTBOUND
+  UNKNOWN
+}
+
+enum LineChatMirrorReconcileStatus {
+  PENDING
+  WAITING_CANONICAL
+  DUPLICATE
+  IMPORTED
+  UNMAPPED
+  AMBIGUOUS
+  FAILED
+  SKIPPED
 }
 
 model LineChatSession {
@@ -2227,6 +2257,86 @@ model LineChatProfileOperationLease {
 
   @@index([leaseUntil])
   @@index([operationKind])
+}
+
+model LineChatMirrorStoreState {
+  id                    String                   @id @default(uuid())
+  lineOfficialAccountId String                   @unique
+  storeId               String?
+  storeCode             String
+  status                LineChatMirrorSyncStatus @default(IDLE)
+  enabled               Boolean                  @default(false)
+  lastStartedAt         DateTime?
+  lastCompletedAt       DateTime?
+  lastSuccessfulSyncAt  DateTime?
+  lastFailureAt         DateTime?
+  lastErrorCode         String?
+  lastErrorMessage      String?
+  recentChatsObserved   Int                      @default(0)
+  pendingChats          Int                      @default(0)
+  messagesStored        Int                      @default(0)
+  lastCycleDurationMs   Int?
+  createdAt             DateTime                 @default(now())
+  updatedAt             DateTime                 @updatedAt
+
+  @@index([storeCode])
+  @@index([enabled, status])
+  @@index([lastSuccessfulSyncAt])
+}
+
+model LineChatMirrorChat {
+  id                    String                   @id @default(uuid())
+  lineOfficialAccountId String
+  lineChatUserId        String
+  displayName           String?
+  lastMessageText       String?
+  lastMessageAt         DateTime?
+  lastMessageDirection  String?
+  historySyncedThroughAt DateTime?
+  lastHistorySyncedAt   DateTime?
+  status                LineChatMirrorSyncStatus @default(IDLE)
+  lastErrorCode         String?
+  lastErrorMessage      String?
+  createdAt             DateTime                 @default(now())
+  updatedAt             DateTime                 @updatedAt
+
+  @@unique([lineOfficialAccountId, lineChatUserId])
+  @@index([lineOfficialAccountId, lastMessageAt])
+  @@index([lineOfficialAccountId, status])
+  @@index([historySyncedThroughAt])
+}
+
+model LineChatMirrorMessage {
+  id                      String                        @id @default(uuid())
+  lineOfficialAccountId   String
+  lineChatUserId          String
+  managerMessageId        String
+  eventType               String
+  direction               LineChatMirrorDirection       @default(UNKNOWN)
+  messageType             String?
+  text                    String?
+  fileName                String?
+  bizId                   String?
+  ownerName               String?
+  sentAt                  DateTime
+  reconcileStatus         LineChatMirrorReconcileStatus @default(PENDING)
+  canonicalConversationId String?
+  canonicalMessageId      String?
+  reconcileSource         String?
+  reconcileAttempts       Int                           @default(0)
+  reconciledAt            DateTime?
+  reconcileError          String?
+  firstSeenAt             DateTime                      @default(now())
+  lastSeenAt              DateTime                      @updatedAt
+  createdAt               DateTime                      @default(now())
+  updatedAt               DateTime                      @updatedAt
+
+  @@unique([lineOfficialAccountId, managerMessageId])
+  @@index([lineOfficialAccountId, lineChatUserId, sentAt])
+  @@index([lineOfficialAccountId, direction, sentAt])
+  @@index([reconcileStatus, sentAt])
+  @@index([canonicalConversationId, sentAt])
+  @@index([eventType])
 }
 
 model LineChatHealthEvent {

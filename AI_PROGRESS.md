@@ -5466,3 +5466,29 @@ Waiver scope: focused PIN/auth tests pass **26/26**, focused Flutter PIN tests p
 - Live worker and backend processes report durable queue enabled, store allowlist `28375`, exactly the two authorized Test A/Test B conversation IDs, and the old pre-send failure flag absent. The pause flag is present only in the live worker runtime. Backend deployment `634a1907-7255-4465-a3ae-7c616a23eb95` remains healthy; public health/readiness and local worker health returned 200.
 - Read-only preflight passed: Manager OA is `OPPO BS RBS Chonburi`, Manager exact-text baseline for `INTERNAL WORKER RESTART B 001` is **0**, global active durable jobs are **0**, Test A/B/Max snapshots are unchanged, and Max/non-authorized recent traffic is **0**. Profile B is `ACTIVE`/`CONNECTED` with HTTP 200 health.
 - No customer-facing message has been sent and the Android emulator has not been touched for this canary. Next action: await explicit approval before sending the single Test B message.
+
+
+## 2026-09-21 — Project B: 7-store mirror-only production cutover
+
+- User announced that the seven LINE chat pilot stores will stop using the black app and return to LINE OA Manager as the customer-facing source of truth.
+- Added an explicit `LINE_CHAT_MIRROR_ONLY_STORE_CODES` kill-switch allowlist.
+- Black-app conversation sends (text, failed-message retry, image, PDF) now fail closed for mirror-only stores before any LINE transport is attempted.
+- Durable Manager queue creation also fails closed for mirror-only stores.
+- Durable send worker terminalizes already queued/verify-pending jobs for mirror-only stores before any customer-facing send action.
+- Existing Project B read-only mirror remains the data-capture path. Production activation will use the same seven store codes and preserve Manager as source of truth.
+- Added mirror-only cutover regression coverage and CI lint/test steps.
+- Required verification before completion: PR CI green, backend build/smoke green, production backend + line-chat worker deploy green, readiness healthy, mirror worker running, and no mirror-only send jobs initiating customer-facing sends.
+
+- Post-deploy validation found 6 legacy `UNKNOWN` mirror rows at store 28375. New production events were already classified correctly (`message` => INBOUND), so this was a rollout-race residue from the old worker between DB migration and worker replacement. Added per-store self-healing that reclassifies legacy `UNKNOWN + eventType=message` rows to INBOUND before each mirror cycle, preventing the same residue after future staggered deploys. This repair is limited to the Project B shadow table and never mutates canonical conversation messages.
+
+
+## 2026-09-21 — Multi-store LINE OA Broadcast
+
+- Added an HQ Broadcast workspace modeled on LINE Official Account Manager, exposed at `/broadcast` while keeping the existing `mass-messages` authorization boundary and legacy route compatibility.
+- Added official LINE broadcast delivery for All friends and narrowcast delivery for Friendship period targeting. Friendship buckets map exactly to LINE demographic filters; the approved 180–364 + 365+ selection normalizes to `subscriptionPeriod >= day_180`.
+- Broadcast execution is isolated per LINE OA/store with stable retry keys, per-store delivery state, scheduled dispatch, narrowcast progress reconciliation, failed-store-only retry, and no fallback from targeting to All friends.
+- Added preflight readiness using connected OA/token state and latest follower snapshot. Friendship targeting blocks stores whose known Target reach is below 100 and surfaces stale/unknown reach as warnings.
+- Message composer supports up to five text/image LINE message objects. Existing protected image upload is reused. Unsupported LINE Manager content controls are visible but disabled rather than pretending to be operational.
+- Added draft persistence and campaign history. The LINE Manager-style “Send test” control is intentionally disabled because Messaging API does not expose OA-manager test recipients; production sending never guesses a test user.
+- Added database migration for official broadcast audience types and scheduled campaigns, plus focused backend targeting and frontend UI regression coverage.
+- Next gate: Application CI + Unified Auth CI, then production deploy and health/readiness verification.

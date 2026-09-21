@@ -26,6 +26,7 @@ import { followerInsightsTranslations } from "./follower-insights/follower-insig
 import { getInclusiveCalendarDays } from "./follower-insights/follower-insights-utils";
 import { FriendSourceLinksView } from "./friend-source-links/friend-source-links-view";
 import { MassMessagesView } from "./mass-messages/mass-messages-view";
+import { BroadcastView } from "./broadcast/broadcast-view";
 import { RichMenusView } from "./rich-menus/rich-menus-view";
 import { AutoResponsesView } from "./auto-responses/auto-responses-view";
 import { GreetingMessagesView } from "./greeting-messages/greeting-messages-view";
@@ -4245,6 +4246,10 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
           ) : initialSection === "mass-messages" ? (
             <PageContainer variant="full">
               <MassMessagesView language={language} userRole={authUser.role} />
+            </PageContainer>
+          ) : initialSection === "broadcast" ? (
+            <PageContainer variant="full">
+              <BroadcastView language={language} userRole={authUser.role} />
             </PageContainer>
           ) : initialSection === "rich-menus" ? (
             <PageContainer variant="full">

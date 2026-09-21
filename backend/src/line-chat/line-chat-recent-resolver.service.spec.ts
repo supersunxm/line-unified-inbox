@@ -14,7 +14,14 @@ function conversation(overrides: Record<string, unknown> = {}) {
     lineChatUserId: null,
     latestMessageAt: MESSAGE_AT,
     customer: { displayName: "สมชาย Oppo" },
-    messages: [{ sentAt: MESSAGE_AT }],
+    messages: [{
+      direction: "INBOUND",
+      deliveryStatus: "DELIVERED",
+      externalMessageId: "line-message-1",
+      messageType: "TEXT",
+      originalText: "สวัสดีครับ",
+      sentAt: MESSAGE_AT,
+    }],
     store: { code: "28375", storeMaster: null },
     lineOfficialAccount: {
       name: "OPPO BS RBS Chonburi",
@@ -47,6 +54,9 @@ function fixture(options: {
   expandedChats?: ReturnType<typeof chat>[];
   discoveryStatus?: "READY" | "FAILED";
   failureReason?: "SESSION_AUTH" | "TRANSPORT";
+  fingerprintMatches?: string[];
+  fingerprintStatus?: "READY" | "FAILED";
+  fingerprintMatchMethod?: "MESSAGE_ID" | "TEXT_TIMESTAMP" | null;
   conflict?: boolean;
   writeCount?: number;
   racedMapping?: string | null;
@@ -93,6 +103,30 @@ function fixture(options: {
         totalRawRecords: expanded ? 500 : 125,
       };
     },
+    findInboundMessageFingerprintMatches: async (input: { chats: readonly ReturnType<typeof chat>[] }) => ({
+      status: options.fingerprintStatus ?? "READY",
+      matches: options.fingerprintStatus === "FAILED" ? [] : (options.fingerprintMatches ?? []),
+      scannedChats: input.chats.length,
+      failedChats: options.fingerprintStatus === "FAILED" ? input.chats.length : 0,
+      matchMethod: options.fingerprintStatus === "FAILED"
+        ? null
+        : (options.fingerprintMatchMethod ?? (options.fingerprintMatches?.length ? "MESSAGE_ID" : null)),
+    }),
+    discoverChats: async () => ({
+      botId: input.botId,
+      endpoint: "https://chat.line.biz/api/v2/bots/test/chats",
+      responseShape: "list",
+      enumerationStatus: "COMPLETE",
+      chats: options.expandedChats ?? options.chats ?? [chat()],
+      pagesFetched: 1,
+      totalRawRecords: (options.expandedChats ?? options.chats ?? [chat()]).length,
+      validUserChats: (options.expandedChats ?? options.chats ?? [chat()]).length,
+      ignoredNonUserRecords: 0,
+      invalidUserRecords: 0,
+      duplicateIds: 0,
+      conflictingDuplicates: 0,
+      nextTerminationObserved: true,
+    }),
   };
   const service = new LineChatRecentResolverService(prisma as never, session as never);
   (service as unknown as { logger: { log: (message: string) => void } }).logger = {
@@ -122,17 +156,35 @@ test("unique normalized exact customer name resolves with a guarded write", asyn
   assert.equal(value.discoveryInputs.length, 1);
   assert.equal(value.discoveryInputs[0].maxPages, 5);
   assert.equal(value.discoveryInputs[0].maxChats, 125);
-  assert.equal(value.diagnostics.length, 1);
-  const diagnostic = JSON.parse(value.diagnostics[0]) as Record<string, unknown>;
-  assert.equal(diagnostic.resolutionStatus, "RESOLVED");
-  assert.equal(diagnostic.recentChatCount, 1);
-  assert.equal(diagnostic.exactNameMatchCount, 1);
-  assert.deepEqual(value.selectedCustomerFields(), { displayName: true });
+  const diagnostic = value.diagnostics
+    .map((payload) => JSON.parse(payload) as Record<string, unknown>)
+    .find((payload) => payload.event === "line_chat_recent_resolver_diagnostic");
+  assert.equal(diagnostic?.resolutionStatus, "RESOLVED");
+  assert.equal(diagnostic?.recentChatCount, 1);
+  assert.equal(diagnostic?.exactNameMatchCount, 1);
+  assert.deepEqual(value.selectedCustomerFields(), { displayName: true, lineUserId: true });
   assert.deepEqual(value.writes[0], {
     where: { id: "conversation-1", lineOfficialAccountId: "oa-1", lineChatUserId: null },
     data: { lineChatUserId: CHAT_ID },
   });
 });
+
+test("inbound LINE message ID resolves before display-name matching", async () => {
+  const value = fixture({
+    chats: [chat(CHAT_ID, "different customer", 0)],
+    fingerprintMatches: [CHAT_ID],
+    fingerprintMatchMethod: "MESSAGE_ID",
+  });
+  const result = await value.service.resolve(input);
+  assert.deepEqual(result, { status: "RESOLVED", lineChatUserId: CHAT_ID });
+  assert.equal(value.writes.length, 1);
+  const fingerprintDiagnostic = value.diagnostics
+    .map((payload) => JSON.parse(payload) as Record<string, unknown>)
+    .find((payload) => payload.event === "line_chat_inbound_fingerprint_resolution");
+  assert.equal(fingerprintDiagnostic?.matchMethod, "MESSAGE_ID");
+  assert.equal(fingerprintDiagnostic?.resolutionStatus, "RESOLVED");
+});
+
 
 
 test("no-match retries with an expanded recent-chat scan before failing", async () => {
@@ -153,51 +205,63 @@ test("no-match retries with an expanded recent-chat scan before failing", async 
   assert.equal(value.writes.length, 1);
 });
 
-test("message timestamps never determine pilot candidate selection", async (t) => {
-  await t.test("exact customer name resolves even when LINE activity is hours away", async () => {
+test("reliable message timestamps guard pilot candidate selection", async (t) => {
+  await t.test("exact customer name outside the message window does not resolve", async () => {
     const value = fixture({ chats: [chat(CHAT_ID, "สมชาย Oppo", 3 * 60 * 60 * 1000)] });
-    assert.deepEqual(await value.service.resolve(input), { status: "RESOLVED", lineChatUserId: CHAT_ID });
-    assert.equal(value.writes.length, 1);
-    const diagnostic = JSON.parse(value.diagnostics[0]) as Record<string, unknown>;
-    assert.equal(diagnostic.exactNameMatchCount, 1);
-    assert.equal(diagnostic.combinedMatchCount, 0);
+    assert.deepEqual(await value.service.resolve(input), { status: "RESOLVE_NO_MATCH" });
+    assert.equal(value.writes.length, 0);
+    const diagnostic = value.diagnostics
+      .map((payload) => JSON.parse(payload) as Record<string, unknown>)
+      .find((payload) => payload.event === "line_chat_recent_resolver_diagnostic");
+    assert.equal(diagnostic?.exactNameMatchCount, 1);
+    assert.equal(diagnostic?.combinedMatchCount, 0);
+    assert.equal(diagnostic?.timestampCandidateCount, 0);
   });
 
   await t.test("timestamp-only candidate with a different customer name never resolves", async () => {
     const value = fixture({ chats: [chat(CHAT_ID, "different name", 0)] });
     assert.deepEqual(await value.service.resolve(input), { status: "RESOLVE_NO_MATCH" });
     assert.equal(value.writes.length, 0);
-    const diagnostic = JSON.parse(value.diagnostics[0]) as Record<string, unknown>;
-    assert.equal(diagnostic.exactNameMatchCount, 0);
-    assert.equal(diagnostic.timestampWithinToleranceCount, 1);
+    const diagnostic = value.diagnostics
+      .map((payload) => JSON.parse(payload) as Record<string, unknown>)
+      .find((payload) => payload.event === "line_chat_recent_resolver_diagnostic");
+    assert.equal(diagnostic?.exactNameMatchCount, 0);
+    assert.equal(diagnostic?.timestampWithinToleranceCount, 1);
   });
 });
 
-test("exact customer name resolves even when LINE timestamp is missing or invalid", async (t) => {
+test("exact customer name with missing or invalid Manager timestamp does not resolve against a reliable message anchor", async (t) => {
   for (const lastMessageAt of [null, "not-a-timestamp"] as const) {
     await t.test(String(lastMessageAt), async () => {
       const value = fixture({ chats: [chat(CHAT_ID, "สมชาย Oppo", 0, lastMessageAt)] });
-      assert.deepEqual(await value.service.resolve(input), { status: "RESOLVED", lineChatUserId: CHAT_ID });
-      const diagnostic = JSON.parse(value.diagnostics[0]) as Record<string, unknown>;
-      assert.equal(diagnostic.exactNameMatchCount, 1);
-      assert.equal(diagnostic.combinedMatchCount, 0);
-      assert.equal(diagnostic.exactNameWithMissingTimestampCount, 1);
+      assert.deepEqual(await value.service.resolve(input), { status: "RESOLVE_NO_MATCH" });
+      assert.equal(value.writes.length, 0);
+      const diagnostic = value.diagnostics
+        .map((payload) => JSON.parse(payload) as Record<string, unknown>)
+        .find((payload) => payload.event === "line_chat_recent_resolver_diagnostic");
+      assert.equal(diagnostic?.exactNameMatchCount, 1);
+      assert.equal(diagnostic?.combinedMatchCount, 0);
+      assert.equal(diagnostic?.exactNameWithMissingTimestampCount, 1);
+      assert.equal(diagnostic?.timestampCandidateCount, 0);
     });
   }
 });
 
-test("multiple exact customer-name candidates are ambiguous regardless of timestamp", async () => {
+test("multiple exact customer-name candidates resolve only when timestamp leaves one candidate", async () => {
   const value = fixture({
     chats: [
       chat(CHAT_ID, "สมชาย Oppo", 0),
       chat(CHAT_ID_2, "สมชาย Oppo", 3 * 60 * 60 * 1000),
     ],
   });
-  assert.deepEqual(await value.service.resolve(input), { status: "RESOLVE_AMBIGUOUS" });
-  assert.equal(value.writes.length, 0);
-  const diagnostic = JSON.parse(value.diagnostics[0]) as Record<string, unknown>;
-  assert.equal(diagnostic.exactNameMatchCount, 2);
-  assert.equal(diagnostic.resolutionStatus, "RESOLVE_AMBIGUOUS");
+  assert.deepEqual(await value.service.resolve(input), { status: "RESOLVED", lineChatUserId: CHAT_ID });
+  assert.equal(value.writes.length, 1);
+  const diagnostic = value.diagnostics
+    .map((payload) => JSON.parse(payload) as Record<string, unknown>)
+    .find((payload) => payload.event === "line_chat_recent_resolver_diagnostic");
+  assert.equal(diagnostic?.exactNameMatchCount, 2);
+  assert.equal(diagnostic?.timestampCandidateCount, 1);
+  assert.equal(diagnostic?.resolutionStatus, "RESOLVED");
 });
 
 test("timestamp diagnostics remain informational when fallback conversation timestamp is used", async () => {

@@ -73,6 +73,13 @@ function realtimeFixture(options: {
       pagesFetched: 1,
       totalRawRecords: options.chats?.length ?? 1,
     }),
+    findInboundMessageFingerprintMatches: async (input: { chats: readonly ReturnType<typeof discovered>[] }) => ({
+      status: "READY",
+      matches: [],
+      scannedChats: input.chats.length,
+      failedChats: 0,
+      matchMethod: null,
+    }),
   };
   const service = new LineChatRecentResolverService(prisma as never, session as never);
   (service as unknown as { logger: { log: (message: string) => void } }).logger = {
