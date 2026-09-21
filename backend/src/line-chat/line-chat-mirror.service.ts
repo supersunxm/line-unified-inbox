@@ -1009,6 +1009,12 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
                 ownerName: event.ownerName,
                 sentAt: event.sentAt,
               },
+              // Keep the existing read-only mirror safe during staggered
+              // backend/worker rollouts: this query only returns a legacy
+              // column, so a worker can start before the additive
+              // reconciliation migration is visible without selecting the
+              // new columns.
+              select: { id: true },
             });
             messagesInsertedOrUpdated += 1;
           }

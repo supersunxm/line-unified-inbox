@@ -2196,6 +2196,17 @@ enum LineChatMirrorDirection {
   UNKNOWN
 }
 
+enum LineChatMirrorReconcileStatus {
+  PENDING
+  WAITING_CANONICAL
+  DUPLICATE
+  IMPORTED
+  UNMAPPED
+  AMBIGUOUS
+  FAILED
+  SKIPPED
+}
+
 model LineChatSession {
   id                      String                @id @default(uuid())
   sessionKey              String                @unique
@@ -2292,26 +2303,35 @@ model LineChatMirrorChat {
 }
 
 model LineChatMirrorMessage {
-  id                    String                  @id @default(uuid())
-  lineOfficialAccountId String
-  lineChatUserId        String
-  managerMessageId      String
-  eventType             String
-  direction             LineChatMirrorDirection @default(UNKNOWN)
-  messageType           String?
-  text                  String?
-  fileName              String?
-  bizId                 String?
-  ownerName             String?
-  sentAt                DateTime
-  firstSeenAt           DateTime                @default(now())
-  lastSeenAt            DateTime                @updatedAt
-  createdAt             DateTime                @default(now())
-  updatedAt             DateTime                @updatedAt
+  id                      String                        @id @default(uuid())
+  lineOfficialAccountId   String
+  lineChatUserId          String
+  managerMessageId        String
+  eventType               String
+  direction               LineChatMirrorDirection       @default(UNKNOWN)
+  messageType             String?
+  text                    String?
+  fileName                String?
+  bizId                   String?
+  ownerName               String?
+  sentAt                  DateTime
+  reconcileStatus         LineChatMirrorReconcileStatus @default(PENDING)
+  canonicalConversationId String?
+  canonicalMessageId      String?
+  reconcileSource         String?
+  reconcileAttempts       Int                           @default(0)
+  reconciledAt            DateTime?
+  reconcileError          String?
+  firstSeenAt             DateTime                      @default(now())
+  lastSeenAt              DateTime                      @updatedAt
+  createdAt               DateTime                      @default(now())
+  updatedAt               DateTime                      @updatedAt
 
   @@unique([lineOfficialAccountId, managerMessageId])
   @@index([lineOfficialAccountId, lineChatUserId, sentAt])
   @@index([lineOfficialAccountId, direction, sentAt])
+  @@index([reconcileStatus, sentAt])
+  @@index([canonicalConversationId, sentAt])
   @@index([eventType])
 }
 
