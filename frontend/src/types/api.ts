@@ -1269,7 +1269,8 @@ export type BroadcastPreviewResult = {
 
 export type BroadcastMessageItem =
   | { type: "text"; text: string }
-  | { type: "image"; originalContentUrl: string; previewImageUrl: string };
+  | { type: "image"; originalContentUrl: string; previewImageUrl: string }
+  | { type: "rich_message"; richMessageId: string };
 
 export type BroadcastCreateInput = BroadcastPreviewInput & {
   campaignRequestId: string;
