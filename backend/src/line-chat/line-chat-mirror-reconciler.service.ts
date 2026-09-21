@@ -73,7 +73,7 @@ export interface LineChatMirrorReconcileCycleResult {
 
 function jsonObject(value: Prisma.JsonValue | null | undefined): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
-    ? value as Record<string, unknown>
+    ? value
     : {};
 }
 
@@ -711,7 +711,7 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
             managerBizId: input.row.bizId,
             managerOwnerName: input.row.ownerName,
             mirroredAt: now.toISOString(),
-          } as Prisma.InputJsonObject,
+          },
         },
         select: { id: true },
       });
