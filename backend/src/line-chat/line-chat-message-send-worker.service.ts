@@ -18,6 +18,7 @@ import { LineChatRecentResolverService } from "./line-chat-recent-resolver.servi
 import {
   isLineChatCanaryPreSendFailureEnabled,
   isLineChatDurableSendQueueConversationEnabled,
+  isLineChatMirrorOnlyStore,
 } from "./line-chat-pilot.constants";
 
 const POLL_INTERVAL_MS = 1_500;
@@ -624,11 +625,62 @@ export class LineChatMessageSendWorkerService implements OnModuleInit, OnModuleD
     });
     if (claimed.count === 0) return false;
 
+    if (await this.cancelMirrorOnlyJob(job.id)) {
+      return true;
+    }
+
     if (job.status === LineChatMessageSendJobStatus.VERIFY_PENDING) {
       await this.processVerification(job.id);
     } else {
       await this.processSend(job.id);
     }
+    return true;
+  }
+
+  private async cancelMirrorOnlyJob(jobId: string): Promise<boolean> {
+    const job = await this.prisma.lineChatMessageSendJob.findUnique({
+      where: { id: jobId },
+      select: {
+        id: true,
+        conversationId: true,
+        conversation: {
+          select: {
+            store: {
+              select: {
+                code: true,
+                storeMaster: { select: { externalStoreId: true } },
+              },
+            },
+          },
+        },
+      },
+    });
+    if (!job) return true;
+
+    const storeCode = job.conversation?.store?.code?.trim()
+      || job.conversation?.store?.storeMaster?.externalStoreId?.trim()
+      || "";
+    if (!isLineChatMirrorOnlyStore(storeCode)) return false;
+
+    const completedAt = new Date();
+    await this.prisma.lineChatMessageSendJob.update({
+      where: { id: job.id },
+      data: {
+        status: LineChatMessageSendJobStatus.FAILED,
+        completedAt,
+        workerId: null,
+        claimedAt: null,
+        lockedUntil: null,
+        lastError: "MIRROR_ONLY_CUTOVER_CANCELLED_NO_SEND",
+      },
+    });
+    this.logger.warn(JSON.stringify({
+      event: "line_chat_message_send_job_cancelled_mirror_only",
+      jobId: job.id,
+      conversationId: job.conversationId,
+      storeCode,
+      completedAt: completedAt.toISOString(),
+    }));
     return true;
   }
 

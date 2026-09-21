@@ -148,7 +148,9 @@ export function mirrorDirectionForManagerEvent(
 ): LineChatMirrorDirection {
   const normalized = eventType?.trim().toLowerCase() ?? "";
   if (normalized === "messagesent") return LineChatMirrorDirection.OUTBOUND;
-  if (normalized === "messagereceived") return LineChatMirrorDirection.INBOUND;
+  if (normalized === "messagereceived" || normalized === "message") {
+    return LineChatMirrorDirection.INBOUND;
+  }
   return LineChatMirrorDirection.UNKNOWN;
 }
 

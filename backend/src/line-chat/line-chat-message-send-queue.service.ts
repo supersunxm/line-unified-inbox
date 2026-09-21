@@ -13,6 +13,7 @@ import {
   isLineChatDurableSendQueueConversationEnabled,
   isLineChatDurableSendQueueStoreEnabled,
   isLineChatManagerRelayStoreEnabled,
+  isLineChatMirrorOnlyStore,
 } from "./line-chat-pilot.constants";
 
 export type DurableManagerQueueResult =
@@ -108,6 +109,11 @@ export class LineChatMessageSendQueueService {
     const storeCode = conversation.store?.code?.trim()
       || conversation.store?.storeMaster?.externalStoreId?.trim()
       || "";
+    if (isLineChatMirrorOnlyStore(storeCode)) {
+      throw new ServiceUnavailableException(
+        `ร้าน ${storeCode} ย้ายไปตอบผ่าน LINE OA Manager แล้ว ระบบแอปดำจะไม่ส่งข้อความออก`,
+      );
+    }
     if (!this.isConversationEnabled({ storeCode, conversationId: conversation.id })) {
       return { handled: false };
     }

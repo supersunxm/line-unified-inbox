@@ -2717,3 +2717,14 @@ Keep `StoreMaster.tiktokProfileUrl` as the only persisted TikTok profile URL. Po
 - Deploy the hook image before enabling its runtime flag, then restart the same worker image so live `/proc/1/environ` evidence proves the flag is actually loaded. Require runtime health, exact A+B allowlist values, and absence of the prior failure flag before any canary send.
 - Use the existing 90-second lease recovery contract: an expired `PROCESSING` job becomes `VERIFY_PENDING`, and the replacement worker performs Manager-history verification only. It must not call `relayText` or create Attempt 2 while resolving the ambiguous send window.
 - Stop after read-only preflight. No customer-facing send is authorized until a separate explicit approval is received.
+
+
+## 2026-09-21 — Seven pilot stores switch from black-app transport to Manager mirror
+
+**Decision:** For store codes `28375,25610,27627,25391,24804,27789,3791`, LINE OA Manager becomes the customer-facing source of truth. The black app is no longer an allowed transport once a store is present in `LINE_CHAT_MIRROR_ONLY_STORE_CODES`.
+
+**Rationale:** Staff have returned to the normal LINE OA Manager workflow. Project B should observe and reconcile Manager history rather than compete with it as a second sender. A backend-level hard block is required because disabling Manager relay alone is insufficient: the legacy conversation path can fall back to LINE Messaging API reply/push.
+
+**Safety behavior:** Mirror-only status blocks text/retry/image/PDF sends, blocks new durable queue jobs, and makes existing durable send jobs terminal before any send action. Historical message/job evidence is preserved for later mirror reconciliation. Project B mirror remains read-only.
+
+**Rollback:** Remove a store from the mirror-only allowlist only after explicitly deciding to restore black-app transport for that store. Do not delete the legacy transport code during the observation period.
