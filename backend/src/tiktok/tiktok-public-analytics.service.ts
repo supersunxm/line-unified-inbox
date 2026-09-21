@@ -46,6 +46,7 @@ export interface TikTokPublicDashboardStore {
   videoCount: number;
   profileUrl: string;
   lastFetchedAt: string;
+  latestMetricDate: string | null;
   growth: {
     daily: TikTokPublicGrowthValue;
     sevenDay: TikTokPublicGrowthValue;
@@ -90,6 +91,7 @@ interface RawPublicProfileRow {
   videoCount: number;
   profileUrl: string;
   lastFetchedAt: Date | string;
+  latestMetricDate: Date | string | null;
 }
 
 interface RawPublicMetricRow {
@@ -169,6 +171,20 @@ export function baselineAtOrBefore(
     if (!candidate || isoDate(candidate.metricDate) < date) candidate = metric;
   }
   return candidate;
+}
+
+/**
+ * Returns the snapshot for the exact requested metric date.
+ *
+ * Growth periods on the dashboard are calendar-day comparisons. Falling back to
+ * an older snapshot would turn "1 day" into a multi-day delta, so missing dates
+ * must remain missing rather than being silently substituted.
+ */
+export function metricOnDate(
+  metrics: readonly RawPublicMetricRow[],
+  targetDate: string,
+): RawPublicMetricRow | null {
+  return metrics.find((metric) => isoDate(metric.metricDate) === targetDate) ?? null;
 }
 
 @Injectable()
@@ -308,6 +324,7 @@ export class TikTokPublicAnalyticsService {
         p."avatarUrl",
         p."bioDescription",
         p."isVerified",
+        m."metricDate" AS "latestMetricDate",
         COALESCE(m."followerCount", p."followerCount", 0)::int AS "followerCount",
         COALESCE(m."followingCount", p."followingCount", 0)::int AS "followingCount",
         COALESCE(m."likesCount", p."likesCount", 0)::int AS "likesCount",
@@ -318,7 +335,7 @@ export class TikTokPublicAnalyticsService {
       LEFT JOIN "TikTokPublicAccount" a ON s."tiktokPublicAccountId" = a."id"
       LEFT JOIN "TikTokPublicProfile" p ON p."storeMasterId" = s."id"
       LEFT JOIN LATERAL (
-        SELECT m1."followerCount", m1."followingCount", m1."likesCount", m1."videoCount", m1."collectedAt"
+        SELECT m1."metricDate", m1."followerCount", m1."followingCount", m1."likesCount", m1."videoCount", m1."collectedAt"
         FROM "TikTokPublicDailyMetric" m1
         WHERE m1."tiktokPublicAccountId" = a."id"
         ORDER BY m1."metricDate" DESC
@@ -356,10 +373,13 @@ export class TikTokPublicAnalyticsService {
 
     return profiles.map((profile) => {
       const storeMetrics = (profile.tiktokPublicAccountId ? byAccount.get(profile.tiktokPublicAccountId) : null) ?? [];
-      const latestDate = getBangkokMetricDate(profile.lastFetchedAt);
-      const oneDay = baselineAtOrBefore(storeMetrics, dateMinusDays(latestDate, 1));
-      const sevenDay = baselineAtOrBefore(storeMetrics, dateMinusDays(latestDate, 7));
-      const thirtyDay = baselineAtOrBefore(storeMetrics, dateMinusDays(latestDate, 30));
+      // Anchor growth to the persisted metric date, not collectedAt. The nightly
+      // collector intentionally records the previous completed Bangkok date, so
+      // a 21 Sep 02:30 collection can legitimately be metricDate=20 Sep.
+      const latestDate = profile.latestMetricDate ? isoDate(profile.latestMetricDate) : null;
+      const oneDay = latestDate ? metricOnDate(storeMetrics, dateMinusDays(latestDate, 1)) : null;
+      const sevenDay = latestDate ? metricOnDate(storeMetrics, dateMinusDays(latestDate, 7)) : null;
+      const thirtyDay = latestDate ? metricOnDate(storeMetrics, dateMinusDays(latestDate, 30)) : null;
 
       return {
         storeMasterId: profile.storeMasterId,
@@ -378,6 +398,7 @@ export class TikTokPublicAnalyticsService {
         videoCount: profile.videoCount,
         profileUrl: profile.profileUrl,
         lastFetchedAt: isoTimestamp(profile.lastFetchedAt),
+        latestMetricDate: latestDate,
         growth: {
           daily: calculateTikTokGrowth(profile.followerCount, oneDay?.followerCount ?? null),
           sevenDay: calculateTikTokGrowth(profile.followerCount, sevenDay?.followerCount ?? null),
