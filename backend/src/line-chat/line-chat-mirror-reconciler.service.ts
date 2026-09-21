@@ -750,11 +750,11 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
         canonicalMessageId: input.messageId,
         reconcileSource: input.source,
         reconcileAttempts: { increment: 1 },
-        reconciledAt: [
-          LineChatMirrorReconcileStatus.DUPLICATE,
-          LineChatMirrorReconcileStatus.IMPORTED,
-          LineChatMirrorReconcileStatus.SKIPPED,
-        ].includes(input.status) ? new Date() : null,
+        reconciledAt: input.status === LineChatMirrorReconcileStatus.DUPLICATE
+          || input.status === LineChatMirrorReconcileStatus.IMPORTED
+          || input.status === LineChatMirrorReconcileStatus.SKIPPED
+          ? new Date()
+          : null,
         reconcileError: input.error ?? null,
       },
     });
