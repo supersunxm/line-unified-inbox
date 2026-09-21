@@ -782,6 +782,7 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
               event: "line_chat_mirror_target_candidate_rejected",
               sessionKey: session.sessionKey,
               reason: `RECENT_DISCOVERY_${verification.failureReason ?? "FAILED"}`,
+              failureDetail: verification.failureDetail ?? null,
               botIdMasked: `${resolvedBotId.slice(0, 4)}...${resolvedBotId.slice(-4)}`,
             }));
             return null;
