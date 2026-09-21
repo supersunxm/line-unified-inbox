@@ -257,7 +257,7 @@ void test("createAndSend rejects invalid UUID or invalid messages array", async 
 });
 
 void test("uploadImage validates file size, magic bytes, preview generation <= 1MB, and rejects WebP, GIF, PDF", async () => {
-  const sharp = (await import("sharp")).default;
+  const sharp = require("sharp") as typeof import("sharp");
   const storedKeys: string[] = [];
   const storedMimes: string[] = [];
   const storedBuffers: Buffer[] = [];
