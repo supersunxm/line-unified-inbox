@@ -50,14 +50,29 @@ type MappingResult =
   | { status: "UNMAPPED"; reason: string }
   | { status: "AMBIGUOUS"; reason: string };
 
+type IdentityEvidence = {
+  verified: boolean;
+  matches: number;
+  mismatches: number;
+  validPairs: number;
+  invalidPairs: number;
+};
+
 export interface LineChatMirrorReconcileCycleResult {
   storeCode: string;
   apply: boolean;
   scanned: number;
   directMapped: number;
   identityMapped: number;
+  identityEquivalenceVerified: boolean;
+  identityEvidenceMatches: number;
+  identityEvidenceMismatches: number;
+  identityEvidenceValidPairs: number;
+  identityEvidenceInvalidPairs: number;
   unmapped: number;
+  unmappedReasons: Record<string, number>;
   ambiguous: number;
+  ambiguousReasons: Record<string, number>;
   exactDuplicates: number;
   contentTimeDuplicates: number;
   waitingInboundCanonical: number;
@@ -300,8 +315,15 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
       scanned: rows.length,
       directMapped: 0,
       identityMapped: 0,
+      identityEquivalenceVerified: false,
+      identityEvidenceMatches: 0,
+      identityEvidenceMismatches: 0,
+      identityEvidenceValidPairs: 0,
+      identityEvidenceInvalidPairs: 0,
       unmapped: 0,
+      unmappedReasons: {},
       ambiguous: 0,
+      ambiguousReasons: {},
       exactDuplicates: 0,
       contentTimeDuplicates: 0,
       waitingInboundCanonical: 0,
@@ -321,7 +343,12 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
       return result;
     }
 
-    const identityEquivalent = await this.hasVerifiedIdentityEquivalence(oa.id);
+    const identityEvidence = await this.identityEvidence(oa.id);
+    result.identityEquivalenceVerified = identityEvidence.verified;
+    result.identityEvidenceMatches = identityEvidence.matches;
+    result.identityEvidenceMismatches = identityEvidence.mismatches;
+    result.identityEvidenceValidPairs = identityEvidence.validPairs;
+    result.identityEvidenceInvalidPairs = identityEvidence.invalidPairs;
     const mappingCache = new Map<string, MappingResult>();
     const ownerCache = new Map<string, { id: string; displayName: string } | null>();
     const touchedConversationIds = new Set<string>();
@@ -334,7 +361,7 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
             lineOfficialAccountId: oa.id,
             storeId: store.id,
             lineChatUserId: row.lineChatUserId,
-            identityEquivalent,
+            identityEquivalent: identityEvidence.verified,
             apply,
           });
           mappingCache.set(row.lineChatUserId, mapping);
@@ -342,6 +369,7 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
 
         if (mapping.status === "UNMAPPED") {
           result.unmapped += 1;
+          result.unmappedReasons[mapping.reason] = (result.unmappedReasons[mapping.reason] ?? 0) + 1;
           await this.markMirror(row.id, {
             status: LineChatMirrorReconcileStatus.UNMAPPED,
             error: mapping.reason,
@@ -350,6 +378,7 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
         }
         if (mapping.status === "AMBIGUOUS") {
           result.ambiguous += 1;
+          result.ambiguousReasons[mapping.reason] = (result.ambiguousReasons[mapping.reason] ?? 0) + 1;
           await this.markMirror(row.id, {
             status: LineChatMirrorReconcileStatus.AMBIGUOUS,
             error: mapping.reason,
@@ -492,7 +521,7 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
     return result;
   }
 
-  private async hasVerifiedIdentityEquivalence(lineOfficialAccountId: string): Promise<boolean> {
+  private async identityEvidence(lineOfficialAccountId: string): Promise<IdentityEvidence> {
     const evidence = await this.prisma.conversation.findMany({
       where: {
         lineOfficialAccountId,
@@ -508,14 +537,26 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
 
     let matches = 0;
     let mismatches = 0;
+    let validPairs = 0;
+    let invalidPairs = 0;
     for (const row of evidence) {
       const managerId = row.lineChatUserId?.trim() || "";
       const webhookId = row.customer.lineUserId?.trim() || "";
-      if (!isLineChatUserId(managerId) || !isLineChatUserId(webhookId)) continue;
+      if (!isLineChatUserId(managerId) || !isLineChatUserId(webhookId)) {
+        invalidPairs += 1;
+        continue;
+      }
+      validPairs += 1;
       if (managerId === webhookId) matches += 1;
       else mismatches += 1;
     }
-    return matches >= MIN_IDENTITY_MATCHES && mismatches === 0;
+    return {
+      verified: matches >= MIN_IDENTITY_MATCHES && mismatches === 0,
+      matches,
+      mismatches,
+      validPairs,
+      invalidPairs,
+    };
   }
 
   private async resolveConversation(input: {
