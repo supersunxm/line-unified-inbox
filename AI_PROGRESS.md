@@ -5478,3 +5478,5 @@ Waiver scope: focused PIN/auth tests pass **26/26**, focused Flutter PIN tests p
 - Existing Project B read-only mirror remains the data-capture path. Production activation will use the same seven store codes and preserve Manager as source of truth.
 - Added mirror-only cutover regression coverage and CI lint/test steps.
 - Required verification before completion: PR CI green, backend build/smoke green, production backend + line-chat worker deploy green, readiness healthy, mirror worker running, and no mirror-only send jobs initiating customer-facing sends.
+
+- Post-deploy validation found 6 legacy `UNKNOWN` mirror rows at store 28375. New production events were already classified correctly (`message` => INBOUND), so this was a rollout-race residue from the old worker between DB migration and worker replacement. Added per-store self-healing that reclassifies legacy `UNKNOWN + eventType=message` rows to INBOUND before each mirror cycle, preventing the same residue after future staggered deploys.
