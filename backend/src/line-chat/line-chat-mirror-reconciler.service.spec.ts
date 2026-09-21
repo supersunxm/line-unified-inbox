@@ -11,6 +11,7 @@ import {
   lineChatMirrorReconcileSince,
   mirrorCanonicalExternalId,
   mirrorCanonicalText,
+  selectUniqueExactInboundConversationId,
 } from "./line-chat-mirror-reconciler.service";
 
 function withEnv(
@@ -117,5 +118,18 @@ test("Manager mirror canonical text preserves text and supplies media placeholde
   assert.equal(
     mirrorCanonicalText({ messageType: "image", text: null, fileName: null }),
     "[Image]",
+  );
+});
+
+
+test("exact inbound Manager-message evidence maps only when every match points to one canonical conversation", () => {
+  assert.deepEqual(selectUniqueExactInboundConversationId([]), { status: "NONE" });
+  assert.deepEqual(
+    selectUniqueExactInboundConversationId(["conversation-a", "conversation-a"]),
+    { status: "UNIQUE", conversationId: "conversation-a" },
+  );
+  assert.deepEqual(
+    selectUniqueExactInboundConversationId(["conversation-a", "conversation-b"]),
+    { status: "AMBIGUOUS" },
   );
 });
