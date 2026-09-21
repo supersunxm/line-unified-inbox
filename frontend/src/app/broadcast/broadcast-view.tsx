@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/lib/api";
+import { richMessageApi, type RichMessage } from "../rich-messages/rich-message-api";
 import type {
   ApiStore,
   BroadcastAdvanced,
@@ -36,7 +37,17 @@ type DraftImageMessage = {
   fileName: string;
 };
 
-type DraftMessage = DraftTextMessage | DraftImageMessage;
+type DraftRichMessage = {
+  id: string;
+  type: "rich_message";
+  richMessageId: string;
+  richMessageName: string;
+  previewUrl: string;
+  altText: string;
+  actionCount: number;
+};
+
+type DraftMessage = DraftTextMessage | DraftImageMessage | DraftRichMessage;
 type ViewMode = "compose" | "progress" | "history";
 type StoreStatusFilter = "ALL" | "READY" | "BLOCKED";
 
@@ -132,6 +143,10 @@ export function BroadcastView({ language, userRole }: Props) {
     { id: createId(), type: "text", text: "" },
   ]);
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [richPickerOpen, setRichPickerOpen] = useState(false);
+  const [richItems, setRichItems] = useState<RichMessage[]>([]);
+  const [richLoading, setRichLoading] = useState(false);
+  const [richError, setRichError] = useState<string | null>(null);
 
   const [preview, setPreview] = useState<BroadcastPreviewResult | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -184,10 +199,16 @@ export function BroadcastView({ language, userRole }: Props) {
       const text = message.text.trim();
       return text ? [{ type: "text" as const, text }] : [];
     }
+    if (message.type === "image") {
+      return [{
+        type: "image" as const,
+        originalContentUrl: message.originalContentUrl,
+        previewImageUrl: message.previewImageUrl,
+      }];
+    }
     return [{
-      type: "image" as const,
-      originalContentUrl: message.originalContentUrl,
-      previewImageUrl: message.previewImageUrl,
+      type: "rich_message" as const,
+      richMessageId: message.richMessageId,
     }];
   }), [messages]);
 
@@ -361,6 +382,37 @@ export function BroadcastView({ language, userRole }: Props) {
   const addTextMessage = () => {
     if (messages.length >= 5) return;
     setMessages((current) => [...current, { id: createId(), type: "text", text: "" }]);
+  };
+
+  const openRichMessagePicker = async () => {
+    if (messages.length >= 5) return;
+    setRichPickerOpen(true);
+    setRichLoading(true);
+    setRichError(null);
+    try {
+      setRichItems(await richMessageApi.list(false));
+    } catch (error) {
+      setRichError(error instanceof Error ? error.message : "โหลด Rich Message ไม่สำเร็จ");
+    } finally {
+      setRichLoading(false);
+    }
+  };
+
+  const addRichMessage = (item: RichMessage) => {
+    if (messages.length >= 5) return;
+    setMessages((current) => [
+      ...current,
+      {
+        id: createId(),
+        type: "rich_message",
+        richMessageId: item.id,
+        richMessageName: item.name,
+        previewUrl: item.previewUrl || item.imageUrl,
+        altText: item.altText,
+        actionCount: item.actions.length,
+      },
+    ]);
+    setRichPickerOpen(false);
   };
 
   const onImagePicked = async (file: File | null) => {
@@ -724,14 +776,15 @@ export function BroadcastView({ language, userRole }: Props) {
                 <div className="mb-3 flex flex-wrap gap-2">
                   <button type="button" disabled={messages.length >= 5} onClick={addTextMessage} className="rounded-lg bg-[var(--app-accent)] px-3 py-2 text-xs font-semibold text-white disabled:opacity-40">T Text</button>
                   <button type="button" disabled={messages.length >= 5 || uploadingImage} onClick={() => imageInputRef.current?.click()} className="rounded-lg border border-[var(--app-border)] px-3 py-2 text-xs font-semibold disabled:opacity-40">{uploadingImage ? "Uploading…" : "Image"}</button>
-                  {["Video", "Rich message", "Card", "Flex message"].map((item) => <button key={item} type="button" disabled title="Not enabled in the current API backend" className="rounded-lg border border-[var(--app-border)] px-3 py-2 text-xs text-[var(--app-text-tertiary)] opacity-55">{item}</button>)}
+                  <button type="button" disabled={messages.length >= 5} onClick={() => void openRichMessagePicker()} className="rounded-lg border border-[var(--app-border)] px-3 py-2 text-xs font-semibold disabled:opacity-40">Rich message</button>
+                  {["Video", "Card", "Flex message"].map((item) => <button key={item} type="button" disabled title="Not enabled in the current API backend" className="rounded-lg border border-[var(--app-border)] px-3 py-2 text-xs text-[var(--app-text-tertiary)] opacity-55">{item}</button>)}
                   <input ref={imageInputRef} type="file" accept="image/jpeg,image/png" className="hidden" onChange={(event) => void onImagePicked(event.target.files?.[0] ?? null)} />
                 </div>
                 <div className="space-y-3">
                   {messages.map((message, index) => (
                     <div key={message.id} className="rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-subtle)] p-3">
                       <div className="mb-2 flex items-center justify-between gap-2">
-                        <div className="text-xs font-semibold text-[var(--app-text-secondary)]">Message {index + 1} · {message.type === "text" ? "Text" : "Image"}</div>
+                        <div className="text-xs font-semibold text-[var(--app-text-secondary)]">Message {index + 1} · {message.type === "text" ? "Text" : message.type === "image" ? "Image" : "Rich message"}</div>
                         <div className="flex gap-1">
                           <button type="button" disabled={index === 0} onClick={() => moveMessage(index, -1)} className="rounded-md border border-[var(--app-border)] px-2 py-1 text-xs disabled:opacity-30">↑</button>
                           <button type="button" disabled={index === messages.length - 1} onClick={() => moveMessage(index, 1)} className="rounded-md border border-[var(--app-border)] px-2 py-1 text-xs disabled:opacity-30">↓</button>
@@ -765,10 +818,19 @@ export function BroadcastView({ language, userRole }: Props) {
                           </div>
                           <div className="mt-1 text-right text-[10px] text-[var(--app-text-tertiary)]">{message.text.length}/5000</div>
                         </>
-                      ) : (
+                      ) : message.type === "image" ? (
                         <div className="flex items-center gap-3">
                           <img src={message.previewImageUrl} alt="" className="h-24 w-24 rounded-xl border border-[var(--app-border)] object-cover" />
                           <div className="min-w-0"><div className="truncate text-sm font-medium">{message.fileName}</div><div className="mt-1 text-xs text-[var(--app-text-tertiary)]">LINE image message</div></div>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-3">
+                          <img src={message.previewUrl} alt={message.altText} className="h-24 w-24 rounded-xl border border-[var(--app-border)] object-cover" />
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate text-sm font-semibold">{message.richMessageName}</div>
+                            <div className="mt-1 text-xs text-[var(--app-text-tertiary)]">Rich message · {message.actionCount} จุดกด</div>
+                            <div className="mt-1 truncate text-xs text-[var(--app-text-tertiary)]">Alt: {message.altText}</div>
+                          </div>
                         </div>
                       )}
                     </div>
@@ -873,11 +935,16 @@ export function BroadcastView({ language, userRole }: Props) {
               <div className="overflow-hidden rounded-2xl border border-[var(--app-border)] bg-[#dbe8f5]">
                 <div className="flex items-center gap-2 bg-[#8aaeda] px-3 py-3 text-sm font-bold text-slate-900"><span>‹</span><span className="flex h-7 w-7 items-center justify-center rounded-full bg-black text-[8px] text-white">OPPO</span><span>OPPO Store</span></div>
                 <div className="min-h-[480px] space-y-3 p-3">
-                  {payloadMessages.length === 0 ? <div className="pt-20 text-center text-xs text-slate-500">Your message preview will appear here</div> : payloadMessages.map((message, index) => (
+                  {payloadMessages.length === 0 ? <div className="pt-20 text-center text-xs text-slate-500">Your message preview will appear here</div> : messages.filter((message) => message.type !== "text" || message.text.trim()).map((message, index) => (
                     message.type === "text" ? (
-                      <div key={index} className="max-w-[86%] rounded-2xl rounded-tl-md bg-white p-3 text-sm leading-5 text-slate-900 shadow-sm">{message.text}</div>
-                    ) : (
+                      <div key={index} className="max-w-[86%] whitespace-pre-wrap break-words rounded-2xl rounded-tl-md bg-white p-3 text-sm leading-5 text-slate-900 shadow-sm">{message.text.trim()}</div>
+                    ) : message.type === "image" ? (
                       <div key={index} className="max-w-[92%] overflow-hidden rounded-2xl bg-white shadow-sm"><img src={message.previewImageUrl} alt="" className="w-full object-cover" /></div>
+                    ) : (
+                      <div key={index} className="max-w-[92%] overflow-hidden rounded-2xl bg-white shadow-sm">
+                        <img src={message.previewUrl} alt={message.altText} className="w-full object-cover" />
+                        <div className="border-t border-slate-100 px-2 py-1.5 text-[10px] font-semibold text-slate-500">Rich message · {message.richMessageName}</div>
+                      </div>
                     )
                   ))}
                 </div>
@@ -886,6 +953,43 @@ export function BroadcastView({ language, userRole }: Props) {
           </aside>
         </div>
       </div>
+
+      {richPickerOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/45 p-4" role="dialog" aria-modal="true">
+          <div className="w-full max-w-2xl rounded-2xl bg-[var(--app-surface)] p-5 shadow-2xl">
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-bold">เลือก Rich Message</h2>
+                <p className="mt-1 text-sm text-[var(--app-text-secondary)]">เลือกจากคลัง Rich Message ที่เปิดใช้งานอยู่ในระบบ</p>
+              </div>
+              <button type="button" onClick={() => setRichPickerOpen(false)} className="rounded-lg border border-[var(--app-border)] px-3 py-1.5 text-sm">Close</button>
+            </div>
+            {richLoading ? (
+              <div className="p-8 text-center text-sm text-[var(--app-text-secondary)]">กำลังโหลด Rich Message…</div>
+            ) : richError ? (
+              <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{richError}</div>
+            ) : richItems.length === 0 ? (
+              <div className="rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-subtle)] p-6 text-center text-sm text-[var(--app-text-secondary)]">ยังไม่มี Rich Message ที่เปิดใช้งาน</div>
+            ) : (
+              <div className="grid max-h-[60vh] gap-3 overflow-y-auto sm:grid-cols-2">
+                {richItems.map((item) => (
+                  <button key={item.id} type="button" onClick={() => addRichMessage(item)} className="flex items-center gap-3 rounded-xl border border-[var(--app-border)] p-3 text-left hover:border-[var(--app-accent)] hover:bg-[var(--app-accent-soft)]">
+                    <img src={item.previewUrl || item.imageUrl} alt={item.altText} className="h-24 w-24 shrink-0 rounded-lg border border-[var(--app-border)] object-cover" />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-semibold text-[var(--app-text-primary)]">{item.name}</span>
+                      <span className="mt-1 block text-xs text-[var(--app-text-tertiary)]">{item.actions.length} จุดกด · {item.baseWidth}×{item.baseHeight}</span>
+                      <span className="mt-1 block truncate text-xs text-[var(--app-text-tertiary)]">Alt: {item.altText}</span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+            <div className="mt-4 flex justify-end">
+              <a href="/rich-messages" target="_blank" rel="noreferrer" className="text-xs font-semibold text-[var(--app-accent)] hover:underline">จัดการคลัง Rich Message ↗</a>
+            </div>
+          </div>
+        </div>
+      )}
 
       {confirmOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/45 p-4" role="dialog" aria-modal="true">
