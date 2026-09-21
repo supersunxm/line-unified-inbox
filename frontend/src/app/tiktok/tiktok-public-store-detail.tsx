@@ -13,6 +13,21 @@ function formatNumber(value: number, locale: string) {
   return new Intl.NumberFormat(locale).format(value);
 }
 
+function shiftMetricDate(date: string, days: number) {
+  const value = new Date(`${date}T00:00:00.000Z`);
+  value.setUTCDate(value.getUTCDate() + days);
+  return value.toISOString().slice(0, 10);
+}
+
+function formatMetricDate(date: string, locale: string) {
+  return new Intl.DateTimeFormat(locale, {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(`${date}T00:00:00.000Z`));
+}
+
 function Sparkline({ points }: { points: TikTokPublicHistoryPoint[] }) {
   if (points.length < 2) return <div className="flex h-56 items-center justify-center text-sm text-[var(--app-text-tertiary)]">Need at least 2 daily snapshots to draw history</div>;
   const values = points.map((point) => point.followerCount);
@@ -50,11 +65,13 @@ export function TikTokPublicStoreDetail({ store, history }: Props) {
     following: "Following",
     likes: "Total Likes",
     videos: "Videos",
-    today: "วันนี้",
-    seven: "7 วัน",
-    thirty: "30 วัน",
-    history: "Follower History · 30 วัน",
-    updated: "อัปเดตล่าสุด",
+    oneDay: "การเติบโต 1 วัน",
+    seven: "การเติบโต 7 วัน",
+    thirty: "การเติบโต 30 วัน",
+    history: "ประวัติผู้ติดตาม · Daily Snapshots",
+    snapshot: "Snapshot ล่าสุด",
+    updated: "ดึงข้อมูลล่าสุด",
+    noBaseline: "ยังไม่มี Snapshot สำหรับวันที่เปรียบเทียบ",
     open: "เปิด TikTok Profile",
   } : {
     back: "Back to TikTok Analytics",
@@ -62,15 +79,23 @@ export function TikTokPublicStoreDetail({ store, history }: Props) {
     following: "Following",
     likes: "Total Likes",
     videos: "Videos",
-    today: "Today",
-    seven: "7 days",
-    thirty: "30 days",
-    history: "Follower History · 30 days",
-    updated: "Last updated",
+    oneDay: "1 Day Growth",
+    seven: "7 Day Growth",
+    thirty: "30 Day Growth",
+    history: "Follower History · Daily Snapshots",
+    snapshot: "Latest snapshot",
+    updated: "Last collected",
+    noBaseline: "No snapshot exists for the comparison date yet",
     open: "Open TikTok Profile",
   };
 
   const growthText = (value: number | null) => value === null ? "—" : `${value > 0 ? "+" : ""}${formatNumber(value, locale)}`;
+  const latestMetricDate = store.latestMetricDate;
+  const growthCards = [
+    { label: labels.oneDay, days: 1, value: store.growth.daily },
+    { label: labels.seven, days: 7, value: store.growth.sevenDay },
+    { label: labels.thirty, days: 30, value: store.growth.thirtyDay },
+  ];
 
   return (
     <PageContainer variant="wide">
@@ -92,7 +117,14 @@ export function TikTokPublicStoreDetail({ store, history }: Props) {
       <section className="flex flex-col gap-4 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-5 shadow-[var(--app-shadow-sm)] sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-4">
           <div className="h-16 w-16 overflow-hidden rounded-full bg-[var(--app-surface-subtle)]">{store.avatarUrl ? <img src={store.avatarUrl} alt="" className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center text-xl font-bold">T</div>}</div>
-          <div><div className="text-lg font-bold">{store.displayName || store.accountName}</div><div className="mt-1 text-sm text-[var(--app-text-secondary)]">{store.bioDescription || `@${store.username}`}</div><div className="mt-1 text-xs text-[var(--app-text-tertiary)]">{labels.updated}: {new Date(store.lastFetchedAt).toLocaleString(locale)}</div></div>
+          <div>
+            <div className="text-lg font-bold">{store.displayName || store.accountName}</div>
+            <div className="mt-1 text-sm text-[var(--app-text-secondary)]">{store.bioDescription || `@${store.username}`}</div>
+            <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[var(--app-text-tertiary)]">
+              <span>{labels.snapshot}: {latestMetricDate ? formatMetricDate(latestMetricDate, locale) : "—"}</span>
+              <span>{labels.updated}: {new Date(store.lastFetchedAt).toLocaleString(locale)}</span>
+            </div>
+          </div>
         </div>
         <a href={store.profileUrl} target="_blank" rel="noreferrer" className="inline-flex h-10 items-center justify-center rounded-xl bg-[var(--app-accent)] px-4 text-sm font-semibold text-white">{labels.open}</a>
       </section>
@@ -102,7 +134,22 @@ export function TikTokPublicStoreDetail({ store, history }: Props) {
       </section>
 
       <section className="grid gap-3 sm:grid-cols-3">
-        {[[labels.today, store.growth.daily.absolute, store.growth.daily.percent], [labels.seven, store.growth.sevenDay.absolute, store.growth.sevenDay.percent], [labels.thirty, store.growth.thirtyDay.absolute, store.growth.thirtyDay.percent]].map(([label, absolute, percent]) => <div key={String(label)} className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-5"><div className="text-xs text-[var(--app-text-tertiary)]">{label}</div><div className="mt-2 text-xl font-bold">{growthText(absolute as number | null)}</div><div className="mt-1 text-xs text-[var(--app-text-secondary)]">{percent === null ? "—" : `${Number(percent).toFixed(2)}%`}</div></div>)}
+        {growthCards.map(({ label, days, value }) => {
+          const baselineDate = latestMetricDate ? shiftMetricDate(latestMetricDate, -days) : null;
+          const comparison = latestMetricDate && baselineDate
+            ? `${formatMetricDate(latestMetricDate, locale)} vs ${formatMetricDate(baselineDate, locale)}`
+            : null;
+          return (
+            <div key={label} className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-5">
+              <div className="text-xs font-semibold text-[var(--app-text-tertiary)]">{label}</div>
+              <div className="mt-2 text-2xl font-bold">{growthText(value.absolute)}</div>
+              <div className="mt-1 text-xs text-[var(--app-text-secondary)]">
+                {value.percent === null ? labels.noBaseline : `${value.percent > 0 ? "+" : ""}${value.percent.toFixed(2)}%`}
+              </div>
+              {comparison && <div className="mt-2 text-xs text-[var(--app-text-tertiary)]">{comparison}</div>}
+            </div>
+          );
+        })}
       </section>
 
       <section className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-5 shadow-[var(--app-shadow-sm)]">
