@@ -59,3 +59,20 @@ void test("broadcast message validation permits up to five text/image objects", 
     /at most 5/,
   );
 });
+
+
+void test("broadcast message validation accepts Rich Message references", () => {
+  const messages = validateBroadcastMessages([
+    { type: "rich_message", richMessageId: "rich-123" },
+  ]);
+  assert.deepEqual(messages, [
+    { type: "rich_message", richMessageId: "rich-123" },
+  ]);
+});
+
+void test("broadcast message validation rejects missing Rich Message IDs", () => {
+  assert.throws(
+    () => validateBroadcastMessages([{ type: "rich_message", richMessageId: "   " }]),
+    /Rich Message ID is required/,
+  );
+});
