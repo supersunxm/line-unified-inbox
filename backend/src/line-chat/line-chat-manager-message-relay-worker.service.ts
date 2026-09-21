@@ -10,6 +10,7 @@ import { confirmLineManagerAuthentication } from "./line-chat-manager-auth-confi
 import {
   getLineChatManagerRelayStoreConfig,
   isLineChatManagerRelayStoreEnabled,
+  isLineChatMirrorOnlyStore,
 } from "./line-chat-pilot.constants";
 import { findSoleManagerTextarea } from "./line-chat-composer-fallback";
 import type {
@@ -112,6 +113,16 @@ export class LineChatManagerMessageRelayWorkerService {
     if (!conversation) return { handled: false };
 
     const storeCode = storeCodeOf(conversation);
+    if (isLineChatMirrorOnlyStore(storeCode)) {
+      this.logger.warn(JSON.stringify({
+        event: "line_chat_manager_relay_blocked_mirror_only",
+        conversationId: conversation.id,
+        storeCode,
+      }));
+      throw new ServiceUnavailableException(
+        `ร้าน ${storeCode} ย้ายไปตอบผ่าน LINE OA Manager แล้ว ระบบแอปดำจะไม่ส่งข้อความออก`,
+      );
+    }
     if (!isLineChatManagerRelayStoreEnabled(storeCode)) return { handled: false };
 
     this.assertRelayConfiguration(conversation, storeCode);
