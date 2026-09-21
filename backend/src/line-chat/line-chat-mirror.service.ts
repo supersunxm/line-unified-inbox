@@ -302,6 +302,23 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
       },
     });
 
+    const repairedUnknownDirections = await this.prisma.lineChatMirrorMessage.updateMany({
+      where: {
+        lineOfficialAccountId: oa.id,
+        direction: LineChatMirrorDirection.UNKNOWN,
+        eventType: "message",
+      },
+      data: { direction: LineChatMirrorDirection.INBOUND },
+    });
+    if (repairedUnknownDirections.count > 0) {
+      this.logger.warn(JSON.stringify({
+        event: "line_chat_mirror_unknown_direction_repaired",
+        storeCode: effectiveStoreCode,
+        lineOfficialAccountId: oa.id,
+        repairedCount: repairedUnknownDirections.count,
+      }));
+    }
+
     const target = await this.resolveMirrorTarget({
       lineOfficialAccountId: oa.id,
       chatBotId: oa.chatBotId,
