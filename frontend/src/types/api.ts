@@ -637,7 +637,7 @@ export type CreateLineOaInput = {
 export type StoreMasterSuggestion = {
   id: string; accountName: string; storeName: string; externalStoreId: string | null;
   province: string | null; region: string | null; lineId: string | null; lineOaLink: string | null;
-  lineManagerUrl: string | null; googleMapsUrl?: string | null; googleMapsStatus?: GoogleMapsReadinessStatus; googleMapsStatusReason?: string | null; matchScore: number; matchReason: "EXACT_ACCOUNT_NAME" | "NORMALIZED_ACCOUNT_NAME" | "PARTIAL_ACCOUNT_NAME" | "FUZZY_SUGGESTION";
+  lineManagerUrl: string | null; googleMapsUrl?: string | null; googleMapsName?: string | null; googleMapsStatus?: GoogleMapsReadinessStatus; googleMapsStatusReason?: string | null; matchScore: number; matchReason: "EXACT_ACCOUNT_NAME" | "NORMALIZED_ACCOUNT_NAME" | "PARTIAL_ACCOUNT_NAME" | "FUZZY_SUGGESTION";
   dataQualityStatus: "COMPLETE" | "MISSING_STORE_ID" | "INVALID_MANAGER_URL" | "DUPLICATE_ACCOUNT_NAME" | "INCOMPLETE";
   existingStore: { id: string; name: string } | null;
 };
@@ -2005,6 +2005,7 @@ export type GoogleReviewKpiStoreItem = {
   region: string | null;
   province: string | null;
   googleMapsUrl: string | null;
+  googleMapsName: string | null;
   hasGoogleMaps: boolean;
   kpiResult: {
     id: string;
@@ -2060,6 +2061,7 @@ export type GoogleReviewAuditQueueStoreItem = {
   storeCode: string | null;
   region: string | null;
   googleMapsUrl: string | null;
+  googleMapsName: string | null;
   queueOrder: number;
   status: "PENDING" | "RUNNING" | "COMPLETED" | "NEEDS_ATTENTION" | "SKIPPED" | "FAILED";
   reviewsChecked: number;
@@ -2068,6 +2070,7 @@ export type GoogleReviewAuditQueueStoreItem = {
   reviewsOver15ThaiWords: number;
   qualifiedReviews: number;
   coverageStatus: string | null;
+  completionReason: string | null;
   attemptCount: number;
   errorCode: string | null;
   errorMessage: string | null;

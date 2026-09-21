@@ -56,12 +56,15 @@ function buildGoogleMapsHandoffUrl(
   backendUrl?: string,
 ): string {
   const origin = backendUrl || (typeof window !== "undefined" ? window.location.origin : undefined);
+  const canonicalStoreCode = store.storeId || store.code;
   try {
     const url = new URL(originalUrl);
     url.searchParams.set("oppoStoreId", store.id);
     if (store.storeId) url.searchParams.set("oppoExtId", store.storeId);
-    if (store.code) url.searchParams.set("oppoCode", store.code);
+    if (canonicalStoreCode) url.searchParams.set("oppoCode", canonicalStoreCode);
     url.searchParams.set("oppoName", store.name);
+    if (store.googleMapsUrl) url.searchParams.set("oppoGoogleMapsUrl", store.googleMapsUrl);
+    if (store.googleMapsName) url.searchParams.set("oppoGoogleMapsName", store.googleMapsName);
     url.searchParams.set("oppoMonth", month);
     if (runnerToken || sessionId || origin) {
       const hashParams = new URLSearchParams(url.hash.startsWith("#") ? url.hash.slice(1) : "");
@@ -73,7 +76,7 @@ function buildGoogleMapsHandoffUrl(
     return url.toString();
   } catch {
     const sep = originalUrl.includes("?") ? "&" : "?";
-    let base = `${originalUrl}${sep}oppoStoreId=${encodeURIComponent(store.id)}&oppoExtId=${encodeURIComponent(store.storeId || "")}&oppoCode=${encodeURIComponent(store.code || "")}&oppoName=${encodeURIComponent(store.name)}&oppoMonth=${encodeURIComponent(month)}`;
+    let base = `${originalUrl}${sep}oppoStoreId=${encodeURIComponent(store.id)}&oppoExtId=${encodeURIComponent(store.storeId || "")}&oppoCode=${encodeURIComponent(canonicalStoreCode || "")}&oppoName=${encodeURIComponent(store.name)}&oppoGoogleMapsUrl=${encodeURIComponent(store.googleMapsUrl || originalUrl)}&oppoGoogleMapsName=${encodeURIComponent(store.googleMapsName || "")}&oppoMonth=${encodeURIComponent(month)}`;
     if (runnerToken || sessionId || origin) {
       const hashParts: string[] = [];
       if (runnerToken) hashParts.push(`oppoToken=${encodeURIComponent(runnerToken)}`);
@@ -714,6 +717,7 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
             region: res.currentStore.region,
             province: null,
             googleMapsUrl: res.currentStore.googleMapsUrl,
+            googleMapsName: res.currentStore.googleMapsName,
             hasGoogleMaps: true,
             kpiResult: null,
           },
@@ -785,6 +789,7 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
             region: res.currentStore.region,
             province: null,
             googleMapsUrl: res.currentStore.googleMapsUrl,
+            googleMapsName: res.currentStore.googleMapsName,
             hasGoogleMaps: true,
             kpiResult: null,
           },
@@ -882,6 +887,20 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
       return true;
     });
   }, [summary, search, regionFilter, statusFilter, batchSession]);
+
+  const selectedQueueDiffers = useMemo(() => {
+    if (!batchSession || (batchSession.status !== "RUNNING" && batchSession.status !== "PAUSED")) return false;
+    if (auditScope !== "SELECTED" || selectedStoreIds.length === 0) return false;
+    const queuedIds = batchSession.stores.map((store) => store.storeId);
+    return queuedIds.length !== selectedStoreIds.length || selectedStoreIds.some((storeId) => !queuedIds.includes(storeId));
+  }, [auditScope, batchSession, selectedStoreIds]);
+
+  const canStartNewAudit =
+    !batchSession ||
+    batchSession.status === "IDLE" ||
+    batchSession.status === "CANCELLED" ||
+    batchSession.status === "COMPLETED" ||
+    selectedQueueDiffers;
 
   const handleOpenModal = (store?: GoogleReviewKpiStoreItem) => {
     if (store) {
@@ -1656,7 +1675,7 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
           </div>
 
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-            {(!batchSession || batchSession.status === "IDLE" || batchSession.status === "CANCELLED" || batchSession.status === "COMPLETED") && (
+            {canStartNewAudit && (
               <div className="flex items-center gap-3 bg-[var(--app-surface-subtle)] px-3 py-1.5 rounded-xl border border-[var(--app-border)] text-xs">
                 <span className="font-semibold text-[var(--app-text-secondary)]">Scope:</span>
                 <label className="flex items-center gap-1 cursor-pointer font-medium text-[var(--app-text-primary)]">
@@ -1686,7 +1705,7 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
               </div>
             )}
 
-            {(!batchSession || batchSession.status === "IDLE" || batchSession.status === "CANCELLED" || batchSession.status === "COMPLETED") && (
+            {canStartNewAudit && (
               <button
                 type="button"
                 onClick={handleStartBatchAudit}
@@ -1701,7 +1720,9 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
                   <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-                {auditScope === "SELECTED"
+                {selectedQueueDiffers
+                  ? `เริ่มชุดที่เลือกใหม่ (${selectedStoreIds.length} ร้าน)`
+                  : auditScope === "SELECTED"
                   ? `เริ่ม Pilot Audit (${selectedStoreIds.length} ร้าน)`
                   : `เริ่มตรวจอัตโนมัติ (${summary?.storesWithGoogleMaps || 0} ร้าน)`}
               </button>
@@ -1800,6 +1821,7 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
                         region: batchSession.currentStore.region,
                         province: null,
                         googleMapsUrl: batchSession.currentStore.googleMapsUrl,
+                        googleMapsName: batchSession.currentStore.googleMapsName,
                         hasGoogleMaps: true,
                         kpiResult: null,
                       },
@@ -2011,6 +2033,10 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
 
                       {/* Google Maps Link */}
                       <td className="py-3.5 px-3">
+                        <div className="mb-1 max-w-[220px] text-[10px] text-[var(--app-text-secondary)]" title={store.googleMapsName ?? "Missing from Store Master"}>
+                          <span className="font-semibold">Google Maps:</span>{" "}
+                          {store.googleMapsName ?? "Missing from Store Master"}
+                        </div>
                         {store.googleMapsUrl ? (
                           <a
                             href={buildGoogleMapsHandoffUrl(store.googleMapsUrl, store, selectedMonth)}
@@ -2068,10 +2094,15 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
                       <td className="py-3.5 px-3 text-center">
                         {queueStore ? (
                           queueStore.status === "COMPLETED" ? (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
-                              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                              เสร็จสมบูรณ์
-                            </span>
+                            <div className="inline-flex flex-col items-center">
+                              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                                เสร็จสมบูรณ์
+                              </span>
+                              <span className="mt-1 max-w-[150px] truncate text-[9px] text-[var(--app-text-tertiary)]" title={queueStore.completionReason ?? "Completion reason unavailable"}>
+                                {queueStore.completionReason ?? "Completion reason unavailable"}
+                              </span>
+                            </div>
                           ) : queueStore.status === "RUNNING" ? (
                             <span className="inline-flex items-center gap-1 rounded-full bg-blue-500/10 px-2 py-0.5 text-[10px] font-bold text-blue-600 dark:text-blue-400 animate-pulse">
                               <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />
