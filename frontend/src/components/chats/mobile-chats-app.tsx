@@ -27,6 +27,7 @@ type MobileView = "list" | "chat" | "info";
 type StatusFilter = "all" | ApiBmReplyStatus;
 
 const PAGE_SIZE = 40;
+const STORE_CHATS_PARITY_REFRESH_MS = 30_000;
 const statusLabels: Record<ApiBmReplyStatus, string> = {
   NOT_REPLIED: "ยังไม่ตอบ",
   NOTIFIED_BM: "แจ้ง BM แล้ว",
@@ -240,6 +241,38 @@ export function MobileChatsApp() {
       setSelected((current) => current ? { ...current, messages: current.messages.map((item) => item.id === incoming.id ? { ...item, media: incoming.media } : item) } : current);
     });
   }, [selected?.id, user]);
+
+  useEffect(() => {
+    if (!user || !selected?.id || messages.page !== 1) return;
+
+    const conversationId = selected.id;
+    let active = true;
+    const refreshFromCanonical = async () => {
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+      try {
+        const [conversation, history] = await Promise.all([
+          api.conversation(conversationId),
+          api.conversationMessages(conversationId, 1),
+        ]);
+        if (!active) return;
+        setMessages(history);
+        setSelected((current) => current?.id === conversationId ? conversation : current);
+        setConversations((current) => current.map((item) => item.id === conversationId ? conversation : item));
+      } catch {
+        // Mirror parity refresh is best-effort. Existing realtime/manual refresh
+        // remains available if the background request temporarily fails.
+      }
+    };
+
+    const timer = window.setInterval(() => {
+      void refreshFromCanonical();
+    }, STORE_CHATS_PARITY_REFRESH_MS);
+
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, [messages.page, selected?.id, user]);
 
   const loadList = useCallback(async () => {
     if (!user) return;
