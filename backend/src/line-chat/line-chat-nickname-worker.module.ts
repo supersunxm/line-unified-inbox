@@ -1,6 +1,7 @@
 import "./line-chat-pdf-relay-patch";
 import { Module } from "@nestjs/common";
 import { PrismaModule } from "../prisma.module";
+import { MediaStorageService } from "../media/media-storage";
 import { LineChatNicknameWorkerService } from "./line-chat-nickname-worker.service";
 import { LineChatSessionService } from "./line-chat-session.service";
 import { LineChatRecentResolverService } from "./line-chat-recent-resolver.service";
@@ -18,6 +19,7 @@ import { LineChatHistoricalMappingBackfillService } from "./line-chat-historical
 import { LineChatMessageSendWorkerService } from "./line-chat-message-send-worker.service";
 import { LineChatMirrorService } from "./line-chat-mirror.service";
 import { LineChatMirrorReconcilerService } from "./line-chat-mirror-reconciler.service";
+import { LineChatManagerMediaMaterializerService } from "./line-chat-manager-media-materializer.service";
 
 /**
  * Composition root for the dedicated nickname worker process.
@@ -46,6 +48,8 @@ import { LineChatMirrorReconcilerService } from "./line-chat-mirror-reconciler.s
     LineChatMessageSendWorkerService,
     LineChatMirrorService,
     LineChatMirrorReconcilerService,
+    MediaStorageService,
+    LineChatManagerMediaMaterializerService,
   ],
   exports: [
     LineChatNicknameWorkerService,
@@ -55,6 +59,7 @@ import { LineChatMirrorReconcilerService } from "./line-chat-mirror-reconciler.s
     LineChatNovncRecoveryWorkerService,
     LineChatMirrorService,
     LineChatMirrorReconcilerService,
+    LineChatManagerMediaMaterializerService,
   ],
 })
 export class LineChatNicknameWorkerModule {}
