@@ -1234,6 +1234,8 @@ export type BroadcastStorePreview = {
   externalStoreId: string | null;
   storeName: string;
   storeCode: string | null;
+  storeLocationText: string | null;
+  missingVariables: string[];
   lineOfficialAccountId: string | null;
   lineOaName: string | null;
   isEligible: boolean;
@@ -1253,6 +1255,7 @@ export type BroadcastPreviewInput = {
   };
   targeting: BroadcastTargeting;
   advanced?: Partial<BroadcastAdvanced>;
+  messages?: BroadcastMessageItem[];
 };
 
 export type BroadcastPreviewResult = {
