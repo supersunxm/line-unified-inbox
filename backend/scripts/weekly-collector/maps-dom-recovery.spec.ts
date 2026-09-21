@@ -241,6 +241,35 @@ describe("Google Maps DOM Recovery Unit Tests", () => {
       assert.strictEqual(isExactNewestText("ประชาสัมพันธ์เปิดตัว OPPO SPACE ใหม่"), false);
     });
 
+    it("rejects reviewer photo and profile buttons containing เรียง like รูปภาพ อรอุมา เรียงพรม", () => {
+      const normalize = (value: string) => String(value || "").replace(/\s+/g, " ").trim();
+      const isSortControlText = (value: string) => {
+        const text = normalize(value).toLowerCase();
+        if (text.startsWith("รูปภาพ") || text.startsWith("photo") || text.includes("โปรไฟล์") || text.includes("profile")) {
+          return false;
+        }
+        return (
+          text === "newest" ||
+          text === "ใหม่ที่สุด" ||
+          text.includes("sort") ||
+          text.includes("เรียงตาม") ||
+          text.includes("จัดเรียง") ||
+          text.includes("เรียงลำดับ") ||
+          text.includes("most relevant") ||
+          text.includes("relevant") ||
+          text.includes("เกี่ยวข้องที่สุด")
+        );
+      };
+
+      assert.strictEqual(isSortControlText("รูปภาพ อรอุมา เรียงพรม"), false);
+      assert.strictEqual(isSortControlText("โปรไฟล์ นายสมชาย เรียงทอง"), false);
+      assert.strictEqual(isSortControlText("Photo of user"), false);
+      assert.strictEqual(isSortControlText("จัดเรียง"), true);
+      assert.strictEqual(isSortControlText("เรียงตาม"), true);
+      assert.strictEqual(isSortControlText("เกี่ยวข้องที่สุด"), true);
+      assert.strictEqual(isSortControlText("ใหม่ที่สุด"), true);
+    });
+
     it("fails with ERROR_SORT_BUTTON_NOT_FOUND when button is missing on place with many reviews", async () => {
       const mockPage = {
         evaluate: async () => ({

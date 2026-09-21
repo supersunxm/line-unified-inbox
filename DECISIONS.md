@@ -1,3 +1,33 @@
+# 2026-09-21: Google Maps Sort Button Isolation & Invariant Protection Boundary
+
+- **Sort Control Button Discrimination**:
+  - Reviewer user-generated content on Google Maps (such as profile/photo accessibility labels containing Thai surnames like "เรียงพรม" or English "photo") must NEVER be matched as sort dropdown controls.
+  - Buttons located inside review cards (`.jftiEf`, `div[data-review-id]`) are explicitly excluded from sort button candidate resolution.
+  - Thai sort keyword matching is tightened from loose substring `"เรียง"` to precise phrases (`"จัดเรียง"`, `"เรียงตาม"`, `"เรียงลำดับ"`), and buttons starting with `"รูปภาพ"`, `"photo"`, `"โปรไฟล์"`, or `"profile"` are discarded.
+- **Canonical Fingerprint Daily KPI Reconciliation**:
+  - When persisting daily KPI rows following an interrupted or recovered run, the daily KPI count must reconcile with the canonical database truth in `GoogleReviewFingerprint` for that `storeCode` and `reviewDate`.
+  - Incremental upsert logic uses `Math.max(canonicalQualified, scanStats.newQualifiedReviews)` on initial creation or applies differential increments if `canonicalQualified > existingDaily.qualifiedReviews`, preventing undercounting or duplicate counting.
+- **Week 4 Daily KPI Invariant Protection**:
+  - Postflight reconciliation enforces historical invariants for all completed dates preceding `targetDate`. For Week 4, Sep 17 (26), Sep 18 (24), and Sep 19 (38) are explicitly validated alongside historical closed weeks (Week 1 = 274, Week 2 = 301).
+
+# 2026-09-21: Multi-inbound fingerprint resolution safety boundary
+
+- Never infer a LINE OA Manager chat from display name, one latest message, or `Manager.lastMessageAt`. Chat-list metadata can narrow the scan only; it cannot authorize a mapping.
+- Use all usable persisted inbound messages for one conversation. Prefer exact external LINE message IDs. If an ID is unavailable, require exact safe type/content metadata with a bounded timestamp tolerance. Nontext messages use safe type/metadata/timestamp evidence; no text is invented.
+- Read Manager history through the observed `/api/v3/.../messages` contract, following the opaque `backward` cursor until exhaustion or a bounded limit. A history transport/auth failure is transport; zero matches is no-match; more than one matching chat is ambiguous.
+- Verify `Customer.lineUserId` against Manager history before persisting it. Persist only through the existing same-OA conflict-checked transaction into `Conversation.lineChatUserId`.
+- Keep the `line_chat_multi_inbound_fingerprint_resolution` event aggregate-only: IDs are counted, not emitted; raw message text, cookies, cursors, tokens, and customer identifiers are excluded.
+- Route nickname-worker recovery through the same resolver. The legacy snapshot batch API remains available for callers but is fail-closed for unmapped conversations because it does not have history evidence.
+- The live Manager API uses inbound record type `message` (with legacy `messageReceived` still accepted); filtering only `messageReceived` is an identity-loss bug. Production proof for the target is six exact external-ID matches in one chat.
+- A mapped target can still be non-sendable: the live Manager UI reported that the user blocked/deleted the account or removed it from the chat. Preserve the failed state and surface the upstream restriction; never bypass the Manager composer or mark delivery without Manager evidence.
+
+# 2026-09-20: Post-B002 metric and profile-lock observability boundary
+
+- Treat `MessageDeliveryAttempt` count and customer-facing send-action count as separate measures. The authoritative duplicate-safety metric is the number of attempts with non-null `sendActionAt`; a null-timestamp pre-send failure followed by one non-null success is one customer-facing send, while two non-null timestamps are a duplicate-send risk.
+- Preserve B002's two-attempt audit history. Restart recovery is read-only Manager-history verification and must not create another attempt or increment the customer-facing send-action count.
+- Keep Manager evidence fail-closed: `handled` is not delivery proof; only a concrete nonblank Manager message ID and valid Manager timestamp may persist `DELIVERED`.
+- Add only non-secret profile-operation observability for the B002 contention gap: request correlation ID, profile session ID, operation kind, local-vs-database busy stage, wait/hold durations, acquired timestamp, and active holder operation/timestamps. Do not log owner tokens, credentials, message text, or browser content; do not change lock/send behavior.
+
 # 2026-09-20: Worker Restart Canary B002 Outcome and Cleanup
 
 - The B002 restart canary was terminal but not a rollout pass: `PROFILE_BUSY_BEFORE_SEND` caused Attempt 1 to fail before send, and the automatic requeue created Attempt 2. The final records are preserved as audit history; they must not be rewritten to simulate the required one-attempt outcome.
@@ -2717,3 +2747,24 @@ Keep `StoreMaster.tiktokProfileUrl` as the only persisted TikTok profile URL. Po
 - Deploy the hook image before enabling its runtime flag, then restart the same worker image so live `/proc/1/environ` evidence proves the flag is actually loaded. Require runtime health, exact A+B allowlist values, and absence of the prior failure flag before any canary send.
 - Use the existing 90-second lease recovery contract: an expired `PROCESSING` job becomes `VERIFY_PENDING`, and the replacement worker performs Manager-history verification only. It must not call `relayText` or create Attempt 2 while resolving the ambiguous send window.
 - Stop after read-only preflight. No customer-facing send is authorized until a separate explicit approval is received.
+
+## 2026-09-20: Profile operation contention observability deployment
+
+- Keep observability at the coordinator boundary: correlate each request with its operation kind, acquisition time, wait time, holder metadata, and release/held duration. Do not expose owner tokens, cookies, credentials, message text, local storage, or sensitive headers.
+- Preserve the existing local priority lock and database lease semantics. Database-busy diagnostics use a read-only active-lease lookup; no new lock, migration, retry policy, or send behavior is introduced.
+- Deploy only a clean archive of the observability commit so unrelated working-tree changes cannot enter the backend or worker image. Treat runtime process diagnostics and emitted coordinator events as the deployment proof.
+- Natural post-deploy contention is sufficient evidence when present; do not manufacture a production lock or customer-facing action merely to exercise logging. Use focused tests for the controlled harness contract.
+
+## 2026-09-20: Clean Android production reliability release 1.1.34+54
+
+- Keep the release limited to the already-tested Android delivery UX/reconciliation, retry hit-target, canonical merge, and lifecycle guards. Do not change backend queue behavior, queue allowlists, Health semantics, or customer-facing test traffic.
+- Reuse the permanent production signing identity and keep `forceUpdate=false`; the additive AppRelease migration is the only release metadata persistence change.
+- Preserve historical APK downloads by using the existing Git-connected frontend deployment path after the local Railway upload exceeded the snapshot limit from the 47 historical APK artifacts. The release checkpoint is pushed as `97ce6901` so the canonical source build retains the complete download history.
+- Treat the existing debug-signed emulator as incompatible with the production-signed APK when Android returns `INSTALL_FAILED_UPDATE_INCOMPATIBLE`. Do not uninstall or clear authenticated data merely to force a smoke test; report the release smoke as blocked and rely on artifact/signature/public-surface verification.
+
+## 2026-09-20: LINE Manager Health Dashboard state semantics
+
+- Job counters are history/audit data, not session-health inputs. Current health is derived from session/auth/browser evidence and active pending/processing job age/lease risk.
+- Use the existing five-minute worker recovery window as the warning boundary and a fifteen-minute operational age as the critical boundary. Future-scheduled pending work remains normal; expired/overdue work is classified from persisted timestamps rather than UI timing.
+- Treat a failure as current only while its persisted `updatedAt` is within the fifteen-minute actionability window. The dashboard requires both this current evidence and the existing safe category policy before selecting a retry; absent or historical evidence fails closed. The existing server retry contracts remain unchanged, and no Manager send path is altered.
+- Keep historical failures and superseded counts visible, label historical failure cards `Historical / resolved`, and show current risk/actionability separately so audit information is not erased or allowed to distort runtime health.

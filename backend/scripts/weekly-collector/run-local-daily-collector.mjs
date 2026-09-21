@@ -13,6 +13,7 @@ import {
   offsetBangkokDate,
   resolveWeekNumberFromDate,
   getWeekDateBoundaries,
+  getBangkokDateString,
 } from "./date-classifier.mjs";
 import {
   buildGoogleReviewLaunchOptions,
@@ -550,13 +551,55 @@ export async function runCollectionForDate({
   if (!options.dryRun) {
     logger.log(`Persisting Daily KPI records for review date ${targetDate}...`);
     for (const [storeCode, { membership, res }] of resultsByStore.entries()) {
-      const targetStats = res.newReviewStatsByDate?.[targetDate] || {
+      const scanStats = res.newReviewStatsByDate?.[targetDate] || {
         reviewsChecked: 0,
         reviewsWithPhoto: 0,
         reviewsOver15ThaiWords: 0,
         newReviewsDiscovered: 0,
         newQualifiedReviews: 0,
       };
+
+      // Canonical fingerprint reconciliation:
+      // If fingerprints for targetDate were already persisted (e.g. from an earlier interrupted run),
+      // ensure the daily record reflects the true database canonical count.
+      const canonicalFps = await prisma.googleReviewFingerprint.findMany({
+        where: {
+          storeCode,
+          reviewDate: targetDate,
+        },
+      });
+      const canonicalQualified = canonicalFps.filter((f) => f.isQualified).length;
+      const canonicalChecked = canonicalFps.length;
+
+      const existingDaily = await prisma.googleReviewDailyKpi.findUnique({
+        where: {
+          storeCode_date: {
+            storeCode,
+            date: targetDate,
+          },
+        },
+      });
+
+      let targetStats = scanStats;
+      if (!existingDaily) {
+        targetStats = {
+          reviewsChecked: Math.max(canonicalChecked, scanStats.reviewsChecked),
+          reviewsWithPhoto: Math.max(canonicalQualified, scanStats.reviewsWithPhoto),
+          reviewsOver15ThaiWords: Math.max(canonicalQualified, scanStats.reviewsOver15ThaiWords),
+          newReviewsDiscovered: Math.max(canonicalChecked, scanStats.newReviewsDiscovered),
+          newQualifiedReviews: Math.max(canonicalQualified, scanStats.newQualifiedReviews),
+        };
+      } else if (canonicalQualified > existingDaily.qualifiedReviews) {
+        const diffQualified = canonicalQualified - existingDaily.qualifiedReviews;
+        const diffChecked = Math.max(0, canonicalChecked - existingDaily.reviewsChecked);
+        targetStats = {
+          reviewsChecked: Math.max(diffChecked, scanStats.reviewsChecked),
+          reviewsWithPhoto: Math.max(diffQualified, scanStats.reviewsWithPhoto),
+          reviewsOver15ThaiWords: Math.max(diffQualified, scanStats.reviewsOver15ThaiWords),
+          newReviewsDiscovered: Math.max(diffChecked, scanStats.newReviewsDiscovered),
+          newQualifiedReviews: Math.max(diffQualified, scanStats.newQualifiedReviews),
+        };
+      }
 
       await upsertDailyByReviewDate({
         storeCode,
@@ -670,7 +713,7 @@ export async function runPostflightVerification(prisma, targetDate, targetWeekNu
     failures.push(`Week 2 invariant violated: status=${w2?.status}, qualified=${w2Total._sum.qualifiedReviews} (expected CLOSED / 301)`);
   }
 
-  // Invariant 4: Historical days for Week 3 before targetDate must remain unchanged
+  // Invariant 4: Historical days before targetDate must remain unchanged
   const expectedHistorical = {
     "2026-09-10": 38,
     "2026-09-11": 36,
@@ -679,6 +722,9 @@ export async function runPostflightVerification(prisma, targetDate, targetWeekNu
     "2026-09-14": 33,
     "2026-09-15": 25,
     "2026-09-16": 25,
+    "2026-09-17": 26,
+    "2026-09-18": 24,
+    "2026-09-19": 38,
   };
   const datesToCheck = Object.keys(expectedHistorical).filter((d) => d < targetDate);
   if (datesToCheck.length > 0) {

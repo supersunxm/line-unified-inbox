@@ -26,7 +26,7 @@ export async function evaluatePlaceStatus(page, maxRetries = 3) {
         const title = document.querySelector("h1")?.textContent?.trim() || null;
 
         // 3. Rating & Total Review Count
-        const ratingEl = document.querySelector(".F7nice, span.ceNzKf");
+        const ratingEl = document.querySelector(".F7nice, span.ceNzKf, div.jANrlb .fontDisplayLarge, .fontDisplayLarge");
         let rating = null;
         let reviewCountText = null;
         if (ratingEl) {
@@ -127,6 +127,9 @@ export async function openReviewsPane(page) {
     await page.waitForTimeout(2000);
     const postStatus = await evaluatePlaceStatus(page);
     if (postStatus.cardsCount > 0 || postStatus.hasFeed || postStatus.reviewTabSelected) {
+      if (!postStatus.rating && status.rating) {
+        postStatus.rating = status.rating;
+      }
       return { success: true, reason: "CLICKED_REVIEW_TAB", status: postStatus };
     }
   }
@@ -207,12 +210,16 @@ export async function ensureNewestSort(page) {
 
     const isSortControlText = (value) => {
       const text = normalize(value).toLowerCase();
+      if (text.startsWith("รูปภาพ") || text.startsWith("photo") || text.includes("โปรไฟล์") || text.includes("profile")) {
+        return false;
+      }
       return (
         text === "newest" ||
         text === "ใหม่ที่สุด" ||
         text.includes("sort") ||
-        text.includes("เรียง") ||
+        text.includes("เรียงตาม") ||
         text.includes("จัดเรียง") ||
+        text.includes("เรียงลำดับ") ||
         text.includes("most relevant") ||
         text.includes("relevant") ||
         text.includes("เกี่ยวข้องที่สุด")
@@ -242,7 +249,8 @@ export async function ensureNewestSort(page) {
         "div[role='tabpanel'], div.m6QErb[aria-label*='รีวิว' i], div.m6QErb[aria-label*='Reviews' i], div.m6QErb.DxyBCb, div.w6VYqd"
       );
       const root = panel || document;
-      const buttons = Array.from(root.querySelectorAll("button, [role='button']"));
+      const buttons = Array.from(root.querySelectorAll("button, [role='button']"))
+        .filter((el) => !el.closest(".jftiEf, div[data-review-id]"));
 
       // Priority 1: Semantic button with sort-related label/aria inside the panel
       const semantic = buttons.find(
