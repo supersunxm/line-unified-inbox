@@ -61,7 +61,6 @@ export class BroadcastService {
 
   async saveDraft(input: BroadcastDraftInput, user: AuthUser) {
     this.assertRequestId(input.campaignRequestId);
-    await this.assertRichMessagesAvailable(messages);
     const targeting = validateBroadcastTargeting(input.targeting);
     const advanced = normalizeBroadcastAdvanced(input.advanced);
     const draftScheduledAt = input.schedule?.mode === "SCHEDULED"
@@ -119,6 +118,7 @@ export class BroadcastService {
   async createAndSend(input: BroadcastCreateInput, user: AuthUser) {
     this.assertRequestId(input.campaignRequestId);
     const messages = validateBroadcastMessages(input.messages);
+    await this.assertRichMessagesAvailable(messages);
     const targeting = validateBroadcastTargeting(input.targeting);
     const advanced = normalizeBroadcastAdvanced(input.advanced);
     const scheduledAt = resolveScheduledAt(input.schedule);
