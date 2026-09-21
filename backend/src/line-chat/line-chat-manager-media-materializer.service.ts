@@ -1,11 +1,9 @@
 import { Inject, Injectable, Logger, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
 import {
   LineAccountType,
-  LineChatSessionStatus,
   MediaProcessingStatus,
   MessageDirection,
   MessageType,
-  Prisma,
 } from "@prisma/client";
 import type { APIResponse, BrowserContext } from "playwright";
 import * as fs from "node:fs";
@@ -607,7 +605,7 @@ export class LineChatManagerMediaMaterializerService implements OnModuleInit, On
             type: "sticker",
             ...(downloaded.stickerId ? { stickerId: downloaded.stickerId } : {}),
             ...(downloaded.packageId ? { packageId: downloaded.packageId } : {}),
-          } as Prisma.InputJsonValue,
+          },
         },
       });
     }
@@ -636,7 +634,7 @@ export class LineChatManagerMediaMaterializerService implements OnModuleInit, On
     for (const url of urls) {
       const response = await context.request.get(url).catch(() => null);
       if (!response?.ok()) continue;
-      const body = await response.json().catch(() => null);
+      const body: unknown = await response.json().catch(() => null);
       const event = findObjectWithId(body, managerMessageId);
       if (event) return event;
     }
@@ -655,7 +653,7 @@ export class LineChatManagerMediaMaterializerService implements OnModuleInit, On
     const maxBytes = maxBytesFor(messageType);
     const infoUrl = `https://chat.line.biz/api/v1/bots/${encodeURIComponent(botId)}/messages/content/${encodeURIComponent(managerMessageId)}/info`;
     const infoResponse = await context.request.get(infoUrl, { headers: { referer } }).catch(() => null);
-    const info = infoResponse?.ok()
+    const info: unknown = infoResponse?.ok()
       ? await infoResponse.json().catch(() => null)
       : null;
     const contentHash = extractManagerContentHash(payload) || extractManagerContentHash(info);
