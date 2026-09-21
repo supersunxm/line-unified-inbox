@@ -110,6 +110,7 @@ export function canAccessPrimarySection(user: AuthUser, section: PrimarySection)
       return auth.workspaces.hq || auth.workspaces.store;
     case "friend-source-links":
     case "mass-messages":
+    case "broadcast":
     case "coupons":
     case "rich-menus":
     case "auto-responses":
