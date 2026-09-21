@@ -53,3 +53,8 @@ test("Broadcast composer exposes an explicit add-another-message control", () =>
   assert.match(viewCode, /\+ Add another text message/);
   assert.match(viewCode, /onClick=\{addTextMessage\}/);
 });
+
+
+test("Broadcast LINE preview preserves text line breaks", () => {
+  assert.match(viewCode, /whitespace-pre-wrap/);
+});
