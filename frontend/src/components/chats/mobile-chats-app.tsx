@@ -10,6 +10,7 @@ import type {
   ConversationMessagesResponse,
 } from "@/types/api";
 import { MessageImage } from "@/app/message-image";
+import { MessageFileAttachment, MessageVideo } from "@/app/message-media";
 import { getMessageSenderName } from "@/app/message-sender";
 import { mapRealtimeMessage, subscribeToRealtimeEvents } from "@/app/realtime";
 import { formatRelativeTime } from "@/app/relative-time";
@@ -678,19 +679,38 @@ export function MobileChatsApp() {
                               <MessageImage
                                 messageId={message.id}
                                 media={message.media}
-                                alt="รูปภาพจากลูกค้า"
+                                alt="รูปภาพในแชท"
                                 unavailableLabel="รูปภาพไม่ได้ถูกจัดเก็บ"
                                 errorLabel="โหลดรูปภาพไม่สำเร็จ"
                                 retryLabel="ลองอีกครั้ง"
                               />
+                            ) : message.messageType === "STICKER" && message.media ? (
+                              <MessageImage
+                                messageId={message.id}
+                                media={message.media}
+                                alt="สติกเกอร์ในแชท"
+                                unavailableLabel="สติกเกอร์ไม่ได้ถูกจัดเก็บ"
+                                errorLabel="โหลดสติกเกอร์ไม่สำเร็จ"
+                                retryLabel="ลองอีกครั้ง"
+                              />
                             ) : message.messageType === "STICKER" ? (
                               <MessageSticker sticker={message.sticker} />
+                            ) : message.messageType === "VIDEO" ? (
+                              <MessageVideo messageId={message.id} media={message.media} />
+                            ) : message.messageType === "FILE" ? (
+                              <MessageFileAttachment
+                                messageId={message.id}
+                                media={message.media}
+                                fileName={message.fileName}
+                              />
                             ) : (
                               <p className="whitespace-pre-wrap break-words text-[15px] leading-[1.45]">
                                 {content || "—"}
                               </p>
                             )}
-                            {message.fileName && <p className="mt-1 text-xs">📎 {message.fileName}</p>}
+                            {message.fileName && message.messageType !== "FILE" && (
+                              <p className="mt-1 text-xs">📎 {message.fileName}</p>
+                            )}
                             <div className="mt-1 flex items-center justify-between gap-2">
                               <p
                                 className={`text-[10px] ${
