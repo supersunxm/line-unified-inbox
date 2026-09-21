@@ -63,10 +63,27 @@ export function resolveMessageSender(message: {
   senderUserId?: string | null;
   senderDisplayName?: string | null;
   sender?: { id: string; displayName: string | null } | null;
+  rawPayload?: unknown;
 }) {
   if (message.direction !== MessageDirection.OUTBOUND) return null;
-  const displayName = message.sender?.displayName?.trim() || message.senderDisplayName?.trim() || null;
-  if (!message.senderUserId && !message.sender) return null;
+
+  const raw = message.rawPayload
+    && typeof message.rawPayload === "object"
+    && !Array.isArray(message.rawPayload)
+    ? message.rawPayload as Record<string, unknown>
+    : {};
+  const isManagerMirror = raw.provider === "LINE_MANAGER"
+    || raw.source === "LINE_MANAGER_MIRROR"
+    || raw.responderIdentitySource === "LINE_MANAGER_OWNER_NAME";
+  const snapshotName = message.senderDisplayName?.trim() || null;
+  const relationName = message.sender?.displayName?.trim() || null;
+  const displayName = isManagerMirror
+    ? snapshotName || relationName
+    : relationName || snapshotName;
+
+  if (!message.senderUserId && !message.sender && !displayName) return null;
+  if (!message.senderUserId && !message.sender && !isManagerMirror) return null;
+
   return {
     userId: message.senderUserId ?? message.sender?.id ?? null,
     displayName: displayName ?? "Staff",
@@ -227,7 +244,7 @@ export class ConversationsService {
     void _encToken;
     void _tokenRecv;
     void _tokenUsed;
-    const sender = resolveMessageSender({ direction: safe.direction, senderUserId, senderDisplayName, sender: senderUser });
+    const sender = resolveMessageSender({ direction: safe.direction, senderUserId, senderDisplayName, sender: senderUser, rawPayload });
     const sticker = safe.messageType === MessageType.STICKER
       ? stickerPresentationFromRawPayload(rawPayload)
       : null;
