@@ -15,6 +15,7 @@ test("TopNavigation renders destination links as native Next.js Link components"
     { name: "Purchase Intelligence", href: "/admin/purchase-analytics" },
     { name: "Friend Source Links", href: "/friend-source-links" },
     { name: "Mass Message", href: "/mass-messages" },
+    { name: "Broadcast", href: "/broadcast" },
   ];
 
   for (const item of expectedRoutes) {
@@ -47,7 +48,7 @@ test("TopNavigation layout prevents transparent search container from intercepti
 
 test("secondary links are rendered in the current sidebar and mobile More menu", () => {
   assert.match(topNavSource, /aria-expanded=\{moreOpen\}/);
-  for (const href of ["/stores", "/admin/purchase-analytics", "/friend-source-links", "/mass-messages"]) {
+  for (const href of ["/stores", "/admin/purchase-analytics", "/friend-source-links", "/mass-messages", "/broadcast"]) {
     assert.match(sidebarSource, new RegExp(`href: "${href}"`));
     assert.match(topNavSource, new RegExp(`href="${href}"`));
   }
@@ -64,4 +65,10 @@ test("TopNavigation accessibility: focus rings, ARIA roles, and keyboard handler
   // Sidebar navigation landmarks and active-page semantics
   assert.match(sidebarSource, /<nav className="space-y-1" aria-label=\{t\.workspace\}/);
   assert.match(sidebarSource, /aria-current=\{active \?/);
+});
+
+
+test("Broadcast has a complete section label mapping and mobile More entry", () => {
+  assert.match(topNavSource, /broadcast:\s*\["Broadcast",\s*"Broadcast",\s*"Broadcast"\]/);
+  assert.match(topNavSource, /can\("broadcast"\).*href="\/broadcast"/);
 });
