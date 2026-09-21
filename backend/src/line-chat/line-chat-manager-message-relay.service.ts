@@ -4,6 +4,7 @@ import { PrismaService } from "../prisma.service";
 import {
   getLineChatManagerRelayStoreConfig,
   isLineChatManagerRelayStoreEnabled,
+  isLineChatMirrorOnlyStore,
 } from "./line-chat-pilot.constants";
 
 export type ManagerDeliveryEvidence = {
@@ -128,6 +129,11 @@ export class LineChatManagerMessageRelayService {
     if (!conversation) return { handled: false };
 
     const storeCode = storeCodeOf(conversation);
+    if (isLineChatMirrorOnlyStore(storeCode)) {
+      throw new ServiceUnavailableException(
+        `ร้าน ${storeCode} ย้ายไปตอบผ่าน LINE OA Manager แล้ว ระบบแอปดำจะไม่ส่งข้อความออก`,
+      );
+    }
     if (!isLineChatManagerRelayStoreEnabled(storeCode)) return { handled: false };
 
     this.assertRelayConfiguration(conversation, storeCode);
