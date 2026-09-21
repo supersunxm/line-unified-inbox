@@ -212,15 +212,22 @@ export function BroadcastView({ language, userRole }: Props) {
     }];
   }), [messages]);
 
-  const templateVariableSignature = useMemo(() => {
+  const broadcastValidationSignature = useMemo(() => {
     const variables = new Set<string>();
+    const richMessageIds: string[] = [];
     for (const message of payloadMessages) {
-      if (message.type !== "text") continue;
-      for (const match of message.text.matchAll(/\{\{\s*([a-zA-Z0-9_.]+)\s*\}\}/g)) {
-        if (match[1]) variables.add(match[1]);
+      if (message.type === "text") {
+        for (const match of message.text.matchAll(/\{\{\s*([a-zA-Z0-9_.]+)\s*\}\}/g)) {
+          if (match[1]) variables.add(match[1]);
+        }
+      } else if (message.type === "rich_message") {
+        richMessageIds.push(message.richMessageId);
       }
     }
-    return Array.from(variables).sort().join("|");
+    return [
+      Array.from(variables).sort().join("|"),
+      richMessageIds.sort().join("|"),
+    ].join("::");
   }, [payloadMessages]);
 
   useEffect(() => {
@@ -257,7 +264,7 @@ export function BroadcastView({ language, userRole }: Props) {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [advanced, periods.size, selectedStoreIds.size, storeMode, storeSelection, stores.length, targetMode, targeting, templateVariableSignature]);
+  }, [advanced, periods.size, selectedStoreIds.size, storeMode, storeSelection, stores.length, targetMode, targeting, broadcastValidationSignature]);
 
   useEffect(() => {
     if (viewMode !== "progress" || !activeCampaign) return;
