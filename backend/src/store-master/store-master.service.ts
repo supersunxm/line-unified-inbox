@@ -68,6 +68,7 @@ export class StoreMasterService {
     const tiktokUsername = row.tiktokUsername ?? existingRow?.tiktokUsername ?? null;
     const tiktokProfileUrl = row.tiktokProfileUrl ?? existingRow?.tiktokProfileUrl ?? null;
     const googleMapsUrl = row.googleMapsUrl ?? existingRow?.googleMapsUrl ?? null;
+    const googleMapsName = row.googleMapsName ?? existingRow?.googleMapsName ?? null;
 
     if (!storeName && existingRow?.storeName) storeName = existingRow.storeName;
     if (!accountName) {
@@ -99,6 +100,7 @@ export class StoreMasterService {
       tiktokUsername,
       tiktokProfileUrl,
       googleMapsUrl,
+      googleMapsName,
       province: row.province,
       region: row.region ?? regionFromProvince(row.province),
       source,
@@ -344,6 +346,7 @@ export class StoreMasterService {
         (item) => Boolean(item.googleMapsUrl) && !isValidGoogleMapsUrl(item.googleMapsUrl)
       ).length,
       missingGoogleMapsUrls: items.filter((item) => !item.googleMapsUrl).length,
+      missingGoogleMapsNames: items.filter((item) => !item.googleMapsName).length,
     };
   }
 
@@ -411,6 +414,7 @@ export class StoreMasterService {
           tiktokUsername: item.tiktokUsername,
           tiktokProfileUrl: item.tiktokProfileUrl,
           googleMapsUrl: item.googleMapsUrl ?? null,
+          googleMapsName: item.googleMapsName ?? null,
           googleMapsStatus: getStoreGoogleMapsReadiness(item.googleMapsUrl).status,
           googleMapsStatusReason: getStoreGoogleMapsReadiness(item.googleMapsUrl).reason,
           matchScore: Number(score.toFixed(3)),
@@ -457,6 +461,7 @@ export class StoreMasterService {
         (item) => Boolean(item.googleMapsUrl) && !isValidGoogleMapsUrl(item.googleMapsUrl)
       ).length,
       missingGoogleMapsUrls: items.filter((item) => !item.googleMapsUrl).length,
+      missingGoogleMapsNames: items.filter((item) => !item.googleMapsName).length,
       incomplete: items.filter((item) => item.dataQualityStatus !== "COMPLETE").length,
     };
   }

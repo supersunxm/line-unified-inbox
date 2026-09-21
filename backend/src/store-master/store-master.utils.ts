@@ -9,6 +9,7 @@ export type ParsedMasterRow = {
   tiktokUsername: string | null;
   tiktokProfileUrl: string | null;
   googleMapsUrl: string | null;
+  googleMapsName: string | null;
   province: string | null;
   region: string | null;
   sourceRowNumber: number;
@@ -218,6 +219,18 @@ export function parseStoreMasterCsv(csv: string): ParsedMasterRow[] {
     );
     const googleMapsUrl = clean(rawGoogleMapsUrl);
 
+    // Column L (Google Maps Name)
+    const googleMapsName = clean(
+      at(
+        row,
+        "Google Maps Name",
+        "Google Map Name",
+        "Google Maps Display Name",
+        "googleMapsName",
+        "google maps name",
+      )
+    );
+
     const incomplete = !storeName || !accountName;
     const dataQualityStatus = incomplete
       ? "INCOMPLETE"
@@ -238,6 +251,7 @@ export function parseStoreMasterCsv(csv: string): ParsedMasterRow[] {
       tiktokUsername,
       tiktokProfileUrl,
       googleMapsUrl,
+      googleMapsName,
       province,
       region,
       sourceRowNumber: index + 2,
