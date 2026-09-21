@@ -206,6 +206,34 @@ test("contention logs correlate acquisition, busy owner, release, and durations 
   assert.doesNotMatch(serialized, /owner-a|owner-b|secret|token-value/i);
 });
 
+test("bounded wait override lets a background mirror operation queue behind the current holder", async () => {
+  const prisma = createFakePrisma();
+  const coordinator = new LineChatProfileOperationCoordinator(prisma as never);
+  let releaseFirst!: () => void;
+  const firstHold = new Promise<void>((resolve) => { releaseFirst = resolve; });
+
+  const first = coordinator.withProfileOperation(
+    { sessionId: "session-a", operationKind: "NICKNAME_UPDATE" },
+    async () => firstHold,
+  );
+
+  await new Promise((resolve) => setImmediate(resolve));
+
+  const queued = coordinator.withProfileOperation(
+    { sessionId: "session-a", operationKind: "MIRROR_SYNC" },
+    async () => "materialized",
+    { waitForLock: true, waitForLockMs: 5_000 },
+  );
+
+  await new Promise((resolve) => setImmediate(resolve));
+  releaseFirst();
+
+  assert.equal((await first).acquired, true);
+  const queuedResult = await queued;
+  assert.equal(queuedResult.acquired, true);
+  if (queuedResult.acquired) assert.equal(queuedResult.value, "materialized");
+});
+
 test("different sessions operate concurrently", async () => {
   const prisma = createFakePrisma();
   const coordinator = new LineChatProfileOperationCoordinator(prisma as never);
