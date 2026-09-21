@@ -312,6 +312,7 @@ export class LineChatManagerMediaMaterializerService implements OnModuleInit, On
     let scanned = 0;
     let ready = 0;
     let failed = 0;
+    let deferred = 0;
     let skipped = 0;
 
     try {
@@ -394,9 +395,21 @@ export class LineChatManagerMediaMaterializerService implements OnModuleInit, On
           else skipped += 1;
           this.retryNotBefore.delete(message.id);
         } catch (error) {
+          const errorMessage = error instanceof Error ? error.message.slice(0, 240) : String(error).slice(0, 240);
+          if (errorMessage === "MANAGER_MEDIA_PROFILE_BUSY") {
+            deferred += 1;
+            this.retryNotBefore.set(message.id, Date.now() + 30_000);
+            this.logger.log(JSON.stringify({
+              event: "line_chat_manager_media_materialize_deferred",
+              storeCode: storeCodeOf(message),
+              messageType: message.messageType,
+              reason: errorMessage,
+            }));
+            continue;
+          }
+
           failed += 1;
           this.retryNotBefore.set(message.id, Date.now() + 5 * 60_000);
-          const errorMessage = error instanceof Error ? error.message.slice(0, 240) : String(error).slice(0, 240);
           await this.markFailed(message.id, message.externalMessageId, message.messageType, errorMessage).catch(() => {});
           this.logger.warn(JSON.stringify({
             event: "line_chat_manager_media_materialize_failed",
@@ -413,6 +426,7 @@ export class LineChatManagerMediaMaterializerService implements OnModuleInit, On
         scanned,
         ready,
         failed,
+        deferred,
         skipped,
         durationMs: Date.now() - startedAt,
       }));
@@ -554,7 +568,7 @@ export class LineChatManagerMediaMaterializerService implements OnModuleInit, On
           }
         }
       },
-      { waitForLock: false },
+      { waitForLock: true, waitForLockMs: 15_000 },
     );
 
     if (!operation.acquired) throw new Error("MANAGER_MEDIA_PROFILE_BUSY");
