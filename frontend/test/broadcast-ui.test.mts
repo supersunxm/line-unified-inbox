@@ -29,7 +29,7 @@ test("Broadcast UI exposes LINE-like targeting, timing, composer, and multi-stor
   assert.match(viewCode, /Allow partial broadcast/);
   assert.match(viewCode, /Select stores/);
   assert.match(viewCode, /Select all/);
-  assert.match(viewCode, /max.*5 message objects/i);
+  assert.match(viewCode, /(สูงสุด|maximum|max).*5 message objects/i);
 });
 
 test("Broadcast UI uses official broadcast API client and preserves blocked-store targeting", () => {
