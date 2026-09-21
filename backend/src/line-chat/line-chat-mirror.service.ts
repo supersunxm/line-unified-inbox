@@ -50,7 +50,7 @@ interface PendingMirrorChat {
   lastMessageAt: Date;
 }
 
-interface MirrorSessionTarget {
+export interface MirrorSessionTarget {
   id: string;
   sessionKey: string;
   status: LineChatSessionStatus;
@@ -58,7 +58,7 @@ interface MirrorSessionTarget {
   profileStorageKey: string | null;
 }
 
-type MirrorTargetResolution =
+export type MirrorTargetResolution =
   | {
       ok: true;
       botId: string;
@@ -645,7 +645,7 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
     return result;
   }
 
-  private async resolveMirrorTarget(input: {
+  public async resolveMirrorTarget(input: {
     lineOfficialAccountId: string;
     chatBotId: string | null;
     basicId: string | null;
