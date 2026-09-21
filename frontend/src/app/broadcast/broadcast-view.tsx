@@ -191,6 +191,17 @@ export function BroadcastView({ language, userRole }: Props) {
     }];
   }), [messages]);
 
+  const templateVariableSignature = useMemo(() => {
+    const variables = new Set<string>();
+    for (const message of payloadMessages) {
+      if (message.type !== "text") continue;
+      for (const match of message.text.matchAll(/\{\{\s*([a-zA-Z0-9_.]+)\s*\}\}/g)) {
+        if (match[1]) variables.add(match[1]);
+      }
+    }
+    return Array.from(variables).sort().join("|");
+  }, [payloadMessages]);
+
   useEffect(() => {
     if (stores.length === 0) return;
     if (storeMode !== "ALL" && selectedStoreIds.size === 0) {
@@ -225,7 +236,7 @@ export function BroadcastView({ language, userRole }: Props) {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [advanced, payloadMessages, periods.size, selectedStoreIds.size, storeMode, storeSelection, stores.length, targetMode, targeting]);
+  }, [advanced, periods.size, selectedStoreIds.size, storeMode, storeSelection, stores.length, targetMode, targeting, templateVariableSignature]);
 
   useEffect(() => {
     if (viewMode !== "progress" || !activeCampaign) return;
