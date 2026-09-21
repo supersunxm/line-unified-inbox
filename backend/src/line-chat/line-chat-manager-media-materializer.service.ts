@@ -196,6 +196,56 @@ function normalizeMime(raw: string | undefined): string {
   return (raw ?? "").split(";", 1)[0].trim().toLowerCase();
 }
 
+function ascii(body: Buffer, start: number, end: number): string {
+  return body.subarray(start, end).toString("ascii");
+}
+
+export function inferManagerMediaMimeFromMagic(
+  messageType: MessageType,
+  body: Buffer,
+): string | null {
+  if (messageType === MessageType.IMAGE || messageType === MessageType.STICKER) {
+    if (body.length >= 3 && body[0] === 0xff && body[1] === 0xd8 && body[2] === 0xff) return "image/jpeg";
+    if (
+      body.length >= 8
+      && body.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
+    ) return "image/png";
+    if (body.length >= 6 && (ascii(body, 0, 6) === "GIF87a" || ascii(body, 0, 6) === "GIF89a")) return "image/gif";
+    if (body.length >= 12 && ascii(body, 0, 4) === "RIFF" && ascii(body, 8, 12) === "WEBP") return "image/webp";
+  }
+
+  if (messageType === MessageType.VIDEO) {
+    if (body.length >= 12 && ascii(body, 4, 8) === "ftyp") {
+      const brand = ascii(body, 8, 12).toLowerCase();
+      if (brand.startsWith("3gp")) return "video/3gpp";
+      if (brand === "qt  ") return "video/quicktime";
+      return "video/mp4";
+    }
+    if (
+      body.length >= 4
+      && body[0] === 0x1a
+      && body[1] === 0x45
+      && body[2] === 0xdf
+      && body[3] === 0xa3
+    ) return "video/webm";
+  }
+
+  return null;
+}
+
+function safeJsonKeyNames(value: unknown): string[] {
+  const record = jsonRecord(value);
+  return record ? Object.keys(record).sort().slice(0, 40) : [];
+}
+
+function managerMediaCandidateKind(
+  url: string,
+  contentHash: string | null,
+): "CONTENT_HASH" | "PAYLOAD_URL" | "DIRECT_CONTENT" {
+  if (contentHash && url.includes(contentHash)) return "CONTENT_HASH";
+  return url.includes("/messages/content/") ? "DIRECT_CONTENT" : "PAYLOAD_URL";
+}
+
 function fileExtensionFor(input: {
   messageType: MessageType;
   mimeType: string;
@@ -203,12 +253,20 @@ function fileExtensionFor(input: {
   body: Buffer;
 }): { mimeType: string; extension: string } | null {
   if (input.messageType === MessageType.IMAGE || input.messageType === MessageType.STICKER) {
-    const extension = IMAGE_EXTENSIONS[input.mimeType];
-    return extension ? { mimeType: input.mimeType, extension } : null;
+    const effectiveMime = IMAGE_EXTENSIONS[input.mimeType]
+      ? input.mimeType
+      : inferManagerMediaMimeFromMagic(input.messageType, input.body);
+    if (!effectiveMime) return null;
+    const extension = IMAGE_EXTENSIONS[effectiveMime];
+    return extension ? { mimeType: effectiveMime, extension } : null;
   }
   if (input.messageType === MessageType.VIDEO) {
-    const extension = VIDEO_EXTENSIONS[input.mimeType];
-    return extension ? { mimeType: input.mimeType, extension } : null;
+    const effectiveMime = VIDEO_EXTENSIONS[input.mimeType]
+      ? input.mimeType
+      : inferManagerMediaMimeFromMagic(input.messageType, input.body);
+    if (!effectiveMime) return null;
+    const extension = VIDEO_EXTENSIONS[effectiveMime];
+    return extension ? { mimeType: effectiveMime, extension } : null;
   }
   if (input.messageType === MessageType.FILE) {
     const looksPdf = isPdfMagicBytes(input.body);
@@ -543,11 +601,13 @@ export class LineChatManagerMediaMaterializerService implements OnModuleInit, On
             throw new Error(`MANAGER_MEDIA_AUTH_${auth.outcome}`);
           }
 
+          const managerHeaders = await this.managerRequestHeaders(context, referer);
           const managerPayload = await this.loadManagerMessagePayload(
             context,
             target.botId,
             mirror.lineChatUserId,
             mirror.managerMessageId,
+            managerHeaders,
           );
           const downloaded = message.messageType === MessageType.STICKER
             ? await this.downloadSticker(context, managerPayload)
@@ -559,6 +619,7 @@ export class LineChatManagerMediaMaterializerService implements OnModuleInit, On
                 message.messageType,
                 message.fileName,
                 referer,
+                managerHeaders,
               );
           operationContext.assertOwnership();
           return downloaded;
@@ -635,18 +696,40 @@ export class LineChatManagerMediaMaterializerService implements OnModuleInit, On
     return "READY";
   }
 
+  private async managerRequestHeaders(
+    context: BrowserContext,
+    referer: string,
+  ): Promise<Record<string, string>> {
+    const headers: Record<string, string> = {
+      accept: "application/json, text/plain, */*",
+      referer,
+    };
+    const csrfResponse = await context.request.get(
+      "https://chat.line.biz/api/v1/csrfToken",
+      { headers: { referer }, timeout: 10_000 },
+    ).catch(() => null);
+    if (!csrfResponse?.ok()) return headers;
+    const body: unknown = await csrfResponse.json().catch(() => null);
+    const token = jsonRecord(body)?.token;
+    if (typeof token === "string" && token.trim()) {
+      headers["x-xsrf-token"] = token.trim();
+    }
+    return headers;
+  }
+
   private async loadManagerMessagePayload(
     context: BrowserContext,
     botId: string,
     lineChatUserId: string,
     managerMessageId: string,
+    headers: Record<string, string>,
   ): Promise<ManagerMessagePayload> {
     const urls = [
       `https://chat.line.biz/api/v3/bots/${encodeURIComponent(botId)}/chats/${encodeURIComponent(lineChatUserId)}/messages`,
       `https://chat.line.biz/api/v1/bots/${encodeURIComponent(botId)}/messages/${encodeURIComponent(lineChatUserId)}`,
     ];
     for (const url of urls) {
-      const response = await context.request.get(url).catch(() => null);
+      const response = await context.request.get(url, { headers, timeout: 20_000 }).catch(() => null);
       if (!response?.ok()) continue;
       const body: unknown = await response.json().catch(() => null);
       const event = findObjectWithId(body, managerMessageId);
@@ -663,10 +746,14 @@ export class LineChatManagerMediaMaterializerService implements OnModuleInit, On
     messageType: MessageType,
     fileName: string | null,
     referer: string,
+    managerHeaders: Record<string, string>,
   ): Promise<DownloadedManagerMedia> {
     const maxBytes = maxBytesFor(messageType);
     const infoUrl = `https://chat.line.biz/api/v1/bots/${encodeURIComponent(botId)}/messages/content/${encodeURIComponent(managerMessageId)}/info`;
-    const infoResponse = await context.request.get(infoUrl, { headers: { referer } }).catch(() => null);
+    const infoResponse = await context.request.get(
+      infoUrl,
+      { headers: managerHeaders, timeout: 20_000 },
+    ).catch(() => null);
     const info: unknown = infoResponse?.ok()
       ? await infoResponse.json().catch(() => null)
       : null;
@@ -683,29 +770,72 @@ export class LineChatManagerMediaMaterializerService implements OnModuleInit, On
     ];
 
     const deduped = [...new Set(candidateUrls)];
+    const attempts: Array<{
+      source: "CONTENT_HASH" | "PAYLOAD_URL" | "DIRECT_CONTENT";
+      status: number | null;
+      mimeType: string | null;
+      bodyReadable: boolean;
+      formatAccepted: boolean;
+    }> = [];
+
     for (const url of deduped) {
+      const source = managerMediaCandidateKind(url, contentHash);
+      const isManagerApi = url.startsWith("https://chat.line.biz/");
       const response = await context.request.get(url, {
-        headers: { referer },
+        headers: isManagerApi ? managerHeaders : { referer },
         timeout: 20_000,
       }).catch(() => null);
-      if (!response?.ok()) continue;
+      if (!response?.ok()) {
+        attempts.push({
+          source,
+          status: response?.status() ?? null,
+          mimeType: response ? normalizeMime(response.headers()["content-type"]) || null : null,
+          bodyReadable: false,
+          formatAccepted: false,
+        });
+        continue;
+      }
       const mimeType = normalizeMime(response.headers()["content-type"]);
       const body = await responseBuffer(response, maxBytes).catch(() => null);
-      if (!body) continue;
+      if (!body) {
+        attempts.push({
+          source,
+          status: response.status(),
+          mimeType: mimeType || null,
+          bodyReadable: false,
+          formatAccepted: false,
+        });
+        continue;
+      }
       const normalized = fileExtensionFor({ messageType, mimeType, fileName, body });
+      attempts.push({
+        source,
+        status: response.status(),
+        mimeType: mimeType || null,
+        bodyReadable: true,
+        formatAccepted: Boolean(normalized),
+      });
       if (!normalized) continue;
       return {
         body,
         mimeType: normalized.mimeType,
         extension: normalized.extension,
-        source: contentHash && url.includes(contentHash)
-          ? "CONTENT_HASH"
-          : url.includes("/messages/content/")
-            ? "DIRECT_CONTENT"
-            : "PAYLOAD_URL",
+        source,
       };
     }
 
+    this.logger.warn(JSON.stringify({
+      event: "line_chat_manager_media_binary_not_found",
+      messageType,
+      infoStatus: infoResponse?.status() ?? null,
+      payloadKeys: safeJsonKeyNames(payload),
+      infoKeys: safeJsonKeyNames(info),
+      payloadContentHashPresent: Boolean(extractManagerContentHash(payload)),
+      infoContentHashPresent: Boolean(extractManagerContentHash(info)),
+      payloadUrlCandidateCount: extractManagerMediaUrlCandidates(payload).length,
+      infoUrlCandidateCount: extractManagerMediaUrlCandidates(info).length,
+      attempts,
+    }));
     throw new Error("MANAGER_MEDIA_BINARY_NOT_FOUND");
   }
 
