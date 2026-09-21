@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFileSync } from "node:fs";
 import {
   extractManagerContentHash,
   extractManagerMediaUrlCandidates,
@@ -43,4 +44,13 @@ test("accepts only LINE-owned media URL candidates", () => {
       "https://chat.line.biz/api/v1/media/preview",
     ],
   );
+});
+
+
+test("materializer waits briefly for the shared Manager profile instead of failing immediately", () => {
+  const source = readFileSync(new URL("./line-chat-manager-media-materializer.service.ts", import.meta.url), "utf8");
+  assert.match(source, /waitForLock:\s*true/);
+  assert.match(source, /waitForLockMs:\s*15_000/);
+  assert.match(source, /line_chat_manager_media_materialize_deferred/);
+  assert.match(source, /Date\.now\(\) \+ 30_000/);
 });
