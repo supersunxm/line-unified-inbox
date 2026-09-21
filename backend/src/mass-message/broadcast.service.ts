@@ -14,6 +14,7 @@ import {
 import { randomUUID } from "node:crypto";
 import type { AuthUser } from "../auth/auth.guard";
 import { PrismaService } from "../prisma.service";
+import { RichMessageService } from "../rich-message/rich-message.service";
 import { BroadcastProcessorService } from "./broadcast-processor.service";
 import { BroadcastScopeService } from "./broadcast-scope.service";
 import {
@@ -44,6 +45,7 @@ export class BroadcastService {
     private readonly prisma: PrismaService,
     private readonly scope: BroadcastScopeService,
     private readonly processor: BroadcastProcessorService,
+    private readonly richMessages: RichMessageService,
   ) {}
 
   async preview(input: BroadcastPreviewInput, user: AuthUser): Promise<BroadcastPreviewResult> {
@@ -52,12 +54,14 @@ export class BroadcastService {
       Array.isArray(input.messages) && input.messages.length > 0
         ? validateBroadcastMessages(input.messages)
         : [];
+    await this.assertRichMessagesAvailable(messages);
     const scopes = await this.scope.resolve(input.storeSelection, targeting, user, messages);
     return this.formatPreview(scopes);
   }
 
   async saveDraft(input: BroadcastDraftInput, user: AuthUser) {
     this.assertRequestId(input.campaignRequestId);
+    await this.assertRichMessagesAvailable(messages);
     const targeting = validateBroadcastTargeting(input.targeting);
     const advanced = normalizeBroadcastAdvanced(input.advanced);
     const draftScheduledAt = input.schedule?.mode === "SCHEDULED"
@@ -69,6 +73,7 @@ export class BroadcastService {
     const messages = Array.isArray(input.messages) && input.messages.length > 0
       ? validateBroadcastMessages(input.messages)
       : [];
+    await this.assertRichMessagesAvailable(messages);
     const audienceType = this.audienceType(targeting.mode);
     const payload: BroadcastCampaignPayload = {
       messages,
@@ -342,6 +347,20 @@ export class BroadcastService {
 
     void this.processor.processCampaign(id);
     return this.getCampaign(id, user);
+  }
+
+  private async assertRichMessagesAvailable(messages: Array<{ type: string; richMessageId?: string }>) {
+    const ids = [...new Set(
+      messages
+        .filter((message) => message.type === "rich_message" && message.richMessageId)
+        .map((message) => message.richMessageId as string),
+    )];
+    for (const id of ids) {
+      const richMessage = await this.richMessages.get(id);
+      if (!richMessage.isActive) {
+        throw new BadRequestException(`Rich Message '${richMessage.name}' is inactive`);
+      }
+    }
   }
 
   private formatPreview(scopes: Awaited<ReturnType<BroadcastScopeService["resolve"]>>): BroadcastPreviewResult {
