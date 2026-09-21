@@ -9,7 +9,14 @@ import { randomUUID } from "node:crypto";
 import { CredentialEncryptionService } from "../credentials/credential-encryption.service";
 import { LineMessagingService } from "../line-messaging/line-messaging.service";
 import { PrismaService } from "../prisma.service";
-import { buildFriendshipDemographicFilter } from "./broadcast-targeting";
+import {
+  buildFriendshipDemographicFilter,
+  validateBroadcastMessages,
+} from "./broadcast-targeting";
+import {
+  buildBroadcastStoreVariableContext,
+  resolveBroadcastMessagesForStore,
+} from "./broadcast-store-variables";
 import type { BroadcastCampaignPayload } from "./broadcast.types";
 
 const BROADCAST_AUDIENCES: ReadonlySet<MassMessageAudienceType> = new Set([
@@ -32,7 +39,10 @@ export class BroadcastProcessorService {
       where: { id: campaignId },
       include: {
         storeDeliveries: {
-          include: { lineOfficialAccount: true },
+          include: {
+            lineOfficialAccount: true,
+            store: { include: { storeMaster: true } },
+          },
           orderBy: { createdAt: "asc" },
         },
       },
@@ -68,7 +78,6 @@ export class BroadcastProcessorService {
       }
 
       const payload = campaign.messagePayload as unknown as BroadcastCampaignPayload;
-      const messages = payload.messages;
       const existingBatch = await this.prisma.massMessageBatch.findUnique({
         where: { storeDeliveryId_batchIndex: { storeDeliveryId: delivery.id, batchIndex: 0 } },
       });
@@ -77,6 +86,32 @@ export class BroadcastProcessorService {
         if (campaign.audienceType === MassMessageAudienceType.ALL_FRIENDS) {
           await this.markBroadcastAccepted(delivery.id, delivery.recipientCount);
         }
+        return;
+      }
+
+      const variableContext = buildBroadcastStoreVariableContext({
+        store: delivery.store,
+        lineOfficialAccount: delivery.lineOfficialAccount,
+      });
+      const rendered = resolveBroadcastMessagesForStore(payload.messages, variableContext);
+      if (!rendered.ok) {
+        await this.failDelivery(
+          delivery.id,
+          "MISSING_TEMPLATE_VARIABLES",
+          "Missing store variables: " + rendered.missingVariables.join(", "),
+        );
+        return;
+      }
+
+      let messages: ReturnType<typeof validateBroadcastMessages>;
+      try {
+        messages = validateBroadcastMessages(rendered.messages);
+      } catch (error) {
+        await this.failDelivery(
+          delivery.id,
+          "INVALID_RESOLVED_MESSAGE",
+          error instanceof Error ? error.message : "Resolved broadcast message is invalid",
+        );
         return;
       }
 

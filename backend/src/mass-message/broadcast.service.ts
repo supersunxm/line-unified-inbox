@@ -48,7 +48,11 @@ export class BroadcastService {
 
   async preview(input: BroadcastPreviewInput, user: AuthUser): Promise<BroadcastPreviewResult> {
     const targeting = validateBroadcastTargeting(input.targeting);
-    const scopes = await this.scope.resolve(input.storeSelection, targeting, user);
+    const messages =
+      Array.isArray(input.messages) && input.messages.length > 0
+        ? validateBroadcastMessages(input.messages)
+        : [];
+    const scopes = await this.scope.resolve(input.storeSelection, targeting, user, messages);
     return this.formatPreview(scopes);
   }
 
@@ -130,7 +134,7 @@ export class BroadcastService {
       return { ...this.formatCampaign(existing), duplicate: true };
     }
 
-    const scopes = await this.scope.resolve(input.storeSelection, targeting, user);
+    const scopes = await this.scope.resolve(input.storeSelection, targeting, user, messages);
     const ready = scopes.filter((item) => item.isEligible);
     const blocked = scopes.filter((item) => !item.isEligible);
     if (ready.length === 0) {

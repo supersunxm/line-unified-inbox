@@ -16,9 +16,10 @@ export type BroadcastPreviewInput = {
   storeSelection: BroadcastStoreSelectionInput;
   targeting: BroadcastTargetingInput;
   advanced?: BroadcastAdvancedInput;
+  messages?: Array<Record<string, unknown>>;
 };
 
-export type BroadcastCreateInput = BroadcastPreviewInput & {
+export type BroadcastCreateInput = Omit<BroadcastPreviewInput, "messages"> & {
   campaignRequestId: string;
   title?: string;
   messages: Array<Record<string, unknown>>;
@@ -33,6 +34,8 @@ export type BroadcastScopeItem = {
   externalStoreId: string | null;
   storeName: string;
   storeCode: string | null;
+  storeLocationText: string | null;
+  missingVariables: string[];
   lineOfficialAccountId: string | null;
   lineOaName: string | null;
   encryptedChannelAccessToken: string | null;
