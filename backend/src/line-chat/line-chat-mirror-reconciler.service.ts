@@ -20,6 +20,7 @@ import {
 } from "../conversation-reply-state";
 import { isLineChatUserId } from "./line-chat-chat-discovery";
 import { configuredLineChatMirrorStoreCodes } from "./line-chat-mirror.service";
+import { selectLineChatStoreOa } from "./line-chat-store-oa-selector";
 
 const DEFAULT_INTERVAL_MS = 60_000;
 const MIN_INTERVAL_MS = 30_000;
@@ -282,7 +283,14 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
       select: {
         id: true,
         code: true,
-        storeMaster: { select: { externalStoreId: true } },
+        storeMaster: {
+          select: {
+            externalStoreId: true,
+            accountName: true,
+            normalizedAccountName: true,
+            lineId: true,
+          },
+        },
         lineOfficialAccounts: {
           where: {
             accountType: LineAccountType.STORE,
@@ -290,17 +298,38 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
             archivedAt: null,
           },
           orderBy: { updatedAt: "desc" },
-          take: 1,
-          select: { id: true },
+          select: { id: true, name: true, basicId: true },
         },
       },
     });
-    const oa = store?.lineOfficialAccounts[0];
-    if (!store || !oa) throw new Error("RECONCILE_STORE_OR_ACTIVE_OA_NOT_FOUND");
+    if (!store) throw new Error("RECONCILE_STORE_NOT_FOUND");
+
+    const oaSelection = selectLineChatStoreOa(
+      store.storeMaster,
+      store.lineOfficialAccounts.map((candidate) => ({
+        id: candidate.id,
+        name: candidate.name,
+        basicId: candidate.basicId,
+      })),
+    );
+    if (!oaSelection.ok) {
+      throw new Error(`RECONCILE_OA_IDENTITY_${oaSelection.reason}`);
+    }
+    const oa = store.lineOfficialAccounts.find((candidate) => candidate.id === oaSelection.oaId);
+    if (!oa) throw new Error("RECONCILE_SELECTED_OA_NOT_FOUND");
 
     const effectiveStoreCode = store.code?.trim()
       || store.storeMaster?.externalStoreId?.trim()
       || storeCode;
+    this.logger.log(JSON.stringify({
+      event: "line_chat_mirror_reconcile_oa_selected",
+      storeCode: effectiveStoreCode,
+      storeMasterAccountName: store.storeMaster?.accountName ?? null,
+      storeMasterLineId: store.storeMaster?.lineId ?? null,
+      lineOfficialAccountId: oa.id,
+      lineOfficialAccountName: oa.name,
+      selectionSource: oaSelection.source,
+    }));
     const rows = await this.prisma.lineChatMirrorMessage.findMany({
       where: {
         lineOfficialAccountId: oa.id,
