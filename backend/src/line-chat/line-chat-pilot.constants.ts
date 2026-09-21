@@ -69,6 +69,27 @@ export function isLineChatManagerRelayStoreEnabled(
   return getLineChatManagerRelayEnabledStoreCodes(raw).has(cleanStoreCode);
 }
 
+export function getLineChatMirrorOnlyStoreCodes(
+  raw = process.env.LINE_CHAT_MIRROR_ONLY_STORE_CODES,
+): ReadonlySet<string> {
+  if (!raw) return new Set();
+  return new Set(
+    raw
+      .split(/[\s,;]+/u)
+      .map((value) => value.trim())
+      .filter(Boolean),
+  );
+}
+
+export function isLineChatMirrorOnlyStore(
+  storeCode: string | null | undefined,
+  raw = process.env.LINE_CHAT_MIRROR_ONLY_STORE_CODES,
+): boolean {
+  const cleanStoreCode = (storeCode ?? "").trim();
+  if (!cleanStoreCode) return false;
+  return getLineChatMirrorOnlyStoreCodes(raw).has(cleanStoreCode);
+}
+
 export function getLineChatManagerRelayStoreConfig(storeCode: string | null | undefined) {
   const cleanStoreCode = (storeCode ?? "").trim() as LineChatManagerRelayStoreCode;
   return LINE_CHAT_MANAGER_RELAY_STORE_CONFIG[cleanStoreCode] ?? null;
