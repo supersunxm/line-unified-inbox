@@ -18,7 +18,7 @@ import type {
   BroadcastPreviewInput,
 } from "./broadcast.types";
 
-// Production route contract: keep /broadcasts endpoints registered in fresh backend builds.
+// Production route contract: /broadcasts must be present in every fresh backend source build (deployment refresh 2).
 @Controller("broadcasts")
 @UseGuards(AuthGuard)
 @Roles(UserRole.ADMIN)
