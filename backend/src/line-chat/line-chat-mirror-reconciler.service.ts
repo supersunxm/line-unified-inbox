@@ -140,6 +140,18 @@ export function mirrorCanonicalExternalId(managerMessageId: string): string {
   return `line-chat-manager:${managerMessageId}`;
 }
 
+export function selectUniqueExactInboundConversationId(
+  conversationIds: readonly string[],
+):
+  | { status: "NONE" }
+  | { status: "UNIQUE"; conversationId: string }
+  | { status: "AMBIGUOUS" } {
+  const unique = [...new Set(conversationIds.map((value) => value.trim()).filter(Boolean))];
+  if (unique.length === 0) return { status: "NONE" };
+  if (unique.length > 1) return { status: "AMBIGUOUS" };
+  return { status: "UNIQUE", conversationId: unique[0] };
+}
+
 export function canonicalMessageTypeFromMirror(raw: string | null | undefined): MessageType {
   switch (raw?.trim().toLowerCase()) {
     case "text": return MessageType.TEXT;
@@ -697,16 +709,18 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
         externalMessageId: true,
       },
     });
-    const conversationIds = [...new Set(canonicalEvidence.map((row) => row.conversationId))];
-    if (conversationIds.length === 0) return null;
-    if (conversationIds.length > 1) {
+    const selection = selectUniqueExactInboundConversationId(
+      canonicalEvidence.map((row) => row.conversationId),
+    );
+    if (selection.status === "NONE") return null;
+    if (selection.status === "AMBIGUOUS") {
       return {
         status: "AMBIGUOUS",
         reason: "EXACT_INBOUND_MESSAGE_IDS_POINT_TO_MULTIPLE_CONVERSATIONS",
       };
     }
 
-    const conversationId = conversationIds[0];
+    const conversationId = selection.conversationId;
     const conversation = await this.prisma.conversation.findUnique({
       where: { id: conversationId },
       select: { id: true, lineOfficialAccountId: true, storeId: true, lineChatUserId: true },
