@@ -5466,3 +5466,15 @@ Waiver scope: focused PIN/auth tests pass **26/26**, focused Flutter PIN tests p
 - Live worker and backend processes report durable queue enabled, store allowlist `28375`, exactly the two authorized Test A/Test B conversation IDs, and the old pre-send failure flag absent. The pause flag is present only in the live worker runtime. Backend deployment `634a1907-7255-4465-a3ae-7c616a23eb95` remains healthy; public health/readiness and local worker health returned 200.
 - Read-only preflight passed: Manager OA is `OPPO BS RBS Chonburi`, Manager exact-text baseline for `INTERNAL WORKER RESTART B 001` is **0**, global active durable jobs are **0**, Test A/B/Max snapshots are unchanged, and Max/non-authorized recent traffic is **0**. Profile B is `ACTIVE`/`CONNECTED` with HTTP 200 health.
 - No customer-facing message has been sent and the Android emulator has not been touched for this canary. Next action: await explicit approval before sending the single Test B message.
+
+
+## 2026-09-21 — Project B: 7-store mirror-only production cutover
+
+- User announced that the seven LINE chat pilot stores will stop using the black app and return to LINE OA Manager as the customer-facing source of truth.
+- Added an explicit `LINE_CHAT_MIRROR_ONLY_STORE_CODES` kill-switch allowlist.
+- Black-app conversation sends (text, failed-message retry, image, PDF) now fail closed for mirror-only stores before any LINE transport is attempted.
+- Durable Manager queue creation also fails closed for mirror-only stores.
+- Durable send worker terminalizes already queued/verify-pending jobs for mirror-only stores before any customer-facing send action.
+- Existing Project B read-only mirror remains the data-capture path. Production activation will use the same seven store codes and preserve Manager as source of truth.
+- Added mirror-only cutover regression coverage and CI lint/test steps.
+- Required verification before completion: PR CI green, backend build/smoke green, production backend + line-chat worker deploy green, readiness healthy, mirror worker running, and no mirror-only send jobs initiating customer-facing sends.
