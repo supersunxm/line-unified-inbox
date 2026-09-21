@@ -11,6 +11,7 @@ import { PrismaService } from "../prisma.service";
 import { confirmLineManagerAuthentication } from "./line-chat-manager-auth-confirmation";
 import { LineChatProfileOperationCoordinator } from "./line-chat-profile-operation-coordinator.service";
 import { LineChatSessionService } from "./line-chat-session.service";
+import { selectLineChatStoreOa } from "./line-chat-store-oa-selector";
 
 const DEFAULT_INTERVAL_MS = 60_000;
 const MIN_INTERVAL_MS = 30_000;
@@ -245,7 +246,15 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
       select: {
         id: true,
         code: true,
-        storeMaster: { select: { externalStoreId: true, lineManagerUrl: true } },
+        storeMaster: {
+          select: {
+            externalStoreId: true,
+            lineManagerUrl: true,
+            accountName: true,
+            normalizedAccountName: true,
+            lineId: true,
+          },
+        },
         lineOfficialAccounts: {
           where: {
             accountType: LineAccountType.STORE,
@@ -253,9 +262,9 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
             archivedAt: null,
           },
           orderBy: { updatedAt: "desc" },
-          take: 1,
           select: {
             id: true,
+            name: true,
             basicId: true,
             lineChatWorkspaceUrl: true,
             chatBotId: true,
@@ -273,13 +282,37 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
       },
     });
 
-    const oa = store?.lineOfficialAccounts[0];
     const effectiveStoreCode = store?.code?.trim()
       || store?.storeMaster?.externalStoreId?.trim()
       || storeCode;
-    if (!store || !oa) {
-      throw new Error("MIRROR_STORE_OR_ACTIVE_OA_NOT_FOUND");
+    if (!store) {
+      throw new Error("MIRROR_STORE_NOT_FOUND");
     }
+
+    const oaSelection = selectLineChatStoreOa(
+      store.storeMaster,
+      store.lineOfficialAccounts.map((candidate) => ({
+        id: candidate.id,
+        name: candidate.name,
+        basicId: candidate.basicId,
+      })),
+    );
+    if (!oaSelection.ok) {
+      throw new Error(`MIRROR_OA_IDENTITY_${oaSelection.reason}`);
+    }
+    const oa = store.lineOfficialAccounts.find((candidate) => candidate.id === oaSelection.oaId);
+    if (!oa) {
+      throw new Error("MIRROR_SELECTED_OA_NOT_FOUND");
+    }
+    this.logger.log(JSON.stringify({
+      event: "line_chat_mirror_oa_selected",
+      storeCode: effectiveStoreCode,
+      storeMasterAccountName: store.storeMaster?.accountName ?? null,
+      storeMasterLineId: store.storeMaster?.lineId ?? null,
+      lineOfficialAccountId: oa.id,
+      lineOfficialAccountName: oa.name,
+      selectionSource: oaSelection.source,
+    }));
 
     await this.prisma.lineChatMirrorStoreState.upsert({
       where: { lineOfficialAccountId: oa.id },
