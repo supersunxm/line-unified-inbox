@@ -33,10 +33,10 @@ import type {
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-const BROADCAST_AUDIENCES = [
+const BROADCAST_AUDIENCES: ReadonlySet<MassMessageAudienceType> = new Set([
   MassMessageAudienceType.ALL_FRIENDS,
   MassMessageAudienceType.FRIENDSHIP_PERIOD,
-];
+]);
 
 @Injectable()
 export class BroadcastService {
@@ -219,7 +219,7 @@ export class BroadcastService {
     if (
       current &&
       current.status === MassMessageCampaignStatus.RUNNING &&
-      BROADCAST_AUDIENCES.includes(current.audienceType)
+      BROADCAST_AUDIENCES.has(current.audienceType)
     ) {
       await this.processor.reconcileCampaign(id);
     }
@@ -242,7 +242,7 @@ export class BroadcastService {
         },
       },
     });
-    if (!campaign || !BROADCAST_AUDIENCES.includes(campaign.audienceType)) {
+    if (!campaign || !BROADCAST_AUDIENCES.has(campaign.audienceType)) {
       throw new NotFoundException("Broadcast campaign not found");
     }
     return this.formatCampaign(campaign);
@@ -252,7 +252,14 @@ export class BroadcastService {
     void user;
     const take = Math.min(100, Math.max(1, limit));
     const skip = Math.max(0, offset);
-    const where = { audienceType: { in: BROADCAST_AUDIENCES } };
+    const where = {
+      audienceType: {
+        in: [
+          MassMessageAudienceType.ALL_FRIENDS,
+          MassMessageAudienceType.FRIENDSHIP_PERIOD,
+        ],
+      },
+    };
     const [items, total] = await Promise.all([
       this.prisma.massMessageCampaign.findMany({
         where,
@@ -272,12 +279,14 @@ export class BroadcastService {
       where: { id },
       include: { storeDeliveries: true },
     });
-    if (!campaign || !BROADCAST_AUDIENCES.includes(campaign.audienceType)) {
+    if (!campaign || !BROADCAST_AUDIENCES.has(campaign.audienceType)) {
       throw new NotFoundException("Broadcast campaign not found");
     }
 
-    const failed = campaign.storeDeliveries.filter((delivery) =>
-      [MassMessageStoreDeliveryStatus.FAILED, MassMessageStoreDeliveryStatus.PARTIAL].includes(delivery.status),
+    const failed = campaign.storeDeliveries.filter(
+      (delivery) =>
+        delivery.status === MassMessageStoreDeliveryStatus.FAILED ||
+        delivery.status === MassMessageStoreDeliveryStatus.PARTIAL,
     );
     if (failed.length === 0) {
       throw new BadRequestException("There are no failed stores to retry");
