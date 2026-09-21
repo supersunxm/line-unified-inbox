@@ -58,3 +58,12 @@ test("Broadcast composer exposes an explicit add-another-message control", () =>
 test("Broadcast LINE preview preserves text line breaks", () => {
   assert.match(viewCode, /whitespace-pre-wrap/);
 });
+
+
+test("Broadcast composer enables Rich Message selection from the existing library", () => {
+  assert.match(viewCode, /richMessageApi\.list\(false\)/);
+  assert.match(viewCode, />Rich message<\/button>/);
+  assert.match(viewCode, /type:\s*"rich_message"/);
+  assert.match(viewCode, /richMessageId:\s*message\.richMessageId/);
+  assert.match(viewCode, /จัดการคลัง Rich Message/);
+});
