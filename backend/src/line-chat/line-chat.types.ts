@@ -295,4 +295,9 @@ export interface LineChatRecentDiscoveryResult {
   pagesFetched: number;
   totalRawRecords: number;
   failureReason?: "SESSION_AUTH" | "TRANSPORT";
+  /**
+   * Safe transport-contract diagnostic only. Never includes cookies, tokens,
+   * message bodies, customer identifiers, or raw request query values.
+   */
+  failureDetail?: string;
 }

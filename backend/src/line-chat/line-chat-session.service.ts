@@ -402,6 +402,7 @@ export class LineChatSessionService {
         pagesFetched: result.pagesFetched,
         totalRawRecords: result.totalRawRecords,
         failureReason: authFailure ? "SESSION_AUTH" : "TRANSPORT",
+        failureDetail: (result.enumerationError ?? "CHAT_LIST_DISCOVERY_FAILED").slice(0, 240),
       };
     }
     return {
