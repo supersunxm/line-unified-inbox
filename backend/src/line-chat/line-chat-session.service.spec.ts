@@ -1026,3 +1026,16 @@ void test("runDiagnostics rejects the chat-list surface when no bot is supplied"
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
 });
+
+void test("bounded recent-chat discovery treats an oversized first page as a bounded window, not a transport failure", () => {
+  const source = fs.readFileSync(new URL("./line-chat-session.service.ts", import.meta.url), "utf8");
+  assert.match(
+    source,
+    /let enumerationError: string \| undefined = !boundedWindow && byId\.size > maxChats/,
+  );
+  assert.match(
+    source,
+    /if \(!boundedWindow && byId\.size > maxChats\) \{/,
+  );
+});
+
