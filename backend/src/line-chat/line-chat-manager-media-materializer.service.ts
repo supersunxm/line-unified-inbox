@@ -16,6 +16,8 @@ import { LineChatMirrorService } from "./line-chat-mirror.service";
 import { LineChatProfileOperationCoordinator } from "./line-chat-profile-operation-coordinator.service";
 import { LineChatSessionService } from "./line-chat-session.service";
 import { configuredLineChatMirrorReconcileStoreCodes } from "./line-chat-mirror-reconciler.service";
+import { LineChatAuthRecoveryService } from "./line-chat-auth-recovery.service";
+import { LineChatHealthService } from "./line-chat-health.service";
 
 const DEFAULT_INTERVAL_MS = 60_000;
 const MIN_INTERVAL_MS = 30_000;
@@ -161,6 +163,7 @@ export function managerContentHashUrl(botId: string, contentHash: string): strin
 
 export function isTransientManagerMediaError(errorMessage: string): boolean {
   return errorMessage === "MANAGER_MEDIA_PROFILE_BUSY"
+    || errorMessage.startsWith("MANAGER_MEDIA_AUTH_")
     || /\bEAGAIN\b/u.test(errorMessage)
     || /browser has been closed/iu.test(errorMessage)
     || /Failed to launch/iu.test(errorMessage)
@@ -360,6 +363,8 @@ export class LineChatManagerMediaMaterializerService implements OnModuleInit, On
     private readonly coordinator: LineChatProfileOperationCoordinator,
     @Inject(LineChatMirrorService) private readonly mirrorService: LineChatMirrorService,
     @Inject(MediaStorageService) private readonly storage: MediaStorageService,
+    @Inject(LineChatHealthService) private readonly healthService: LineChatHealthService,
+    @Inject(LineChatAuthRecoveryService) private readonly authRecovery: LineChatAuthRecoveryService,
   ) {}
 
   onModuleInit(): void {
@@ -498,7 +503,8 @@ export class LineChatManagerMediaMaterializerService implements OnModuleInit, On
         const errorMessage = result.error ?? "MANAGER_MEDIA_UNKNOWN_FAILURE";
         if (isTransientManagerMediaError(errorMessage)) {
           deferred += 1;
-          this.retryNotBefore.set(result.id, Date.now() + 30_000);
+          const retryDelayMs = errorMessage.startsWith("MANAGER_MEDIA_AUTH_") ? 5 * 60_000 : 30_000;
+          this.retryNotBefore.set(result.id, Date.now() + retryDelayMs);
           this.logger.log(JSON.stringify({
             event: "line_chat_manager_media_materialize_deferred",
             storeCode: result.storeCode,
@@ -611,6 +617,7 @@ export class LineChatManagerMediaMaterializerService implements OnModuleInit, On
       input: MaterializationBatchInput;
       message: NonNullable<Awaited<ReturnType<LineChatManagerMediaMaterializerService["loadMessageForMaterialization"]>>>;
     }>,
+    allowAuthRecovery = true,
   ): Promise<MaterializationBatchResult[]> {
     const first = group[0];
     if (!first) return [];
@@ -760,12 +767,57 @@ export class LineChatManagerMediaMaterializerService implements OnModuleInit, On
       return results.concat(operation.value);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message.slice(0, 240) : String(error).slice(0, 240);
+
+      if (allowAuthRecovery && errorMessage.startsWith("MANAGER_MEDIA_AUTH_")) {
+        const recovered = await this.tryRecoverExpiredManagerAuth(target.session.id, errorMessage);
+        if (recovered) {
+          this.logger.log(JSON.stringify({
+            event: "line_chat_manager_media_auth_recovered_retrying_batch",
+            storeCode: runnable[0]?.input.storeCode ?? null,
+            candidateCount: runnable.length,
+          }));
+          return results.concat(await this.materializeLoadedGroup(runnable, false));
+        }
+      }
+
       return results.concat(runnable.map(({ input }) => ({
         ...input,
         outcome: "ERROR",
         error: errorMessage,
       })));
     }
+  }
+
+  private async tryRecoverExpiredManagerAuth(
+    sessionId: string,
+    errorMessage: string,
+  ): Promise<boolean> {
+    await this.healthService.recordSessionHealthResult({
+      sessionId,
+      status: "AUTH_REQUIRED",
+      failureStage: "MANAGER_AUTH",
+      checkedAt: new Date(),
+      httpStatus: 401,
+      source: "SCHEDULED",
+    }).catch(() => undefined);
+
+    if (process.env.LINE_CHAT_AUTO_AUTH_RECOVERY_ENABLED !== "true") {
+      return false;
+    }
+
+    const recovery = await this.authRecovery.recoverSession(sessionId, "SCHEDULED").catch((error: unknown) => ({
+      outcome: "RECOVERY_FAILED_SAFE" as const,
+      message: error instanceof Error ? error.message : String(error),
+    }));
+
+    this.logger.log(JSON.stringify({
+      event: "line_chat_manager_media_auth_recovery_attempted",
+      sessionId,
+      trigger: errorMessage,
+      outcome: recovery.outcome,
+    }));
+
+    return recovery.outcome === "RECOVERED_REMEMBERED_ACCOUNT";
   }
 
   private async persistDownloadedMedia(

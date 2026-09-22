@@ -56,7 +56,8 @@ test("materializer waits briefly for the shared Manager profile instead of faili
   assert.match(source, /waitForLock:\s*true/);
   assert.match(source, /waitForLockMs:\s*15_000/);
   assert.match(source, /line_chat_manager_media_materialize_deferred/);
-  assert.match(source, /Date\.now\(\) \+ 30_000/);
+  assert.match(source, /retryDelayMs = errorMessage\.startsWith\("MANAGER_MEDIA_AUTH_"\) \? 5 \* 60_000 : 30_000/);
+  assert.match(source, /Date\.now\(\) \+ retryDelayMs/);
 });
 
 
@@ -115,4 +116,16 @@ test("materializer reuses a single persistent browser context for a candidate ba
   assert.match(source, /for \(const \{ input, message \} of runnable\)/);
   assert.match(source, /launchManagedPersistentContext/);
   assert.match(source, /persistDownloadedMedia/);
+});
+
+
+test("materializer treats Manager auth expiry as retryable and wires safe remembered-account recovery", () => {
+  const source = readFileSync(new URL("./line-chat-manager-media-materializer.service.ts", import.meta.url), "utf8");
+  assert.equal(isTransientManagerMediaError("MANAGER_MEDIA_AUTH_AUTH_EXPIRED"), true);
+  assert.match(source, /LineChatAuthRecoveryService/);
+  assert.match(source, /recordSessionHealthResult/);
+  assert.match(source, /status:\s*"AUTH_REQUIRED"/);
+  assert.match(source, /failureStage:\s*"MANAGER_AUTH"/);
+  assert.match(source, /recoverSession\(sessionId, "SCHEDULED"\)/);
+  assert.match(source, /line_chat_manager_media_auth_recovered_retrying_batch/);
 });
