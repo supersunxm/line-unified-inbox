@@ -167,7 +167,8 @@ export function isTransientManagerMediaError(errorMessage: string): boolean {
     || /\bEAGAIN\b/u.test(errorMessage)
     || /browser has been closed/iu.test(errorMessage)
     || /Failed to launch/iu.test(errorMessage)
-    || /Target page, context or browser has been closed/iu.test(errorMessage);
+    || /Target page, context or browser has been closed/iu.test(errorMessage)
+    || /launchPersistentContext:\s*Timeout\s+\d+ms exceeded/iu.test(errorMessage);
 }
 
 export function extractManagerMediaUrlCandidates(value: unknown): string[] {
@@ -687,6 +688,7 @@ export class LineChatManagerMediaMaterializerService implements OnModuleInit, On
                 profilePath,
                 headless: true,
                 viewport: { width: 1280, height: 800 },
+                timeout: 30_000,
                 args: [
                   "--no-sandbox",
                   "--disable-setuid-sandbox",
