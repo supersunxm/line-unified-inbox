@@ -107,15 +107,25 @@ export function isLineChatMirrorReconcileApplyEnabled(): boolean {
   return process.env.LINE_CHAT_MIRROR_RECONCILE_APPLY?.trim().toLowerCase() === "true";
 }
 
-export function configuredLineChatMirrorReconcileStoreCodes(): string[] {
-  const raw = process.env.LINE_CHAT_MIRROR_RECONCILE_STORE_CODES?.trim();
-  if (!raw) return configuredLineChatMirrorStoreCodes();
+function parseStoreCodeList(raw: string | null | undefined): string[] {
+  if (!raw?.trim()) return [];
   return [...new Set(
     raw
       .split(/[\s,;]+/u)
       .map((value) => value.trim())
       .filter(Boolean),
   )];
+}
+
+export function configuredLineChatMirrorReconcileStoreCodes(): string[] {
+  const configured = parseStoreCodeList(process.env.LINE_CHAT_MIRROR_RECONCILE_STORE_CODES);
+  return configured.length > 0 ? configured : configuredLineChatMirrorStoreCodes();
+}
+
+export function configuredLineChatMirrorReconcileDryRunStoreCodes(): string[] {
+  const primary = new Set(configuredLineChatMirrorReconcileStoreCodes());
+  return parseStoreCodeList(process.env.LINE_CHAT_MIRROR_RECONCILE_DRY_RUN_STORE_CODES)
+    .filter((storeCode) => !primary.has(storeCode));
 }
 
 export function lineChatMirrorReconcileSince(): Date | null {
@@ -217,10 +227,13 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
     }
 
     const intervalMs = lineChatMirrorReconcileIntervalMs();
+    const primaryStoreCodes = configuredLineChatMirrorReconcileStoreCodes();
+    const dryRunStoreCodes = configuredLineChatMirrorReconcileDryRunStoreCodes();
     this.logger.log(JSON.stringify({
       event: "line_chat_mirror_reconciler_started",
-      storeCount: configuredLineChatMirrorReconcileStoreCodes().length,
+      storeCount: primaryStoreCodes.length,
       apply: isLineChatMirrorReconcileApplyEnabled(),
+      dryRunStoreCount: dryRunStoreCodes.length,
       since: since.toISOString(),
       batchSize: lineChatMirrorReconcileBatchSize(),
       intervalMs,
@@ -248,13 +261,24 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
     this.running = true;
     try {
       const results: LineChatMirrorReconcileCycleResult[] = [];
-      for (const storeCode of configuredLineChatMirrorReconcileStoreCodes()) {
+      const scopes = [
+        ...configuredLineChatMirrorReconcileStoreCodes().map((storeCode) => ({
+          storeCode,
+          apply: isLineChatMirrorReconcileApplyEnabled(),
+        })),
+        ...configuredLineChatMirrorReconcileDryRunStoreCodes().map((storeCode) => ({
+          storeCode,
+          apply: false,
+        })),
+      ];
+      for (const scope of scopes) {
         try {
-          results.push(await this.reconcileStore(storeCode, since));
+          results.push(await this.reconcileStore(scope.storeCode, since, scope.apply));
         } catch (error) {
           this.logger.error(JSON.stringify({
             event: "line_chat_mirror_reconcile_store_failed",
-            storeCode,
+            storeCode: scope.storeCode,
+            apply: scope.apply,
             error: error instanceof Error ? error.message.slice(0, 500) : String(error).slice(0, 500),
           }));
         }
@@ -268,9 +292,9 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
   private async reconcileStore(
     storeCode: string,
     since: Date,
+    apply: boolean,
   ): Promise<LineChatMirrorReconcileCycleResult> {
     const startedAt = Date.now();
-    const apply = isLineChatMirrorReconcileApplyEnabled();
     const store = await this.prisma.store.findFirst({
       where: {
         isActive: true,
