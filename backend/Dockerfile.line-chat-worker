@@ -1,5 +1,5 @@
 # Dedicated lightweight container for standalone LINE Chat Nickname Worker
-FROM mcr.microsoft.com/playwright:v1.50.0-noble AS runner
+FROM mcr.microsoft.com/playwright:v1.62.1-noble AS runner
 
 WORKDIR /app
 
