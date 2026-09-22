@@ -2,7 +2,6 @@ import { BadRequestException, Injectable, Logger, NotFoundException } from "@nes
 import { createHash, randomBytes } from "node:crypto";
 import { PrismaService } from "../prisma.service";
 import {
-  AggregateWeeklyKpiDto,
   CheckGoogleReviewKpiResultDto,
   CompleteStoreAuditDto,
   ExportWeeklyLeaderboardDto,
@@ -29,13 +28,14 @@ import ExcelJS from "exceljs";
 import {
   generateWeeklyPeriods,
   getBangkokDateParts,
-  getWeeklyPeriod,
   resolveWeekNumber,
 } from "./weekly-period.util";
 import type { AuthUser } from "../auth/auth.guard";
 import { StoreAccessService } from "../auth/store-access.service";
+import type { Prisma } from "@prisma/client";
 import {
   GoogleReviewAuditCoverageStatus,
+  GoogleReviewAuditCompletionReason,
   GoogleReviewAuditSessionStatus,
   GoogleReviewAuditStoreStatus,
   GoogleReviewPeriodStatus,
@@ -45,6 +45,25 @@ import {
 /** Lifetime of a batch-runner token: 30 minutes. */
 const RUNNER_TOKEN_TTL_MS = 30 * 60 * 1000;
 
+type AuditQueueStoreWithRelations = Prisma.GoogleReviewAuditStoreGetPayload<{
+  include: {
+    store: {
+      include: {
+        storeMaster: {
+          select: {
+            externalStoreId: true;
+            storeName: true;
+            googleMapsUrl: true;
+            googleMapsName: true;
+            region: true;
+          };
+        };
+      };
+    };
+  };
+}>;
+type ExportCellValue = string | number | null;
+
 export function getCurrentYearMonthBangkok(): string {
   const formatter = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Bangkok",
@@ -52,6 +71,37 @@ export function getCurrentYearMonthBangkok(): string {
     month: "2-digit",
   });
   return formatter.format(new Date()).slice(0, 7);
+}
+
+/** Keep an operator's explicit selection order independent from DB ordering. */
+export function preserveSelectedStoreOrder<T extends { id: string }>(
+  stores: T[],
+  selectedStoreIds: string[],
+): T[] {
+  const storesById = new Map(stores.map((store) => [store.id, store]));
+  return Array.from(new Set(selectedStoreIds))
+    .map((storeId) => storesById.get(storeId))
+    .filter((store): store is T => Boolean(store));
+}
+
+/** Normalize the scanner's internal boundary event to the public audit vocabulary. */
+export function normalizeAuditCompletionReason(args: {
+  coverageStatus?: string | null;
+  completionReason?: string | null;
+}): GoogleReviewAuditCompletionReason | null {
+  if (args.completionReason === "MONTHLY_STOP_BOUNDARY_REACHED") {
+    return GoogleReviewAuditCompletionReason.MONTHLY_STOP_BOUNDARY_REACHED;
+  }
+  if (args.completionReason === "END_OF_REVIEW_FEED") {
+    return GoogleReviewAuditCompletionReason.END_OF_REVIEW_FEED;
+  }
+  if (args.coverageStatus === "OLDER_THAN_TARGET_REACHED") {
+    return GoogleReviewAuditCompletionReason.MONTHLY_STOP_BOUNDARY_REACHED;
+  }
+  if (args.coverageStatus === "END_OF_AVAILABLE_REVIEWS") {
+    return GoogleReviewAuditCompletionReason.END_OF_REVIEW_FEED;
+  }
+  return null;
 }
 
 @Injectable()
@@ -91,7 +141,9 @@ export class GoogleReviewKpiService {
         storeMaster: {
           select: {
             externalStoreId: true,
+            storeName: true,
             googleMapsUrl: true,
+            googleMapsName: true,
             province: true,
             region: true,
           },
@@ -124,6 +176,7 @@ export class GoogleReviewKpiService {
     const storeItems: GoogleReviewKpiStoreItem[] = stores.map((store) => {
       totalStores++;
       const googleMapsUrl = store.storeMaster?.googleMapsUrl?.trim() || null;
+      const googleMapsName = store.storeMaster?.googleMapsName?.trim() || null;
       const hasGoogleMaps = Boolean(googleMapsUrl);
       if (hasGoogleMaps) storesWithGoogleMaps++;
 
@@ -170,11 +223,12 @@ export class GoogleReviewKpiService {
       return {
         id: store.id,
         storeId: store.storeMaster?.externalStoreId ?? store.code ?? null,
-        name: store.name,
-        code: store.code,
+        name: store.storeMaster?.storeName ?? store.name,
+        code: store.storeMaster?.externalStoreId ?? store.code,
         region: store.storeMaster?.region ?? store.region ?? null,
         province: store.storeMaster?.province ?? store.area ?? null,
         googleMapsUrl,
+        googleMapsName,
         hasGoogleMaps,
         kpiResult,
       };
@@ -220,9 +274,10 @@ export class GoogleReviewKpiService {
         store: {
           id: store.id,
           storeId: store.storeMaster?.externalStoreId ?? store.code ?? null,
-          name: store.name,
-          code: store.code,
+          name: store.storeMaster?.storeName ?? store.name,
+          code: store.storeMaster?.externalStoreId ?? store.code,
           googleMapsUrl: store.storeMaster?.googleMapsUrl ?? null,
+          googleMapsName: store.storeMaster?.googleMapsName ?? null,
         },
         month: selectedMonth,
         kpiResult: kpi,
@@ -243,9 +298,10 @@ export class GoogleReviewKpiService {
       store: {
         id: store.id,
         storeId: store.storeMaster?.externalStoreId ?? store.code ?? null,
-        name: store.name,
-        code: store.code,
+        name: store.storeMaster?.storeName ?? store.name,
+        code: store.storeMaster?.externalStoreId ?? store.code,
         googleMapsUrl: store.storeMaster?.googleMapsUrl ?? null,
+        googleMapsName: store.storeMaster?.googleMapsName ?? null,
       },
       history,
     };
@@ -355,9 +411,10 @@ export class GoogleReviewKpiService {
         store: {
           id: store.id,
           storeId: store.storeMaster?.externalStoreId ?? store.code ?? null,
-          name: store.name,
-          code: store.code,
+          name: store.storeMaster?.storeName ?? store.name,
+          code: store.storeMaster?.externalStoreId ?? store.code,
           googleMapsUrl: store.storeMaster?.googleMapsUrl ?? null,
+          googleMapsName: store.storeMaster?.googleMapsName ?? null,
         },
       },
     };
@@ -376,7 +433,9 @@ export class GoogleReviewKpiService {
         storeMaster: {
           select: {
             externalStoreId: true,
+            storeName: true,
             googleMapsUrl: true,
+            googleMapsName: true,
             province: true,
             region: true,
           },
@@ -392,8 +451,10 @@ export class GoogleReviewKpiService {
           storeMaster: {
             select: {
               externalStoreId: true,
-              googleMapsUrl: true,
-              province: true,
+            storeName: true,
+            googleMapsUrl: true,
+            googleMapsName: true,
+            province: true,
               region: true,
             },
           },
@@ -412,7 +473,9 @@ export class GoogleReviewKpiService {
               storeMaster: {
                 select: {
                   externalStoreId: true,
+                  storeName: true,
                   googleMapsUrl: true,
+                  googleMapsName: true,
                   province: true,
                   region: true,
                 },
@@ -447,21 +510,6 @@ export class GoogleReviewKpiService {
       throw new BadRequestException("month must be in YYYY-MM format (e.g. 2026-08)");
     }
 
-    // 1. If an active session (RUNNING or PAUSED) exists, reuse it
-    const existing = await this.prisma.googleReviewAuditSession.findFirst({
-      where: {
-        month,
-        status: { in: [GoogleReviewAuditSessionStatus.RUNNING, GoogleReviewAuditSessionStatus.PAUSED] },
-      },
-      orderBy: { createdAt: "desc" },
-    });
-
-    if (existing) {
-      this.logger.log(`Reusing active audit session id=${existing.id} for month=${month}`);
-      const active = await this.getActiveAuditSession(month);
-      if (active) return active;
-    }
-
     // 2. Query all active stores
     const stores = await this.prisma.store.findMany({
       where: {
@@ -473,7 +521,9 @@ export class GoogleReviewKpiService {
         storeMaster: {
           select: {
             externalStoreId: true,
+            storeName: true,
             googleMapsUrl: true,
+            googleMapsName: true,
             region: true,
           },
         },
@@ -487,8 +537,10 @@ export class GoogleReviewKpiService {
       if (!dto.storeIds || dto.storeIds.length === 0) {
         throw new BadRequestException("At least one storeId must be provided when scope is SELECTED.");
       }
-      const uniqueStoreIds = Array.from(new Set(dto.storeIds));
-      targetStores = stores.filter((s) => uniqueStoreIds.includes(s.id));
+      // Preserve the dashboard selection order. The first runner item must be
+      // the first store selected by the operator, not the backend's region/name
+      // ordering or a previous batch's queue order.
+      targetStores = preserveSelectedStoreOrder(stores, dto.storeIds);
       if (targetStores.length === 0) {
         throw new BadRequestException("None of the selected store IDs were found or active.");
       }
@@ -506,23 +558,48 @@ export class GoogleReviewKpiService {
       throw new BadRequestException("No stores with valid Google Maps URLs found.");
     }
 
-    // 3. Create session with ordered queue items
-    const session = await this.prisma.googleReviewAuditSession.create({
-      data: {
-        month,
-        status: GoogleReviewAuditSessionStatus.RUNNING,
-        qualificationRuleVersion: dto.qualificationRuleVersion || "IMAGE_CAPTURE_MONTH_V1",
-        totalStores: eligibleStores.length,
-        startedByUserId: user?.id ?? null,
-        queueStores: {
-          create: eligibleStores.map((s, idx) => ({
-            storeId: s.id,
-            queueOrder: idx + 1,
-            status: GoogleReviewAuditStoreStatus.PENDING,
-          })),
+    // A dashboard Start action is a new audit identity. Reusing an older
+    // session here allowed a stale queue/currentStore to win over the stores
+    // the operator had just selected. Preserve the old audit rows for history,
+    // but invalidate its active execution state only after the new selection
+    // has been validated and is ready to create a fresh queue.
+    const { session, supersededCount } = await this.prisma.$transaction(async (tx) => {
+      const superseded = await tx.googleReviewAuditSession.updateMany({
+        where: {
+          month,
+          status: { in: [GoogleReviewAuditSessionStatus.RUNNING, GoogleReviewAuditSessionStatus.PAUSED] },
         },
-      },
+        data: {
+          status: GoogleReviewAuditSessionStatus.CANCELLED,
+          completedAt: new Date(),
+        },
+      });
+
+      const created = await tx.googleReviewAuditSession.create({
+        data: {
+          month,
+          status: GoogleReviewAuditSessionStatus.RUNNING,
+          qualificationRuleVersion: dto.qualificationRuleVersion || "IMAGE_CAPTURE_MONTH_V1",
+          totalStores: eligibleStores.length,
+          startedByUserId: user?.id ?? null,
+          queueStores: {
+            create: eligibleStores.map((s, idx) => ({
+              storeId: s.id,
+              queueOrder: idx + 1,
+              status: GoogleReviewAuditStoreStatus.PENDING,
+            })),
+          },
+        },
+      });
+
+      return { session: created, supersededCount: superseded.count };
     });
+
+    if (supersededCount > 0) {
+      this.logger.warn(
+        `Superseded ${supersededCount} active monthly audit session(s) for fresh dashboard start month=${month}`,
+      );
+    }
 
     this.logger.log(
       `Created monthly batch audit session id=${session.id} month=${month} eligibleStores=${eligibleStores.length}/${stores.length}`,
@@ -552,7 +629,9 @@ export class GoogleReviewKpiService {
                 storeMaster: {
                   select: {
                     externalStoreId: true,
+                    storeName: true,
                     googleMapsUrl: true,
+                    googleMapsName: true,
                     region: true,
                   },
                 },
@@ -588,10 +667,11 @@ export class GoogleReviewKpiService {
             id: qs.id,
             sessionId: qs.sessionId,
             storeId: qs.storeId,
-            storeName: qs.store.name,
-            storeCode: qs.store.code,
+            storeName: qs.store.storeMaster?.storeName ?? qs.store.name,
+            storeCode: qs.store.storeMaster?.externalStoreId ?? qs.store.code,
             region: qs.store.storeMaster?.region ?? qs.store.region ?? null,
             googleMapsUrl: qs.store.storeMaster?.googleMapsUrl ?? null,
+            googleMapsName: qs.store.storeMaster?.googleMapsName ?? null,
             queueOrder: qs.queueOrder,
             status: qs.status,
             reviewsChecked: qs.reviewsChecked,
@@ -600,6 +680,7 @@ export class GoogleReviewKpiService {
             reviewsOver15ThaiWords: qs.reviewsOver15ThaiWords,
             qualifiedReviews: qs.qualifiedReviews,
             coverageStatus: qs.coverageStatus,
+            completionReason: qs.completionReason,
             attemptCount: qs.attemptCount,
             errorCode: qs.errorCode,
             errorMessage: qs.errorMessage,
@@ -616,11 +697,12 @@ export class GoogleReviewKpiService {
         id: qs.id,
         sessionId: qs.sessionId,
         storeId: qs.storeId,
-        storeName: qs.store.name,
-        storeCode: qs.store.code,
+        storeName: qs.store.storeMaster?.storeName ?? qs.store.name,
+        storeCode: qs.store.storeMaster?.externalStoreId ?? qs.store.code,
         region: qs.store.storeMaster?.region ?? qs.store.region ?? null,
-        googleMapsUrl: qs.store.storeMaster?.googleMapsUrl ?? null,
-        queueOrder: qs.queueOrder,
+            googleMapsUrl: qs.store.storeMaster?.googleMapsUrl ?? null,
+            googleMapsName: qs.store.storeMaster?.googleMapsName ?? null,
+            queueOrder: qs.queueOrder,
         status: qs.status,
         reviewsChecked: qs.reviewsChecked,
         reviewsWithPhoto: qs.reviewsWithPhoto,
@@ -628,6 +710,7 @@ export class GoogleReviewKpiService {
         reviewsOver15ThaiWords: qs.reviewsOver15ThaiWords,
         qualifiedReviews: qs.qualifiedReviews,
         coverageStatus: qs.coverageStatus,
+        completionReason: qs.completionReason,
         attemptCount: qs.attemptCount,
         errorCode: qs.errorCode,
         errorMessage: qs.errorMessage,
@@ -711,7 +794,9 @@ export class GoogleReviewKpiService {
                 storeMaster: {
                   select: {
                     externalStoreId: true,
+                    storeName: true,
                     googleMapsUrl: true,
+                    googleMapsName: true,
                     region: true,
                   },
                 },
@@ -772,7 +857,9 @@ export class GoogleReviewKpiService {
               storeMaster: {
                 select: {
                   externalStoreId: true,
+                  storeName: true,
                   googleMapsUrl: true,
+                  googleMapsName: true,
                   region: true,
                 },
               },
@@ -824,7 +911,6 @@ export class GoogleReviewKpiService {
       reviewsWithPhoto,
       reviewsOver15ThaiWords,
       qualifiedReviews,
-      coverageStatus,
     } = dto;
 
     if (qualifiedReviews > reviewsChecked) {
@@ -849,6 +935,16 @@ export class GoogleReviewKpiService {
       throw new NotFoundException(`Store ${storeId} not in session queue`);
     }
 
+    if (
+      session.status !== GoogleReviewAuditSessionStatus.RUNNING ||
+      queueStore.status !== GoogleReviewAuditStoreStatus.RUNNING
+    ) {
+      throw new BadRequestException("This monthly audit batch item is no longer active");
+    }
+    if (dto.batchItemId && dto.batchItemId !== queueStore.id) {
+      throw new BadRequestException("Batch item identity does not match the active store queue item");
+    }
+
     // Upsert into canonical GoogleReviewKpiResult and update queueStore
     const effectiveCoverage = dto.coverageStatus || dto.auditCoverageStatus;
     const parsedCoverage =
@@ -857,6 +953,25 @@ export class GoogleReviewKpiService {
         : effectiveCoverage === "END_OF_AVAILABLE_REVIEWS"
           ? GoogleReviewAuditCoverageStatus.END_OF_AVAILABLE_REVIEWS
           : null;
+
+    const parsedCompletionReason = normalizeAuditCompletionReason({
+      coverageStatus: effectiveCoverage,
+      completionReason: dto.completionReason,
+    });
+
+    if (!parsedCoverage || !parsedCompletionReason) {
+      throw new BadRequestException(
+        "A deterministic coverage status and completion reason are required to complete a monthly audit store",
+      );
+    }
+    if (
+      (parsedCoverage === GoogleReviewAuditCoverageStatus.OLDER_THAN_TARGET_REACHED &&
+        parsedCompletionReason !== GoogleReviewAuditCompletionReason.MONTHLY_STOP_BOUNDARY_REACHED) ||
+      (parsedCoverage === GoogleReviewAuditCoverageStatus.END_OF_AVAILABLE_REVIEWS &&
+        parsedCompletionReason !== GoogleReviewAuditCompletionReason.END_OF_REVIEW_FEED)
+    ) {
+      throw new BadRequestException("completionReason does not match audit coverage status");
+    }
 
     await this.prisma.$transaction([
       this.prisma.googleReviewAuditStore.update({
@@ -869,6 +984,7 @@ export class GoogleReviewKpiService {
           reviewsOver15ThaiWords,
           qualifiedReviews,
           coverageStatus: parsedCoverage,
+          completionReason: parsedCompletionReason,
           completedAt: new Date(),
           errorCode: null,
           errorMessage: null,
@@ -949,11 +1065,24 @@ export class GoogleReviewKpiService {
     storeId: string,
     dto: FailStoreAuditDto,
   ) {
-    const queueStore = await this.prisma.googleReviewAuditStore.findFirst({
-      where: { sessionId, storeId },
-    });
+    const [session, queueStore] = await Promise.all([
+      this.prisma.googleReviewAuditSession.findUnique({ where: { id: sessionId } }),
+      this.prisma.googleReviewAuditStore.findFirst({ where: { sessionId, storeId } }),
+    ]);
+    if (!session) {
+      throw new NotFoundException(`Audit session ${sessionId} not found`);
+    }
     if (!queueStore) {
       throw new NotFoundException(`Store ${storeId} not in session queue`);
+    }
+    if (
+      session.status !== GoogleReviewAuditSessionStatus.RUNNING ||
+      queueStore.status !== GoogleReviewAuditStoreStatus.RUNNING
+    ) {
+      throw new BadRequestException("This monthly audit batch item is no longer active");
+    }
+    if (dto.batchItemId && dto.batchItemId !== queueStore.id) {
+      throw new BadRequestException("Batch item identity does not match the active store queue item");
     }
 
     await this.prisma.googleReviewAuditStore.update({
@@ -1014,6 +1143,7 @@ export class GoogleReviewKpiService {
         status: GoogleReviewAuditStoreStatus.PENDING,
         errorCode: null,
         errorMessage: null,
+        completionReason: null,
         completedAt: null,
       },
     });
@@ -1021,15 +1151,16 @@ export class GoogleReviewKpiService {
     return { success: true, storeId, status: "PENDING" };
   }
 
-  private mapQueueStoreToItem(qs: any): GoogleReviewAuditQueueStoreItem {
+  private mapQueueStoreToItem(qs: AuditQueueStoreWithRelations): GoogleReviewAuditQueueStoreItem {
     return {
       id: qs.id,
       sessionId: qs.sessionId,
       storeId: qs.storeId,
-      storeName: qs.store?.name ?? "",
-      storeCode: qs.store?.code ?? null,
+      storeName: qs.store?.storeMaster?.storeName ?? qs.store?.name ?? "",
+      storeCode: qs.store?.storeMaster?.externalStoreId ?? qs.store?.code ?? null,
       region: qs.store?.storeMaster?.region ?? qs.store?.region ?? null,
       googleMapsUrl: qs.store?.storeMaster?.googleMapsUrl ?? null,
+      googleMapsName: qs.store?.storeMaster?.googleMapsName ?? null,
       queueOrder: qs.queueOrder,
       status: qs.status,
       reviewsChecked: qs.reviewsChecked,
@@ -1038,6 +1169,7 @@ export class GoogleReviewKpiService {
       reviewsOver15ThaiWords: qs.reviewsOver15ThaiWords,
       qualifiedReviews: qs.qualifiedReviews,
       coverageStatus: qs.coverageStatus,
+      completionReason: qs.completionReason,
       attemptCount: qs.attemptCount,
       errorCode: qs.errorCode,
       errorMessage: qs.errorMessage,
@@ -1722,7 +1854,7 @@ export class GoogleReviewKpiService {
         (store.storeRating === null || store.storeRating > 4.8);
       const achievement = store.qualifiedReviews / target;
 
-      const row: Record<string, any> = {
+      const row: Record<string, ExportCellValue> = {
         "Rank": store.rank,
         "Store Code": store.storeCode,
         "Store Name": store.storeName,
@@ -1767,7 +1899,7 @@ export class GoogleReviewKpiService {
       }
 
       const headers = Object.keys(rows[0]);
-      const escapeCsvVal = (val: any): string => {
+      const escapeCsvVal = (val: ExportCellValue): string => {
         if (val === null || val === undefined) return "";
         const str = String(val);
         if (str.includes(",") || str.includes("\"") || str.includes("\n") || str.includes("\r")) {
@@ -1845,4 +1977,3 @@ export class GoogleReviewKpiService {
     };
   }
 }
-

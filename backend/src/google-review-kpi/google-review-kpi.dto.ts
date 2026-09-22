@@ -109,6 +109,10 @@ export class StartMonthlyAuditDto {
 }
 
 export class CompleteStoreAuditDto {
+  @IsOptional()
+  @IsString()
+  batchItemId?: string;
+
   @Type(() => Number)
   @IsInt()
   @Min(0)
@@ -160,6 +164,10 @@ export class CompleteStoreAuditDto {
   auditCoverageStatus?: "OLDER_THAN_TARGET_REACHED" | "END_OF_AVAILABLE_REVIEWS";
 
   @IsOptional()
+  @IsIn(["MONTHLY_STOP_BOUNDARY_REACHED", "END_OF_REVIEW_FEED"])
+  completionReason?: "MONTHLY_STOP_BOUNDARY_REACHED" | "END_OF_REVIEW_FEED";
+
+  @IsOptional()
   @IsString()
   oldestReviewDateText?: string;
 
@@ -176,6 +184,10 @@ export class FailStoreAuditDto {
   @IsOptional()
   @IsString()
   errorMessage?: string;
+
+  @IsOptional()
+  @IsString()
+  batchItemId?: string;
 }
 
 export class UpdateAuditSessionStatusDto {
@@ -192,6 +204,7 @@ export type GoogleReviewAuditQueueStoreItem = {
   storeCode: string | null;
   region: string | null;
   googleMapsUrl: string | null;
+  googleMapsName: string | null;
   queueOrder: number;
   status: "PENDING" | "RUNNING" | "COMPLETED" | "NEEDS_ATTENTION" | "SKIPPED" | "FAILED";
   reviewsChecked: number;
@@ -200,6 +213,7 @@ export type GoogleReviewAuditQueueStoreItem = {
   reviewsOver15ThaiWords: number;
   qualifiedReviews: number;
   coverageStatus: string | null;
+  completionReason: string | null;
   attemptCount: number;
   errorCode: string | null;
   errorMessage: string | null;
@@ -234,6 +248,7 @@ export type GoogleReviewKpiStoreItem = {
   region: string | null;
   province: string | null;
   googleMapsUrl: string | null;
+  googleMapsName: string | null;
   hasGoogleMaps: boolean;
   kpiResult: {
     id: string;
@@ -454,4 +469,3 @@ export class ExportWeeklyLeaderboardDto {
   @IsIn(["xlsx", "csv"])
   format?: "xlsx" | "csv";
 }
-
