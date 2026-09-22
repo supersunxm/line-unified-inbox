@@ -109,6 +109,10 @@ export class StartMonthlyAuditDto {
 }
 
 export class CompleteStoreAuditDto {
+  @IsOptional()
+  @IsString()
+  batchItemId?: string;
+
   @Type(() => Number)
   @IsInt()
   @Min(0)
@@ -180,6 +184,10 @@ export class FailStoreAuditDto {
   @IsOptional()
   @IsString()
   errorMessage?: string;
+
+  @IsOptional()
+  @IsString()
+  batchItemId?: string;
 }
 
 export class UpdateAuditSessionStatusDto {

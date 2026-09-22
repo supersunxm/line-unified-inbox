@@ -54,12 +54,14 @@ function buildGoogleMapsHandoffUrl(
   runnerToken?: string,
   sessionId?: string,
   backendUrl?: string,
+  batchItemId?: string,
 ): string {
   const origin = backendUrl || (typeof window !== "undefined" ? window.location.origin : undefined);
   const canonicalStoreCode = store.storeId || store.code;
   try {
     const url = new URL(originalUrl);
     url.searchParams.set("oppoStoreId", store.id);
+    if (batchItemId) url.searchParams.set("oppoBatchItemId", batchItemId);
     if (store.storeId) url.searchParams.set("oppoExtId", store.storeId);
     if (canonicalStoreCode) url.searchParams.set("oppoCode", canonicalStoreCode);
     url.searchParams.set("oppoName", store.name);
@@ -76,7 +78,7 @@ function buildGoogleMapsHandoffUrl(
     return url.toString();
   } catch {
     const sep = originalUrl.includes("?") ? "&" : "?";
-    let base = `${originalUrl}${sep}oppoStoreId=${encodeURIComponent(store.id)}&oppoExtId=${encodeURIComponent(store.storeId || "")}&oppoCode=${encodeURIComponent(canonicalStoreCode || "")}&oppoName=${encodeURIComponent(store.name)}&oppoGoogleMapsUrl=${encodeURIComponent(store.googleMapsUrl || originalUrl)}&oppoGoogleMapsName=${encodeURIComponent(store.googleMapsName || "")}&oppoMonth=${encodeURIComponent(month)}`;
+    let base = `${originalUrl}${sep}oppoStoreId=${encodeURIComponent(store.id)}${batchItemId ? `&oppoBatchItemId=${encodeURIComponent(batchItemId)}` : ""}&oppoExtId=${encodeURIComponent(store.storeId || "")}&oppoCode=${encodeURIComponent(canonicalStoreCode || "")}&oppoName=${encodeURIComponent(store.name)}&oppoGoogleMapsUrl=${encodeURIComponent(store.googleMapsUrl || originalUrl)}&oppoGoogleMapsName=${encodeURIComponent(store.googleMapsName || "")}&oppoMonth=${encodeURIComponent(month)}`;
     if (runnerToken || sessionId || origin) {
       const hashParts: string[] = [];
       if (runnerToken) hashParts.push(`oppoToken=${encodeURIComponent(runnerToken)}`);
@@ -93,7 +95,7 @@ async function persistBatchSessionWithAck(
     sessionId: string;
     targetMonth: string;
     status: string;
-    currentStore?: any;
+    currentStore?: GoogleReviewAuditQueueStoreItem | null;
     totalStores?: number;
     completedStores?: number;
     runnerToken?: string;
@@ -193,6 +195,26 @@ async function persistBatchSessionWithAck(
       );
     } catch {}
   });
+}
+
+function setBatchReplacementPending(pending: boolean, sessionId?: string): void {
+  try {
+    if (pending) {
+      localStorage.setItem(
+        "oppo_batch_replacement_pending",
+        JSON.stringify({ pending: true, sessionId: sessionId || null, timestamp: Date.now() }),
+      );
+    } else {
+      localStorage.removeItem("oppo_batch_replacement_pending");
+    }
+  } catch {}
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(
+      new CustomEvent("oppo_batch_replacement_pending", {
+        detail: pending ? { pending: true, sessionId: sessionId || null, timestamp: Date.now() } : null,
+      }),
+    );
+  }
 }
 
 const translations = {
@@ -660,8 +682,28 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
   }, [batchSession?.status, selectedMonth]);
 
   const handleStartBatchAudit = async () => {
+    const replacingActiveBatch = Boolean(
+      batchSession &&
+      (batchSession.status === "RUNNING" || batchSession.status === "PAUSED"),
+    );
+
+    if (replacingActiveBatch) {
+      // Mark the replacement as unresolved before opening the native confirm.
+      // If browser focus handling stalls the dialog, Maps tabs see this marker
+      // and fail closed instead of resuming the old batch.
+      setBatchReplacementPending(true, batchSession?.id);
+      const confirmed = confirm(
+        "ต้องการยืนยันการยกเลิกชุดเดิมและเริ่มชุดใหม่หรือไม่?\n\nOld batch history will be preserved. No Maps scan will start until the replacement is confirmed.",
+      );
+      if (!confirmed) {
+        setBatchReplacementPending(false);
+        return;
+      }
+    }
+
     if (auditScope === "SELECTED") {
       if (selectedStoreIds.length === 0) {
+        setBatchReplacementPending(false);
         alert("กรุณาเลือกร้านค้าอย่างน้อย 1 ร้านสำหรับ Pilot Audit (Please select at least 1 store)");
         return;
       }
@@ -670,7 +712,10 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
       const confirmed = confirm(
         `คุณกำลังจะเริ่มตรวจร้านค้าทั้งหมด ${totalEligible} ร้านที่มี Google Maps URL\n\n(You are about to audit all ${totalEligible} stores).\n\nต้องการเริ่มการตรวจรอบใหญ่หรือไม่?`,
       );
-      if (!confirmed) return;
+      if (!confirmed) {
+        setBatchReplacementPending(false);
+        return;
+      }
     }
 
     try {
@@ -697,14 +742,21 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
         sessionId: res.id,
         targetMonth: res.month,
         status: "RUNNING",
-        currentStore: res.currentStore,
+        currentStore: res.currentStore
+          ? { ...res.currentStore, batchItemId: res.currentStore.id }
+          : null,
         totalStores: res.totalStores,
         completedStores: res.completedStores,
         runnerToken,
       };
 
-      // Deterministically persist session in extension storage with ACK before opening tab
-      await persistBatchSessionWithAck(bridgeData);
+      // Deterministically persist session in extension storage with ACK before opening tab.
+      // A missing ACK is non-submittable: never launch a Maps tab on uncertain identity.
+      const persistence = await persistBatchSessionWithAck(bridgeData);
+      if (!persistence.acked) {
+        throw new Error(`BATCH_REPLACEMENT_NOT_CONFIRMED: ${persistence.error || "extension session persistence was not acknowledged"}`);
+      }
+      setBatchReplacementPending(false);
 
       if (res.currentStore?.googleMapsUrl) {
         const handoffUrl = buildGoogleMapsHandoffUrl(
@@ -724,6 +776,8 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
           res.month,
           runnerToken,
           res.id,
+          undefined,
+          res.currentStore.id,
         );
         window.open(handoffUrl, "_blank");
       }
@@ -740,7 +794,16 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
       setBatchLoading(true);
       const res = await api.updateGoogleReviewBatchAuditStatus(batchSession.id, "PAUSE");
       setBatchSession(res);
-      const bridgeData = { ...res, status: "PAUSED" };
+      const bridgeData = {
+        sessionId: res.id,
+        targetMonth: res.month,
+        status: "PAUSED",
+        currentStore: res.currentStore
+          ? { ...res.currentStore, batchItemId: res.currentStore.id }
+          : null,
+        totalStores: res.totalStores,
+        completedStores: res.completedStores,
+      };
       await persistBatchSessionWithAck(bridgeData, 1000);
     } catch (err: unknown) {
       alert(err instanceof Error ? err.message : "Failed to pause audit");
@@ -769,14 +832,19 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
         sessionId: res.id,
         targetMonth: res.month,
         status: "RUNNING",
-        currentStore: res.currentStore,
+        currentStore: res.currentStore
+          ? { ...res.currentStore, batchItemId: res.currentStore.id }
+          : null,
         totalStores: res.totalStores,
         completedStores: res.completedStores,
         runnerToken,
       };
 
       // Deterministically persist session in extension storage with ACK before opening tab
-      await persistBatchSessionWithAck(bridgeData);
+      const persistence = await persistBatchSessionWithAck(bridgeData);
+      if (!persistence.acked) {
+        throw new Error(`BATCH_REPLACEMENT_NOT_CONFIRMED: ${persistence.error || "extension session persistence was not acknowledged"}`);
+      }
 
       if (res.currentStore?.googleMapsUrl) {
         const handoffUrl = buildGoogleMapsHandoffUrl(
@@ -796,6 +864,8 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
           res.month,
           runnerToken,
           res.id,
+          undefined,
+          res.currentStore.id,
         );
         window.open(handoffUrl, "_blank");
       }
@@ -813,6 +883,7 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
       setBatchLoading(true);
       const res = await api.updateGoogleReviewBatchAuditStatus(batchSession.id, "CANCEL");
       setBatchSession(res);
+      setBatchReplacementPending(false);
       localStorage.removeItem("oppo_active_batch_audit");
       window.dispatchEvent(new CustomEvent("oppo_batch_audit_action", { detail: null }));
     } catch (err: unknown) {
@@ -892,7 +963,10 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
     if (!batchSession || (batchSession.status !== "RUNNING" && batchSession.status !== "PAUSED")) return false;
     if (auditScope !== "SELECTED" || selectedStoreIds.length === 0) return false;
     const queuedIds = batchSession.stores.map((store) => store.storeId);
-    return queuedIds.length !== selectedStoreIds.length || selectedStoreIds.some((storeId) => !queuedIds.includes(storeId));
+    return (
+      queuedIds.length !== selectedStoreIds.length ||
+      selectedStoreIds.some((storeId, index) => queuedIds[index] !== storeId)
+    );
   }, [auditScope, batchSession, selectedStoreIds]);
 
   const canStartNewAudit =
