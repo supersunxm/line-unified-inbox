@@ -16,3 +16,10 @@ test("LINE Chat worker Docker Playwright image matches locked package version", 
     `Docker Playwright image must match package-lock Playwright version ${lockedVersion}`,
   );
 });
+
+
+test("LINE Chat worker Docker image uses the reachable Ubuntu archive mirror", () => {
+  const dockerfile = readFileSync(path.join(process.cwd(), "Dockerfile.line-chat-worker"), "utf8");
+  assert.match(dockerfile, /archive\.ubuntu\.com\/ubuntu/);
+  assert.doesNotMatch(dockerfile, /azure\.archive\.ubuntu\.com\/ubuntu/);
+});
