@@ -3,6 +3,7 @@ import test from "node:test";
 import { MessageType } from "@prisma/client";
 import {
   canonicalMessageTypeFromMirror,
+  configuredLineChatMirrorReconcileDryRunStoreCodes,
   configuredLineChatMirrorReconcileStoreCodes,
   isLineChatMirrorReconcileApplyEnabled,
   isLineChatMirrorReconcileEnabled,
@@ -78,6 +79,25 @@ test("Project B canonical reconciler parses store scope and requires a valid sin
   withEnv({ LINE_CHAT_MIRROR_RECONCILE_SINCE: "invalid" }, () => {
     assert.equal(lineChatMirrorReconcileSince(), null);
   });
+});
+
+test("Project B canonical reconciler keeps dry-run stores separate from the apply scope", () => {
+  withEnv(
+    {
+      LINE_CHAT_MIRROR_RECONCILE_STORE_CODES: "28375,25610",
+      LINE_CHAT_MIRROR_RECONCILE_DRY_RUN_STORE_CODES: "20789, 29039;28375 20789",
+    },
+    () => {
+      assert.deepEqual(
+        configuredLineChatMirrorReconcileStoreCodes(),
+        ["28375", "25610"],
+      );
+      assert.deepEqual(
+        configuredLineChatMirrorReconcileDryRunStoreCodes(),
+        ["20789", "29039"],
+      );
+    },
+  );
 });
 
 test("Project B canonical reconciler bounds interval and batch size", () => {
