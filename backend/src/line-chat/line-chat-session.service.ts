@@ -1930,6 +1930,7 @@ export class LineChatSessionService {
       ],
       ...(options?.channel ? { channel: options.channel } : {}),
       ...(options?.env ? { env: options.env } : {}),
+      ...(options?.timeout !== undefined ? { timeout: options.timeout } : {}),
     });
   }
 }
