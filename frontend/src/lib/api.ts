@@ -570,6 +570,13 @@ export const api = {
     if (params.showArchived) query.set("showArchived", "true");
     return download(`/line-official-accounts/export.csv?${query.toString()}`);
   },
+  exportLineOfficialAccountHandover: (params: { search?: string; status?: "all" | "active" | "issues"; showArchived?: boolean }) => {
+    const query = new URLSearchParams();
+    if (params.search?.trim()) query.set("search", params.search.trim());
+    if (params.status && params.status !== "all") query.set("status", params.status);
+    if (params.showArchived) query.set("showArchived", "true");
+    return download(`/line-official-accounts/handover.csv?${query.toString()}`);
+  },
   createLineOfficialAccount: (input: CreateLineOaInput) => request<LineOfficialAccountResponse>("/line-official-accounts", { method: "POST", body: JSON.stringify(input) }),
   updateLineOfficialAccount: (id: string, input: Partial<CreateLineOaInput>) => request<LineOfficialAccountResponse>(`/line-official-accounts/${id}`, { method: "PATCH", body: JSON.stringify(input) }),
   setLineOfficialAccountStatus: (id: string, isActive: boolean) => request<LineOfficialAccountResponse>(`/line-official-accounts/${id}/status`, { method: "PATCH", body: JSON.stringify({ isActive }) }),
