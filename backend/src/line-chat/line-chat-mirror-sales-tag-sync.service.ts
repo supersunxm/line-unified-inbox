@@ -214,6 +214,7 @@ export class LineChatMirrorSalesTagSyncService implements OnModuleInit, OnModule
           select: {
             externalStoreId: true,
             accountName: true,
+            normalizedAccountName: true,
             lineId: true,
           },
         },
