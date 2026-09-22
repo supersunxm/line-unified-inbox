@@ -106,6 +106,86 @@ void test("CSV export uses the complete safe list, applies filters, escapes RFC 
   assert.equal(result.csv.split("\r\n").length, 3);
 });
 
+void test("handover export decrypts stored credentials, labels each store, and records an audit event", async () => {
+  const previousBase = process.env.PUBLIC_WEBHOOK_BASE_URL;
+  const previousNodeEnv = process.env.NODE_ENV;
+  process.env.PUBLIC_WEBHOOK_BASE_URL = "https://backend.example.com";
+  process.env.NODE_ENV = "production";
+  const auditWrites: Array<Record<string, unknown>> = [];
+  const prisma = {
+    lineOfficialAccount: {
+      findMany: () => Promise.resolve([{
+        id: "oa-1",
+        webhookKey: "webhook-key",
+        name: "OPPO Central Bangna",
+        basicId: "@centralbangna",
+        channelId: "2011281609",
+        destinationId: null,
+        encryptedChannelSecret: "encrypted-secret",
+        encryptedChannelAccessToken: "encrypted-token",
+        connectionStatus: "CONNECTED",
+        lastWebhookReceivedAt: new Date("2026-09-22T01:00:00Z"),
+        lastConnectionTestAt: null,
+        lastConnectionError: null,
+        accountType: "STORE",
+        storeId: "store-1",
+        isActive: true,
+        archivedAt: null,
+        createdAt: new Date("2026-01-01T00:00:00Z"),
+        updatedAt: new Date("2026-09-22T01:00:00Z"),
+        lastBackfillReconciledAt: null,
+        store: {
+          id: "store-1",
+          name: "OPPO Central Bangna",
+          code: "STORE-CB",
+          region: "BKK",
+          area: "Bangkok",
+          storeMasterId: "master-1",
+          archivedAt: null,
+          storeMaster: {
+            externalStoreId: "STORE-CENTRAL-BANGNA",
+            accountName: "OPPO Central Bangna",
+            province: "Bangkok",
+            googleMapsUrl: null,
+            lineId: "@centralbangna",
+            lineOaLink: null,
+            dataQualityStatus: "COMPLETE",
+          },
+        },
+        _count: { conversations: 1 },
+      }]),
+    },
+    auditLog: {
+      create: ({ data }: { data: Record<string, unknown> }) => {
+        auditWrites.push(data);
+        return Promise.resolve(data);
+      },
+    },
+  } as unknown as PrismaService;
+  const encryption = {
+    decrypt: (value: string) => value === "encrypted-secret" ? "plain-channel-secret" : value === "encrypted-token" ? "plain-channel-token" : (() => { throw new Error("unexpected"); })(),
+  } as unknown as CredentialEncryptionService;
+  const service = new LineOfficialAccountsService(prisma, encryption);
+  try {
+    const result = await service.exportHandoverCsv({ status: "all", showArchived: "false" }, "admin-1");
+    assert.equal(result.rowCount, 1);
+    assert.equal(result.incompleteCredentialRows, 0);
+    assert.equal(result.csv.includes("OPPO Central Bangna"), true);
+    assert.equal(result.csv.includes("STORE-CENTRAL-BANGNA"), true);
+    assert.equal(result.csv.includes("plain-channel-secret"), true);
+    assert.equal(result.csv.includes("plain-channel-token"), true);
+    assert.equal(result.csv.includes("encrypted-secret"), false);
+    assert.equal(result.csv.includes("encrypted-token"), false);
+    assert.equal(result.csv.includes("https://backend.example.com/webhook/webhook-key"), true);
+    assert.equal(auditWrites.length, 1);
+    assert.equal(auditWrites[0].actorUserId, "admin-1");
+    assert.equal(auditWrites[0].action, "LINE_OA_HANDOVER_CREDENTIAL_EXPORT");
+  } finally {
+    if (previousBase === undefined) delete process.env.PUBLIC_WEBHOOK_BASE_URL; else process.env.PUBLIC_WEBHOOK_BASE_URL = previousBase;
+    if (previousNodeEnv === undefined) delete process.env.NODE_ENV; else process.env.NODE_ENV = previousNodeEnv;
+  }
+});
+
 void test("explicit regeneration persists a new key and invalidates the previous key", async () => {
   const { service, updates } = fixture();
   await service.regenerateWebhook("oa-1");
