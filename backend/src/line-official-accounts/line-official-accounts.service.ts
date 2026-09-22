@@ -137,6 +137,101 @@ export class LineOfficialAccountsService {
     return { csv, filename: `line-oa-management-${date}.csv`, rowCount: rows.length };
   }
 
+  async exportHandoverCsv(query: ExportLineOfficialAccountsDto, actorUserId?: string) {
+    const showArchived = query.showArchived === "true";
+    const allItems = await this.prisma.lineOfficialAccount.findMany({
+      where: showArchived
+        ? { accountType: "STORE" }
+        : { accountType: "STORE", archivedAt: null, store: { archivedAt: null } },
+      include: safeInclude,
+      orderBy: { name: "asc" },
+    });
+    const search = query.search?.trim().toLocaleLowerCase() ?? "";
+    const items = allItems.filter((item) => {
+      const connectionStatus = this.calculatedStatus(item);
+      const matchesStatus = query.status === "all" || (query.status === "active"
+        ? item.isActive
+        : connectionStatus === "ERROR" || connectionStatus === "NOT_CONFIGURED");
+      const matchesSearch = !search || [
+        item.name,
+        item.store?.name,
+        item.store?.storeMaster?.accountName,
+        item.store?.storeMaster?.externalStoreId,
+        item.store?.code,
+      ].some((value) => value?.toLocaleLowerCase().includes(search));
+      return matchesStatus && matchesSearch;
+    });
+
+    let incompleteCredentialRows = 0;
+    const columns = [
+      "Store ID", "Store Name", "LINE OA Account Name", "LINE OA Basic ID", "Channel ID",
+      "Channel Secret", "Channel Access Token", "Webhook URL", "Connection Status",
+      "Enabled / Disabled", "Credential Export Status",
+    ];
+    const rows = items.map((item) => {
+      const issues: string[] = [];
+      let channelSecret = "";
+      let channelAccessToken = "";
+      if (!item.encryptedChannelSecret) issues.push("MISSING_CHANNEL_SECRET");
+      else {
+        try { channelSecret = this.encryption.decrypt(item.encryptedChannelSecret); }
+        catch { issues.push("CHANNEL_SECRET_DECRYPTION_ERROR"); }
+      }
+      if (!item.encryptedChannelAccessToken) issues.push("MISSING_CHANNEL_ACCESS_TOKEN");
+      else {
+        try { channelAccessToken = this.encryption.decrypt(item.encryptedChannelAccessToken); }
+        catch { issues.push("CHANNEL_ACCESS_TOKEN_DECRYPTION_ERROR"); }
+      }
+      if (issues.length > 0) incompleteCredentialRows += 1;
+      const webhook = this.webhookConfiguration(item.webhookKey);
+      const storeId = item.store?.storeMaster?.externalStoreId ?? item.store?.code ?? "";
+      return [
+        this.csvCell(storeId),
+        this.csvCell(item.store?.name ?? ""),
+        this.csvCell(item.name),
+        this.csvCell(item.basicId),
+        this.csvCell(item.channelId),
+        this.rawCsvCell(channelSecret),
+        this.rawCsvCell(channelAccessToken),
+        this.csvCell(webhook.webhookUrl),
+        this.csvCell(this.calculatedStatus(item)),
+        this.csvCell(item.isActive ? "Enabled" : "Disabled"),
+        this.csvCell(issues.length ? issues.join("|") : "COMPLETE"),
+      ].join(",");
+    });
+    const csv = `\uFEFF${columns.map((value) => this.csvCell(value)).join(",")}\r\n${rows.join("\r\n")}\r\n`;
+    const date = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Bangkok",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date());
+    await this.prisma.auditLog.create({
+      data: {
+        actorUserId,
+        action: "LINE_OA_HANDOVER_CREDENTIAL_EXPORT",
+        metadata: {
+          rowCount: items.length,
+          incompleteCredentialRows,
+          showArchived,
+          status: query.status,
+          searchApplied: Boolean(search),
+        },
+      },
+    }).catch(() => undefined);
+    return {
+      csv,
+      filename: `line-oa-handover-credentials-${date}.csv`,
+      rowCount: items.length,
+      incompleteCredentialRows,
+    };
+  }
+
+  private rawCsvCell(value: string | null | undefined) {
+    const text = value === null || value === undefined ? "" : String(value);
+    return `"${text.replaceAll('"', '""')}"`;
+  }
+
   private csvCell(value: string | number | Date | null | undefined) {
     let text = value === null || value === undefined ? "" : String(value);
     if (/^[=+\-@]/.test(text)) text = `'${text}`;
