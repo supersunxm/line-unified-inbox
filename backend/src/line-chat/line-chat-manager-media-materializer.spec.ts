@@ -56,7 +56,8 @@ test("materializer waits briefly for the shared Manager profile instead of faili
   assert.match(source, /waitForLock:\s*true/);
   assert.match(source, /waitForLockMs:\s*15_000/);
   assert.match(source, /line_chat_manager_media_materialize_deferred/);
-  assert.match(source, /Date\.now\(\) \+ 30_000/);
+  assert.match(source, /retryDelayMs = errorMessage\.startsWith\("MANAGER_MEDIA_AUTH_"\) \? 5 \* 60_000 : 30_000/);
+  assert.match(source, /Date\.now\(\) \+ retryDelayMs/);
 });
 
 
