@@ -74,6 +74,27 @@ export type MirrorTargetResolution =
       errorMessage: string;
     };
 
+export type MirrorResolvedCandidate = {
+  botId: string;
+  session: MirrorSessionTarget;
+};
+
+export function selectMirrorResolvedCandidate(
+  candidates: readonly MirrorResolvedCandidate[],
+): MirrorResolvedCandidate | null | "AMBIGUOUS" {
+  const uniqueCandidates = candidates.filter((candidate, index, all) =>
+    all.findIndex((item) =>
+      item.botId === candidate.botId && item.session.id === candidate.session.id
+    ) === index,
+  );
+  if (uniqueCandidates.length === 0) return null;
+
+  const uniqueBotIds = [...new Set(uniqueCandidates.map((candidate) => candidate.botId))];
+  if (uniqueBotIds.length !== 1) return "AMBIGUOUS";
+
+  return uniqueCandidates[0];
+}
+
 export function managerAccountKeyFromInputs(input: {
   lineChatWorkspaceUrl?: string | null;
   storeManagerUrl?: string | null;
@@ -798,21 +819,15 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
       });
     }
 
-    const uniqueCandidates = candidates.filter((candidate, index, all) =>
-      all.findIndex((item) =>
-        item.botId === candidate.botId && item.session.id === candidate.session.id
-      ) === index,
-    );
-    if (uniqueCandidates.length === 0) {
+    const candidate = selectMirrorResolvedCandidate(candidates);
+    if (candidate === null) {
       return {
         ok: false,
         errorCode: "MIRROR_MANAGER_TARGET_NOT_FOUND",
         errorMessage: "No active LINE Manager session could open this OA account.",
       };
     }
-
-    const uniqueBotIds = [...new Set(uniqueCandidates.map((candidate) => candidate.botId))];
-    if (uniqueBotIds.length !== 1) {
+    if (candidate === "AMBIGUOUS") {
       return {
         ok: false,
         errorCode: "MIRROR_MANAGER_TARGET_AMBIGUOUS",
@@ -821,9 +836,9 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
     }
 
     // Multiple authenticated Manager sessions may legitimately have access to
-    // the same OA. When they all resolve to the exact same botId, keep the
-    // existing deterministic session ordering and use the first candidate.
-    const candidate = uniqueCandidates[0];
+    // the same OA. When they all resolve to the exact same botId, the helper
+    // preserves the existing deterministic session ordering and uses the first.
+
     const result = {
       botId: candidate.botId,
       session: candidate.session,
