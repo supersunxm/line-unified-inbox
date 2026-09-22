@@ -30,6 +30,7 @@ export interface LineChatSessionOptions {
   args?: string[];
   viewport?: { width: number; height: number };
   env?: NodeJS.ProcessEnv;
+  timeout?: number;
 }
 
 export interface LineChatSessionValidation {

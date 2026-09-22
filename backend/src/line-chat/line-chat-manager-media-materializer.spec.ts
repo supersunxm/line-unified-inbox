@@ -129,3 +129,13 @@ test("materializer treats Manager auth expiry as retryable and wires safe rememb
   assert.match(source, /recoverSession\(sessionId, "SCHEDULED"\)/);
   assert.match(source, /line_chat_manager_media_auth_recovered_retrying_batch/);
 });
+
+
+test("Chromium launch timeouts are retryable and the media worker uses a bounded launch timeout", () => {
+  assert.equal(
+    isTransientManagerMediaError("browserType.launchPersistentContext: Timeout 30000ms exceeded."),
+    true,
+  );
+  const source = readFileSync(new URL("./line-chat-manager-media-materializer.service.ts", import.meta.url), "utf8");
+  assert.match(source, /timeout:\s*30_000/);
+});
