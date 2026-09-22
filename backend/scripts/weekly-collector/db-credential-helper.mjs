@@ -55,8 +55,20 @@ export function resolveProductionDatabaseUrl() {
     }
   }
 
-  if (process.env.DATABASE_URL && process.env.DATABASE_URL.startsWith("postgres") && !process.env.DATABASE_URL.includes("localhost") && !process.env.DATABASE_URL.includes("127.0.0.1") && !process.env.DATABASE_URL.includes(".railway.internal")) {
-    return process.env.DATABASE_URL.trim();
+  const databaseUrl = process.env.DATABASE_URL?.trim();
+  const isRailwayRuntime = Boolean(
+    process.env.RAILWAY_ENVIRONMENT_ID ||
+    process.env.RAILWAY_PROJECT_ID ||
+    process.env.RAILWAY_SERVICE_ID
+  );
+  if (
+    databaseUrl &&
+    databaseUrl.startsWith("postgres") &&
+    !databaseUrl.includes("localhost") &&
+    !databaseUrl.includes("127.0.0.1") &&
+    (!databaseUrl.includes(".railway.internal") || isRailwayRuntime)
+  ) {
+    return databaseUrl;
   }
 
   // 3. Railway CLI fallback
