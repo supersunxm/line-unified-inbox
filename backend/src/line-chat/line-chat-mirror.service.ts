@@ -1177,6 +1177,10 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
       event: "line_chat_mirror_store_cycle_failed",
       lineOfficialAccountId: input.lineOfficialAccountId,
       errorCode: input.errorCode,
+      // Error messages are already bounded before reaching this helper. Keep
+      // runtime diagnostics concise while exposing enough detail to distinguish
+      // Manager transport, browser/profile, auth, and lease failures.
+      failureDetail: input.errorMessage.slice(0, 240),
       durationMs: input.durationMs,
     }));
   }
