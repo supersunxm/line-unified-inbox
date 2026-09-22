@@ -59,6 +59,18 @@ type DownloadedManagerMedia = {
   packageId?: string;
 };
 
+type MaterializationBatchInput = {
+  id: string;
+  externalMessageId: string | null;
+  messageType: MessageType;
+  storeCode: string;
+};
+
+type MaterializationBatchResult = MaterializationBatchInput & {
+  outcome: "READY" | "SKIPPED" | "ERROR";
+  error?: string;
+};
+
 function positiveInteger(raw: string | undefined, fallback: number): number {
   const parsed = Number(raw);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
@@ -136,6 +148,23 @@ export function extractManagerStickerIdentity(value: unknown): {
     stickerId: findNestedStringByKey(value, ["stickerId", "sticker_id"]),
     packageId: findNestedStringByKey(value, ["packageId", "package_id"]),
   };
+}
+
+export function managerContentHashUrl(botId: string, contentHash: string): string | null {
+  const trimmed = contentHash.trim().replace(/^\/+|\/+$/gu, "");
+  if (!trimmed || /[\r\n?#]/u.test(trimmed) || trimmed.split("/").some((part) => part === "..")) {
+    return null;
+  }
+  const encodedPath = trimmed.split("/").map((part) => encodeURIComponent(part)).join("/");
+  return `https://chat-content.line-scdn.net/bot/${encodeURIComponent(botId)}/${encodedPath}`;
+}
+
+export function isTransientManagerMediaError(errorMessage: string): boolean {
+  return errorMessage === "MANAGER_MEDIA_PROFILE_BUSY"
+    || /\bEAGAIN\b/u.test(errorMessage)
+    || /browser has been closed/iu.test(errorMessage)
+    || /Failed to launch/iu.test(errorMessage)
+    || /Target page, context or browser has been closed/iu.test(errorMessage);
 }
 
 export function extractManagerMediaUrlCandidates(value: unknown): string[] {
@@ -445,37 +474,49 @@ export class LineChatManagerMediaMaterializerService implements OnModuleInit, On
         })
         .slice(0, managerMediaMaterializationBatchSize());
 
-      for (const message of candidates) {
-        scanned += 1;
-        try {
-          const outcome = await this.materializeMessage(message);
-          if (outcome === "READY") ready += 1;
-          else skipped += 1;
-          this.retryNotBefore.delete(message.id);
-        } catch (error) {
-          const errorMessage = error instanceof Error ? error.message.slice(0, 240) : String(error).slice(0, 240);
-          if (errorMessage === "MANAGER_MEDIA_PROFILE_BUSY") {
-            deferred += 1;
-            this.retryNotBefore.set(message.id, Date.now() + 30_000);
-            this.logger.log(JSON.stringify({
-              event: "line_chat_manager_media_materialize_deferred",
-              storeCode: storeCodeOf(message),
-              messageType: message.messageType,
-              reason: errorMessage,
-            }));
-            continue;
-          }
+      const batchInputs: MaterializationBatchInput[] = candidates.map((message) => ({
+        id: message.id,
+        externalMessageId: message.externalMessageId,
+        messageType: message.messageType,
+        storeCode: storeCodeOf(message),
+      }));
+      scanned = batchInputs.length;
 
-          failed += 1;
-          this.retryNotBefore.set(message.id, Date.now() + 5 * 60_000);
-          await this.markFailed(message.id, message.externalMessageId, message.messageType, errorMessage).catch(() => {});
-          this.logger.warn(JSON.stringify({
-            event: "line_chat_manager_media_materialize_failed",
-            storeCode: storeCodeOf(message),
-            messageType: message.messageType,
-            error: errorMessage,
-          }));
+      const results = await this.materializeMessageBatch(batchInputs);
+      for (const result of results) {
+        if (result.outcome === "READY") {
+          ready += 1;
+          this.retryNotBefore.delete(result.id);
+          continue;
         }
+        if (result.outcome === "SKIPPED") {
+          skipped += 1;
+          this.retryNotBefore.delete(result.id);
+          continue;
+        }
+
+        const errorMessage = result.error ?? "MANAGER_MEDIA_UNKNOWN_FAILURE";
+        if (isTransientManagerMediaError(errorMessage)) {
+          deferred += 1;
+          this.retryNotBefore.set(result.id, Date.now() + 30_000);
+          this.logger.log(JSON.stringify({
+            event: "line_chat_manager_media_materialize_deferred",
+            storeCode: result.storeCode,
+            messageType: result.messageType,
+            reason: errorMessage,
+          }));
+          continue;
+        }
+
+        failed += 1;
+        this.retryNotBefore.set(result.id, Date.now() + 5 * 60_000);
+        await this.markFailed(result.id, result.externalMessageId, result.messageType, errorMessage).catch(() => {});
+        this.logger.warn(JSON.stringify({
+          event: "line_chat_manager_media_materialize_failed",
+          storeCode: result.storeCode,
+          messageType: result.messageType,
+          error: errorMessage,
+        }));
       }
 
       this.logger.log(JSON.stringify({
@@ -493,9 +534,30 @@ export class LineChatManagerMediaMaterializerService implements OnModuleInit, On
     }
   }
 
-  private async materializeMessage(message: Awaited<ReturnType<LineChatManagerMediaMaterializerService["loadMessageForMaterialization"]>>): Promise<"READY" | "SKIPPED"> {
-    if (!message) return "SKIPPED";
-    return this.materializeLoadedMessage(message);
+  private async materializeMessageBatch(
+    inputs: MaterializationBatchInput[],
+  ): Promise<MaterializationBatchResult[]> {
+    type LoadedMessage = NonNullable<Awaited<ReturnType<LineChatManagerMediaMaterializerService["loadMessageForMaterialization"]>>>;
+    const results: MaterializationBatchResult[] = [];
+    const loadedGroups = new Map<string, Array<{ input: MaterializationBatchInput; message: LoadedMessage }>>();
+
+    for (const input of inputs) {
+      const message = await this.loadMessageForMaterialization(input.id);
+      if (!message || !MATERIALIZABLE_TYPES.has(message.messageType)) {
+        results.push({ ...input, outcome: "SKIPPED" });
+        continue;
+      }
+      const key = message.conversation.lineOfficialAccount.id;
+      const group = loadedGroups.get(key) ?? [];
+      group.push({ input, message });
+      loadedGroups.set(key, group);
+    }
+
+    for (const group of loadedGroups.values()) {
+      results.push(...await this.materializeLoadedGroup(group));
+    }
+
+    return results;
   }
 
   private async loadMessageForMaterialization(messageId: string) {
@@ -544,97 +606,172 @@ export class LineChatManagerMediaMaterializerService implements OnModuleInit, On
     });
   }
 
-  private async materializeLoadedMessage(message: NonNullable<Awaited<ReturnType<LineChatManagerMediaMaterializerService["loadMessageForMaterialization"]>>>): Promise<"READY" | "SKIPPED"> {
-    if (!MATERIALIZABLE_TYPES.has(message.messageType)) return "SKIPPED";
-    const mirror = await this.prisma.lineChatMirrorMessage.findFirst({
-      where: { canonicalMessageId: message.id },
+  private async materializeLoadedGroup(
+    group: Array<{
+      input: MaterializationBatchInput;
+      message: NonNullable<Awaited<ReturnType<LineChatManagerMediaMaterializerService["loadMessageForMaterialization"]>>>;
+    }>,
+  ): Promise<MaterializationBatchResult[]> {
+    const first = group[0];
+    if (!first) return [];
+
+    const mirrorRows = await this.prisma.lineChatMirrorMessage.findMany({
+      where: { canonicalMessageId: { in: group.map(({ message }) => message.id) } },
       select: {
+        canonicalMessageId: true,
         managerMessageId: true,
         lineChatUserId: true,
         messageType: true,
       },
     });
-    if (!mirror) throw new Error("MANAGER_MEDIA_MIRROR_ROW_MISSING");
+    const mirrorsByCanonicalId = new Map(
+      mirrorRows
+        .filter((row) => Boolean(row.canonicalMessageId))
+        .map((row) => [row.canonicalMessageId!, row]),
+    );
 
-    const oa = message.conversation.lineOfficialAccount;
+    const runnable = group.filter(({ message }) => mirrorsByCanonicalId.has(message.id));
+    const results: MaterializationBatchResult[] = group
+      .filter(({ message }) => !mirrorsByCanonicalId.has(message.id))
+      .map(({ input }) => ({
+        ...input,
+        outcome: "ERROR",
+        error: "MANAGER_MEDIA_MIRROR_ROW_MISSING",
+      }));
+    if (runnable.length === 0) return results;
+
+    const oa = first.message.conversation.lineOfficialAccount;
     const target = await this.mirrorService.resolveMirrorTarget({
       lineOfficialAccountId: oa.id,
       chatBotId: oa.chatBotId,
       basicId: oa.basicId,
       lineChatWorkspaceUrl: oa.lineChatWorkspaceUrl,
-      storeManagerUrl: message.conversation.store?.storeMaster?.lineManagerUrl ?? null,
+      storeManagerUrl: first.message.conversation.store?.storeMaster?.lineManagerUrl ?? null,
       lineChatSession: oa.lineChatSession,
     });
-    if (!target.ok) throw new Error(target.errorCode);
+    if (!target.ok) {
+      return results.concat(runnable.map(({ input }) => ({
+        ...input,
+        outcome: "ERROR",
+        error: target.errorCode,
+      })));
+    }
 
     const profilePath = this.sessionService.resolveProfilePath(target.session);
-    if (!fs.existsSync(profilePath)) throw new Error("MANAGER_MEDIA_PROFILE_MISSING");
+    if (!fs.existsSync(profilePath)) {
+      return results.concat(runnable.map(({ input }) => ({
+        ...input,
+        outcome: "ERROR",
+        error: "MANAGER_MEDIA_PROFILE_MISSING",
+      })));
+    }
 
-    const operation = await this.coordinator.withProfileOperation(
-      { sessionId: target.session.id, operationKind: "MIRROR_SYNC" },
-      async (operationContext) => {
-        operationContext.assertOwnership();
-        let context: BrowserContext | null = null;
-        try {
-          context = await this.sessionService.launchManagedPersistentContext(
-            profilePath,
-            {
-              profilePath,
-              headless: true,
-              viewport: { width: 1280, height: 800 },
-              args: [
-                "--no-sandbox",
-                "--disable-setuid-sandbox",
-                "--disable-blink-features=AutomationControlled",
-              ],
-            },
-            { sessionId: target.session.id, sessionKey: target.session.sessionKey },
-          );
-          const page = context.pages()[0] || await context.newPage();
-          const referer = this.sessionService.buildChatRefererUrl(target.botId, mirror.lineChatUserId);
-          await page.goto(referer, { waitUntil: "domcontentloaded", timeout: 15_000 }).catch(() => {});
-          const auth = await confirmLineManagerAuthentication(
-            () => this.sessionService.probeApiAuthentication(context!),
-            (ms) => page.waitForTimeout(ms),
-          );
-          if (auth.outcome !== "AUTHENTICATED") {
-            throw new Error(`MANAGER_MEDIA_AUTH_${auth.outcome}`);
-          }
-
-          const managerHeaders = await this.managerRequestHeaders(context, referer);
-          const managerPayload = await this.loadManagerMessagePayload(
-            context,
-            target.botId,
-            mirror.lineChatUserId,
-            mirror.managerMessageId,
-            managerHeaders,
-          );
-          const downloaded = message.messageType === MessageType.STICKER
-            ? await this.downloadSticker(context, managerPayload)
-            : await this.downloadManagerMedia(
-                context,
-                target.botId,
-                mirror.managerMessageId,
-                managerPayload,
-                message.messageType,
-                message.fileName,
-                referer,
-                managerHeaders,
-              );
+    try {
+      const operation = await this.coordinator.withProfileOperation(
+        { sessionId: target.session.id, operationKind: "MIRROR_SYNC" },
+        async (operationContext) => {
           operationContext.assertOwnership();
-          return downloaded;
-        } finally {
-          if (context) {
-            await this.sessionService.closeManagedPersistentContext(context, profilePath).catch(() => {});
-          }
-        }
-      },
-      { waitForLock: true, waitForLockMs: 15_000 },
-    );
+          let context: BrowserContext | null = null;
+          const operationResults: MaterializationBatchResult[] = [];
+          try {
+            context = await this.sessionService.launchManagedPersistentContext(
+              profilePath,
+              {
+                profilePath,
+                headless: true,
+                viewport: { width: 1280, height: 800 },
+                args: [
+                  "--no-sandbox",
+                  "--disable-setuid-sandbox",
+                  "--disable-blink-features=AutomationControlled",
+                ],
+              },
+              { sessionId: target.session.id, sessionKey: target.session.sessionKey },
+            );
+            const page = context.pages()[0] || await context.newPage();
+            const firstMirror = mirrorsByCanonicalId.get(runnable[0]!.message.id)!;
+            const firstReferer = this.sessionService.buildChatRefererUrl(target.botId, firstMirror.lineChatUserId);
+            await page.goto(firstReferer, { waitUntil: "domcontentloaded", timeout: 15_000 }).catch(() => {});
+            const auth = await confirmLineManagerAuthentication(
+              () => this.sessionService.probeApiAuthentication(context!),
+              (ms) => page.waitForTimeout(ms),
+            );
+            if (auth.outcome !== "AUTHENTICATED") {
+              throw new Error(`MANAGER_MEDIA_AUTH_${auth.outcome}`);
+            }
 
-    if (!operation.acquired) throw new Error("MANAGER_MEDIA_PROFILE_BUSY");
-    const downloaded = operation.value;
-    const providerMessageId = `line-chat-manager:${mirror.managerMessageId}`;
+            const baseHeaders = await this.managerRequestHeaders(context, firstReferer);
+            for (const { input, message } of runnable) {
+              operationContext.assertOwnership();
+              const mirror = mirrorsByCanonicalId.get(message.id)!;
+              try {
+                const referer = this.sessionService.buildChatRefererUrl(target.botId, mirror.lineChatUserId);
+                const managerHeaders = { ...baseHeaders, referer };
+                const managerPayload = await this.loadManagerMessagePayload(
+                  context,
+                  target.botId,
+                  mirror.lineChatUserId,
+                  mirror.managerMessageId,
+                  managerHeaders,
+                );
+                const downloaded = message.messageType === MessageType.STICKER
+                  ? await this.downloadSticker(context, managerPayload)
+                  : await this.downloadManagerMedia(
+                      context,
+                      target.botId,
+                      mirror.managerMessageId,
+                      managerPayload,
+                      message.messageType,
+                      message.fileName,
+                      referer,
+                      managerHeaders,
+                    );
+                await this.persistDownloadedMedia(message, mirror.managerMessageId, downloaded);
+                operationResults.push({ ...input, outcome: "READY" });
+              } catch (error) {
+                operationResults.push({
+                  ...input,
+                  outcome: "ERROR",
+                  error: error instanceof Error ? error.message.slice(0, 240) : String(error).slice(0, 240),
+                });
+              }
+            }
+            operationContext.assertOwnership();
+            return operationResults;
+          } finally {
+            if (context) {
+              await this.sessionService.closeManagedPersistentContext(context, profilePath).catch(() => {});
+            }
+          }
+        },
+        { waitForLock: true, waitForLockMs: 15_000 },
+      );
+
+      if (!operation.acquired) {
+        return results.concat(runnable.map(({ input }) => ({
+          ...input,
+          outcome: "ERROR",
+          error: "MANAGER_MEDIA_PROFILE_BUSY",
+        })));
+      }
+      return results.concat(operation.value);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message.slice(0, 240) : String(error).slice(0, 240);
+      return results.concat(runnable.map(({ input }) => ({
+        ...input,
+        outcome: "ERROR",
+        error: errorMessage,
+      })));
+    }
+  }
+
+  private async persistDownloadedMedia(
+    message: NonNullable<Awaited<ReturnType<LineChatManagerMediaMaterializerService["loadMessageForMaterialization"]>>>,
+    managerMessageId: string,
+    downloaded: DownloadedManagerMedia,
+  ): Promise<void> {
+    const oa = message.conversation.lineOfficialAccount;
+    const providerMessageId = `line-chat-manager:${managerMessageId}`;
     const objectKey = objectKeyFor(
       oa.id,
       message.sentAt,
@@ -693,7 +830,6 @@ export class LineChatManagerMediaMaterializerService implements OnModuleInit, On
       fileSize: downloaded.body.length,
       source: downloaded.source,
     }));
-    return "READY";
   }
 
   private async managerRequestHeaders(
@@ -761,7 +897,7 @@ export class LineChatManagerMediaMaterializerService implements OnModuleInit, On
 
     const candidateUrls = [
       ...(contentHash
-        ? [`https://chat-content.line-scdn.net/bot/${encodeURIComponent(botId)}/${encodeURIComponent(contentHash)}`]
+        ? [managerContentHashUrl(botId, contentHash)].filter((value): value is string => Boolean(value))
         : []),
       ...extractManagerMediaUrlCandidates(payload),
       ...extractManagerMediaUrlCandidates(info),
