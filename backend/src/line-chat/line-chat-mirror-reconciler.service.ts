@@ -122,6 +122,7 @@ export function configuredLineChatMirrorReconcileStoreCodes(): string[] {
   return configured.length > 0 ? configured : configuredLineChatMirrorStoreCodes();
 }
 
+// Keep Wave 2 observation read-only while Wave 1 remains the canonical apply scope.
 export function configuredLineChatMirrorReconcileDryRunStoreCodes(): string[] {
   const primary = new Set(configuredLineChatMirrorReconcileStoreCodes());
   return parseStoreCodeList(process.env.LINE_CHAT_MIRROR_RECONCILE_DRY_RUN_STORE_CODES)
