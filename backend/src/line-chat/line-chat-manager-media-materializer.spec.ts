@@ -7,6 +7,8 @@ import {
   extractManagerMediaUrlCandidates,
   extractManagerStickerIdentity,
   inferManagerMediaMimeFromMagic,
+  isTransientManagerMediaError,
+  managerContentHashUrl,
 } from "./line-chat-manager-media-materializer.service";
 
 test("extracts nested Manager content hashes without depending on payload depth", () => {
@@ -87,4 +89,30 @@ test("infers generic Manager media MIME types from safe magic bytes", () => {
     ),
     "video/webm",
   );
+});
+
+
+test("preserves content-hash path separators while encoding each path segment safely", () => {
+  assert.equal(
+    managerContentHashUrl("bot-1", "abc/def+ghi=="),
+    "https://chat-content.line-scdn.net/bot/bot-1/abc/def%2Bghi%3D%3D",
+  );
+  assert.equal(managerContentHashUrl("bot-1", "../escape"), null);
+  assert.equal(managerContentHashUrl("bot-1", "bad?query"), null);
+});
+
+test("treats browser process exhaustion as transient materialization contention", () => {
+  assert.equal(isTransientManagerMediaError("MANAGER_MEDIA_PROFILE_BUSY"), true);
+  assert.equal(isTransientManagerMediaError("spawn chromium EAGAIN"), true);
+  assert.equal(isTransientManagerMediaError("Target page, context or browser has been closed"), true);
+  assert.equal(isTransientManagerMediaError("MANAGER_MEDIA_BINARY_NOT_FOUND"), false);
+});
+
+test("materializer reuses a single persistent browser context for a candidate batch", () => {
+  const source = readFileSync(new URL("./line-chat-manager-media-materializer.service.ts", import.meta.url), "utf8");
+  assert.match(source, /materializeMessageBatch/);
+  assert.match(source, /materializeLoadedGroup/);
+  assert.match(source, /for \(const \{ input, message \} of runnable\)/);
+  assert.match(source, /launchManagedPersistentContext/);
+  assert.match(source, /persistDownloadedMedia/);
 });
