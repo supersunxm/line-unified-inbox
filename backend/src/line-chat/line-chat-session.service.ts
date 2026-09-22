@@ -726,7 +726,7 @@ export class LineChatSessionService {
       mergePage(firstPage);
       let next = firstPage.next;
       const seenNext = new Set<string>();
-      let enumerationError: string | undefined = byId.size > maxChats
+      let enumerationError: string | undefined = !boundedWindow && byId.size > maxChats
         ? "Chat-list discovered-chat limit reached."
         : undefined;
       while (next !== null) {
@@ -774,7 +774,7 @@ export class LineChatSessionService {
         }
         pages.push(parsedPage);
         mergePage(parsedPage);
-        if (byId.size > maxChats) {
+        if (!boundedWindow && byId.size > maxChats) {
           enumerationError = "Chat-list discovered-chat limit reached.";
           break;
         }
