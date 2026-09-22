@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import type {
   GoogleReviewAuditQueueStoreItem,
@@ -51,12 +51,9 @@ function buildGoogleMapsHandoffUrl(
   originalUrl: string,
   store: GoogleReviewKpiStoreItem,
   month: string,
-  runnerToken?: string,
   sessionId?: string,
-  backendUrl?: string,
   batchItemId?: string,
 ): string {
-  const origin = backendUrl || (typeof window !== "undefined" ? window.location.origin : undefined);
   const canonicalStoreCode = store.storeId || store.code;
   try {
     const original = new URL(originalUrl);
@@ -79,27 +76,30 @@ function buildGoogleMapsHandoffUrl(
     if (store.googleMapsUrl) url.searchParams.set("oppoGoogleMapsUrl", store.googleMapsUrl);
     if (store.googleMapsName) url.searchParams.set("oppoGoogleMapsName", store.googleMapsName);
     url.searchParams.set("oppoMonth", month);
-    if (runnerToken || sessionId || origin) {
+    if (sessionId) {
       const hashParams = new URLSearchParams(url.hash.startsWith("#") ? url.hash.slice(1) : "");
-      if (runnerToken) hashParams.set("oppoToken", runnerToken);
       if (sessionId) hashParams.set("oppoSessionId", sessionId);
-      if (origin) hashParams.set("oppoBackendUrl", origin);
       url.hash = hashParams.toString();
     }
     return url.toString();
   } catch {
     const sep = originalUrl.includes("?") ? "&" : "?";
     let base = `${originalUrl}${sep}oppoStoreId=${encodeURIComponent(store.id)}${batchItemId ? `&oppoBatchItemId=${encodeURIComponent(batchItemId)}` : ""}&oppoExtId=${encodeURIComponent(store.storeId || "")}&oppoCode=${encodeURIComponent(canonicalStoreCode || "")}&oppoName=${encodeURIComponent(store.name)}&oppoGoogleMapsUrl=${encodeURIComponent(store.googleMapsUrl || originalUrl)}&oppoGoogleMapsName=${encodeURIComponent(store.googleMapsName || "")}&oppoMonth=${encodeURIComponent(month)}`;
-    if (runnerToken || sessionId || origin) {
+    if (sessionId) {
       const hashParts: string[] = [];
-      if (runnerToken) hashParts.push(`oppoToken=${encodeURIComponent(runnerToken)}`);
       if (sessionId) hashParts.push(`oppoSessionId=${encodeURIComponent(sessionId)}`);
-      if (origin) hashParts.push(`oppoBackendUrl=${encodeURIComponent(origin)}`);
       base += `#${hashParts.join("&")}`;
     }
     return base;
   }
 }
+
+type BatchSessionPersistenceAck = {
+  requestId?: string;
+  sessionId?: string;
+  success?: boolean;
+  error?: string | null;
+};
 
 async function persistBatchSessionWithAck(
   bridgeData: {
@@ -109,7 +109,6 @@ async function persistBatchSessionWithAck(
     currentStore?: GoogleReviewAuditQueueStoreItem | null;
     totalStores?: number;
     completedStores?: number;
-    runnerToken?: string;
   },
   timeoutMs: number = 2000,
 ): Promise<{ acked: boolean; error?: string | null }> {
@@ -149,23 +148,23 @@ async function persistBatchSessionWithAck(
       }
     }, timeoutMs);
 
-    const onAckReceived = (detail: any) => {
+    const onAckReceived = (detail: BatchSessionPersistenceAck) => {
       if (!settled) {
         settled = true;
         clearTimeout(timer);
         cleanup();
         console.debug("[BatchAudit] Extension bridge persistence ACK:", {
           sessionId: detail.sessionId,
-          runnerTokenPresent: detail.runnerTokenPresent,
           success: detail.success,
         });
-        resolve({ acked: detail.success, error: detail.error });
+        resolve({ acked: Boolean(detail.success), error: detail.error });
       }
     };
 
-    const customEventHandler = (e: any) => {
-      if (e.detail?.requestId === requestId) {
-        onAckReceived(e.detail);
+    const customEventHandler = (e: Event) => {
+      const detail = (e as CustomEvent<BatchSessionPersistenceAck>).detail;
+      if (detail?.requestId === requestId) {
+        onAckReceived(detail);
       }
     };
 
@@ -227,6 +226,56 @@ function setBatchReplacementPending(pending: boolean, sessionId?: string): void 
     );
   }
 }
+
+type DashboardAuditResultReady = {
+  requestId: string;
+  batchId: string;
+  batchItemId: string;
+  sessionId: string;
+  storeId: string;
+  storeCode: string;
+  targetMonth: string;
+  completionReason: "MONTHLY_STOP_BOUNDARY_REACHED" | "END_OF_REVIEW_FEED";
+  aggregate: {
+    reviewsChecked: number;
+    withCustomerPhoto: number;
+    photoInTargetMonth: number;
+    thaiWords15Plus: number;
+    qualifiedReviews: number;
+  };
+  coverageStatus: "OLDER_THAN_TARGET_REACHED" | "END_OF_AVAILABLE_REVIEWS";
+  qualificationRuleVersion: string;
+  oldestReviewDateText?: string;
+};
+
+type DashboardAuditResultAck = {
+  requestId: string;
+  batchId: string;
+  batchItemId: string;
+  sessionId: string;
+  storeId: string;
+  storeCode: string;
+  targetMonth: string;
+  status: "PERSISTED" | "REJECTED" | "FAILED";
+  errorCode?: string;
+  errorMessage?: string;
+  nextStore?: {
+    batchItemId: string;
+    sessionId: string;
+    storeId: string;
+    storeName: string;
+    storeCode: string | null;
+    googleMapsUrl: string;
+    googleMapsName: string | null;
+    region: string | null;
+    targetMonth: string;
+  } | null;
+};
+
+type DashboardAuditNeedsAttention = Omit<DashboardAuditResultReady, "aggregate" | "completionReason" | "coverageStatus" | "qualificationRuleVersion" | "oldestReviewDateText"> & {
+  errorCode: string;
+  errorMessage: string;
+};
 
 const translations = {
   th: {
@@ -479,6 +528,11 @@ type ViewProps = {
   userRole?: "ADMIN" | "VIEWER";
 };
 
+type FormMessage = {
+  type: "success" | "error";
+  text: string;
+};
+
 export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
   const t = translations[language] || translations.en;
   const recentMonths = useMemo(() => getRecentMonths(12), []);
@@ -506,6 +560,7 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
   const [formReviewsOver15Words, setFormReviewsOver15Words] = useState<number>(0);
   const [formQualifiedReviews, setFormQualifiedReviews] = useState<number>(0);
   const [formTarget, setFormTarget] = useState<number>(10);
+  const [formMessage, setFormMessage] = useState<FormMessage | null>(null);
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<"monthly" | "weekly">("monthly");
 
@@ -524,6 +579,7 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
   const [downloadMenuOpen, setDownloadMenuOpen] = useState<boolean>(false);
   const [exportingFormat, setExportingFormat] = useState<"xlsx" | "csv" | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
+  const handledAuditRequests = useRef(new Set<string>());
 
   const loadData = async (month: string, silent: boolean = false) => {
     try {
@@ -692,6 +748,230 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
     }
   }, [batchSession?.status, selectedMonth]);
 
+  // Completed Maps scans arrive through the extension bridge. This handler is
+  // intentionally the only production result POST path: api.request uses the
+  // authenticated lineoppo.click session cookie with credentials: include.
+  useEffect(() => {
+    const emitResultAck = (payload: DashboardAuditResultReady, ack: DashboardAuditResultAck) => {
+      window.dispatchEvent(new CustomEvent("OPPO_AUDIT_RESULT_PERSISTED", { detail: ack }));
+      try {
+        localStorage.setItem("oppo_last_audit_result_ack", JSON.stringify(ack));
+      } catch {}
+      void payload;
+    };
+
+    const handleAuditResultReady = async (event: Event) => {
+      const payload = (event as CustomEvent<DashboardAuditResultReady>).detail;
+      if (!payload || handledAuditRequests.current.has(payload.requestId)) return;
+
+      const queueStore = batchSession?.stores.find((store) => store.id === payload.batchItemId);
+      const activeSession = batchSession;
+      const identityValid = Boolean(
+        activeSession &&
+        (activeSession.status === "RUNNING" || activeSession.status === "COMPLETED") &&
+        activeSession.id === payload.batchId &&
+        activeSession.id === payload.sessionId &&
+        activeSession.month === payload.targetMonth &&
+        queueStore &&
+        queueStore.storeId === payload.storeId &&
+        queueStore.storeCode === payload.storeCode &&
+        queueStore.sessionId === payload.sessionId &&
+        (queueStore.status === "RUNNING" || queueStore.status === "COMPLETED") &&
+        payload.completionReason in {
+          MONTHLY_STOP_BOUNDARY_REACHED: true,
+          END_OF_REVIEW_FEED: true,
+        } &&
+        payload.aggregate.reviewsChecked >= 0 &&
+        payload.aggregate.withCustomerPhoto >= 0 &&
+        payload.aggregate.photoInTargetMonth >= 0 &&
+        payload.aggregate.thaiWords15Plus >= 0 &&
+        payload.aggregate.qualifiedReviews >= 0 &&
+        payload.aggregate.qualifiedReviews <= payload.aggregate.reviewsChecked,
+      );
+
+      if (!identityValid || !queueStore) {
+        emitResultAck(payload, {
+          requestId: payload.requestId,
+          batchId: payload.batchId,
+          batchItemId: payload.batchItemId,
+          sessionId: payload.sessionId,
+          storeId: payload.storeId,
+          storeCode: payload.storeCode,
+          targetMonth: payload.targetMonth,
+          status: "REJECTED",
+          errorCode: "STALE_OR_MISMATCHED_AUDIT_RESULT",
+          errorMessage: "The dashboard batch identity, store code, month, or completion state does not match.",
+        });
+        return;
+      }
+
+      handledAuditRequests.current.add(payload.requestId);
+      try {
+        const persisted = await api.completeGoogleReviewBatchStore(
+          payload.sessionId,
+          payload.storeId,
+          {
+            storeId: payload.storeId,
+            storeCode: payload.storeCode,
+            targetMonth: payload.targetMonth,
+            batchItemId: payload.batchItemId,
+            reviewsChecked: payload.aggregate.reviewsChecked,
+            reviewsWithPhoto: payload.aggregate.withCustomerPhoto,
+            photoReviewsInTargetMonth: payload.aggregate.photoInTargetMonth,
+            reviewsOver15ThaiWords: payload.aggregate.thaiWords15Plus,
+            qualifiedReviews: payload.aggregate.qualifiedReviews,
+            qualificationRuleVersion: payload.qualificationRuleVersion,
+            auditCoverageStatus: payload.coverageStatus,
+            completionReason: payload.completionReason,
+            oldestReviewDateText: payload.oldestReviewDateText,
+          },
+        );
+        if (!persisted.success || persisted.storeId !== payload.storeId) {
+          throw new Error("Authenticated dashboard submission did not return a persistence confirmation");
+        }
+
+        const next = await api.getNextGoogleReviewBatchStore(payload.sessionId);
+        const nextQueueStore = next.store;
+        const nextStore = nextQueueStore?.googleMapsUrl
+          ? {
+              batchItemId: nextQueueStore.id,
+              sessionId: payload.sessionId,
+              storeId: nextQueueStore.storeId,
+              storeName: nextQueueStore.storeName,
+              storeCode: nextQueueStore.storeCode,
+              googleMapsUrl: nextQueueStore.googleMapsUrl,
+              googleMapsName: nextQueueStore.googleMapsName,
+              region: nextQueueStore.region,
+              targetMonth: next.targetMonth,
+            }
+          : null;
+
+        if (!activeSession) {
+          throw new Error("The active dashboard batch disappeared before persistence ACK");
+        }
+
+        const bridgeData: {
+          sessionId: string;
+          targetMonth: string;
+          status: "RUNNING" | "COMPLETED";
+          currentStore: GoogleReviewAuditQueueStoreItem | null;
+          totalStores: number;
+          completedStores: number;
+        } = {
+          sessionId: payload.sessionId,
+          targetMonth: payload.targetMonth,
+          status: nextStore ? "RUNNING" : "COMPLETED",
+          currentStore: nextStore && nextQueueStore ? nextQueueStore : null,
+          totalStores: activeSession.totalStores,
+          completedStores: activeSession.completedStores + (queueStore.status === "COMPLETED" ? 0 : 1),
+        };
+        const bridgeAck = await persistBatchSessionWithAck(bridgeData, 3000);
+        if (!bridgeAck.acked) {
+          throw new Error(`Dashboard-to-extension session ACK failed: ${bridgeAck.error || "unknown error"}`);
+        }
+
+        const ack: DashboardAuditResultAck = {
+          requestId: payload.requestId,
+          batchId: payload.batchId,
+          batchItemId: payload.batchItemId,
+          sessionId: payload.sessionId,
+          storeId: payload.storeId,
+          storeCode: payload.storeCode,
+          targetMonth: payload.targetMonth,
+          status: "PERSISTED",
+          nextStore,
+        };
+        emitResultAck(payload, ack);
+        await loadBatchSession(selectedMonth);
+        await loadData(selectedMonth, true);
+      } catch (err: unknown) {
+        handledAuditRequests.current.delete(payload.requestId);
+        emitResultAck(payload, {
+          requestId: payload.requestId,
+          batchId: payload.batchId,
+          batchItemId: payload.batchItemId,
+          sessionId: payload.sessionId,
+          storeId: payload.storeId,
+          storeCode: payload.storeCode,
+          targetMonth: payload.targetMonth,
+          status: "FAILED",
+          errorCode: "DASHBOARD_AUDIT_RESULT_SUBMISSION_FAILED",
+          errorMessage: err instanceof Error ? err.message : "Authenticated dashboard submission failed",
+        });
+      }
+    };
+
+    const handleNeedsAttention = async (event: Event) => {
+      const payload = (event as CustomEvent<DashboardAuditNeedsAttention>).detail;
+      if (!payload || handledAuditRequests.current.has(payload.requestId)) return;
+      const queueStore = batchSession?.stores.find((store) => store.id === payload.batchItemId);
+      if (
+        !batchSession ||
+        batchSession.id !== payload.batchId ||
+        batchSession.id !== payload.sessionId ||
+        batchSession.month !== payload.targetMonth ||
+        !queueStore ||
+        queueStore.storeId !== payload.storeId ||
+        queueStore.storeCode !== payload.storeCode
+      ) {
+        return;
+      }
+      handledAuditRequests.current.add(payload.requestId);
+      try {
+        await api.flagGoogleReviewBatchStoreNeedsAttention(payload.sessionId, payload.storeId, {
+          batchItemId: payload.batchItemId,
+          errorCode: payload.errorCode,
+          errorMessage: payload.errorMessage,
+        });
+        window.dispatchEvent(new CustomEvent("OPPO_AUDIT_NEEDS_ATTENTION_ACK", {
+          detail: {
+            requestId: payload.requestId,
+            batchId: payload.batchId,
+            batchItemId: payload.batchItemId,
+            sessionId: payload.sessionId,
+            storeId: payload.storeId,
+            storeCode: payload.storeCode,
+            targetMonth: payload.targetMonth,
+            status: "NEEDS_ATTENTION_PERSISTED",
+          },
+        }));
+        await loadBatchSession(selectedMonth);
+      } catch (err: unknown) {
+        handledAuditRequests.current.delete(payload.requestId);
+        window.dispatchEvent(new CustomEvent("OPPO_AUDIT_NEEDS_ATTENTION_ACK", {
+          detail: {
+            requestId: payload.requestId,
+            batchId: payload.batchId,
+            batchItemId: payload.batchItemId,
+            sessionId: payload.sessionId,
+            storeId: payload.storeId,
+            storeCode: payload.storeCode,
+            targetMonth: payload.targetMonth,
+            status: "FAILED",
+            errorCode: "DASHBOARD_NEEDS_ATTENTION_FAILED",
+            errorMessage: err instanceof Error ? err.message : "Authenticated needs-attention update failed",
+          },
+        }));
+      }
+    };
+
+    window.addEventListener("OPPO_AUDIT_RESULT_READY", handleAuditResultReady);
+    window.addEventListener("OPPO_AUDIT_NEEDS_ATTENTION", handleNeedsAttention);
+    try {
+      const pending = localStorage.getItem("oppo_pending_audit_result");
+      if (pending) {
+        const parsed = JSON.parse(pending) as DashboardAuditResultReady;
+        setTimeout(() => {
+          void handleAuditResultReady(new CustomEvent("OPPO_AUDIT_RESULT_READY", { detail: parsed }));
+        }, 0);
+      }
+    } catch {}
+    return () => {
+      window.removeEventListener("OPPO_AUDIT_RESULT_READY", handleAuditResultReady);
+      window.removeEventListener("OPPO_AUDIT_NEEDS_ATTENTION", handleNeedsAttention);
+    };
+  }, [batchSession, selectedMonth]);
+
   const handleStartBatchAudit = async () => {
     const replacingActiveBatch = Boolean(
       batchSession &&
@@ -738,17 +1018,6 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
       });
       setBatchSession(res);
 
-      // Issue a short-lived Bearer token for the Chrome Extension so it can
-      // make authenticated API calls from the google.com/maps content script
-      // context without relying on cross-site cookies.
-      let runnerToken: string | undefined;
-      try {
-        const tokenRes = await api.issueGoogleReviewRunnerToken(res.id);
-        runnerToken = tokenRes.runnerToken;
-      } catch (tokenErr) {
-        console.error("[BatchAudit] Failed to issue runner token:", tokenErr);
-      }
-
       const bridgeData = {
         sessionId: res.id,
         targetMonth: res.month,
@@ -758,7 +1027,6 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
           : null,
         totalStores: res.totalStores,
         completedStores: res.completedStores,
-        runnerToken,
       };
 
       // Deterministically persist session in extension storage with ACK before opening tab.
@@ -785,9 +1053,7 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
             kpiResult: null,
           },
           res.month,
-          runnerToken,
           res.id,
-          undefined,
           res.currentStore.id,
         );
         window.open(handoffUrl, "_blank");
@@ -830,15 +1096,6 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
       const res = await api.updateGoogleReviewBatchAuditStatus(batchSession.id, "RESUME");
       setBatchSession(res);
 
-      // Issue a fresh runner token on every resume (previous token may have expired).
-      let runnerToken: string | undefined;
-      try {
-        const tokenRes = await api.issueGoogleReviewRunnerToken(res.id);
-        runnerToken = tokenRes.runnerToken;
-      } catch (tokenErr) {
-        console.error("[BatchAudit] Failed to issue runner token on resume:", tokenErr);
-      }
-
       const bridgeData = {
         sessionId: res.id,
         targetMonth: res.month,
@@ -848,7 +1105,6 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
           : null,
         totalStores: res.totalStores,
         completedStores: res.completedStores,
-        runnerToken,
       };
 
       // Deterministically persist session in extension storage with ACK before opening tab
@@ -873,9 +1129,7 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
             kpiResult: null,
           },
           res.month,
-          runnerToken,
           res.id,
-          undefined,
           res.currentStore.id,
         );
         window.open(handoffUrl, "_blank");
@@ -1911,9 +2165,7 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
                         kpiResult: null,
                       },
                       batchSession.month,
-                      batchSession.runnerToken,
                       batchSession.id,
-                      undefined,
                       batchSession.currentStore.id,
                     )}
                     target="_blank"

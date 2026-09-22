@@ -93,6 +93,7 @@ export type LineChatRecommendedAction =
   | "MANUAL_REVIEW"
   | "SYSTEM_ATTENTION"
   | "INVESTIGATE";
+export type LineChatJobActivityRisk = "NORMAL" | "WARNING" | "CRITICAL";
 export type LineChatJobCounts = { pending: number; processing: number; success: number; failed: number; failedAuth: number; superseded: number; total: number };
 export type LineChatSafeJobFailure = {
   jobId: string;
@@ -106,6 +107,8 @@ export type LineChatSafeJobFailure = {
   conversationId: string | null;
   recommendedAction: LineChatRecommendedAction;
   isAutoFixable: boolean;
+  resolutionState?: "ACTIVE" | "HISTORICAL";
+  isActionable?: boolean;
 };
 export type LineChatBrowserState = "AVAILABLE" | "BUSY" | "RECOVERING" | "UNKNOWN";
 export type LineChatOperationsSession = {
@@ -116,6 +119,11 @@ export type LineChatOperationsSession = {
   lastAuthenticatedAt: string | null; lastSuccessfulRequestAt: string | null; lastAuthFailureAt: string | null;
   healthLastCheckedAt: string | null; healthLastHealthyAt: string | null; jobs: LineChatJobCounts;
   recentFailures: LineChatSafeJobFailure[];
+  activeJobRisk?: LineChatJobActivityRisk;
+  activeStuckJobs?: number;
+  activeActionableFailures?: number;
+  historicalFailures?: number;
+  retryEligibleCount?: number;
 };
 export type LineChatMappingQueueMetrics = { mappedReadyPending: number; waitingForMapping: number; oldestPendingAt: string | null };
 export type LineChatFleetReadinessStatus = "READY" | "NEED_BOT_MAPPING" | "NEED_LOGIN" | "BLOCKED";
@@ -1081,16 +1089,43 @@ export const api = {
         method: "POST",
       },
     ),
-  /**
-   * Issues a short-lived (30-min) Bearer token scoped to the given audit
-   * session.  Must be called from the dashboard (same-origin) immediately
-   * after a session is started or resumed so the token can be forwarded to
-   * the Chrome Extension via chrome.storage.local.
-   */
-  issueGoogleReviewRunnerToken: (sessionId: string) =>
-    request<{ runnerToken: string; expiresAt: string }>(
-      `/google-review-kpi/audit-session/${encodeURIComponent(sessionId)}/runner-token`,
-      { method: "POST" },
+  completeGoogleReviewBatchStore: (
+    sessionId: string,
+    storeId: string,
+    body: {
+      storeId: string;
+      storeCode: string;
+      targetMonth: string;
+      batchItemId: string;
+      reviewsChecked: number;
+      reviewsWithPhoto: number;
+      photoReviewsInTargetMonth: number;
+      reviewsOver15ThaiWords: number;
+      qualifiedReviews: number;
+      qualificationRuleVersion: string;
+      auditCoverageStatus: "OLDER_THAN_TARGET_REACHED" | "END_OF_AVAILABLE_REVIEWS";
+      completionReason: "MONTHLY_STOP_BOUNDARY_REACHED" | "END_OF_REVIEW_FEED";
+      oldestReviewDateText?: string;
+    },
+  ) =>
+    request<{ success: boolean; storeId: string; remainingPending: number; idempotent?: boolean }>(
+      `/google-review-kpi/audit-session/${encodeURIComponent(sessionId)}/stores/${encodeURIComponent(storeId)}/complete`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+  getNextGoogleReviewBatchStore: (sessionId: string) =>
+    request<{
+      sessionStatus: string;
+      targetMonth: string;
+      store: import("@/types/api").GoogleReviewAuditQueueStoreItem | null;
+    }>(`/google-review-kpi/audit-session/${encodeURIComponent(sessionId)}/next-store`),
+  flagGoogleReviewBatchStoreNeedsAttention: (
+    sessionId: string,
+    storeId: string,
+    body: { batchItemId: string; errorCode: string; errorMessage: string },
+  ) =>
+    request<{ success: boolean; storeId: string; status: string }>(
+      `/google-review-kpi/audit-session/${encodeURIComponent(sessionId)}/stores/${encodeURIComponent(storeId)}/flag-attention`,
+      { method: "POST", body: JSON.stringify(body) },
     ),
   getGoogleReviewWeeklyStores: () =>
     request<import("@/types/api").GoogleReviewWeeklyStoreItem[]>("/google-review-kpi/weekly/stores"),
