@@ -1,9 +1,10 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Res } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, Res } from "@nestjs/common";
 import type { Response } from "express";
 import { CreateLineOfficialAccountDto, ExportLineOfficialAccountsDto, UpdateLineOfficialAccountDto, UpdateLineOaStatusDto } from "./line-official-account.dto";
 import { LineOfficialAccountsService } from "./line-official-accounts.service";
 import { buildCanonicalLineOaCsv } from "./line-official-account-canonical-export";
 import { Roles } from "../auth/auth.decorators";
+import type { AuthRequest } from "../auth/auth.guard";
 
 @Controller("line-official-accounts")
 export class LineOfficialAccountsController {
@@ -16,6 +17,20 @@ export class LineOfficialAccountsController {
     response.setHeader("Content-Type", "text/csv; charset=utf-8");
     response.setHeader("Content-Disposition", `attachment; filename="${result.filename}"`);
     response.setHeader("X-Export-Row-Count", String(result.rowCount));
+    response.send(result.csv);
+  }
+  @Roles("ADMIN")
+  @Get("handover.csv")
+  async exportHandoverCsv(@Query() query: ExportLineOfficialAccountsDto, @Req() request: AuthRequest, @Res() response: Response) {
+    const result = await this.service.exportHandoverCsv(query, request.user?.id);
+    response.setHeader("Content-Type", "text/csv; charset=utf-8");
+    response.setHeader("Content-Disposition", `attachment; filename="${result.filename}"`);
+    response.setHeader("Cache-Control", "no-store, private, max-age=0");
+    response.setHeader("Pragma", "no-cache");
+    response.setHeader("Expires", "0");
+    response.setHeader("X-Content-Type-Options", "nosniff");
+    response.setHeader("X-Export-Row-Count", String(result.rowCount));
+    response.setHeader("X-Incomplete-Credential-Rows", String(result.incompleteCredentialRows));
     response.send(result.csv);
   }
   @Get(":id") get(@Param("id") id: string) { return this.service.get(id); }
