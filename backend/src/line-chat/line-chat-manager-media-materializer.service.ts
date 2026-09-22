@@ -689,7 +689,10 @@ export class LineChatManagerMediaMaterializerService implements OnModuleInit, On
               { sessionId: target.session.id, sessionKey: target.session.sessionKey },
             );
             const page = context.pages()[0] || await context.newPage();
-            const firstMirror = mirrorsByCanonicalId.get(runnable[0]!.message.id)!;
+            const firstRunnable = runnable[0];
+            if (!firstRunnable) return operationResults;
+            const firstMirror = mirrorsByCanonicalId.get(firstRunnable.message.id);
+            if (!firstMirror) throw new Error("MANAGER_MEDIA_MIRROR_ROW_MISSING");
             const firstReferer = this.sessionService.buildChatRefererUrl(target.botId, firstMirror.lineChatUserId);
             await page.goto(firstReferer, { waitUntil: "domcontentloaded", timeout: 15_000 }).catch(() => {});
             const auth = await confirmLineManagerAuthentication(
