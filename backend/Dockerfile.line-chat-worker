@@ -5,7 +5,7 @@ WORKDIR /app
 
 # Dormant operator tooling for token-gated, on-demand interactive login recovery.
 # No VNC/noVNC process or public listener is started by the image itself.
-RUN sed -i 's|http://|https://|g' /etc/apt/sources.list.d/ubuntu.sources \
+RUN sed -i 's|http://|https://|g; s|https://azure.archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' /etc/apt/sources.list.d/ubuntu.sources \
   && apt-get update \
   && apt-get install -y --no-install-recommends \
     fluxbox \
