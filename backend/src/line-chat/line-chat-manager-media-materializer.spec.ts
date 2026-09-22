@@ -116,3 +116,15 @@ test("materializer reuses a single persistent browser context for a candidate ba
   assert.match(source, /launchManagedPersistentContext/);
   assert.match(source, /persistDownloadedMedia/);
 });
+
+
+test("materializer treats Manager auth expiry as retryable and wires safe remembered-account recovery", () => {
+  const source = readFileSync(new URL("./line-chat-manager-media-materializer.service.ts", import.meta.url), "utf8");
+  assert.equal(isTransientManagerMediaError("MANAGER_MEDIA_AUTH_AUTH_EXPIRED"), true);
+  assert.match(source, /LineChatAuthRecoveryService/);
+  assert.match(source, /recordSessionHealthResult/);
+  assert.match(source, /status:\s*"AUTH_REQUIRED"/);
+  assert.match(source, /failureStage:\s*"MANAGER_AUTH"/);
+  assert.match(source, /recoverSession\(sessionId, "SCHEDULED"\)/);
+  assert.match(source, /line_chat_manager_media_auth_recovered_retrying_batch/);
+});
