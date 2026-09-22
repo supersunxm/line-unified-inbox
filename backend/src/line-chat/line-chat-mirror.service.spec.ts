@@ -9,6 +9,7 @@ import {
   managerAccountKeyFromInputs,
   managerBotIdFromRedirect,
   mirrorDirectionForManagerEvent,
+  selectMirrorResolvedCandidate,
 } from "./line-chat-mirror.service";
 
 function withEnv(
@@ -139,5 +140,60 @@ test("Project B mirror accepts only canonical LINE chat bot redirects", () => {
       "https://evil.example/U0123456789abcdef0123456789abcdef",
     ),
     null,
+  );
+});
+
+
+test("Project B mirror accepts duplicate Manager sessions when they resolve the same bot", () => {
+  const sessionA = {
+    id: "session-a",
+    sessionKey: "profile-b",
+    status: "ACTIVE" as any,
+    profilePath: "/tmp/a",
+    profileStorageKey: null,
+  };
+  const sessionB = {
+    id: "session-b",
+    sessionKey: "account-1",
+    status: "ACTIVE" as any,
+    profilePath: "/tmp/b",
+    profileStorageKey: null,
+  };
+
+  const selected = selectMirrorResolvedCandidate([
+    { botId: "U0123456789abcdef0123456789abcdef", session: sessionA },
+    { botId: "U0123456789abcdef0123456789abcdef", session: sessionB },
+  ]);
+
+  assert.notEqual(selected, null);
+  assert.notEqual(selected, "AMBIGUOUS");
+  if (selected && selected !== "AMBIGUOUS") {
+    assert.equal(selected.session.id, "session-a");
+    assert.equal(selected.botId, "U0123456789abcdef0123456789abcdef");
+  }
+});
+
+test("Project B mirror fails closed when Manager sessions resolve different bots", () => {
+  const sessionA = {
+    id: "session-a",
+    sessionKey: "profile-b",
+    status: "ACTIVE" as any,
+    profilePath: "/tmp/a",
+    profileStorageKey: null,
+  };
+  const sessionB = {
+    id: "session-b",
+    sessionKey: "account-1",
+    status: "ACTIVE" as any,
+    profilePath: "/tmp/b",
+    profileStorageKey: null,
+  };
+
+  assert.equal(
+    selectMirrorResolvedCandidate([
+      { botId: "U0123456789abcdef0123456789abcdef", session: sessionA },
+      { botId: "Ufedcba9876543210fedcba9876543210", session: sessionB },
+    ]),
+    "AMBIGUOUS",
   );
 });
