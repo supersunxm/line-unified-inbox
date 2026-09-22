@@ -326,6 +326,10 @@ const translations = {
     exportCsv: "ดาวน์โหลด CSV",
     exportingCsv: "กำลังสร้าง CSV...",
     exportCsvFailed: "ดาวน์โหลด CSV ไม่สำเร็จ กรุณาลองอีกครั้ง",
+    handoverExport: "ส่งต่อ Credentials",
+    exportingHandover: "กำลังสร้างไฟล์ส่งต่อ...",
+    handoverExportFailed: "สร้างไฟล์ส่งต่อ Credentials ไม่สำเร็จ กรุณาลองอีกครั้ง",
+    handoverExportWarning: "ไฟล์นี้มี Channel Secret และ Channel Access Token จริงของทุกสาขาที่เลือก ผู้ที่ได้รับไฟล์สามารถใช้ Messaging API ของ LINE OA ได้\n\nยืนยันดาวน์โหลดไฟล์สำหรับส่งต่อหรือไม่?",
     syncMasterFile: "↻ Sync Store Master",
     syncingMasterFile: "Syncing Store Master...",
     syncMasterSuccess: "Sync Store Master สำเร็จ",
@@ -668,6 +672,10 @@ const translations = {
     exportCsv: "Export CSV",
     exportingCsv: "Generating CSV...",
     exportCsvFailed: "CSV download failed. Please try again.",
+    handoverExport: "Handover Credentials",
+    exportingHandover: "Preparing handover file...",
+    handoverExportFailed: "Credential handover export failed. Please try again.",
+    handoverExportWarning: "This file contains the real Channel Secret and Channel Access Token for every selected LINE OA. Anyone with the file can use the LINE Messaging API for those accounts.\n\nDownload the handover file?",
     syncMasterFile: "↻ Sync Store Master",
     syncingMasterFile: "Syncing Store Master...",
     syncMasterSuccess: "Store Master sync succeeded",
@@ -1008,6 +1016,10 @@ const translations = {
     exportCsv: "下载 CSV",
     exportingCsv: "正在生成 CSV...",
     exportCsvFailed: "CSV 下载失败，请重试。",
+    handoverExport: "交接 Credentials",
+    exportingHandover: "正在生成交接文件...",
+    handoverExportFailed: "Credential 交接文件生成失败，请重试。",
+    handoverExportWarning: "此文件包含所选 LINE OA 的真实 Channel Secret 和 Channel Access Token。任何获得此文件的人都可以使用这些账号的 LINE Messaging API。\n\n确认下载交接文件吗？",
     syncMasterFile: "↻ 同步 Store Master",
     syncingMasterFile: "正在同步 Store Master...",
     syncMasterSuccess: "Store Master 同步成功",
@@ -1481,6 +1493,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
   const [editingLineOaId, setEditingLineOaId] = useState<string | null>(null);
   const [lineOaError, setLineOaError] = useState<string | null>(null);
   const [lineOaExporting, setLineOaExporting] = useState(false);
+  const [lineOaHandoverExporting, setLineOaHandoverExporting] = useState(false);
   const [lineOaExportError, setLineOaExportError] = useState<string | null>(null);
   const [masterSyncing, setMasterSyncing] = useState(false);
   const [masterSyncResult, setMasterSyncResult] = useState<StoreMasterSyncResult | null>(null);
@@ -2876,6 +2889,32 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
     }
   }
 
+  async function exportLineOaHandoverCsv() {
+    if (lineOaHandoverExporting || authUser?.role !== "ADMIN") return;
+    if (!window.confirm(text.handoverExportWarning)) return;
+    setLineOaHandoverExporting(true);
+    setLineOaExportError(null);
+    try {
+      const { blob, filename } = await api.exportLineOfficialAccountHandover({
+        search: storeManagementSearch,
+        status: storeRouteStatus === "error" ? "issues" : storeRouteStatus,
+        showArchived: showArchivedLineOas,
+      });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = filename;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      setLineOaExportError(error instanceof Error ? error.message : text.handoverExportFailed);
+    } finally {
+      setLineOaHandoverExporting(false);
+    }
+  }
+
   async function syncMasterFile() {
     if (masterSyncing || authUser?.role !== "ADMIN") return;
     setMasterSyncing(true);
@@ -3319,6 +3358,17 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                               onClick={() => void exportLineOaCsv()}
                             >
                               {lineOaExporting ? text.exportingCsv : `↓ ${text.exportCsv}`}
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              size="sm"
+                              disabled={lineOaHandoverExporting}
+                              isLoading={lineOaHandoverExporting}
+                              onClick={() => void exportLineOaHandoverCsv()}
+                              data-testid="export-line-oa-handover-button"
+                            >
+                              {lineOaHandoverExporting ? text.exportingHandover : `↓ ${text.handoverExport}`}
                             </Button>
                           </>
                         )}
