@@ -59,7 +59,18 @@ function buildGoogleMapsHandoffUrl(
   const origin = backendUrl || (typeof window !== "undefined" ? window.location.origin : undefined);
   const canonicalStoreCode = store.storeId || store.code;
   try {
-    const url = new URL(originalUrl);
+    const original = new URL(originalUrl);
+    // Google Maps short-link redirects drop arbitrary query/hash parameters.
+    // Use the canonical Maps search route when StoreMaster provides the
+    // canonical place name so the dashboard handoff survives the redirect.
+    const isGoogleMapsShortLink = /(^|\.)maps\.app\.goo\.gl$/i.test(original.hostname);
+    const url = isGoogleMapsShortLink && store.googleMapsName
+      ? new URL("https://www.google.com/maps/search/")
+      : original;
+    if (isGoogleMapsShortLink && store.googleMapsName) {
+      url.searchParams.set("api", "1");
+      url.searchParams.set("query", store.googleMapsName);
+    }
     url.searchParams.set("oppoStoreId", store.id);
     if (batchItemId) url.searchParams.set("oppoBatchItemId", batchItemId);
     if (store.storeId) url.searchParams.set("oppoExtId", store.storeId);
@@ -1900,6 +1911,10 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
                         kpiResult: null,
                       },
                       batchSession.month,
+                      batchSession.runnerToken,
+                      batchSession.id,
+                      undefined,
+                      batchSession.currentStore.id,
                     )}
                     target="_blank"
                     rel="noopener noreferrer"
