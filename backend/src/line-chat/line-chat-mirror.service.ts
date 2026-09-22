@@ -810,14 +810,19 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
         errorMessage: "No active LINE Manager session could open this OA account.",
       };
     }
-    if (uniqueCandidates.length !== 1) {
+
+    const uniqueBotIds = [...new Set(uniqueCandidates.map((candidate) => candidate.botId))];
+    if (uniqueBotIds.length !== 1) {
       return {
         ok: false,
         errorCode: "MIRROR_MANAGER_TARGET_AMBIGUOUS",
-        errorMessage: "More than one LINE Manager session resolved this OA account.",
+        errorMessage: "More than one distinct LINE Manager OA bot resolved this account.",
       };
     }
 
+    // Multiple authenticated Manager sessions may legitimately have access to
+    // the same OA. When they all resolve to the exact same botId, keep the
+    // existing deterministic session ordering and use the first candidate.
     const candidate = uniqueCandidates[0];
     const result = {
       botId: candidate.botId,
