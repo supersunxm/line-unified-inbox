@@ -398,7 +398,7 @@ export class LineChatMirrorSalesTagSyncService implements OnModuleInit, OnModule
       const common: Prisma.ConversationUpdateInput = {
         interestLevel: null,
       };
-      let actionType = ActivityActionType.CUSTOMER_SALES_INFO_UPDATED;
+      let actionType: ActivityActionType = ActivityActionType.CUSTOMER_SALES_INFO_UPDATED;
       let productModelId: string | null = null;
 
       if (input.tag.status === "ONLINE") {
