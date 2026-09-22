@@ -620,6 +620,7 @@ model StoreMaster {
   tiktokUsername        String?
   tiktokProfileUrl      String?
   googleMapsUrl         String?
+  googleMapsName        String?
   province              String?
   region                String?
   dashboardTier         String?
@@ -2497,6 +2498,11 @@ enum GoogleReviewAuditCoverageStatus {
   END_OF_AVAILABLE_REVIEWS
 }
 
+enum GoogleReviewAuditCompletionReason {
+  MONTHLY_STOP_BOUNDARY_REACHED
+  END_OF_REVIEW_FEED
+}
+
 model GoogleReviewAuditSession {
   id                       String                         @id @default(uuid())
   month                    String                         // YYYY-MM
@@ -2532,6 +2538,7 @@ model GoogleReviewAuditStore {
   reviewsOver15ThaiWords    Int                              @default(0)
   qualifiedReviews          Int                              @default(0)
   coverageStatus            GoogleReviewAuditCoverageStatus?
+  completionReason          GoogleReviewAuditCompletionReason?
 
   attemptCount           Int                              @default(0)
   errorCode              String?
