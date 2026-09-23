@@ -2,6 +2,7 @@ import type {
   LineChatDiscoveredChat,
   LineChatDiscoveryPage,
   LineChatDiscoveryResult,
+  LineChatLatestEventTimestampState,
 } from "./line-chat.types";
 
 const CHAT_USER_ID_PATTERN = /^U[0-9a-f]{32}$/i;
@@ -53,10 +54,27 @@ function assertListEnvelope(body: unknown): { entries: unknown[]; next: string |
   return { entries: wrapper.list, next: rawNext.trim() ? rawNext : null };
 }
 
-function normalizeLatestEventTimestamp(value: Record<string, unknown>): string | null {
+function normalizeLatestEventTimestamp(value: Record<string, unknown>): {
+  timestamp: string | null;
+  state: LineChatLatestEventTimestampState;
+} {
+  const hasLatestEvent = Object.prototype.hasOwnProperty.call(value, "latestEvent");
+  if (!hasLatestEvent || value.latestEvent === null || value.latestEvent === undefined) {
+    return { timestamp: null, state: "NO_LATEST_EVENT" };
+  }
+
   const latestEvent = objectValue(value.latestEvent);
-  if (!latestEvent || !Object.prototype.hasOwnProperty.call(latestEvent, "timestamp")) return null;
-  return timestampValue(latestEvent.timestamp);
+  if (!latestEvent) {
+    return { timestamp: null, state: "INVALID_TIMESTAMP" };
+  }
+  if (!Object.prototype.hasOwnProperty.call(latestEvent, "timestamp")) {
+    return { timestamp: null, state: "MISSING_TIMESTAMP" };
+  }
+
+  const timestamp = timestampValue(latestEvent.timestamp);
+  return timestamp
+    ? { timestamp, state: "VALID_TIMESTAMP" }
+    : { timestamp: null, state: "INVALID_TIMESTAMP" };
 }
 
 function normalizeCustomerName(value: Record<string, unknown>): string | null {
@@ -73,12 +91,14 @@ function normalizeCustomerName(value: Record<string, unknown>): string | null {
 function normalizeUserChat(raw: unknown): LineChatDiscoveredChat | null {
   const value = objectValue(raw);
   if (!value || value.chatType !== "USER" || !isLineChatUserId(value.chatId)) return null;
+  const latestEventTimestamp = normalizeLatestEventTimestamp(value);
   return {
     chatUserId: value.chatId.trim(),
     displayName: normalizeCustomerName(value),
     // The verified v2 contract does not establish message text or direction semantics.
     lastMessageText: null,
-    lastMessageAt: normalizeLatestEventTimestamp(value),
+    lastMessageAt: latestEventTimestamp.timestamp,
+    lastMessageAtState: latestEventTimestamp.state,
     lastMessageDirection: null,
   };
 }

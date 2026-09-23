@@ -30,6 +30,8 @@ function safeReport(report: SeptemberChatInventoryReport): Record<string, unknow
     septemberChatsObserved: report.septemberChatsObserved,
     beforeSeptemberObserved: report.beforeSeptemberObserved,
     afterSeptemberObserved: report.afterSeptemberObserved,
+    noLatestEventChats: report.noLatestEventChats,
+    malformedTimestampChats: report.malformedTimestampChats,
     unknownDateChats: report.unknownDateChats,
     pagesFetched: report.pagesFetched,
     newestChatListTimestamp: report.newestChatListTimestamp,

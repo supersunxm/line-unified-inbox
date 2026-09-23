@@ -1,9 +1,10 @@
-import { Inject, Injectable } from "@nestjs/common";
+import { Inject, Injectable, Optional } from "@nestjs/common";
 import { LineChatSessionStatus } from "@prisma/client";
 import { PrismaService } from "../prisma.service";
 import { LINE_CHAT_HISTORICAL_PILOT_STORE_CODES } from "./line-chat-historical-backfill";
 import { LineChatProfileOperationCoordinator } from "./line-chat-profile-operation-coordinator.service";
 import { LineChatSessionService } from "./line-chat-session.service";
+import { LineChatMirrorService } from "./line-chat-mirror.service";
 import type { LineChatDiscoveryResult } from "./line-chat.types";
 import {
   SeptemberChatListOrderTracker,
@@ -32,6 +33,9 @@ export class LineChatSeptemberInventoryService {
     @Inject(LineChatSessionService) private readonly sessionService: LineChatSessionService,
     @Inject(LineChatProfileOperationCoordinator)
     private readonly coordinator: LineChatProfileOperationCoordinator,
+    @Optional()
+    @Inject(LineChatMirrorService)
+    private readonly mirrorService?: LineChatMirrorService,
   ) {}
 
   /** Builds sanitized reports for the three approved A1 pilot stores, serially. */
@@ -61,6 +65,15 @@ export class LineChatSeptemberInventoryService {
         where: { id: state.lineOfficialAccountId },
         select: {
           chatBotId: true,
+          basicId: true,
+          lineChatWorkspaceUrl: true,
+          store: {
+            select: {
+              storeMaster: {
+                select: { lineManagerUrl: true },
+              },
+            },
+          },
           lineChatSession: {
             select: {
               id: true,
@@ -72,15 +85,32 @@ export class LineChatSeptemberInventoryService {
           },
         },
       });
-      const botId = account?.chatBotId?.trim() ?? "";
-      if (!account || !botId) {
-        reports.push(emptySeptemberChatInventoryReport(storeCode, "MANAGER_BOT_ID_UNAVAILABLE"));
+      if (!account) {
+        reports.push(emptySeptemberChatInventoryReport(storeCode, "MANAGER_TARGET_UNAVAILABLE"));
         continue;
       }
-      const session = account.lineChatSession;
-      if (!session || session.status !== LineChatSessionStatus.ACTIVE) {
-        reports.push(emptySeptemberChatInventoryReport(storeCode, "MANAGER_SESSION_UNAVAILABLE"));
-        continue;
+
+      let botId = account.chatBotId?.trim() ?? "";
+      let session = account.lineChatSession;
+      if (!botId || !session || session.status !== LineChatSessionStatus.ACTIVE) {
+        if (!this.mirrorService) {
+          reports.push(emptySeptemberChatInventoryReport(storeCode, "MANAGER_TARGET_UNAVAILABLE"));
+          continue;
+        }
+        const resolved = await this.mirrorService.resolveMirrorTarget({
+          lineOfficialAccountId: state.lineOfficialAccountId,
+          chatBotId: account.chatBotId,
+          basicId: account.basicId,
+          lineChatWorkspaceUrl: account.lineChatWorkspaceUrl,
+          storeManagerUrl: account.store?.storeMaster?.lineManagerUrl ?? null,
+          lineChatSession: account.lineChatSession,
+        });
+        if (!resolved.ok) {
+          reports.push(emptySeptemberChatInventoryReport(storeCode, resolved.errorCode));
+          continue;
+        }
+        botId = resolved.botId;
+        session = resolved.session;
       }
 
       reports.push(await this.discoverStore({

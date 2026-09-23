@@ -17,12 +17,17 @@ import type {
   LineChatDiscoveryResult,
 } from "./line-chat.types";
 
-function chat(id: string, lastMessageAt: string | null): LineChatDiscoveredChat {
+function chat(
+  id: string,
+  lastMessageAt: string | null,
+  lastMessageAtState?: LineChatDiscoveredChat["lastMessageAtState"],
+): LineChatDiscoveredChat {
   return {
     chatUserId: `U${id.padStart(32, "0")}`,
     displayName: "Customer",
     lastMessageText: null,
     lastMessageAt,
+    ...(lastMessageAtState ? { lastMessageAtState } : {}),
     lastMessageDirection: null,
   };
 }
@@ -95,7 +100,7 @@ test("September classifier returns UNKNOWN for missing or invalid timestamps", (
   }
 });
 
-test("order tracker paginates September pages and permits early stop after crossing into August", () => {
+test("order tracker observes the September boundary but does not early-stop without cursor exhaustion", () => {
   const tracker = new SeptemberChatListOrderTracker();
   assert.equal(tracker.observePage(page([
     chat("1", "2026-09-23T10:00:00+07:00"),
@@ -104,15 +109,17 @@ test("order tracker paginates September pages and permits early stop after cross
   assert.equal(tracker.observePage(page([
     chat("3", "2026-09-01T00:00:00+07:00"),
     chat("4", "2026-08-31T23:59:59+07:00"),
-  ])), true);
+  ])), false);
   assert.deepEqual(tracker.snapshot(), {
     pagesObserved: 2,
     invalidUserRecords: 0,
     unknownTimestampObserved: false,
+    noLatestEventObserved: 0,
+    malformedTimestampObserved: 0,
     reachedBeforeSeptember: true,
     orderingAnomaly: false,
     duplicateConflict: false,
-    safeEarlyStopReached: true,
+    earlyStopCandidateReached: true,
   });
 
   const report = buildSeptemberChatInventoryReport({
@@ -126,15 +133,16 @@ test("order tracker paginates September pages and permits early stop after cross
       pagesFetched: 2,
       enumerationStatus: "PARTIAL",
       nextTerminationObserved: false,
-      stoppedEarlyByObserver: true,
+      enumerationError: "Chat-list page limit reached.",
     }),
     order: tracker.snapshot(),
     historicalStates: [],
   });
-  assert.equal(report.inventoryComplete, true);
-  assert.equal(report.septemberChats, 3);
+  assert.equal(report.inventoryComplete, false);
+  assert.equal(report.septemberChats, null);
+  assert.equal(report.septemberChatsObserved, 3);
   assert.equal(report.beforeSeptemberObserved, 1);
-  assert.equal(report.inventoryIncompleteReason, null);
+  assert.equal(report.inventoryIncompleteReason, "CHAT_LIST_DISCOVERY_INCOMPLETE");
 });
 
 test("discovery cap before the September boundary leaves inventory incomplete", () => {
@@ -180,11 +188,12 @@ test("cursor exhaustion completes an all-September inventory without an older ch
   assert.equal(report.historicalNotStarted, 2);
 });
 
-test("monotonic descending dates allow a safe early stop at the lower boundary", () => {
+test("monotonic descending dates mark the boundary candidate without terminating enumeration", () => {
   const tracker = new SeptemberChatListOrderTracker();
   tracker.observePage(page([chat("1", "2026-09-02T00:00:00+07:00")]));
-  assert.equal(tracker.observePage(page([chat("2", "2026-08-31T23:59:59+07:00")])), true);
+  assert.equal(tracker.observePage(page([chat("2", "2026-08-31T23:59:59+07:00")])), false);
   assert.equal(tracker.snapshot().orderingAnomaly, false);
+  assert.equal(tracker.snapshot().earlyStopCandidateReached, true);
 });
 
 test("ordering anomaly prevents early stop and fails closed at the discovery bound", () => {
@@ -235,6 +244,34 @@ test("unknown timestamp prevents early stop and a complete range claim", () => {
   assert.equal(report.septemberChats, null);
   assert.equal(report.septemberChatsObserved, 1);
   assert.equal(report.inventoryIncompleteReason, "UNKNOWN_CHAT_LIST_TIMESTAMP");
+});
+
+test("USER rows with no latestEvent are excluded without making September membership unknown", () => {
+  const tracker = new SeptemberChatListOrderTracker();
+  const september = chat("1", "2026-09-10T00:00:00+07:00", "VALID_TIMESTAMP");
+  const noEvent = chat("2", null, "NO_LATEST_EVENT");
+  const august = chat("3", "2026-08-31T00:00:00+07:00", "VALID_TIMESTAMP");
+
+  assert.equal(tracker.observePage(page([september, noEvent, august])), false);
+  const snapshot = tracker.snapshot();
+  assert.equal(snapshot.unknownTimestampObserved, false);
+  assert.equal(snapshot.noLatestEventObserved, 1);
+  assert.equal(snapshot.malformedTimestampObserved, 0);
+  assert.equal(snapshot.orderingAnomaly, false);
+
+  const report = buildSeptemberChatInventoryReport({
+    storeCode: "25610",
+    discovery: discovery([september, noEvent, august]),
+    order: snapshot,
+    historicalStates: [],
+  });
+
+  assert.equal(report.inventoryComplete, true);
+  assert.equal(report.septemberChats, 1);
+  assert.equal(report.noLatestEventChats, 1);
+  assert.equal(report.malformedTimestampChats, 0);
+  assert.equal(report.unknownDateChats, 1);
+  assert.equal(report.inventoryIncompleteReason, null);
 });
 
 test("September membership stays independent when historical messages extend into August", () => {
