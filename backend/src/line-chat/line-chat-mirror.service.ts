@@ -470,7 +470,10 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
             reason: `RECENT_DISCOVERY_${recent.failureReason ?? "FAILED"}`,
             sessionKey: session.sessionKey,
           }));
-          throw new Error(`RECENT_DISCOVERY_${recent.failureReason ?? "FAILED"}`);
+          const failureDetail = recent.failureDetail?.replace(/\s+/gu, " ").trim();
+          throw new Error(
+            `RECENT_DISCOVERY_${recent.failureReason ?? "FAILED"}${failureDetail ? `: ${failureDetail}` : ""}`,
+          );
         }
 
         for (const chat of recent.chats) {

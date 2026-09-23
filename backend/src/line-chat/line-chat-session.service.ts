@@ -682,18 +682,38 @@ export class LineChatSessionService {
         });
       });
 
+      let navigationFailure: string | null = null;
       try {
         input.operationContext?.assertOwnership();
         await page.goto(`https://chat.line.biz/${encodeURIComponent(botId)}`, {
           waitUntil: "domcontentloaded",
           timeout: 15000,
         });
-      } catch {
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        navigationFailure = message.match(/\bnet::ERR_[A-Z_]+\b/u)?.[0]
+          ?? (error instanceof Error ? error.name : "NavigationError");
         // Natural background requests may still complete after navigation timeout.
       }
 
       const firstRequest = await this.withTimeout(firstRequestWait, 20000);
-      if (!firstRequest) return this.emptyDiscoveryResult(botId, endpoint, "LINE OA Manager v2 chat-list natural GET was not observed.");
+      if (!firstRequest) {
+        let pageState = "unknown";
+        try {
+          const pageUrl = new URL(page.url());
+          if (pageUrl.origin !== "https://chat.line.biz") pageState = "external";
+          else if (/login|signin|auth/iu.test(pageUrl.pathname)) pageState = "manager-auth";
+          else pageState = "manager";
+        } catch {
+          pageState = "blank";
+        }
+        const detail = [
+          "LINE OA Manager v2 chat-list natural GET was not observed.",
+          `page=${pageState}`,
+          ...(navigationFailure ? [`navigation=${navigationFailure}`] : []),
+        ].join(" ");
+        return this.emptyDiscoveryResult(botId, endpoint, detail);
+      }
       const firstResponse = await this.withTimeout(firstResponseWait, 20000);
       if (!firstResponse) return this.emptyDiscoveryResult(botId, endpoint, "LINE OA Manager v2 chat-list response was not observed.", "UNVERIFIED");
       if (firstResponse.status !== 200) {
