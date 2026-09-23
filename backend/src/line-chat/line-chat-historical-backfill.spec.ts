@@ -4,6 +4,7 @@ import { LineChatMirrorDirection } from "@prisma/client";
 import {
   HistoricalBackfillStatus,
   classifyHistoricalPage,
+  deriveHistoricalManagerEventId,
   historicalBackfillCanResume,
   historicalFetchResultPatch,
   historicalFetchStartedPatch,
@@ -28,6 +29,33 @@ function textEvent(id: string, timestamp: number): unknown {
     timestamp,
     bizId: "customer",
     message: { id, type: "text", text: "safe fixture" },
+  };
+}
+
+function chatReadEvent(input: {
+  timestamp?: number;
+  chatId?: string;
+  userId?: string;
+  watermark?: number;
+  bizId?: string;
+} = {}): Record<string, unknown> {
+  return {
+    type: "chatRead",
+    timestamp: input.timestamp ?? 1_789_522_965_624,
+    source: {
+      chatId: input.chatId ?? "chat-user-29113",
+      userId: input.userId ?? "line-user-7f3a",
+    },
+    read: { watermark: input.watermark ?? 1_789_522_965_624 },
+    ...(input.bizId ? { bizId: input.bizId } : {}),
+  };
+}
+
+function followEvent(type: "follow" | "unfollow", timestamp = 1_784_776_041_142) {
+  return {
+    type,
+    timestamp,
+    source: { chatId: "chat-user-29113", userId: "line-user-7f3a" },
   };
 }
 
@@ -105,16 +133,90 @@ test("A1 keeps non-text event metadata and does not persist its body as text", (
   assert.equal(parsed.events[0].fileName, "manual.pdf");
 });
 
-test("A1 preserves event-only timeline metadata without treating it as a message", () => {
-  const parsed = page([{
-    id: "read-event-1",
-    type: "chatRead",
-    timestamp: afterBoundary,
-  }]);
+test("A1 accepts production-shaped chatRead metadata without event IDs", () => {
+  const parsed = page([chatReadEvent({ timestamp: afterBoundary, watermark: afterBoundary })]);
   assert.equal(parsed.events.length, 1);
-  assert.equal(parsed.events[0].managerMessageId, "read-event-1");
+  assert.match(parsed.events[0].managerMessageId, /^event:chatread:[0-9a-f]{64}$/u);
+  assert.equal(parsed.events[0].messageType, null);
   assert.equal(parsed.events[0].direction, LineChatMirrorDirection.UNKNOWN);
   assert.equal(parsed.events[0].text, null);
+  assert.equal(parsed.events[0].ownerName, null);
+});
+
+test("A1 gives an identical chatRead the same deterministic synthetic identity", () => {
+  const event = chatReadEvent();
+  const first = parseManagerHistoryPage({ list: [event] }).events[0];
+  const second = parseManagerHistoryPage({ list: [event] }).events[0];
+  assert.equal(first.managerMessageId, second.managerMessageId);
+});
+
+test("A1 changes synthetic chatRead identity when stable source fields change", () => {
+  const base = chatReadEvent();
+  const baseId = deriveHistoricalManagerEventId(base);
+  assert.ok(baseId);
+
+  const variants = [
+    chatReadEvent({ timestamp: 1_789_522_965_625 }),
+    chatReadEvent({ watermark: 1_789_522_965_625 }),
+    chatReadEvent({ chatId: "chat-user-29114" }),
+    chatReadEvent({ userId: "line-user-7f3b" }),
+    chatReadEvent({ bizId: "manager-owner-2" }),
+    followEvent("follow", 1_789_522_965_624),
+  ];
+  for (const variant of variants) {
+    assert.notEqual(deriveHistoricalManagerEventId(variant), baseId);
+  }
+
+  const payloadTextChanged = {
+    ...base,
+    message: { type: "text", text: "must not affect event identity" },
+  };
+  assert.equal(deriveHistoricalManagerEventId(payloadTextChanged), baseId);
+});
+
+test("A1 supports production-shaped follow and unfollow event-only records", () => {
+  for (const type of ["follow", "unfollow"] as const) {
+    const parsed = page([followEvent(type)]);
+    assert.equal(parsed.events.length, 1);
+    assert.match(parsed.events[0].managerMessageId, new RegExp(`^event:${type}:`));
+    assert.equal(parsed.events[0].eventType, type);
+    assert.equal(parsed.events[0].direction, LineChatMirrorDirection.UNKNOWN);
+    assert.equal(parsed.events[0].messageType, null);
+    assert.equal(parsed.events[0].text, null);
+  }
+});
+
+test("A1 rejects event-only metadata that lacks enough stable identity", () => {
+  const parsed = page([{
+    type: "chatRead",
+    timestamp: beforeBoundary,
+    source: { chatId: "chat-user-29113", userId: "line-user-7f3a" },
+  }, {
+    type: "delivery",
+    timestamp: beforeBoundary,
+    source: { chatId: "chat-user-29113", userId: "line-user-7f3a" },
+  }]);
+  assert.equal(parsed.events.length, 0);
+  assert.equal(parsed.invalidEventCount, 2);
+  assert.equal(classifyHistoricalPage(parsed).complete, false);
+});
+
+test("A1 keeps event-only timeline rows outside human reply semantics", () => {
+  const parsed = page([chatReadEvent({ timestamp: beforeBoundary, watermark: beforeBoundary })]);
+  const [event] = parsed.events;
+  assert.equal(event.eventType, "chatRead");
+  assert.equal(event.direction, LineChatMirrorDirection.UNKNOWN);
+  assert.equal(event.messageType, null);
+  assert.equal(event.text, null);
+  assert.equal(event.ownerName, null);
+  assert.notEqual(event.direction, LineChatMirrorDirection.INBOUND);
+  assert.notEqual(event.direction, LineChatMirrorDirection.OUTBOUND);
+});
+
+test("A1 trusts deterministic chatRead timestamp evidence for Sep 1 coverage", () => {
+  const parsed = page([chatReadEvent({ timestamp: beforeBoundary, watermark: beforeBoundary })]);
+  assert.equal(parsed.invalidEventCount, 0);
+  assert.equal(classifyHistoricalPage(parsed).status, HistoricalBackfillStatus.FAST_PATH_COMPLETE);
 });
 
 test("A1 preserves auto response identity as outbound metadata", () => {
@@ -127,6 +229,44 @@ test("A1 preserves auto response identity as outbound metadata", () => {
   assert.equal(parsed.events[0].direction, LineChatMirrorDirection.OUTBOUND);
   assert.equal(parsed.events[0].bizId, "__AUTO_RESPONSE");
   assert.equal(parsed.events[0].ownerName, null);
+});
+
+test("A1 preserves real Manager IDs for text and media messages", () => {
+  const text = page([textEvent("manager-text-1", afterBoundary)]).events[0];
+  assert.equal(text.managerMessageId, "manager-text-1");
+  assert.equal(text.managerMessageId.startsWith("event:"), false);
+
+  for (const messageType of ["image", "video", "file", "sticker", "audio", "location"]) {
+    const event = page([{
+      type: "messageReceived",
+      timestamp: afterBoundary,
+      message: { id: `manager-${messageType}-1`, type: messageType },
+    }]).events[0];
+    assert.equal(event.managerMessageId, `manager-${messageType}-1`);
+    assert.equal(event.messageType, messageType);
+    assert.equal(event.text, null);
+    assert.equal(event.managerMessageId.startsWith("event:"), false);
+  }
+});
+
+test("A1 keeps message.id ahead of top-level id and top-level id ahead of synthetic identity", () => {
+  const nestedMessageId = page([{
+    id: "top-level-event-id",
+    type: "messageReceived",
+    timestamp: afterBoundary,
+    message: { id: "manager-message-id", type: "text", text: "fixture" },
+  }]).events[0];
+  assert.equal(nestedMessageId.managerMessageId, "manager-message-id");
+
+  const topLevelEventId = page([{
+    id: "manager-event-id",
+    type: "chatRead",
+    timestamp: afterBoundary,
+    source: { chatId: "chat-user-29113", userId: "line-user-7f3a" },
+    read: { watermark: afterBoundary },
+  }]).events[0];
+  assert.equal(topLevelEventId.managerMessageId, "manager-event-id");
+  assert.equal(topLevelEventId.direction, LineChatMirrorDirection.UNKNOWN);
 });
 
 test("A1 reruns upsert by stable Manager event ID without creating duplicates", async () => {
@@ -149,6 +289,37 @@ test("A1 reruns upsert by stable Manager event ID without creating duplicates", 
   const second = await persistHistoricalEvents(input);
   assert.equal(rows.size, 1);
   assert.equal(first.existingBeforeWrite, 0);
+  assert.equal(second.existingBeforeWrite, 1);
+  assert.equal(second.upsertOperations, 1);
+});
+
+test("A1 synthetic chatRead identity remains idempotent through historical persistence", async () => {
+  const rows = new Map<string, HistoricalMirrorEvent>();
+  const writer = {
+    findExistingIds: async (_oaId: string, ids: string[]) => ids.filter((id) => rows.has(id)),
+    upsert: async (_oaId: string, _chatUserId: string, event: HistoricalMirrorEvent) => {
+      rows.set(event.managerMessageId, event);
+    },
+  };
+  const raw = chatReadEvent();
+  const firstParsed = page([raw]).events;
+  const secondParsed = page([raw]).events;
+  assert.equal(firstParsed[0].managerMessageId, secondParsed[0].managerMessageId);
+
+  await persistHistoricalEvents({
+    writer,
+    lineOfficialAccountId: "oa-1",
+    lineChatUserId: "chat-1",
+    events: firstParsed,
+  });
+  const second = await persistHistoricalEvents({
+    writer,
+    lineOfficialAccountId: "oa-1",
+    lineChatUserId: "chat-1",
+    events: secondParsed,
+  });
+
+  assert.equal(rows.size, 1);
   assert.equal(second.existingBeforeWrite, 1);
   assert.equal(second.upsertOperations, 1);
 });
