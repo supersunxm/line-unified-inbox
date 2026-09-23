@@ -255,11 +255,22 @@ export interface DiagnosticsResult {
   streamingSseObserved: boolean;
 }
 
+export type LineChatLatestEventTimestampState =
+  | "VALID_TIMESTAMP"
+  | "NO_LATEST_EVENT"
+  | "MISSING_TIMESTAMP"
+  | "INVALID_TIMESTAMP";
+
 export interface LineChatDiscoveredChat {
   chatUserId: string;
   displayName: string | null;
   lastMessageText: string | null;
   lastMessageAt: string | null;
+  /**
+   * Safe structural state for the Manager chat-list timestamp.
+   * Optional only for compatibility with older fixtures/callers; production parsing always sets it.
+   */
+  lastMessageAtState?: LineChatLatestEventTimestampState;
   lastMessageDirection: string | null;
 }
 
