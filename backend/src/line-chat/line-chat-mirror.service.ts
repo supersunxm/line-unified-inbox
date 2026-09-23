@@ -22,6 +22,11 @@ import {
   persistHistoricalEvents,
   runIndependently,
 } from "./line-chat-historical-backfill";
+import {
+  SEPTEMBER_CHAT_LOWER_BOUND_ISO,
+  SEPTEMBER_CHAT_UPPER_BOUND_EXCLUSIVE_ISO,
+  isSeptemberHistoricalChatCandidate,
+} from "./line-chat-september-inventory";
 import { LineChatProfileOperationCoordinator } from "./line-chat-profile-operation-coordinator.service";
 import { LineChatSessionService } from "./line-chat-session.service";
 import { selectLineChatStoreOa } from "./line-chat-store-oa-selector";
@@ -1269,13 +1274,16 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
         ];
         const candidateWhere = {
           lineOfficialAccountId: target.lineOfficialAccountId,
-          lastMessageAt: { not: null },
+          lastMessageAt: {
+            gte: new Date(SEPTEMBER_CHAT_LOWER_BOUND_ISO),
+            lt: new Date(SEPTEMBER_CHAT_UPPER_BOUND_EXCLUSIVE_ISO),
+          },
           OR: [
             { historicalBackfillStatus: null },
             { historicalBackfillStatus: { in: resumableStatuses } },
           ],
         };
-        const [conversationsDiscovered, conversationsEligible, candidates] = await Promise.all([
+        const [mirroredChatsStored, historicalCandidatesAvailable, candidates] = await Promise.all([
           this.prisma.lineChatMirrorChat.count({
             where: { lineOfficialAccountId: target.lineOfficialAccountId },
           }),
@@ -1293,7 +1301,8 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
         ]);
         const candidatesWithTimestamp: PendingHistoricalMirrorChat[] = candidates
           .filter((candidate): candidate is typeof candidate & { lastMessageAt: Date } =>
-            candidate.lastMessageAt instanceof Date,
+            candidate.lastMessageAt instanceof Date
+            && isSeptemberHistoricalChatCandidate(candidate.lastMessageAt),
           )
           .map((candidate) => ({
             lineChatUserId: candidate.lineChatUserId,
@@ -1305,8 +1314,8 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
           this.logger.log(JSON.stringify({
             event: "line_chat_historical_backfill_store_cycle_completed",
             storeCode: target.storeCode,
-            conversationsDiscovered,
-            conversationsEligible,
+            mirroredChatsStored,
+            historicalCandidatesAvailable,
             conversationsProcessed: 0,
             fastPathComplete: 0,
             needsBackwardPagination: 0,
@@ -1570,8 +1579,8 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
           this.logger.log(JSON.stringify({
             event: "line_chat_historical_backfill_store_cycle_completed",
             storeCode: target.storeCode,
-            conversationsDiscovered,
-            conversationsEligible,
+            mirroredChatsStored,
+            historicalCandidatesAvailable,
             conversationsProcessed,
             fastPathCoverageRate: conversationsProcessed > 0
               ? Number((Number(resultStatus === HistoricalBackfillStatus.FAST_PATH_COMPLETE) / conversationsProcessed).toFixed(4))

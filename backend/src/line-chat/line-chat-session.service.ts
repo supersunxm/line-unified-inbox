@@ -13,6 +13,7 @@ import type {
   DiagnosticApiAuthProbe,
   DiagnosticQueryMetadata,
   LineChatDiscoveryResult,
+  LineChatDiscoveryPageObserver,
   LineChatRecentDiscoveryResult,
   ObservedRequestSummary,
 } from "./line-chat.types";
@@ -366,9 +367,10 @@ export class LineChatSessionService {
     profilePath: string;
     headless?: boolean;
     customLauncher?: ContextLauncher;
+    pageObserver?: LineChatDiscoveryPageObserver;
     operationContext?: import("./line-chat-profile-operation-coordinator.service").LineChatProfileOperationContext;
   }): Promise<LineChatDiscoveryResult> {
-    return this.discoverChatPages(input, 200, 10_000, false);
+    return this.discoverChatPages(input, 200, 10_000, false, input.pageObserver);
   }
 
   /**
@@ -637,8 +639,9 @@ export class LineChatSessionService {
     profilePath: string;
     headless?: boolean;
     customLauncher?: ContextLauncher;
+    pageObserver?: LineChatDiscoveryPageObserver;
     operationContext?: import("./line-chat-profile-operation-coordinator.service").LineChatProfileOperationContext;
-  }, maxPages: number, maxChats: number, boundedWindow: boolean): Promise<LineChatDiscoveryResult> {
+  }, maxPages: number, maxChats: number, boundedWindow: boolean, pageObserver?: LineChatDiscoveryPageObserver): Promise<LineChatDiscoveryResult> {
     const botId = input.botId.trim();
     if (!botId) throw new Error("Missing LINE OA Manager bot ID.");
 
@@ -743,13 +746,22 @@ export class LineChatSessionService {
           }
         }
       };
+      const observePage = (pageResult: typeof firstPage): boolean => pageObserver?.({
+        responseShape: pageResult.responseShape,
+        chats: pageResult.chats,
+        totalRawRecords: pageResult.totalRawRecords,
+        validUserChats: pageResult.validUserChats,
+        ignoredNonUserRecords: pageResult.ignoredNonUserRecords,
+        invalidUserRecords: pageResult.invalidUserRecords,
+      }) === true;
       mergePage(firstPage);
+      let stoppedEarlyByObserver = observePage(firstPage);
       let next = firstPage.next;
       const seenNext = new Set<string>();
       let enumerationError: string | undefined = !boundedWindow && byId.size > maxChats
         ? "Chat-list discovered-chat limit reached."
         : undefined;
-      while (next !== null) {
+      while (next !== null && !stoppedEarlyByObserver) {
         if (seenNext.has(next)) {
           enumerationError = "Repeated chat-list next token detected.";
           break;
@@ -794,6 +806,7 @@ export class LineChatSessionService {
         }
         pages.push(parsedPage);
         mergePage(parsedPage);
+        stoppedEarlyByObserver = observePage(parsedPage);
         if (!boundedWindow && byId.size > maxChats) {
           enumerationError = "Chat-list discovered-chat limit reached.";
           break;
@@ -818,6 +831,7 @@ export class LineChatSessionService {
         conflictingDuplicates: conflictingIds.size,
         nextTerminationObserved: next === null,
         ...(enumerationError ? { enumerationError } : {}),
+        ...(stoppedEarlyByObserver ? { stoppedEarlyByObserver: true } : {}),
       };
     } finally {
       await this.closeManagedPersistentContext(context, resolvedProfile);
