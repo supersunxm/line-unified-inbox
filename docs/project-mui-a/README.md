@@ -54,9 +54,7 @@ For Next.js App Router, use `AppRouterCacheProvider` from the MUI Next.js
 integration and enable the MUI CSS layer so Tailwind 4 and existing app styles
 remain predictable.
 
-No MUI dependency is added in the isolation commit. The dependency + provider
-change is a separate checkpoint so its lockfile, build, SSR behavior, and visual
-impact can be verified independently.
+Checkpoint 2 installs pinned MUI/Emotion dependencies, wires the Next.js App Router cache provider, adds a project MUI ThemeProvider, and orders CSS layers as `theme, base, mui, components, utilities`. No `CssBaseline` is enabled, so the existing application reset and semantic CSS remain authoritative.
 
 ## Migration sequence
 
