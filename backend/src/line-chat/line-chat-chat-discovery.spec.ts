@@ -41,6 +41,7 @@ test("verified v2 list envelope uses chatId as the authoritative USER ID", () =>
     displayName: "Somchai",
     lastMessageText: null,
     lastMessageAt: "2026-08-31T05:00:00.000Z",
+    lastMessageAtState: "VALID_TIMESTAMP",
     lastMessageDirection: null,
   }]);
   assert.equal(result.validUserChats, 1);
@@ -60,9 +61,28 @@ test("v2 parser normalizes latestEvent.timestamp seconds and milliseconds only",
     endpoint: "https://chat.line.biz/api/v2/bots/Ubot/chats",
   });
   assert.equal(result.chats[0]?.lastMessageAt, "2026-08-31T05:00:00.000Z");
+  assert.equal(result.chats[0]?.lastMessageAtState, "VALID_TIMESTAMP");
   assert.equal(result.chats[1]?.lastMessageAt, result.chats[0]?.lastMessageAt);
+  assert.equal(result.chats[1]?.lastMessageAtState, "VALID_TIMESTAMP");
   assert.equal(result.chats[2]?.lastMessageAt, null);
+  assert.equal(result.chats[2]?.lastMessageAtState, "INVALID_TIMESTAMP");
   assert.equal(result.enumerationStatus, "COMPLETE");
+});
+
+test("v2 parser distinguishes no latestEvent from missing latestEvent timestamp", () => {
+  const noEventId = `U${"4d".repeat(16)}`;
+  const missingTimestampId = `U${"5e".repeat(16)}`;
+  const result = parseLineChatListResponse({ list: [
+    { chatId: noEventId, chatType: "USER" },
+    { chatId: missingTimestampId, chatType: "USER", latestEvent: { type: "message" } },
+  ], next: null }, {
+    botId: "Ubot",
+    endpoint: "https://chat.line.biz/api/v2/bots/Ubot/chats",
+  });
+  assert.equal(result.chats[0]?.lastMessageAt, null);
+  assert.equal(result.chats[0]?.lastMessageAtState, "NO_LATEST_EVENT");
+  assert.equal(result.chats[1]?.lastMessageAt, null);
+  assert.equal(result.chats[1]?.lastMessageAtState, "MISSING_TIMESTAMP");
 });
 
 test("v2 parser fails closed on malformed envelope or next", () => {
