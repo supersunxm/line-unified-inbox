@@ -129,6 +129,35 @@ test("recent resolution is treated as customer-facing priority work", async () =
   if (resolution.acquired) assert.equal(resolution.value, "resolved");
 });
 
+test("live mirror is granted before queued A1 historical backfill", async () => {
+  const coordinator = new LineChatProfileOperationCoordinator(createFakePrisma() as never);
+  let releaseBackground!: () => void;
+  const hold = new Promise<void>((resolve) => { releaseBackground = resolve; });
+  const order: string[] = [];
+
+  const background = coordinator.withProfileOperation(
+    { sessionId: "profile-a1", operationKind: "NICKNAME_UPDATE" },
+    async () => hold,
+  );
+  await new Promise((resolve) => setImmediate(resolve));
+
+  const historical = coordinator.withProfileOperation(
+    { sessionId: "profile-a1", operationKind: "HISTORICAL_BACKFILL" },
+    async () => { order.push("historical"); },
+    { waitForLock: true, waitForLockMs: 2_000 },
+  );
+  const liveMirror = coordinator.withProfileOperation(
+    { sessionId: "profile-a1", operationKind: "MIRROR_SYNC" },
+    async () => { order.push("live-mirror"); },
+    { waitForLock: true, waitForLockMs: 2_000 },
+  );
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  releaseBackground();
+
+  await Promise.all([background, historical, liveMirror]);
+  assert.deepEqual(order, ["live-mirror", "historical"]);
+});
+
 test("background mapping defers immediately when a customer relay is active", async () => {
   const coordinator = new LineChatProfileOperationCoordinator(createFakePrisma() as never);
   let releaseRelay!: () => void;

@@ -4,6 +4,7 @@ import { LineChatMirrorDirection } from "@prisma/client";
 import {
   configuredLineChatMirrorStoreCodes,
   isLineChatMirrorEnabled,
+  isLineChatHistoricalBackfillEnabled,
   lineChatMirrorIntervalMs,
   lineChatMirrorMaxChangedChatsPerCycle,
   managerAccountKeyFromInputs,
@@ -50,6 +51,15 @@ test("Project B mirror remains opt-in", () => {
   });
   withEnv({ LINE_CHAT_MIRROR_ENABLED: "true" }, () => {
     assert.equal(isLineChatMirrorEnabled(), true);
+  });
+});
+
+test("A1 historical backfill remains explicitly opt-in", () => {
+  withEnv({ LINE_CHAT_HISTORICAL_BACKFILL_ENABLED: undefined }, () => {
+    assert.equal(isLineChatHistoricalBackfillEnabled(), false);
+  });
+  withEnv({ LINE_CHAT_HISTORICAL_BACKFILL_ENABLED: "true" }, () => {
+    assert.equal(isLineChatHistoricalBackfillEnabled(), true);
   });
 });
 
