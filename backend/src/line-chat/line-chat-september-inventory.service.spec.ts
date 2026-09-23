@@ -186,6 +186,22 @@ test("pilot inventory reports all configured pilot stores without guessing missi
   assert.equal(accountLookupCount, 0);
 });
 
+test("inventory fails closed when used outside the worker module without a Mirror resolver", async () => {
+  const prisma = {
+    lineChatMirrorStoreState: {
+      findMany: async () => [{ storeCode: "29113", lineOfficialAccountId: "oa-1", enabled: true }],
+    },
+  } as unknown as PrismaService;
+  const service = new LineChatSeptemberInventoryService(
+    prisma,
+    {} as LineChatSessionService,
+    {} as LineChatProfileOperationCoordinator,
+  );
+
+  const reports = await service.discoverPilotStores();
+  assert.equal(reports[0]?.inventoryIncompleteReason, "MIRROR_TARGET_RESOLVER_UNAVAILABLE");
+});
+
 test("pilot inventory uses the Live Mirror OA selector and resolver for direct and fallback targets", async () => {
   for (const targetCase of [
     {

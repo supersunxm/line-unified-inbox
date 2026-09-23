@@ -5582,7 +5582,7 @@ Run #1 held `MANUAL_DIAGNOSTIC` profile leases during long scans and temporarily
 
 ## Verification
 
-- A2 parser/inventory/target/session/trigger/Mirror focused tests: **68/68 passed**.
+- A2 parser/inventory/target/session/trigger/Mirror focused tests: **68/68 passed** before the PR wiring correction; **69/69 passed** with the correction included.
 - Profile coordinator and selected health/scheduler/session-health regressions: **39/39 passed**.
 - Touched backend ESLint: passed.
 - Nest backend build/typecheck: passed.
@@ -5608,4 +5608,12 @@ Run #1 held `MANUAL_DIAGNOSTIC` profile leases during long scans and temporarily
 2. Keep `LINE_CHAT_HISTORICAL_BACKFILL_ENABLED` false. Separately authorize a one-shot read-only September inventory run for the existing three pilot stores, using the startup trigger only for that run and restoring it to false afterward.
 3. Use the bounded 12-page / 600-chat / 15-second profile window. No historical messages/checkpoints or customer records may be written. Exact totals remain unproven for any store that has missing/invalid event timestamps, unresolved conflicts, or a reached bound before a safe boundary/exhaustion.
 
-Current state: branch implementation and checks are complete. PR/CI review is the next code gate. Production and merge/deploy remain unchanged and unauthorized in this task.
+## 2026-09-23: PR #355 application wiring correction
+
+- **CI finding**: the first PR run passed frontend, Android, the LINE chat health regression suite, other backend checks, and backend build, but failed the backend auth-guard smoke test. `LineChatSeptemberInventoryService` required `LineChatMirrorService` in the general `LineChatModule`, where the dedicated Mirror worker provider is intentionally absent.
+- **Correction**: made the resolver dependency optional at Nest injection time. The dedicated worker module still supplies the normal resolver; if the service is ever invoked without it, inventory now returns `MIRROR_TARGET_RESOLVER_UNAVAILABLE` for each applicable pilot store and continues fail-closed. Added a focused test for this app-module-safe path. The general API module does not register or start another Mirror worker.
+- **Verification**: focused A2 tests including the new case passed **69/69**; the mobile nickname wiring / module isolation test passed **4/4**; touched-file ESLint passed; Nest backend build passed; `git diff --check` passed. No schema, migration, production data, Railway configuration, or rollout scope changed.
+- **GitHub**: PR #355 remains open and unmerged. The first CI run's sole failure was the backend auth-guard smoke test described above; the follow-up correction must be pushed to the same branch before rerunning CI.
+- **Next gate**: commit and push only this DI correction and its test/progress note, then monitor PR CI to its final state. Merge, deployment, production inventory, and historical-flag activation are still separate gates.
+
+Current state: local follow-up fix and checks are complete; the follow-up commit/push and PR CI rerun are next. Production and merge/deploy remain unchanged and unauthorized in this task.

@@ -1,4 +1,4 @@
-import { Inject, Injectable } from "@nestjs/common";
+import { Inject, Injectable, Optional } from "@nestjs/common";
 import { PrismaService } from "../prisma.service";
 import { LINE_CHAT_HISTORICAL_PILOT_STORE_CODES } from "./line-chat-historical-backfill";
 import { LineChatMirrorService, type MirrorStoreTargetInputs } from "./line-chat-mirror.service";
@@ -37,8 +37,9 @@ export class LineChatSeptemberInventoryService {
     @Inject(LineChatSessionService) private readonly sessionService: LineChatSessionService,
     @Inject(LineChatProfileOperationCoordinator)
     private readonly coordinator: LineChatProfileOperationCoordinator,
+    @Optional()
     @Inject(LineChatMirrorService)
-    private readonly mirrorService: LineChatMirrorService,
+    private readonly mirrorService: LineChatMirrorService | undefined = undefined,
   ) {}
 
   /** Builds sanitized reports for the three approved A1 pilot stores, serially. */
@@ -48,6 +49,7 @@ export class LineChatSeptemberInventoryService {
       select: { storeCode: true, lineOfficialAccountId: true, enabled: true },
     });
     const reports: SeptemberChatInventoryReport[] = [];
+    const mirrorService = this.mirrorService;
 
     for (const storeCode of LINE_CHAT_HISTORICAL_PILOT_STORE_CODES) {
       const matchingStates = storeStates.filter((state) => state.storeCode === storeCode);
@@ -65,10 +67,15 @@ export class LineChatSeptemberInventoryService {
         await this.yieldToProfileWaiters();
         continue;
       }
+      if (!mirrorService) {
+        reports.push(emptySeptemberChatInventoryReport(storeCode, "MIRROR_TARGET_RESOLVER_UNAVAILABLE"));
+        await this.yieldToProfileWaiters();
+        continue;
+      }
 
       let storeTarget: MirrorStoreTargetInputs;
       try {
-        storeTarget = await this.mirrorService.getStoreMirrorTargetInputs(storeCode);
+        storeTarget = await mirrorService.getStoreMirrorTargetInputs(storeCode);
       } catch (error) {
         const errorCode = error instanceof Error ? error.message : "";
         const reason = errorCode === "MIRROR_STORE_NOT_FOUND"
@@ -86,7 +93,7 @@ export class LineChatSeptemberInventoryService {
         continue;
       }
 
-      const targetResolution = await this.mirrorService.resolveMirrorTarget({
+      const targetResolution = await mirrorService.resolveMirrorTarget({
         lineOfficialAccountId: storeTarget.oa.id,
         chatBotId: storeTarget.oa.chatBotId,
         basicId: storeTarget.oa.basicId,
