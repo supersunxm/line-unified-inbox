@@ -187,7 +187,7 @@ async function main() {
     },
   });
 
-  console.log(JSON.stringify({
+  const result = {
     totalActiveStoreOas: totalActive,
     initiallyMissingChannelId: missing.length,
     tokensAvailable,
@@ -195,7 +195,9 @@ async function main() {
     rowsUpdated,
     remainingMissingChannelId: remainingMissing,
     failures,
-  }, null, 2));
+  };
+  console.log("CHANNEL_ID_BACKFILL_RESULT=" + JSON.stringify(result));
+  if (remainingMissing > 0) process.exitCode = 2;
 }
 
 main()
