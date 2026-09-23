@@ -1,0 +1,308 @@
+import { LineChatMirrorDirection } from "@prisma/client";
+
+export const LINE_CHAT_HISTORICAL_LOWER_BOUND_ISO = "2026-09-01T00:00:00+07:00";
+export const LINE_CHAT_HISTORICAL_PILOT_STORE_CODES = ["29113", "28375", "25610"] as const;
+
+export const HistoricalBackfillStatus = {
+  FETCHING_INITIAL_PAGE: "FETCHING_INITIAL_PAGE",
+  FAST_PATH_COMPLETE: "FAST_PATH_COMPLETE",
+  NEEDS_BACKWARD_PAGINATION: "NEEDS_BACKWARD_PAGINATION",
+  HISTORICAL_COVERAGE_UNPROVEN: "HISTORICAL_COVERAGE_UNPROVEN",
+  FAILED: "FAILED",
+} as const;
+
+export type HistoricalBackfillStatusValue =
+  typeof HistoricalBackfillStatus[keyof typeof HistoricalBackfillStatus];
+
+export interface HistoricalMirrorEvent {
+  managerMessageId: string;
+  eventType: string;
+  direction: LineChatMirrorDirection;
+  messageType: string | null;
+  text: string | null;
+  fileName: string | null;
+  sentAt: Date;
+  bizId: string | null;
+  ownerName: string | null;
+}
+
+export interface ParsedManagerHistoryPage {
+  events: HistoricalMirrorEvent[];
+  invalidEventCount: number;
+  backwardPresent: boolean;
+}
+
+export interface HistoricalPageClassification {
+  status: HistoricalBackfillStatusValue;
+  errorCode: string | null;
+  backwardRequired: boolean | null;
+  complete: boolean;
+  oldestValidTimestamp: Date | null;
+  newestValidTimestamp: Date | null;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function parseManagerTimestamp(value: unknown): Date | null {
+  if (typeof value !== "number" && typeof value !== "string") return null;
+  if (typeof value === "string" && value.trim().length === 0) return null;
+  const timestamp = Number(value);
+  if (!Number.isFinite(timestamp) || timestamp <= 0) return null;
+  const date = new Date(timestamp);
+  return Number.isFinite(date.getTime()) ? date : null;
+}
+
+export function lineChatHistoricalLowerBound(): Date {
+  return new Date(LINE_CHAT_HISTORICAL_LOWER_BOUND_ISO);
+}
+
+export function parseManagerHistoryPage(
+  raw: unknown,
+  ownerByBizId: ReadonlyMap<string, string> = new Map(),
+): ParsedManagerHistoryPage {
+  const body = isRecord(raw) ? raw : {};
+  const rawList = Array.isArray(body.list) ? body.list : [];
+  const events: HistoricalMirrorEvent[] = [];
+  let invalidEventCount = 0;
+
+  for (const rawEvent of rawList) {
+    if (!isRecord(rawEvent)) {
+      invalidEventCount += 1;
+      continue;
+    }
+    const rawMessage = isRecord(rawEvent.message) ? rawEvent.message : {};
+    const nestedMessageId = typeof rawMessage.id === "string"
+      ? rawMessage.id.trim()
+      : typeof rawMessage.id === "number" && Number.isFinite(rawMessage.id)
+        ? String(rawMessage.id)
+        : "";
+    const topLevelEventId = typeof rawEvent.id === "string"
+      ? rawEvent.id.trim()
+      : typeof rawEvent.id === "number" && Number.isFinite(rawEvent.id)
+        ? String(rawEvent.id)
+        : "";
+    const managerMessageId = nestedMessageId || topLevelEventId;
+    const sentAt = parseManagerTimestamp(rawEvent.timestamp);
+    if (!managerMessageId || !sentAt) {
+      invalidEventCount += 1;
+      continue;
+    }
+
+    const eventType = typeof rawEvent.type === "string" && rawEvent.type.trim()
+      ? rawEvent.type.trim()
+      : "unknown";
+    const messageType = typeof rawMessage.type === "string" && rawMessage.type.trim()
+      ? rawMessage.type.trim()
+      : null;
+    const bizId = typeof rawEvent.bizId === "string" ? rawEvent.bizId : null;
+    const fileName = typeof rawMessage.fileName === "string"
+      ? rawMessage.fileName
+      : typeof rawMessage.name === "string"
+        ? rawMessage.name
+        : null;
+    events.push({
+      managerMessageId,
+      eventType,
+      direction: managerDirectionForHistoricalEvent(eventType),
+      messageType,
+      text: messageType?.toLowerCase() === "text"
+        && typeof rawMessage.text === "string"
+        ? rawMessage.text
+        : null,
+      fileName,
+      sentAt,
+      bizId,
+      ownerName: bizId && bizId !== "__AUTO_RESPONSE"
+        ? ownerByBizId.get(bizId) ?? null
+        : null,
+    });
+  }
+
+  return {
+    events,
+    invalidEventCount,
+    backwardPresent: typeof body.backward === "string" && body.backward.trim().length > 0,
+  };
+}
+
+function managerDirectionForHistoricalEvent(eventType: string): LineChatMirrorDirection {
+  const normalized = eventType.trim().toLowerCase();
+  if (normalized === "messagesent") return LineChatMirrorDirection.OUTBOUND;
+  if (normalized === "messagereceived" || normalized === "message") {
+    return LineChatMirrorDirection.INBOUND;
+  }
+  return LineChatMirrorDirection.UNKNOWN;
+}
+
+export function classifyHistoricalPage(
+  page: Pick<ParsedManagerHistoryPage, "events" | "backwardPresent">,
+  lowerBound = lineChatHistoricalLowerBound(),
+): HistoricalPageClassification {
+  if (page.events.length === 0) {
+    return {
+      status: HistoricalBackfillStatus.HISTORICAL_COVERAGE_UNPROVEN,
+      errorCode: "NO_VALID_EVENTS",
+      backwardRequired: null,
+      complete: false,
+      oldestValidTimestamp: null,
+      newestValidTimestamp: null,
+    };
+  }
+
+  let oldestValidTimestamp = page.events[0].sentAt;
+  let newestValidTimestamp = page.events[0].sentAt;
+  for (const event of page.events.slice(1)) {
+    if (event.sentAt.getTime() < oldestValidTimestamp.getTime()) {
+      oldestValidTimestamp = event.sentAt;
+    }
+    if (event.sentAt.getTime() > newestValidTimestamp.getTime()) {
+      newestValidTimestamp = event.sentAt;
+    }
+  }
+
+  if (oldestValidTimestamp.getTime() <= lowerBound.getTime()) {
+    return {
+      status: HistoricalBackfillStatus.FAST_PATH_COMPLETE,
+      errorCode: null,
+      backwardRequired: false,
+      complete: true,
+      oldestValidTimestamp,
+      newestValidTimestamp,
+    };
+  }
+  if (page.backwardPresent) {
+    return {
+      status: HistoricalBackfillStatus.NEEDS_BACKWARD_PAGINATION,
+      errorCode: "BACKWARD_CONTRACT_UNPROVEN",
+      backwardRequired: true,
+      complete: false,
+      oldestValidTimestamp,
+      newestValidTimestamp,
+    };
+  }
+  return {
+    status: HistoricalBackfillStatus.HISTORICAL_COVERAGE_UNPROVEN,
+    errorCode: "NO_BACKWARD_CONTINUATION",
+    backwardRequired: false,
+    complete: false,
+    oldestValidTimestamp,
+    newestValidTimestamp,
+  };
+}
+
+export function historicalBackfillCanResume(status: string | null): boolean {
+  return status === null
+    || status === HistoricalBackfillStatus.FETCHING_INITIAL_PAGE
+    || status === HistoricalBackfillStatus.FAILED;
+}
+
+export function historicalFetchStartedPatch(at: Date): {
+  historicalBackfillStatus: string;
+  historicalBackfillLowerBoundAt: Date;
+  historicalBackfillOldestAt: null;
+  historicalBackfillNewestAt: null;
+  historicalBackfillLastAttemptAt: Date;
+  historicalBackfillBackwardRequired: null;
+  historicalBackfillErrorCode: null;
+} {
+  return {
+    historicalBackfillStatus: HistoricalBackfillStatus.FETCHING_INITIAL_PAGE,
+    historicalBackfillLowerBoundAt: lineChatHistoricalLowerBound(),
+    historicalBackfillOldestAt: null,
+    historicalBackfillNewestAt: null,
+    historicalBackfillLastAttemptAt: at,
+    historicalBackfillBackwardRequired: null,
+    historicalBackfillErrorCode: null,
+  };
+}
+
+export function historicalFetchResultPatch(
+  classification: HistoricalPageClassification,
+  completedAt: Date,
+): {
+  historicalBackfillStatus: string;
+  historicalBackfillLowerBoundAt: Date;
+  historicalBackfillOldestAt: Date | null;
+  historicalBackfillNewestAt: Date | null;
+  historicalBackfillLastSuccessAt: Date;
+  historicalBackfillBackwardRequired: boolean | null;
+  historicalBackfillErrorCode: string | null;
+} {
+  return {
+    historicalBackfillStatus: classification.status,
+    historicalBackfillLowerBoundAt: lineChatHistoricalLowerBound(),
+    historicalBackfillOldestAt: classification.oldestValidTimestamp,
+    historicalBackfillNewestAt: classification.newestValidTimestamp,
+    historicalBackfillLastSuccessAt: completedAt,
+    historicalBackfillBackwardRequired: classification.backwardRequired,
+    historicalBackfillErrorCode: classification.errorCode,
+  };
+}
+
+export function historicalFetchFailurePatch(errorCode: string): {
+  historicalBackfillStatus: string;
+  historicalBackfillLowerBoundAt: Date;
+  historicalBackfillErrorCode: string;
+} {
+  return {
+    historicalBackfillStatus: HistoricalBackfillStatus.FAILED,
+    historicalBackfillLowerBoundAt: lineChatHistoricalLowerBound(),
+    historicalBackfillErrorCode: errorCode.slice(0, 80),
+  };
+}
+
+export interface HistoricalMessageWriter {
+  findExistingIds(lineOfficialAccountId: string, managerMessageIds: string[]): Promise<string[]>;
+  upsert(
+    lineOfficialAccountId: string,
+    lineChatUserId: string,
+    event: HistoricalMirrorEvent,
+  ): Promise<void>;
+}
+
+export interface HistoricalMessagePersistenceResult {
+  observed: number;
+  upsertOperations: number;
+  existingBeforeWrite: number;
+}
+
+export async function persistHistoricalEvents(input: {
+  writer: HistoricalMessageWriter;
+  lineOfficialAccountId: string;
+  lineChatUserId: string;
+  events: HistoricalMirrorEvent[];
+}): Promise<HistoricalMessagePersistenceResult> {
+  const managerMessageIds = [...new Set(input.events.map((event) => event.managerMessageId))];
+  const existingIds = managerMessageIds.length > 0
+    ? await input.writer.findExistingIds(input.lineOfficialAccountId, managerMessageIds)
+    : [];
+  const existing = new Set(existingIds);
+  for (const event of input.events) {
+    await input.writer.upsert(input.lineOfficialAccountId, input.lineChatUserId, event);
+  }
+  return {
+    observed: input.events.length,
+    upsertOperations: input.events.length,
+    existingBeforeWrite: existing.size,
+  };
+}
+
+export async function runIndependently<TInput, TResult>(input: {
+  items: readonly TInput[];
+  process: (item: TInput) => Promise<TResult>;
+  onFailure: (item: TInput, error: unknown) => Promise<void>;
+}): Promise<{ results: TResult[]; failures: number }> {
+  const results: TResult[] = [];
+  let failures = 0;
+  for (const item of input.items) {
+    try {
+      results.push(await input.process(item));
+    } catch (error) {
+      failures += 1;
+      await input.onFailure(item, error).catch(() => {});
+    }
+  }
+  return { results, failures };
+}

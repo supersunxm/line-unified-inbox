@@ -2185,6 +2185,7 @@ enum LineChatProfileOperationKind {
   HEALTH_OA
   MANUAL_DIAGNOSTIC
   MIRROR_SYNC
+  HISTORICAL_BACKFILL
 }
 
 enum LineChatMirrorSyncStatus {
@@ -2295,6 +2296,14 @@ model LineChatMirrorChat {
   lastMessageDirection  String?
   historySyncedThroughAt DateTime?
   lastHistorySyncedAt   DateTime?
+  historicalBackfillStatus String?
+  historicalBackfillLowerBoundAt DateTime?
+  historicalBackfillOldestAt DateTime?
+  historicalBackfillNewestAt DateTime?
+  historicalBackfillLastAttemptAt DateTime?
+  historicalBackfillLastSuccessAt DateTime?
+  historicalBackfillBackwardRequired Boolean?
+  historicalBackfillErrorCode String?
   status                LineChatMirrorSyncStatus @default(IDLE)
   lastErrorCode         String?
   lastErrorMessage      String?
@@ -2305,6 +2314,7 @@ model LineChatMirrorChat {
   @@index([lineOfficialAccountId, lastMessageAt])
   @@index([lineOfficialAccountId, status])
   @@index([historySyncedThroughAt])
+  @@index([historicalBackfillStatus])
 }
 
 model LineChatMirrorMessage {

@@ -9,6 +9,19 @@ import * as fs from "node:fs";
 import type { BrowserContext } from "playwright";
 import { PrismaService } from "../prisma.service";
 import { confirmLineManagerAuthentication } from "./line-chat-manager-auth-confirmation";
+import {
+  HistoricalBackfillStatus,
+  LINE_CHAT_HISTORICAL_PILOT_STORE_CODES,
+  classifyHistoricalPage,
+  historicalBackfillCanResume,
+  historicalFetchFailurePatch,
+  historicalFetchResultPatch,
+  historicalFetchStartedPatch,
+  lineChatHistoricalLowerBound,
+  parseManagerHistoryPage,
+  persistHistoricalEvents,
+  runIndependently,
+} from "./line-chat-historical-backfill";
 import { LineChatProfileOperationCoordinator } from "./line-chat-profile-operation-coordinator.service";
 import { LineChatSessionService } from "./line-chat-session.service";
 import { selectLineChatStoreOa } from "./line-chat-store-oa-selector";
@@ -20,6 +33,7 @@ const DEFAULT_MAX_CHANGED_CHATS_PER_CYCLE = 20;
 const MAX_CHANGED_CHATS_PER_CYCLE = 50;
 const RECENT_MAX_PAGES = 5;
 const RECENT_MAX_CHATS = 125;
+const HISTORICAL_MAX_CONVERSATIONS_PER_STORE_CYCLE = 1;
 
 export interface LineChatMirrorCycleResult {
   storeCode: string;
@@ -48,6 +62,32 @@ interface MirrorHistoryEvent {
 interface PendingMirrorChat {
   lineChatUserId: string;
   lastMessageAt: Date;
+}
+
+interface PendingHistoricalMirrorChat extends PendingMirrorChat {
+  historicalBackfillStatus: string | null;
+}
+
+interface HistoricalMirrorTarget {
+  storeCode: string;
+  lineOfficialAccountId: string;
+  botId: string;
+  profilePath: string;
+  session: MirrorSessionTarget;
+  liveMirrorStatus: LineChatMirrorSyncStatus;
+}
+
+interface HistoricalBackfillConversationResult {
+  status: string;
+  eventsObserved: number;
+  validEventsPersisted: number;
+  upsertOperations: number;
+  existingBeforeWrite: number;
+  invalidEventCount: number;
+  oldestValidTimestamp: Date | null;
+  newestValidTimestamp: Date | null;
+  errorCode: string | null;
+  retried: boolean;
 }
 
 export interface MirrorSessionTarget {
@@ -147,6 +187,10 @@ export function isLineChatMirrorEnabled(): boolean {
   return process.env.LINE_CHAT_MIRROR_ENABLED?.trim().toLowerCase() === "true";
 }
 
+export function isLineChatHistoricalBackfillEnabled(): boolean {
+  return process.env.LINE_CHAT_HISTORICAL_BACKFILL_ENABLED?.trim().toLowerCase() === "true";
+}
+
 export function lineChatMirrorIntervalMs(): number {
   const parsed = Number(process.env.LINE_CHAT_MIRROR_INTERVAL_MS ?? DEFAULT_INTERVAL_MS);
   if (!Number.isFinite(parsed)) return DEFAULT_INTERVAL_MS;
@@ -201,6 +245,14 @@ function safeError(error: unknown): string {
   return message.slice(0, 500);
 }
 
+function safeErrorType(error: unknown): string {
+  return error instanceof Error ? error.name.slice(0, 80) : "UNKNOWN_ERROR";
+}
+
+function maskIdentifier(value: string): string {
+  return value.length <= 8 ? "[masked]" : `${value.slice(0, 4)}...${value.slice(-4)}`;
+}
+
 @Injectable()
 export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(LineChatMirrorService.name);
@@ -212,6 +264,7 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
     session: MirrorSessionTarget;
     source: "EXISTING_OA" | "MANAGER_ACCOUNT_REDIRECT";
   }>();
+  private readonly historicalTargetsForCycle = new Map<string, HistoricalMirrorTarget>();
 
   constructor(
     @Inject(PrismaService) private readonly prisma: PrismaService,
@@ -235,6 +288,7 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
       storeCount: configuredLineChatMirrorStoreCodes().length,
       intervalMs,
       maxChangedChatsPerCycle: lineChatMirrorMaxChangedChatsPerCycle(),
+      historicalBackfillEnabled: isLineChatHistoricalBackfillEnabled(),
       mode: "READ_ONLY_MANAGER_SOURCE",
     }));
 
@@ -255,6 +309,7 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
     if (this.running) return [];
     this.running = true;
     const results: LineChatMirrorCycleResult[] = [];
+    this.historicalTargetsForCycle.clear();
     try {
       for (const storeCode of configuredLineChatMirrorStoreCodes()) {
         try {
@@ -266,6 +321,38 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
             error: safeError(error),
           }));
         }
+      }
+      if (isLineChatHistoricalBackfillEnabled()) {
+        const pilotTargetStatuses = LINE_CHAT_HISTORICAL_PILOT_STORE_CODES
+          .map((storeCode) => this.historicalTargetsForCycle.get(storeCode))
+          .filter((target): target is HistoricalMirrorTarget => target !== undefined)
+          .map((target) => ({
+            ...target,
+            liveMirrorStatus: results.find((result) => result.storeCode === target.storeCode)?.status
+              ?? LineChatMirrorSyncStatus.FAILED,
+          }));
+        const pilotTargets = pilotTargetStatuses.filter((target) => {
+          if (target.liveMirrorStatus === LineChatMirrorSyncStatus.SUCCESS) return true;
+          this.logger.log(JSON.stringify({
+            event: "line_chat_historical_backfill_store_deferred",
+            storeCode: target.storeCode,
+            reason: "LIVE_MIRROR_NOT_SUCCESSFUL",
+            liveMirrorStatus: target.liveMirrorStatus,
+          }));
+          return false;
+        });
+        await runIndependently({
+          items: pilotTargets,
+          process: (target) => this.runHistoricalBackfillStore(target),
+          onFailure: (target, error) => {
+            this.logger.warn(JSON.stringify({
+              event: "line_chat_historical_backfill_store_failed",
+              storeCode: target.storeCode,
+              errorType: safeErrorType(error),
+            }));
+            return Promise.resolve();
+          },
+        });
       }
       return results;
     } finally {
@@ -446,6 +533,20 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
         unknownDirectionEvents: 0,
         durationMs,
       };
+    }
+
+    if (
+      isLineChatHistoricalBackfillEnabled()
+      && LINE_CHAT_HISTORICAL_PILOT_STORE_CODES.some((code) => code === effectiveStoreCode)
+    ) {
+      this.historicalTargetsForCycle.set(effectiveStoreCode, {
+        storeCode: effectiveStoreCode,
+        lineOfficialAccountId: oa.id,
+        botId,
+        profilePath,
+        session,
+        liveMirrorStatus: LineChatMirrorSyncStatus.RUNNING,
+      });
     }
 
     let syncFailure: string | null = null;
@@ -1155,6 +1256,387 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
       unknownDirectionEvents,
       historyFailures,
     };
+  }
+
+  private async runHistoricalBackfillStore(target: HistoricalMirrorTarget): Promise<void> {
+    const operation = await this.coordinator.withProfileOperation(
+      { sessionId: target.session.id, operationKind: "HISTORICAL_BACKFILL" },
+      async (operationContext) => {
+        operationContext.assertOwnership();
+        const resumableStatuses = [
+          HistoricalBackfillStatus.FETCHING_INITIAL_PAGE,
+          HistoricalBackfillStatus.FAILED,
+        ];
+        const candidateWhere = {
+          lineOfficialAccountId: target.lineOfficialAccountId,
+          lastMessageAt: { not: null },
+          OR: [
+            { historicalBackfillStatus: null },
+            { historicalBackfillStatus: { in: resumableStatuses } },
+          ],
+        };
+        const [conversationsDiscovered, conversationsEligible, candidates] = await Promise.all([
+          this.prisma.lineChatMirrorChat.count({
+            where: { lineOfficialAccountId: target.lineOfficialAccountId },
+          }),
+          this.prisma.lineChatMirrorChat.count({ where: candidateWhere }),
+          this.prisma.lineChatMirrorChat.findMany({
+            where: candidateWhere,
+            orderBy: { lastMessageAt: "desc" },
+            take: HISTORICAL_MAX_CONVERSATIONS_PER_STORE_CYCLE,
+            select: {
+              lineChatUserId: true,
+              lastMessageAt: true,
+              historicalBackfillStatus: true,
+            },
+          }),
+        ]);
+        const candidatesWithTimestamp: PendingHistoricalMirrorChat[] = candidates
+          .filter((candidate): candidate is typeof candidate & { lastMessageAt: Date } =>
+            candidate.lastMessageAt instanceof Date,
+          )
+          .map((candidate) => ({
+            lineChatUserId: candidate.lineChatUserId,
+            lastMessageAt: candidate.lastMessageAt,
+            historicalBackfillStatus: candidate.historicalBackfillStatus,
+          }));
+
+        if (candidatesWithTimestamp.length === 0) {
+          this.logger.log(JSON.stringify({
+            event: "line_chat_historical_backfill_store_cycle_completed",
+            storeCode: target.storeCode,
+            conversationsDiscovered,
+            conversationsEligible,
+            conversationsProcessed: 0,
+            fastPathComplete: 0,
+            needsBackwardPagination: 0,
+            coverageUnproven: 0,
+            eventsObserved: 0,
+            validEventsPersisted: 0,
+            upsertOperations: 0,
+            existingBeforeWrite: 0,
+            failures: 0,
+            retries: 0,
+            liveMirrorStatus: target.liveMirrorStatus,
+          }));
+          return;
+        }
+
+        let context: BrowserContext | null = null;
+        const attemptTimes = new Map<string, Date>();
+        try {
+          const firstCandidate = candidatesWithTimestamp[0];
+          for (const candidate of candidatesWithTimestamp) {
+            const attemptedAt = new Date();
+            attemptTimes.set(candidate.lineChatUserId, attemptedAt);
+            await this.prisma.lineChatMirrorChat.update({
+              where: {
+                lineOfficialAccountId_lineChatUserId: {
+                  lineOfficialAccountId: target.lineOfficialAccountId,
+                  lineChatUserId: candidate.lineChatUserId,
+                },
+              },
+              data: historicalFetchStartedPatch(attemptedAt),
+            });
+          }
+          context = await this.sessionService.launchManagedPersistentContext(
+            target.profilePath,
+            {
+              profilePath: target.profilePath,
+              headless: true,
+              viewport: { width: 1280, height: 800 },
+              args: [
+                "--no-sandbox",
+                "--disable-setuid-sandbox",
+                "--disable-blink-features=AutomationControlled",
+              ],
+            },
+            { sessionId: target.session.id, sessionKey: target.session.sessionKey },
+          );
+          const page = context.pages()[0] || await context.newPage();
+          const refererUrl = this.sessionService.buildChatRefererUrl(
+            target.botId,
+            firstCandidate.lineChatUserId,
+          );
+          await page.goto(refererUrl, {
+            waitUntil: "domcontentloaded",
+            timeout: 15_000,
+          }).catch(() => {});
+          await page.waitForLoadState("networkidle", { timeout: 5_000 }).catch(() => {});
+          const auth = await confirmLineManagerAuthentication(
+            () => this.sessionService.probeApiAuthentication(context!),
+            (ms) => page.waitForTimeout(ms),
+          );
+          if (auth.outcome !== "AUTHENTICATED") {
+            throw new Error(`MIRROR_MANAGER_AUTH_${auth.outcome}`);
+          }
+
+          const ownersUrl = `https://chat.line.biz/api/v1/bots/${encodeURIComponent(target.botId)}/owners`;
+          const owners = await page.evaluate(async (url) => {
+            const response = await fetch(url, { credentials: "include" });
+            if (!response.ok) return [] as Array<{ bizId: string; name: string }>;
+            const body = await response.json() as {
+              list?: Array<{ bizId?: string; name?: string }>;
+            };
+            return (body.list ?? [])
+              .filter((item) => typeof item.bizId === "string")
+              .map((item) => ({
+                bizId: item.bizId!,
+                name: typeof item.name === "string" ? item.name.trim() : "",
+              }));
+          }, ownersUrl).catch(() => [] as Array<{ bizId: string; name: string }>);
+          const ownerByBizId = new Map(owners.map((owner) => [owner.bizId, owner.name]));
+
+          const outcome = await runIndependently({
+            items: candidatesWithTimestamp,
+            process: async (candidate): Promise<HistoricalBackfillConversationResult> => {
+              operationContext.assertOwnership();
+              const attemptedAt = attemptTimes.get(candidate.lineChatUserId) ?? new Date();
+              const historyUrl = `https://chat.line.biz/api/v3/bots/${encodeURIComponent(target.botId)}/chats/${encodeURIComponent(candidate.lineChatUserId)}/messages`;
+              const history = await page.evaluate(async (url) => {
+                const response = await fetch(url, {
+                  credentials: "include",
+                  signal: AbortSignal.timeout(20_000),
+                });
+                if (!response.ok) {
+                  return {
+                    ok: false as const,
+                    status: response.status,
+                    list: [] as unknown[],
+                    backwardPresent: false,
+                  };
+                }
+                const body = await response.json() as {
+                  list?: unknown;
+                  backward?: unknown;
+                };
+                return {
+                  ok: true as const,
+                  status: response.status,
+                  list: Array.isArray(body.list) ? body.list : [],
+                  backwardPresent: typeof body.backward === "string"
+                    && body.backward.trim().length > 0,
+                };
+              }, historyUrl);
+              operationContext.assertOwnership();
+
+              if (!history.ok) {
+                const errorCode = `HISTORY_HTTP_${history.status}`;
+                await this.prisma.lineChatMirrorChat.update({
+                  where: {
+                    lineOfficialAccountId_lineChatUserId: {
+                      lineOfficialAccountId: target.lineOfficialAccountId,
+                      lineChatUserId: candidate.lineChatUserId,
+                    },
+                  },
+                  data: {
+                    ...historicalFetchFailurePatch(errorCode),
+                    historicalBackfillLastAttemptAt: attemptedAt,
+                  },
+                });
+                return {
+                  status: HistoricalBackfillStatus.FAILED,
+                  eventsObserved: 0,
+                  validEventsPersisted: 0,
+                  upsertOperations: 0,
+                  existingBeforeWrite: 0,
+                  invalidEventCount: 0,
+                  oldestValidTimestamp: null,
+                  newestValidTimestamp: null,
+                  errorCode,
+                  retried: candidate.historicalBackfillStatus !== null
+                    && historicalBackfillCanResume(candidate.historicalBackfillStatus),
+              };
+            }
+
+            const fetchedAt = new Date();
+            await this.prisma.lineChatMirrorChat.update({
+              where: {
+                lineOfficialAccountId_lineChatUserId: {
+                  lineOfficialAccountId: target.lineOfficialAccountId,
+                  lineChatUserId: candidate.lineChatUserId,
+                },
+              },
+              data: { historicalBackfillLastSuccessAt: fetchedAt },
+            });
+            const parsed = parseManagerHistoryPage(
+                { list: history.list, backward: history.backwardPresent ? "present" : undefined },
+                ownerByBizId,
+              );
+              const classification = classifyHistoricalPage({
+                events: parsed.events,
+                backwardPresent: history.backwardPresent,
+              }, lineChatHistoricalLowerBound());
+              const persistence = await persistHistoricalEvents({
+                writer: {
+                  findExistingIds: async (lineOfficialAccountId, managerMessageIds) => {
+                    const rows = await this.prisma.lineChatMirrorMessage.findMany({
+                      where: {
+                        lineOfficialAccountId,
+                        managerMessageId: { in: managerMessageIds },
+                      },
+                      select: { managerMessageId: true },
+                    });
+                    return rows.map((row) => row.managerMessageId);
+                  },
+                  upsert: async (lineOfficialAccountId, lineChatUserId, event) => {
+                    await this.prisma.lineChatMirrorMessage.upsert({
+                      where: {
+                        lineOfficialAccountId_managerMessageId: {
+                          lineOfficialAccountId,
+                          managerMessageId: event.managerMessageId,
+                        },
+                      },
+                      update: {
+                        lineChatUserId,
+                        eventType: event.eventType,
+                        direction: event.direction,
+                        messageType: event.messageType,
+                        text: event.text,
+                        fileName: event.fileName,
+                        bizId: event.bizId,
+                        ownerName: event.ownerName,
+                        sentAt: event.sentAt,
+                      },
+                      create: {
+                        lineOfficialAccountId,
+                        lineChatUserId,
+                        managerMessageId: event.managerMessageId,
+                        eventType: event.eventType,
+                        direction: event.direction,
+                        messageType: event.messageType,
+                        text: event.text,
+                        fileName: event.fileName,
+                        bizId: event.bizId,
+                        ownerName: event.ownerName,
+                        sentAt: event.sentAt,
+                      },
+                      select: { id: true },
+                    });
+                  },
+                },
+                lineOfficialAccountId: target.lineOfficialAccountId,
+                lineChatUserId: candidate.lineChatUserId,
+                events: parsed.events,
+              });
+              operationContext.assertOwnership();
+              await this.prisma.lineChatMirrorChat.update({
+                where: {
+                  lineOfficialAccountId_lineChatUserId: {
+                    lineOfficialAccountId: target.lineOfficialAccountId,
+                    lineChatUserId: candidate.lineChatUserId,
+                  },
+                },
+                data: historicalFetchResultPatch(classification, fetchedAt),
+              });
+              return {
+                status: classification.status,
+                eventsObserved: history.list.length,
+                validEventsPersisted: persistence.observed,
+                upsertOperations: persistence.upsertOperations,
+                existingBeforeWrite: persistence.existingBeforeWrite,
+                invalidEventCount: parsed.invalidEventCount,
+                oldestValidTimestamp: classification.oldestValidTimestamp,
+                newestValidTimestamp: classification.newestValidTimestamp,
+                errorCode: classification.errorCode,
+                retried: candidate.historicalBackfillStatus !== null
+                  && historicalBackfillCanResume(candidate.historicalBackfillStatus),
+              };
+            },
+            onFailure: async (candidate, error) => {
+              await this.prisma.lineChatMirrorChat.update({
+                where: {
+                  lineOfficialAccountId_lineChatUserId: {
+                    lineOfficialAccountId: target.lineOfficialAccountId,
+                    lineChatUserId: candidate.lineChatUserId,
+                  },
+                },
+                data: {
+                  ...historicalFetchFailurePatch("HISTORICAL_PAGE_EXCEPTION"),
+                  historicalBackfillLastAttemptAt: new Date(),
+                },
+              });
+              this.logger.warn(JSON.stringify({
+                event: "line_chat_historical_backfill_conversation_failed",
+                storeCode: target.storeCode,
+                conversationIdMasked: maskIdentifier(candidate.lineChatUserId),
+                errorType: safeErrorType(error),
+              }));
+            },
+          });
+          const result = outcome.results[0] ?? null;
+          const resultStatus = result?.status ?? null;
+          const conversationsProcessed = outcome.results.length + outcome.failures;
+          this.logger.log(JSON.stringify({
+            event: "line_chat_historical_backfill_store_cycle_completed",
+            storeCode: target.storeCode,
+            conversationsDiscovered,
+            conversationsEligible,
+            conversationsProcessed,
+            fastPathCoverageRate: conversationsProcessed > 0
+              ? Number((Number(resultStatus === HistoricalBackfillStatus.FAST_PATH_COMPLETE) / conversationsProcessed).toFixed(4))
+              : null,
+            fastPathComplete: resultStatus === HistoricalBackfillStatus.FAST_PATH_COMPLETE ? 1 : 0,
+            needsBackwardPagination: resultStatus === HistoricalBackfillStatus.NEEDS_BACKWARD_PAGINATION ? 1 : 0,
+            coverageUnproven: resultStatus === HistoricalBackfillStatus.HISTORICAL_COVERAGE_UNPROVEN ? 1 : 0,
+            eventsObserved: result?.eventsObserved ?? 0,
+            validEventsPersisted: result?.validEventsPersisted ?? 0,
+            upsertOperations: result?.upsertOperations ?? 0,
+            existingBeforeWrite: result?.existingBeforeWrite ?? 0,
+            invalidEvents: result?.invalidEventCount ?? 0,
+            earliestTimestamp: result?.oldestValidTimestamp?.toISOString() ?? null,
+            latestTimestamp: result?.newestValidTimestamp?.toISOString() ?? null,
+            status: resultStatus,
+            errorCode: result?.errorCode ?? null,
+            failures: outcome.failures + (resultStatus === HistoricalBackfillStatus.FAILED ? 1 : 0),
+            retries: result?.retried ? 1 : 0,
+            liveMirrorStatus: target.liveMirrorStatus,
+          }));
+        } catch (error) {
+          await runIndependently({
+            items: candidatesWithTimestamp,
+            process: async (candidate) => {
+              await this.prisma.lineChatMirrorChat.update({
+                where: {
+                  lineOfficialAccountId_lineChatUserId: {
+                    lineOfficialAccountId: target.lineOfficialAccountId,
+                    lineChatUserId: candidate.lineChatUserId,
+                  },
+                },
+                data: {
+                  ...historicalFetchFailurePatch("HISTORICAL_STORE_EXCEPTION"),
+                  historicalBackfillLastAttemptAt: attemptTimes.get(candidate.lineChatUserId) ?? new Date(),
+                },
+              });
+            },
+            onFailure: async () => {},
+          });
+          throw error;
+        } finally {
+          if (context) {
+            await this.sessionService.closeManagedPersistentContext(context, target.profilePath).catch(() => {});
+          }
+        }
+      },
+      { waitForLock: false },
+    ).catch((error) => {
+      this.logger.warn(JSON.stringify({
+        event: "line_chat_historical_backfill_store_failed",
+        storeCode: target.storeCode,
+        errorType: safeErrorType(error),
+      }));
+      return null;
+    });
+
+    if (!operation) return;
+    if (!operation.acquired) {
+      this.logger.log(JSON.stringify({
+        event: "line_chat_historical_backfill_store_skipped",
+        storeCode: target.storeCode,
+        reason: operation.reason,
+        liveMirrorStatus: target.liveMirrorStatus,
+      }));
+    }
   }
 
   private async markMirrorChatFailure(
