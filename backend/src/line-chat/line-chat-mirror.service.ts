@@ -29,7 +29,7 @@ import {
 } from "./line-chat-september-inventory";
 import { LineChatProfileOperationCoordinator } from "./line-chat-profile-operation-coordinator.service";
 import { LineChatSessionService } from "./line-chat-session.service";
-import { selectLineChatStoreOa } from "./line-chat-store-oa-selector";
+import { selectLineChatStoreOa, type LineChatStoreOaSelection } from "./line-chat-store-oa-selector";
 
 const DEFAULT_INTERVAL_MS = 60_000;
 const MIN_INTERVAL_MS = 30_000;
@@ -101,6 +101,23 @@ export interface MirrorSessionTarget {
   status: LineChatSessionStatus;
   profilePath: string | null;
   profileStorageKey: string | null;
+}
+
+export interface MirrorStoreTargetInputs {
+  storeId: string;
+  effectiveStoreCode: string;
+  storeMasterAccountName: string | null;
+  storeMasterLineId: string | null;
+  storeManagerUrl: string | null;
+  selectionSource: Extract<LineChatStoreOaSelection, { ok: true }>['source'];
+  oa: {
+    id: string;
+    name: string;
+    basicId: string | null;
+    lineChatWorkspaceUrl: string | null;
+    chatBotId: string | null;
+    lineChatSession: MirrorSessionTarget | null;
+  };
 }
 
 export type MirrorTargetResolution =
@@ -365,8 +382,11 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  private async syncStore(storeCode: string): Promise<LineChatMirrorCycleResult> {
-    const startedAtMs = Date.now();
+  /**
+   * Read-only canonical store/OA selection shared by Live Mirror and inventory.
+   * The caller decides when to persist cycle state or resolve the browser target.
+   */
+  public async getStoreMirrorTargetInputs(storeCode: string): Promise<MirrorStoreTargetInputs> {
     const store = await this.prisma.store.findFirst({
       where: {
         isActive: true,
@@ -437,20 +457,43 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
     if (!oa) {
       throw new Error("MIRROR_SELECTED_OA_NOT_FOUND");
     }
+    return {
+      storeId: store.id,
+      effectiveStoreCode,
+      storeMasterAccountName: store.storeMaster?.accountName ?? null,
+      storeMasterLineId: store.storeMaster?.lineId ?? null,
+      storeManagerUrl: store.storeMaster?.lineManagerUrl ?? null,
+      selectionSource: oaSelection.source,
+      oa: {
+        id: oa.id,
+        name: oa.name,
+        basicId: oa.basicId,
+        lineChatWorkspaceUrl: oa.lineChatWorkspaceUrl,
+        chatBotId: oa.chatBotId,
+        lineChatSession: oa.lineChatSession,
+      },
+    };
+  }
+
+  private async syncStore(storeCode: string): Promise<LineChatMirrorCycleResult> {
+    const startedAtMs = Date.now();
+    const storeTarget = await this.getStoreMirrorTargetInputs(storeCode);
+    const effectiveStoreCode = storeTarget.effectiveStoreCode;
+    const oa = storeTarget.oa;
     this.logger.log(JSON.stringify({
       event: "line_chat_mirror_oa_selected",
       storeCode: effectiveStoreCode,
-      storeMasterAccountName: store.storeMaster?.accountName ?? null,
-      storeMasterLineId: store.storeMaster?.lineId ?? null,
+      storeMasterAccountName: storeTarget.storeMasterAccountName,
+      storeMasterLineId: storeTarget.storeMasterLineId,
       lineOfficialAccountId: oa.id,
       lineOfficialAccountName: oa.name,
-      selectionSource: oaSelection.source,
+      selectionSource: storeTarget.selectionSource,
     }));
 
     await this.prisma.lineChatMirrorStoreState.upsert({
       where: { lineOfficialAccountId: oa.id },
       update: {
-        storeId: store.id,
+        storeId: storeTarget.storeId,
         storeCode: effectiveStoreCode,
         enabled: true,
         status: LineChatMirrorSyncStatus.RUNNING,
@@ -460,7 +503,7 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
       },
       create: {
         lineOfficialAccountId: oa.id,
-        storeId: store.id,
+        storeId: storeTarget.storeId,
         storeCode: effectiveStoreCode,
         enabled: true,
         status: LineChatMirrorSyncStatus.RUNNING,
@@ -490,7 +533,7 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
       chatBotId: oa.chatBotId,
       basicId: oa.basicId,
       lineChatWorkspaceUrl: oa.lineChatWorkspaceUrl,
-      storeManagerUrl: store.storeMaster?.lineManagerUrl ?? null,
+      storeManagerUrl: storeTarget.storeManagerUrl,
       lineChatSession: oa.lineChatSession,
     });
     if (!target.ok) {
@@ -574,7 +617,6 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
             event: "line_chat_mirror_target_cache_evicted",
             lineOfficialAccountId: oa.id,
             reason: `RECENT_DISCOVERY_${recent.failureReason ?? "FAILED"}`,
-            sessionKey: session.sessionKey,
           }));
           const failureDetail = recent.failureDetail?.replace(/\s+/gu, " ").trim();
           throw new Error(
@@ -930,7 +972,6 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
           if (verification.status !== "READY") {
             this.logger.warn(JSON.stringify({
               event: "line_chat_mirror_target_candidate_rejected",
-              sessionKey: session.sessionKey,
               reason: `RECENT_DISCOVERY_${verification.failureReason ?? "FAILED"}`,
               failureDetail: verification.failureDetail ?? null,
               botIdMasked: `${resolvedBotId.slice(0, 4)}...${resolvedBotId.slice(-4)}`,
@@ -978,7 +1019,6 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
       event: "line_chat_mirror_target_resolved",
       lineOfficialAccountId: input.lineOfficialAccountId,
       source: result.source,
-      sessionKey: result.session.sessionKey,
       botIdMasked: `${result.botId.slice(0, 4)}...${result.botId.slice(-4)}`,
     }));
     return { ok: true, ...result };

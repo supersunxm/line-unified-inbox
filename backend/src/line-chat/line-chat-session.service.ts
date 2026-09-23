@@ -369,8 +369,16 @@ export class LineChatSessionService {
     customLauncher?: ContextLauncher;
     pageObserver?: LineChatDiscoveryPageObserver;
     operationContext?: import("./line-chat-profile-operation-coordinator.service").LineChatProfileOperationContext;
+    maxPages?: number;
+    maxChats?: number;
+    maxDurationMs?: number;
   }): Promise<LineChatDiscoveryResult> {
-    return this.discoverChatPages(input, 200, 10_000, false, input.pageObserver);
+    const maxPages = Math.min(200, Math.max(1, Math.floor(input.maxPages ?? 200)));
+    const maxChats = Math.min(10_000, Math.max(1, Math.floor(input.maxChats ?? 10_000)));
+    const maxDurationMs = input.maxDurationMs === undefined
+      ? undefined
+      : Math.min(60_000, Math.max(1, Math.floor(input.maxDurationMs)));
+    return this.discoverChatPages(input, maxPages, maxChats, false, input.pageObserver, maxDurationMs);
   }
 
   /**
@@ -641,7 +649,13 @@ export class LineChatSessionService {
     customLauncher?: ContextLauncher;
     pageObserver?: LineChatDiscoveryPageObserver;
     operationContext?: import("./line-chat-profile-operation-coordinator.service").LineChatProfileOperationContext;
-  }, maxPages: number, maxChats: number, boundedWindow: boolean, pageObserver?: LineChatDiscoveryPageObserver): Promise<LineChatDiscoveryResult> {
+  }, maxPages: number, maxChats: number, boundedWindow: boolean, pageObserver?: LineChatDiscoveryPageObserver, maxDurationMs?: number): Promise<LineChatDiscoveryResult> {
+    const startedAtMs = Date.now();
+    const deadlineAtMs = maxDurationMs === undefined ? null : startedAtMs + maxDurationMs;
+    const remainingTimeMs = (maximumMs: number): number => deadlineAtMs === null
+      ? maximumMs
+      : Math.max(0, Math.min(maximumMs, deadlineAtMs - Date.now()));
+    const timeLimitReached = (): boolean => deadlineAtMs !== null && Date.now() >= deadlineAtMs;
     const botId = input.botId.trim();
     if (!botId) throw new Error("Missing LINE OA Manager bot ID.");
 
@@ -686,11 +700,17 @@ export class LineChatSessionService {
       });
 
       let navigationFailure: string | null = null;
+      if (remainingTimeMs(Number.MAX_SAFE_INTEGER) <= 0) {
+        return {
+          ...this.emptyDiscoveryResult(botId, endpoint, "Chat-list time limit reached.", "PARTIAL"),
+          timeLimitReached: true,
+        };
+      }
       try {
         input.operationContext?.assertOwnership();
         await page.goto(`https://chat.line.biz/${encodeURIComponent(botId)}`, {
           waitUntil: "domcontentloaded",
-          timeout: 15000,
+          timeout: Math.max(1, remainingTimeMs(15_000)),
         });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -699,7 +719,13 @@ export class LineChatSessionService {
         // Natural background requests may still complete after navigation timeout.
       }
 
-      const firstRequest = await this.withTimeout(firstRequestWait, 20000);
+      if (timeLimitReached()) {
+        return {
+          ...this.emptyDiscoveryResult(botId, endpoint, "Chat-list time limit reached.", "PARTIAL"),
+          timeLimitReached: true,
+        };
+      }
+      const firstRequest = await this.withTimeout(firstRequestWait, remainingTimeMs(20_000));
       if (!firstRequest) {
         let pageState = "unknown";
         try {
@@ -715,15 +741,50 @@ export class LineChatSessionService {
           `page=${pageState}`,
           ...(navigationFailure ? [`navigation=${navigationFailure}`] : []),
         ].join(" ");
-        return this.emptyDiscoveryResult(botId, endpoint, detail);
+        const reachedTimeLimit = timeLimitReached();
+        return {
+          ...this.emptyDiscoveryResult(
+            botId,
+            endpoint,
+            reachedTimeLimit ? "Chat-list time limit reached." : detail,
+            reachedTimeLimit ? "PARTIAL" : "UNVERIFIED",
+          ),
+          timeLimitReached: reachedTimeLimit,
+        };
       }
-      const firstResponse = await this.withTimeout(firstResponseWait, 20000);
-      if (!firstResponse) return this.emptyDiscoveryResult(botId, endpoint, "LINE OA Manager v2 chat-list response was not observed.", "UNVERIFIED");
+      const firstResponse = await this.withTimeout(firstResponseWait, remainingTimeMs(20_000));
+      if (!firstResponse) {
+        const reachedTimeLimit = timeLimitReached();
+        return {
+          ...this.emptyDiscoveryResult(
+            botId,
+            endpoint,
+            reachedTimeLimit ? "Chat-list time limit reached." : "LINE OA Manager v2 chat-list response was not observed.",
+            reachedTimeLimit ? "PARTIAL" : "UNVERIFIED",
+          ),
+          timeLimitReached: reachedTimeLimit,
+        };
+      }
       if (firstResponse.status !== 200) {
         return this.emptyDiscoveryResult(botId, endpoint, `LINE OA Manager chat-list returned HTTP ${firstResponse.status}`, "PARTIAL");
       }
 
-      const firstPageBody = await this.readJsonResponse(firstResponse.response);
+      const firstPageBody = await this.withTimeout(
+        this.readJsonResponse(firstResponse.response),
+        remainingTimeMs(20_000),
+      );
+      if (!firstPageBody) {
+        const reachedTimeLimit = timeLimitReached();
+        return {
+          ...this.emptyDiscoveryResult(
+            botId,
+            endpoint,
+            reachedTimeLimit ? "Chat-list time limit reached." : "LINE OA Manager chat-list response parsing timed out.",
+            "PARTIAL",
+          ),
+          timeLimitReached: reachedTimeLimit,
+        };
+      }
       if (!firstPageBody.ok) return this.emptyDiscoveryResult(botId, endpoint, firstPageBody.error, "PARTIAL");
       let firstPage;
       try {
@@ -761,6 +822,9 @@ export class LineChatSessionService {
       let enumerationError: string | undefined = !boundedWindow && byId.size > maxChats
         ? "Chat-list discovered-chat limit reached."
         : undefined;
+      let pageLimitReached = false;
+      let chatLimitReached = byId.size > maxChats;
+      let discoveryTimeLimitReached = false;
       while (next !== null && !stoppedEarlyByObserver) {
         if (seenNext.has(next)) {
           enumerationError = "Repeated chat-list next token detected.";
@@ -768,11 +832,18 @@ export class LineChatSessionService {
         }
         seenNext.add(next);
         if (pages.length >= maxPages) {
+          pageLimitReached = true;
           if (!boundedWindow) enumerationError = "Chat-list page limit reached.";
           break;
         }
         if (byId.size >= maxChats) {
+          chatLimitReached = true;
           if (!boundedWindow) enumerationError = "Chat-list discovered-chat limit reached.";
+          break;
+        }
+        if (remainingTimeMs(Number.MAX_SAFE_INTEGER) <= 0) {
+          discoveryTimeLimitReached = true;
+          enumerationError = "Chat-list time limit reached.";
           break;
         }
         const nextUrl = new URL(firstRequest.url);
@@ -782,17 +853,32 @@ export class LineChatSessionService {
           input.operationContext?.assertOwnership();
           response = await requestContext.get(nextUrl.toString(), {
             headers: firstRequest.headers,
-            timeout: 15000,
+            timeout: Math.max(1, remainingTimeMs(15_000)),
           });
         } catch {
-          enumerationError = "LINE OA Manager chat-list transport failed on a subsequent page.";
+          if (timeLimitReached()) {
+            discoveryTimeLimitReached = true;
+            enumerationError = "Chat-list time limit reached.";
+          } else {
+            enumerationError = "LINE OA Manager chat-list transport failed on a subsequent page.";
+          }
           break;
         }
         if (response.status() !== 200) {
           enumerationError = `LINE OA Manager chat-list returned HTTP ${response.status()} on a subsequent page`;
           break;
         }
-        const body = await this.readJsonResponse(response);
+        const body = await this.withTimeout(
+          this.readJsonResponse(response),
+          remainingTimeMs(20_000),
+        );
+        if (!body) {
+          discoveryTimeLimitReached = timeLimitReached();
+          enumerationError = discoveryTimeLimitReached
+            ? "Chat-list time limit reached."
+            : "LINE OA Manager chat-list response parsing timed out.";
+          break;
+        }
         if (!body.ok) {
           enumerationError = body.error;
           break;
@@ -808,7 +894,13 @@ export class LineChatSessionService {
         mergePage(parsedPage);
         stoppedEarlyByObserver = observePage(parsedPage);
         if (!boundedWindow && byId.size > maxChats) {
+          chatLimitReached = true;
           enumerationError = "Chat-list discovered-chat limit reached.";
+          break;
+        }
+        if (timeLimitReached() && parsedPage.next !== null) {
+          discoveryTimeLimitReached = true;
+          enumerationError = "Chat-list time limit reached.";
           break;
         }
         next = parsedPage.next;
@@ -830,6 +922,9 @@ export class LineChatSessionService {
         duplicateIds,
         conflictingDuplicates: conflictingIds.size,
         nextTerminationObserved: next === null,
+        pageLimitReached,
+        chatLimitReached,
+        timeLimitReached: discoveryTimeLimitReached,
         ...(enumerationError ? { enumerationError } : {}),
         ...(stoppedEarlyByObserver ? { stoppedEarlyByObserver: true } : {}),
       };
@@ -857,10 +952,17 @@ export class LineChatSessionService {
   }
 
   private async withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T | undefined> {
-    return Promise.race([
-      promise,
-      new Promise<undefined>((resolve) => setTimeout(() => resolve(undefined), timeoutMs)),
-    ]);
+    let timer: NodeJS.Timeout | undefined;
+    try {
+      return await Promise.race([
+        promise,
+        new Promise<undefined>((resolve) => {
+          timer = setTimeout(() => resolve(undefined), timeoutMs);
+        }),
+      ]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
   }
 
   private async readJsonResponse(response: { json: () => Promise<unknown> }): Promise<{ ok: true; body: unknown } | { ok: false; error: string }> {

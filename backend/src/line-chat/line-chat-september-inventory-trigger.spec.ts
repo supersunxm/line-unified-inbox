@@ -52,6 +52,14 @@ test("startup inventory retries only profile contention and emits aggregate-only
     historicalNotStarted: 35,
     historicalCheckedRate: 5 / 40,
     fastPathCompleteRate: 2 / 40,
+    targetResolutionSource: "MANAGER_ACCOUNT_REDIRECT" as const,
+    chatsWithValidTimestamp: 42,
+    chatsWithoutLatestEvent: 0,
+    chatsWithMissingTimestamp: 0,
+    chatsWithInvalidTimestamp: 0,
+    pageLimitReached: false,
+    chatLimitReached: false,
+    timeLimitReached: false,
   };
 
   const result = await runSeptemberInventoryStartupDiagnostic({
@@ -76,7 +84,29 @@ test("startup inventory retries only profile contention and emits aggregate-only
   assert.equal(result.reports[0]?.inventoryComplete, true);
   assert.ok(logs.some((line) => line.includes("line_chat_september_inventory_startup_retrying")));
   assert.ok(logs.some((line) => line.includes('"septemberChats":40')));
+  assert.ok(logs.some((line) => line.includes('"targetResolutionSource":"MANAGER_ACCOUNT_REDIRECT"')));
+  assert.ok(logs.some((line) => line.includes('"chatsWithMissingTimestamp":0')));
+  assert.ok(logs.some((line) => line.includes('"timeLimitReached":false')));
   assert.ok(logs.every((line) => !line.includes("chatUserId")));
   assert.ok(logs.every((line) => !line.includes("displayName")));
   assert.ok(logs.every((line) => !line.includes("lastMessageText")));
+});
+
+test("startup inventory failure log keeps only the error type", async () => {
+  const privateDetail = "/private/profile/private-cursor-token-customer-name";
+  const logs: string[] = [];
+  const result = await runSeptemberInventoryStartupDiagnostic({
+    enabled: true,
+    service: {
+      discoverPilotStores: async () => { throw new Error(privateDetail); },
+    },
+    logger: {
+      log(message) { logs.push(message); },
+      warn(message) { logs.push(message); },
+    },
+  });
+  assert.equal(result.ran, true);
+  assert.equal(result.error, "Error");
+  assert.ok(logs.every((line) => !line.includes(privateDetail)));
+  assert.ok(logs.every((line) => !line.includes("private-cursor-token")));
 });

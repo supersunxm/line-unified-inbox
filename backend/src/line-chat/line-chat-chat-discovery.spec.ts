@@ -42,6 +42,7 @@ test("verified v2 list envelope uses chatId as the authoritative USER ID", () =>
     lastMessageText: null,
     lastMessageAt: "2026-08-31T05:00:00.000Z",
     lastMessageDirection: null,
+    lastMessageTimestampStatus: "VALID",
   }]);
   assert.equal(result.validUserChats, 1);
   assert.equal(result.invalidUserRecords, 1);
@@ -62,7 +63,34 @@ test("v2 parser normalizes latestEvent.timestamp seconds and milliseconds only",
   assert.equal(result.chats[0]?.lastMessageAt, "2026-08-31T05:00:00.000Z");
   assert.equal(result.chats[1]?.lastMessageAt, result.chats[0]?.lastMessageAt);
   assert.equal(result.chats[2]?.lastMessageAt, null);
+  assert.equal(result.chats[0]?.lastMessageTimestampStatus, "VALID");
+  assert.equal(result.chats[1]?.lastMessageTimestampStatus, "VALID");
+  assert.equal(result.chats[2]?.lastMessageTimestampStatus, "TIMESTAMP_INVALID");
   assert.equal(result.enumerationStatus, "COMPLETE");
+});
+
+test("v2 parser distinguishes absent events from missing and invalid event timestamps", () => {
+  const result = parseLineChatListResponse({ list: [
+    { chatId: VALID_USER_ID, chatType: "USER" },
+    { chatId: VALID_USER_ID_2, chatType: "USER", latestEvent: {} },
+    { chatId: `U${"3c".repeat(16)}`, chatType: "USER", latestEvent: { timestamp: null } },
+    { chatId: `U${"4d".repeat(16)}`, chatType: "USER", latestEvent: { timestamp: "invalid-private-value" } },
+    { chatId: `U${"5e".repeat(16)}`, chatType: "USER", latestEvent: { timestamp: Number.NaN } },
+    { chatId: `U${"6f".repeat(16)}`, chatType: "USER", latestEvent: { timestamp: "2026-09-10T10:00:00+07:00" } },
+    { chatId: `C${"7a".repeat(16)}`, chatType: "GROUP", latestEvent: {} },
+  ], next: null }, { botId: "Ubot", endpoint: "https://chat.line.biz/api/v2/bots/Ubot/chats" });
+
+  assert.deepEqual(result.chats.map((chat) => chat.lastMessageTimestampStatus), [
+    "NO_LATEST_EVENT",
+    "TIMESTAMP_MISSING",
+    "TIMESTAMP_MISSING",
+    "TIMESTAMP_INVALID",
+    "TIMESTAMP_INVALID",
+    "VALID",
+  ]);
+  assert.equal(result.chats[5]?.lastMessageAt, "2026-09-10T03:00:00.000Z");
+  assert.equal(result.ignoredNonUserRecords, 1);
+  assert.doesNotMatch(JSON.stringify(result), /invalid-private-value/iu);
 });
 
 test("v2 parser fails closed on malformed envelope or next", () => {
@@ -92,6 +120,7 @@ test("v2 parser ignores non-USER entries and counts invalid USER records", () =>
 interface MockPageOptions {
   firstRequestUrl?: string;
   navigationError?: Error;
+  navigationDelayMs?: number;
 }
 
 interface MockPageDefinition {
@@ -130,6 +159,9 @@ function mockNaturalDiscoveryContext(
     },
     goto: async (url: string) => {
       gotoUrls.push(url);
+      if (options.navigationDelayMs) {
+        await new Promise((resolve) => setTimeout(resolve, options.navigationDelayMs));
+      }
       const request = {
         method: () => "GET",
         url: () => firstRequestUrl,
@@ -175,13 +207,22 @@ function validPage(chatUserId: string, next: string | null = null): MockPageDefi
   return { body: { list: [{ chatId: chatUserId, chatType: "USER", name: "Sanitized" }], next } };
 }
 
-async function discoverWithPages(pageDefinitions: readonly MockPageDefinition[], options: MockPageOptions = {}) {
+async function discoverWithPages(
+  pageDefinitions: readonly MockPageDefinition[],
+  options: MockPageOptions = {},
+  discoveryOptions: { maxPages?: number; maxChats?: number; maxDurationMs?: number } = {},
+) {
   const profilePath = fs.mkdtempSync(path.join(os.tmpdir(), "line-chat-discovery-"));
   const mock = mockNaturalDiscoveryContext(pageDefinitions, options);
   const launcher: ContextLauncher = async () => mock.context;
   try {
     const service = new LineChatSessionService(launcher);
-    const result = await service.discoverChats({ botId: "Ubot", profilePath, customLauncher: launcher });
+    const result = await service.discoverChats({
+      botId: "Ubot",
+      profilePath,
+      customLauncher: launcher,
+      ...discoveryOptions,
+    });
     return { result, mock };
   } finally {
     fs.rmSync(profilePath, { recursive: true, force: true });
@@ -206,6 +247,38 @@ test("session discovery captures the natural v2 GET and enumerates subsequent pa
   assert.equal(result.validUserChats, 2);
   assert.equal(result.enumerationStatus, "COMPLETE");
   assert.deepEqual(result.chats.map((chat) => chat.chatUserId), [VALID_USER_ID, secondId]);
+  assert.equal(mock.wasClosed(), true);
+});
+
+test("bounded inventory discovery reports page and chat caps without exposing cursors", async () => {
+  const pages = Array.from({ length: 4 }, (_, index) => validPage(
+    `U${index.toString(16).repeat(32)}`,
+    `private-cursor-${index}`,
+  ));
+  const pageBound = await discoverWithPages(pages, {}, { maxPages: 2, maxChats: 10 });
+  assert.equal(pageBound.result.pagesFetched, 2);
+  assert.equal(pageBound.result.pageLimitReached, true);
+  assert.equal(pageBound.result.enumerationError, "Chat-list page limit reached.");
+  assert.equal(pageBound.mock.calls.length, 1);
+  assert.doesNotMatch(JSON.stringify(pageBound.result), /private-cursor/iu);
+
+  const chatBound = await discoverWithPages([
+    validPage(VALID_USER_ID, "private-cursor"),
+    validPage(VALID_USER_ID_2, null),
+  ], {}, { maxPages: 5, maxChats: 1 });
+  assert.equal(chatBound.result.chatLimitReached, true);
+  assert.equal(chatBound.result.enumerationError, "Chat-list discovered-chat limit reached.");
+  assert.equal(chatBound.mock.calls.length, 0);
+});
+
+test("bounded inventory discovery stops when its elapsed-time budget expires", async () => {
+  const { result, mock } = await discoverWithPages(
+    [validPage(VALID_USER_ID, "private-cursor")],
+    { navigationDelayMs: 5 },
+    { maxDurationMs: 1 },
+  );
+  assert.equal(result.timeLimitReached, true);
+  assert.equal(result.enumerationError, "Chat-list time limit reached.");
   assert.equal(mock.wasClosed(), true);
 });
 

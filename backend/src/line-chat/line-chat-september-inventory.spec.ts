@@ -17,13 +17,18 @@ import type {
   LineChatDiscoveryResult,
 } from "./line-chat.types";
 
-function chat(id: string, lastMessageAt: string | null): LineChatDiscoveredChat {
+function chat(
+  id: string,
+  lastMessageAt: string | null,
+  lastMessageTimestampStatus?: NonNullable<LineChatDiscoveredChat["lastMessageTimestampStatus"]>,
+): LineChatDiscoveredChat {
   return {
     chatUserId: `U${id.padStart(32, "0")}`,
     displayName: "Customer",
     lastMessageText: null,
     lastMessageAt,
     lastMessageDirection: null,
+    ...(lastMessageTimestampStatus ? { lastMessageTimestampStatus } : {}),
   };
 }
 
@@ -234,7 +239,97 @@ test("unknown timestamp prevents early stop and a complete range claim", () => {
   assert.equal(report.unknownDateChats, 1);
   assert.equal(report.septemberChats, null);
   assert.equal(report.septemberChatsObserved, 1);
-  assert.equal(report.inventoryIncompleteReason, "UNKNOWN_CHAT_LIST_TIMESTAMP");
+  assert.equal(report.inventoryIncompleteReason, "LATEST_EVENT_TIMESTAMP_INVALID");
+});
+
+test("no latest event is excluded from the activity denominator without blocking completeness", () => {
+  const september = chat("1", "2026-09-10T10:00:00+07:00", "VALID");
+  const inactive = chat("2", null, "NO_LATEST_EVENT");
+  const august = chat("3", "2026-08-31T23:59:59+07:00", "VALID");
+  const tracker = new SeptemberChatListOrderTracker();
+
+  assert.equal(tracker.observePage(page([september, inactive, august])), true);
+  const report = buildSeptemberChatInventoryReport({
+    storeCode: "29113",
+    discovery: discovery([september, inactive, august]),
+    order: tracker.snapshot(),
+    historicalStates: [],
+  });
+
+  assert.equal(report.inventoryComplete, true);
+  assert.equal(report.septemberChats, 1);
+  assert.equal(report.septemberChatsObserved, 1);
+  assert.equal(report.chatsWithValidTimestamp, 2);
+  assert.equal(report.chatsWithoutLatestEvent, 1);
+  assert.equal(report.chatsWithMissingTimestamp, 0);
+  assert.equal(report.chatsWithInvalidTimestamp, 0);
+  assert.equal(report.unknownDateChats, 0);
+  assert.equal(report.historicalNotStarted, 1);
+});
+
+test("latest event with a missing timestamp blocks exact totals and rates", () => {
+  const chats = [
+    chat("1", "2026-09-10T10:00:00+07:00", "VALID"),
+    chat("2", null, "TIMESTAMP_MISSING"),
+  ];
+  const tracker = new SeptemberChatListOrderTracker();
+  tracker.observePage(page(chats));
+  const report = buildSeptemberChatInventoryReport({
+    storeCode: "28375",
+    discovery: discovery(chats),
+    order: tracker.snapshot(),
+    historicalStates: [],
+  });
+
+  assert.equal(report.inventoryComplete, false);
+  assert.equal(report.septemberChats, null);
+  assert.equal(report.septemberChatsObserved, 1);
+  assert.equal(report.chatsWithMissingTimestamp, 1);
+  assert.equal(report.chatsWithInvalidTimestamp, 0);
+  assert.equal(report.unknownDateChats, 1);
+  assert.equal(report.historicalCheckedRate, null);
+  assert.equal(report.fastPathCompleteRate, null);
+  assert.equal(report.inventoryIncompleteReason, "LATEST_EVENT_TIMESTAMP_MISSING");
+});
+
+test("latest event with an invalid timestamp blocks exact cursor-exhausted totals", () => {
+  const chats = [
+    chat("1", "2026-09-10T10:00:00+07:00", "VALID"),
+    chat("2", null, "TIMESTAMP_INVALID"),
+  ];
+  const tracker = new SeptemberChatListOrderTracker();
+  tracker.observePage(page(chats));
+  const report = buildSeptemberChatInventoryReport({
+    storeCode: "25610",
+    discovery: discovery(chats),
+    order: tracker.snapshot(),
+    historicalStates: [],
+  });
+
+  assert.equal(report.cursorExhausted, true);
+  assert.equal(report.inventoryComplete, false);
+  assert.equal(report.septemberChats, null);
+  assert.equal(report.chatsWithInvalidTimestamp, 1);
+  assert.equal(report.inventoryIncompleteReason, "LATEST_EVENT_TIMESTAMP_INVALID");
+});
+
+test("cursor exhaustion can prove membership despite ordering anomalies", () => {
+  const chats = [
+    chat("1", "2026-09-10T10:00:00+07:00", "VALID"),
+    chat("2", "2026-09-15T10:00:00+07:00", "VALID"),
+  ];
+  const tracker = new SeptemberChatListOrderTracker();
+  tracker.observePage(page(chats));
+  const report = buildSeptemberChatInventoryReport({
+    storeCode: "28375",
+    discovery: discovery(chats),
+    order: tracker.snapshot(),
+    historicalStates: [],
+  });
+  assert.equal(report.orderingAnomaly, true);
+  assert.equal(report.orderingValidated, false);
+  assert.equal(report.inventoryComplete, true);
+  assert.equal(report.septemberChats, 2);
 });
 
 test("September membership stays independent when historical messages extend into August", () => {
