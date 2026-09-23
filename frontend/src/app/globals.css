@@ -1,4 +1,4 @@
-@import "tailwindcss";
+@layer theme, base, mui, components, utilities;\n@import "tailwindcss";
 
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *, .dark, .dark *));
 
