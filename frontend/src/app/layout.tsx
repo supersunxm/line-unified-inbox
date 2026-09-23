@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
+import { AppRouterCacheProvider } from "@mui/material-nextjs/v15-appRouter";
 import "./globals.css";
 import "./public-branding.css";
 import { ThemeProvider } from "./theme";
 import { LanguageProvider } from "./language";
+import { ProjectMuiAProvider } from "@/mui/project-mui-a-provider";
 
 export const metadata: Metadata = {
   title: {
@@ -52,9 +54,13 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: themeInitializationScript }} />
       </head>
       <body className="min-h-full flex flex-col">
-        <ThemeProvider>
-          <LanguageProvider>{children}</LanguageProvider>
-        </ThemeProvider>
+        <AppRouterCacheProvider options={{ enableCssLayer: true }}>
+          <ProjectMuiAProvider>
+            <ThemeProvider>
+              <LanguageProvider>{children}</LanguageProvider>
+            </ThemeProvider>
+          </ProjectMuiAProvider>
+        </AppRouterCacheProvider>
       </body>
     </html>
   );
