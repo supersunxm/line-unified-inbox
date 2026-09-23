@@ -8,6 +8,7 @@ import { LineChatSeptemberInventoryService } from "./line-chat-september-invento
 import type { PrismaService } from "../prisma.service";
 import type { LineChatProfileOperationCoordinator } from "./line-chat-profile-operation-coordinator.service";
 import type { LineChatSessionService } from "./line-chat-session.service";
+import type { LineChatMirrorService } from "./line-chat-mirror.service";
 
 test("inventory service returns aggregate chat-list coverage without exposing chat identifiers", async () => {
   const privateChatId = `U${"a".repeat(32)}`;
@@ -92,7 +93,10 @@ test("inventory service returns aggregate chat-list coverage without exposing ch
     },
   } as unknown as LineChatProfileOperationCoordinator;
 
-  const service = new LineChatSeptemberInventoryService(prisma, sessionService, coordinator);
+  const mirrorService = {
+    resolveMirrorTarget: async () => { throw new Error("unexpected mirror target resolution"); },
+  } as unknown as LineChatMirrorService;
+  const service = new LineChatSeptemberInventoryService(prisma, sessionService, coordinator, mirrorService);
   const report = await service.discoverStore({
     storeCode: "29113",
     lineOfficialAccountId: "oa-1",
@@ -132,7 +136,10 @@ test("inventory service reports profile contention without attempting chat disco
       waitedMs: 0,
     }),
   } as unknown as LineChatProfileOperationCoordinator;
-  const service = new LineChatSeptemberInventoryService(prisma, sessionService, coordinator);
+  const mirrorService = {
+    resolveMirrorTarget: async () => { throw new Error("unexpected mirror target resolution"); },
+  } as unknown as LineChatMirrorService;
+  const service = new LineChatSeptemberInventoryService(prisma, sessionService, coordinator, mirrorService);
   const report = await service.discoverStore({
     storeCode: "28375",
     lineOfficialAccountId: "oa-2",
@@ -142,6 +149,93 @@ test("inventory service reports profile contention without attempting chat disco
   assert.equal(discoveryCalled, false);
   assert.equal(report.inventoryComplete, false);
   assert.equal(report.inventoryIncompleteReason, "PROFILE_OPERATION_BUSY");
+});
+
+test("pilot inventory reuses live Mirror target resolution when persisted bot ID is absent", async () => {
+  const targetStore = LINE_CHAT_HISTORICAL_PILOT_STORE_CODES[0];
+  let resolverCalls = 0;
+  const prisma = {
+    lineChatMirrorStoreState: {
+      findMany: async () => [{
+        storeCode: targetStore,
+        lineOfficialAccountId: "oa-pinklao",
+        enabled: true,
+      }],
+    },
+    lineOfficialAccount: {
+      findUnique: async () => ({
+        chatBotId: null,
+        basicId: "@048ovjmp",
+        lineChatWorkspaceUrl: null,
+        store: { storeMaster: { lineManagerUrl: "https://manager.line.biz/account/@048ovjmp" } },
+        lineChatSession: null,
+      }),
+    },
+  } as unknown as PrismaService;
+  const sessionService = {
+    resolveProfilePath: () => "/redacted/profile",
+  } as unknown as LineChatSessionService;
+  const coordinator = {} as LineChatProfileOperationCoordinator;
+  const mirrorService = {
+    resolveMirrorTarget: async (input: { lineOfficialAccountId: string }) => {
+      resolverCalls += 1;
+      assert.equal(input.lineOfficialAccountId, "oa-pinklao");
+      return {
+        ok: true as const,
+        botId: `U${"a".repeat(32)}`,
+        session: {
+          id: "resolved-session",
+          sessionKey: "profile-b",
+          status: "ACTIVE",
+          profilePath: "/redacted/profile",
+          profileStorageKey: null,
+        },
+        source: "MANAGER_ACCOUNT_REDIRECT" as const,
+      };
+    },
+  } as unknown as LineChatMirrorService;
+
+  const service = new LineChatSeptemberInventoryService(prisma, sessionService, coordinator, mirrorService);
+  service.discoverStore = async (target) => {
+    assert.equal(target.storeCode, targetStore);
+    assert.equal(target.lineOfficialAccountId, "oa-pinklao");
+    assert.match(target.botId, /^U[0-9a-f]{32}$/u);
+    assert.equal(target.session.id, "resolved-session");
+    return {
+      storeCode: targetStore,
+      conversationsObserved: 1,
+      septemberChats: 1,
+      septemberChatsObserved: 1,
+      beforeSeptemberObserved: 0,
+      afterSeptemberObserved: 0,
+      noLatestEventChats: 0,
+      malformedTimestampChats: 0,
+      unknownDateChats: 0,
+      pagesFetched: 1,
+      newestChatListTimestamp: "2026-09-23T00:00:00.000Z",
+      oldestChatListTimestamp: "2026-09-23T00:00:00.000Z",
+      reachedBeforeSeptember: false,
+      cursorExhausted: true,
+      orderingValidated: true,
+      orderingAnomaly: false,
+      inventoryComplete: true,
+      inventoryIncompleteReason: null,
+      historicalChecked: 0,
+      fastPathComplete: 0,
+      needsBackwardPagination: 0,
+      historicalCoverageUnproven: 0,
+      failed: 0,
+      historicalNotStarted: 1,
+      fetchingInitialPage: 0,
+      historicalCheckedRate: 0,
+      fastPathCompleteRate: 0,
+    };
+  };
+
+  const reports = await service.discoverPilotStores();
+  assert.equal(resolverCalls, 1);
+  assert.equal(reports[0]?.inventoryComplete, true);
+  assert.equal(reports[0]?.septemberChats, 1);
 });
 
 test("pilot inventory reports all configured pilot stores without guessing missing targets", async () => {
@@ -162,7 +256,10 @@ test("pilot inventory reports all configured pilot stores without guessing missi
   const coordinator = {
     withProfileOperation: async () => { throw new Error("unexpected profile lock"); },
   } as unknown as LineChatProfileOperationCoordinator;
-  const service = new LineChatSeptemberInventoryService(prisma, sessionService, coordinator);
+  const mirrorService = {
+    resolveMirrorTarget: async () => { throw new Error("unexpected mirror target resolution"); },
+  } as unknown as LineChatMirrorService;
+  const service = new LineChatSeptemberInventoryService(prisma, sessionService, coordinator, mirrorService);
   const reports = await service.discoverPilotStores();
 
   assert.deepEqual(reports.map((report) => report.storeCode), LINE_CHAT_HISTORICAL_PILOT_STORE_CODES);
