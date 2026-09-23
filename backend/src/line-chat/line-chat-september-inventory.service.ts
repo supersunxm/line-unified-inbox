@@ -1,4 +1,4 @@
-import { Inject, Injectable } from "@nestjs/common";
+import { Inject, Injectable, Optional } from "@nestjs/common";
 import { LineChatSessionStatus } from "@prisma/client";
 import { PrismaService } from "../prisma.service";
 import { LINE_CHAT_HISTORICAL_PILOT_STORE_CODES } from "./line-chat-historical-backfill";
@@ -33,8 +33,9 @@ export class LineChatSeptemberInventoryService {
     @Inject(LineChatSessionService) private readonly sessionService: LineChatSessionService,
     @Inject(LineChatProfileOperationCoordinator)
     private readonly coordinator: LineChatProfileOperationCoordinator,
+    @Optional()
     @Inject(LineChatMirrorService)
-    private readonly mirrorService: LineChatMirrorService,
+    private readonly mirrorService?: LineChatMirrorService,
   ) {}
 
   /** Builds sanitized reports for the three approved A1 pilot stores, serially. */
@@ -92,6 +93,10 @@ export class LineChatSeptemberInventoryService {
       let botId = account.chatBotId?.trim() ?? "";
       let session = account.lineChatSession;
       if (!botId || !session || session.status !== LineChatSessionStatus.ACTIVE) {
+        if (!this.mirrorService) {
+          reports.push(emptySeptemberChatInventoryReport(storeCode, "MANAGER_TARGET_UNAVAILABLE"));
+          continue;
+        }
         const resolved = await this.mirrorService.resolveMirrorTarget({
           lineOfficialAccountId: state.lineOfficialAccountId,
           chatBotId: account.chatBotId,
