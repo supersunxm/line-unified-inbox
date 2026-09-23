@@ -8,7 +8,7 @@
 export const PROJECT_MUI_A = {
   name: "Project MUI A",
   pilotSurface: "Store Chats",
-  runtimeEnabled: false,
+  runtimeEnabled: true,
   allowedAreas: [
     "frontend/src/mui",
     "frontend/src/components/ui",
