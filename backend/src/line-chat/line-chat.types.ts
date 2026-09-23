@@ -261,6 +261,8 @@ export interface LineChatDiscoveredChat {
   lastMessageText: string | null;
   lastMessageAt: string | null;
   lastMessageDirection: string | null;
+  /** Safe reason metadata for null `lastMessageAt`; optional for legacy callers. */
+  lastMessageTimestampStatus?: "VALID" | "NO_LATEST_EVENT" | "TIMESTAMP_MISSING" | "TIMESTAMP_INVALID";
 }
 
 export interface LineChatDiscoveryPage {
@@ -296,6 +298,9 @@ export interface LineChatDiscoveryResult {
   nextTerminationObserved: boolean;
   enumerationError?: string;
   stoppedEarlyByObserver?: boolean;
+  pageLimitReached?: boolean;
+  chatLimitReached?: boolean;
+  timeLimitReached?: boolean;
 }
 
 export interface LineChatRecentDiscoveryResult {

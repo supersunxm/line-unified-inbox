@@ -23,6 +23,7 @@ export function isSeptemberInventoryStartupEnabled(value: string | undefined): b
 function safeReport(report: SeptemberChatInventoryReport): Record<string, unknown> {
   return {
     storeCode: report.storeCode,
+    targetResolutionSource: report.targetResolutionSource,
     inventoryComplete: report.inventoryComplete,
     inventoryIncompleteReason: report.inventoryIncompleteReason,
     conversationsObserved: report.conversationsObserved,
@@ -30,8 +31,15 @@ function safeReport(report: SeptemberChatInventoryReport): Record<string, unknow
     septemberChatsObserved: report.septemberChatsObserved,
     beforeSeptemberObserved: report.beforeSeptemberObserved,
     afterSeptemberObserved: report.afterSeptemberObserved,
+    chatsWithValidTimestamp: report.chatsWithValidTimestamp,
+    chatsWithoutLatestEvent: report.chatsWithoutLatestEvent,
+    chatsWithMissingTimestamp: report.chatsWithMissingTimestamp,
+    chatsWithInvalidTimestamp: report.chatsWithInvalidTimestamp,
     unknownDateChats: report.unknownDateChats,
     pagesFetched: report.pagesFetched,
+    pageLimitReached: report.pageLimitReached,
+    chatLimitReached: report.chatLimitReached,
+    timeLimitReached: report.timeLimitReached,
     newestChatListTimestamp: report.newestChatListTimestamp,
     oldestChatListTimestamp: report.oldestChatListTimestamp,
     reachedBeforeSeptember: report.reachedBeforeSeptember,
@@ -118,12 +126,12 @@ export async function runSeptemberInventoryStartupDiagnostic(input: {
 
     return { ran: true, attempts: maxAttempts, reports, error: null };
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const errorType = error instanceof Error ? error.name.slice(0, 80) : "UNKNOWN_ERROR";
     input.logger.warn(JSON.stringify({
       event: "line_chat_september_inventory_startup_failed",
-      error: message,
+      errorType,
       mode: "READ_ONLY",
     }));
-    return { ran: true, attempts: 1, reports, error: message };
+    return { ran: true, attempts: 1, reports, error: errorType };
   }
 }

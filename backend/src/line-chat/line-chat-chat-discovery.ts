@@ -53,10 +53,25 @@ function assertListEnvelope(body: unknown): { entries: unknown[]; next: string |
   return { entries: wrapper.list, next: rawNext.trim() ? rawNext : null };
 }
 
-function normalizeLatestEventTimestamp(value: Record<string, unknown>): string | null {
-  const latestEvent = objectValue(value.latestEvent);
-  if (!latestEvent || !Object.prototype.hasOwnProperty.call(latestEvent, "timestamp")) return null;
-  return timestampValue(latestEvent.timestamp);
+function normalizeLatestEventTimestamp(value: Record<string, unknown>): {
+  timestamp: string | null;
+  status: NonNullable<LineChatDiscoveredChat["lastMessageTimestampStatus"]>;
+} {
+  const rawLatestEvent = value.latestEvent;
+  if (rawLatestEvent === undefined || rawLatestEvent === null) {
+    return { timestamp: null, status: "NO_LATEST_EVENT" };
+  }
+  const latestEvent = objectValue(rawLatestEvent);
+  if (!latestEvent) return { timestamp: null, status: "TIMESTAMP_INVALID" };
+  if (!Object.prototype.hasOwnProperty.call(latestEvent, "timestamp")
+    || latestEvent.timestamp === undefined
+    || latestEvent.timestamp === null) {
+    return { timestamp: null, status: "TIMESTAMP_MISSING" };
+  }
+  const timestamp = timestampValue(latestEvent.timestamp);
+  return timestamp
+    ? { timestamp, status: "VALID" }
+    : { timestamp: null, status: "TIMESTAMP_INVALID" };
 }
 
 function normalizeCustomerName(value: Record<string, unknown>): string | null {
@@ -73,13 +88,15 @@ function normalizeCustomerName(value: Record<string, unknown>): string | null {
 function normalizeUserChat(raw: unknown): LineChatDiscoveredChat | null {
   const value = objectValue(raw);
   if (!value || value.chatType !== "USER" || !isLineChatUserId(value.chatId)) return null;
+  const latestEvent = normalizeLatestEventTimestamp(value);
   return {
     chatUserId: value.chatId.trim(),
     displayName: normalizeCustomerName(value),
     // The verified v2 contract does not establish message text or direction semantics.
     lastMessageText: null,
-    lastMessageAt: normalizeLatestEventTimestamp(value),
+    lastMessageAt: latestEvent.timestamp,
     lastMessageDirection: null,
+    lastMessageTimestampStatus: latestEvent.status,
   };
 }
 

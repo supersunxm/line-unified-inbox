@@ -1,7 +1,7 @@
 import { Inject, Injectable } from "@nestjs/common";
-import { LineChatSessionStatus } from "@prisma/client";
 import { PrismaService } from "../prisma.service";
 import { LINE_CHAT_HISTORICAL_PILOT_STORE_CODES } from "./line-chat-historical-backfill";
+import { LineChatMirrorService, type MirrorStoreTargetInputs } from "./line-chat-mirror.service";
 import { LineChatProfileOperationCoordinator } from "./line-chat-profile-operation-coordinator.service";
 import { LineChatSessionService } from "./line-chat-session.service";
 import type { LineChatDiscoveryResult } from "./line-chat.types";
@@ -13,10 +13,15 @@ import {
   type SeptemberChatInventoryReport,
 } from "./line-chat-september-inventory";
 
+const INVENTORY_MAX_PAGES_PER_PROFILE_LEASE = 12;
+const INVENTORY_MAX_CHATS_PER_PROFILE_LEASE = 600;
+const INVENTORY_MAX_DISCOVERY_DURATION_MS = 15_000;
+
 export interface SeptemberChatInventoryTarget {
   storeCode: string;
   lineOfficialAccountId: string;
   botId: string;
+  targetResolutionSource?: "EXISTING_OA" | "MANAGER_ACCOUNT_REDIRECT";
   session: {
     id: string;
     sessionKey?: string | null;
@@ -32,6 +37,8 @@ export class LineChatSeptemberInventoryService {
     @Inject(LineChatSessionService) private readonly sessionService: LineChatSessionService,
     @Inject(LineChatProfileOperationCoordinator)
     private readonly coordinator: LineChatProfileOperationCoordinator,
+    @Inject(LineChatMirrorService)
+    private readonly mirrorService: LineChatMirrorService,
   ) {}
 
   /** Builds sanitized reports for the three approved A1 pilot stores, serially. */
@@ -49,49 +56,71 @@ export class LineChatSeptemberInventoryService {
           storeCode,
           matchingStates.length === 0 ? "MIRROR_TARGET_NOT_FOUND" : "MIRROR_TARGET_AMBIGUOUS",
         ));
+        await this.yieldToProfileWaiters();
         continue;
       }
       const [state] = matchingStates;
       if (!state.enabled) {
         reports.push(emptySeptemberChatInventoryReport(storeCode, "MIRROR_TARGET_DISABLED"));
+        await this.yieldToProfileWaiters();
         continue;
       }
 
-      const account = await this.prisma.lineOfficialAccount.findUnique({
-        where: { id: state.lineOfficialAccountId },
-        select: {
-          chatBotId: true,
-          lineChatSession: {
-            select: {
-              id: true,
-              sessionKey: true,
-              profilePath: true,
-              profileStorageKey: true,
-              status: true,
-            },
-          },
-        },
-      });
-      const botId = account?.chatBotId?.trim() ?? "";
-      if (!account || !botId) {
-        reports.push(emptySeptemberChatInventoryReport(storeCode, "MANAGER_BOT_ID_UNAVAILABLE"));
+      let storeTarget: MirrorStoreTargetInputs;
+      try {
+        storeTarget = await this.mirrorService.getStoreMirrorTargetInputs(storeCode);
+      } catch (error) {
+        const errorCode = error instanceof Error ? error.message : "";
+        const reason = errorCode === "MIRROR_STORE_NOT_FOUND"
+          ? "MIRROR_TARGET_NOT_FOUND"
+          : errorCode.startsWith("MIRROR_OA_IDENTITY_")
+            ? "MIRROR_TARGET_AMBIGUOUS"
+            : "MIRROR_TARGET_RESOLUTION_FAILED";
+        reports.push(emptySeptemberChatInventoryReport(storeCode, reason));
+        await this.yieldToProfileWaiters();
         continue;
       }
-      const session = account.lineChatSession;
-      if (!session || session.status !== LineChatSessionStatus.ACTIVE) {
-        reports.push(emptySeptemberChatInventoryReport(storeCode, "MANAGER_SESSION_UNAVAILABLE"));
+      if (state.lineOfficialAccountId !== storeTarget.oa.id) {
+        reports.push(emptySeptemberChatInventoryReport(storeCode, "MIRROR_OA_MAPPING_MISMATCH"));
+        await this.yieldToProfileWaiters();
+        continue;
+      }
+
+      const targetResolution = await this.mirrorService.resolveMirrorTarget({
+        lineOfficialAccountId: storeTarget.oa.id,
+        chatBotId: storeTarget.oa.chatBotId,
+        basicId: storeTarget.oa.basicId,
+        lineChatWorkspaceUrl: storeTarget.oa.lineChatWorkspaceUrl,
+        storeManagerUrl: storeTarget.storeManagerUrl,
+        lineChatSession: storeTarget.oa.lineChatSession,
+      }).catch(() => null);
+      if (!targetResolution?.ok) {
+        reports.push(emptySeptemberChatInventoryReport(
+          storeCode,
+          targetResolution && !targetResolution.ok
+            ? targetResolution.errorCode
+            : "MIRROR_TARGET_RESOLUTION_FAILED",
+        ));
+        await this.yieldToProfileWaiters();
         continue;
       }
 
       reports.push(await this.discoverStore({
         storeCode,
-        lineOfficialAccountId: state.lineOfficialAccountId,
-        botId,
-        session,
+        lineOfficialAccountId: storeTarget.oa.id,
+        botId: targetResolution.botId,
+        session: targetResolution.session,
+        targetResolutionSource: targetResolution.source,
       }));
+      await this.yieldToProfileWaiters();
     }
 
     return reports;
+  }
+
+  /** Lets already-scheduled profile work enter between bounded inventory leases. */
+  private async yieldToProfileWaiters(): Promise<void> {
+    await new Promise<void>((resolve) => setImmediate(resolve));
   }
 
   /**
@@ -121,6 +150,9 @@ export class LineChatSeptemberInventoryService {
             headless: true,
             operationContext,
             pageObserver: order.observePage,
+            maxPages: INVENTORY_MAX_PAGES_PER_PROFILE_LEASE,
+            maxChats: INVENTORY_MAX_CHATS_PER_PROFILE_LEASE,
+            maxDurationMs: INVENTORY_MAX_DISCOVERY_DURATION_MS,
           });
         } catch {
           return emptySeptemberChatInventoryReport(target.storeCode, "CHAT_LIST_DISCOVERY_FAILED");
@@ -142,12 +174,16 @@ export class LineChatSeptemberInventoryService {
             },
           });
 
-        return buildSeptemberChatInventoryReport({
+        const report = buildSeptemberChatInventoryReport({
           storeCode: target.storeCode,
           discovery,
           order: order.snapshot(),
           historicalStates,
         });
+        return {
+          ...report,
+          targetResolutionSource: target.targetResolutionSource ?? null,
+        };
       },
       { waitForLock: false },
     );

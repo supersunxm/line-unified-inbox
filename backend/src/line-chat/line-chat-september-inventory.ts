@@ -43,14 +43,22 @@ export interface SeptemberChatCoverageSummary {
 
 export interface SeptemberChatInventoryReport extends SeptemberChatCoverageSummary {
   storeCode: string;
+  targetResolutionSource: "EXISTING_OA" | "MANAGER_ACCOUNT_REDIRECT" | null;
   conversationsObserved: number;
   /** Exact total only when inventoryComplete; otherwise null. */
   septemberChats: number | null;
   septemberChatsObserved: number;
   beforeSeptemberObserved: number;
   afterSeptemberObserved: number;
+  chatsWithValidTimestamp: number;
+  chatsWithoutLatestEvent: number;
+  chatsWithMissingTimestamp: number;
+  chatsWithInvalidTimestamp: number;
   unknownDateChats: number;
   pagesFetched: number;
+  pageLimitReached: boolean;
+  chatLimitReached: boolean;
+  timeLimitReached: boolean;
   newestChatListTimestamp: string | null;
   oldestChatListTimestamp: string | null;
   reachedBeforeSeptember: boolean;
@@ -69,6 +77,20 @@ export interface SeptemberChatListOrderSnapshot {
   orderingAnomaly: boolean;
   duplicateConflict: boolean;
   safeEarlyStopReached: boolean;
+}
+
+type ChatTimestampStatus = NonNullable<LineChatDiscoveredChat["lastMessageTimestampStatus"]>;
+
+function chatTimestampStatus(chat: LineChatDiscoveredChat): ChatTimestampStatus {
+  const explicitStatus = chat.lastMessageTimestampStatus;
+  const validTimestamp = timestampMilliseconds(chat.lastMessageAt) !== null;
+  if (explicitStatus === "VALID") return validTimestamp ? "VALID" : "TIMESTAMP_INVALID";
+  if (explicitStatus) {
+    return chat.lastMessageAt === null ? explicitStatus : "TIMESTAMP_INVALID";
+  }
+  if (validTimestamp) return "VALID";
+  // Legacy hand-built callers with a null timestamp cannot prove why it is null.
+  return "TIMESTAMP_INVALID";
 }
 
 function timestampMilliseconds(value: unknown): number | null {
@@ -103,7 +125,8 @@ export function isSeptemberHistoricalChatCandidate(lastMessageAt: unknown): bool
  */
 export class SeptemberChatListOrderTracker {
   private previousTimestampMs: number | null = null;
-  private readonly chatsById = new Map<string, Pick<LineChatDiscoveredChat, "displayName" | "lastMessageAt">>();
+  private readonly chatsById = new Map<string, Pick<LineChatDiscoveredChat,
+    "displayName" | "lastMessageAt" | "lastMessageTimestampStatus">>();
   private state: SeptemberChatListOrderSnapshot = {
     pagesObserved: 0,
     invalidUserRecords: 0,
@@ -124,18 +147,25 @@ export class SeptemberChatListOrderTracker {
         this.chatsById.set(chat.chatUserId, {
           displayName: chat.displayName,
           lastMessageAt: chat.lastMessageAt,
+          lastMessageTimestampStatus: chat.lastMessageTimestampStatus,
         });
       } else if (
         previousChat.displayName !== chat.displayName
         || previousChat.lastMessageAt !== chat.lastMessageAt
+        || previousChat.lastMessageTimestampStatus !== chat.lastMessageTimestampStatus
       ) {
         this.state.duplicateConflict = true;
       }
 
+      const status = chatTimestampStatus(chat);
+      if (status === "NO_LATEST_EVENT") continue;
+      if (status !== "VALID") {
+        this.state.unknownTimestampObserved = true;
+        continue;
+      }
       const milliseconds = timestampMilliseconds(chat.lastMessageAt);
       if (milliseconds === null) {
         this.state.unknownTimestampObserved = true;
-        this.previousTimestampMs = null;
         continue;
       }
 
@@ -233,6 +263,9 @@ export function buildSeptemberChatInventoryReport(input: {
     | "nextTerminationObserved"
     | "enumerationError"
     | "stoppedEarlyByObserver"
+    | "pageLimitReached"
+    | "chatLimitReached"
+    | "timeLimitReached"
   >;
   order: SeptemberChatListOrderSnapshot;
   historicalStates: readonly SeptemberChatHistoricalState[];
@@ -240,6 +273,7 @@ export function buildSeptemberChatInventoryReport(input: {
   const uniqueChats = [...new Map(input.discovery.chats.map((chat) => [chat.chatUserId, chat])).values()];
   const classifications = uniqueChats.map((chat) => ({
     chat,
+    status: chatTimestampStatus(chat),
     classification: classifySeptemberChat(chat.lastMessageAt),
   }));
   const septemberChats = classifications
@@ -251,18 +285,24 @@ export function buildSeptemberChatInventoryReport(input: {
   const afterSeptemberObserved = classifications
     .filter((entry) => entry.classification === SeptemberChatClassification.AFTER_SEPTEMBER)
     .length;
-  const unknownDateChats = classifications
-    .filter((entry) => entry.classification === SeptemberChatClassification.UNKNOWN)
-    .length;
+  const chatsWithoutLatestEvent = classifications.filter((entry) => entry.status === "NO_LATEST_EVENT").length;
+  const chatsWithMissingTimestamp = classifications.filter((entry) => entry.status === "TIMESTAMP_MISSING").length;
+  const chatsWithInvalidTimestamp = classifications.filter((entry) => entry.status === "TIMESTAMP_INVALID").length;
+  const chatsWithValidTimestamp = classifications.filter((entry) => entry.status === "VALID").length;
+  const unknownDateChats = chatsWithMissingTimestamp + chatsWithInvalidTimestamp;
   const timestamps = classifications
+    .filter((entry) => entry.status === "VALID")
     .map((entry) => timestampMilliseconds(entry.chat.lastMessageAt))
     .filter((timestamp): timestamp is number => timestamp !== null);
   const orderingValidated = input.order.pagesObserved > 0
     && unknownDateChats === 0
+    && !input.order.unknownTimestampObserved
     && input.discovery.invalidUserRecords === 0
     && !input.order.orderingAnomaly;
   const cursorExhausted = input.discovery.nextTerminationObserved;
-  const noUnknownMembership = unknownDateChats === 0 && input.order.invalidUserRecords === 0;
+  const noUnknownMembership = unknownDateChats === 0
+    && !input.order.unknownTimestampObserved
+    && input.order.invalidUserRecords === 0;
   const noConflicts = input.discovery.conflictingDuplicates === 0 && !input.order.duplicateConflict;
   const completeBySafeEarlyStop = input.discovery.stoppedEarlyByObserver === true
     && input.order.safeEarlyStopReached
@@ -278,15 +318,24 @@ export function buildSeptemberChatInventoryReport(input: {
 
   let inventoryIncompleteReason: string | null = null;
   if (!inventoryComplete) {
-    const boundReached = /(?:page|discovered-chat) limit reached/iu.test(input.discovery.enumerationError ?? "");
+    const boundReached = input.discovery.pageLimitReached === true
+      || input.discovery.chatLimitReached === true
+      || input.discovery.timeLimitReached === true
+      || /(?:page|discovered-chat|time) limit reached/iu.test(input.discovery.enumerationError ?? "");
     if (unknownDateChats > 0 || input.order.unknownTimestampObserved) {
-      inventoryIncompleteReason = "UNKNOWN_CHAT_LIST_TIMESTAMP";
+      inventoryIncompleteReason = chatsWithMissingTimestamp > 0
+        ? "LATEST_EVENT_TIMESTAMP_MISSING"
+        : "LATEST_EVENT_TIMESTAMP_INVALID";
     } else if (!noConflicts || input.discovery.invalidUserRecords > 0 || input.order.invalidUserRecords > 0) {
       inventoryIncompleteReason = "INVALID_OR_CONFLICTING_CHAT_LIST_RECORD";
     } else if (boundReached && beforeSeptemberObserved === 0) {
-      inventoryIncompleteReason = "DISCOVERY_BOUND_REACHED_BEFORE_SEPTEMBER_BOUNDARY";
+      inventoryIncompleteReason = input.discovery.timeLimitReached
+        ? "DISCOVERY_TIME_LIMIT_REACHED_BEFORE_SEPTEMBER_BOUNDARY"
+        : "DISCOVERY_BOUND_REACHED_BEFORE_SEPTEMBER_BOUNDARY";
     } else if (boundReached && input.order.orderingAnomaly) {
       inventoryIncompleteReason = "ORDERING_ANOMALY_AND_DISCOVERY_BOUND_REACHED";
+    } else if (input.discovery.timeLimitReached) {
+      inventoryIncompleteReason = "DISCOVERY_TIME_LIMIT_REACHED";
     } else if (input.order.orderingAnomaly && !cursorExhausted) {
       inventoryIncompleteReason = "ORDERING_ANOMALY_WITHOUT_CURSOR_EXHAUSTION";
     } else {
@@ -297,13 +346,21 @@ export function buildSeptemberChatInventoryReport(input: {
   const coverage = summarizeSeptemberChatCoverage(septemberChats, input.historicalStates);
   return {
     storeCode: input.storeCode,
+    targetResolutionSource: null,
     conversationsObserved: uniqueChats.length,
     septemberChats: inventoryComplete ? septemberChats.length : null,
     septemberChatsObserved: septemberChats.length,
     beforeSeptemberObserved,
     afterSeptemberObserved,
+    chatsWithValidTimestamp,
+    chatsWithoutLatestEvent,
+    chatsWithMissingTimestamp,
+    chatsWithInvalidTimestamp,
     unknownDateChats,
     pagesFetched: input.discovery.pagesFetched,
+    pageLimitReached: input.discovery.pageLimitReached ?? false,
+    chatLimitReached: input.discovery.chatLimitReached ?? false,
+    timeLimitReached: input.discovery.timeLimitReached ?? false,
     newestChatListTimestamp: timestamps.length > 0 ? new Date(Math.max(...timestamps)).toISOString() : null,
     oldestChatListTimestamp: timestamps.length > 0 ? new Date(Math.min(...timestamps)).toISOString() : null,
     reachedBeforeSeptember: beforeSeptemberObserved > 0,
@@ -324,13 +381,21 @@ export function emptySeptemberChatInventoryReport(
 ): SeptemberChatInventoryReport {
   return {
     storeCode,
+    targetResolutionSource: null,
     conversationsObserved: 0,
     septemberChats: null,
     septemberChatsObserved: 0,
     beforeSeptemberObserved: 0,
     afterSeptemberObserved: 0,
+    chatsWithValidTimestamp: 0,
+    chatsWithoutLatestEvent: 0,
+    chatsWithMissingTimestamp: 0,
+    chatsWithInvalidTimestamp: 0,
     unknownDateChats: 0,
     pagesFetched: 0,
+    pageLimitReached: false,
+    chatLimitReached: false,
+    timeLimitReached: false,
     newestChatListTimestamp: null,
     oldestChatListTimestamp: null,
     reachedBeforeSeptember: false,
@@ -354,8 +419,16 @@ export function emptySeptemberChatInventoryReport(
 export function formatSeptemberChatInventoryReport(report: SeptemberChatInventoryReport): string {
   return [
     `Store: ${report.storeCode}`,
+    `Target resolution source: ${report.targetResolutionSource ?? "unresolved"}`,
     `September inventory complete: ${report.inventoryComplete ? "YES" : "NO"}`,
     `septemberChats: ${report.septemberChats ?? `unknown (at least ${report.septemberChatsObserved} observed)`}`,
+    `chatsWithValidTimestamp: ${report.chatsWithValidTimestamp}`,
+    `chatsWithoutLatestEvent: ${report.chatsWithoutLatestEvent}`,
+    `chatsWithMissingTimestamp: ${report.chatsWithMissingTimestamp}`,
+    `chatsWithInvalidTimestamp: ${report.chatsWithInvalidTimestamp}`,
+    `pageLimitReached: ${report.pageLimitReached}`,
+    `chatLimitReached: ${report.chatLimitReached}`,
+    `timeLimitReached: ${report.timeLimitReached}`,
     `historicalChecked: ${report.historicalChecked}`,
     `fastPathComplete: ${report.fastPathComplete}`,
     `needsBackwardPagination: ${report.needsBackwardPagination}`,

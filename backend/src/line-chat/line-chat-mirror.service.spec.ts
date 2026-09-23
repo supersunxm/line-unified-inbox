@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { LineChatMirrorDirection } from "@prisma/client";
+import { LineChatMirrorDirection, LineChatSessionStatus } from "@prisma/client";
+import { LineChatMirrorService } from "./line-chat-mirror.service";
+import type { PrismaService } from "../prisma.service";
+import type { LineChatSessionService } from "./line-chat-session.service";
+import type { LineChatProfileOperationCoordinator } from "./line-chat-profile-operation-coordinator.service";
 import {
   configuredLineChatMirrorStoreCodes,
   isLineChatMirrorEnabled,
@@ -151,6 +155,157 @@ test("Project B mirror accepts only canonical LINE chat bot redirects", () => {
     ),
     null,
   );
+});
+
+test("Live Mirror canonical store target inputs use the read-only OA selector", async () => {
+  let storeReads = 0;
+  let writes = 0;
+  const prisma = {
+    store: {
+      findFirst: async () => {
+        storeReads += 1;
+        return {
+          id: "store-db-id",
+          code: "29113",
+          storeMaster: {
+            externalStoreId: "29113",
+            lineManagerUrl: "https://manager.line.biz/account/@pinklao",
+            accountName: "OPPO Central Pinklao",
+            normalizedAccountName: "oppo central pinklao",
+            lineId: "@pinklao",
+          },
+          lineOfficialAccounts: [{
+            id: "oa-pinklao",
+            name: "OPPO Central Pinklao",
+            basicId: "@pinklao",
+            lineChatWorkspaceUrl: null,
+            chatBotId: null,
+            lineChatSession: null,
+          }],
+        };
+      },
+    },
+    lineChatMirrorStoreState: {
+      upsert: async () => { writes += 1; },
+    },
+  } as unknown as PrismaService;
+  const service = new LineChatMirrorService(
+    prisma,
+    {} as LineChatSessionService,
+    {} as LineChatProfileOperationCoordinator,
+  );
+
+  const target = await service.getStoreMirrorTargetInputs("29113");
+  assert.equal(storeReads, 1);
+  assert.equal(writes, 0);
+  assert.equal(target.oa.id, "oa-pinklao");
+  assert.equal(target.oa.chatBotId, null);
+  assert.equal(target.oa.lineChatSession, null);
+  assert.equal(target.storeManagerUrl, "https://manager.line.biz/account/@pinklao");
+  assert.equal(target.selectionSource, "MASTER_LINE_ID");
+});
+
+test("canonical Mirror target resolver preserves the direct OA bot and active-session path", async () => {
+  let profileResolutionCalls = 0;
+  const session = {
+    id: "session-direct",
+    sessionKey: "direct-profile",
+    status: LineChatSessionStatus.ACTIVE,
+    profilePath: "/unused/profile",
+    profileStorageKey: null,
+  };
+  const service = new LineChatMirrorService(
+    {} as PrismaService,
+    {
+      resolveProfilePath: () => {
+        profileResolutionCalls += 1;
+        throw new Error("Direct target must not inspect the profile.");
+      },
+    } as unknown as LineChatSessionService,
+    {} as LineChatProfileOperationCoordinator,
+  );
+
+  const result = await service.resolveMirrorTarget({
+    lineOfficialAccountId: "oa-direct",
+    chatBotId: "Uexisting-bot",
+    basicId: "@direct",
+    lineChatWorkspaceUrl: null,
+    storeManagerUrl: null,
+    lineChatSession: session,
+  });
+  assert.equal(result.ok, true);
+  if (result.ok) {
+    assert.equal(result.botId, "Uexisting-bot");
+    assert.equal(result.source, "EXISTING_OA");
+    assert.equal(result.session.id, "session-direct");
+  }
+  assert.equal(profileResolutionCalls, 0);
+});
+
+test("canonical Mirror target resolver uses Manager redirect fallback when OA bot and session are absent", async () => {
+  const botId = `U${"a".repeat(32)}`;
+  const session = {
+    id: "session-fallback",
+    sessionKey: "fallback-profile",
+    status: LineChatSessionStatus.ACTIVE,
+    profilePath: null,
+    profileStorageKey: null,
+  };
+  let recentDiscoveryCalls = 0;
+  let closedContexts = 0;
+  const page = {
+    goto: async () => {},
+    waitForTimeout: async () => {},
+    url: () => `https://chat.line.biz/${botId}`,
+  };
+  const context = {
+    pages: () => [page],
+    newPage: async () => page,
+    close: async () => { closedContexts += 1; },
+  } as unknown as import("playwright").BrowserContext;
+  const prisma = {
+    lineChatSession: { findMany: async () => [session] },
+  } as unknown as PrismaService;
+  const sessionService = {
+    resolveProfilePath: () => "/tmp",
+    launchManagedPersistentContext: async () => context,
+    probeApiAuthentication: async () => ({ authenticated: "YES" as const }),
+    closeManagedPersistentContext: async () => { closedContexts += 1; },
+    discoverRecentChats: async () => {
+      recentDiscoveryCalls += 1;
+      return { status: "READY" as const, chats: [], pagesFetched: 1, totalRawRecords: 0 };
+    },
+  } as unknown as LineChatSessionService;
+  const coordinator = {
+    withProfileOperation: async (
+      _input: unknown,
+      callback: (context: { assertOwnership: () => void }) => Promise<unknown>,
+    ) => ({
+      acquired: true as const,
+      value: await callback({ assertOwnership() {} }),
+      sessionId: session.id,
+      operationKind: "MIRROR_SYNC" as const,
+      requestId: "request-1",
+    }),
+  } as unknown as LineChatProfileOperationCoordinator;
+  const service = new LineChatMirrorService(prisma, sessionService, coordinator);
+
+  const result = await service.resolveMirrorTarget({
+    lineOfficialAccountId: "oa-fallback",
+    chatBotId: null,
+    basicId: "@fallback",
+    lineChatWorkspaceUrl: null,
+    storeManagerUrl: null,
+    lineChatSession: null,
+  });
+  assert.equal(result.ok, true);
+  if (result.ok) {
+    assert.equal(result.botId, botId);
+    assert.equal(result.source, "MANAGER_ACCOUNT_REDIRECT");
+    assert.equal(result.session.id, session.id);
+  }
+  assert.equal(recentDiscoveryCalls, 1);
+  assert.equal(closedContexts, 1);
 });
 
 

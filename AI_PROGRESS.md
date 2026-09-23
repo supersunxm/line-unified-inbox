@@ -5557,3 +5557,55 @@ Waiver scope: focused PIN/auth tests pass **26/26**, focused Flutter PIN tests p
 - **GitHub/CI**: commit `3ab87bbb16fd0553263d0f53199e9e411731160b` is on `feature/a1-a2-september-chat-inventory`; PR #352 targets `main` at base `fef893bec4a78286f6c0a13cb3a24479a99999e4`. Application CI run 692 passed all Frontend, Android, Backend, and CI Gate jobs. PR remains open and unmerged.
 - **Next gate**: user/reviewer decision on PR #352. This task stops before merge. Do not deploy, enable the flag, run a production pilot, or implement backward pagination in this milestone.
 - **Progress**: A1 Historical Backfill Engine **80%**, A2 Historical Data Validation **15%**, A3 24h Reply KPI **15%**, A4 Nickname / Rename Status **10%**, A5 All-Store Eligibility **5%**, A6 All-Store Rollout **0%**, A7 Production Stability **35%**, Overall Big Project A **21%**. No production validation is claimed.
+# Current task: Big Project A — A2 Production Findings Fix (2026-09-23)
+
+## Production Run #1 evidence (user supplied; no new production inspection here)
+
+| Store | Run #1 result |
+|---|---|
+| 29113 — Central Pinklao | Inventory stopped at `MANAGER_BOT_ID_UNAVAILABLE`, with zero conversations observed. This was a lookup limitation: inventory required the OA's stored `chatBotId`, while Live Mirror can resolve an absent value through its Manager-account redirect path. |
+| 28375 — RBS Chonburi | 5,000 conversations / 200 pages; 672 September-observed; 2,350 before September; 1,978 with an undifferentiated unknown date; newest `2026-09-23T13:37:52.405Z`; oldest `2026-03-25T09:16:56.069Z`; ordering anomaly; reached before September; page bound reached; cursor not exhausted. Exact total not proven. |
+| 25610 — Central World | 1,272 conversations / 51 pages; 268 September-observed; 608 before September; 396 with an undifferentiated unknown date; newest `2026-09-23T11:14:31.670Z`; oldest `2026-03-26T07:43:09.145Z`; ordering anomaly; reached before September; cursor exhausted. Exact total not proven because unknown dates could not be classified. |
+
+Historical checkpoint observations: 28375 had 4 checked, 0 fast-path complete, 4 backward-required; 25610 had 3 checked, 1 fast-path complete, 2 backward-required.
+
+Run #1 held `MANUAL_DIAGNOSTIC` profile leases during long scans and temporarily delayed Live Mirror work. After the diagnostic finished, Live Mirror recovered across all 16 configured stores, mirror failures were 0, reconciliation was healthy, historical events were 0, and DB/schema errors were 0. Historical backfill was never enabled. The startup inventory trigger was returned to false without another deploy.
+
+## Local A2 fix implemented
+
+- Live Mirror and September Inventory now share `getStoreMirrorTargetInputs()` for canonical store/OA selection and `resolveMirrorTarget()` for direct OA or Manager redirect/session resolution. Inventory checks that its enabled state row still points to that selected OA, and fails closed for mismatch, ambiguity, or unavailable targets. The resolver path is read-only apart from its existing in-memory target cache.
+- Parsed USER chat rows now carry safe `lastMessageTimestampStatus`: `VALID`, `NO_LATEST_EVENT`, `TIMESTAMP_MISSING`, or `TIMESTAMP_INVALID`. No other timestamp fallback fields were introduced.
+- `NO_LATEST_EVENT` is separately reported and excluded from the activity-based September denominator; it does not block exact activity inventory. A latest event with a missing/invalid timestamp still blocks exact totals and rates. Cursor exhaustion can prove full membership despite ordering anomalies; early stop still requires valid, ordered, conflict-free activity dates. Partial totals remain lower bounds only.
+- Inventory discovery uses per-profile limits of 12 pages, 600 chats, and a 15-second discovery budget; those limits are applied to navigation, first-page waits, response parsing, and subsequent requests. The existing `MANUAL_DIAGNOSTIC` lease remains non-blocking (`waitForLock:false`). Each lease is released between store windows, with an event-loop yield so queued profile work can run before the next window. No cursor is persisted or logged, and no cross-context resume semantics were added.
+- Startup reports include only store-level aggregates, target-resolution source, timestamp-reason counts, and limit flags. Startup exceptions log only the error type. Resolver diagnostics no longer include session keys.
+- No migration, public endpoint, production inventory, Railway change, historical write, or production deployment was performed.
+
+## Verification
+
+- A2 parser/inventory/target/session/trigger/Mirror focused tests: **68/68 passed**.
+- Profile coordinator and selected health/scheduler/session-health regressions: **39/39 passed**.
+- Touched backend ESLint: passed.
+- Nest backend build/typecheck: passed.
+- Prisma validate: passed (existing Prisma package.json configuration deprecation warning only).
+- Prisma schema diff from base: **empty migration**; no schema or migration files changed.
+- `git diff --check`: passed before documentation updates.
+- Two additional existing health test suites are inconsistent with the current health implementation: `line-chat-health-reconciliation.service.spec.ts` has two tests that omit the `operationalSession` mock now required by the service; `line-chat-health-baseline.spec.ts` expects successful totals to reset to zero while the implementation explicitly preserves cumulative success. Neither suite or implementation was changed because both are outside A2 scope.
+
+## Big Project A progress
+
+- A1 — Historical backfill: **80%**
+- A2 — September inventory: **30%** (local findings fix complete; production Run #2 and exact store totals remain pending)
+- A3: **15%**
+- A4: **10%**
+- A5: **5%**
+- A6: **0%**
+- A7: **35%**
+- Overall: **23%**
+
+## Gate for Production Inventory Run #2
+
+1. Review and merge/deploy this PR only under a separate user authorization; confirm the resulting worker deployment is healthy and Live Mirror/reconciliation remain healthy across the 16-store fleet.
+2. Keep `LINE_CHAT_HISTORICAL_BACKFILL_ENABLED` false. Separately authorize a one-shot read-only September inventory run for the existing three pilot stores, using the startup trigger only for that run and restoring it to false afterward.
+3. Use the bounded 12-page / 600-chat / 15-second profile window. No historical messages/checkpoints or customer records may be written. Exact totals remain unproven for any store that has missing/invalid event timestamps, unresolved conflicts, or a reached bound before a safe boundary/exhaustion.
+
+Current state: branch implementation and checks are complete. PR/CI review is the next code gate. Production and merge/deploy remain unchanged and unauthorized in this task.
