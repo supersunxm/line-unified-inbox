@@ -1,7 +1,9 @@
+import { createHash } from "node:crypto";
 import { LineChatMirrorDirection } from "@prisma/client";
 
 export const LINE_CHAT_HISTORICAL_LOWER_BOUND_ISO = "2026-09-01T00:00:00+07:00";
 export const LINE_CHAT_HISTORICAL_PILOT_STORE_CODES = ["29113", "28375", "25610"] as const;
+const EVENT_ONLY_TIMELINE_TYPES = new Set(["chatread", "follow", "unfollow"]);
 
 export const HistoricalBackfillStatus = {
   FETCHING_INITIAL_PAGE: "FETCHING_INITIAL_PAGE",
@@ -45,13 +47,83 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function parseManagerTimestamp(value: unknown): Date | null {
+function parseEpochMilliseconds(value: unknown): number | null {
   if (typeof value !== "number" && typeof value !== "string") return null;
   if (typeof value === "string" && value.trim().length === 0) return null;
   const timestamp = Number(value);
   if (!Number.isFinite(timestamp) || timestamp <= 0) return null;
   const date = new Date(timestamp);
-  return Number.isFinite(date.getTime()) ? date : null;
+  return Number.isFinite(date.getTime()) ? timestamp : null;
+}
+
+function parseManagerTimestamp(value: unknown): Date | null {
+  const timestamp = parseEpochMilliseconds(value);
+  return timestamp === null ? null : new Date(timestamp);
+}
+
+function parseStableNonnegativeNumber(value: unknown): number | null {
+  if (typeof value !== "number" && typeof value !== "string") return null;
+  if (typeof value === "string" && value.trim().length === 0) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+}
+
+function managerIdValue(value: unknown): string {
+  if (typeof value === "string") return value.trim();
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  return "";
+}
+
+function stableScalarString(value: unknown): string | null {
+  if (typeof value === "string" && value.trim().length > 0) return value.trim();
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  return null;
+}
+
+function deriveHistoricalManagerEventIdentity(
+  rawEvent: unknown,
+): string | null {
+  if (!isRecord(rawEvent)) return null;
+  const rawMessage = isRecord(rawEvent.message) ? rawEvent.message : {};
+  const nestedMessageId = managerIdValue(rawMessage.id);
+  if (nestedMessageId) return nestedMessageId;
+
+  const topLevelEventId = managerIdValue(rawEvent.id);
+  if (topLevelEventId) return topLevelEventId;
+
+  const eventType = typeof rawEvent.type === "string" ? rawEvent.type.trim().toLowerCase() : "";
+  if (!EVENT_ONLY_TIMELINE_TYPES.has(eventType)) return null;
+
+  const timestamp = parseEpochMilliseconds(rawEvent.timestamp);
+  const source = isRecord(rawEvent.source) ? rawEvent.source : {};
+  const chatId = stableScalarString(source.chatId);
+  const userId = stableScalarString(source.userId);
+  if (timestamp === null || !chatId || !userId) return null;
+
+  let watermark: number | null = null;
+  if (eventType === "chatread") {
+    const read = isRecord(rawEvent.read) ? rawEvent.read : {};
+    watermark = parseStableNonnegativeNumber(read.watermark);
+    if (watermark === null) return null;
+  }
+
+  const bizId = stableScalarString(rawEvent.bizId);
+  // Hash a fixed, ordered list of stable scalar fields, never the raw event object.
+  const stableIdentity = JSON.stringify([
+    "line-manager-event-v1",
+    eventType,
+    timestamp,
+    chatId,
+    userId,
+    watermark,
+    bizId,
+  ]);
+  const stableHash = createHash("sha256").update(stableIdentity).digest("hex");
+  return `event:${eventType}:${stableHash}`;
+}
+
+export function deriveHistoricalManagerEventId(rawEvent: unknown): string | null {
+  return deriveHistoricalManagerEventIdentity(rawEvent);
 }
 
 export function lineChatHistoricalLowerBound(): Date {
@@ -73,17 +145,7 @@ export function parseManagerHistoryPage(
       continue;
     }
     const rawMessage = isRecord(rawEvent.message) ? rawEvent.message : {};
-    const nestedMessageId = typeof rawMessage.id === "string"
-      ? rawMessage.id.trim()
-      : typeof rawMessage.id === "number" && Number.isFinite(rawMessage.id)
-        ? String(rawMessage.id)
-        : "";
-    const topLevelEventId = typeof rawEvent.id === "string"
-      ? rawEvent.id.trim()
-      : typeof rawEvent.id === "number" && Number.isFinite(rawEvent.id)
-        ? String(rawEvent.id)
-        : "";
-    const managerMessageId = nestedMessageId || topLevelEventId;
+    const managerMessageId = deriveHistoricalManagerEventIdentity(rawEvent);
     const sentAt = parseManagerTimestamp(rawEvent.timestamp);
     if (!managerMessageId || !sentAt) {
       invalidEventCount += 1;
@@ -93,7 +155,8 @@ export function parseManagerHistoryPage(
     const eventType = typeof rawEvent.type === "string" && rawEvent.type.trim()
       ? rawEvent.type.trim()
       : "unknown";
-    const messageType = typeof rawMessage.type === "string" && rawMessage.type.trim()
+    const eventOnly = EVENT_ONLY_TIMELINE_TYPES.has(eventType.toLowerCase());
+    const messageType = !eventOnly && typeof rawMessage.type === "string" && rawMessage.type.trim()
       ? rawMessage.type.trim()
       : null;
     const bizId = typeof rawEvent.bizId === "string" ? rawEvent.bizId : null;
@@ -107,14 +170,14 @@ export function parseManagerHistoryPage(
       eventType,
       direction: managerDirectionForHistoricalEvent(eventType),
       messageType,
-      text: messageType?.toLowerCase() === "text"
+      text: !eventOnly && messageType?.toLowerCase() === "text"
         && typeof rawMessage.text === "string"
         ? rawMessage.text
         : null,
-      fileName,
+      fileName: eventOnly ? null : fileName,
       sentAt,
       bizId,
-      ownerName: bizId && bizId !== "__AUTO_RESPONSE"
+      ownerName: !eventOnly && bizId && bizId !== "__AUTO_RESPONSE"
         ? ownerByBizId.get(bizId) ?? null
         : null,
     });
