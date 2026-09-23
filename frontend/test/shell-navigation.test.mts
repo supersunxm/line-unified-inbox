@@ -152,7 +152,10 @@ test("Store Chats owns pane reset in its page-level overflow menu", () => {
   assert.match(pageCode, /<StoreChatsOverflowMenu language=\{language\} resetPaneSizes=\{resetChatPanes\}/);
   assert.match(storeChatsOverflowCode, /Reset pane sizes/);
   assert.match(storeChatsOverflowCode, /resetPaneSizes\(\)/);
-  assert.match(storeChatsOverflowCode, /event\.key === "Escape"/);
+  assert.match(storeChatsOverflowCode, /import Menu from "@mui\/material\/Menu"/);
+  assert.match(storeChatsOverflowCode, /onClose=\{closeMenu\}/);
+  assert.match(storeChatsOverflowCode, /aria-haspopup="menu"/);
+  assert.match(storeChatsOverflowCode, /aria-expanded=\{isOpen\}/);
 });
 
 test("TopNavigation search wrapper and controls do not expand invisibly or intercept pointer events over navigation links", () => {
