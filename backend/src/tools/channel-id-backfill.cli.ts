@@ -1,3 +1,4 @@
+// One-off production backfill. Safe to rerun: only fills missing channelId values.
 import { PrismaClient } from "@prisma/client";
 import { CredentialEncryptionService } from "../credentials/credential-encryption.service";
 
