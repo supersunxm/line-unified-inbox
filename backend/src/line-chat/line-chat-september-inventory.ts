@@ -75,7 +75,11 @@ export interface SeptemberChatListOrderSnapshot {
   reachedBeforeSeptember: boolean;
   orderingAnomaly: boolean;
   duplicateConflict: boolean;
-  safeEarlyStopReached: boolean;
+  /**
+   * Diagnostic only. Production evidence showed the Manager chat list is not
+   * globally monotonic, so this condition must never terminate enumeration.
+   */
+  earlyStopCandidateReached: boolean;
 }
 
 function chatTimestampState(chat: Pick<LineChatDiscoveredChat, "lastMessageAt" | "lastMessageAtState">):
@@ -128,7 +132,7 @@ export class SeptemberChatListOrderTracker {
     reachedBeforeSeptember: false,
     orderingAnomaly: false,
     duplicateConflict: false,
-    safeEarlyStopReached: false,
+    earlyStopCandidateReached: false,
   };
 
   public observePage = (page: LineChatDiscoveryPageObservation): boolean => {
@@ -173,13 +177,17 @@ export class SeptemberChatListOrderTracker {
       }
     }
 
-    const safeToStop = this.state.reachedBeforeSeptember
+    const earlyStopCandidate = this.state.reachedBeforeSeptember
       && !this.state.orderingAnomaly
       && !this.state.unknownTimestampObserved
       && this.state.invalidUserRecords === 0
       && !this.state.duplicateConflict;
-    if (safeToStop) this.state.safeEarlyStopReached = true;
-    return safeToStop;
+    if (earlyStopCandidate) this.state.earlyStopCandidateReached = true;
+
+    // Do not stop on the observed timestamp boundary. The first production
+    // inventory proved that later chat-list pages can contain timestamp-order
+    // anomalies, so only cursor exhaustion can establish the exact denominator.
+    return false;
   };
 
   public snapshot(): SeptemberChatListOrderSnapshot {
@@ -299,17 +307,13 @@ export function buildSeptemberChatInventoryReport(input: {
     && input.order.malformedTimestampObserved === 0
     && input.order.invalidUserRecords === 0;
   const noConflicts = input.discovery.conflictingDuplicates === 0 && !input.order.duplicateConflict;
-  const completeBySafeEarlyStop = input.discovery.stoppedEarlyByObserver === true
-    && input.order.safeEarlyStopReached
-    && !input.order.orderingAnomaly
-    && !input.discovery.enumerationError
-    && noUnknownMembership
-    && noConflicts;
   const completeByCursorExhaustion = cursorExhausted
     && input.discovery.enumerationStatus === "COMPLETE"
     && noUnknownMembership
     && noConflicts;
-  const inventoryComplete = completeBySafeEarlyStop || completeByCursorExhaustion;
+  // Production chat-list ordering is not globally monotonic. Exact September
+  // membership therefore requires enumerating until LINE returns terminal next.
+  const inventoryComplete = completeByCursorExhaustion;
 
   let inventoryIncompleteReason: string | null = null;
   if (!inventoryComplete) {
