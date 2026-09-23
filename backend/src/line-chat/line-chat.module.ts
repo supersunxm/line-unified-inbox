@@ -17,6 +17,7 @@ import { LineChatHealthReconciliationService } from "./line-chat-health-reconcil
 import { LineChatManualMappingService } from "./line-chat-manual-mapping.service";
 import { LineChatMessageSendQueueService } from "./line-chat-message-send-queue.service";
 import { LineChatMirrorStatusService } from "./line-chat-mirror-status.service";
+import { LineChatSeptemberInventoryService } from "./line-chat-september-inventory.service";
 
 @Global()
 @Module({
@@ -38,6 +39,7 @@ import { LineChatMirrorStatusService } from "./line-chat-mirror-status.service";
     LineChatManualMappingService,
     LineChatMessageSendQueueService,
     LineChatMirrorStatusService,
+    LineChatSeptemberInventoryService,
   ],
   exports: [
     LineChatSessionService,
@@ -55,6 +57,7 @@ import { LineChatMirrorStatusService } from "./line-chat-mirror-status.service";
     LineChatManualMappingService,
     LineChatMessageSendQueueService,
     LineChatMirrorStatusService,
+    LineChatSeptemberInventoryService,
   ],
 })
 export class LineChatModule {}

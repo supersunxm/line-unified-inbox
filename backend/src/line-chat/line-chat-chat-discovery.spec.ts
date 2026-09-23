@@ -209,6 +209,64 @@ test("session discovery captures the natural v2 GET and enumerates subsequent pa
   assert.equal(mock.wasClosed(), true);
 });
 
+test("session discovery exposes parsed pages without cursors and honors a safe observer stop", async () => {
+  const secondId = `U${"2b".repeat(16)}`;
+  const thirdId = `U${"3c".repeat(16)}`;
+  const profilePath = fs.mkdtempSync(path.join(os.tmpdir(), "line-chat-observed-discovery-"));
+  const mock = mockNaturalDiscoveryContext([
+    { body: {
+      list: [{
+        chatId: VALID_USER_ID,
+        chatType: "USER",
+        latestEvent: { timestamp: "2026-09-23T10:00:00+07:00" },
+      }],
+      next: "private-opaque-cursor-1",
+    } },
+    { body: {
+      list: [{
+        chatId: secondId,
+        chatType: "USER",
+        latestEvent: { timestamp: "2026-08-31T23:59:59+07:00" },
+      }],
+      next: "private-opaque-cursor-2",
+    } },
+    { body: {
+      list: [{
+        chatId: thirdId,
+        chatType: "USER",
+        latestEvent: { timestamp: "2026-09-20T10:00:00+07:00" },
+      }],
+      next: null,
+    } },
+  ]);
+  const launcher: ContextLauncher = async () => mock.context;
+  const observed: Array<{ chatCount: number; containsNext: boolean }> = [];
+  try {
+    const service = new LineChatSessionService(launcher);
+    const result = await service.discoverChats({
+      botId: "Ubot",
+      profilePath,
+      customLauncher: launcher,
+      pageObserver: (page) => {
+        observed.push({ chatCount: page.chats.length, containsNext: "next" in page });
+        return page.chats.some((chat) => chat.lastMessageAt === "2026-08-31T16:59:59.000Z");
+      },
+    });
+    assert.deepEqual(observed, [
+      { chatCount: 1, containsNext: false },
+      { chatCount: 1, containsNext: false },
+    ]);
+    assert.equal(result.stoppedEarlyByObserver, true);
+    assert.equal(result.enumerationStatus, "PARTIAL");
+    assert.equal(result.nextTerminationObserved, false);
+    assert.equal(result.pagesFetched, 2);
+    assert.equal(mock.calls.length, 1);
+    assert.doesNotMatch(JSON.stringify(result), /private-opaque-cursor/iu);
+  } finally {
+    fs.rmSync(profilePath, { recursive: true, force: true });
+  }
+});
+
 test("recent discovery stops at five pages without turning into historical enumeration", async () => {
   const profilePath = fs.mkdtempSync(path.join(os.tmpdir(), "line-chat-recent-discovery-"));
   const definitions = Array.from({ length: 6 }, (_, index) => validPage(

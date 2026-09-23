@@ -273,6 +273,13 @@ export interface LineChatDiscoveryPage {
   invalidUserRecords: number;
 }
 
+/** Parsed page metadata for internal observers; the opaque cursor is omitted. */
+export type LineChatDiscoveryPageObservation = Omit<LineChatDiscoveryPage, "next">;
+
+export type LineChatDiscoveryPageObserver = (
+  page: LineChatDiscoveryPageObservation,
+) => boolean;
+
 export interface LineChatDiscoveryResult {
   botId: string;
   endpoint: string;
@@ -288,6 +295,7 @@ export interface LineChatDiscoveryResult {
   conflictingDuplicates: number;
   nextTerminationObserved: boolean;
   enumerationError?: string;
+  stoppedEarlyByObserver?: boolean;
 }
 
 export interface LineChatRecentDiscoveryResult {
