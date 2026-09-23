@@ -11,6 +11,11 @@ import { LineChatManagerImageRelayWorkerService } from "./line-chat-manager-imag
 import { LineChatNovncRecoveryWorkerService } from "./line-chat-novnc-recovery-worker.service";
 import { LineChatRecentResolverService } from "./line-chat-recent-resolver.service";
 import { LineChatSessionService } from "./line-chat-session.service";
+import { LineChatSeptemberInventoryService } from "./line-chat-september-inventory.service";
+import {
+  isSeptemberInventoryStartupEnabled,
+  runSeptemberInventoryStartupDiagnostic,
+} from "./line-chat-september-inventory-trigger";
 import type { ManagerRelayConversationSnapshot } from "./line-chat-manager-message-relay.service";
 
 const MAX_INTERNAL_BODY_BYTES = 64 * 1024;
@@ -143,6 +148,7 @@ async function bootstrap() {
   const recovery = app.get(LineChatNovncRecoveryWorkerService);
   const recentResolver = app.get(LineChatRecentResolverService);
   const sessionService = app.get(LineChatSessionService);
+  const septemberInventory = app.get(LineChatSeptemberInventoryService);
   const relayContexts = new Map<string, ManagerRelayConversationSnapshot>();
   installRelayContextLoader(textRelay, relayContexts);
   installRelayContextLoader(imageRelay, relayContexts);
@@ -348,6 +354,17 @@ async function bootstrap() {
     });
   });
   logger.log(`Private LINE Chat relay endpoint listening on port ${internalPort}`);
+
+  const septemberInventoryEnabled = isSeptemberInventoryStartupEnabled(
+    process.env.LINE_CHAT_SEPTEMBER_INVENTORY_ON_STARTUP,
+  );
+  if (septemberInventoryEnabled) {
+    void runSeptemberInventoryStartupDiagnostic({
+      enabled: true,
+      service: septemberInventory,
+      logger,
+    });
+  }
 
   const shutdown = async (signal: string) => {
     logger.log(`Received ${signal}, shutting down gracefully...`);
