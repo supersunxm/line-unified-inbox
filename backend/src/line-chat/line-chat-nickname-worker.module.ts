@@ -21,6 +21,7 @@ import { LineChatMirrorService } from "./line-chat-mirror.service";
 import { LineChatMirrorReconcilerService } from "./line-chat-mirror-reconciler.service";
 import { LineChatManagerMediaMaterializerService } from "./line-chat-manager-media-materializer.service";
 import { LineChatMirrorSalesTagSyncService } from "./line-chat-mirror-sales-tag-sync.service";
+import { LineChatSeptemberInventoryService } from "./line-chat-september-inventory.service";
 
 /**
  * Composition root for the dedicated nickname worker process.
@@ -52,6 +53,7 @@ import { LineChatMirrorSalesTagSyncService } from "./line-chat-mirror-sales-tag-
     MediaStorageService,
     LineChatManagerMediaMaterializerService,
     LineChatMirrorSalesTagSyncService,
+    LineChatSeptemberInventoryService,
   ],
   exports: [
     LineChatNicknameWorkerService,
@@ -63,6 +65,7 @@ import { LineChatMirrorSalesTagSyncService } from "./line-chat-mirror-sales-tag-
     LineChatMirrorReconcilerService,
     LineChatManagerMediaMaterializerService,
     LineChatMirrorSalesTagSyncService,
+    LineChatSeptemberInventoryService,
   ],
 })
 export class LineChatNicknameWorkerModule {}
