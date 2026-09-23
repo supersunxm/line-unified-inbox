@@ -177,8 +177,28 @@ export function mirrorDirectionForManagerEvent(
 }
 
 function safeError(error: unknown): string {
-  if (error instanceof Error) return error.message.slice(0, 500);
-  return String(error).slice(0, 500);
+  const message = error instanceof Error ? error.message : String(error);
+  const browserLogsIndex = message.indexOf("Browser logs:");
+  if (
+    browserLogsIndex >= 0
+    && message.includes("browserType.launchPersistentContext:")
+  ) {
+    const summary = message.slice(0, browserLogsIndex).replace(/\s+/gu, " ").trim();
+    // Playwright's launch command can fill the log limit before Chromium emits
+    // its exit detail. Keep the output tail, omit that command, and redact profiles.
+    const browserOutput = message
+      .slice(browserLogsIndex + "Browser logs:".length)
+      .split(/\r?\n/u)
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0 && !line.startsWith("<launching>"))
+      .map((line) =>
+        line.replace(/\/data\/line-chat-profiles\/[^\s]+/gu, "/data/line-chat-profiles/[profile]"),
+      )
+      .join(" | ");
+    const diagnostic = browserOutput || "No browser stderr captured after launch command.";
+    return `${summary.slice(0, 80)} | browser: ${diagnostic.slice(-150)}`.slice(0, 240);
+  }
+  return message.slice(0, 500);
 }
 
 @Injectable()
