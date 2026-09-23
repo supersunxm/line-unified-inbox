@@ -49,6 +49,11 @@ export interface SeptemberChatInventoryReport extends SeptemberChatCoverageSumma
   septemberChatsObserved: number;
   beforeSeptemberObserved: number;
   afterSeptemberObserved: number;
+  /** USER records where LINE Manager supplied no latestEvent object. */
+  noLatestEventChats: number;
+  /** USER records whose latestEvent exists but has no usable timestamp. */
+  malformedTimestampChats: number;
+  /** Compatibility total: noLatestEventChats + malformedTimestampChats. */
   unknownDateChats: number;
   pagesFetched: number;
   newestChatListTimestamp: string | null;
@@ -65,10 +70,20 @@ export interface SeptemberChatListOrderSnapshot {
   pagesObserved: number;
   invalidUserRecords: number;
   unknownTimestampObserved: boolean;
+  noLatestEventObserved: number;
+  malformedTimestampObserved: number;
   reachedBeforeSeptember: boolean;
   orderingAnomaly: boolean;
   duplicateConflict: boolean;
   safeEarlyStopReached: boolean;
+}
+
+function chatTimestampState(chat: Pick<LineChatDiscoveredChat, "lastMessageAt" | "lastMessageAtState">):
+  "VALID_TIMESTAMP" | "NO_LATEST_EVENT" | "MISSING_TIMESTAMP" | "INVALID_TIMESTAMP" {
+  if (chat.lastMessageAtState) return chat.lastMessageAtState;
+  return timestampMilliseconds(chat.lastMessageAt) === null
+    ? "INVALID_TIMESTAMP"
+    : "VALID_TIMESTAMP";
 }
 
 function timestampMilliseconds(value: unknown): number | null {
@@ -103,11 +118,13 @@ export function isSeptemberHistoricalChatCandidate(lastMessageAt: unknown): bool
  */
 export class SeptemberChatListOrderTracker {
   private previousTimestampMs: number | null = null;
-  private readonly chatsById = new Map<string, Pick<LineChatDiscoveredChat, "displayName" | "lastMessageAt">>();
+  private readonly chatsById = new Map<string, Pick<LineChatDiscoveredChat, "displayName" | "lastMessageAt" | "lastMessageAtState">>();
   private state: SeptemberChatListOrderSnapshot = {
     pagesObserved: 0,
     invalidUserRecords: 0,
     unknownTimestampObserved: false,
+    noLatestEventObserved: 0,
+    malformedTimestampObserved: 0,
     reachedBeforeSeptember: false,
     orderingAnomaly: false,
     duplicateConflict: false,
@@ -124,18 +141,26 @@ export class SeptemberChatListOrderTracker {
         this.chatsById.set(chat.chatUserId, {
           displayName: chat.displayName,
           lastMessageAt: chat.lastMessageAt,
+          lastMessageAtState: chat.lastMessageAtState,
         });
       } else if (
         previousChat.displayName !== chat.displayName
         || previousChat.lastMessageAt !== chat.lastMessageAt
+        || previousChat.lastMessageAtState !== chat.lastMessageAtState
       ) {
         this.state.duplicateConflict = true;
       }
 
+      const timestampState = chatTimestampState(chat);
+      if (timestampState === "NO_LATEST_EVENT") {
+        this.state.noLatestEventObserved += 1;
+        continue;
+      }
+
       const milliseconds = timestampMilliseconds(chat.lastMessageAt);
-      if (milliseconds === null) {
+      if (timestampState !== "VALID_TIMESTAMP" || milliseconds === null) {
         this.state.unknownTimestampObserved = true;
-        this.previousTimestampMs = null;
+        this.state.malformedTimestampObserved += 1;
         continue;
       }
 
@@ -251,18 +276,28 @@ export function buildSeptemberChatInventoryReport(input: {
   const afterSeptemberObserved = classifications
     .filter((entry) => entry.classification === SeptemberChatClassification.AFTER_SEPTEMBER)
     .length;
-  const unknownDateChats = classifications
-    .filter((entry) => entry.classification === SeptemberChatClassification.UNKNOWN)
+  const unknownEntries = classifications
+    .filter((entry) => entry.classification === SeptemberChatClassification.UNKNOWN);
+  const noLatestEventChats = unknownEntries
+    .filter((entry) => chatTimestampState(entry.chat) === "NO_LATEST_EVENT")
     .length;
+  const malformedTimestampChats = unknownEntries.length - noLatestEventChats;
+  const unknownDateChats = unknownEntries.length;
   const timestamps = classifications
     .map((entry) => timestampMilliseconds(entry.chat.lastMessageAt))
     .filter((timestamp): timestamp is number => timestamp !== null);
   const orderingValidated = input.order.pagesObserved > 0
-    && unknownDateChats === 0
+    && malformedTimestampChats === 0
     && input.discovery.invalidUserRecords === 0
     && !input.order.orderingAnomaly;
   const cursorExhausted = input.discovery.nextTerminationObserved;
-  const noUnknownMembership = unknownDateChats === 0 && input.order.invalidUserRecords === 0;
+  // A USER record with no latestEvent has no dated Manager event to place in
+  // the September window. It is therefore safely excluded from the September
+  // candidate set. Missing/invalid timestamps on an existing latestEvent still
+  // fail closed because September membership is unknowable.
+  const noUnknownMembership = malformedTimestampChats === 0
+    && input.order.malformedTimestampObserved === 0
+    && input.order.invalidUserRecords === 0;
   const noConflicts = input.discovery.conflictingDuplicates === 0 && !input.order.duplicateConflict;
   const completeBySafeEarlyStop = input.discovery.stoppedEarlyByObserver === true
     && input.order.safeEarlyStopReached
@@ -279,7 +314,7 @@ export function buildSeptemberChatInventoryReport(input: {
   let inventoryIncompleteReason: string | null = null;
   if (!inventoryComplete) {
     const boundReached = /(?:page|discovered-chat) limit reached/iu.test(input.discovery.enumerationError ?? "");
-    if (unknownDateChats > 0 || input.order.unknownTimestampObserved) {
+    if (malformedTimestampChats > 0 || input.order.unknownTimestampObserved) {
       inventoryIncompleteReason = "UNKNOWN_CHAT_LIST_TIMESTAMP";
     } else if (!noConflicts || input.discovery.invalidUserRecords > 0 || input.order.invalidUserRecords > 0) {
       inventoryIncompleteReason = "INVALID_OR_CONFLICTING_CHAT_LIST_RECORD";
@@ -302,6 +337,8 @@ export function buildSeptemberChatInventoryReport(input: {
     septemberChatsObserved: septemberChats.length,
     beforeSeptemberObserved,
     afterSeptemberObserved,
+    noLatestEventChats,
+    malformedTimestampChats,
     unknownDateChats,
     pagesFetched: input.discovery.pagesFetched,
     newestChatListTimestamp: timestamps.length > 0 ? new Date(Math.max(...timestamps)).toISOString() : null,
@@ -329,6 +366,8 @@ export function emptySeptemberChatInventoryReport(
     septemberChatsObserved: 0,
     beforeSeptemberObserved: 0,
     afterSeptemberObserved: 0,
+    noLatestEventChats: 0,
+    malformedTimestampChats: 0,
     unknownDateChats: 0,
     pagesFetched: 0,
     newestChatListTimestamp: null,
@@ -356,6 +395,8 @@ export function formatSeptemberChatInventoryReport(report: SeptemberChatInventor
     `Store: ${report.storeCode}`,
     `September inventory complete: ${report.inventoryComplete ? "YES" : "NO"}`,
     `septemberChats: ${report.septemberChats ?? `unknown (at least ${report.septemberChatsObserved} observed)`}`,
+    `noLatestEventChats: ${report.noLatestEventChats}`,
+    `malformedTimestampChats: ${report.malformedTimestampChats}`,
     `historicalChecked: ${report.historicalChecked}`,
     `fastPathComplete: ${report.fastPathComplete}`,
     `needsBackwardPagination: ${report.needsBackwardPagination}`,
