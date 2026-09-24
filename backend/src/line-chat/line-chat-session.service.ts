@@ -907,11 +907,6 @@ export class LineChatSessionService {
       let chatLimitReached = byId.size > maxChats;
       let discoveryTimeLimitReached = false;
       while (next !== null && !stoppedEarlyByObserver) {
-        if (seenNext.has(next)) {
-          enumerationError = "Repeated chat-list next token detected.";
-          break;
-        }
-        seenNext.add(next);
         if (pages.length >= maxPages) {
           pageLimitReached = true;
           if (!boundedWindow) enumerationError = "Chat-list page limit reached.";
@@ -927,6 +922,11 @@ export class LineChatSessionService {
           enumerationError = "Chat-list time limit reached.";
           break;
         }
+        if (seenNext.has(next)) {
+          enumerationError = "Repeated chat-list next token detected.";
+          break;
+        }
+        seenNext.add(next);
         const nextUrl = new URL(firstRequest.url);
         nextUrl.searchParams.set("next", next);
         let response;
