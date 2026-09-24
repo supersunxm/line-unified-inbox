@@ -194,27 +194,55 @@ export class LineChatSeptemberInventoryService {
     };
 
     while (true) {
-      if (Date.now() - startedAtMs >= INVENTORY_MAX_TOTAL_DURATION_MS) {
+      const elapsedMs = Date.now() - startedAtMs;
+      const remainingPages = INVENTORY_MAX_TOTAL_PAGES - pagesFetched;
+      const remainingChats = INVENTORY_MAX_TOTAL_CHATS - chatsById.size;
+      const remainingDurationMs = INVENTORY_MAX_TOTAL_DURATION_MS - elapsedMs;
+
+      if (remainingDurationMs <= 0) {
         timeLimitReached = true;
         enumerationError = "Chat-list total inventory time limit reached.";
         break;
       }
+      if (remainingPages <= 0) {
+        pageLimitReached = true;
+        enumerationError = "Chat-list global page limit reached.";
+        break;
+      }
+      if (remainingChats <= 0) {
+        chatLimitReached = true;
+        enumerationError = "Chat-list global discovered-chat limit reached.";
+        break;
+      }
 
-      const operation = await this.coordinator.withProfileOperation(
-        { sessionId: target.session.id, operationKind: "MANUAL_DIAGNOSTIC" },
-        async (operationContext) => this.sessionService.discoverChatsChunk({
-          botId: target.botId,
-          profilePath,
-          headless: true,
-          operationContext,
-          pageObserver: order.observePage,
-          continuation,
-          maxPages: INVENTORY_MAX_PAGES_PER_PROFILE_LEASE,
-          maxChats: INVENTORY_MAX_CHATS_PER_PROFILE_LEASE,
-          maxDurationMs: INVENTORY_MAX_DISCOVERY_DURATION_MS,
-        }),
-        { waitForLock: false },
-      );
+      const chunkMaxPages = Math.min(INVENTORY_MAX_PAGES_PER_PROFILE_LEASE, remainingPages);
+      const chunkMaxChats = Math.min(INVENTORY_MAX_CHATS_PER_PROFILE_LEASE, remainingChats);
+      const chunkMaxDurationMs = Math.min(INVENTORY_MAX_DISCOVERY_DURATION_MS, remainingDurationMs);
+
+      let operation: Awaited<ReturnType<LineChatProfileOperationCoordinator["withProfileOperation"]>>;
+      try {
+        operation = await this.coordinator.withProfileOperation(
+          { sessionId: target.session.id, operationKind: "MANUAL_DIAGNOSTIC" },
+          async (operationContext) => this.sessionService.discoverChatsChunk({
+            botId: target.botId,
+            profilePath,
+            headless: true,
+            operationContext,
+            pageObserver: order.observePage,
+            continuation,
+            maxPages: chunkMaxPages,
+            maxChats: chunkMaxChats,
+            maxDurationMs: chunkMaxDurationMs,
+          }),
+          { waitForLock: false },
+        );
+      } catch {
+        if (pagesFetched === 0) {
+          return emptySeptemberChatInventoryReport(target.storeCode, "CHAT_LIST_DISCOVERY_FAILED");
+        }
+        enumerationError = "CHAT_LIST_DISCOVERY_FAILED_DURING_RESUMABLE_INVENTORY";
+        break;
+      }
 
       if (!operation.acquired) {
         busyRetries += 1;
@@ -241,6 +269,22 @@ export class LineChatSeptemberInventoryService {
       conflictingDuplicates += chunk.conflictingDuplicates;
       mergeChats(chunk.chats);
 
+      if (pagesFetched > INVENTORY_MAX_TOTAL_PAGES) {
+        pageLimitReached = true;
+        enumerationError = "Chat-list global page limit exceeded unexpectedly.";
+        break;
+      }
+      if (chatsById.size > INVENTORY_MAX_TOTAL_CHATS) {
+        chatLimitReached = true;
+        enumerationError = "Chat-list global discovered-chat limit exceeded unexpectedly.";
+        break;
+      }
+      if (Date.now() - startedAtMs > INVENTORY_MAX_TOTAL_DURATION_MS) {
+        timeLimitReached = true;
+        enumerationError = "Chat-list total inventory time limit exceeded unexpectedly.";
+        break;
+      }
+
       if (chunk.enumerationError) {
         enumerationError = chunk.enumerationError;
         timeLimitReached = chunk.timeLimitReached === true;
@@ -259,17 +303,6 @@ export class LineChatSeptemberInventoryService {
         if (!nextTerminationObserved) {
           enumerationError = "CHAT_LIST_CONTINUATION_UNAVAILABLE";
         }
-        break;
-      }
-
-      if (pagesFetched >= INVENTORY_MAX_TOTAL_PAGES) {
-        pageLimitReached = true;
-        enumerationError = "Chat-list global page limit reached.";
-        break;
-      }
-      if (chatsById.size >= INVENTORY_MAX_TOTAL_CHATS) {
-        chatLimitReached = true;
-        enumerationError = "Chat-list global discovered-chat limit reached.";
         break;
       }
 
@@ -327,6 +360,7 @@ export class LineChatSeptemberInventoryService {
       historicalStates,
     });
     const forcedIncompleteReason = enumerationError === "PROFILE_OPERATION_BUSY_DURING_RESUMABLE_INVENTORY"
+      || enumerationError === "CHAT_LIST_DISCOVERY_FAILED_DURING_RESUMABLE_INVENTORY"
       ? enumerationError
       : null;
     return {
