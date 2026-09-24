@@ -2227,6 +2227,7 @@ enum MirrorOperationCoverageStatus {
 model MirrorOperationState {
   id                         String                         @id @default("big-project-a")
   mode                       MirrorOperationMode            @default(NORMAL)
+  runId                      String?
   freezeAt                   DateTime?
   backfillTargetStartAt      DateTime?
   catchUpOverlapSeconds      Int                            @default(300)
@@ -2239,9 +2240,41 @@ model MirrorOperationState {
   catchUpStoresPending       Int                            @default(0)
   catchUpStoresFailed        Int                            @default(0)
   catchUpEarliestUncoveredAt DateTime?
+  recoveryRequired           Boolean                        @default(false)
+  emergencyResumedAt         DateTime?
+  emergencyResumeReason      String?
   enteredAt                  DateTime                       @default(now())
   completedAt                DateTime?
   updatedAt                  DateTime                       @updatedAt
+}
+
+model MirrorBackfillStoreCohort {
+  runId                  String
+  storeCode              String
+  lineOfficialAccountId  String
+  inventoryStatus        MirrorOperationCoverageStatus @default(UNPROVEN)
+  observedConversations  Int                           @default(0)
+  exactSeptemberChats    Int?
+  inventoryCompletedAt   DateTime?
+  createdAt              DateTime                      @default(now())
+  updatedAt              DateTime                      @updatedAt
+
+  @@id([runId, storeCode])
+  @@index([runId, inventoryStatus])
+  @@index([lineOfficialAccountId])
+}
+
+model MirrorBackfillConversation {
+  runId                 String
+  storeCode             String
+  lineOfficialAccountId String
+  lineChatUserId        String
+  observedLastMessageAt DateTime?
+  createdAt             DateTime @default(now())
+
+  @@id([runId, lineOfficialAccountId, lineChatUserId])
+  @@index([runId, storeCode])
+  @@index([lineOfficialAccountId, lineChatUserId])
 }
 
 model LineChatSession {
