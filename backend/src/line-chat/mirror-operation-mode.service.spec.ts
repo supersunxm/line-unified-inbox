@@ -330,6 +330,60 @@ test("completed inventory replaces the store cohort with a durable exact snapsho
   assert.equal(cohortStores.get("run-1:29113")?.exactSeptemberChats, 2);
 });
 
+test("a partial rerun cannot downgrade an already proven exact cohort", async () => {
+  const runId = "run-proven-cohort";
+  const initialStore: CohortStore = {
+    runId,
+    storeCode: "29113",
+    lineOfficialAccountId: "oa-pinklao",
+    inventoryStatus: "PROVEN",
+    observedConversations: 2,
+    exactSeptemberChats: 2,
+    inventoryCompletedAt: new Date("2026-09-24T01:00:00.000Z"),
+  };
+  const initialRows: CohortConversation[] = [
+    {
+      runId,
+      storeCode: "29113",
+      lineOfficialAccountId: "oa-pinklao",
+      lineChatUserId: "chat-a",
+      observedLastMessageAt: new Date("2026-09-20T00:00:00.000Z"),
+    },
+    {
+      runId,
+      storeCode: "29113",
+      lineOfficialAccountId: "oa-pinklao",
+      lineChatUserId: "chat-b",
+      observedLastMessageAt: new Date("2026-09-21T00:00:00.000Z"),
+    },
+  ];
+  const { service, cohortStores, cohortConversations } = testService({
+    initial: state({
+      mode: "BACKFILL",
+      runId,
+      freezeAt: new Date("2026-09-24T01:15:00.000Z"),
+      backfillTargetStartAt: MIRROR_BACKFILL_TARGET_START_AT,
+    }),
+    cohortStores: [initialStore],
+    cohortConversations: initialRows,
+  });
+
+  await service.recordBackfillInventory({
+    storeCode: "29113",
+    lineOfficialAccountId: "oa-pinklao",
+    conversations: [{ lineChatUserId: "partial", lastMessageAt: null }],
+    inventoryComplete: false,
+    exactSeptemberChats: null,
+  });
+
+  assert.equal(cohortStores.get(`${runId}:29113`)?.inventoryStatus, "PROVEN");
+  assert.equal(cohortStores.get(`${runId}:29113`)?.exactSeptemberChats, 2);
+  assert.deepEqual(
+    cohortConversations().filter((row) => row.storeCode === "29113").map((row) => row.lineChatUserId),
+    ["chat-a", "chat-b"],
+  );
+});
+
 test("known backward pagination blocker prevents false backfill completion", async () => {
   const runId = "run-blocked";
   const proof = provenCohort(runId, [
