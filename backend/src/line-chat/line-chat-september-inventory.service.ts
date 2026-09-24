@@ -2,9 +2,17 @@ import { Inject, Injectable, Optional } from "@nestjs/common";
 import { PrismaService } from "../prisma.service";
 import { LINE_CHAT_HISTORICAL_PILOT_STORE_CODES } from "./line-chat-historical-backfill";
 import { LineChatMirrorService, type MirrorStoreTargetInputs } from "./line-chat-mirror.service";
-import {\n  LineChatProfileOperationCoordinator,\n  type ProfileOperationResult,\n} from "./line-chat-profile-operation-coordinator.service";
+import {
+  LineChatProfileOperationCoordinator,
+  type ProfileOperationResult,
+} from "./line-chat-profile-operation-coordinator.service";
 import { LineChatSessionService } from "./line-chat-session.service";
-import type {\n  LineChatDiscoveredChat,\n  LineChatDiscoveryChunkResult,\n  LineChatDiscoveryContinuation,\n  LineChatDiscoveryResult,\n} from "./line-chat.types";
+import type {
+  LineChatDiscoveredChat,
+  LineChatDiscoveryChunkResult,
+  LineChatDiscoveryContinuation,
+  LineChatDiscoveryResult,
+} from "./line-chat.types";
 import {
   SeptemberChatListOrderTracker,
   buildSeptemberChatInventoryReport,
