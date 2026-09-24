@@ -229,6 +229,13 @@ export function lineChatMirrorIntervalMs(): number {
   return Math.max(MIN_INTERVAL_MS, Math.floor(parsed));
 }
 
+export function isMirrorOperationSchemaUnavailable(error: unknown): boolean {
+  if (typeof error !== "object" || error === null) return false;
+  const code = "code" in error ? String((error as { code?: unknown }).code ?? "") : "";
+  const message = error instanceof Error ? error.message : "";
+  return code === "P2021" && /MirrorOperationState/u.test(message);
+}
+
 export function lineChatMirrorMaxChangedChatsPerCycle(): number {
   const parsed = Number(
     process.env.LINE_CHAT_MIRROR_MAX_CHANGED_CHATS_PER_CYCLE
@@ -292,6 +299,7 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
   private startupTimer: NodeJS.Timeout | null = null;
   private running = false;
   private lastLoggedOperationMode: MirrorOperationModeValue | null = null;
+  private operationModeStateLoaded = false;
   private readonly targetCache = new Map<string, {
     botId: string;
     session: MirrorSessionTarget;
@@ -345,15 +353,49 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
     this.running = true;
     const results: LineChatMirrorCycleResult[] = [];
     try {
-      const operationState = this.operationModeService
-        ? await this.operationModeService.getState()
-        : {
-            mode: "NORMAL" as const,
-            runId: null,
-            freezeAt: null,
-            backfillTargetStartAt: null,
-            catchUpStartAt: null,
-          };
+      let operationState: Awaited<ReturnType<MirrorOperationModeService["getState"]>> | {
+        mode: "NORMAL";
+        runId: null;
+        freezeAt: null;
+        backfillTargetStartAt: null;
+        catchUpStartAt: null;
+      };
+      if (!this.operationModeService) {
+        operationState = {
+          mode: "NORMAL",
+          runId: null,
+          freezeAt: null,
+          backfillTargetStartAt: null,
+          catchUpStartAt: null,
+        };
+      } else {
+        try {
+          operationState = await this.operationModeService.getState();
+          this.operationModeStateLoaded = true;
+        } catch (error) {
+          if (!this.operationModeStateLoaded && isMirrorOperationSchemaUnavailable(error)) {
+            this.logger.warn(JSON.stringify({
+              event: "mirror_operation_mode_schema_pending",
+              behavior: "TEMPORARY_NORMAL_DURING_INITIAL_MIGRATION",
+              errorType: safeErrorType(error),
+            }));
+            operationState = {
+              mode: "NORMAL",
+              runId: null,
+              freezeAt: null,
+              backfillTargetStartAt: null,
+              catchUpStartAt: null,
+            };
+          } else {
+            this.logger.warn(JSON.stringify({
+              event: "mirror_operation_mode_load_failed",
+              behavior: "FAIL_CLOSED_NO_NEW_MIRROR_WORK",
+              errorType: safeErrorType(error),
+            }));
+            return [];
+          }
+        }
+      }
       if (this.lastLoggedOperationMode !== operationState.mode) {
         this.logger.log(JSON.stringify({
           event: "mirror_operation_mode_loaded",
