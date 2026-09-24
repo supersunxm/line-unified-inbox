@@ -12,6 +12,11 @@ import { LineChatNovncRecoveryWorkerService } from "./line-chat-novnc-recovery-w
 import { LineChatRecentResolverService } from "./line-chat-recent-resolver.service";
 import { LineChatSessionService } from "./line-chat-session.service";
 import { LineChatSeptemberInventoryService } from "./line-chat-september-inventory.service";
+import { LineChatMirrorService } from "./line-chat-mirror.service";
+import {
+  isPinklaoResolverStartupEnabled,
+  runPinklaoResolverStartupDiagnostic,
+} from "./line-chat-pinklao-resolver-trigger";
 import {
   isSeptemberInventoryStartupEnabled,
   runSeptemberInventoryStartupDiagnostic,
@@ -149,6 +154,7 @@ async function bootstrap() {
   const recentResolver = app.get(LineChatRecentResolverService);
   const sessionService = app.get(LineChatSessionService);
   const septemberInventory = app.get(LineChatSeptemberInventoryService);
+  const mirrorService = app.get(LineChatMirrorService);
   const relayContexts = new Map<string, ManagerRelayConversationSnapshot>();
   installRelayContextLoader(textRelay, relayContexts);
   installRelayContextLoader(imageRelay, relayContexts);
@@ -362,6 +368,17 @@ async function bootstrap() {
     void runSeptemberInventoryStartupDiagnostic({
       enabled: true,
       service: septemberInventory,
+      logger,
+    });
+  }
+
+  const pinklaoResolverEnabled = isPinklaoResolverStartupEnabled(
+    process.env.LINE_CHAT_PINKLAO_RESOLVER_ON_STARTUP,
+  );
+  if (pinklaoResolverEnabled) {
+    void runPinklaoResolverStartupDiagnostic({
+      enabled: true,
+      service: mirrorService,
       logger,
     });
   }

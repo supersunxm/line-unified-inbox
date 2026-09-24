@@ -494,6 +494,39 @@ test("Mirror target resolver reports cache hits without changing the cached targ
   assert.deepEqual(harness.summaryRecords().map((record) => record.outcome), ["EXISTING_OA", "CACHE_HIT"]);
 });
 
+test("Mirror target resolver bypasses a warm cache when explicitly requested", async () => {
+  const cachedSession = resolverTestSession("cache-session");
+  const redirectSession = resolverTestSession("redirect-session");
+  const redirectBotId = `U${"b".repeat(32)}`;
+  const harness = createTargetResolverHarness({
+    sessions: [redirectSession],
+    botIdBySession: new Map([[redirectSession.id, redirectBotId]]),
+  });
+
+  const cached = await harness.service.resolveMirrorTarget(targetResolverInput({
+    chatBotId: `U${"c".repeat(32)}`,
+    lineChatSession: cachedSession,
+  }));
+  assert.equal(cached.ok, true);
+
+  const fresh = await harness.service.resolveMirrorTarget(targetResolverInput({
+    chatBotId: null,
+    lineChatSession: null,
+    bypassCache: true,
+  }));
+
+  assert.equal(fresh.ok, true);
+  if (fresh.ok) {
+    assert.equal(fresh.source, "MANAGER_ACCOUNT_REDIRECT");
+    assert.equal(fresh.session.id, redirectSession.id);
+    assert.equal(fresh.botId, redirectBotId);
+  }
+  assert.deepEqual(
+    harness.summaryRecords().map((record) => record.outcome),
+    ["EXISTING_OA", "MANAGER_ACCOUNT_REDIRECT"],
+  );
+});
+
 test("Mirror target resolver reports missing account key and no usable sessions distinctly", async () => {
   const missingKeyHarness = createTargetResolverHarness({ sessions: [] });
   const missingKey = await missingKeyHarness.service.resolveMirrorTarget(targetResolverInput({ basicId: null }));
@@ -541,6 +574,28 @@ test("Mirror target resolver continues past one busy profile and accepts another
   assert.equal(summary?.sessionsAttempted, 1);
   assert.equal(summary?.verifiedCandidates, 1);
   assert.equal(summary?.outcome, "MANAGER_ACCOUNT_REDIRECT");
+});
+
+test("busy profile plus rejected attempted profile remains temporary busy", async () => {
+  const busy = resolverTestSession("busy-session");
+  const attempted = resolverTestSession("attempted-session");
+  const attemptedBotId = `U${"d".repeat(32)}`;
+  const harness = createTargetResolverHarness({
+    sessions: [busy, attempted],
+    busySessionIds: new Set([busy.id]),
+    botIdBySession: new Map([[attempted.id, attemptedBotId]]),
+    failedDiscoveryBotIds: new Set([attemptedBotId]),
+  });
+
+  const result = await harness.service.resolveMirrorTarget(targetResolverInput());
+
+  assert.equal(result.ok, false);
+  if (!result.ok) assert.equal(result.errorCode, "MIRROR_MANAGER_TARGET_BUSY");
+  const summary = harness.summaryRecords()[0];
+  assert.equal(summary?.sessionsBusy, 1);
+  assert.equal(summary?.sessionsAttempted, 1);
+  assert.equal(summary?.recentDiscoveryRejected, 1);
+  assert.equal(summary?.outcome, "PROFILE_BUSY");
 });
 
 test("all eligible Mirror resolver profiles busy returns a temporary busy code, not target-not-found", async () => {
