@@ -895,7 +895,7 @@ test("BACKFILL keeps the worker cycle active but serializes pilot stores without
     });
     Object.defineProperty(service, "runBackfillStore", {
       configurable: true,
-      value: async (storeCode: string) => {
+      value: async (_runId: string, storeCode: string) => {
         activeBackfill += 1;
         maxActiveBackfill = Math.max(maxActiveBackfill, activeBackfill);
         backfillStores.push(storeCode);
