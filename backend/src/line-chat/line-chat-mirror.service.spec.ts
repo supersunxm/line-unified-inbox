@@ -873,6 +873,7 @@ test("BACKFILL keeps the worker cycle active but serializes pilot stores without
     const operationMode = {
       getState: async () => ({
         mode: "BACKFILL" as const,
+        runId: "run-backfill",
         freezeAt: new Date("2026-09-24T01:15:00.000Z"),
         backfillTargetStartAt: new Date("2026-08-31T17:00:00.000Z"),
         catchUpStartAt: null,
@@ -924,6 +925,7 @@ test("an in-flight live cycle may finish, then BACKFILL skips later live work", 
         }
         : {
           mode,
+          runId: "run-backfill",
           freezeAt,
           backfillTargetStartAt: new Date("2026-08-31T17:00:00.000Z"),
           catchUpStartAt: null,
