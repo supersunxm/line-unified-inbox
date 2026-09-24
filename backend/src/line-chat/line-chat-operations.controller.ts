@@ -46,6 +46,15 @@ export class FixRetryableJobsDto {
   sessionKey!: string;
 }
 
+export class EmergencyResumeMirrorModeDto {
+  @IsBoolean()
+  acknowledgeUnprovenGap!: boolean;
+
+  @IsString()
+  @IsNotEmpty()
+  reason!: string;
+}
+
 export class RunProgressDto {
   @IsArray()
   @ArrayNotEmpty()
@@ -153,6 +162,16 @@ export class LineChatOperationsController {
   @Post("mirror-operation-mode/normal")
   async returnMirrorToNormal() {
     return this.getMirrorOperationModeService().transition("NORMAL");
+  }
+
+  @Post("mirror-operation-mode/emergency-resume")
+  async emergencyResumeMirror(
+    @Body() body: EmergencyResumeMirrorModeDto,
+  ) {
+    return this.getMirrorOperationModeService().emergencyResume({
+      acknowledgeUnprovenGap: body.acknowledgeUnprovenGap,
+      reason: body.reason,
+    });
   }
 
   @Post("retry-failed")
