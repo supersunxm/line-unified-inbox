@@ -576,6 +576,28 @@ test("Mirror target resolver continues past one busy profile and accepts another
   assert.equal(summary?.outcome, "MANAGER_ACCOUNT_REDIRECT");
 });
 
+test("busy profile plus rejected attempted profile remains temporary busy", async () => {
+  const busy = resolverTestSession("busy-session");
+  const attempted = resolverTestSession("attempted-session");
+  const attemptedBotId = `U${"d".repeat(32)}`;
+  const harness = createTargetResolverHarness({
+    sessions: [busy, attempted],
+    busySessionIds: new Set([busy.id]),
+    botIdBySession: new Map([[attempted.id, attemptedBotId]]),
+    failedDiscoveryBotIds: new Set([attemptedBotId]),
+  });
+
+  const result = await harness.service.resolveMirrorTarget(targetResolverInput());
+
+  assert.equal(result.ok, false);
+  if (!result.ok) assert.equal(result.errorCode, "MIRROR_MANAGER_TARGET_BUSY");
+  const summary = harness.summaryRecords()[0];
+  assert.equal(summary?.sessionsBusy, 1);
+  assert.equal(summary?.sessionsAttempted, 1);
+  assert.equal(summary?.recentDiscoveryRejected, 1);
+  assert.equal(summary?.outcome, "PROFILE_BUSY");
+});
+
 test("all eligible Mirror resolver profiles busy returns a temporary busy code, not target-not-found", async () => {
   const sessions = [resolverTestSession("busy-a"), resolverTestSession("busy-b")];
   const harness = createTargetResolverHarness({
