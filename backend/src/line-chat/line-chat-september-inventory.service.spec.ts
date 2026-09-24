@@ -4,7 +4,10 @@ import {
   HistoricalBackfillStatus,
   LINE_CHAT_HISTORICAL_PILOT_STORE_CODES,
 } from "./line-chat-historical-backfill";
-import {\n  LineChatSeptemberInventoryService,\n  computeSeptemberInventoryChunkBudget,\n} from "./line-chat-september-inventory.service";
+import {
+  LineChatSeptemberInventoryService,
+  computeSeptemberInventoryChunkBudget,
+} from "./line-chat-september-inventory.service";
 import type { PrismaService } from "../prisma.service";
 import type { LineChatProfileOperationCoordinator } from "./line-chat-profile-operation-coordinator.service";
 import type { LineChatSessionService } from "./line-chat-session.service";
