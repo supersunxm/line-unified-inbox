@@ -375,6 +375,13 @@ test("a partial rerun cannot downgrade an already proven exact cohort", async ()
     inventoryComplete: false,
     exactSeptemberChats: null,
   });
+  await service.recordBackfillInventory({
+    storeCode: "29113",
+    lineOfficialAccountId: "oa-pinklao",
+    conversations: [{ lineChatUserId: "replacement", lastMessageAt: null }],
+    inventoryComplete: true,
+    exactSeptemberChats: 1,
+  });
 
   assert.equal(cohortStores.get(`${runId}:29113`)?.inventoryStatus, "PROVEN");
   assert.equal(cohortStores.get(`${runId}:29113`)?.exactSeptemberChats, 2);
