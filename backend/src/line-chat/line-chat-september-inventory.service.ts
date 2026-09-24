@@ -4,7 +4,7 @@ import { LINE_CHAT_HISTORICAL_PILOT_STORE_CODES } from "./line-chat-historical-b
 import { LineChatMirrorService, type MirrorStoreTargetInputs } from "./line-chat-mirror.service";
 import { LineChatProfileOperationCoordinator } from "./line-chat-profile-operation-coordinator.service";
 import { LineChatSessionService } from "./line-chat-session.service";
-import type { LineChatDiscoveryResult } from "./line-chat.types";
+import type { LineChatDiscoveredChat, LineChatDiscoveryContinuation, LineChatDiscoveryResult } from "./line-chat.types";
 import {
   SeptemberChatListOrderTracker,
   buildSeptemberChatInventoryReport,
@@ -16,6 +16,11 @@ import {
 const INVENTORY_MAX_PAGES_PER_PROFILE_LEASE = 12;
 const INVENTORY_MAX_CHATS_PER_PROFILE_LEASE = 600;
 const INVENTORY_MAX_DISCOVERY_DURATION_MS = 15_000;
+const INVENTORY_MAX_TOTAL_PAGES = 200;
+const INVENTORY_MAX_TOTAL_CHATS = 10_000;
+const INVENTORY_MAX_TOTAL_DURATION_MS = 180_000;
+const INVENTORY_MAX_BUSY_RETRIES = 3;
+const INVENTORY_CHUNK_YIELD_MS = 750;
 
 export interface SeptemberChatInventoryTarget {
   storeCode: string;
@@ -129,14 +134,21 @@ export class LineChatSeptemberInventoryService {
   }
 
   /** Lets already-scheduled profile work enter between bounded inventory leases. */
-  private async yieldToProfileWaiters(): Promise<void> {
+  private async yieldToProfileWaiters(delayMs = 0): Promise<void> {
+    if (delayMs > 0) {
+      await new Promise<void>((resolve) => {
+        const timer = setTimeout(resolve, delayMs);
+        timer.unref?.();
+      });
+      return;
+    }
     await new Promise<void>((resolve) => setImmediate(resolve));
   }
 
   /**
-   * Discovers one store's LINE chat-list inventory and joins only its
-   * persisted historical checkpoint state. It does not write mirror messages
-   * or historical checkpoints; the coordinator lease protects the shared profile.
+   * Discovers one store's LINE chat-list inventory in bounded profile leases.
+   * Opaque Manager continuation values stay inside LineChatSessionService as
+   * in-process handles and are never persisted or logged.
    */
   public async discoverStore(
     target: SeptemberChatInventoryTarget,
@@ -148,59 +160,191 @@ export class LineChatSeptemberInventoryService {
       return emptySeptemberChatInventoryReport(target.storeCode, "PROFILE_UNAVAILABLE");
     }
 
-    const operation = await this.coordinator.withProfileOperation(
-      { sessionId: target.session.id, operationKind: "MANUAL_DIAGNOSTIC" },
-      async (operationContext) => {
-        const order = new SeptemberChatListOrderTracker();
-        let discovery: LineChatDiscoveryResult;
-        try {
-          discovery = await this.sessionService.discoverChats({
-            botId: target.botId,
-            profilePath,
-            headless: true,
-            operationContext,
-            pageObserver: order.observePage,
-            maxPages: INVENTORY_MAX_PAGES_PER_PROFILE_LEASE,
-            maxChats: INVENTORY_MAX_CHATS_PER_PROFILE_LEASE,
-            maxDurationMs: INVENTORY_MAX_DISCOVERY_DURATION_MS,
-          });
-        } catch {
-          return emptySeptemberChatInventoryReport(target.storeCode, "CHAT_LIST_DISCOVERY_FAILED");
+    const startedAtMs = Date.now();
+    const order = new SeptemberChatListOrderTracker();
+    const chatsById = new Map<string, LineChatDiscoveredChat>();
+    let continuation: LineChatDiscoveryContinuation | null = null;
+    let firstChunk = true;
+    let pagesFetched = 0;
+    let totalRawRecords = 0;
+    let validUserChats = 0;
+    let ignoredNonUserRecords = 0;
+    let invalidUserRecords = 0;
+    let duplicateIds = 0;
+    let conflictingDuplicates = 0;
+    let endpoint = this.sessionService.buildChatListUrl(target.botId);
+    let stoppedEarlyByObserver = false;
+    let nextTerminationObserved = false;
+    let pageLimitReached = false;
+    let chatLimitReached = false;
+    let timeLimitReached = false;
+    let enumerationError: string | undefined;
+    let busyRetries = 0;
+
+    const mergeChats = (chats: readonly LineChatDiscoveredChat[]): void => {
+      for (const chat of chats) {
+        const previous = chatsById.get(chat.chatUserId);
+        if (!previous) {
+          chatsById.set(chat.chatUserId, chat);
+          continue;
         }
+        duplicateIds += 1;
+        if (JSON.stringify(previous) !== JSON.stringify(chat)) {
+          conflictingDuplicates += 1;
+        }
+      }
+    };
 
-        const septemberChats = discovery.chats.filter((chat) =>
-          isSeptemberHistoricalChatCandidate(chat.lastMessageAt),
-        );
-        const historicalStates = septemberChats.length === 0
-          ? []
-          : await this.prisma.lineChatMirrorChat.findMany({
-            where: {
-              lineOfficialAccountId: target.lineOfficialAccountId,
-              lineChatUserId: { in: septemberChats.map((chat) => chat.chatUserId) },
-            },
-            select: {
-              lineChatUserId: true,
-              historicalBackfillStatus: true,
-            },
-          });
+    while (true) {
+      if (Date.now() - startedAtMs >= INVENTORY_MAX_TOTAL_DURATION_MS) {
+        timeLimitReached = true;
+        enumerationError = "Chat-list total inventory time limit reached.";
+        break;
+      }
 
-        const report = buildSeptemberChatInventoryReport({
-          storeCode: target.storeCode,
-          discovery,
-          order: order.snapshot(),
-          historicalStates,
-        });
-        return {
-          ...report,
-          targetResolutionSource: target.targetResolutionSource ?? null,
-        };
-      },
-      { waitForLock: false },
+      const operation = await this.coordinator.withProfileOperation(
+        { sessionId: target.session.id, operationKind: "MANUAL_DIAGNOSTIC" },
+        async (operationContext) => this.sessionService.discoverChatsChunk({
+          botId: target.botId,
+          profilePath,
+          headless: true,
+          operationContext,
+          pageObserver: order.observePage,
+          continuation,
+          maxPages: INVENTORY_MAX_PAGES_PER_PROFILE_LEASE,
+          maxChats: INVENTORY_MAX_CHATS_PER_PROFILE_LEASE,
+          maxDurationMs: INVENTORY_MAX_DISCOVERY_DURATION_MS,
+        }),
+        { waitForLock: false },
+      );
+
+      if (!operation.acquired) {
+        busyRetries += 1;
+        if (busyRetries >= INVENTORY_MAX_BUSY_RETRIES) {
+          if (pagesFetched === 0) {
+            return emptySeptemberChatInventoryReport(target.storeCode, "PROFILE_OPERATION_BUSY");
+          }
+          enumerationError = "PROFILE_OPERATION_BUSY_DURING_RESUMABLE_INVENTORY";
+          break;
+        }
+        await this.yieldToProfileWaiters(Math.min(operation.retryAfterMs, 5_000));
+        continue;
+      }
+
+      busyRetries = 0;
+      const chunk = operation.value.discovery;
+      endpoint = chunk.endpoint;
+      pagesFetched += chunk.pagesFetched;
+      totalRawRecords += chunk.totalRawRecords;
+      validUserChats += chunk.validUserChats;
+      ignoredNonUserRecords += chunk.ignoredNonUserRecords;
+      invalidUserRecords += chunk.invalidUserRecords;
+      duplicateIds += chunk.duplicateIds;
+      conflictingDuplicates += chunk.conflictingDuplicates;
+      mergeChats(chunk.chats);
+
+      if (chunk.enumerationError) {
+        enumerationError = chunk.enumerationError;
+        timeLimitReached = chunk.timeLimitReached === true;
+        break;
+      }
+
+      stoppedEarlyByObserver = stoppedEarlyByObserver || chunk.stoppedEarlyByObserver === true;
+      if (stoppedEarlyByObserver) {
+        nextTerminationObserved = false;
+        break;
+      }
+
+      continuation = operation.value.continuation;
+      firstChunk = false;
+      if (!continuation) {
+        nextTerminationObserved = chunk.nextTerminationObserved;
+        if (!nextTerminationObserved) {
+          enumerationError = "CHAT_LIST_CONTINUATION_UNAVAILABLE";
+        }
+        break;
+      }
+
+      if (pagesFetched >= INVENTORY_MAX_TOTAL_PAGES) {
+        pageLimitReached = true;
+        enumerationError = "Chat-list global page limit reached.";
+        break;
+      }
+      if (chatsById.size >= INVENTORY_MAX_TOTAL_CHATS) {
+        chatLimitReached = true;
+        enumerationError = "Chat-list global discovered-chat limit reached.";
+        break;
+      }
+
+      // The lease has been released at this point. Give realtime Mirror and
+      // reconciliation timers a chance to enter before the next bounded chunk.
+      await this.yieldToProfileWaiters(INVENTORY_CHUNK_YIELD_MS);
+    }
+
+    const orderSnapshot = order.snapshot();
+    const completeByCursor = nextTerminationObserved
+      && !enumerationError
+      && invalidUserRecords === 0
+      && conflictingDuplicates === 0;
+    const discovery: LineChatDiscoveryResult = {
+      botId: target.botId,
+      endpoint,
+      responseShape: "list",
+      enumerationStatus: completeByCursor ? "COMPLETE" : "PARTIAL",
+      chats: [...chatsById.values()],
+      pagesFetched,
+      totalRawRecords,
+      validUserChats,
+      ignoredNonUserRecords,
+      invalidUserRecords,
+      duplicateIds,
+      conflictingDuplicates,
+      nextTerminationObserved,
+      ...(enumerationError ? { enumerationError } : {}),
+      ...(stoppedEarlyByObserver ? { stoppedEarlyByObserver: true } : {}),
+      ...(pageLimitReached ? { pageLimitReached: true } : {}),
+      ...(chatLimitReached ? { chatLimitReached: true } : {}),
+      ...(timeLimitReached ? { timeLimitReached: true } : {}),
+    };
+
+    const septemberChats = discovery.chats.filter((chat) =>
+      isSeptemberHistoricalChatCandidate(chat.lastMessageAt),
     );
+    const historicalStates = septemberChats.length === 0
+      ? []
+      : await this.prisma.lineChatMirrorChat.findMany({
+        where: {
+          lineOfficialAccountId: target.lineOfficialAccountId,
+          lineChatUserId: { in: septemberChats.map((chat) => chat.chatUserId) },
+        },
+        select: {
+          lineChatUserId: true,
+          historicalBackfillStatus: true,
+        },
+      });
 
-    return operation.acquired
-      ? operation.value
-      : emptySeptemberChatInventoryReport(target.storeCode, "PROFILE_OPERATION_BUSY");
+    const report = buildSeptemberChatInventoryReport({
+      storeCode: target.storeCode,
+      discovery,
+      order: orderSnapshot,
+      historicalStates,
+    });
+    const forcedIncompleteReason = enumerationError === "PROFILE_OPERATION_BUSY_DURING_RESUMABLE_INVENTORY"
+      ? enumerationError
+      : null;
+    return {
+      ...report,
+      targetResolutionSource: target.targetResolutionSource ?? null,
+      ...(forcedIncompleteReason
+        ? {
+            inventoryComplete: false,
+            inventoryIncompleteReason: forcedIncompleteReason,
+            septemberChats: null,
+            historicalCheckedRate: null,
+            fastPathCompleteRate: null,
+          }
+        : {}),
+    };
   }
 
   /** Runs read-only store inventories serially to avoid overlapping Manager profiles. */
