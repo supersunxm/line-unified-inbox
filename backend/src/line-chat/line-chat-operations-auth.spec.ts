@@ -41,6 +41,7 @@ test("Operations Security: AuthGuard and Reflector enforce ADMIN-only access", a
     LineChatOperationsController.prototype.startMirrorBackfill,
     LineChatOperationsController.prototype.startMirrorCatchUp,
     LineChatOperationsController.prototype.returnMirrorToNormal,
+    LineChatOperationsController.prototype.emergencyResumeMirror,
   ]) {
     assert.equal(Reflect.getMetadata(PATH_METADATA, handler) !== undefined, true);
   }
@@ -91,6 +92,10 @@ test("Mirror mode control endpoints reuse the authenticated ADMIN controller and
       transitions.push(mode);
       return { mode };
     },
+    emergencyResume: async (input: { acknowledgeUnprovenGap: boolean; reason: string }) => ({
+      mode: "NORMAL",
+      recoveryRequired: input.acknowledgeUnprovenGap,
+    }),
   };
   const controller = new LineChatOperationsController(
     undefined as never,
@@ -106,6 +111,13 @@ test("Mirror mode control endpoints reuse the authenticated ADMIN controller and
   assert.deepEqual(await controller.startMirrorBackfill(), { mode: "BACKFILL" });
   assert.deepEqual(await controller.startMirrorCatchUp(), { mode: "CATCH_UP" });
   assert.deepEqual(await controller.returnMirrorToNormal(), { mode: "NORMAL" });
+  assert.deepEqual(
+    await controller.emergencyResumeMirror({
+      acknowledgeUnprovenGap: true,
+      reason: "restore live polling",
+    }),
+    { mode: "NORMAL", recoveryRequired: true },
+  );
   assert.deepEqual(transitions, ["BACKFILL", "CATCH_UP", "NORMAL"]);
   assert.equal(Reflect.getMetadata(PATH_METADATA, LineChatOperationsController), "operations/line-chat-nickname");
   assert.equal(Reflect.getMetadata(METHOD_METADATA, LineChatOperationsController.prototype.startMirrorBackfill), 1);
