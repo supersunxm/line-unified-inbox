@@ -494,6 +494,39 @@ test("Mirror target resolver reports cache hits without changing the cached targ
   assert.deepEqual(harness.summaryRecords().map((record) => record.outcome), ["EXISTING_OA", "CACHE_HIT"]);
 });
 
+test("Mirror target resolver bypasses a warm cache when explicitly requested", async () => {
+  const cachedSession = resolverTestSession("cache-session");
+  const redirectSession = resolverTestSession("redirect-session");
+  const redirectBotId = `U${"b".repeat(32)}`;
+  const harness = createTargetResolverHarness({
+    sessions: [redirectSession],
+    botIdBySession: new Map([[redirectSession.id, redirectBotId]]),
+  });
+
+  const cached = await harness.service.resolveMirrorTarget(targetResolverInput({
+    chatBotId: `U${"c".repeat(32)}`,
+    lineChatSession: cachedSession,
+  }));
+  assert.equal(cached.ok, true);
+
+  const fresh = await harness.service.resolveMirrorTarget(targetResolverInput({
+    chatBotId: null,
+    lineChatSession: null,
+    bypassCache: true,
+  }));
+
+  assert.equal(fresh.ok, true);
+  if (fresh.ok) {
+    assert.equal(fresh.source, "MANAGER_ACCOUNT_REDIRECT");
+    assert.equal(fresh.session.id, redirectSession.id);
+    assert.equal(fresh.botId, redirectBotId);
+  }
+  assert.deepEqual(
+    harness.summaryRecords().map((record) => record.outcome),
+    ["EXISTING_OA", "MANAGER_ACCOUNT_REDIRECT"],
+  );
+});
+
 test("Mirror target resolver reports missing account key and no usable sessions distinctly", async () => {
   const missingKeyHarness = createTargetResolverHarness({ sessions: [] });
   const missingKey = await missingKeyHarness.service.resolveMirrorTarget(targetResolverInput({ basicId: null }));
