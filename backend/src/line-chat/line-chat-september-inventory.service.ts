@@ -2,9 +2,9 @@ import { Inject, Injectable, Optional } from "@nestjs/common";
 import { PrismaService } from "../prisma.service";
 import { LINE_CHAT_HISTORICAL_PILOT_STORE_CODES } from "./line-chat-historical-backfill";
 import { LineChatMirrorService, type MirrorStoreTargetInputs } from "./line-chat-mirror.service";
-import { LineChatProfileOperationCoordinator } from "./line-chat-profile-operation-coordinator.service";
+import {\n  LineChatProfileOperationCoordinator,\n  type ProfileOperationResult,\n} from "./line-chat-profile-operation-coordinator.service";
 import { LineChatSessionService } from "./line-chat-session.service";
-import type { LineChatDiscoveredChat, LineChatDiscoveryContinuation, LineChatDiscoveryResult } from "./line-chat.types";
+import type {\n  LineChatDiscoveredChat,\n  LineChatDiscoveryChunkResult,\n  LineChatDiscoveryContinuation,\n  LineChatDiscoveryResult,\n} from "./line-chat.types";
 import {
   SeptemberChatListOrderTracker,
   buildSeptemberChatInventoryReport,
@@ -251,7 +251,7 @@ export class LineChatSeptemberInventoryService {
         break;
       }
 
-      let operation: Awaited<ReturnType<LineChatProfileOperationCoordinator["withProfileOperation"]>>;
+      let operation: ProfileOperationResult<LineChatDiscoveryChunkResult>;
       try {
         operation = await this.coordinator.withProfileOperation(
           { sessionId: target.session.id, operationKind: "MANUAL_DIAGNOSTIC" },
