@@ -869,6 +869,7 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
     lineChatWorkspaceUrl: string | null;
     storeManagerUrl: string | null;
     lineChatSession: MirrorSessionTarget | null;
+    bypassCache?: boolean;
   }): Promise<MirrorTargetResolution> {
     const diagnostics = {
       sessionsConsidered: 0,
@@ -899,7 +900,9 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
       return { ok: false, errorCode, errorMessage };
     };
 
-    const cached = this.targetCache.get(input.lineOfficialAccountId);
+    const cached = input.bypassCache
+      ? null
+      : this.targetCache.get(input.lineOfficialAccountId);
     if (cached && cached.session.status === LineChatSessionStatus.ACTIVE) {
       emitSummary("CACHE_HIT");
       return { ok: true, ...cached };
