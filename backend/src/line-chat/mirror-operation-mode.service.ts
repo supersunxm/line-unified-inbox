@@ -444,6 +444,52 @@ export class MirrorOperationModeService {
     }
 
     if (input.inventoryComplete) {
+      const existingRows = await this.prisma.mirrorBackfillConversation.findMany({
+        where: {
+          runId: state.runId,
+          storeCode: input.storeCode,
+        },
+        select: { lineChatUserId: true },
+      });
+      const incomingIds = new Set(rows.map((row) => row.lineChatUserId));
+      const frozenMembersMissingFromInventory = existingRows
+        .filter((row) => !incomingIds.has(row.lineChatUserId))
+        .length;
+
+      if (frozenMembersMissingFromInventory > 0) {
+        if (rows.length > 0) {
+          await this.prisma.mirrorBackfillConversation.createMany({
+            data: rows,
+            skipDuplicates: true,
+          });
+        }
+        const observedConversations = await this.prisma.mirrorBackfillConversation.count({
+          where: { runId: state.runId, storeCode: input.storeCode },
+        });
+        await this.prisma.mirrorBackfillStoreCohort.update({
+          where: {
+            runId_storeCode: {
+              runId: state.runId,
+              storeCode: input.storeCode,
+            },
+          },
+          data: {
+            inventoryStatus: "UNPROVEN",
+            observedConversations,
+            exactSeptemberChats: null,
+            inventoryCompletedAt: null,
+          },
+        });
+        this.logger.warn(JSON.stringify({
+          event: "mirror_backfill_cohort_inventory_conflict",
+          storeCode: input.storeCode,
+          frozenMembersMissingFromInventory,
+          inventoryMembersObserved: rows.length,
+          behavior: "PRESERVE_FROZEN_MEMBERS_AND_FAIL_CLOSED",
+        }));
+        return;
+      }
+
       await this.prisma.mirrorBackfillConversation.deleteMany({
         where: {
           runId: state.runId,
