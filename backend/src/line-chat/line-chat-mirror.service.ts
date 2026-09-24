@@ -71,6 +71,7 @@ interface PendingHistoricalMirrorChat extends PendingMirrorChat {
 }
 
 interface HistoricalMirrorTarget {
+  runId: string;
   storeCode: string;
   lineOfficialAccountId: string;
   botId: string;
@@ -365,11 +366,16 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
           freezeAt: operationState.freezeAt?.toISOString() ?? null,
           storeCount: configuredLineChatMirrorStoreCodes().length,
         }));
-        if (!operationState.freezeAt || !operationState.backfillTargetStartAt) return [];
+        if (
+          !operationState.runId
+          || !operationState.freezeAt
+          || !operationState.backfillTargetStartAt
+        ) return [];
         const configuredStores = new Set(configuredLineChatMirrorStoreCodes());
         for (const storeCode of LINE_CHAT_HISTORICAL_PILOT_STORE_CODES) {
           if (!configuredStores.has(storeCode)) continue;
           await this.runBackfillStore(
+            operationState.runId,
             storeCode,
             operationState.freezeAt,
             operationState.backfillTargetStartAt,
@@ -414,6 +420,7 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async runBackfillStore(
+    runId: string,
     storeCode: string,
     freezeAt: Date,
     targetStartAt: Date,
@@ -440,6 +447,7 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
       }
       const profilePath = this.sessionService.resolveProfilePath(resolution.session);
       await this.runHistoricalBackfillStore({
+        runId,
         storeCode: inputs.effectiveStoreCode,
         lineOfficialAccountId: inputs.oa.id,
         botId: resolution.botId,
@@ -1481,12 +1489,21 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
           HistoricalBackfillStatus.FETCHING_INITIAL_PAGE,
           HistoricalBackfillStatus.FAILED,
         ];
+        const cohortRows = await this.prisma.mirrorBackfillConversation.findMany({
+          where: {
+            runId: target.runId,
+            storeCode: target.storeCode,
+            lineOfficialAccountId: target.lineOfficialAccountId,
+          },
+          select: {
+            lineChatUserId: true,
+            observedLastMessageAt: true,
+          },
+        });
+        const cohortIds = cohortRows.map((row) => row.lineChatUserId);
         const candidateWhere = {
           lineOfficialAccountId: target.lineOfficialAccountId,
-          lastMessageAt: {
-            gte: target.targetStartAt,
-            lte: target.freezeAt,
-          },
+          lineChatUserId: { in: cohortIds },
           OR: [
             { historicalBackfillStatus: null },
             { historicalBackfillStatus: { in: resumableStatuses } },
@@ -1496,27 +1513,31 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
           this.prisma.lineChatMirrorChat.count({
             where: { lineOfficialAccountId: target.lineOfficialAccountId },
           }),
-          this.prisma.lineChatMirrorChat.count({ where: candidateWhere }),
-          this.prisma.lineChatMirrorChat.findMany({
-            where: candidateWhere,
-            orderBy: { lastMessageAt: "desc" },
-            take: HISTORICAL_MAX_CONVERSATIONS_PER_STORE_CYCLE,
-            select: {
-              lineChatUserId: true,
-              lastMessageAt: true,
-              historicalBackfillStatus: true,
-            },
-          }),
+          cohortIds.length === 0
+            ? Promise.resolve(0)
+            : this.prisma.lineChatMirrorChat.count({ where: candidateWhere }),
+          cohortIds.length === 0
+            ? Promise.resolve([])
+            : this.prisma.lineChatMirrorChat.findMany({
+                where: candidateWhere,
+                orderBy: { lastMessageAt: "desc" },
+                take: HISTORICAL_MAX_CONVERSATIONS_PER_STORE_CYCLE,
+                select: {
+                  lineChatUserId: true,
+                  lastMessageAt: true,
+                  historicalBackfillStatus: true,
+                },
+              }),
         ]);
+        const observedTimestampById = new Map(
+          cohortRows.map((row) => [row.lineChatUserId, row.observedLastMessageAt] as const),
+        );
         const candidatesWithTimestamp: PendingHistoricalMirrorChat[] = candidates
-          .filter((candidate): candidate is typeof candidate & { lastMessageAt: Date } =>
-            candidate.lastMessageAt instanceof Date
-            && candidate.lastMessageAt.getTime() <= target.freezeAt.getTime()
-            && candidate.lastMessageAt.getTime() >= target.targetStartAt.getTime(),
-          )
           .map((candidate) => ({
             lineChatUserId: candidate.lineChatUserId,
-            lastMessageAt: candidate.lastMessageAt,
+            lastMessageAt: candidate.lastMessageAt
+              ?? observedTimestampById.get(candidate.lineChatUserId)
+              ?? target.freezeAt,
             historicalBackfillStatus: candidate.historicalBackfillStatus,
           }));
 
@@ -1690,7 +1711,7 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
                 ),
               );
               const classification = classifyHistoricalPage({
-                events: boundedEvents,
+                events: parsed.events,
                 backwardPresent: history.backwardPresent,
               }, lineChatHistoricalLowerBound());
               const persistence = await persistHistoricalEvents({
