@@ -330,6 +330,7 @@ test("pilot inventory uses the Live Mirror OA selector and resolver for direct a
     assert.equal(report?.targetResolutionSource, targetCase.source, targetCase.name);
     assert.equal(report?.septemberChats, 1, targetCase.name);
     assert.deepEqual(resolvedInputs, {
+      storeCode: "29113",
       lineOfficialAccountId: "oa-1",
       chatBotId: targetCase.chatBotId,
       basicId: "@pinklao",
@@ -365,7 +366,11 @@ test("pilot inventory fails closed for OA mismatch, ambiguous, or unavailable Mi
       lineChatSession: null,
     },
   };
-  for (const errorCode of ["MIRROR_MANAGER_TARGET_AMBIGUOUS", "MIRROR_MANAGER_TARGET_NOT_FOUND"] as const) {
+  for (const errorCode of [
+    "MIRROR_MANAGER_TARGET_AMBIGUOUS",
+    "MIRROR_MANAGER_TARGET_NOT_FOUND",
+    "MIRROR_MANAGER_TARGET_BUSY",
+  ] as const) {
     let discoveryCalls = 0;
     let resolverCalls = 0;
     const prisma = {
@@ -385,7 +390,10 @@ test("pilot inventory fails closed for OA mismatch, ambiguous, or unavailable Mi
     const coordinator = {} as LineChatProfileOperationCoordinator;
     const service = new LineChatSeptemberInventoryService(prisma, sessionService, coordinator, mirrorService);
     const [report] = await service.discoverPilotStores();
-    assert.equal(report?.inventoryIncompleteReason, errorCode);
+    assert.equal(
+      report?.inventoryIncompleteReason,
+      errorCode === "MIRROR_MANAGER_TARGET_BUSY" ? "PROFILE_OPERATION_BUSY" : errorCode,
+    );
     assert.equal(resolverCalls, 1);
     assert.equal(discoveryCalls, 0);
   }

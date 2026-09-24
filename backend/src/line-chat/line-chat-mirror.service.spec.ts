@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { LineChatMirrorDirection, LineChatSessionStatus } from "@prisma/client";
+import {
+  LineChatMirrorDirection,
+  LineChatMirrorSyncStatus,
+  LineChatSessionStatus,
+} from "@prisma/client";
 import { LineChatMirrorService } from "./line-chat-mirror.service";
 import type { PrismaService } from "../prisma.service";
 import type { LineChatSessionService } from "./line-chat-session.service";
@@ -16,6 +20,143 @@ import {
   mirrorDirectionForManagerEvent,
   selectMirrorResolvedCandidate,
 } from "./line-chat-mirror.service";
+
+type ResolverTestSession = {
+  id: string;
+  sessionKey: string;
+  status: LineChatSessionStatus;
+  profilePath: string | null;
+  profileStorageKey: null;
+};
+
+function resolverTestSession(id: string): ResolverTestSession {
+  return {
+    id,
+    sessionKey: `profile-${id}`,
+    status: LineChatSessionStatus.ACTIVE,
+    profilePath: "/tmp",
+    profileStorageKey: null,
+  };
+}
+
+function createTargetResolverHarness(options: {
+  sessions: ResolverTestSession[];
+  busySessionIds?: ReadonlySet<string>;
+  unusableSessionIds?: ReadonlySet<string>;
+  authBySession?: ReadonlyMap<string, "YES" | "NO" | "UNKNOWN">;
+  botIdBySession?: ReadonlyMap<string, string | null>;
+  failedDiscoveryBotIds?: ReadonlySet<string>;
+}) {
+  const logs: string[] = [];
+  const leaseRequests: Array<{ sessionId: string; operationKind: string; waitForLock?: boolean }> = [];
+  const contexts = new Map<string, {
+    resolverSessionId: string;
+    pages: () => Array<{ goto: () => Promise<void>; waitForTimeout: () => Promise<void>; url: () => string }>;
+    newPage: () => Promise<{ goto: () => Promise<void>; waitForTimeout: () => Promise<void>; url: () => string }>;
+  }>();
+  for (const session of options.sessions) {
+    const botId = options.botIdBySession?.has(session.id)
+      ? options.botIdBySession.get(session.id) ?? null
+      : `U${"a".repeat(32)}`;
+    const page = {
+      goto: async () => {},
+      waitForTimeout: async () => {},
+      url: () => botId ? `https://chat.line.biz/${botId}` : "https://chat.line.biz/account/@manager",
+    };
+    contexts.set(session.id, {
+      resolverSessionId: session.id,
+      pages: () => [page],
+      newPage: async () => page,
+    });
+  }
+  const prisma = {
+    lineChatSession: { findMany: async () => options.sessions },
+  } as unknown as PrismaService;
+  const sessionService = {
+    resolveProfilePath: (session: ResolverTestSession) => {
+      if (options.unusableSessionIds?.has(session.id)) throw new Error("profile unavailable");
+      return "/tmp";
+    },
+    launchManagedPersistentContext: async (
+      _profilePath: string,
+      _launchOptions: unknown,
+      metadata?: { sessionId?: string },
+    ) => contexts.get(metadata?.sessionId ?? "") as unknown as import("playwright").BrowserContext,
+    probeApiAuthentication: async (context: { resolverSessionId: string }) => ({
+      authenticated: options.authBySession?.get(context.resolverSessionId) ?? "YES",
+    }),
+    closeManagedPersistentContext: async () => {},
+    discoverRecentChats: async ({ botId }: { botId: string }) => options.failedDiscoveryBotIds?.has(botId)
+      ? {
+        status: "FAILED" as const,
+        chats: [],
+        pagesFetched: 1,
+        totalRawRecords: 0,
+        failureReason: "TRANSPORT" as const,
+        failureDetail: "private customer and cursor details must not enter the summary",
+      }
+      : { status: "READY" as const, chats: [], pagesFetched: 1, totalRawRecords: 0 },
+  } as unknown as LineChatSessionService;
+  const coordinator = {
+    withProfileOperation: async (
+      input: { sessionId: string; operationKind: string },
+      callback: (context: { assertOwnership: () => void }) => Promise<unknown>,
+      lockOptions?: { waitForLock?: boolean },
+    ) => {
+      leaseRequests.push({ ...input, waitForLock: lockOptions?.waitForLock });
+      if (options.busySessionIds?.has(input.sessionId)) {
+        return {
+          acquired: false as const,
+          reason: "PROFILE_OPERATION_BUSY" as const,
+          retryAfterMs: 5_000,
+          sessionId: input.sessionId,
+          operationKind: "MIRROR_SYNC" as const,
+          requestId: `busy-${input.sessionId}`,
+          busyStage: "DATABASE_LEASE" as const,
+          waitedMs: 0,
+        };
+      }
+      return {
+        acquired: true as const,
+        value: await callback({ assertOwnership() {} }),
+        sessionId: input.sessionId,
+        operationKind: "MIRROR_SYNC" as const,
+        requestId: `acquired-${input.sessionId}`,
+      };
+    },
+  } as unknown as LineChatProfileOperationCoordinator;
+  const service = new LineChatMirrorService(prisma, sessionService, coordinator);
+  Object.defineProperty(service, "logger", {
+    configurable: true,
+    value: {
+      log: (message: string) => logs.push(message),
+      warn: (message: string) => logs.push(message),
+    },
+  });
+  const summaryRecords = () => logs
+    .map((message) => {
+      try { return JSON.parse(message) as Record<string, unknown>; } catch { return null; }
+    })
+    .filter((record): record is Record<string, unknown> =>
+      record?.event === "line_chat_mirror_target_resolution_summary",
+    );
+  return { service, logs, leaseRequests, summaryRecords };
+}
+
+function targetResolverInput(
+  overrides: Partial<Parameters<LineChatMirrorService["resolveMirrorTarget"]>[0]> = {},
+): Parameters<LineChatMirrorService["resolveMirrorTarget"]>[0] {
+  return {
+    storeCode: "29113",
+    lineOfficialAccountId: "oa-private-test",
+    chatBotId: null,
+    basicId: "@manager-account",
+    lineChatWorkspaceUrl: null,
+    storeManagerUrl: null,
+    lineChatSession: null,
+    ...overrides,
+  };
+}
 
 function withEnv(
   values: Record<string, string | undefined>,
@@ -207,6 +348,7 @@ test("Live Mirror canonical store target inputs use the read-only OA selector", 
 
 test("canonical Mirror target resolver preserves the direct OA bot and active-session path", async () => {
   let profileResolutionCalls = 0;
+  const logs: string[] = [];
   const session = {
     id: "session-direct",
     sessionKey: "direct-profile",
@@ -224,8 +366,13 @@ test("canonical Mirror target resolver preserves the direct OA bot and active-se
     } as unknown as LineChatSessionService,
     {} as LineChatProfileOperationCoordinator,
   );
+  Object.defineProperty(service, "logger", {
+    configurable: true,
+    value: { log: (message: string) => logs.push(message), warn: (message: string) => logs.push(message) },
+  });
 
   const result = await service.resolveMirrorTarget({
+    storeCode: "29113",
     lineOfficialAccountId: "oa-direct",
     chatBotId: "Uexisting-bot",
     basicId: "@direct",
@@ -240,6 +387,10 @@ test("canonical Mirror target resolver preserves the direct OA bot and active-se
     assert.equal(result.session.id, "session-direct");
   }
   assert.equal(profileResolutionCalls, 0);
+  const summary = JSON.parse(logs[0] ?? "{}") as Record<string, unknown>;
+  assert.equal(summary.event, "line_chat_mirror_target_resolution_summary");
+  assert.equal(summary.storeCode, "29113");
+  assert.equal(summary.outcome, "EXISTING_OA");
 });
 
 test("canonical Mirror target resolver uses Manager redirect fallback when OA bot and session are absent", async () => {
@@ -253,6 +404,8 @@ test("canonical Mirror target resolver uses Manager redirect fallback when OA bo
   };
   let recentDiscoveryCalls = 0;
   let closedContexts = 0;
+  let waitForLock: boolean | undefined;
+  const logs: string[] = [];
   const page = {
     goto: async () => {},
     waitForTimeout: async () => {},
@@ -280,17 +433,26 @@ test("canonical Mirror target resolver uses Manager redirect fallback when OA bo
     withProfileOperation: async (
       _input: unknown,
       callback: (context: { assertOwnership: () => void }) => Promise<unknown>,
-    ) => ({
-      acquired: true as const,
-      value: await callback({ assertOwnership() {} }),
-      sessionId: session.id,
-      operationKind: "MIRROR_SYNC" as const,
-      requestId: "request-1",
-    }),
+      options?: { waitForLock?: boolean },
+    ) => {
+      waitForLock = options?.waitForLock;
+      return {
+        acquired: true as const,
+        value: await callback({ assertOwnership() {} }),
+        sessionId: session.id,
+        operationKind: "MIRROR_SYNC" as const,
+        requestId: "request-1",
+      };
+    },
   } as unknown as LineChatProfileOperationCoordinator;
   const service = new LineChatMirrorService(prisma, sessionService, coordinator);
+  Object.defineProperty(service, "logger", {
+    configurable: true,
+    value: { log: (message: string) => logs.push(message), warn: (message: string) => logs.push(message) },
+  });
 
   const result = await service.resolveMirrorTarget({
+    storeCode: "29113",
     lineOfficialAccountId: "oa-fallback",
     chatBotId: null,
     basicId: "@fallback",
@@ -306,6 +468,226 @@ test("canonical Mirror target resolver uses Manager redirect fallback when OA bo
   }
   assert.equal(recentDiscoveryCalls, 1);
   assert.equal(closedContexts, 1);
+  assert.equal(waitForLock, false);
+  const summary = logs.map((line) => JSON.parse(line) as Record<string, unknown>)
+    .find((line) => line.event === "line_chat_mirror_target_resolution_summary");
+  assert.equal(summary?.outcome, "MANAGER_ACCOUNT_REDIRECT");
+  assert.equal(summary?.verifiedCandidates, 1);
+});
+
+test("Mirror target resolver reports cache hits without changing the cached target", async () => {
+  const session = resolverTestSession("cache-session");
+  const harness = createTargetResolverHarness({ sessions: [] });
+  const first = await harness.service.resolveMirrorTarget(targetResolverInput({
+    chatBotId: `U${"c".repeat(32)}`,
+    lineChatSession: session,
+  }));
+  const second = await harness.service.resolveMirrorTarget(targetResolverInput());
+
+  assert.equal(first.ok, true);
+  assert.equal(second.ok, true);
+  if (first.ok && second.ok) {
+    assert.equal(first.source, "EXISTING_OA");
+    assert.equal(second.source, "EXISTING_OA");
+    assert.equal(second.session.id, session.id);
+  }
+  assert.deepEqual(harness.summaryRecords().map((record) => record.outcome), ["EXISTING_OA", "CACHE_HIT"]);
+});
+
+test("Mirror target resolver reports missing account key and no usable sessions distinctly", async () => {
+  const missingKeyHarness = createTargetResolverHarness({ sessions: [] });
+  const missingKey = await missingKeyHarness.service.resolveMirrorTarget(targetResolverInput({ basicId: null }));
+  assert.equal(missingKey.ok, false);
+  if (!missingKey.ok) assert.equal(missingKey.errorCode, "MIRROR_MANAGER_ACCOUNT_KEY_MISSING");
+  assert.equal(missingKeyHarness.summaryRecords()[0]?.outcome, "NO_MANAGER_ACCOUNT_KEY");
+
+  const noSessionHarness = createTargetResolverHarness({ sessions: [] });
+  const noSession = await noSessionHarness.service.resolveMirrorTarget(targetResolverInput());
+  assert.equal(noSession.ok, false);
+  if (!noSession.ok) assert.equal(noSession.errorCode, "MIRROR_MANAGER_TARGET_NOT_FOUND");
+  assert.equal(noSessionHarness.summaryRecords()[0]?.outcome, "NO_ACTIVE_SESSION");
+
+  const unavailable = resolverTestSession("unavailable-session");
+  const noProfileHarness = createTargetResolverHarness({
+    sessions: [unavailable],
+    unusableSessionIds: new Set([unavailable.id]),
+  });
+  const noProfile = await noProfileHarness.service.resolveMirrorTarget(targetResolverInput());
+  assert.equal(noProfile.ok, false);
+  if (!noProfile.ok) assert.equal(noProfile.errorCode, "MIRROR_MANAGER_TARGET_NOT_FOUND");
+  assert.equal(noProfileHarness.summaryRecords()[0]?.outcome, "NO_USABLE_SESSION");
+});
+
+test("Mirror target resolver continues past one busy profile and accepts another verified redirect", async () => {
+  const first = resolverTestSession("busy-session");
+  const second = resolverTestSession("available-session");
+  const botId = `U${"b".repeat(32)}`;
+  const harness = createTargetResolverHarness({
+    sessions: [first, second],
+    busySessionIds: new Set([first.id]),
+    botIdBySession: new Map([[second.id, botId]]),
+  });
+
+  const result = await harness.service.resolveMirrorTarget(targetResolverInput());
+  assert.equal(result.ok, true);
+  if (result.ok) {
+    assert.equal(result.botId, botId);
+    assert.equal(result.session.id, second.id);
+    assert.equal(result.source, "MANAGER_ACCOUNT_REDIRECT");
+  }
+  assert.deepEqual(harness.leaseRequests.map((request) => request.waitForLock), [false, false]);
+  const summary = harness.summaryRecords()[0];
+  assert.equal(summary?.sessionsBusy, 1);
+  assert.equal(summary?.sessionsAttempted, 1);
+  assert.equal(summary?.verifiedCandidates, 1);
+  assert.equal(summary?.outcome, "MANAGER_ACCOUNT_REDIRECT");
+});
+
+test("all eligible Mirror resolver profiles busy returns a temporary busy code, not target-not-found", async () => {
+  const sessions = [resolverTestSession("busy-a"), resolverTestSession("busy-b")];
+  const harness = createTargetResolverHarness({
+    sessions,
+    busySessionIds: new Set(sessions.map((session) => session.id)),
+  });
+
+  const result = await harness.service.resolveMirrorTarget(targetResolverInput());
+  assert.equal(result.ok, false);
+  if (!result.ok) assert.equal(result.errorCode, "MIRROR_MANAGER_TARGET_BUSY");
+  const summary = harness.summaryRecords()[0];
+  assert.equal(summary?.sessionsConsidered, 2);
+  assert.equal(summary?.sessionsBusy, 2);
+  assert.equal(summary?.sessionsAttempted, 0);
+  assert.equal(summary?.outcome, "PROFILE_BUSY");
+  assert.doesNotMatch(JSON.stringify(summary), /oa-private-test|busy-a|busy-b|manager-account/iu);
+});
+
+test("attempted profiles without confirmed auth remain permanent target-not-found with auth diagnostics", async () => {
+  const sessions = [resolverTestSession("auth-a"), resolverTestSession("auth-b")];
+  const harness = createTargetResolverHarness({
+    sessions,
+    authBySession: new Map([["auth-a", "NO"], ["auth-b", "UNKNOWN"]]),
+  });
+
+  const result = await harness.service.resolveMirrorTarget(targetResolverInput());
+  assert.equal(result.ok, false);
+  if (!result.ok) assert.equal(result.errorCode, "MIRROR_MANAGER_TARGET_NOT_FOUND");
+  const summary = harness.summaryRecords()[0];
+  assert.equal(summary?.sessionsAttempted, 2);
+  assert.equal(summary?.authenticationNotConfirmed, 2);
+  assert.equal(summary?.outcome, "AUTH_NOT_CONFIRMED");
+});
+
+test("authenticated redirect without a canonical Bot ID remains target-not-found with a distinct outcome", async () => {
+  const session = resolverTestSession("redirect-without-bot");
+  const harness = createTargetResolverHarness({
+    sessions: [session],
+    botIdBySession: new Map([[session.id, null]]),
+  });
+
+  const result = await harness.service.resolveMirrorTarget(targetResolverInput());
+  assert.equal(result.ok, false);
+  if (!result.ok) assert.equal(result.errorCode, "MIRROR_MANAGER_TARGET_NOT_FOUND");
+  const summary = harness.summaryRecords()[0];
+  assert.equal(summary?.authenticatedSessions, 1);
+  assert.equal(summary?.redirectsWithoutBotId, 1);
+  assert.equal(summary?.outcome, "REDIRECT_BOT_ID_NOT_FOUND");
+});
+
+test("recent discovery rejection is distinguished without customer details in resolver summaries", async () => {
+  const session = resolverTestSession("candidate-rejected");
+  const botId = `U${"d".repeat(32)}`;
+  const harness = createTargetResolverHarness({
+    sessions: [session],
+    botIdBySession: new Map([[session.id, botId]]),
+    failedDiscoveryBotIds: new Set([botId]),
+  });
+
+  const result = await harness.service.resolveMirrorTarget(targetResolverInput());
+  assert.equal(result.ok, false);
+  if (!result.ok) assert.equal(result.errorCode, "MIRROR_MANAGER_TARGET_NOT_FOUND");
+  const summary = harness.summaryRecords()[0];
+  assert.equal(summary?.recentDiscoveryRejected, 1);
+  assert.equal(summary?.outcome, "RECENT_DISCOVERY_REJECTED");
+  assert.doesNotMatch(JSON.stringify(summary), /customer|cursor|candidate-rejected|oa-private-test/iu);
+  const rejectedLog = harness.logs
+    .map((message) => JSON.parse(message) as Record<string, unknown>)
+    .find((record) => record.event === "line_chat_mirror_target_candidate_rejected");
+  assert.equal(rejectedLog?.storeCode, "29113");
+  assert.equal("failureDetail" in (rejectedLog ?? {}), false);
+});
+
+test("multiple distinct verified redirect targets remain fail-closed as ambiguous", async () => {
+  const first = resolverTestSession("candidate-a");
+  const second = resolverTestSession("candidate-b");
+  const harness = createTargetResolverHarness({
+    sessions: [first, second],
+    botIdBySession: new Map([
+      [first.id, `U${"e".repeat(32)}`],
+      [second.id, `U${"f".repeat(32)}`],
+    ]),
+  });
+
+  const result = await harness.service.resolveMirrorTarget(targetResolverInput());
+  assert.equal(result.ok, false);
+  if (!result.ok) assert.equal(result.errorCode, "MIRROR_MANAGER_TARGET_AMBIGUOUS");
+  const summary = harness.summaryRecords()[0];
+  assert.equal(summary?.verifiedCandidates, 2);
+  assert.equal(summary?.outcome, "AMBIGUOUS");
+});
+
+test("Live Mirror records resolver contention as transient PARTIAL state", async () => {
+  const stateUpdates: Array<Record<string, unknown>> = [];
+  const store = {
+    id: "store-db-id",
+    code: "29113",
+    storeMaster: {
+      externalStoreId: "29113",
+      lineManagerUrl: "https://manager.line.biz/account/@pinklao",
+      accountName: "OPPO Central Pinklao",
+      normalizedAccountName: "oppo central pinklao",
+      lineId: "@pinklao",
+    },
+    lineOfficialAccounts: [{
+      id: "oa-pinklao",
+      name: "OPPO Central Pinklao",
+      basicId: "@pinklao",
+      lineChatWorkspaceUrl: null,
+      chatBotId: null,
+      lineChatSession: null,
+    }],
+  };
+  const prisma = {
+    store: { findFirst: async () => store },
+    lineChatMirrorStoreState: {
+      upsert: async () => {},
+      update: async (input: { data: Record<string, unknown> }) => stateUpdates.push(input.data),
+    },
+    lineChatMirrorMessage: { updateMany: async () => ({ count: 0 }) },
+    lineChatMirrorChat: { findMany: async () => [] },
+  } as unknown as PrismaService;
+  const service = new LineChatMirrorService(
+    prisma,
+    {} as LineChatSessionService,
+    {} as LineChatProfileOperationCoordinator,
+  );
+  Object.defineProperty(service, "resolveMirrorTarget", {
+    configurable: true,
+    value: async () => ({
+      ok: false as const,
+      errorCode: "MIRROR_MANAGER_TARGET_BUSY" as const,
+      errorMessage: "temporarily busy",
+    }),
+  });
+
+  const result = await (service as unknown as {
+    syncStore: (storeCode: string) => Promise<{ status: LineChatMirrorSyncStatus }>;
+  }).syncStore("29113");
+
+  assert.equal(result.status, LineChatMirrorSyncStatus.PARTIAL);
+  assert.equal(stateUpdates.length, 1);
+  assert.equal(stateUpdates[0]?.status, LineChatMirrorSyncStatus.PARTIAL);
+  assert.equal(stateUpdates[0]?.lastErrorCode, "PROFILE_OPERATION_BUSY");
+  assert.notEqual(stateUpdates[0]?.lastErrorCode, "MIRROR_MANAGER_TARGET_NOT_FOUND");
 });
 
 

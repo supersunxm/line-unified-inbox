@@ -104,6 +104,7 @@ test("preserves content-hash path separators while encoding each path segment sa
 
 test("treats browser process exhaustion as transient materialization contention", () => {
   assert.equal(isTransientManagerMediaError("MANAGER_MEDIA_PROFILE_BUSY"), true);
+  assert.equal(isTransientManagerMediaError("MIRROR_MANAGER_TARGET_BUSY"), true);
   assert.equal(isTransientManagerMediaError("spawn chromium EAGAIN"), true);
   assert.equal(isTransientManagerMediaError("Target page, context or browser has been closed"), true);
   assert.equal(isTransientManagerMediaError("MANAGER_MEDIA_BINARY_NOT_FOUND"), false);

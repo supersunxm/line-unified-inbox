@@ -131,10 +131,25 @@ export type MirrorTargetResolution =
       ok: false;
       errorCode:
         | "MIRROR_MANAGER_ACCOUNT_KEY_MISSING"
+        | "MIRROR_MANAGER_TARGET_BUSY"
         | "MIRROR_MANAGER_TARGET_NOT_FOUND"
         | "MIRROR_MANAGER_TARGET_AMBIGUOUS";
       errorMessage: string;
     };
+
+type MirrorTargetResolutionOutcome =
+  | "CACHE_HIT"
+  | "EXISTING_OA"
+  | "MANAGER_ACCOUNT_REDIRECT"
+  | "NO_MANAGER_ACCOUNT_KEY"
+  | "NO_ACTIVE_SESSION"
+  | "NO_USABLE_SESSION"
+  | "PROFILE_BUSY"
+  | "AUTH_NOT_CONFIRMED"
+  | "REDIRECT_BOT_ID_NOT_FOUND"
+  | "RECENT_DISCOVERY_REJECTED"
+  | "AMBIGUOUS"
+  | "TRUE_TARGET_NOT_FOUND";
 
 export type MirrorResolvedCandidate = {
   botId: string;
@@ -529,6 +544,7 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
     }
 
     const target = await this.resolveMirrorTarget({
+      storeCode: effectiveStoreCode,
       lineOfficialAccountId: oa.id,
       chatBotId: oa.chatBotId,
       basicId: oa.basicId,
@@ -538,6 +554,23 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
     });
     if (!target.ok) {
       const durationMs = Date.now() - startedAtMs;
+      if (target.errorCode === "MIRROR_MANAGER_TARGET_BUSY") {
+        const pendingChats = await this.markStoreProfileOperationBusy({
+          lineOfficialAccountId: oa.id,
+          durationMs,
+        });
+        return {
+          storeCode: effectiveStoreCode,
+          status: LineChatMirrorSyncStatus.PARTIAL,
+          recentChatsObserved: 0,
+          historiesFetched: 0,
+          messagesObserved: 0,
+          messagesInsertedOrUpdated: 0,
+          pendingChats,
+          unknownDirectionEvents: 0,
+          durationMs,
+        };
+      }
       await this.markStoreFailure({
         lineOfficialAccountId: oa.id,
         status: LineChatMirrorSyncStatus.FAILED,
@@ -732,18 +765,9 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
 
     if (!operation.acquired) {
       const durationMs = Date.now() - startedAtMs;
-      const pendingChats = await this.countPendingChats(oa.id);
-      await this.prisma.lineChatMirrorStoreState.update({
-        where: { lineOfficialAccountId: oa.id },
-        data: {
-          status: LineChatMirrorSyncStatus.PARTIAL,
-          lastCompletedAt: new Date(),
-          lastFailureAt: new Date(),
-          lastErrorCode: "PROFILE_OPERATION_BUSY",
-          lastErrorMessage: operation.reason,
-          pendingChats,
-          lastCycleDurationMs: durationMs,
-        },
+      const pendingChats = await this.markStoreProfileOperationBusy({
+        lineOfficialAccountId: oa.id,
+        durationMs,
       });
       return {
         storeCode: effectiveStoreCode,
@@ -838,6 +862,7 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
   }
 
   public async resolveMirrorTarget(input: {
+    storeCode?: string;
     lineOfficialAccountId: string;
     chatBotId: string | null;
     basicId: string | null;
@@ -845,8 +870,38 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
     storeManagerUrl: string | null;
     lineChatSession: MirrorSessionTarget | null;
   }): Promise<MirrorTargetResolution> {
+    const diagnostics = {
+      sessionsConsidered: 0,
+      sessionsWithProfile: 0,
+      sessionsBusy: 0,
+      sessionsAttempted: 0,
+      authenticatedSessions: 0,
+      redirectCandidates: 0,
+      verifiedCandidates: 0,
+      authenticationNotConfirmed: 0,
+      redirectsWithoutBotId: 0,
+      recentDiscoveryRejected: 0,
+    };
+    const emitSummary = (outcome: MirrorTargetResolutionOutcome): void => {
+      this.logger.log(JSON.stringify({
+        event: "line_chat_mirror_target_resolution_summary",
+        ...(input.storeCode ? { storeCode: input.storeCode } : {}),
+        ...diagnostics,
+        outcome,
+      }));
+    };
+    const fail = (
+      errorCode: Extract<MirrorTargetResolution, { ok: false }>['errorCode'],
+      errorMessage: string,
+      outcome: MirrorTargetResolutionOutcome,
+    ): MirrorTargetResolution => {
+      emitSummary(outcome);
+      return { ok: false, errorCode, errorMessage };
+    };
+
     const cached = this.targetCache.get(input.lineOfficialAccountId);
     if (cached && cached.session.status === LineChatSessionStatus.ACTIVE) {
+      emitSummary("CACHE_HIT");
       return { ok: true, ...cached };
     }
 
@@ -862,6 +917,7 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
         source: "EXISTING_OA" as const,
       };
       this.targetCache.set(input.lineOfficialAccountId, resolved);
+      emitSummary("EXISTING_OA");
       return { ok: true, ...resolved };
     }
 
@@ -871,11 +927,11 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
       basicId: input.basicId,
     });
     if (!managerAccountKey) {
-      return {
-        ok: false,
-        errorCode: "MIRROR_MANAGER_ACCOUNT_KEY_MISSING",
-        errorMessage: "No LINE Manager account URL or Basic ID is available for mirror discovery.",
-      };
+      return fail(
+        "MIRROR_MANAGER_ACCOUNT_KEY_MISSING",
+        "No LINE Manager account URL or Basic ID is available for mirror discovery.",
+        "NO_MANAGER_ACCOUNT_KEY",
+      );
     }
 
     const activeSessions = await this.prisma.lineChatSession.findMany({
@@ -901,6 +957,7 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
         sessions.push(session);
       }
     }
+    diagnostics.sessionsConsidered = sessions.length;
 
     const candidates: Array<{
       botId: string;
@@ -914,10 +971,12 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
         continue;
       }
       if (!fs.existsSync(profilePath)) continue;
+      diagnostics.sessionsWithProfile += 1;
 
       const resolved = await this.coordinator.withProfileOperation(
         { sessionId: session.id, operationKind: "MIRROR_SYNC" },
         async (operationContext) => {
+          diagnostics.sessionsAttempted += 1;
           operationContext.assertOwnership();
           let context: BrowserContext | null = null;
           let resolvedBotId: string | null = null;
@@ -948,7 +1007,12 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
               (ms) => page.waitForTimeout(ms),
             );
             if (auth.outcome === "AUTHENTICATED") {
+              diagnostics.authenticatedSessions += 1;
               resolvedBotId = managerBotIdFromRedirect(page.url());
+              if (resolvedBotId) diagnostics.redirectCandidates += 1;
+              else diagnostics.redirectsWithoutBotId += 1;
+            } else {
+              diagnostics.authenticationNotConfirmed += 1;
             }
           } finally {
             if (context) {
@@ -970,19 +1034,25 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
           });
           operationContext.assertOwnership();
           if (verification.status !== "READY") {
+            diagnostics.recentDiscoveryRejected += 1;
             this.logger.warn(JSON.stringify({
               event: "line_chat_mirror_target_candidate_rejected",
+              ...(input.storeCode ? { storeCode: input.storeCode } : {}),
               reason: `RECENT_DISCOVERY_${verification.failureReason ?? "FAILED"}`,
-              failureDetail: verification.failureDetail ?? null,
               botIdMasked: `${resolvedBotId.slice(0, 4)}...${resolvedBotId.slice(-4)}`,
             }));
             return null;
           }
+          diagnostics.verifiedCandidates += 1;
           return resolvedBotId;
         },
         { waitForLock: false },
       );
-      if (!resolved.acquired || !resolved.value) continue;
+      if (!resolved.acquired) {
+        diagnostics.sessionsBusy += 1;
+        continue;
+      }
+      if (!resolved.value) continue;
       candidates.push({
         botId: resolved.value,
         session,
@@ -991,18 +1061,60 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
 
     const candidate = selectMirrorResolvedCandidate(candidates);
     if (candidate === null) {
-      return {
-        ok: false,
-        errorCode: "MIRROR_MANAGER_TARGET_NOT_FOUND",
-        errorMessage: "No active LINE Manager session could open this OA account.",
-      };
+      if (diagnostics.sessionsBusy > 0) {
+        return fail(
+          "MIRROR_MANAGER_TARGET_BUSY",
+          "One or more LINE OA Manager profiles are temporarily busy.",
+          "PROFILE_BUSY",
+        );
+      }
+      if (sessions.length === 0) {
+        return fail(
+          "MIRROR_MANAGER_TARGET_NOT_FOUND",
+          "No active LINE Manager session could open this OA account.",
+          "NO_ACTIVE_SESSION",
+        );
+      }
+      if (diagnostics.sessionsWithProfile === 0) {
+        return fail(
+          "MIRROR_MANAGER_TARGET_NOT_FOUND",
+          "No active LINE Manager session has an available browser profile.",
+          "NO_USABLE_SESSION",
+        );
+      }
+      if (diagnostics.recentDiscoveryRejected > 0) {
+        return fail(
+          "MIRROR_MANAGER_TARGET_NOT_FOUND",
+          "LINE Manager target candidates failed recent-chat verification.",
+          "RECENT_DISCOVERY_REJECTED",
+        );
+      }
+      if (diagnostics.authenticatedSessions > 0 && diagnostics.redirectsWithoutBotId > 0) {
+        return fail(
+          "MIRROR_MANAGER_TARGET_NOT_FOUND",
+          "Authenticated LINE Manager redirects did not identify a chat target.",
+          "REDIRECT_BOT_ID_NOT_FOUND",
+        );
+      }
+      if (diagnostics.sessionsAttempted > 0 && diagnostics.authenticationNotConfirmed > 0) {
+        return fail(
+          "MIRROR_MANAGER_TARGET_NOT_FOUND",
+          "LINE Manager authentication could not be confirmed.",
+          "AUTH_NOT_CONFIRMED",
+        );
+      }
+      return fail(
+        "MIRROR_MANAGER_TARGET_NOT_FOUND",
+        "No active LINE Manager session could open this OA account.",
+        "TRUE_TARGET_NOT_FOUND",
+      );
     }
     if (candidate === "AMBIGUOUS") {
-      return {
-        ok: false,
-        errorCode: "MIRROR_MANAGER_TARGET_AMBIGUOUS",
-        errorMessage: "More than one distinct LINE Manager OA bot resolved this account.",
-      };
+      return fail(
+        "MIRROR_MANAGER_TARGET_AMBIGUOUS",
+        "More than one distinct LINE Manager OA bot resolved this account.",
+        "AMBIGUOUS",
+      );
     }
 
     // Multiple authenticated Manager sessions may legitimately have access to
@@ -1021,6 +1133,7 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
       source: result.source,
       botIdMasked: `${result.botId.slice(0, 4)}...${result.botId.slice(-4)}`,
     }));
+    emitSummary("MANAGER_ACCOUNT_REDIRECT");
     return { ok: true, ...result };
   }
 
@@ -1727,6 +1840,26 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
         || chat.historySyncedThroughAt.getTime() < chat.lastMessageAt.getTime()
       ),
     ).length;
+  }
+
+  private async markStoreProfileOperationBusy(input: {
+    lineOfficialAccountId: string;
+    durationMs: number;
+  }): Promise<number> {
+    const pendingChats = await this.countPendingChats(input.lineOfficialAccountId);
+    await this.prisma.lineChatMirrorStoreState.update({
+      where: { lineOfficialAccountId: input.lineOfficialAccountId },
+      data: {
+        status: LineChatMirrorSyncStatus.PARTIAL,
+        lastCompletedAt: new Date(),
+        lastFailureAt: new Date(),
+        lastErrorCode: "PROFILE_OPERATION_BUSY",
+        lastErrorMessage: "PROFILE_OPERATION_BUSY",
+        pendingChats,
+        lastCycleDurationMs: input.durationMs,
+      },
+    });
+    return pendingChats;
   }
 
   private async markStoreFailure(input: {

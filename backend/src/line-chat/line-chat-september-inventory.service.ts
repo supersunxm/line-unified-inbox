@@ -94,6 +94,7 @@ export class LineChatSeptemberInventoryService {
       }
 
       const targetResolution = await mirrorService.resolveMirrorTarget({
+        storeCode,
         lineOfficialAccountId: storeTarget.oa.id,
         chatBotId: storeTarget.oa.chatBotId,
         basicId: storeTarget.oa.basicId,
@@ -105,7 +106,9 @@ export class LineChatSeptemberInventoryService {
         reports.push(emptySeptemberChatInventoryReport(
           storeCode,
           targetResolution && !targetResolution.ok
-            ? targetResolution.errorCode
+            ? targetResolution.errorCode === "MIRROR_MANAGER_TARGET_BUSY"
+              ? "PROFILE_OPERATION_BUSY"
+              : targetResolution.errorCode
             : "MIRROR_TARGET_RESOLUTION_FAILED",
         ));
         await this.yieldToProfileWaiters();
