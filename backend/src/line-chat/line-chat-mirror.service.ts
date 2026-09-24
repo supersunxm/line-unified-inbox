@@ -347,7 +347,13 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
     try {
       const operationState = this.operationModeService
         ? await this.operationModeService.getState()
-        : { mode: "NORMAL" as const, freezeAt: null, backfillTargetStartAt: null, catchUpStartAt: null };
+        : {
+            mode: "NORMAL" as const,
+            runId: null,
+            freezeAt: null,
+            backfillTargetStartAt: null,
+            catchUpStartAt: null,
+          };
       if (this.lastLoggedOperationMode !== operationState.mode) {
         this.logger.log(JSON.stringify({
           event: "mirror_operation_mode_loaded",
