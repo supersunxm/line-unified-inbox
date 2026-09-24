@@ -330,6 +330,47 @@ test("completed inventory replaces the store cohort with a durable exact snapsho
   assert.equal(cohortStores.get("run-1:29113")?.exactSeptemberChats, 2);
 });
 
+test("exact inventory cannot discard a member captured at the freeze boundary", async () => {
+  const runId = "run-freeze-conflict";
+  const seeded: CohortConversation = {
+    runId,
+    storeCode: "29113",
+    lineOfficialAccountId: "oa-pinklao",
+    lineChatUserId: "chat-frozen",
+    observedLastMessageAt: new Date("2026-09-23T00:00:00.000Z"),
+  };
+  const { service, cohortStores, cohortConversations } = testService({
+    initial: state({
+      mode: "BACKFILL",
+      runId,
+      freezeAt: new Date("2026-09-24T01:15:00.000Z"),
+      backfillTargetStartAt: MIRROR_BACKFILL_TARGET_START_AT,
+    }),
+    cohortConversations: [seeded],
+  });
+
+  await service.recordBackfillInventory({
+    storeCode: "29113",
+    lineOfficialAccountId: "oa-pinklao",
+    conversations: [{
+      lineChatUserId: "chat-current-inventory",
+      lastMessageAt: new Date("2026-09-24T00:30:00.000Z"),
+    }],
+    inventoryComplete: true,
+    exactSeptemberChats: 1,
+  });
+
+  assert.equal(cohortStores.get(`${runId}:29113`)?.inventoryStatus, "UNPROVEN");
+  assert.equal(cohortStores.get(`${runId}:29113`)?.exactSeptemberChats, null);
+  assert.deepEqual(
+    cohortConversations()
+      .filter((row) => row.storeCode === "29113")
+      .map((row) => row.lineChatUserId)
+      .sort(),
+    ["chat-current-inventory", "chat-frozen"],
+  );
+});
+
 test("a partial rerun cannot downgrade an already proven exact cohort", async () => {
   const runId = "run-proven-cohort";
   const initialStore: CohortStore = {
