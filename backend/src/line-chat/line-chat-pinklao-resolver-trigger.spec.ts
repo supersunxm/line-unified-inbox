@@ -11,7 +11,7 @@ const storeTarget = {
   storeMasterAccountName: "OPPO Central Pinklao",
   storeMasterLineId: "@pinklao",
   storeManagerUrl: "https://manager.line.biz/account/@pinklao",
-  selectionSource: "STORE_MASTER_LINE_ID" as const,
+  selectionSource: "MASTER_LINE_ID" as const,
   oa: {
     id: "oa-private",
     name: "OPPO Central Pinklao",
