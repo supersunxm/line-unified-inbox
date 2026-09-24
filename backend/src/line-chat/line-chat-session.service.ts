@@ -919,7 +919,7 @@ export class LineChatSessionService {
         }
         if (remainingTimeMs(Number.MAX_SAFE_INTEGER) <= 0) {
           discoveryTimeLimitReached = true;
-          enumerationError = "Chat-list time limit reached.";
+          if (!boundedWindow) enumerationError = "Chat-list time limit reached.";
           break;
         }
         if (seenNext.has(next)) {
