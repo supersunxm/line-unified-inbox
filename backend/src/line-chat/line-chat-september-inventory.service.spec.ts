@@ -30,7 +30,7 @@ test("inventory service returns aggregate chat-list coverage without exposing ch
   } as unknown as PrismaService;
   const sessionService = {
     resolveProfilePath: () => "/redacted/profile",
-    discoverChats: async (input: {
+    discoverChatsChunk: async (input: {
       maxPages?: number;
       maxChats?: number;
       maxDurationMs?: number;
@@ -71,19 +71,22 @@ test("inventory service returns aggregate chat-list coverage without exposing ch
         invalidUserRecords: 0,
       });
       return {
-        botId: "Ubot",
-        endpoint: "https://chat.line.biz/api/v2/bots/Ubot/chats",
-        responseShape: "list" as const,
-        enumerationStatus: "COMPLETE" as const,
-        chats,
-        pagesFetched: 1,
-        totalRawRecords: 1,
-        validUserChats: 1,
-        ignoredNonUserRecords: 0,
-        invalidUserRecords: 0,
-        duplicateIds: 0,
-        conflictingDuplicates: 0,
-        nextTerminationObserved: true,
+        discovery: {
+          botId: "Ubot",
+          endpoint: "https://chat.line.biz/api/v2/bots/Ubot/chats",
+          responseShape: "list" as const,
+          enumerationStatus: "COMPLETE" as const,
+          chats,
+          pagesFetched: 1,
+          totalRawRecords: 1,
+          validUserChats: 1,
+          ignoredNonUserRecords: 0,
+          invalidUserRecords: 0,
+          duplicateIds: 0,
+          conflictingDuplicates: 0,
+          nextTerminationObserved: true,
+        },
+        continuation: null,
       };
     },
   } as unknown as LineChatSessionService;
@@ -125,12 +128,160 @@ test("inventory service returns aggregate chat-list coverage without exposing ch
   assert.doesNotMatch(JSON.stringify(report), /Private Customer Name/u);
 });
 
+test("inventory resumes across bounded leases without exposing the opaque continuation", async () => {
+  const septemberChatId = `U${"a".repeat(32)}`;
+  const augustChatId = `U${"b".repeat(32)}`;
+  const continuation = Object.freeze({ kind: "LINE_CHAT_DISCOVERY_CONTINUATION" as const });
+  let chunkCalls = 0;
+  let leaseCalls = 0;
+  const prisma = {
+    lineChatMirrorChat: { findMany: async () => [] },
+  } as unknown as PrismaService;
+  const sessionService = {
+    resolveProfilePath: () => "/redacted/profile",
+    buildChatListUrl: () => "https://chat.line.biz/api/v2/bots/Ubot/chats",
+    discoverChatsChunk: async (input: {
+      continuation?: unknown;
+      pageObserver: (page: {
+        responseShape: "list";
+        chats: Array<{
+          chatUserId: string;
+          displayName: string | null;
+          lastMessageText: string | null;
+          lastMessageAt: string | null;
+          lastMessageDirection: string | null;
+          lastMessageTimestampStatus: "VALID";
+        }>;
+        totalRawRecords: number;
+        validUserChats: number;
+        ignoredNonUserRecords: number;
+        invalidUserRecords: number;
+      }) => boolean;
+    }) => {
+      chunkCalls += 1;
+      if (chunkCalls === 1) {
+        assert.equal(input.continuation ?? null, null);
+        const chats = [{
+          chatUserId: septemberChatId,
+          displayName: null,
+          lastMessageText: null,
+          lastMessageAt: "2026-09-20T03:00:00.000Z",
+          lastMessageDirection: null,
+          lastMessageTimestampStatus: "VALID" as const,
+        }];
+        input.pageObserver({
+          responseShape: "list",
+          chats,
+          totalRawRecords: 1,
+          validUserChats: 1,
+          ignoredNonUserRecords: 0,
+          invalidUserRecords: 0,
+        });
+        return {
+          discovery: {
+            botId: "Ubot",
+            endpoint: "https://chat.line.biz/api/v2/bots/Ubot/chats",
+            responseShape: "list" as const,
+            enumerationStatus: "PARTIAL" as const,
+            chats,
+            pagesFetched: 12,
+            totalRawRecords: 1,
+            validUserChats: 1,
+            ignoredNonUserRecords: 0,
+            invalidUserRecords: 0,
+            duplicateIds: 0,
+            conflictingDuplicates: 0,
+            nextTerminationObserved: false,
+            pageLimitReached: true,
+          },
+          continuation,
+        };
+      }
+
+      assert.equal(input.continuation, continuation);
+      const chats = [{
+        chatUserId: augustChatId,
+        displayName: null,
+        lastMessageText: null,
+        lastMessageAt: "2026-08-31T16:59:59.000Z",
+        lastMessageDirection: null,
+        lastMessageTimestampStatus: "VALID" as const,
+      }];
+      const stopped = input.pageObserver({
+        responseShape: "list",
+        chats,
+        totalRawRecords: 1,
+        validUserChats: 1,
+        ignoredNonUserRecords: 0,
+        invalidUserRecords: 0,
+      });
+      assert.equal(stopped, true);
+      return {
+        discovery: {
+          botId: "Ubot",
+          endpoint: "https://chat.line.biz/api/v2/bots/Ubot/chats",
+          responseShape: "list" as const,
+          enumerationStatus: "PARTIAL" as const,
+          chats,
+          pagesFetched: 1,
+          totalRawRecords: 1,
+          validUserChats: 1,
+          ignoredNonUserRecords: 0,
+          invalidUserRecords: 0,
+          duplicateIds: 0,
+          conflictingDuplicates: 0,
+          nextTerminationObserved: false,
+          stoppedEarlyByObserver: true,
+        },
+        continuation: null,
+      };
+    },
+  } as unknown as LineChatSessionService;
+  const coordinator = {
+    withProfileOperation: async (
+      input: { sessionId: string; operationKind: string },
+      callback: (context: { assertOwnership: () => void }) => Promise<unknown>,
+    ) => {
+      leaseCalls += 1;
+      assert.equal(input.operationKind, "MANUAL_DIAGNOSTIC");
+      return {
+        acquired: true as const,
+        value: await callback({ assertOwnership() {} }),
+        sessionId: input.sessionId,
+        operationKind: input.operationKind,
+        requestId: `request-${leaseCalls}`,
+      };
+    },
+  } as unknown as LineChatProfileOperationCoordinator;
+
+  const service = new LineChatSeptemberInventoryService(
+    prisma,
+    sessionService,
+    coordinator,
+    {} as LineChatMirrorService,
+  );
+  const report = await service.discoverStore({
+    storeCode: "28375",
+    lineOfficialAccountId: "oa-rbs",
+    botId: "Ubot",
+    session: { id: "session-1" },
+  });
+
+  assert.equal(chunkCalls, 2);
+  assert.equal(leaseCalls, 2);
+  assert.equal(report.pagesFetched, 13);
+  assert.equal(report.inventoryComplete, true);
+  assert.equal(report.septemberChats, 1);
+  assert.equal(report.reachedBeforeSeptember, true);
+  assert.doesNotMatch(JSON.stringify(report), /LINE_CHAT_DISCOVERY_CONTINUATION|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb/iu);
+});
+
 test("inventory service reports profile contention without attempting chat discovery", async () => {
   let discoveryCalled = false;
   const prisma = {} as PrismaService;
   const sessionService = {
     resolveProfilePath: () => "/redacted/profile",
-    discoverChats: async () => {
+    discoverChatsChunk: async () => {
       discoveryCalled = true;
       throw new Error("unexpected discovery");
     },
@@ -139,7 +290,7 @@ test("inventory service reports profile contention without attempting chat disco
     withProfileOperation: async () => ({
       acquired: false as const,
       reason: "PROFILE_OPERATION_BUSY" as const,
-      retryAfterMs: 5000,
+      retryAfterMs: 0,
       sessionId: "session-1",
       operationKind: "MANUAL_DIAGNOSTIC" as const,
       requestId: "request-1",
@@ -172,7 +323,7 @@ test("pilot inventory reports all configured pilot stores without guessing missi
   } as unknown as PrismaService;
   const sessionService = {
     resolveProfilePath: () => { throw new Error("unexpected profile resolution"); },
-    discoverChats: async () => { throw new Error("unexpected chat discovery"); },
+    discoverChatsChunk: async () => { throw new Error("unexpected chat discovery"); },
   } as unknown as LineChatSessionService;
   const coordinator = {
     withProfileOperation: async () => { throw new Error("unexpected profile lock"); },
@@ -236,7 +387,7 @@ test("pilot inventory uses the Live Mirror OA selector and resolver for direct a
     } as unknown as PrismaService;
     const sessionService = {
       resolveProfilePath: () => "/redacted/profile",
-      discoverChats: async (input: Record<string, unknown>) => {
+      discoverChatsChunk: async (input: Record<string, unknown>) => {
         requestedBounds = {
           maxPages: input.maxPages,
           maxChats: input.maxChats,
@@ -259,19 +410,22 @@ test("pilot inventory uses the Live Mirror OA selector and resolver for direct a
           invalidUserRecords: 0,
         });
         return {
-          botId: "Uresolved-bot",
-          endpoint: "https://chat.line.biz/api/v2/bots/Uresolved-bot/chats",
-          responseShape: "list" as const,
-          enumerationStatus: "COMPLETE" as const,
-          chats,
-          pagesFetched: 1,
-          totalRawRecords: 1,
-          validUserChats: 1,
-          ignoredNonUserRecords: 0,
-          invalidUserRecords: 0,
-          duplicateIds: 0,
-          conflictingDuplicates: 0,
-          nextTerminationObserved: true,
+          discovery: {
+            botId: "Uresolved-bot",
+            endpoint: "https://chat.line.biz/api/v2/bots/Uresolved-bot/chats",
+            responseShape: "list" as const,
+            enumerationStatus: "COMPLETE" as const,
+            chats,
+            pagesFetched: 1,
+            totalRawRecords: 1,
+            validUserChats: 1,
+            ignoredNonUserRecords: 0,
+            invalidUserRecords: 0,
+            duplicateIds: 0,
+            conflictingDuplicates: 0,
+            nextTerminationObserved: true,
+          },
+          continuation: null,
         };
       },
     } as unknown as LineChatSessionService;
@@ -378,7 +532,7 @@ test("pilot inventory fails closed for OA mismatch, ambiguous, or unavailable Mi
     } as unknown as PrismaService;
     const sessionService = {
       resolveProfilePath: () => "/redacted/profile",
-      discoverChats: async () => { discoveryCalls += 1; throw new Error("must not discover"); },
+      discoverChatsChunk: async () => { discoveryCalls += 1; throw new Error("must not discover"); },
     } as unknown as LineChatSessionService;
     const mirrorService = {
       getStoreMirrorTargetInputs: async () => targetInputs,
