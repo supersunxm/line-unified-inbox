@@ -437,7 +437,9 @@ export class MirrorOperationModeService {
       },
     });
 
-    if (existingStoreCohort.inventoryStatus === "PROVEN" && !input.inventoryComplete) {
+    // The first proven inventory is the immutable cohort snapshot for this run.
+    // Later retries must not move membership after freezeAt.
+    if (existingStoreCohort.inventoryStatus === "PROVEN") {
       return;
     }
 
