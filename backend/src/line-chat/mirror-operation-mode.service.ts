@@ -150,18 +150,6 @@ export class MirrorOperationModeService {
     reconciliationPolicy: typeof MIRROR_BACKFILL_RECONCILIATION_POLICY;
   }> {
     const state = await this.getState();
-    if (
-      state.mode === "BACKFILL"
-      && state.runId
-      && state.freezeAt
-      && state.backfillTargetStartAt
-    ) {
-      await this.ensureBackfillCohortSeeded({
-        runId: state.runId,
-        freezeAt: state.freezeAt,
-        targetStartAt: state.backfillTargetStartAt,
-      });
-    }
     const evaluatedAt = new Date();
     const [backfill, catchUp] = await Promise.all([
       this.evaluateBackfill(state),
@@ -429,7 +417,7 @@ export class MirrorOperationModeService {
       observedLastMessageAt: conversation.lastMessageAt,
     }));
 
-    await this.prisma.mirrorBackfillStoreCohort.upsert({
+    const existingStoreCohort = await this.prisma.mirrorBackfillStoreCohort.upsert({
       where: {
         runId_storeCode: {
           runId: state.runId,
@@ -445,6 +433,10 @@ export class MirrorOperationModeService {
         lineOfficialAccountId: input.lineOfficialAccountId,
       },
     });
+
+    if (existingStoreCohort.inventoryStatus === "PROVEN" && !input.inventoryComplete) {
+      return;
+    }
 
     if (input.inventoryComplete) {
       await this.prisma.mirrorBackfillConversation.deleteMany({
@@ -512,7 +504,7 @@ export class MirrorOperationModeService {
       const matches = storeStates.filter((state) => state.storeCode === storeCode);
       if (matches.length !== 1) continue;
       const storeState = matches[0];
-      await this.prisma.mirrorBackfillStoreCohort.upsert({
+      const cohortStore = await this.prisma.mirrorBackfillStoreCohort.upsert({
         where: {
           runId_storeCode: {
             runId: input.runId,
@@ -527,6 +519,7 @@ export class MirrorOperationModeService {
           inventoryStatus: "UNPROVEN",
         },
       });
+      if (cohortStore.inventoryStatus === "PROVEN") continue;
 
       const knownChats = await this.prisma.lineChatMirrorChat.findMany({
         where: {
