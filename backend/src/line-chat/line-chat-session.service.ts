@@ -14,6 +14,8 @@ import type {
   DiagnosticQueryMetadata,
   LineChatDiscoveryResult,
   LineChatDiscoveryPageObserver,
+  LineChatDiscoveryContinuation,
+  LineChatDiscoveryChunkResult,
   LineChatRecentDiscoveryResult,
   ObservedRequestSummary,
 } from "./line-chat.types";
@@ -184,6 +186,11 @@ export class LineChatSessionService {
   private readonly logger = new Logger(LineChatSessionService.name);
   private readonly rawLauncher: ContextLauncher;
   private readonly activeManagedContexts = new Map<string, number>();
+  private readonly discoveryContinuations = new WeakMap<LineChatDiscoveryContinuation, {
+    botId: string;
+    token: string;
+    seenNext: Set<string>;
+  }>();
   public readonly defaultLauncher: ContextLauncher;
 
   constructor(@Optional() customLauncher?: ContextLauncher) {
@@ -379,6 +386,68 @@ export class LineChatSessionService {
       ? undefined
       : Math.min(60_000, Math.max(1, Math.floor(input.maxDurationMs)));
     return this.discoverChatPages(input, maxPages, maxChats, false, input.pageObserver, maxDurationMs);
+  }
+
+  /**
+   * Reads one bounded chat-list chunk and returns an opaque in-process
+   * continuation handle. The raw LINE Manager `next` value never leaves this
+   * service and cannot survive a process restart.
+   */
+  public async discoverChatsChunk(input: {
+    botId: string;
+    profilePath: string;
+    headless?: boolean;
+    customLauncher?: ContextLauncher;
+    pageObserver?: LineChatDiscoveryPageObserver;
+    operationContext?: import("./line-chat-profile-operation-coordinator.service").LineChatProfileOperationContext;
+    continuation?: LineChatDiscoveryContinuation | null;
+    maxPages?: number;
+    maxChats?: number;
+    maxDurationMs?: number;
+  }): Promise<LineChatDiscoveryChunkResult> {
+    const botId = input.botId.trim();
+    const previous = input.continuation
+      ? this.discoveryContinuations.get(input.continuation)
+      : undefined;
+    if (input.continuation && (!previous || previous.botId !== botId)) {
+      throw new Error("INVALID_CHAT_LIST_CONTINUATION");
+    }
+
+    const maxPages = Math.min(20, Math.max(1, Math.floor(input.maxPages ?? 12)));
+    const maxChats = Math.min(1_000, Math.max(1, Math.floor(input.maxChats ?? 600)));
+    const maxDurationMs = input.maxDurationMs === undefined
+      ? 15_000
+      : Math.min(30_000, Math.max(1, Math.floor(input.maxDurationMs)));
+    const cursorState = {
+      startNext: previous?.token,
+      next: null as string | null,
+      seenNext: previous?.seenNext ?? new Set<string>(),
+    };
+    const discovery = await this.discoverChatPages(
+      input,
+      maxPages,
+      maxChats,
+      true,
+      input.pageObserver,
+      maxDurationMs,
+      cursorState,
+    );
+
+    let continuation: LineChatDiscoveryContinuation | null = null;
+    if (
+      cursorState.next
+      && !discovery.stoppedEarlyByObserver
+      && !discovery.enumerationError
+    ) {
+      continuation = Object.freeze({ kind: "LINE_CHAT_DISCOVERY_CONTINUATION" as const });
+      this.discoveryContinuations.set(continuation, {
+        botId,
+        token: cursorState.next,
+        seenNext: cursorState.seenNext,
+      });
+    }
+
+    return { discovery, continuation };
   }
 
   /**
@@ -649,7 +718,11 @@ export class LineChatSessionService {
     customLauncher?: ContextLauncher;
     pageObserver?: LineChatDiscoveryPageObserver;
     operationContext?: import("./line-chat-profile-operation-coordinator.service").LineChatProfileOperationContext;
-  }, maxPages: number, maxChats: number, boundedWindow: boolean, pageObserver?: LineChatDiscoveryPageObserver, maxDurationMs?: number): Promise<LineChatDiscoveryResult> {
+  }, maxPages: number, maxChats: number, boundedWindow: boolean, pageObserver?: LineChatDiscoveryPageObserver, maxDurationMs?: number, cursorState?: {
+    startNext?: string;
+    next: string | null;
+    seenNext: Set<string>;
+  }): Promise<LineChatDiscoveryResult> {
     const startedAtMs = Date.now();
     const deadlineAtMs = maxDurationMs === undefined ? null : startedAtMs + maxDurationMs;
     const remainingTimeMs = (maximumMs: number): number => deadlineAtMs === null
@@ -792,7 +865,8 @@ export class LineChatSessionService {
       } catch {
         return this.emptyDiscoveryResult(botId, endpoint, "LINE OA Manager v2 chat-list response had an unsupported or malformed envelope.", "PARTIAL");
       }
-      const pages = [firstPage];
+      const continuing = typeof cursorState?.startNext === "string" && cursorState.startNext.length > 0;
+      const pages: Array<typeof firstPage> = [];
       const byId = new Map<string, LineChatDiscoveredChat>();
       let duplicateIds = 0;
       const conflictingIds = new Set<string>();
@@ -815,10 +889,17 @@ export class LineChatSessionService {
         ignoredNonUserRecords: pageResult.ignoredNonUserRecords,
         invalidUserRecords: pageResult.invalidUserRecords,
       }) === true;
-      mergePage(firstPage);
-      let stoppedEarlyByObserver = observePage(firstPage);
-      let next = firstPage.next;
-      const seenNext = new Set<string>();
+      let stoppedEarlyByObserver = false;
+      let next: string | null;
+      if (continuing) {
+        next = cursorState!.startNext!;
+      } else {
+        pages.push(firstPage);
+        mergePage(firstPage);
+        stoppedEarlyByObserver = observePage(firstPage);
+        next = firstPage.next;
+      }
+      const seenNext = cursorState?.seenNext ?? new Set<string>();
       let enumerationError: string | undefined = !boundedWindow && byId.size > maxChats
         ? "Chat-list discovered-chat limit reached."
         : undefined;
@@ -826,11 +907,6 @@ export class LineChatSessionService {
       let chatLimitReached = byId.size > maxChats;
       let discoveryTimeLimitReached = false;
       while (next !== null && !stoppedEarlyByObserver) {
-        if (seenNext.has(next)) {
-          enumerationError = "Repeated chat-list next token detected.";
-          break;
-        }
-        seenNext.add(next);
         if (pages.length >= maxPages) {
           pageLimitReached = true;
           if (!boundedWindow) enumerationError = "Chat-list page limit reached.";
@@ -843,9 +919,14 @@ export class LineChatSessionService {
         }
         if (remainingTimeMs(Number.MAX_SAFE_INTEGER) <= 0) {
           discoveryTimeLimitReached = true;
-          enumerationError = "Chat-list time limit reached.";
+          if (!boundedWindow) enumerationError = "Chat-list time limit reached.";
           break;
         }
+        if (seenNext.has(next)) {
+          enumerationError = "Repeated chat-list next token detected.";
+          break;
+        }
+        seenNext.add(next);
         const nextUrl = new URL(firstRequest.url);
         nextUrl.searchParams.set("next", next);
         let response;
@@ -908,6 +989,7 @@ export class LineChatSessionService {
 
       const invalidUserRecords = pages.reduce((sum, item) => sum + item.invalidUserRecords, 0);
       const complete = next === null && !enumerationError && invalidUserRecords === 0 && conflictingIds.size === 0;
+      if (cursorState) cursorState.next = next;
       return {
         botId,
         endpoint,

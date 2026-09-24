@@ -303,6 +303,20 @@ export interface LineChatDiscoveryResult {
   timeLimitReached?: boolean;
 }
 
+/**
+ * Opaque in-process continuation handle for chunked chat-list discovery.
+ * The raw LINE Manager cursor is intentionally held inside LineChatSessionService
+ * and is never exposed through this object.
+ */
+export interface LineChatDiscoveryContinuation {
+  readonly kind: "LINE_CHAT_DISCOVERY_CONTINUATION";
+}
+
+export interface LineChatDiscoveryChunkResult {
+  discovery: LineChatDiscoveryResult;
+  continuation: LineChatDiscoveryContinuation | null;
+}
+
 export interface LineChatRecentDiscoveryResult {
   status: "READY" | "FAILED";
   chats: LineChatDiscoveredChat[];

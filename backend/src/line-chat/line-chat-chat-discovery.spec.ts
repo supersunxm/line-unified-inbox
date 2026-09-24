@@ -250,6 +250,67 @@ test("session discovery captures the natural v2 GET and enumerates subsequent pa
   assert.equal(mock.wasClosed(), true);
 });
 
+test("chunked discovery resumes with an opaque in-process continuation", async () => {
+  const secondId = `U${"2b".repeat(16)}`;
+  const thirdId = `U${"3c".repeat(16)}`;
+  const profilePath = fs.mkdtempSync(path.join(os.tmpdir(), "line-chat-chunked-discovery-"));
+  const mock = mockNaturalDiscoveryContext([
+    validPage(VALID_USER_ID, "private-cursor-1"),
+    validPage(secondId, "private-cursor-2"),
+    validPage(thirdId, null),
+  ]);
+  const launcher: ContextLauncher = async () => mock.context;
+  try {
+    const service = new LineChatSessionService(launcher);
+    const first = await service.discoverChatsChunk({
+      botId: "Ubot",
+      profilePath,
+      customLauncher: launcher,
+      maxPages: 1,
+      maxChats: 25,
+      maxDurationMs: 15_000,
+    });
+    assert.equal(first.discovery.pagesFetched, 1);
+    assert.equal(first.discovery.pageLimitReached, true);
+    assert.ok(first.continuation);
+    assert.deepEqual(first.discovery.chats.map((chat) => chat.chatUserId), [VALID_USER_ID]);
+    assert.doesNotMatch(JSON.stringify(first), /private-cursor/iu);
+
+    const second = await service.discoverChatsChunk({
+      botId: "Ubot",
+      profilePath,
+      customLauncher: launcher,
+      continuation: first.continuation,
+      maxPages: 1,
+      maxChats: 25,
+      maxDurationMs: 15_000,
+    });
+    assert.equal(second.discovery.pagesFetched, 1);
+    assert.ok(second.continuation);
+    assert.deepEqual(second.discovery.chats.map((chat) => chat.chatUserId), [secondId]);
+    assert.doesNotMatch(JSON.stringify(second), /private-cursor/iu);
+
+    const third = await service.discoverChatsChunk({
+      botId: "Ubot",
+      profilePath,
+      customLauncher: launcher,
+      continuation: second.continuation,
+      maxPages: 1,
+      maxChats: 25,
+      maxDurationMs: 15_000,
+    });
+    assert.equal(third.discovery.pagesFetched, 1);
+    assert.equal(third.discovery.enumerationStatus, "COMPLETE");
+    assert.equal(third.discovery.nextTerminationObserved, true);
+    assert.equal(third.continuation, null);
+    assert.deepEqual(third.discovery.chats.map((chat) => chat.chatUserId), [thirdId]);
+    assert.equal(mock.calls.length, 2);
+    assert.doesNotMatch(JSON.stringify(third), /private-cursor/iu);
+  } finally {
+    fs.rmSync(profilePath, { recursive: true, force: true });
+  }
+});
+
 test("bounded inventory discovery reports page and chat caps without exposing cursors", async () => {
   const pages = Array.from({ length: 4 }, (_, index) => validPage(
     `U${index.toString(16).repeat(32)}`,
