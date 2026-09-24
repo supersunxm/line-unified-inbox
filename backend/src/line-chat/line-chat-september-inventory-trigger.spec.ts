@@ -92,6 +92,34 @@ test("startup inventory retries only profile contention and emits aggregate-only
   assert.ok(logs.every((line) => !line.includes("lastMessageText")));
 });
 
+test("startup inventory does not retry a permanent target-not-found result", async () => {
+  let calls = 0;
+  const logs: string[] = [];
+  const notFound = emptySeptemberChatInventoryReport("29113", "MIRROR_MANAGER_TARGET_NOT_FOUND");
+
+  const result = await runSeptemberInventoryStartupDiagnostic({
+    enabled: true,
+    maxAttempts: 3,
+    retryDelayMs: 0,
+    service: {
+      discoverPilotStores: async () => {
+        calls += 1;
+        return [notFound];
+      },
+    },
+    logger: {
+      log(message) { logs.push(message); },
+      warn(message) { logs.push(message); },
+    },
+  });
+
+  assert.equal(calls, 1);
+  assert.equal(result.attempts, 1);
+  assert.equal(result.reports[0]?.inventoryIncompleteReason, "MIRROR_MANAGER_TARGET_NOT_FOUND");
+  assert.ok(logs.some((line) => line.includes("line_chat_september_inventory_startup_completed")));
+  assert.ok(logs.every((line) => !line.includes("line_chat_september_inventory_startup_retrying")));
+});
+
 test("startup inventory failure log keeps only the error type", async () => {
   const privateDetail = "/private/profile/private-cursor-token-customer-name";
   const logs: string[] = [];

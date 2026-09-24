@@ -163,6 +163,7 @@ export function managerContentHashUrl(botId: string, contentHash: string): strin
 
 export function isTransientManagerMediaError(errorMessage: string): boolean {
   return errorMessage === "MANAGER_MEDIA_PROFILE_BUSY"
+    || errorMessage === "MIRROR_MANAGER_TARGET_BUSY"
     || errorMessage.startsWith("MANAGER_MEDIA_AUTH_")
     || /\bEAGAIN\b/u.test(errorMessage)
     || /browser has been closed/iu.test(errorMessage)
@@ -650,6 +651,7 @@ export class LineChatManagerMediaMaterializerService implements OnModuleInit, On
 
     const oa = first.message.conversation.lineOfficialAccount;
     const target = await this.mirrorService.resolveMirrorTarget({
+      storeCode: first.input.storeCode,
       lineOfficialAccountId: oa.id,
       chatBotId: oa.chatBotId,
       basicId: oa.basicId,
