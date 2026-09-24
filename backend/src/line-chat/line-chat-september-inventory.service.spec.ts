@@ -30,6 +30,7 @@ test("inventory service returns aggregate chat-list coverage without exposing ch
   } as unknown as PrismaService;
   const sessionService = {
     resolveProfilePath: () => "/redacted/profile",
+    buildChatListUrl: () => "https://chat.line.biz/api/v2/bots/Ubot/chats",
     discoverChatsChunk: async (input: {
       maxPages?: number;
       maxChats?: number;
@@ -281,6 +282,7 @@ test("inventory service reports profile contention without attempting chat disco
   const prisma = {} as PrismaService;
   const sessionService = {
     resolveProfilePath: () => "/redacted/profile",
+    buildChatListUrl: () => "https://chat.line.biz/api/v2/bots/Ubot/chats",
     discoverChatsChunk: async () => {
       discoveryCalled = true;
       throw new Error("unexpected discovery");
@@ -387,6 +389,7 @@ test("pilot inventory uses the Live Mirror OA selector and resolver for direct a
     } as unknown as PrismaService;
     const sessionService = {
       resolveProfilePath: () => "/redacted/profile",
+      buildChatListUrl: () => "https://chat.line.biz/api/v2/bots/Uresolved-bot/chats",
       discoverChatsChunk: async (input: Record<string, unknown>) => {
         requestedBounds = {
           maxPages: input.maxPages,
