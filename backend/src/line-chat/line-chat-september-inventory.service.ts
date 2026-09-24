@@ -22,6 +22,41 @@ const INVENTORY_MAX_TOTAL_DURATION_MS = 180_000;
 const INVENTORY_MAX_BUSY_RETRIES = 3;
 const INVENTORY_CHUNK_YIELD_MS = 750;
 
+export interface SeptemberInventoryChunkBudget {
+  maxPages: number;
+  maxChats: number;
+  maxDurationMs: number;
+  stopReason: "PAGE_LIMIT" | "CHAT_LIMIT" | "TIME_LIMIT" | null;
+}
+
+/** Computes the next lease budget without allowing the global caps to overshoot. */
+export function computeSeptemberInventoryChunkBudget(input: {
+  pagesFetched: number;
+  chatsObserved: number;
+  elapsedMs: number;
+}): SeptemberInventoryChunkBudget {
+  const remainingPages = INVENTORY_MAX_TOTAL_PAGES - input.pagesFetched;
+  const remainingChats = INVENTORY_MAX_TOTAL_CHATS - input.chatsObserved;
+  const remainingDurationMs = INVENTORY_MAX_TOTAL_DURATION_MS - input.elapsedMs;
+
+  if (remainingDurationMs <= 0) {
+    return { maxPages: 0, maxChats: 0, maxDurationMs: 0, stopReason: "TIME_LIMIT" };
+  }
+  if (remainingPages <= 0) {
+    return { maxPages: 0, maxChats: 0, maxDurationMs: 0, stopReason: "PAGE_LIMIT" };
+  }
+  if (remainingChats <= 0) {
+    return { maxPages: 0, maxChats: 0, maxDurationMs: 0, stopReason: "CHAT_LIMIT" };
+  }
+
+  return {
+    maxPages: Math.min(INVENTORY_MAX_PAGES_PER_PROFILE_LEASE, remainingPages),
+    maxChats: Math.min(INVENTORY_MAX_CHATS_PER_PROFILE_LEASE, remainingChats),
+    maxDurationMs: Math.min(INVENTORY_MAX_DISCOVERY_DURATION_MS, remainingDurationMs),
+    stopReason: null,
+  };
+}
+
 export interface SeptemberChatInventoryTarget {
   storeCode: string;
   lineOfficialAccountId: string;
@@ -194,30 +229,27 @@ export class LineChatSeptemberInventoryService {
     };
 
     while (true) {
-      const elapsedMs = Date.now() - startedAtMs;
-      const remainingPages = INVENTORY_MAX_TOTAL_PAGES - pagesFetched;
-      const remainingChats = INVENTORY_MAX_TOTAL_CHATS - chatsById.size;
-      const remainingDurationMs = INVENTORY_MAX_TOTAL_DURATION_MS - elapsedMs;
+      const budget = computeSeptemberInventoryChunkBudget({
+        pagesFetched,
+        chatsObserved: chatsById.size,
+        elapsedMs: Date.now() - startedAtMs,
+      });
 
-      if (remainingDurationMs <= 0) {
+      if (budget.stopReason === "TIME_LIMIT") {
         timeLimitReached = true;
         enumerationError = "Chat-list total inventory time limit reached.";
         break;
       }
-      if (remainingPages <= 0) {
+      if (budget.stopReason === "PAGE_LIMIT") {
         pageLimitReached = true;
         enumerationError = "Chat-list global page limit reached.";
         break;
       }
-      if (remainingChats <= 0) {
+      if (budget.stopReason === "CHAT_LIMIT") {
         chatLimitReached = true;
         enumerationError = "Chat-list global discovered-chat limit reached.";
         break;
       }
-
-      const chunkMaxPages = Math.min(INVENTORY_MAX_PAGES_PER_PROFILE_LEASE, remainingPages);
-      const chunkMaxChats = Math.min(INVENTORY_MAX_CHATS_PER_PROFILE_LEASE, remainingChats);
-      const chunkMaxDurationMs = Math.min(INVENTORY_MAX_DISCOVERY_DURATION_MS, remainingDurationMs);
 
       let operation: Awaited<ReturnType<LineChatProfileOperationCoordinator["withProfileOperation"]>>;
       try {
@@ -230,9 +262,9 @@ export class LineChatSeptemberInventoryService {
             operationContext,
             pageObserver: order.observePage,
             continuation,
-            maxPages: chunkMaxPages,
-            maxChats: chunkMaxChats,
-            maxDurationMs: chunkMaxDurationMs,
+            maxPages: budget.maxPages,
+            maxChats: budget.maxChats,
+            maxDurationMs: budget.maxDurationMs,
           }),
           { waitForLock: false },
         );
