@@ -12,6 +12,7 @@ import type { LineChatProfileOperationCoordinator } from "./line-chat-profile-op
 import {
   configuredLineChatMirrorStoreCodes,
   isLineChatMirrorEnabled,
+  isMirrorOperationSchemaUnavailable,
   lineChatMirrorIntervalMs,
   lineChatMirrorMaxChangedChatsPerCycle,
   managerAccountKeyFromInputs,
@@ -783,6 +784,110 @@ test("Project B mirror accepts duplicate Manager sessions when they resolve the 
     assert.equal(selected.session.id, "session-a");
     assert.equal(selected.botId, "U0123456789abcdef0123456789abcdef");
   }
+});
+
+test("operation-mode schema absence is recognized only for the expected Prisma table error", () => {
+  const missing = Object.assign(
+    new Error('The table `public.MirrorOperationState` does not exist in the current database.'),
+    { code: "P2021" },
+  );
+  assert.equal(isMirrorOperationSchemaUnavailable(missing), true);
+  assert.equal(
+    isMirrorOperationSchemaUnavailable(Object.assign(new Error("other table"), { code: "P2021" })),
+    false,
+  );
+  assert.equal(
+    isMirrorOperationSchemaUnavailable(Object.assign(new Error("MirrorOperationState"), { code: "P1001" })),
+    false,
+  );
+});
+
+test("initial worker rollout temporarily keeps NORMAL behavior while the new mode table is not migrated yet", async () => {
+  await withEnvAsync({ LINE_CHAT_MIRROR_STORE_CODES: "20789" }, async () => {
+    const missing = Object.assign(
+      new Error('The table `public.MirrorOperationState` does not exist in the current database.'),
+      { code: "P2021" },
+    );
+    const service = new LineChatMirrorService(
+      {} as PrismaService,
+      {} as LineChatSessionService,
+      {} as LineChatProfileOperationCoordinator,
+      { getState: async () => { throw missing; } } as never,
+    );
+    let syncCalls = 0;
+    Object.defineProperty(service, "syncStore", {
+      configurable: true,
+      value: async (storeCode: string) => {
+        syncCalls += 1;
+        return {
+          storeCode,
+          status: LineChatMirrorSyncStatus.SUCCESS,
+          recentChatsObserved: 0,
+          historiesFetched: 0,
+          messagesObserved: 0,
+          messagesInsertedOrUpdated: 0,
+          pendingChats: 0,
+          unknownDirectionEvents: 0,
+          durationMs: 0,
+        };
+      },
+    });
+
+    const results = await service.runCycle();
+    assert.equal(syncCalls, 1);
+    assert.equal(results.length, 1);
+  });
+});
+
+test("after operation mode has loaded once, later state-load failures fail closed", async () => {
+  await withEnvAsync({ LINE_CHAT_MIRROR_STORE_CODES: "20789" }, async () => {
+    const missing = Object.assign(
+      new Error('The table `public.MirrorOperationState` does not exist in the current database.'),
+      { code: "P2021" },
+    );
+    let reads = 0;
+    const operationMode = {
+      getState: async () => {
+        reads += 1;
+        if (reads > 1) throw missing;
+        return {
+          mode: "NORMAL" as const,
+          runId: null,
+          freezeAt: null,
+          backfillTargetStartAt: null,
+          catchUpStartAt: null,
+        };
+      },
+    };
+    const service = new LineChatMirrorService(
+      {} as PrismaService,
+      {} as LineChatSessionService,
+      {} as LineChatProfileOperationCoordinator,
+      operationMode as never,
+    );
+    let syncCalls = 0;
+    Object.defineProperty(service, "syncStore", {
+      configurable: true,
+      value: async (storeCode: string) => {
+        syncCalls += 1;
+        return {
+          storeCode,
+          status: LineChatMirrorSyncStatus.SUCCESS,
+          recentChatsObserved: 0,
+          historiesFetched: 0,
+          messagesObserved: 0,
+          messagesInsertedOrUpdated: 0,
+          pendingChats: 0,
+          unknownDirectionEvents: 0,
+          durationMs: 0,
+        };
+      },
+    });
+
+    assert.equal((await service.runCycle()).length, 1);
+    assert.deepEqual(await service.runCycle(), []);
+    assert.equal(syncCalls, 1);
+  });
 });
 
 test("NORMAL mode starts a scheduled Live Mirror cycle", async () => {
