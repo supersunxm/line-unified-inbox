@@ -2,6 +2,7 @@ import { Inject, Injectable, Optional } from "@nestjs/common";
 import { PrismaService } from "../prisma.service";
 import { LINE_CHAT_HISTORICAL_PILOT_STORE_CODES } from "./line-chat-historical-backfill";
 import { LineChatMirrorService, type MirrorStoreTargetInputs } from "./line-chat-mirror.service";
+import { MirrorOperationModeService } from "./mirror-operation-mode.service";
 import {
   LineChatProfileOperationCoordinator,
   type ProfileOperationResult,
@@ -88,6 +89,9 @@ export class LineChatSeptemberInventoryService {
     @Optional()
     @Inject(LineChatMirrorService)
     private readonly mirrorService: LineChatMirrorService | undefined = undefined,
+    @Optional()
+    @Inject(MirrorOperationModeService)
+    private readonly operationModeService: MirrorOperationModeService | undefined = undefined,
   ) {}
 
   /** Builds sanitized reports for the three approved A1 pilot stores, serially. */
@@ -408,7 +412,7 @@ export class LineChatSeptemberInventoryService {
       || enumerationError === "CHAT_LIST_DISCOVERY_FAILED_DURING_RESUMABLE_INVENTORY"
       ? enumerationError
       : null;
-    return {
+    const finalReport: SeptemberChatInventoryReport = {
       ...report,
       targetResolutionSource: target.targetResolutionSource ?? null,
       ...(forcedIncompleteReason
@@ -421,6 +425,19 @@ export class LineChatSeptemberInventoryService {
           }
         : {}),
     };
+
+    await this.operationModeService?.recordBackfillInventory({
+      storeCode: target.storeCode,
+      lineOfficialAccountId: target.lineOfficialAccountId,
+      conversations: septemberChats.map((chat) => ({
+        lineChatUserId: chat.chatUserId,
+        lastMessageAt: chat.lastMessageAt ? new Date(chat.lastMessageAt) : null,
+      })),
+      inventoryComplete: finalReport.inventoryComplete,
+      exactSeptemberChats: finalReport.septemberChats,
+    });
+
+    return finalReport;
   }
 
   /** Runs read-only store inventories serially to avoid overlapping Manager profiles. */
