@@ -1,4 +1,5 @@
 import { ConflictException, Inject, Injectable, Logger } from "@nestjs/common";
+import { randomUUID } from "node:crypto";
 import type { MirrorOperationState } from "@prisma/client";
 import { PrismaService } from "../prisma.service";
 import {
@@ -135,17 +136,32 @@ export class MirrorOperationModeService {
 
   async getStatus(): Promise<{
     mode: MirrorOperationModeValue;
+    runId: string | null;
     freezeAt: string | null;
     backfillTargetStartAt: string | null;
     catchUpOverlapSeconds: number;
     catchUpStartAt: string | null;
     enteredAt: string;
     completedAt: string | null;
+    recoveryRequired: boolean;
+    emergencyResumedAt: string | null;
     backfill: MirrorBackfillCompletion;
     catchUp: MirrorCatchUpCompletion;
     reconciliationPolicy: typeof MIRROR_BACKFILL_RECONCILIATION_POLICY;
   }> {
     const state = await this.getState();
+    if (
+      state.mode === "BACKFILL"
+      && state.runId
+      && state.freezeAt
+      && state.backfillTargetStartAt
+    ) {
+      await this.ensureBackfillCohortSeeded({
+        runId: state.runId,
+        freezeAt: state.freezeAt,
+        targetStartAt: state.backfillTargetStartAt,
+      });
+    }
     const evaluatedAt = new Date();
     const [backfill, catchUp] = await Promise.all([
       this.evaluateBackfill(state),
@@ -153,12 +169,15 @@ export class MirrorOperationModeService {
     ]);
     return {
       mode: state.mode,
+      runId: state.runId ?? null,
       freezeAt: state.freezeAt?.toISOString() ?? null,
       backfillTargetStartAt: state.backfillTargetStartAt?.toISOString() ?? null,
       catchUpOverlapSeconds: state.catchUpOverlapSeconds,
       catchUpStartAt: state.catchUpStartAt?.toISOString() ?? null,
       enteredAt: state.enteredAt.toISOString(),
       completedAt: state.completedAt?.toISOString() ?? null,
+      recoveryRequired: state.recoveryRequired,
+      emergencyResumedAt: state.emergencyResumedAt?.toISOString() ?? null,
       backfill,
       catchUp,
       reconciliationPolicy: MIRROR_BACKFILL_RECONCILIATION_POLICY,
@@ -177,11 +196,16 @@ export class MirrorOperationModeService {
       if (current.mode !== "NORMAL") {
         throw new ConflictException(`INVALID_MIRROR_MODE_TRANSITION:${current.mode}:BACKFILL`);
       }
+      if (current.recoveryRequired) {
+        throw new ConflictException("MIRROR_RECOVERY_REQUIRED");
+      }
       const freezeAt = new Date();
+      const runId = randomUUID();
       this.logger.log(JSON.stringify({
         event: "mirror_operation_mode_transition_started",
         previousMode: current.mode,
         mode: "BACKFILL",
+        runId,
         freezeAt: freezeAt.toISOString(),
         targetStartAt: MIRROR_BACKFILL_TARGET_START_AT.toISOString(),
       }));
@@ -189,6 +213,7 @@ export class MirrorOperationModeService {
         where: { id: MIRROR_OPERATION_STATE_ID, mode: "NORMAL" },
         data: {
           mode: "BACKFILL",
+          runId,
           freezeAt,
           backfillTargetStartAt: MIRROR_BACKFILL_TARGET_START_AT,
           catchUpStartAt: null,
@@ -200,6 +225,9 @@ export class MirrorOperationModeService {
           catchUpStoresPending: 0,
           catchUpStoresFailed: 0,
           catchUpEarliestUncoveredAt: null,
+          recoveryRequired: false,
+          emergencyResumedAt: null,
+          emergencyResumeReason: null,
           enteredAt: freezeAt,
           completedAt: null,
         },
@@ -213,13 +241,25 @@ export class MirrorOperationModeService {
         event: "mirror_operation_mode_transition_completed",
         previousMode: current.mode,
         mode: "BACKFILL",
+        runId,
         freezeAt: freezeAt.toISOString(),
       }));
+      await this.ensureBackfillCohortSeeded({
+        runId,
+        freezeAt,
+        targetStartAt: MIRROR_BACKFILL_TARGET_START_AT,
+      }).catch((error) => {
+        this.logger.warn(JSON.stringify({
+          event: "mirror_backfill_cohort_seed_deferred",
+          mode: "BACKFILL",
+          errorType: error instanceof Error ? error.name.slice(0, 80) : "UNKNOWN_ERROR",
+        }));
+      });
       return this.getStatus();
     }
 
     if (targetMode === "CATCH_UP") {
-      if (current.mode !== "BACKFILL" || !current.freezeAt) {
+      if (current.mode !== "BACKFILL" || !current.freezeAt || !current.runId) {
         throw new ConflictException(`INVALID_MIRROR_MODE_TRANSITION:${current.mode}:CATCH_UP`);
       }
       const progress = await this.evaluateBackfill(current);
@@ -314,37 +354,244 @@ export class MirrorOperationModeService {
     return this.getStatus();
   }
 
-  private async evaluateBackfill(state: MirrorOperationState): Promise<MirrorBackfillCompletion> {
-    if (!state.freezeAt || !state.backfillTargetStartAt) {
-      return emptyBackfillCompletion(state.mode !== "NORMAL");
+  async emergencyResume(input: {
+    acknowledgeUnprovenGap: boolean;
+    reason: string;
+  }): Promise<Awaited<ReturnType<MirrorOperationModeService["getStatus"]>>> {
+    if (!input.acknowledgeUnprovenGap) {
+      throw new ConflictException("MIRROR_EMERGENCY_RESUME_ACK_REQUIRED");
     }
+    const reason = input.reason.trim().slice(0, 500);
+    if (!reason) {
+      throw new ConflictException("MIRROR_EMERGENCY_RESUME_REASON_REQUIRED");
+    }
+
+    const current = await this.getState();
+    if (current.mode === "NORMAL") {
+      return this.getStatus();
+    }
+
+    const resumedAt = new Date();
+    const changed = await this.prisma.mirrorOperationState.updateMany({
+      where: {
+        id: MIRROR_OPERATION_STATE_ID,
+        mode: current.mode,
+        freezeAt: current.freezeAt,
+      },
+      data: {
+        mode: "NORMAL",
+        recoveryRequired: true,
+        emergencyResumedAt: resumedAt,
+        emergencyResumeReason: reason,
+        enteredAt: resumedAt,
+        completedAt: null,
+      },
+    });
+    if (changed.count === 0) throw new ConflictException("MIRROR_MODE_TRANSITION_RACE");
+
+    this.logger.warn(JSON.stringify({
+      event: "mirror_operation_emergency_resume",
+      previousMode: current.mode,
+      freezeAt: current.freezeAt?.toISOString() ?? null,
+      recoveryRequired: true,
+    }));
+    return this.getStatus();
+  }
+
+  async recordBackfillInventory(input: {
+    storeCode: string;
+    lineOfficialAccountId: string;
+    conversations: ReadonlyArray<{
+      lineChatUserId: string;
+      lastMessageAt: Date | null;
+    }>;
+    inventoryComplete: boolean;
+    exactSeptemberChats: number | null;
+  }): Promise<void> {
+    const state = await this.getState();
+    if (
+      state.mode !== "BACKFILL"
+      || !state.runId
+      || !state.freezeAt
+      || !state.backfillTargetStartAt
+      || !LINE_CHAT_HISTORICAL_PILOT_STORE_CODES.includes(
+        input.storeCode as (typeof LINE_CHAT_HISTORICAL_PILOT_STORE_CODES)[number],
+      )
+    ) {
+      return;
+    }
+
+    const rows = input.conversations.map((conversation) => ({
+      runId: state.runId!,
+      storeCode: input.storeCode,
+      lineOfficialAccountId: input.lineOfficialAccountId,
+      lineChatUserId: conversation.lineChatUserId,
+      observedLastMessageAt: conversation.lastMessageAt,
+    }));
+
+    await this.prisma.mirrorBackfillStoreCohort.upsert({
+      where: {
+        runId_storeCode: {
+          runId: state.runId,
+          storeCode: input.storeCode,
+        },
+      },
+      update: {
+        lineOfficialAccountId: input.lineOfficialAccountId,
+      },
+      create: {
+        runId: state.runId,
+        storeCode: input.storeCode,
+        lineOfficialAccountId: input.lineOfficialAccountId,
+      },
+    });
+
+    if (input.inventoryComplete) {
+      await this.prisma.mirrorBackfillConversation.deleteMany({
+        where: {
+          runId: state.runId,
+          storeCode: input.storeCode,
+        },
+      });
+    }
+    if (rows.length > 0) {
+      await this.prisma.mirrorBackfillConversation.createMany({
+        data: rows,
+        skipDuplicates: true,
+      });
+    }
+
+    const observedConversations = await this.prisma.mirrorBackfillConversation.count({
+      where: {
+        runId: state.runId,
+        storeCode: input.storeCode,
+      },
+    });
+    const exactSeptemberChats = input.inventoryComplete
+      ? input.exactSeptemberChats
+      : null;
+    const proofValid = input.inventoryComplete
+      && exactSeptemberChats !== null
+      && exactSeptemberChats === observedConversations;
+
+    await this.prisma.mirrorBackfillStoreCohort.update({
+      where: {
+        runId_storeCode: {
+          runId: state.runId,
+          storeCode: input.storeCode,
+        },
+      },
+      data: {
+        inventoryStatus: proofValid ? "PROVEN" : "UNPROVEN",
+        observedConversations,
+        exactSeptemberChats: proofValid ? exactSeptemberChats : null,
+        inventoryCompletedAt: proofValid ? new Date() : null,
+      },
+    });
+    await this.prisma.mirrorOperationState.updateMany({
+      where: {
+        id: MIRROR_OPERATION_STATE_ID,
+        mode: "BACKFILL",
+        runId: state.runId,
+      },
+      data: { backfillCoverageStatus: "UNPROVEN" },
+    });
+  }
+
+  private async ensureBackfillCohortSeeded(input: {
+    runId: string;
+    freezeAt: Date;
+    targetStartAt: Date;
+  }): Promise<void> {
     const storeStates = await this.prisma.lineChatMirrorStoreState.findMany({
       where: { storeCode: { in: [...LINE_CHAT_HISTORICAL_PILOT_STORE_CODES] } },
       select: { storeCode: true, lineOfficialAccountId: true },
     });
-    const statesByStore = new Map<string, typeof storeStates>();
-    for (const item of storeStates) {
-      const current = statesByStore.get(item.storeCode) ?? [];
-      current.push(item);
-      statesByStore.set(item.storeCode, current);
-    }
-    const storeCodeByAccountId = new Map(
-      storeStates.map((item) => [item.lineOfficialAccountId, item.storeCode] as const),
-    );
-    const accountIds = [...new Set(storeStates.map((item) => item.lineOfficialAccountId))];
-    const groups = accountIds.length === 0
-      ? []
-      : await this.prisma.lineChatMirrorChat.groupBy({
-          by: ["lineOfficialAccountId", "historicalBackfillStatus"],
-          where: {
-            lineOfficialAccountId: { in: accountIds },
-            lastMessageAt: {
-              gte: state.backfillTargetStartAt,
-              lte: state.freezeAt,
-            },
+
+    for (const storeCode of LINE_CHAT_HISTORICAL_PILOT_STORE_CODES) {
+      const matches = storeStates.filter((state) => state.storeCode === storeCode);
+      if (matches.length !== 1) continue;
+      const storeState = matches[0];
+      await this.prisma.mirrorBackfillStoreCohort.upsert({
+        where: {
+          runId_storeCode: {
+            runId: input.runId,
+            storeCode,
           },
-          _count: { _all: true },
+        },
+        update: {},
+        create: {
+          runId: input.runId,
+          storeCode,
+          lineOfficialAccountId: storeState.lineOfficialAccountId,
+          inventoryStatus: "UNPROVEN",
+        },
+      });
+
+      const knownChats = await this.prisma.lineChatMirrorChat.findMany({
+        where: {
+          lineOfficialAccountId: storeState.lineOfficialAccountId,
+          lastMessageAt: {
+            gte: input.targetStartAt,
+            lte: input.freezeAt,
+          },
+        },
+        select: {
+          lineChatUserId: true,
+          lastMessageAt: true,
+        },
+      });
+      if (knownChats.length > 0) {
+        await this.prisma.mirrorBackfillConversation.createMany({
+          data: knownChats.map((chat) => ({
+            runId: input.runId,
+            storeCode,
+            lineOfficialAccountId: storeState.lineOfficialAccountId,
+            lineChatUserId: chat.lineChatUserId,
+            observedLastMessageAt: chat.lastMessageAt,
+          })),
+          skipDuplicates: true,
         });
+      }
+      const observedConversations = await this.prisma.mirrorBackfillConversation.count({
+        where: { runId: input.runId, storeCode },
+      });
+      await this.prisma.mirrorBackfillStoreCohort.update({
+        where: {
+          runId_storeCode: {
+            runId: input.runId,
+            storeCode,
+          },
+        },
+        data: { observedConversations },
+      });
+    }
+  }
+
+  private async evaluateBackfill(state: MirrorOperationState): Promise<MirrorBackfillCompletion> {
+    if (!state.runId || !state.freezeAt || !state.backfillTargetStartAt) {
+      return emptyBackfillCompletion(state.mode !== "NORMAL");
+    }
+
+    await this.ensureBackfillCohortSeeded({
+      runId: state.runId,
+      freezeAt: state.freezeAt,
+      targetStartAt: state.backfillTargetStartAt,
+    });
+
+    const storeCohorts = await this.prisma.mirrorBackfillStoreCohort.findMany({
+      where: {
+        runId: state.runId,
+        storeCode: { in: [...LINE_CHAT_HISTORICAL_PILOT_STORE_CODES] },
+      },
+      select: {
+        storeCode: true,
+        lineOfficialAccountId: true,
+        inventoryStatus: true,
+        observedConversations: true,
+        exactSeptemberChats: true,
+      },
+    });
 
     let conversationsObserved = 0;
     let conversationsComplete = 0;
@@ -352,83 +599,119 @@ export class MirrorOperationModeService {
     let conversationsPending = 0;
     let conversationsFailed = 0;
     let conversationsFailedRetryable = 0;
-    const knownByStore = new Map<string, CoverageCounts>();
-    for (const row of groups) {
-      const count = row._count._all;
-      conversationsObserved += count;
-      const storeCode = storeCodeByAccountId.get(row.lineOfficialAccountId);
-      if (!storeCode) continue;
-      const storeCounts = knownByStore.get(storeCode) ?? {
-        conversationsObserved: 0,
-        conversationsComplete: 0,
-        conversationsBlocked: 0,
-        conversationsPending: 0,
-        conversationsFailed: 0,
-        conversationsFailedRetryable: 0,
-        conversationsFailedPermanent: 0,
-      };
-      storeCounts.conversationsObserved += count;
-      if (row.historicalBackfillStatus === HistoricalBackfillStatus.FAST_PATH_COMPLETE) {
-        conversationsComplete += count;
-        storeCounts.conversationsComplete += count;
-      } else if (
-        row.historicalBackfillStatus === HistoricalBackfillStatus.NEEDS_BACKWARD_PAGINATION
-        || row.historicalBackfillStatus === HistoricalBackfillStatus.HISTORICAL_COVERAGE_UNPROVEN
-      ) {
-        conversationsBlocked += count;
-        storeCounts.conversationsBlocked += count;
-      } else if (row.historicalBackfillStatus === HistoricalBackfillStatus.FAILED) {
-        conversationsFailed += count;
-        conversationsFailedRetryable += count;
-        storeCounts.conversationsFailed += count;
-        storeCounts.conversationsFailedRetryable += count;
-      } else {
-        conversationsPending += count;
-        storeCounts.conversationsPending += count;
-      }
-      knownByStore.set(storeCode, storeCounts);
-    }
-
     let storesComplete = 0;
     let storesBlocked = 0;
     let storesPending = 0;
     let storesFailed = 0;
+    let inventoryProvenForAllStores = true;
+
     for (const storeCode of LINE_CHAT_HISTORICAL_PILOT_STORE_CODES) {
-      const configuredStates = statesByStore.get(storeCode) ?? [];
-      const counts = knownByStore.get(storeCode);
-      if (configuredStates.length !== 1 || !counts || counts.conversationsObserved === 0) {
+      const store = storeCohorts.find((item) => item.storeCode === storeCode);
+      if (
+        !store
+        || store.inventoryStatus !== "PROVEN"
+        || store.exactSeptemberChats === null
+      ) {
+        inventoryProvenForAllStores = false;
         storesPending += 1;
-      } else if (counts.conversationsBlocked > 0) {
-        storesBlocked += 1;
-      } else if (counts.conversationsFailed > 0) {
-        storesFailed += 1;
-      } else if (counts.conversationsPending > 0) {
-        storesPending += 1;
-      } else {
-        storesComplete += 1;
+        continue;
       }
+
+      const cohortRows = await this.prisma.mirrorBackfillConversation.findMany({
+        where: { runId: state.runId, storeCode },
+        select: { lineOfficialAccountId: true, lineChatUserId: true },
+      });
+      conversationsObserved += cohortRows.length;
+      if (cohortRows.length !== store.exactSeptemberChats) {
+        inventoryProvenForAllStores = false;
+        storesPending += 1;
+        conversationsPending += Math.max(0, store.exactSeptemberChats - cohortRows.length);
+        continue;
+      }
+
+      const ids = cohortRows.map((row) => row.lineChatUserId);
+      const historicalRows = ids.length === 0
+        ? []
+        : await this.prisma.lineChatMirrorChat.findMany({
+            where: {
+              lineOfficialAccountId: store.lineOfficialAccountId,
+              lineChatUserId: { in: ids },
+            },
+            select: {
+              lineChatUserId: true,
+              historicalBackfillStatus: true,
+            },
+          });
+      const statusById = new Map(
+        historicalRows.map((row) => [row.lineChatUserId, row.historicalBackfillStatus] as const),
+      );
+
+      let storeComplete = 0;
+      let storeBlocked = 0;
+      let storePending = 0;
+      let storeFailed = 0;
+      for (const cohort of cohortRows) {
+        const status = statusById.get(cohort.lineChatUserId) ?? null;
+        if (status === HistoricalBackfillStatus.FAST_PATH_COMPLETE) {
+          storeComplete += 1;
+        } else if (
+          status === HistoricalBackfillStatus.NEEDS_BACKWARD_PAGINATION
+          || status === HistoricalBackfillStatus.HISTORICAL_COVERAGE_UNPROVEN
+        ) {
+          storeBlocked += 1;
+        } else if (status === HistoricalBackfillStatus.FAILED) {
+          storeFailed += 1;
+        } else {
+          storePending += 1;
+        }
+      }
+
+      conversationsComplete += storeComplete;
+      conversationsBlocked += storeBlocked;
+      conversationsPending += storePending;
+      conversationsFailed += storeFailed;
+      conversationsFailedRetryable += storeFailed;
+
+      if (storeBlocked > 0) storesBlocked += 1;
+      else if (storeFailed > 0) storesFailed += 1;
+      else if (storePending > 0) storesPending += 1;
+      else storesComplete += 1;
     }
-    const technicallyComplete = conversationsObserved > 0
+
+    const technicallyComplete = inventoryProvenForAllStores
       && storesComplete === LINE_CHAT_HISTORICAL_PILOT_STORE_CODES.length
-      && conversationsComplete === conversationsObserved
+      && storesBlocked === 0
+      && storesPending === 0
+      && storesFailed === 0
       && conversationsBlocked === 0
       && conversationsPending === 0
-      && conversationsFailed === 0
-      && state.backfillCoverageStatus === "PROVEN";
+      && conversationsFailed === 0;
+
+    if (technicallyComplete && state.backfillCoverageStatus !== "PROVEN") {
+      await this.prisma.mirrorOperationState.updateMany({
+        where: {
+          id: MIRROR_OPERATION_STATE_ID,
+          mode: "BACKFILL",
+          runId: state.runId,
+        },
+        data: { backfillCoverageStatus: "PROVEN" },
+      });
+    }
+
     const status = technicallyComplete
       ? "COMPLETE"
       : conversationsBlocked > 0
         ? "BLOCKED"
         : conversationsFailed > 0
           ? "FAILED"
-          : conversationsPending > 0
+          : conversationsPending > 0 || storesPending > 0
             ? "PENDING"
             : "UNPROVEN";
 
     return {
       status,
       technicallyComplete,
-      cohortInventoryStatus: state.backfillCoverageStatus,
+      cohortInventoryStatus: inventoryProvenForAllStores ? "PROVEN" : "UNPROVEN",
       storesTotal: LINE_CHAT_HISTORICAL_PILOT_STORE_CODES.length,
       storesComplete,
       storesBlocked,
@@ -445,7 +728,9 @@ export class MirrorOperationModeService {
         ? "BACKWARD_CONTRACT_UNPROVEN"
         : conversationsFailed > 0
           ? "HISTORICAL_FAILURES_REMAIN"
-          : "SEPTEMBER_COHORT_INVENTORY_NOT_PERSISTED",
+          : inventoryProvenForAllStores
+            ? null
+            : "SEPTEMBER_COHORT_INVENTORY_NOT_PERSISTED",
     };
   }
 }
