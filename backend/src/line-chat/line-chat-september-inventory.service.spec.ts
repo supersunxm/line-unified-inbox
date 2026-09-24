@@ -12,6 +12,7 @@ import type { PrismaService } from "../prisma.service";
 import type { LineChatProfileOperationCoordinator } from "./line-chat-profile-operation-coordinator.service";
 import type { LineChatSessionService } from "./line-chat-session.service";
 import type { LineChatMirrorService } from "./line-chat-mirror.service";
+import type { MirrorOperationModeService } from "./mirror-operation-mode.service";
 
 test("strict inventory chunk budgets cannot exceed global page, chat, or time caps", () => {
   assert.deepEqual(
@@ -201,6 +202,7 @@ test("inventory service returns aggregate chat-list coverage without exposing ch
   let persistedRowsRead = 0;
   let managerListPagesRead = 0;
   let discoveryBounds: unknown;
+  let recordedCohort: unknown = null;
   const prisma = {
     lineChatMirrorChat: {
       findMany: async (args: { where: { lineOfficialAccountId: string; lineChatUserId: { in: string[] } } }) => {
@@ -296,7 +298,18 @@ test("inventory service returns aggregate chat-list coverage without exposing ch
     },
   } as unknown as LineChatProfileOperationCoordinator;
 
-  const service = new LineChatSeptemberInventoryService(prisma, sessionService, coordinator, {} as LineChatMirrorService);
+  const operationModeService = {
+    recordBackfillInventory: async (input: unknown) => {
+      recordedCohort = input;
+    },
+  } as unknown as MirrorOperationModeService;
+  const service = new LineChatSeptemberInventoryService(
+    prisma,
+    sessionService,
+    coordinator,
+    {} as LineChatMirrorService,
+    operationModeService,
+  );
   const report = await service.discoverStore({
     storeCode: "29113",
     lineOfficialAccountId: "oa-1",
@@ -311,6 +324,16 @@ test("inventory service returns aggregate chat-list coverage without exposing ch
   assert.equal(report.septemberChats, 1);
   assert.equal(report.needsBackwardPagination, 1);
   assert.equal(report.historicalCheckedRate, 1);
+  assert.deepEqual(recordedCohort, {
+    storeCode: "29113",
+    lineOfficialAccountId: "oa-1",
+    conversations: [{
+      lineChatUserId: privateChatId,
+      lastMessageAt: new Date("2026-09-23T03:00:00.000Z"),
+    }],
+    inventoryComplete: true,
+    exactSeptemberChats: 1,
+  });
   assert.doesNotMatch(JSON.stringify(report), new RegExp(privateChatId, "u"));
   assert.doesNotMatch(JSON.stringify(report), /Private Customer Name/u);
 });

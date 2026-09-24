@@ -8,6 +8,7 @@ import { AuthGuard, type AuthUser } from "../auth/auth.guard";
 import { Reflector } from "@nestjs/core";
 import { REQUIRED_ROLES } from "../auth/auth.decorators";
 import type { ExecutionContext } from "@nestjs/common";
+import { METHOD_METADATA, PATH_METADATA } from "@nestjs/common/constants";
 
 function createMockExecutionContext(authHeader?: string, user?: AuthUser): ExecutionContext {
   const req = {
@@ -35,6 +36,15 @@ test("Operations Security: AuthGuard and Reflector enforce ADMIN-only access", a
   ]);
 
   assert.deepEqual(requiredRoles, [UserRole.ADMIN], "Controller must strictly declare required role ADMIN");
+  for (const handler of [
+    LineChatOperationsController.prototype.getMirrorOperationMode,
+    LineChatOperationsController.prototype.startMirrorBackfill,
+    LineChatOperationsController.prototype.startMirrorCatchUp,
+    LineChatOperationsController.prototype.returnMirrorToNormal,
+    LineChatOperationsController.prototype.emergencyResumeMirror,
+  ]) {
+    assert.equal(Reflect.getMetadata(PATH_METADATA, handler) !== undefined, true);
+  }
 
   const mockAuthService = {
     authenticate: async (token?: string) => {
@@ -72,6 +82,45 @@ test("Operations Security: AuthGuard and Reflector enforce ADMIN-only access", a
     /Authentication required/,
     "Unauthenticated request must be rejected with UnauthorizedException"
   );
+});
+
+test("Mirror mode control endpoints reuse the authenticated ADMIN controller and validate transitions", async () => {
+  const transitions: string[] = [];
+  const modeService = {
+    getStatus: async () => ({ mode: "NORMAL" }),
+    transition: async (mode: "BACKFILL" | "CATCH_UP" | "NORMAL") => {
+      transitions.push(mode);
+      return { mode };
+    },
+    emergencyResume: async (input: { acknowledgeUnprovenGap: boolean; reason: string }) => ({
+      mode: "NORMAL",
+      recoveryRequired: input.acknowledgeUnprovenGap,
+    }),
+  };
+  const controller = new LineChatOperationsController(
+    undefined as never,
+    undefined as never,
+    undefined as never,
+    undefined as never,
+    undefined as never,
+    undefined as never,
+    modeService as never,
+  );
+
+  assert.deepEqual(await controller.getMirrorOperationMode(), { mode: "NORMAL" });
+  assert.deepEqual(await controller.startMirrorBackfill(), { mode: "BACKFILL" });
+  assert.deepEqual(await controller.startMirrorCatchUp(), { mode: "CATCH_UP" });
+  assert.deepEqual(await controller.returnMirrorToNormal(), { mode: "NORMAL" });
+  assert.deepEqual(
+    await controller.emergencyResumeMirror({
+      acknowledgeUnprovenGap: true,
+      reason: "restore live polling",
+    }),
+    { mode: "NORMAL", recoveryRequired: true },
+  );
+  assert.deepEqual(transitions, ["BACKFILL", "CATCH_UP", "NORMAL"]);
+  assert.equal(Reflect.getMetadata(PATH_METADATA, LineChatOperationsController), "operations/line-chat-nickname");
+  assert.equal(Reflect.getMetadata(METHOD_METADATA, LineChatOperationsController.prototype.startMirrorBackfill), 1);
 });
 
 test("Operations Security: Health summary output never exposes sensitive credentials or profile paths", async () => {

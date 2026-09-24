@@ -12,7 +12,7 @@ import type { LineChatProfileOperationCoordinator } from "./line-chat-profile-op
 import {
   configuredLineChatMirrorStoreCodes,
   isLineChatMirrorEnabled,
-  isLineChatHistoricalBackfillEnabled,
+  isMirrorOperationSchemaUnavailable,
   lineChatMirrorIntervalMs,
   lineChatMirrorMaxChangedChatsPerCycle,
   managerAccountKeyFromInputs,
@@ -178,6 +178,26 @@ function withEnv(
   }
 }
 
+async function withEnvAsync(
+  values: Record<string, string | undefined>,
+  callback: () => Promise<void>,
+): Promise<void> {
+  const previous = new Map<string, string | undefined>();
+  for (const [key, value] of Object.entries(values)) {
+    previous.set(key, process.env[key]);
+    if (value === undefined) delete process.env[key];
+    else process.env[key] = value;
+  }
+  try {
+    await callback();
+  } finally {
+    for (const [key, value] of previous) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+}
+
 test("Project B mirror pilot parses and deduplicates configured store codes", () => {
   withEnv(
     { LINE_CHAT_MIRROR_STORE_CODES: "20789, 29113;20789 29737" },
@@ -196,15 +216,6 @@ test("Project B mirror remains opt-in", () => {
   });
   withEnv({ LINE_CHAT_MIRROR_ENABLED: "true" }, () => {
     assert.equal(isLineChatMirrorEnabled(), true);
-  });
-});
-
-test("A1 historical backfill remains explicitly opt-in", () => {
-  withEnv({ LINE_CHAT_HISTORICAL_BACKFILL_ENABLED: undefined }, () => {
-    assert.equal(isLineChatHistoricalBackfillEnabled(), false);
-  });
-  withEnv({ LINE_CHAT_HISTORICAL_BACKFILL_ENABLED: "true" }, () => {
-    assert.equal(isLineChatHistoricalBackfillEnabled(), true);
   });
 });
 
@@ -773,6 +784,305 @@ test("Project B mirror accepts duplicate Manager sessions when they resolve the 
     assert.equal(selected.session.id, "session-a");
     assert.equal(selected.botId, "U0123456789abcdef0123456789abcdef");
   }
+});
+
+test("operation-mode schema absence is recognized only for the expected Prisma table error", () => {
+  const missing = Object.assign(
+    new Error('The table `public.MirrorOperationState` does not exist in the current database.'),
+    { code: "P2021" },
+  );
+  assert.equal(isMirrorOperationSchemaUnavailable(missing), true);
+  assert.equal(
+    isMirrorOperationSchemaUnavailable(Object.assign(new Error("other table"), { code: "P2021" })),
+    false,
+  );
+  assert.equal(
+    isMirrorOperationSchemaUnavailable(Object.assign(new Error("MirrorOperationState"), { code: "P1001" })),
+    false,
+  );
+});
+
+test("initial worker rollout temporarily keeps NORMAL behavior while the new mode table is not migrated yet", async () => {
+  await withEnvAsync({ LINE_CHAT_MIRROR_STORE_CODES: "20789" }, async () => {
+    const missing = Object.assign(
+      new Error('The table `public.MirrorOperationState` does not exist in the current database.'),
+      { code: "P2021" },
+    );
+    const service = new LineChatMirrorService(
+      {} as PrismaService,
+      {} as LineChatSessionService,
+      {} as LineChatProfileOperationCoordinator,
+      { getState: async () => { throw missing; } } as never,
+    );
+    let syncCalls = 0;
+    Object.defineProperty(service, "syncStore", {
+      configurable: true,
+      value: async (storeCode: string) => {
+        syncCalls += 1;
+        return {
+          storeCode,
+          status: LineChatMirrorSyncStatus.SUCCESS,
+          recentChatsObserved: 0,
+          historiesFetched: 0,
+          messagesObserved: 0,
+          messagesInsertedOrUpdated: 0,
+          pendingChats: 0,
+          unknownDirectionEvents: 0,
+          durationMs: 0,
+        };
+      },
+    });
+
+    const results = await service.runCycle();
+    assert.equal(syncCalls, 1);
+    assert.equal(results.length, 1);
+  });
+});
+
+test("after operation mode has loaded once, later state-load failures fail closed", async () => {
+  await withEnvAsync({ LINE_CHAT_MIRROR_STORE_CODES: "20789" }, async () => {
+    const missing = Object.assign(
+      new Error('The table `public.MirrorOperationState` does not exist in the current database.'),
+      { code: "P2021" },
+    );
+    let reads = 0;
+    const operationMode = {
+      getState: async () => {
+        reads += 1;
+        if (reads > 1) throw missing;
+        return {
+          mode: "NORMAL" as const,
+          runId: null,
+          freezeAt: null,
+          backfillTargetStartAt: null,
+          catchUpStartAt: null,
+        };
+      },
+    };
+    const service = new LineChatMirrorService(
+      {} as PrismaService,
+      {} as LineChatSessionService,
+      {} as LineChatProfileOperationCoordinator,
+      operationMode as never,
+    );
+    let syncCalls = 0;
+    Object.defineProperty(service, "syncStore", {
+      configurable: true,
+      value: async (storeCode: string) => {
+        syncCalls += 1;
+        return {
+          storeCode,
+          status: LineChatMirrorSyncStatus.SUCCESS,
+          recentChatsObserved: 0,
+          historiesFetched: 0,
+          messagesObserved: 0,
+          messagesInsertedOrUpdated: 0,
+          pendingChats: 0,
+          unknownDirectionEvents: 0,
+          durationMs: 0,
+        };
+      },
+    });
+
+    assert.equal((await service.runCycle()).length, 1);
+    assert.deepEqual(await service.runCycle(), []);
+    assert.equal(syncCalls, 1);
+  });
+});
+
+test("NORMAL mode starts a scheduled Live Mirror cycle", async () => {
+  await withEnvAsync({ LINE_CHAT_MIRROR_STORE_CODES: "20789" }, async () => {
+    const operationMode = {
+      getState: async () => ({
+        mode: "NORMAL" as const,
+        freezeAt: null,
+        backfillTargetStartAt: null,
+        catchUpStartAt: null,
+      }),
+    };
+    const service = new LineChatMirrorService(
+      {} as PrismaService,
+      {} as LineChatSessionService,
+      {} as LineChatProfileOperationCoordinator,
+      operationMode as never,
+    );
+    let syncCalls = 0;
+    Object.defineProperty(service, "syncStore", {
+      configurable: true,
+      value: async (storeCode: string) => {
+        syncCalls += 1;
+        return {
+          storeCode,
+          status: LineChatMirrorSyncStatus.SUCCESS,
+          recentChatsObserved: 0,
+          historiesFetched: 0,
+          messagesObserved: 0,
+          messagesInsertedOrUpdated: 0,
+          pendingChats: 0,
+          unknownDirectionEvents: 0,
+          durationMs: 0,
+        };
+      },
+    });
+
+    const results = await service.runCycle();
+    assert.equal(syncCalls, 1);
+    assert.equal(results.length, 1);
+  });
+});
+
+test("CATCH_UP resumes live cycles from the persisted overlap boundary", async () => {
+  await withEnvAsync({ LINE_CHAT_MIRROR_STORE_CODES: "20789" }, async () => {
+    const catchUpStartAt = new Date("2026-09-24T01:10:00.000Z");
+    const operationMode = {
+      getState: async () => ({
+        mode: "CATCH_UP" as const,
+        freezeAt: new Date("2026-09-24T01:15:00.000Z"),
+        backfillTargetStartAt: new Date("2026-08-31T17:00:00.000Z"),
+        catchUpStartAt,
+      }),
+    };
+    const service = new LineChatMirrorService(
+      {} as PrismaService,
+      {} as LineChatSessionService,
+      {} as LineChatProfileOperationCoordinator,
+      operationMode as never,
+    );
+    const observedBoundaries: Array<Date | null> = [];
+    Object.defineProperty(service, "syncStore", {
+      configurable: true,
+      value: async (storeCode: string, boundary: Date | null) => {
+        observedBoundaries.push(boundary);
+        return {
+          storeCode,
+          status: LineChatMirrorSyncStatus.SUCCESS,
+          recentChatsObserved: 0,
+          historiesFetched: 0,
+          messagesObserved: 0,
+          messagesInsertedOrUpdated: 0,
+          pendingChats: 0,
+          unknownDirectionEvents: 0,
+          durationMs: 0,
+        };
+      },
+    });
+
+    await service.runCycle();
+    assert.equal(observedBoundaries.length, 1);
+    assert.equal(observedBoundaries[0]?.toISOString(), catchUpStartAt.toISOString());
+  });
+});
+
+test("BACKFILL keeps the worker cycle active but serializes pilot stores without Live Mirror", async () => {
+  await withEnvAsync({ LINE_CHAT_MIRROR_STORE_CODES: "29113,28375,25610" }, async () => {
+    const operationMode = {
+      getState: async () => ({
+        mode: "BACKFILL" as const,
+        runId: "run-backfill",
+        freezeAt: new Date("2026-09-24T01:15:00.000Z"),
+        backfillTargetStartAt: new Date("2026-08-31T17:00:00.000Z"),
+        catchUpStartAt: null,
+      }),
+    };
+    const service = new LineChatMirrorService(
+      {} as PrismaService,
+      {} as LineChatSessionService,
+      {} as LineChatProfileOperationCoordinator,
+      operationMode as never,
+    );
+    let liveCalls = 0;
+    let activeBackfill = 0;
+    let maxActiveBackfill = 0;
+    const backfillStores: string[] = [];
+    Object.defineProperty(service, "syncStore", {
+      configurable: true,
+      value: async () => { liveCalls += 1; throw new Error("Live cycle must be skipped"); },
+    });
+    Object.defineProperty(service, "runBackfillStore", {
+      configurable: true,
+      value: async (_runId: string, storeCode: string) => {
+        activeBackfill += 1;
+        maxActiveBackfill = Math.max(maxActiveBackfill, activeBackfill);
+        backfillStores.push(storeCode);
+        await Promise.resolve();
+        activeBackfill -= 1;
+      },
+    });
+
+    await service.runCycle();
+    assert.equal(liveCalls, 0);
+    assert.equal(maxActiveBackfill, 1);
+    assert.deepEqual(backfillStores, ["29113", "28375", "25610"]);
+  });
+});
+
+test("an in-flight live cycle may finish, then BACKFILL skips later live work", async () => {
+  await withEnvAsync({ LINE_CHAT_MIRROR_STORE_CODES: "29113" }, async () => {
+    let mode: "NORMAL" | "BACKFILL" = "NORMAL";
+    const freezeAt = new Date("2026-09-24T01:15:00.000Z");
+    const operationMode = {
+      getState: async () => mode === "NORMAL"
+        ? {
+          mode,
+          freezeAt: null,
+          backfillTargetStartAt: null,
+          catchUpStartAt: null,
+        }
+        : {
+          mode,
+          runId: "run-backfill",
+          freezeAt,
+          backfillTargetStartAt: new Date("2026-08-31T17:00:00.000Z"),
+          catchUpStartAt: null,
+        },
+    };
+    const service = new LineChatMirrorService(
+      {} as PrismaService,
+      {} as LineChatSessionService,
+      {} as LineChatProfileOperationCoordinator,
+      operationMode as never,
+    );
+    let markStarted!: () => void;
+    let finishSync!: () => void;
+    const started = new Promise<void>((resolve) => { markStarted = resolve; });
+    const blocked = new Promise<void>((resolve) => { finishSync = resolve; });
+    let syncCalls = 0;
+    let backfillCalls = 0;
+    Object.defineProperty(service, "syncStore", {
+      configurable: true,
+      value: async (storeCode: string) => {
+        syncCalls += 1;
+        markStarted();
+        await blocked;
+        return {
+          storeCode,
+          status: LineChatMirrorSyncStatus.SUCCESS,
+          recentChatsObserved: 0,
+          historiesFetched: 0,
+          messagesObserved: 0,
+          messagesInsertedOrUpdated: 0,
+          pendingChats: 0,
+          unknownDirectionEvents: 0,
+          durationMs: 0,
+        };
+      },
+    });
+    Object.defineProperty(service, "runBackfillStore", {
+      configurable: true,
+      value: async () => { backfillCalls += 1; },
+    });
+
+    const inFlight = service.runCycle();
+    await started;
+    mode = "BACKFILL";
+    finishSync();
+    await inFlight;
+    const nextCycle = await service.runCycle();
+
+    assert.equal(syncCalls, 1);
+    assert.equal(nextCycle.length, 0);
+    assert.equal(backfillCalls, 1);
+  });
 });
 
 test("Project B mirror fails closed when Manager sessions resolve different bots", () => {

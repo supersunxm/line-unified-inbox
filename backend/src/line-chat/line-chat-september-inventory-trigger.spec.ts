@@ -33,6 +33,7 @@ test("disabled startup inventory does not touch the service", async () => {
 
 test("startup inventory retries only profile contention and emits aggregate-only reports", async () => {
   let calls = 0;
+  const requestedPerCall: string[][] = [];
   const logs: string[] = [];
   const busy = emptySeptemberChatInventoryReport("29113", "PROFILE_OPERATION_BUSY");
   const complete = {
@@ -67,8 +68,9 @@ test("startup inventory retries only profile contention and emits aggregate-only
     maxAttempts: 2,
     retryDelayMs: 0,
     service: {
-      discoverPilotStores: async () => {
+      discoverPilotStores: async (storeCodes) => {
         calls += 1;
+        requestedPerCall.push([...(storeCodes ?? [])]);
         return calls === 1 ? [busy] : [complete];
       },
     },
@@ -82,6 +84,7 @@ test("startup inventory retries only profile contention and emits aggregate-only
   assert.equal(result.ran, true);
   assert.equal(result.attempts, 2);
   assert.equal(result.reports[0]?.inventoryComplete, true);
+  assert.deepEqual(requestedPerCall[1], ["29113"]);
   assert.ok(logs.some((line) => line.includes("line_chat_september_inventory_startup_retrying")));
   assert.ok(logs.some((line) => line.includes('"septemberChats":40')));
   assert.ok(logs.some((line) => line.includes('"targetResolutionSource":"MANAGER_ACCOUNT_REDIRECT"')));
@@ -90,6 +93,40 @@ test("startup inventory retries only profile contention and emits aggregate-only
   assert.ok(logs.every((line) => !line.includes("chatUserId")));
   assert.ok(logs.every((line) => !line.includes("displayName")));
   assert.ok(logs.every((line) => !line.includes("lastMessageText")));
+});
+
+test("startup retry preserves completed stores and retries only the busy store", async () => {
+  const pinklao = {
+    ...emptySeptemberChatInventoryReport("29113", "unused"),
+    inventoryComplete: true,
+    inventoryIncompleteReason: null,
+    conversationsObserved: 124,
+    septemberChats: 124,
+    septemberChatsObserved: 124,
+  };
+  const rbsBusy = emptySeptemberChatInventoryReport("28375", "PROFILE_OPERATION_BUSY");
+  const centralBusy = emptySeptemberChatInventoryReport("25610", "PROFILE_OPERATION_BUSY");
+  const requests: string[][] = [];
+  let attempt = 0;
+  const result = await runSeptemberInventoryStartupDiagnostic({
+    enabled: true,
+    maxAttempts: 3,
+    retryDelayMs: 0,
+    service: {
+      discoverPilotStores: async (storeCodes) => {
+        requests.push([...(storeCodes ?? [])]);
+        attempt += 1;
+        if (attempt === 1) return [pinklao, rbsBusy, centralBusy];
+        return [rbsBusy, centralBusy];
+      },
+    },
+    logger: { log() {}, warn() {} },
+  });
+
+  assert.deepEqual(requests[1], ["28375", "25610"]);
+  assert.equal(result.reports.find((report) => report.storeCode === "29113")?.septemberChats, 124);
+  assert.equal(result.reports.find((report) => report.storeCode === "29113")?.inventoryComplete, true);
+  assert.equal(result.reports.find((report) => report.storeCode === "28375")?.inventoryIncompleteReason, "PROFILE_OPERATION_BUSY");
 });
 
 test("startup inventory does not retry a permanent target-not-found result", async () => {

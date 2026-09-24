@@ -1,5 +1,9 @@
 import type { LineChatSeptemberInventoryService } from "./line-chat-september-inventory.service";
-import type { SeptemberChatInventoryReport } from "./line-chat-september-inventory";
+import {
+  emptySeptemberChatInventoryReport,
+  type SeptemberChatInventoryReport,
+} from "./line-chat-september-inventory";
+import { LINE_CHAT_HISTORICAL_PILOT_STORE_CODES } from "./line-chat-historical-backfill";
 
 export const SEPTEMBER_INVENTORY_STARTUP_ENV = "LINE_CHAT_SEPTEMBER_INVENTORY_ON_STARTUP";
 
@@ -79,7 +83,9 @@ export async function runSeptemberInventoryStartupDiagnostic(input: {
 
   const maxAttempts = Math.max(1, Math.min(5, Math.floor(input.maxAttempts ?? 3)));
   const retryDelayMs = Math.max(0, Math.min(60_000, Math.floor(input.retryDelayMs ?? 10_000)));
-  let reports: SeptemberChatInventoryReport[] = [];
+  const reportsByStore = new Map<string, SeptemberChatInventoryReport>();
+  let pendingStoreCodes: string[] = [...LINE_CHAT_HISTORICAL_PILOT_STORE_CODES];
+  let attempts = 0;
 
   input.logger.log(JSON.stringify({
     event: "line_chat_september_inventory_startup_started",
@@ -89,42 +95,69 @@ export async function runSeptemberInventoryStartupDiagnostic(input: {
   }));
 
   try {
-    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-      reports = await input.service.discoverPilotStores();
+    for (let attempt = 1; attempt <= maxAttempts && pendingStoreCodes.length > 0; attempt += 1) {
+      attempts = attempt;
+      const requested = new Set<string>(pendingStoreCodes);
+      const reports = await input.service.discoverPilotStores(pendingStoreCodes);
       for (const report of reports) {
+        if (!requested.has(report.storeCode)) continue;
+        const previous = reportsByStore.get(report.storeCode);
+        if (!previous?.inventoryComplete || report.inventoryComplete) {
+          reportsByStore.set(report.storeCode, report);
+        }
         input.logger.log(JSON.stringify({
           event: "line_chat_september_inventory_store_report",
           attempt,
           ...safeReport(report),
         }));
       }
+      for (const storeCode of pendingStoreCodes) {
+        if (!reportsByStore.has(storeCode)) {
+          reportsByStore.set(
+            storeCode,
+            emptySeptemberChatInventoryReport(storeCode, "INVENTORY_REPORT_MISSING"),
+          );
+        }
+      }
 
       const busyStores = reports
         .filter((report) => report.inventoryIncompleteReason === "PROFILE_OPERATION_BUSY")
+        .filter((report) => requested.has(report.storeCode))
+        .filter((report) => !reportsByStore.get(report.storeCode)?.inventoryComplete)
         .map((report) => report.storeCode);
 
-      if (busyStores.length === 0 || attempt === maxAttempts) {
+      pendingStoreCodes = busyStores;
+      if (pendingStoreCodes.length === 0 || attempt === maxAttempts) {
+        const finalReports = LINE_CHAT_HISTORICAL_PILOT_STORE_CODES
+          .flatMap((storeCode) => {
+            const report = reportsByStore.get(storeCode);
+            return report ? [report] : [];
+          });
         input.logger.log(JSON.stringify({
           event: "line_chat_september_inventory_startup_completed",
           attempts: attempt,
-          storeCount: reports.length,
-          completeStores: reports.filter((report) => report.inventoryComplete).length,
-          busyStoresRemaining: busyStores.length,
+          storeCount: finalReports.length,
+          completeStores: finalReports.filter((report) => report.inventoryComplete).length,
+          busyStoresRemaining: pendingStoreCodes.length,
           mode: "READ_ONLY",
         }));
-        return { ran: true, attempts: attempt, reports, error: null };
+        return { ran: true, attempts: attempt, reports: finalReports, error: null };
       }
 
       input.logger.log(JSON.stringify({
         event: "line_chat_september_inventory_startup_retrying",
         attempt,
-        busyStoreCount: busyStores.length,
+        busyStoreCount: pendingStoreCodes.length,
         retryDelayMs,
       }));
       await sleep(retryDelayMs);
     }
 
-    return { ran: true, attempts: maxAttempts, reports, error: null };
+    const reports = LINE_CHAT_HISTORICAL_PILOT_STORE_CODES.flatMap((storeCode) => {
+      const report = reportsByStore.get(storeCode);
+      return report ? [report] : [];
+    });
+    return { ran: true, attempts, reports, error: null };
   } catch (error) {
     const errorType = error instanceof Error ? error.name.slice(0, 80) : "UNKNOWN_ERROR";
     input.logger.warn(JSON.stringify({
@@ -132,6 +165,10 @@ export async function runSeptemberInventoryStartupDiagnostic(input: {
       errorType,
       mode: "READ_ONLY",
     }));
-    return { ran: true, attempts: 1, reports, error: errorType };
+    const reports = LINE_CHAT_HISTORICAL_PILOT_STORE_CODES.flatMap((storeCode) => {
+      const report = reportsByStore.get(storeCode);
+      return report ? [report] : [];
+    });
+    return { ran: true, attempts: Math.max(1, attempts), reports, error: errorType };
   }
 }

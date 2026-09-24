@@ -18,6 +18,7 @@ import { LineChatManualMappingService } from "./line-chat-manual-mapping.service
 import { LineChatMessageSendQueueService } from "./line-chat-message-send-queue.service";
 import { LineChatMirrorStatusService } from "./line-chat-mirror-status.service";
 import { LineChatSeptemberInventoryService } from "./line-chat-september-inventory.service";
+import { MirrorOperationModeService } from "./mirror-operation-mode.service";
 
 @Global()
 @Module({
@@ -40,6 +41,7 @@ import { LineChatSeptemberInventoryService } from "./line-chat-september-invento
     LineChatMessageSendQueueService,
     LineChatMirrorStatusService,
     LineChatSeptemberInventoryService,
+    MirrorOperationModeService,
   ],
   exports: [
     LineChatSessionService,
@@ -58,6 +60,7 @@ import { LineChatSeptemberInventoryService } from "./line-chat-september-invento
     LineChatMessageSendQueueService,
     LineChatMirrorStatusService,
     LineChatSeptemberInventoryService,
+    MirrorOperationModeService,
   ],
 })
 export class LineChatModule {}

@@ -8,6 +8,7 @@ import {
   historicalBackfillCanResume,
   historicalFetchResultPatch,
   historicalFetchStartedPatch,
+  isHistoricalBackfillEventInRange,
   lineChatHistoricalLowerBound,
   parseManagerHistoryPage,
   persistHistoricalEvents,
@@ -363,6 +364,50 @@ test("A1 historical checkpoints never use the live watermark as Sep 1 proof", ()
 test("A1 lower bound uses the explicit Asia/Bangkok UTC offset", () => {
   assert.equal(lineChatHistoricalLowerBound().toISOString(), "2026-08-31T17:00:00.000Z");
   assert.equal(lineChatHistoricalLowerBound().getTime(), boundary);
+});
+
+test("coverage classification uses the full Manager page while persistence can stay range-bounded", () => {
+  const fullPage = page([
+    textEvent("new", Date.parse("2026-09-10T10:00:00+07:00")),
+    textEvent("old", Date.parse("2026-08-26T10:00:00+07:00")),
+  ], "opaque");
+  const freezeAt = new Date("2026-09-24T01:15:00.000Z");
+  const boundedEvents = fullPage.events.filter((event) =>
+    isHistoricalBackfillEventInRange(
+      event.sentAt,
+      lineChatHistoricalLowerBound(),
+      freezeAt,
+    ),
+  );
+
+  assert.equal(boundedEvents.length, 1);
+  assert.equal(
+    classifyHistoricalPage(fullPage).status,
+    HistoricalBackfillStatus.FAST_PATH_COMPLETE,
+  );
+  assert.equal(
+    classifyHistoricalPage({
+      events: boundedEvents,
+      backwardPresent: fullPage.backwardPresent,
+    }).status,
+    HistoricalBackfillStatus.NEEDS_BACKWARD_PAGINATION,
+  );
+});
+
+test("mode-controlled historical range includes Sep 1 and freezeAt, but excludes later events", () => {
+  const start = lineChatHistoricalLowerBound();
+  const freezeAt = new Date("2026-09-24T01:15:00.000Z");
+  assert.equal(isHistoricalBackfillEventInRange(start, start, freezeAt), true);
+  assert.equal(isHistoricalBackfillEventInRange(freezeAt, start, freezeAt), true);
+  assert.equal(isHistoricalBackfillEventInRange(new Date(start.getTime() - 1), start, freezeAt), false);
+  assert.equal(isHistoricalBackfillEventInRange(new Date(freezeAt.getTime() + 1), start, freezeAt), false);
+});
+
+test("opaque backward values are reduced to presence and never returned or persisted", () => {
+  const opaqueValue = "private-backward-cursor-should-not-escape";
+  const parsed = page([textEvent("within-range", afterBoundary)], opaqueValue);
+  assert.equal(parsed.backwardPresent, true);
+  assert.equal(JSON.stringify(parsed).includes(opaqueValue), false);
 });
 
 test("A1 isolates one conversation failure and continues the store batch", async () => {
