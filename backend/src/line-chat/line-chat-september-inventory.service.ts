@@ -91,15 +91,20 @@ export class LineChatSeptemberInventoryService {
   ) {}
 
   /** Builds sanitized reports for the three approved A1 pilot stores, serially. */
-  public async discoverPilotStores(): Promise<SeptemberChatInventoryReport[]> {
+  public async discoverPilotStores(
+    requestedStoreCodes: readonly string[] = LINE_CHAT_HISTORICAL_PILOT_STORE_CODES,
+  ): Promise<SeptemberChatInventoryReport[]> {
+    const storeCodes = LINE_CHAT_HISTORICAL_PILOT_STORE_CODES.filter((storeCode) =>
+      requestedStoreCodes.includes(storeCode),
+    );
     const storeStates = await this.prisma.lineChatMirrorStoreState.findMany({
-      where: { storeCode: { in: [...LINE_CHAT_HISTORICAL_PILOT_STORE_CODES] } },
+      where: { storeCode: { in: storeCodes } },
       select: { storeCode: true, lineOfficialAccountId: true, enabled: true },
     });
     const reports: SeptemberChatInventoryReport[] = [];
     const mirrorService = this.mirrorService;
 
-    for (const storeCode of LINE_CHAT_HISTORICAL_PILOT_STORE_CODES) {
+    for (const storeCode of storeCodes) {
       const matchingStates = storeStates.filter((state) => state.storeCode === storeCode);
       if (matchingStates.length !== 1) {
         reports.push(emptySeptemberChatInventoryReport(

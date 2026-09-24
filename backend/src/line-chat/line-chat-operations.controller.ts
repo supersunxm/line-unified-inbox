@@ -1,4 +1,16 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Get,
+  Inject,
+  InternalServerErrorException,
+  Optional,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
+} from "@nestjs/common";
 import { UserRole } from "@prisma/client";
 import { ArrayNotEmpty, IsArray, IsBoolean, IsNotEmpty, IsOptional, IsString } from "class-validator";
 import { AuthGuard } from "../auth/auth.guard";
@@ -9,6 +21,7 @@ import { LineChatPendingControlService } from "./line-chat-pending-control.servi
 import { LineChatHealthReconciliationService } from "./line-chat-health-reconciliation.service";
 import { LineChatManualMappingService } from "./line-chat-manual-mapping.service";
 import { LineChatMirrorStatusService } from "./line-chat-mirror-status.service";
+import { MirrorOperationModeService } from "./mirror-operation-mode.service";
 import type { AuthRequest } from "../auth/auth.guard";
 import { Req } from "@nestjs/common";
 
@@ -65,7 +78,17 @@ export class LineChatOperationsController {
     private readonly healthReconciliation: LineChatHealthReconciliationService,
     private readonly manualMappingService: LineChatManualMappingService,
     private readonly mirrorStatusService: LineChatMirrorStatusService,
+    @Optional()
+    @Inject(MirrorOperationModeService)
+    private readonly mirrorOperationModeService?: MirrorOperationModeService,
   ) {}
+
+  private getMirrorOperationModeService(): MirrorOperationModeService {
+    if (!this.mirrorOperationModeService) {
+      throw new InternalServerErrorException("MIRROR_OPERATION_MODE_SERVICE_UNAVAILABLE");
+    }
+    return this.mirrorOperationModeService;
+  }
 
   @Get("unresolved-backlog")
   async getUnresolvedBacklog() {
@@ -110,6 +133,26 @@ export class LineChatOperationsController {
   @Get("mirror-status")
   async getMirrorStatus() {
     return this.mirrorStatusService.getStatus();
+  }
+
+  @Get("mirror-operation-mode")
+  async getMirrorOperationMode() {
+    return this.getMirrorOperationModeService().getStatus();
+  }
+
+  @Post("mirror-operation-mode/backfill")
+  async startMirrorBackfill() {
+    return this.getMirrorOperationModeService().transition("BACKFILL");
+  }
+
+  @Post("mirror-operation-mode/catch-up")
+  async startMirrorCatchUp() {
+    return this.getMirrorOperationModeService().transition("CATCH_UP");
+  }
+
+  @Post("mirror-operation-mode/normal")
+  async returnMirrorToNormal() {
+    return this.getMirrorOperationModeService().transition("NORMAL");
   }
 
   @Post("retry-failed")

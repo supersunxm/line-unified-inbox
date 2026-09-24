@@ -130,6 +130,17 @@ export function lineChatHistoricalLowerBound(): Date {
   return new Date(LINE_CHAT_HISTORICAL_LOWER_BOUND_ISO);
 }
 
+export function isHistoricalBackfillEventInRange(
+  timestamp: Date,
+  targetStartAt: Date,
+  freezeAt: Date,
+): boolean {
+  const time = timestamp.getTime();
+  return Number.isFinite(time)
+    && time >= targetStartAt.getTime()
+    && time <= freezeAt.getTime();
+}
+
 export function parseManagerHistoryPage(
   raw: unknown,
   ownerByBizId: ReadonlyMap<string, string> = new Map(),

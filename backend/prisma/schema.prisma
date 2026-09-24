@@ -2213,6 +2213,37 @@ enum LineChatMirrorReconcileStatus {
   SKIPPED
 }
 
+enum MirrorOperationMode {
+  NORMAL
+  BACKFILL
+  CATCH_UP
+}
+
+enum MirrorOperationCoverageStatus {
+  UNPROVEN
+  PROVEN
+}
+
+model MirrorOperationState {
+  id                         String                         @id @default("big-project-a")
+  mode                       MirrorOperationMode            @default(NORMAL)
+  freezeAt                   DateTime?
+  backfillTargetStartAt      DateTime?
+  catchUpOverlapSeconds      Int                            @default(300)
+  catchUpStartAt             DateTime?
+  backfillCoverageStatus     MirrorOperationCoverageStatus @default(UNPROVEN)
+  catchUpCoverageStatus      MirrorOperationCoverageStatus @default(UNPROVEN)
+  catchUpObservedThroughAt   DateTime?
+  catchUpStoresTotal         Int                            @default(0)
+  catchUpStoresComplete      Int                            @default(0)
+  catchUpStoresPending       Int                            @default(0)
+  catchUpStoresFailed        Int                            @default(0)
+  catchUpEarliestUncoveredAt DateTime?
+  enteredAt                  DateTime                       @default(now())
+  completedAt                DateTime?
+  updatedAt                  DateTime                       @updatedAt
+}
+
 model LineChatSession {
   id                      String                @id @default(uuid())
   sessionKey              String                @unique

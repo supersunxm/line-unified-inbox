@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
+import { Inject, Injectable, Logger, OnModuleDestroy, OnModuleInit, Optional } from "@nestjs/common";
 import {
   LineAccountType,
   LineChatMirrorDirection,
@@ -17,19 +17,16 @@ import {
   historicalFetchFailurePatch,
   historicalFetchResultPatch,
   historicalFetchStartedPatch,
+  isHistoricalBackfillEventInRange,
   lineChatHistoricalLowerBound,
   parseManagerHistoryPage,
   persistHistoricalEvents,
   runIndependently,
 } from "./line-chat-historical-backfill";
-import {
-  SEPTEMBER_CHAT_LOWER_BOUND_ISO,
-  SEPTEMBER_CHAT_UPPER_BOUND_EXCLUSIVE_ISO,
-  isSeptemberHistoricalChatCandidate,
-} from "./line-chat-september-inventory";
 import { LineChatProfileOperationCoordinator } from "./line-chat-profile-operation-coordinator.service";
 import { LineChatSessionService } from "./line-chat-session.service";
 import { selectLineChatStoreOa, type LineChatStoreOaSelection } from "./line-chat-store-oa-selector";
+import { MirrorOperationModeService, type MirrorOperationModeValue } from "./mirror-operation-mode.service";
 
 const DEFAULT_INTERVAL_MS = 60_000;
 const MIN_INTERVAL_MS = 30_000;
@@ -79,7 +76,8 @@ interface HistoricalMirrorTarget {
   botId: string;
   profilePath: string;
   session: MirrorSessionTarget;
-  liveMirrorStatus: LineChatMirrorSyncStatus;
+  freezeAt: Date;
+  targetStartAt: Date;
 }
 
 interface HistoricalBackfillConversationResult {
@@ -224,10 +222,6 @@ export function isLineChatMirrorEnabled(): boolean {
   return process.env.LINE_CHAT_MIRROR_ENABLED?.trim().toLowerCase() === "true";
 }
 
-export function isLineChatHistoricalBackfillEnabled(): boolean {
-  return process.env.LINE_CHAT_HISTORICAL_BACKFILL_ENABLED?.trim().toLowerCase() === "true";
-}
-
 export function lineChatMirrorIntervalMs(): number {
   const parsed = Number(process.env.LINE_CHAT_MIRROR_INTERVAL_MS ?? DEFAULT_INTERVAL_MS);
   if (!Number.isFinite(parsed)) return DEFAULT_INTERVAL_MS;
@@ -296,18 +290,21 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
   private timer: NodeJS.Timeout | null = null;
   private startupTimer: NodeJS.Timeout | null = null;
   private running = false;
+  private lastLoggedOperationMode: MirrorOperationModeValue | null = null;
   private readonly targetCache = new Map<string, {
     botId: string;
     session: MirrorSessionTarget;
     source: "EXISTING_OA" | "MANAGER_ACCOUNT_REDIRECT";
   }>();
-  private readonly historicalTargetsForCycle = new Map<string, HistoricalMirrorTarget>();
 
   constructor(
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(LineChatSessionService) private readonly sessionService: LineChatSessionService,
     @Inject(LineChatProfileOperationCoordinator)
     private readonly coordinator: LineChatProfileOperationCoordinator,
+    @Optional()
+    @Inject(MirrorOperationModeService)
+    private readonly operationModeService?: MirrorOperationModeService,
   ) {}
 
   onModuleInit(): void {
@@ -325,7 +322,7 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
       storeCount: configuredLineChatMirrorStoreCodes().length,
       intervalMs,
       maxChangedChatsPerCycle: lineChatMirrorMaxChangedChatsPerCycle(),
-      historicalBackfillEnabled: isLineChatHistoricalBackfillEnabled(),
+      operationModeControlled: true,
       mode: "READ_ONLY_MANAGER_SOURCE",
     }));
 
@@ -346,11 +343,47 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
     if (this.running) return [];
     this.running = true;
     const results: LineChatMirrorCycleResult[] = [];
-    this.historicalTargetsForCycle.clear();
     try {
+      const operationState = this.operationModeService
+        ? await this.operationModeService.getState()
+        : { mode: "NORMAL" as const, freezeAt: null, backfillTargetStartAt: null, catchUpStartAt: null };
+      if (this.lastLoggedOperationMode !== operationState.mode) {
+        this.logger.log(JSON.stringify({
+          event: "mirror_operation_mode_loaded",
+          mode: operationState.mode,
+          freezeAt: operationState.freezeAt?.toISOString() ?? null,
+          targetStartAt: operationState.backfillTargetStartAt?.toISOString() ?? null,
+          catchUpStartAt: operationState.catchUpStartAt?.toISOString() ?? null,
+        }));
+        this.lastLoggedOperationMode = operationState.mode;
+      }
+
+      if (operationState.mode === "BACKFILL") {
+        this.logger.log(JSON.stringify({
+          event: "mirror_live_cycle_skipped_for_backfill",
+          mode: operationState.mode,
+          freezeAt: operationState.freezeAt?.toISOString() ?? null,
+          storeCount: configuredLineChatMirrorStoreCodes().length,
+        }));
+        if (!operationState.freezeAt || !operationState.backfillTargetStartAt) return [];
+        const configuredStores = new Set(configuredLineChatMirrorStoreCodes());
+        for (const storeCode of LINE_CHAT_HISTORICAL_PILOT_STORE_CODES) {
+          if (!configuredStores.has(storeCode)) continue;
+          await this.runBackfillStore(
+            storeCode,
+            operationState.freezeAt,
+            operationState.backfillTargetStartAt,
+          );
+        }
+        return [];
+      }
+
       for (const storeCode of configuredLineChatMirrorStoreCodes()) {
         try {
-          results.push(await this.syncStore(storeCode));
+          results.push(await this.syncStore(
+            storeCode,
+            operationState.mode === "CATCH_UP" ? operationState.catchUpStartAt : null,
+          ));
         } catch (error) {
           this.logger.warn(JSON.stringify({
             event: "line_chat_mirror_store_cycle_failed",
@@ -359,41 +392,69 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
           }));
         }
       }
-      if (isLineChatHistoricalBackfillEnabled()) {
-        const pilotTargetStatuses = LINE_CHAT_HISTORICAL_PILOT_STORE_CODES
-          .map((storeCode) => this.historicalTargetsForCycle.get(storeCode))
-          .filter((target): target is HistoricalMirrorTarget => target !== undefined)
-          .map((target) => ({
-            ...target,
-            liveMirrorStatus: results.find((result) => result.storeCode === target.storeCode)?.status
-              ?? LineChatMirrorSyncStatus.FAILED,
-          }));
-        const pilotTargets = pilotTargetStatuses.filter((target) => {
-          if (target.liveMirrorStatus === LineChatMirrorSyncStatus.SUCCESS) return true;
-          this.logger.log(JSON.stringify({
-            event: "line_chat_historical_backfill_store_deferred",
-            storeCode: target.storeCode,
-            reason: "LIVE_MIRROR_NOT_SUCCESSFUL",
-            liveMirrorStatus: target.liveMirrorStatus,
-          }));
-          return false;
-        });
-        await runIndependently({
-          items: pilotTargets,
-          process: (target) => this.runHistoricalBackfillStore(target),
-          onFailure: (target, error) => {
-            this.logger.warn(JSON.stringify({
-              event: "line_chat_historical_backfill_store_failed",
-              storeCode: target.storeCode,
-              errorType: safeErrorType(error),
-            }));
-            return Promise.resolve();
-          },
-        });
+      if (operationState.mode === "CATCH_UP") {
+        const failed = results.filter((result) => result.status === LineChatMirrorSyncStatus.FAILED).length;
+        this.logger.log(JSON.stringify({
+          event: "mirror_catchup_progress",
+          mode: operationState.mode,
+          freezeAt: operationState.freezeAt?.toISOString() ?? null,
+          catchUpStartAt: operationState.catchUpStartAt?.toISOString() ?? null,
+          storesTotal: results.length,
+          storesComplete: 0,
+          storesPending: results.length - failed,
+          storesFailed: failed,
+          earliestUncoveredAt: operationState.catchUpStartAt?.toISOString() ?? null,
+          coverageStatus: "UNPROVEN",
+        }));
       }
       return results;
     } finally {
       this.running = false;
+    }
+  }
+
+  private async runBackfillStore(
+    storeCode: string,
+    freezeAt: Date,
+    targetStartAt: Date,
+  ): Promise<void> {
+    try {
+      const inputs = await this.getStoreMirrorTargetInputs(storeCode);
+      const resolution = await this.resolveMirrorTarget({
+        storeCode: inputs.effectiveStoreCode,
+        lineOfficialAccountId: inputs.oa.id,
+        chatBotId: inputs.oa.chatBotId,
+        basicId: inputs.oa.basicId,
+        lineChatWorkspaceUrl: inputs.oa.lineChatWorkspaceUrl,
+        storeManagerUrl: inputs.storeManagerUrl,
+        lineChatSession: inputs.oa.lineChatSession,
+      });
+      if (!resolution.ok) {
+        this.logger.warn(JSON.stringify({
+          event: "mirror_backfill_progress",
+          storeCode: inputs.effectiveStoreCode,
+          status: "PENDING",
+          reason: resolution.errorCode,
+        }));
+        return;
+      }
+      const profilePath = this.sessionService.resolveProfilePath(resolution.session);
+      await this.runHistoricalBackfillStore({
+        storeCode: inputs.effectiveStoreCode,
+        lineOfficialAccountId: inputs.oa.id,
+        botId: resolution.botId,
+        profilePath,
+        session: resolution.session,
+        freezeAt,
+        targetStartAt,
+      });
+    } catch (error) {
+      this.logger.warn(JSON.stringify({
+        event: "mirror_backfill_progress",
+        storeCode,
+        status: "PENDING",
+        errorType: safeErrorType(error),
+      }));
     }
   }
 
@@ -490,7 +551,10 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
     };
   }
 
-  private async syncStore(storeCode: string): Promise<LineChatMirrorCycleResult> {
+  private async syncStore(
+    storeCode: string,
+    catchUpStartAt: Date | null = null,
+  ): Promise<LineChatMirrorCycleResult> {
     const startedAtMs = Date.now();
     const storeTarget = await this.getStoreMirrorTargetInputs(storeCode);
     const effectiveStoreCode = storeTarget.effectiveStoreCode;
@@ -616,20 +680,6 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
       };
     }
 
-    if (
-      isLineChatHistoricalBackfillEnabled()
-      && LINE_CHAT_HISTORICAL_PILOT_STORE_CODES.some((code) => code === effectiveStoreCode)
-    ) {
-      this.historicalTargetsForCycle.set(effectiveStoreCode, {
-        storeCode: effectiveStoreCode,
-        lineOfficialAccountId: oa.id,
-        botId,
-        profilePath,
-        session,
-        liveMirrorStatus: LineChatMirrorSyncStatus.RUNNING,
-      });
-    }
-
     let syncFailure: string | null = null;
     const operation = await this.coordinator.withProfileOperation(
       { sessionId: session.id, operationKind: "MIRROR_SYNC" },
@@ -707,6 +757,9 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
             && (
               !chat.historySyncedThroughAt
               || chat.historySyncedThroughAt.getTime() < chat.lastMessageAt.getTime()
+              || (catchUpStartAt !== null
+                && chat.historySyncedThroughAt !== null
+                && chat.historySyncedThroughAt.getTime() < catchUpStartAt.getTime())
             ),
           )
           .slice(0, lineChatMirrorMaxChangedChatsPerCycle())
@@ -1431,8 +1484,8 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
         const candidateWhere = {
           lineOfficialAccountId: target.lineOfficialAccountId,
           lastMessageAt: {
-            gte: new Date(SEPTEMBER_CHAT_LOWER_BOUND_ISO),
-            lt: new Date(SEPTEMBER_CHAT_UPPER_BOUND_EXCLUSIVE_ISO),
+            gte: target.targetStartAt,
+            lte: target.freezeAt,
           },
           OR: [
             { historicalBackfillStatus: null },
@@ -1458,7 +1511,8 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
         const candidatesWithTimestamp: PendingHistoricalMirrorChat[] = candidates
           .filter((candidate): candidate is typeof candidate & { lastMessageAt: Date } =>
             candidate.lastMessageAt instanceof Date
-            && isSeptemberHistoricalChatCandidate(candidate.lastMessageAt),
+            && candidate.lastMessageAt.getTime() <= target.freezeAt.getTime()
+            && candidate.lastMessageAt.getTime() >= target.targetStartAt.getTime(),
           )
           .map((candidate) => ({
             lineChatUserId: candidate.lineChatUserId,
@@ -1482,7 +1536,7 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
             existingBeforeWrite: 0,
             failures: 0,
             retries: 0,
-            liveMirrorStatus: target.liveMirrorStatus,
+            mode: "BACKFILL",
           }));
           return;
         }
@@ -1628,8 +1682,15 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
                 { list: history.list, backward: history.backwardPresent ? "present" : undefined },
                 ownerByBizId,
               );
+              const boundedEvents = parsed.events.filter((event) =>
+                isHistoricalBackfillEventInRange(
+                  event.sentAt,
+                  target.targetStartAt,
+                  target.freezeAt,
+                ),
+              );
               const classification = classifyHistoricalPage({
-                events: parsed.events,
+                events: boundedEvents,
                 backwardPresent: history.backwardPresent,
               }, lineChatHistoricalLowerBound());
               const persistence = await persistHistoricalEvents({
@@ -1682,7 +1743,7 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
                 },
                 lineOfficialAccountId: target.lineOfficialAccountId,
                 lineChatUserId: candidate.lineChatUserId,
-                events: parsed.events,
+                events: boundedEvents,
               });
               operationContext.assertOwnership();
               await this.prisma.lineChatMirrorChat.update({
@@ -1755,7 +1816,7 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
             errorCode: result?.errorCode ?? null,
             failures: outcome.failures + (resultStatus === HistoricalBackfillStatus.FAILED ? 1 : 0),
             retries: result?.retried ? 1 : 0,
-            liveMirrorStatus: target.liveMirrorStatus,
+            mode: "BACKFILL",
           }));
         } catch (error) {
           await runIndependently({
@@ -1799,7 +1860,7 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
         event: "line_chat_historical_backfill_store_skipped",
         storeCode: target.storeCode,
         reason: operation.reason,
-        liveMirrorStatus: target.liveMirrorStatus,
+        mode: "BACKFILL",
       }));
     }
   }
