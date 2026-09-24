@@ -137,8 +137,7 @@ export class LineChatSeptemberInventoryService {
   private async yieldToProfileWaiters(delayMs = 0): Promise<void> {
     if (delayMs > 0) {
       await new Promise<void>((resolve) => {
-        const timer = setTimeout(resolve, delayMs);
-        timer.unref?.();
+        setTimeout(resolve, delayMs);
       });
       return;
     }
@@ -164,7 +163,6 @@ export class LineChatSeptemberInventoryService {
     const order = new SeptemberChatListOrderTracker();
     const chatsById = new Map<string, LineChatDiscoveredChat>();
     let continuation: LineChatDiscoveryContinuation | null = null;
-    let firstChunk = true;
     let pagesFetched = 0;
     let totalRawRecords = 0;
     let validUserChats = 0;
@@ -256,7 +254,6 @@ export class LineChatSeptemberInventoryService {
       }
 
       continuation = operation.value.continuation;
-      firstChunk = false;
       if (!continuation) {
         nextTerminationObserved = chunk.nextTerminationObserved;
         if (!nextTerminationObserved) {
