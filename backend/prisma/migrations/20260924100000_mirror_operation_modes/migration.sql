@@ -39,6 +39,8 @@ CREATE TABLE "MirrorOperationState" (
       CHECK ("mode" <> 'CATCH_UP' OR "catchUpStartAt" IS NOT NULL),
     CONSTRAINT "MirrorOperationState_overlap_check"
       CHECK ("catchUpOverlapSeconds" >= 0),
+    CONSTRAINT "MirrorOperationState_recovery_mode_check"
+      CHECK (NOT "recoveryRequired" OR "mode" = 'NORMAL'),
     CONSTRAINT "MirrorOperationState_catchup_counts_check"
       CHECK (
         "catchUpStoresTotal" >= 0
@@ -67,6 +69,15 @@ CREATE TABLE "MirrorBackfillStoreCohort" (
       CHECK (
         "observedConversations" >= 0
         AND ("exactSeptemberChats" IS NULL OR "exactSeptemberChats" >= 0)
+      ),
+    CONSTRAINT "MirrorBackfillStoreCohort_proof_check"
+      CHECK (
+        "inventoryStatus" <> 'PROVEN'
+        OR (
+          "exactSeptemberChats" IS NOT NULL
+          AND "exactSeptemberChats" = "observedConversations"
+          AND "inventoryCompletedAt" IS NOT NULL
+        )
       )
 );
 
