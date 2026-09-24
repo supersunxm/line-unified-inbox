@@ -231,7 +231,8 @@ export function lineChatMirrorIntervalMs(): number {
 
 export function isMirrorOperationSchemaUnavailable(error: unknown): boolean {
   if (typeof error !== "object" || error === null) return false;
-  const code = "code" in error ? String((error as { code?: unknown }).code ?? "") : "";
+  const rawCode = "code" in error ? (error as { code?: unknown }).code : undefined;
+  const code = typeof rawCode === "string" ? rawCode : "";
   const message = error instanceof Error ? error.message : "";
   return code === "P2021" && /MirrorOperationState/u.test(message);
 }
