@@ -278,6 +278,7 @@ export class MirrorOperationModeService {
         where: {
           id: MIRROR_OPERATION_STATE_ID,
           mode: "BACKFILL",
+          runId: current.runId,
           freezeAt: current.freezeAt,
         },
         data: {
@@ -324,6 +325,7 @@ export class MirrorOperationModeService {
       where: {
         id: MIRROR_OPERATION_STATE_ID,
         mode: "CATCH_UP",
+        runId: current.runId,
         freezeAt: current.freezeAt,
         catchUpCoverageStatus: "PROVEN",
       },
@@ -364,6 +366,7 @@ export class MirrorOperationModeService {
       where: {
         id: MIRROR_OPERATION_STATE_ID,
         mode: current.mode,
+        runId: current.runId,
         freezeAt: current.freezeAt,
       },
       data: {
