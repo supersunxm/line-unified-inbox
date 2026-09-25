@@ -2812,3 +2812,11 @@ Keep `StoreMaster.tiktokProfileUrl` as the only persisted TikTok profile URL. Po
 - Existing deduplication stays unchanged: mirror messages are unique by `(lineOfficialAccountId, managerMessageId)` and canonical imports retain their stable external-message identity. No binary media, KPI, customer assignment, or store rollout configuration changes.
 - Current user-supplied A1/A2 evidence: 29113 — 124 exact September chats, 55 pages, cursor exhausted, 3 historical checked (all backward-required), 121 not started. 28375 — at least 690 observed by 5,000 chats / 200 pages, ordering anomaly, cursor not exhausted, exact total unproven. 25610 — at least 268 observed, inventory interrupted by profile contention, exact total pending. These are evidence facts only; lower bounds remain lower bounds.
 - No production mode change, freeze capture, Railway variable change, inventory run, deploy, or merge is part of this task. Review/merge/deploy remain separate gates.
+
+## 2026-09-25 — Follower Insights uses D-1 as the latest selectable date
+
+**Decision:** Treat the latest available date in Follower Insights as the previous Bangkok calendar day (D-1) for both mobile and desktop UI, and clamp current/future date selections to that boundary.
+
+**Rationale:** The production follower synchronization job fetches LINE follower insight data on a D-1 schedule. Allowing the UI to use the current day as an endpoint produces a false 0/missing state even when historical snapshots are healthy. Keeping the UI boundary aligned with collection semantics avoids presenting missing current-day data as zero followers.
+
+**Data impact:** Presentation/query-date behavior only; no historical follower snapshots are rewritten or deleted.
