@@ -11,6 +11,44 @@ export function getBkkDateStr(d: Date): string {
   }).format(d);
 }
 
+export function getLatestFollowerAvailableDate(reference: Date = new Date()): string {
+  const bangkokToday = getBkkDateStr(reference);
+  const [year, month, day] = bangkokToday.split("-").map((value) => Number(value));
+  const latest = new Date(Date.UTC(year, month - 1, day));
+  latest.setUTCDate(latest.getUTCDate() - 1);
+  return latest.toISOString().slice(0, 10);
+}
+
+export function getFollowerInsightsDefaultRange(
+  days = 7,
+  reference: Date = new Date()
+): { dateFrom: string; dateTo: string } {
+  const dateTo = getLatestFollowerAvailableDate(reference);
+  const start = new Date(`${dateTo}T00:00:00.000Z`);
+  start.setUTCDate(start.getUTCDate() - Math.max(0, days - 1));
+
+  return {
+    dateFrom: start.toISOString().slice(0, 10),
+    dateTo,
+  };
+}
+
+export function clampFollowerInsightsDateRange(
+  dateFrom: string,
+  dateTo: string,
+  reference: Date = new Date()
+): { dateFrom: string; dateTo: string; maxAvailableDate: string } {
+  const maxAvailableDate = getLatestFollowerAvailableDate(reference);
+  const clampedDateTo = dateTo > maxAvailableDate ? maxAvailableDate : dateTo;
+  const clampedDateFrom = dateFrom > clampedDateTo ? clampedDateTo : dateFrom;
+
+  return {
+    dateFrom: clampedDateFrom,
+    dateTo: clampedDateTo,
+    maxAvailableDate,
+  };
+}
+
 export function formatBkkDateTime(d: string | Date | null, locale: Language = "en"): string {
   if (!d) return "—";
   const dateObj = typeof d === "string" ? new Date(d) : d;
