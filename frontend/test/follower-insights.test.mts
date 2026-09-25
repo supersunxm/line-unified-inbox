@@ -4,10 +4,13 @@ import test from "node:test";
 import {
   calculateCoverage,
   calculatePaginationBounds,
+  clampFollowerInsightsDateRange,
   escapeCsvCell,
   formatBkkDateTime,
   formatDateDisplay,
+  getFollowerInsightsDefaultRange,
   getInclusiveCalendarDays,
+  getLatestFollowerAvailableDate,
   validateDateRange,
 } from "../src/app/follower-insights/follower-insights-utils.ts";
 import {
@@ -15,6 +18,45 @@ import {
   getFollowerInsightsText,
 } from "../src/app/follower-insights/follower-insights-translations.ts";
 import type { ByStoreAccountRow, SummaryDailyRow } from "../src/types/api.ts";
+
+test("follower insights uses the latest LINE-available D-1 Bangkok date", () => {
+  const reference = new Date("2026-09-25T07:22:00.000Z");
+  assert.equal(getLatestFollowerAvailableDate(reference), "2026-09-24");
+
+  // 00:30 in Bangkok on Sep 25 is still D-1 = Sep 24.
+  const justAfterBangkokMidnight = new Date("2026-09-24T17:30:00.000Z");
+  assert.equal(getLatestFollowerAvailableDate(justAfterBangkokMidnight), "2026-09-24");
+});
+
+test("follower insights default range ends on D-1 and preserves the requested day count", () => {
+  const reference = new Date("2026-09-25T07:22:00.000Z");
+  assert.deepEqual(getFollowerInsightsDefaultRange(7, reference), {
+    dateFrom: "2026-09-18",
+    dateTo: "2026-09-24",
+  });
+});
+
+test("follower insights clamps today/future selections to the latest available D-1 date", () => {
+  const reference = new Date("2026-09-25T07:22:00.000Z");
+
+  assert.deepEqual(
+    clampFollowerInsightsDateRange("2026-09-01", "2026-09-25", reference),
+    {
+      dateFrom: "2026-09-01",
+      dateTo: "2026-09-24",
+      maxAvailableDate: "2026-09-24",
+    }
+  );
+
+  assert.deepEqual(
+    clampFollowerInsightsDateRange("2026-09-25", "2026-09-25", reference),
+    {
+      dateFrom: "2026-09-24",
+      dateTo: "2026-09-24",
+      maxAvailableDate: "2026-09-24",
+    }
+  );
+});
 
 test("getInclusiveCalendarDays calculates pure UTC calendar day differences", () => {
   assert.equal(getInclusiveCalendarDays("2026-07-01", "2026-07-01"), 1);
