@@ -6,7 +6,11 @@ import { ApiError, api } from "@/lib/api";
 import type { ByStoreAccountRow, SummaryDailyRow } from "@/types/api";
 import { pickLanguageText, useAppLanguage, type AppLanguage } from "../language";
 import { UnifiedPeriodPicker as DateRangePicker } from "@/components/date-range/unified-period-picker";
-import { formatDateDisplay, getBkkDateStr } from "./follower-insights-utils";
+import {
+  clampFollowerInsightsDateRange,
+  formatDateDisplay,
+  getFollowerInsightsDefaultRange,
+} from "./follower-insights-utils";
 
 type AuthUser = {
   id: string;
@@ -132,16 +136,13 @@ export function MobileFollowerInsightsApp() {
     zh: { opening: "正在打开关注者数据...", authError: "无法验证账户", loadError: "加载关注者数据失败", title: "关注者数据", overview: "概览", stores: "按门店", daily: "每日", retry: "重试", totalFollowers: "关注者总数", storesReady: "家门店已就绪", growth: "增长", dataStores: "有数据的门店", attention: "需要关注", noGrowth: "无增长", noGrowthData: "暂无增长数据", search: "搜索门店或 LINE OA", storeUnit: "家门店", showMore: "再显示 30 家门店", data: "数据", ready: "就绪", partial: "部分", missing: "无数据", dailyIncrease: "每日增长", refresh: "刷新数据" },
   });
 
-  const today = new Date();
-  const endInitial = getBkkDateStr(today);
-  const startInitialDate = new Date(today);
-  startInitialDate.setDate(startInitialDate.getDate() - 6);
+  const initialRange = getFollowerInsightsDefaultRange(7);
 
   const [user, setUser] = useState<AuthUser | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [tab, setTab] = useState<MobileTab>("overview");
-  const [dateFrom, setDateFrom] = useState(getBkkDateStr(startInitialDate));
-  const [dateTo, setDateTo] = useState(endInitial);
+  const [dateFrom, setDateFrom] = useState(initialRange.dateFrom);
+  const [dateTo, setDateTo] = useState(initialRange.dateTo);
   const [summary, setSummary] = useState<SummaryDailyRow[]>([]);
   const [stores, setStores] = useState<ByStoreAccountRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -253,7 +254,11 @@ export function MobileFollowerInsightsApp() {
         </div>
         <div className="mt-3 flex gap-2">
           <div className="min-w-0 flex-1 [&>div]:w-full [&>div>button]:w-full [&>div>button]:justify-between [&>div>button]:px-3">
-            <DateRangePicker dateFrom={dateFrom} dateTo={dateTo} readyDates={readyDates} partialDates={partialDates} missingDates={missingDates} language={language} onApply={(from, to) => { setDateFrom(from); setDateTo(to); }} />
+            <DateRangePicker dateFrom={dateFrom} dateTo={dateTo} readyDates={readyDates} partialDates={partialDates} missingDates={missingDates} language={language} onApply={(from, to) => {
+              const range = clampFollowerInsightsDateRange(from, to);
+              setDateFrom(range.dateFrom);
+              setDateTo(range.dateTo);
+            }} />
           </div>
         </div>
       </header>

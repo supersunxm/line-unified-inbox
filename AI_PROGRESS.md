@@ -5640,3 +5640,13 @@ Current state: local follow-up fix and checks are complete; the follow-up commit
 - **Production boundary**: production, Railway, inventory trigger, historical-backfill flag, customer data, and historical records were not changed. Next gate is review/merge/deploy under a separate authorization, then 16-store Live Mirror health and a Pinklao-only resolver validation before considering Inventory Run #3.
 - **Git/CI**: commit `613ff76c6f6a8e3a1e8ac748c2e834889c802011` is on `fix/a2-pinklao-resolver-contention`, based on `main` `1baafb6b9fa9b87661d377efdc2b193465e63b9a`. PR #356 is open and mergeable; Application CI run 701 passed Frontend, Backend, Android, and CI Gate. The PR remains unmerged. Merge and deployment remain out of scope.
 - **Progress**: A1 **80%**, A2 **35%** (resolver diagnosis and local fix verified; production validation remains pending), A3 **15%**, A4 **10%**, A5 **5%**, A6 **0%**, A7 **35%**, Overall **24%**.
+
+## 2026-09-25 — Follower Insights D-1 date fix
+
+- Investigated production follower dashboard showing 0 followers and 0/146 ready stores for a range ending on the current Bangkok date.
+- Confirmed the daily follower sync is D-1 and production already had ready snapshots for 2026-09-24; the UI was querying 2026-09-25 as the endpoint.
+- Added shared follower-date helpers so mobile and desktop default to the latest LINE-available D-1 Bangkok date.
+- Added range clamping so selections ending today/future are normalized to D-1 instead of rendering a false zero/missing state.
+- Added regression tests for the 2026-09-25 case and the Bangkok-midnight boundary.
+- Data safety: no follower snapshots, credentials, or database records were modified.
+- Verification pending: PR CI, then production deployment/route verification.

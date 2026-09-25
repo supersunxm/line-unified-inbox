@@ -9,9 +9,10 @@ import { StoreBreakdownTable } from "./store-breakdown-table";
 import { TrendChart } from "./trend-chart";
 import {
   calculateCoverage,
+  clampFollowerInsightsDateRange,
   formatBkkDateTime,
   formatDateDisplay,
-  getBkkDateStr,
+  getFollowerInsightsDefaultRange,
   getInclusiveCalendarDays,
   validateDateRange,
 } from "./follower-insights-utils";
@@ -19,14 +20,10 @@ import { getFollowerInsightsText, type Language } from "./follower-insights-tran
 
 export function FollowerInsightsView({ language = "en" }: { language?: Language }) {
   const t = getFollowerInsightsText(language);
-  const today = new Date();
-  const defaultDateTo = getBkkDateStr(today);
-  const dateFromInit = new Date(today);
-  dateFromInit.setDate(dateFromInit.getDate() - 6);
-  const defaultDateFrom = getBkkDateStr(dateFromInit);
+  const defaultRange = getFollowerInsightsDefaultRange(7);
 
-  const [dateFrom, setDateFrom] = useState(defaultDateFrom);
-  const [dateTo, setDateTo] = useState(defaultDateTo);
+  const [dateFrom, setDateFrom] = useState(defaultRange.dateFrom);
+  const [dateTo, setDateTo] = useState(defaultRange.dateTo);
 
   const [summaryData, setSummaryData] = useState<SummaryDailyRow[]>([]);
   const [storeData, setStoreData] = useState<ByStoreAccountRow[]>([]);
@@ -416,8 +413,9 @@ export function FollowerInsightsView({ language = "en" }: { language?: Language 
               missingDates={missingDates}
               language={language}
               onApply={(start, end) => {
-                setDateFrom(start);
-                setDateTo(end);
+                const range = clampFollowerInsightsDateRange(start, end);
+                setDateFrom(range.dateFrom);
+                setDateTo(range.dateTo);
               }}
             />
 
