@@ -5641,6 +5641,16 @@ Current state: local follow-up fix and checks are complete; the follow-up commit
 - **Git/CI**: commit `613ff76c6f6a8e3a1e8ac748c2e834889c802011` is on `fix/a2-pinklao-resolver-contention`, based on `main` `1baafb6b9fa9b87661d377efdc2b193465e63b9a`. PR #356 is open and mergeable; Application CI run 701 passed Frontend, Backend, Android, and CI Gate. The PR remains unmerged. Merge and deployment remain out of scope.
 - **Progress**: A1 **80%**, A2 **35%** (resolver diagnosis and local fix verified; production validation remains pending), A3 **15%**, A4 **10%**, A5 **5%**, A6 **0%**, A7 **35%**, Overall **24%**.
 
+## 2026-09-25 — Shared Chromium launch diagnostics (local, unpublished)
+
+- **Base**: prepared in a clean checkout of deployed commit `8c25a220cc630130073393de0a7cb0eada1dfab2`; the existing dirty runtime-debug checkout was left untouched.
+- **Change**: wrapped the existing `chromium.launchPersistentContext` call only to emit one bounded, redacted structured event after a launch rejection, then rethrow the same original error. No browser options, store scheduling, retry policy, profiles, sessions, or data paths changed.
+- **Tests**: new focused extraction/redaction/size-bound/no-mask tests and existing profile lifecycle, session service, and Mirror service tests passed **68/68**.
+- **Build/lint**: backend build passed. Both new diagnostics files pass plain ESLint. Plain touched-file ESLint reports one pre-existing `no-unnecessary-type-assertion` at session-service line 896; linting the unchanged base file at deployed commit `8c25a220` reproduces it at line 895. No unrelated source was changed to hide it. `git diff --check` passed.
+- **Production safety**: no Chromium launch was performed by this verification, and no production reads/writes, commit, push, merge, deployment, Railway change, or restart occurred.
+- **Authorization**: controlled diagnostic deployment approved on 2026-09-25. Scope remains diagnostics/tests/progress documentation only; no root-cause fix is authorized.
+- **Next gate**: verify current `main`, create a dedicated diagnostic branch/PR, pass required CI, then deploy only `line-chat-nickname-worker` and observe the shared A/B runtime without forcing a failure.
+
 ## 2026-09-25 — Follower Insights D-1 date fix
 
 - Investigated production follower dashboard showing 0 followers and 0/146 ready stores for a range ending on the current Bangkok date.
