@@ -31,6 +31,7 @@ import {
   summarizeChatListContractJson,
   summarizeDiagnosticJson,
 } from "./line-chat-diagnostic-metadata";
+import { withChromiumLaunchFailureDiagnostics } from "./line-chat-chromium-launch-diagnostics";
 
 export type ContextLauncher = (
   userDataDir: string,
@@ -2137,18 +2138,22 @@ export class LineChatSessionService {
     userDataDir: string,
     options?: LineChatSessionOptions
   ): Promise<BrowserContext> {
-    return chromium.launchPersistentContext(userDataDir, {
-      headless: options?.headless ?? true,
-      viewport: options?.viewport ?? { width: 1280, height: 800 },
-      args: [
-        "--no-sandbox",
-        "--disable-setuid-sandbox",
-        "--disable-blink-features=AutomationControlled",
-        ...(options?.args || []),
-      ],
-      ...(options?.channel ? { channel: options.channel } : {}),
-      ...(options?.env ? { env: options.env } : {}),
-      ...(options?.timeout !== undefined ? { timeout: options.timeout } : {}),
-    });
+    return withChromiumLaunchFailureDiagnostics(
+      () => chromium.launchPersistentContext(userDataDir, {
+        headless: options?.headless ?? true,
+        viewport: options?.viewport ?? { width: 1280, height: 800 },
+        args: [
+          "--no-sandbox",
+          "--disable-setuid-sandbox",
+          "--disable-blink-features=AutomationControlled",
+          ...(options?.args || []),
+        ],
+        ...(options?.channel ? { channel: options.channel } : {}),
+        ...(options?.env ? { env: options.env } : {}),
+        ...(options?.timeout !== undefined ? { timeout: options.timeout } : {}),
+      }),
+      userDataDir,
+      (event) => this.logger.error(event),
+    );
   }
 }
