@@ -1,6 +1,12 @@
 #!/bin/sh
 set -eu
 
+# Railway may invoke this script directly and bypass the image ENTRYPOINT.
+if [ "$$" -eq 1 ] && [ "${LINE_CHAT_TINI_WRAPPED:-0}" != "1" ] && [ -x /usr/bin/tini ]; then
+  export LINE_CHAT_TINI_WRAPPED=1
+  exec /usr/bin/tini -- /bin/sh "$0" "$@"
+fi
+
 if [ "${LINE_CHAT_OA_FLEET_DISCOVERY_ENABLED:-false}" = "true" ]; then
   SESSIONS="${LINE_CHAT_OA_FLEET_DISCOVERY_SESSIONS:-profile-b,account-1}"
   DISCOVERY_OUTPUT="${LINE_CHAT_OA_FLEET_DISCOVERY_OUTPUT:-/tmp/line-chat-fleet-oa-discovery.csv}"
