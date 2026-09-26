@@ -10,6 +10,7 @@ RUN sed -i 's|http://|https://|g; s|https://azure.archive.ubuntu.com/ubuntu|http
   && apt-get install -y --no-install-recommends \
     fluxbox \
     novnc \
+    tini \
     websockify \
     x11vnc \
     xvfb \
@@ -40,6 +41,9 @@ RUN npx playwright install chromium \
 ENV NODE_ENV=production
 ENV LINE_CHAT_PROFILE_ROOT=/data/line-chat-profiles
 ENV DISABLE_NICKNAME_WORKER=false
+
+# Keep an init as container PID 1 so orphaned Chromium descendants are reaped.
+ENTRYPOINT ["/usr/bin/tini", "--"]
 
 # Start through a controlled entrypoint so optional read-only readiness scans
 # can run before the long-lived worker without depending on Railway overrides.
