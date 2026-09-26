@@ -105,6 +105,37 @@ test("background nickname work still fails fast while a profile is busy", async 
   assert.equal((await first).acquired, true);
 });
 
+test("target proof yields to queued live mirror work", async () => {
+  const coordinator = new LineChatProfileOperationCoordinator(createFakePrisma() as never);
+  let releaseHealth!: () => void;
+  const healthHold = new Promise<void>((resolve) => { releaseHealth = resolve; });
+  const order: string[] = [];
+
+  const health = coordinator.withProfileOperation(
+    { sessionId: "profile-a", operationKind: "HEALTH_SESSION" },
+    async () => { order.push("health-start"); await healthHold; order.push("health-end"); },
+  );
+  await new Promise((resolve) => setImmediate(resolve));
+
+  const proof = coordinator.withProfileOperation(
+    { sessionId: "profile-a", operationKind: "TARGET_PROOF" },
+    async () => { order.push("target-proof"); },
+    { waitForLock: true, waitForLockMs: 2_000 },
+  );
+  const mirror = coordinator.withProfileOperation(
+    { sessionId: "profile-a", operationKind: "MIRROR_SYNC" },
+    async () => { order.push("mirror"); },
+    { waitForLock: true, waitForLockMs: 2_000 },
+  );
+  await new Promise((resolve) => setImmediate(resolve));
+  releaseHealth();
+
+  assert.equal((await health).acquired, true);
+  assert.equal((await mirror).acquired, true);
+  assert.equal((await proof).acquired, true);
+  assert.deepEqual(order, ["health-start", "health-end", "mirror", "target-proof"]);
+});
+
 test("recent resolution is treated as customer-facing priority work", async () => {
   const coordinator = new LineChatProfileOperationCoordinator(createFakePrisma() as never);
   let releaseNickname!: () => void;

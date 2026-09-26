@@ -1,3 +1,9 @@
+# W1.3A-R3 target-proof context ownership (2026-09-26)
+
+- A target-proof request holds one coordinator lease and one supervisor-managed context across both Manager authentication and recent-chat discovery. Discovery accepts that caller-owned context and skips its launcher and close wrapper; target proof releases the managed operation once in its own `finally` path.
+- This prevents normal supervisor age/operation rotation checks from acquiring a second context between the two proof phases. Global rotation policy and all existing discovery callers retain their existing launcher and cleanup behavior.
+- Age and operation-count boundary tests enforce one managed acquisition, one raw context maximum, zero discovery reacquisitions, and identical context identity across auth and discovery.
+
 # Live Mirror Chromium profile supervisor pre-canary gate (2026-09-25)
 
 - Treat the Manager fleet as two physical browser profiles: `account-1 / pinklao-pilot-v1` and `profile-b / RBS Chonburi`. OA counts shown by each account overlap and are not additive.
@@ -2845,3 +2851,11 @@ Keep `StoreMaster.tiktokProfileUrl` as the only persisted TikTok profile URL. Po
 - The worker image can execute shared NORMAL/BACKFILL/CATCH_UP service code, so classify this as `SHARED_RUNTIME`. The process-init change only reaps exited OS processes; it does not alter historical scheduling, page selection, pagination, checkpoints, boundaries, or writes. The relevant historical regression suites passed (included in the 168/168 focused test run).
 - Validate with a bounded Linux soak that repeatedly closes and relaunches a Playwright persistent context under Tini as PID 1; require zombie and Chromium counts to return to baseline after each rotation. Keep the harness local and isolated from production data. The local Linux/ARM64 image built successfully, and 50 rotations passed: zombie counts were 0/0/0 and total process counts 7/14/7 at baseline/peak/final; active Chromium peaked at 7 processes and returned to 0.
 - No production runtime, Railway setting, database, or Historical Mirror state is changed by this local decision.
+
+# 2026-09-26: W1.3A target proof uses a dedicated low-priority lease
+
+- Use a new persisted `TARGET_PROOF` profile operation kind because the existing diagnostic and historical kinds have different purpose and priority. Set its local priority to 5, below Live Mirror (`MIRROR_SYNC`, 25), health checks (50), and historical backfill (10), without changing existing priorities. The only schema change is adding that enum value; its migration creates no table or result record.
+- Resolve the single OA through the existing read-only Store Master/OA selector, then require exact OA ID, Basic ID, normalized account name, effective store code, and the attached active Manager session to match the request. Recognize the existing canonical session names (`account-1` / `account-1-v1` for A and `profile-b` / `profile-b-linux-v2` for B); reject conflicting hints before acquiring a lease and never scan or fall back to another Manager profile.
+- Run Manager redirect/auth proof and one bounded recent-chat-list page under `LineChatProfileOperationCoordinator.withProfileOperation()` and `LineChatSessionService`'s supervised context. The route uses the worker's existing timing-safe internal-secret gate. Context cleanup and the distributed lease lifecycle remain in `finally` paths.
+- Return only bounded target/auth/transport metadata. The endpoint does not call mutation, relay/send, Mirror state, reconciliation, or Historical Mirror services. The only intended DB mutations are the coordinator lease acquire, renewal and release.
+- This work is local-only. Do not invoke the route against production, apply the migration to production, enable Wave 1, or commit/push/deploy without separate authorization.

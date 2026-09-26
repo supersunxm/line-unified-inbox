@@ -301,6 +301,13 @@ export interface LineChatDiscoveryResult {
   pageLimitReached?: boolean;
   chatLimitReached?: boolean;
   timeLimitReached?: boolean;
+  /** Safe first-page transport metadata used by the internal target-proof diagnostic. */
+  recentChatHttpStatus?: number | null;
+  chatListRequestObserved?: boolean;
+  responseStructureValid?: boolean;
+  latestEventPresent?: boolean;
+  itemCount?: number | null;
+  discoveryDurationMs?: number;
 }
 
 /**
@@ -328,4 +335,11 @@ export interface LineChatRecentDiscoveryResult {
    * message bodies, customer identifiers, or raw request query values.
    */
   failureDetail?: string;
+  /** Bounded first-page metadata only; never contains chat rows or request secrets. */
+  recentChatHttpStatus?: number | null;
+  chatListRequestObserved?: boolean;
+  responseStructureValid?: boolean;
+  latestEventPresent?: boolean;
+  itemCount?: number | null;
+  discoveryDurationMs?: number;
 }
