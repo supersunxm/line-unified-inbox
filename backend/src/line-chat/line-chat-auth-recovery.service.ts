@@ -253,6 +253,7 @@ export class LineChatAuthRecoveryService {
           context.assertOwnership();
           return this.executeRecoveryBrowserFlow({
             profilePath,
+            sessionId,
             customLauncher: options.customLauncher,
             botIds: session.lineOfficialAccounts
               .map((oa) => oa.chatBotId)
@@ -406,6 +407,7 @@ export class LineChatAuthRecoveryService {
 
   private async executeRecoveryBrowserFlow(input: {
     profilePath: string;
+    sessionId: string;
     customLauncher?: ContextLauncher;
     botIds: string[];
     assertOwnership: () => void;
@@ -420,6 +422,9 @@ export class LineChatAuthRecoveryService {
     const context: BrowserContext = await launcher(input.profilePath, {
       profilePath: input.profilePath,
       headless: true,
+    }, {
+      sessionId: input.sessionId,
+      operationKind: "HEALTH_SESSION",
     });
 
     try {

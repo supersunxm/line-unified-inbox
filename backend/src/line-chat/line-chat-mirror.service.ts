@@ -1106,7 +1106,12 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
                   "--disable-blink-features=AutomationControlled",
                 ],
               },
-              { sessionId: session.id, sessionKey: session.sessionKey },
+              {
+                sessionId: session.id,
+                sessionKey: session.sessionKey,
+                operationKind: "MIRROR_SYNC",
+                storeCode: input.storeCode,
+              },
             );
             const page = context.pages()[0] || await context.newPage();
             const targetUrl = `https://chat.line.biz/account/${encodeURIComponent(managerAccountKey)}`;
@@ -1287,7 +1292,7 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
             "--disable-blink-features=AutomationControlled",
           ],
         },
-        { sessionId: input.sessionId },
+        { sessionId: input.sessionId, operationKind: "MIRROR_SYNC" },
       );
       const page = context.pages()[0] || await context.newPage();
       const targetUrl = this.sessionService.buildChatRefererUrl(
@@ -1640,7 +1645,12 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
                 "--disable-blink-features=AutomationControlled",
               ],
             },
-            { sessionId: target.session.id, sessionKey: target.session.sessionKey },
+            {
+              sessionId: target.session.id,
+              sessionKey: target.session.sessionKey,
+              operationKind: "HISTORICAL_BACKFILL",
+              storeCode: target.storeCode,
+            },
           );
           const page = context.pages()[0] || await context.newPage();
           const refererUrl = this.sessionService.buildChatRefererUrl(

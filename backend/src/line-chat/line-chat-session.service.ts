@@ -1,4 +1,5 @@
-import { Injectable, Logger, Optional } from "@nestjs/common";
+import { Injectable, Logger, OnModuleDestroy, Optional } from "@nestjs/common";
+import { createHash, randomUUID } from "node:crypto";
 import * as path from "node:path";
 import * as fs from "node:fs";
 import { hostname } from "node:os";
@@ -32,32 +33,171 @@ import {
   summarizeDiagnosticJson,
 } from "./line-chat-diagnostic-metadata";
 import { withChromiumLaunchFailureDiagnostics } from "./line-chat-chromium-launch-diagnostics";
+import { collectChromiumRuntimeSnapshot } from "./line-chat-chromium-runtime-telemetry";
 
 export type ContextLauncher = (
   userDataDir: string,
-  options?: LineChatSessionOptions
+  options?: LineChatSessionOptions,
+  metadata?: LineChatProfileBrowserMetadata,
+) => Promise<BrowserContext>;
+
+interface ChromiumLaunchMetadata {
+  launchId: string;
+  profileId: string;
+  operationKind?: string;
+  sessionId?: string;
+  storeCode?: string;
+}
+
+type ManagedContextLauncher = (
+  userDataDir: string,
+  options?: LineChatSessionOptions,
+  metadata?: ChromiumLaunchMetadata,
 ) => Promise<BrowserContext>;
 
 export const PROFILE_BROWSER_RETRY_BACKOFF_MS = [500, 1_000, 2_000] as const;
 export const PROFILE_BROWSER_RELEASE_WAIT_MS = 4_000;
 export const PROFILE_BROWSER_RELEASE_POLL_INTERVAL_MS = 100;
 export const PROFILE_BROWSER_BUSY_RETRY_AFTER_MS = 5_000;
+export const PROFILE_BROWSER_RECOVERY_BACKOFF_MS = [30_000, 60_000, 120_000, 300_000] as const;
+export const CHROMIUM_RUNTIME_SNAPSHOT_MIN_INTERVAL_MS = 60_000;
+export const PROFILE_BROWSER_MAX_CONTEXT_AGE_MS = 20 * 60_000;
+export const PROFILE_BROWSER_MAX_OPERATIONS = 256;
+export const PROFILE_BROWSER_CLOSE_TIMEOUT_MS = 10_000;
+export const PROFILE_BROWSER_CLOSE_ESCALATION_TIMEOUT_MS = 5_000;
 
 const CHROMIUM_SINGLETON_ARTIFACTS = ["SingletonLock", "SingletonSocket", "SingletonCookie"] as const;
+const BASE_CHROMIUM_ARGS = [
+  "--no-sandbox",
+  "--disable-setuid-sandbox",
+  "--disable-blink-features=AutomationControlled",
+] as const;
 
 export interface LineChatProfileBrowserMetadata {
   sessionId?: string;
   sessionKey?: string;
   profileStorageKey?: string;
+  storeCode?: string;
+  operationKind?: string;
+  reuseContext?: boolean;
+}
+
+type ManagedContextState = "READY" | "BUSY" | "DEGRADED" | "CLOSING" | "CLOSED";
+
+interface ManagedProfileContext {
+  profilePath: string;
+  profileId: string;
+  launchId: string;
+  generation: number;
+  context: BrowserContext;
+  optionsFingerprint: string;
+  reusable: boolean;
+  state: ManagedContextState;
+  activeOperation: string | null;
+  startedAt: number;
+  lastHealthyAt: number;
+  operationsCompleted: number;
+  intentionalClose: boolean;
+  unexpectedClose: boolean;
+  contextCloseListener: () => void;
+  browserDisconnectListener?: () => void;
+  disposePromise: Promise<Error | null> | null;
+}
+
+interface ProfileRecoveryState {
+  failures: number;
+  cooldownUntil: number;
+  lastFailure: string;
+}
+
+interface ManagedContextLease {
+  record: ManagedProfileContext;
+  releaseProfileLock: () => void;
+}
+
+function profileIdentifier(profilePath: string): string {
+  return createHash("sha256").update(profilePath).digest("hex").slice(0, 16);
+}
+
+function canonicalPhysicalPath(pathValue: string): string {
+  const resolved = path.resolve(pathValue);
+  let current = resolved;
+  const missingSegments: string[] = [];
+
+  while (true) {
+    try {
+      const existingRealPath = fs.realpathSync.native(current);
+      return path.resolve(existingRealPath, ...missingSegments);
+    } catch (error: unknown) {
+      const code = error && typeof error === "object" && "code" in error
+        ? String((error as NodeJS.ErrnoException).code)
+        : "";
+      if (code !== "ENOENT" && code !== "ENOTDIR") throw error;
+
+      const parent = path.dirname(current);
+      if (parent === current) throw error;
+      missingSegments.unshift(path.basename(current));
+      current = parent;
+    }
+  }
+}
+
+function canonicalProfilePath(pathValue: string): string {
+  const canonicalPath = canonicalPhysicalPath(pathValue);
+  const configuredRoot = process.env.LINE_CHAT_PROFILE_ROOT?.trim();
+  const enforcedRoot = configuredRoot || (process.env.NODE_ENV === "production"
+    ? "/data/line-chat-profiles"
+    : null);
+  if (!enforcedRoot) return canonicalPath;
+
+  const canonicalRoot = canonicalPhysicalPath(enforcedRoot);
+  if (
+    canonicalPath !== canonicalRoot
+    && !canonicalPath.startsWith(`${canonicalRoot}${path.sep}`)
+  ) {
+    throw new Error("CANONICAL_PROFILE_PATH_ESCAPES_CONFIGURED_ROOT");
+  }
+  return canonicalPath;
+}
+
+function launchOptionsFingerprint(options?: LineChatSessionOptions): string {
+  const environment = options?.env
+    ? Object.entries(options.env).sort(([left], [right]) => left.localeCompare(right))
+    : null;
+  const normalized = {
+    headless: options?.headless ?? true,
+    channel: options?.channel ?? null,
+    viewport: options?.viewport ?? { width: 1280, height: 800 },
+    args: [...new Set([...BASE_CHROMIUM_ARGS, ...(options?.args ?? [])])],
+    environment,
+  };
+  return createHash("sha256").update(JSON.stringify(normalized)).digest("hex");
+}
+
+function contextIsConnected(context: BrowserContext): boolean {
+  try {
+    const browser = typeof context.browser === "function" ? context.browser() : null;
+    if (browser && !browser.isConnected()) return false;
+    if (typeof context.pages !== "function") return false;
+    return context.pages().every((page) => typeof page.isClosed === "function" && typeof page.close === "function");
+  } catch {
+    return false;
+  }
+}
+
+function safeErrorName(error: unknown): string {
+  if (error instanceof Error && error.name) return error.name.slice(0, 80);
+  return "UNKNOWN_ERROR";
 }
 
 export class ProfileBrowserBusyError extends Error {
   public readonly code = "PROFILE_BROWSER_BUSY";
-  public readonly retryAfterMs = PROFILE_BROWSER_BUSY_RETRY_AFTER_MS;
+  public readonly retryAfterMs: number;
 
-  constructor() {
+  constructor(retryAfterMs = PROFILE_BROWSER_BUSY_RETRY_AFTER_MS) {
     super("PROFILE_BROWSER_BUSY");
     this.name = "ProfileBrowserBusyError";
+    this.retryAfterMs = Math.max(0, Math.floor(retryAfterMs));
   }
 }
 
@@ -183,10 +323,17 @@ export interface PageExecutor {
 }
 
 @Injectable()
-export class LineChatSessionService {
+export class LineChatSessionService implements OnModuleDestroy {
   private readonly logger = new Logger(LineChatSessionService.name);
-  private readonly rawLauncher: ContextLauncher;
+  private readonly rawLauncher: ManagedContextLauncher;
   private readonly activeManagedContexts = new Map<string, number>();
+  private readonly managedProfileContexts = new Map<string, ManagedProfileContext>();
+  private readonly recoveryStates = new Map<string, ProfileRecoveryState>();
+  private readonly profileLockTails = new Map<string, Promise<void>>();
+  private readonly contextLeases = new WeakMap<BrowserContext, ManagedContextLease>();
+  private readonly profileGenerations = new Map<string, number>();
+  private isShuttingDown = false;
+  private lastRuntimeSnapshotAt = 0;
   private readonly discoveryContinuations = new WeakMap<LineChatDiscoveryContinuation, {
     botId: string;
     token: string;
@@ -195,99 +342,325 @@ export class LineChatSessionService {
   public readonly defaultLauncher: ContextLauncher;
 
   constructor(@Optional() customLauncher?: ContextLauncher) {
-    this.rawLauncher = customLauncher ?? ((dir, opts) => this.launchPlaywrightPersistentContext(dir, opts));
-    this.defaultLauncher = (dir, opts) => this.launchManagedPersistentContext(dir, opts);
+    this.rawLauncher = customLauncher ?? ((dir, opts, metadata) => this.launchPlaywrightPersistentContext(dir, opts, metadata));
+    this.defaultLauncher = (dir, opts, metadata) => this.launchManagedPersistentContext(dir, opts, metadata);
   }
 
   /**
-   * Launches a persistent LINE Chat context with bounded singleton-lock
-   * handling. Application-level serialization remains the coordinator's job;
-   * this method only covers Chromium's process lifecycle around that lease.
+   * Acquires the single managed context for a profile. Healthy headless
+   * contexts stay alive between operations; the profile-path mutex extends
+   * beyond this method and is released only by closeManagedPersistentContext.
    */
   public async launchManagedPersistentContext(
     userDataDir: string,
     options?: LineChatSessionOptions,
     metadata: LineChatProfileBrowserMetadata = {},
   ): Promise<BrowserContext> {
-    const resolvedProfile = path.resolve(userDataDir);
-    let lastLockError: unknown;
+    const resolvedProfile = canonicalProfilePath(userDataDir);
+    const releaseProfileLock = await this.acquireProfileLock(resolvedProfile);
+    const profileId = profileIdentifier(resolvedProfile);
+    const reusable = metadata.reuseContext ?? (options?.headless !== false && options?.env === undefined);
+    const optionsFingerprint = launchOptionsFingerprint(options);
+    try {
+      if (this.isShuttingDown) throw new ProfileBrowserBusyError();
 
-    for (let attempt = 1; attempt <= PROFILE_BROWSER_RETRY_BACKOFF_MS.length + 1; attempt += 1) {
+      let existing = this.managedProfileContexts.get(resolvedProfile);
+      const scheduledRotation = existing !== undefined && (
+        Date.now() - existing.startedAt >= PROFILE_BROWSER_MAX_CONTEXT_AGE_MS
+        || existing.operationsCompleted >= PROFILE_BROWSER_MAX_OPERATIONS
+      );
+      if (existing && (
+        existing.state === "DEGRADED"
+        || existing.state === "CLOSED"
+        || !contextIsConnected(existing.context)
+        || !existing.reusable
+        || !reusable
+        || existing.optionsFingerprint !== optionsFingerprint
+        || scheduledRotation
+      )) {
+        const closeError = await this.disposeManagedContext(
+          existing,
+          metadata,
+          scheduledRotation ? "SCHEDULED_ROTATION" : "UNHEALTHY_OR_INCOMPATIBLE",
+        );
+        if (closeError) throw closeError;
+        existing = undefined;
+      }
+
+      if (existing) {
+        existing.state = "BUSY";
+        existing.activeOperation = metadata.operationKind ?? "UNSPECIFIED";
+        existing.lastHealthyAt = Date.now();
+        this.contextLeases.set(existing.context, { record: existing, releaseProfileLock });
+        this.safeLog("log", {
+          event: "line_chat_chromium_context_reused",
+          ...this.safeRuntimeMetadata(metadata, profileId),
+          launchId: existing.launchId,
+          contextGeneration: existing.generation,
+          workerPid: process.pid,
+          operationKind: existing.activeOperation,
+        });
+        return existing.context;
+      }
+
+      const recovery = this.recoveryStates.get(resolvedProfile);
+      if (recovery && recovery.cooldownUntil > Date.now()) {
+        const retryAfterMs = recovery.cooldownUntil - Date.now();
+        this.safeLog("warn", {
+          event: "line_chat_chromium_profile_cooldown",
+          ...this.safeRuntimeMetadata(metadata, profileId),
+          consecutiveFailures: recovery.failures,
+          lastFailure: recovery.lastFailure,
+          retryAfterMs,
+        });
+        throw new ProfileBrowserBusyError(retryAfterMs);
+      }
+
+      const generation = (this.profileGenerations.get(resolvedProfile) ?? 0) + 1;
+      this.profileGenerations.set(resolvedProfile, generation);
+      const launchCorrelation = { launchId: "", startedAt: 0 };
+
       try {
-        const context = await this.rawLauncher(resolvedProfile, options);
-        this.markManagedContext(resolvedProfile, 1);
-        return context;
-      } catch (error: unknown) {
-        if (!isPersistentProfileLockError(error)) throw error;
-        lastLockError = error;
-        this.logger.warn(JSON.stringify({
-          event: "line_chat_profile_browser_busy",
-          ...this.safeProfileMetadata(metadata),
-          attempt,
-          retryAfterMs: PROFILE_BROWSER_RETRY_BACKOFF_MS[attempt - 1] ?? 0,
-        }));
-        const waitMs = PROFILE_BROWSER_RETRY_BACKOFF_MS[attempt - 1];
-        if (waitMs !== undefined) {
-          this.logger.log(JSON.stringify({
-            event: "line_chat_profile_launch_retry",
-            ...this.safeProfileMetadata(metadata),
-            attempt: attempt + 1,
-            waitMs,
-          }));
-          await this.delay(waitMs);
+        const context = await this.launchWithBoundedProfileLockRetry(
+          resolvedProfile,
+          options,
+          metadata,
+          generation,
+          reusable,
+          launchCorrelation,
+        );
+        const { launchId, startedAt } = launchCorrelation;
+        const record: ManagedProfileContext = {
+          profilePath: resolvedProfile,
+          profileId,
+          launchId,
+          generation,
+          context,
+          optionsFingerprint,
+          reusable,
+          state: "BUSY",
+          activeOperation: metadata.operationKind ?? "UNSPECIFIED",
+          startedAt,
+          lastHealthyAt: Date.now(),
+          operationsCompleted: 0,
+          intentionalClose: false,
+          unexpectedClose: false,
+          contextCloseListener: () => undefined,
+          disposePromise: null,
+        };
+        record.contextCloseListener = () => {
+          if (record.intentionalClose || record.state === "CLOSED" || record.unexpectedClose) return;
+          record.unexpectedClose = true;
+          record.state = "DEGRADED";
+          this.noteRecoveryFailure(resolvedProfile, "CONTEXT_CLOSED");
+          this.safeLog("error", {
+            event: "line_chat_chromium_process_exited",
+            ...this.safeRuntimeMetadata(metadata, profileId),
+            launchId,
+            contextGeneration: generation,
+            workerPid: process.pid,
+            chromiumPid: null,
+            exitCode: null,
+            terminationSignal: null,
+            observedBy: "BROWSER_CONTEXT_CLOSED",
+            recoveryState: "DEGRADED",
+          });
+          void this.logRuntimeSnapshot("browser_context_closed", metadata, profileId, launchId, true);
+        };
+        if (typeof context.on === "function") context.on("close", record.contextCloseListener);
+        try {
+          const browser = context.browser();
+          if (browser) {
+            record.browserDisconnectListener = () => {
+              if (record.intentionalClose || record.state === "CLOSED" || record.unexpectedClose) return;
+              record.unexpectedClose = true;
+              record.state = "DEGRADED";
+              this.noteRecoveryFailure(resolvedProfile, "BROWSER_DISCONNECTED");
+              this.safeLog("error", {
+                event: "line_chat_chromium_process_exited",
+                ...this.safeRuntimeMetadata(metadata, profileId),
+                launchId,
+                contextGeneration: generation,
+                workerPid: process.pid,
+                chromiumPid: null,
+                exitCode: null,
+                terminationSignal: null,
+                observedBy: "BROWSER_DISCONNECTED",
+              recoveryState: "DEGRADED",
+              });
+              void this.logRuntimeSnapshot("browser_disconnected", metadata, profileId, launchId, true);
+            };
+            if (typeof browser.on === "function") browser.on("disconnected", record.browserDisconnectListener);
+          }
+        } catch {
+          // Some Playwright-compatible test launchers do not expose Browser.
         }
-      }
-    }
-
-    if (this.recoverStaleProfileLock(resolvedProfile, metadata)) {
-      this.logger.warn(JSON.stringify({
-        event: "line_chat_profile_stale_lock_recovered",
-        ...this.safeProfileMetadata(metadata),
-      }));
-      try {
-        const context = await this.rawLauncher(resolvedProfile, options);
+        this.managedProfileContexts.set(resolvedProfile, record);
         this.markManagedContext(resolvedProfile, 1);
+        this.recoveryStates.delete(resolvedProfile);
+        this.contextLeases.set(context, { record, releaseProfileLock });
+        this.safeLog("log", {
+          event: "line_chat_chromium_process_spawned",
+          ...this.safeRuntimeMetadata(metadata, profileId),
+          launchId,
+          contextGeneration: generation,
+          workerPid: process.pid,
+          chromiumPid: null,
+          browserSpawned: true,
+          observedAt: "PERSISTENT_CONTEXT_READY",
+        });
+        this.safeLog("log", {
+          event: "line_chat_chromium_context_ready",
+          ...this.safeRuntimeMetadata(metadata, profileId),
+          launchId,
+          contextGeneration: generation,
+          workerPid: process.pid,
+          chromiumPid: null,
+          browserSpawned: true,
+          launchDurationMs: Date.now() - startedAt,
+          activeProfileContexts: this.countLiveManagedContexts(),
+          reused: false,
+        });
         return context;
       } catch (error: unknown) {
-        if (!isPersistentProfileLockError(error)) throw error;
-        lastLockError = error;
+        this.noteRecoveryFailure(resolvedProfile, safeErrorName(error));
+        await this.logRuntimeSnapshot("launch_failed", metadata, profileId, launchCorrelation.launchId, true);
+        const recoveryState = this.recoveryStates.get(resolvedProfile);
+        const cooldownMs = recoveryState ? Math.max(0, recoveryState.cooldownUntil - Date.now()) : 0;
+        this.safeLog("error", {
+          event: "line_chat_chromium_launch_recovery_deferred",
+          ...this.safeRuntimeMetadata(metadata, profileId),
+          launchId: launchCorrelation.launchId || null,
+          contextGeneration: generation,
+          workerPid: process.pid,
+          errorName: safeErrorName(error),
+          consecutiveFailures: recoveryState?.failures ?? 1,
+          cooldownMs,
+        });
+        throw error;
       }
+    } catch (error: unknown) {
+      releaseProfileLock();
+      throw error;
     }
-
-    if (lastLockError) {
-      this.logger.warn(JSON.stringify({
-        event: "line_chat_profile_browser_busy",
-        ...this.safeProfileMetadata(metadata),
-        attempt: PROFILE_BROWSER_RETRY_BACKOFF_MS.length + 1,
-        outcome: "RETRYABLE",
-      }));
-    }
-    throw new ProfileBrowserBusyError();
   }
 
   /**
-   * Closes a persistent context and waits until Chromium's singleton files are
-   * gone before the caller can release its application-level profile lease.
+   * Resets the operation page and releases its path lock. Healthy headless
+   * contexts remain supervised; exceptional, ephemeral, and shutdown paths
+   * close Chromium and wait for the profile singleton files to disappear.
    */
   public async closeManagedPersistentContext(
     context: BrowserContext,
     userDataDir: string,
     metadata: LineChatProfileBrowserMetadata = {},
   ): Promise<void> {
-    const resolvedProfile = path.resolve(userDataDir);
+    const requestedProfile = canonicalProfilePath(userDataDir);
+    const lease = this.contextLeases.get(context);
+    const record = lease?.record ?? this.managedProfileContexts.get(requestedProfile);
+    if (!lease && record?.context === context) return;
+
+    if (lease) {
+      const { record: managedRecord, releaseProfileLock } = lease;
+      this.contextLeases.delete(context);
+      try {
+        managedRecord.activeOperation = null;
+        if (
+          managedRecord.reusable
+          && !this.isShuttingDown
+          && managedRecord.state !== "DEGRADED"
+          && contextIsConnected(context)
+        ) {
+          try {
+            await this.resetManagedContextPages(managedRecord, metadata);
+            managedRecord.state = "READY";
+            managedRecord.lastHealthyAt = Date.now();
+            managedRecord.operationsCompleted += 1;
+            this.safeLog("log", {
+              event: "line_chat_chromium_operation_released",
+              ...this.safeRuntimeMetadata(metadata, managedRecord.profileId),
+              launchId: managedRecord.launchId,
+              contextGeneration: managedRecord.generation,
+              workerPid: process.pid,
+              activeProfileContexts: this.countLiveManagedContexts(),
+              contextRetained: true,
+            });
+            await this.logRuntimeSnapshot("operation_released", metadata, managedRecord.profileId, managedRecord.launchId, false);
+            return;
+          } catch (error: unknown) {
+            managedRecord.state = "DEGRADED";
+            this.noteRecoveryFailure(managedRecord.profilePath, "PAGE_RESET_FAILED");
+            const closeError = await this.disposeManagedContext(managedRecord, metadata, "PAGE_RESET_FAILED");
+            throw closeError ?? error;
+          }
+        }
+
+        const closeError = await this.disposeManagedContext(
+          managedRecord,
+          metadata,
+          this.isShuttingDown ? "WORKER_SHUTDOWN" : managedRecord.unexpectedClose ? "BROWSER_UNHEALTHY" : "EPHEMERAL_RELEASE",
+        );
+        if (closeError) throw closeError;
+      } finally {
+        releaseProfileLock();
+      }
+      return;
+    }
+
+    const releaseProfileLock = await this.acquireProfileLock(requestedProfile);
     let closeError: unknown;
+    const startedAt = Date.now();
     try {
-      await context.close();
-    } catch (error: unknown) {
-      closeError = error;
+      try {
+        await context.close();
+      } catch (error: unknown) {
+        closeError = error;
+      } finally {
+        if (!(await this.waitForProfileRelease(requestedProfile, metadata))) {
+          closeError ??= new Error("CHROMIUM_PROFILE_RELEASE_UNCONFIRMED");
+        }
+      }
+      this.safeLog(closeError ? "warn" : "log", {
+        event: closeError ? "line_chat_chromium_close_failed" : "line_chat_chromium_close_completed",
+        ...this.safeRuntimeMetadata(metadata, profileIdentifier(requestedProfile)),
+        chromiumPid: null,
+        closeDurationMs: Date.now() - startedAt,
+        cleanupCompleted: !closeError,
+        errorName: closeError ? safeErrorName(closeError) : null,
+      });
     } finally {
-      await this.waitForProfileRelease(resolvedProfile, metadata);
-      this.markManagedContext(resolvedProfile, -1);
+      releaseProfileLock();
     }
     if (closeError) {
       throw closeError instanceof Error
         ? closeError
         : new Error(typeof closeError === "string" ? closeError : "Persistent context close failed.");
+    }
+  }
+
+  public async onModuleDestroy(): Promise<void> {
+    this.isShuttingDown = true;
+    for (const profilePath of [...this.managedProfileContexts.keys()]) {
+      const record = this.managedProfileContexts.get(profilePath);
+      if (record) await this.disposeManagedContext(record, {}, "WORKER_SHUTDOWN");
+      let drainTimer: NodeJS.Timeout | null = null;
+      const drained = await Promise.race([
+        this.acquireProfileLock(profilePath).then((release) => { release(); return true; }),
+        new Promise<boolean>((resolve) => {
+          drainTimer = setTimeout(() => resolve(false), PROFILE_BROWSER_CLOSE_TIMEOUT_MS);
+          drainTimer.unref?.();
+        }),
+      ]);
+      if (drainTimer) clearTimeout(drainTimer);
+      if (!drained) {
+        this.safeLog("warn", {
+          event: "line_chat_chromium_shutdown_operation_drain_timeout",
+          profileId: profileIdentifier(profilePath),
+          workerPid: process.pid,
+          waitMs: PROFILE_BROWSER_CLOSE_TIMEOUT_MS,
+          browserClosed: true,
+        });
+      }
     }
   }
 
@@ -567,6 +940,9 @@ export class LineChatSessionService {
     const context = await launcher(resolvedProfile, {
       profilePath: resolvedProfile,
       headless: input.headless ?? true,
+    }, {
+      sessionId: input.operationContext?.sessionId,
+      operationKind: input.operationContext?.operationKind ?? "INBOUND_MESSAGE_MATCH",
     });
 
     let scannedChats = 0;
@@ -743,6 +1119,9 @@ export class LineChatSessionService {
     const context = await launcher(resolvedProfile, {
       profilePath: resolvedProfile,
       headless: input.headless ?? true,
+    }, {
+      sessionId: input.operationContext?.sessionId,
+      operationKind: input.operationContext?.operationKind ?? "CHAT_DISCOVERY",
     });
     const endpoint = this.buildChatListUrl(botId);
 
@@ -893,7 +1272,7 @@ export class LineChatSessionService {
       let stoppedEarlyByObserver = false;
       let next: string | null;
       if (continuing) {
-        next = cursorState!.startNext!;
+        next = cursorState.startNext ?? null;
       } else {
         pages.push(firstPage);
         mergePage(firstPage);
@@ -1299,6 +1678,9 @@ export class LineChatSessionService {
       context = await launcher(resolvedProfile, {
         profilePath: resolvedProfile,
         headless: input.headless ?? true,
+      }, {
+        sessionId: input.operationContext?.sessionId,
+        operationKind: input.operationContext?.operationKind ?? "NICKNAME_UPDATE",
       });
 
       const page = context.pages()[0] || (await context.newPage());
@@ -1630,7 +2012,7 @@ export class LineChatSessionService {
     const context = await launcher(resolvedProfile, {
       profilePath: resolvedProfile,
       headless: options.headless ?? true,
-    });
+    }, { operationKind: "MANUAL_DIAGNOSTIC" });
 
     const observedRequests: ObservedRequestSummary[] = [];
     const observedResponses: DiagnosticsResult["observedResponses"] = [];
@@ -2009,6 +2391,361 @@ export class LineChatSessionService {
     };
   }
 
+  private safeRuntimeMetadata(metadata: LineChatProfileBrowserMetadata, profileId: string): Record<string, string> {
+    return {
+      profileId,
+      ...(metadata.sessionId ? { sessionId: metadata.sessionId } : {}),
+      ...(metadata.storeCode ? { storeCode: metadata.storeCode } : {}),
+      ...(metadata.operationKind ? { operationKind: metadata.operationKind } : {}),
+    };
+  }
+
+  private safeLog(level: "log" | "warn" | "error", event: Record<string, unknown>): void {
+    try {
+      const serialized = JSON.stringify(event);
+      if (level === "error") this.logger.error(serialized);
+      else if (level === "warn") this.logger.warn(serialized);
+      else this.logger.log(serialized);
+    } catch {
+      // Runtime diagnostics must never interrupt a Manager operation.
+    }
+  }
+
+  private async logRuntimeSnapshot(
+    reason: string,
+    metadata: LineChatProfileBrowserMetadata,
+    profileId: string,
+    launchId: string,
+    force: boolean,
+  ): Promise<void> {
+    const now = Date.now();
+    if (!force && now - this.lastRuntimeSnapshotAt < CHROMIUM_RUNTIME_SNAPSHOT_MIN_INTERVAL_MS) return;
+    this.lastRuntimeSnapshotAt = now;
+    try {
+      const snapshot = await collectChromiumRuntimeSnapshot();
+      this.safeLog("log", {
+        event: "line_chat_chromium_runtime_snapshot",
+        ...this.safeRuntimeMetadata(metadata, profileId),
+        launchId,
+        reason,
+        activeProfileContexts: this.countLiveManagedContexts(),
+        snapshot,
+      });
+    } catch {
+      // Telemetry is best-effort and contains no operation outcome data.
+    }
+  }
+
+  private countLiveManagedContexts(): number {
+    let count = 0;
+    for (const record of this.managedProfileContexts.values()) {
+      if (record.state !== "CLOSED") count += 1;
+    }
+    return count;
+  }
+
+  private async acquireProfileLock(profilePath: string): Promise<() => void> {
+    const canonicalPath = canonicalProfilePath(profilePath);
+    const previous = this.profileLockTails.get(canonicalPath) ?? Promise.resolve();
+    let release!: () => void;
+    const current = new Promise<void>((resolve) => { release = resolve; });
+    const tail = previous.then(() => current);
+    this.profileLockTails.set(canonicalPath, tail);
+    await previous;
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      release();
+      if (this.profileLockTails.get(canonicalPath) === tail) this.profileLockTails.delete(canonicalPath);
+    };
+  }
+
+  private async launchWithBoundedProfileLockRetry(
+    profilePath: string,
+    options: LineChatSessionOptions | undefined,
+    metadata: LineChatProfileBrowserMetadata,
+    generation: number,
+    reusable: boolean,
+    launchCorrelation: { launchId: string; startedAt: number },
+  ): Promise<BrowserContext> {
+    const launchOnce = async (attempt: number): Promise<BrowserContext> => {
+      launchCorrelation.launchId = randomUUID();
+      launchCorrelation.startedAt = Date.now();
+      this.safeLog("log", {
+        event: "line_chat_chromium_launch_started",
+        ...this.safeRuntimeMetadata(metadata, profileIdentifier(profilePath)),
+        launchId: launchCorrelation.launchId,
+        contextGeneration: generation,
+        launchAttempt: attempt,
+        workerPid: process.pid,
+        workerUptimeSeconds: Math.floor(process.uptime()),
+        headless: options?.headless ?? true,
+        reuseContext: reusable,
+        activeProfileContexts: this.countLiveManagedContexts(),
+      });
+      await this.logRuntimeSnapshot("launch_started", metadata, profileIdentifier(profilePath), launchCorrelation.launchId, false);
+      return this.rawLauncher(profilePath, options, {
+        launchId: launchCorrelation.launchId,
+        profileId: profileIdentifier(profilePath),
+        ...(metadata.operationKind ? { operationKind: metadata.operationKind } : {}),
+        ...(metadata.sessionId ? { sessionId: metadata.sessionId } : {}),
+        ...(metadata.storeCode ? { storeCode: metadata.storeCode } : {}),
+      });
+    };
+
+    let lastLockError: unknown;
+    for (let attempt = 1; attempt <= PROFILE_BROWSER_RETRY_BACKOFF_MS.length + 1; attempt += 1) {
+      try {
+        return await launchOnce(attempt);
+      } catch (error: unknown) {
+        if (!isPersistentProfileLockError(error)) throw error;
+        lastLockError = error;
+        this.safeLog("warn", {
+          event: "line_chat_profile_browser_busy",
+          ...this.safeRuntimeMetadata(metadata, profileIdentifier(profilePath)),
+          launchId: launchCorrelation.launchId,
+          attempt,
+          retryAfterMs: PROFILE_BROWSER_RETRY_BACKOFF_MS[attempt - 1] ?? 0,
+        });
+        const waitMs = PROFILE_BROWSER_RETRY_BACKOFF_MS[attempt - 1];
+        if (waitMs !== undefined) {
+          this.safeLog("log", {
+            event: "line_chat_profile_launch_retry",
+            ...this.safeRuntimeMetadata(metadata, profileIdentifier(profilePath)),
+            launchId: launchCorrelation.launchId,
+            attempt: attempt + 1,
+            waitMs,
+          });
+          await this.delay(waitMs);
+        }
+      }
+    }
+
+    if (this.recoverStaleProfileLock(profilePath, metadata)) {
+      this.safeLog("warn", {
+        event: "line_chat_profile_stale_lock_recovered",
+        ...this.safeRuntimeMetadata(metadata, profileIdentifier(profilePath)),
+        launchId: launchCorrelation.launchId,
+      });
+      try {
+        return await launchOnce(PROFILE_BROWSER_RETRY_BACKOFF_MS.length + 2);
+      } catch (error: unknown) {
+        if (!isPersistentProfileLockError(error)) throw error;
+        lastLockError = error;
+      }
+    }
+
+    if (lastLockError) {
+      this.safeLog("warn", {
+        event: "line_chat_profile_browser_busy",
+        ...this.safeRuntimeMetadata(metadata, profileIdentifier(profilePath)),
+        launchId: launchCorrelation.launchId,
+        attempt: PROFILE_BROWSER_RETRY_BACKOFF_MS.length + 1,
+        outcome: "RETRYABLE",
+      });
+    }
+    throw new ProfileBrowserBusyError();
+  }
+
+  private noteRecoveryFailure(profilePath: string, failure: string): ProfileRecoveryState {
+    const previous = this.recoveryStates.get(profilePath);
+    const failures = Math.min((previous?.failures ?? 0) + 1, PROFILE_BROWSER_RECOVERY_BACKOFF_MS.length);
+    const cooldownMs = PROFILE_BROWSER_RECOVERY_BACKOFF_MS[failures - 1] ?? PROFILE_BROWSER_RECOVERY_BACKOFF_MS.at(-1)!;
+    const state = { failures, cooldownUntil: Date.now() + cooldownMs, lastFailure: failure.slice(0, 80) };
+    this.recoveryStates.set(profilePath, state);
+    return state;
+  }
+
+  private async resetManagedContextPages(
+    record: ManagedProfileContext,
+    metadata: LineChatProfileBrowserMetadata,
+  ): Promise<void> {
+    const pages = record.context.pages();
+    for (const page of pages) {
+      if (!page.isClosed()) await page.close({ runBeforeUnload: false });
+    }
+    if (!contextIsConnected(record.context)) throw new Error("CHROMIUM_CONTEXT_DISCONNECTED_DURING_RELEASE");
+    this.safeLog("log", {
+      event: "line_chat_chromium_operation_pages_reset",
+      ...this.safeRuntimeMetadata(metadata, record.profileId),
+      launchId: record.launchId,
+      contextGeneration: record.generation,
+      pagesClosed: pages.length,
+    });
+  }
+
+  private disposeManagedContext(
+    record: ManagedProfileContext,
+    metadata: LineChatProfileBrowserMetadata,
+    reason: string,
+  ): Promise<Error | null> {
+    if (record.disposePromise) return record.disposePromise;
+    if (record.state === "CLOSED") return Promise.resolve(null);
+    record.intentionalClose = true;
+    record.state = "CLOSING";
+    record.disposePromise = this.performManagedContextClose(record, metadata, reason);
+    return record.disposePromise;
+  }
+
+  private async performManagedContextClose(
+    record: ManagedProfileContext,
+    metadata: LineChatProfileBrowserMetadata,
+    reason: string,
+  ): Promise<Error | null> {
+    const startedAt = Date.now();
+    this.safeLog("log", {
+      event: "line_chat_chromium_close_started",
+      ...this.safeRuntimeMetadata(metadata, record.profileId),
+      launchId: record.launchId,
+      contextGeneration: record.generation,
+      workerPid: process.pid,
+      chromiumPid: null,
+      reason,
+    });
+    const closeResult = await this.closeContextBounded(record, metadata);
+    let profileReleased = false;
+    try {
+      profileReleased = await this.waitForProfileRelease(record.profilePath, metadata);
+    } finally {
+      record.state = "CLOSED";
+      if (this.managedProfileContexts.get(record.profilePath) === record) {
+        this.managedProfileContexts.delete(record.profilePath);
+      }
+      this.markManagedContext(record.profilePath, -1);
+      try {
+        record.context.off("close", record.contextCloseListener);
+        const browser = record.context.browser();
+        if (browser && record.browserDisconnectListener) browser.off("disconnected", record.browserDisconnectListener);
+      } catch {
+        // The context may already be disconnected; ownership has still been released.
+      }
+    }
+    let closeError = closeResult.error;
+    if (!profileReleased) closeError ??= new Error("CHROMIUM_PROFILE_RELEASE_UNCONFIRMED");
+    if (closeError) {
+      this.noteRecoveryFailure(record.profilePath, profileReleased ? "CONTEXT_CLOSE_FAILED" : "PROFILE_RELEASE_UNCONFIRMED");
+      this.safeLog("error", {
+        event: "line_chat_chromium_close_failed",
+        ...this.safeRuntimeMetadata(metadata, record.profileId),
+        launchId: record.launchId,
+        contextGeneration: record.generation,
+        workerPid: process.pid,
+        chromiumPid: null,
+        closeDurationMs: Date.now() - startedAt,
+        errorName: safeErrorName(closeError),
+        cleanupCompleted: false,
+        profileReleased,
+        closeEscalationUsed: closeResult.escalationUsed,
+      });
+      await this.logRuntimeSnapshot("close_failed", metadata, record.profileId, record.launchId, true);
+      return closeError;
+    }
+    this.safeLog("log", {
+      event: "line_chat_chromium_close_completed",
+      ...this.safeRuntimeMetadata(metadata, record.profileId),
+      launchId: record.launchId,
+      contextGeneration: record.generation,
+      workerPid: process.pid,
+      chromiumPid: null,
+      closeDurationMs: Date.now() - startedAt,
+      cleanupCompleted: true,
+      closeEscalationUsed: closeResult.escalationUsed,
+      profileReleased,
+      activeProfileContexts: this.countLiveManagedContexts(),
+    });
+    await this.logRuntimeSnapshot("close_completed", metadata, record.profileId, record.launchId, false);
+    return null;
+  }
+
+  private async closeContextBounded(
+    record: ManagedProfileContext,
+    metadata: LineChatProfileBrowserMetadata,
+  ): Promise<{ error: Error | null; escalationUsed: boolean }> {
+    let closePromise: Promise<{ outcome: "CLOSED"; error: null } | { outcome: "FAILED"; error: Error }>;
+    try {
+      closePromise = record.context.close()
+        .then(() => ({ outcome: "CLOSED" as const, error: null }))
+        .catch((error: unknown) => ({
+          outcome: "FAILED" as const,
+          error: error instanceof Error ? error : new Error("Chromium context close failed."),
+        }));
+    } catch (error: unknown) {
+      return {
+        error: error instanceof Error ? error : new Error("Chromium context close failed."),
+        escalationUsed: false,
+      };
+    }
+    let closeTimer: NodeJS.Timeout | null = null;
+    const closeOutcome = await Promise.race([
+      closePromise,
+      new Promise<{ outcome: "TIMEOUT"; error: null }>((resolve) => {
+        closeTimer = setTimeout(() => resolve({ outcome: "TIMEOUT", error: null }), PROFILE_BROWSER_CLOSE_TIMEOUT_MS);
+        closeTimer.unref?.();
+      }),
+    ]);
+    if (closeTimer) clearTimeout(closeTimer);
+    if (closeOutcome.outcome === "CLOSED") return { error: null, escalationUsed: false };
+    if (closeOutcome.outcome === "FAILED") return { error: closeOutcome.error, escalationUsed: false };
+
+    this.safeLog("warn", {
+      event: "line_chat_chromium_close_escalation_started",
+      ...this.safeRuntimeMetadata(metadata, record.profileId),
+      launchId: record.launchId,
+      contextGeneration: record.generation,
+      workerPid: process.pid,
+      chromiumPid: null,
+      action: "OWNED_BROWSER_CLOSE",
+    });
+    let browser: ReturnType<BrowserContext["browser"]> = null;
+    try {
+      browser = record.context.browser();
+    } catch {
+      browser = null;
+    }
+    if (!browser) return { error: new Error("CHROMIUM_CONTEXT_CLOSE_TIMEOUT"), escalationUsed: true };
+
+    let escalationTimer: NodeJS.Timeout | null = null;
+    let escalationPromise: Promise<{ completed: true; error: null } | { completed: false; error: Error }>;
+    try {
+      escalationPromise = browser.close()
+        .then(() => ({ completed: true as const, error: null }))
+        .catch((error: unknown) => ({
+          completed: false as const,
+          error: error instanceof Error ? error : new Error("Chromium browser close failed."),
+        }));
+    } catch (error: unknown) {
+      return {
+        error: error instanceof Error ? error : new Error("Chromium browser close failed."),
+        escalationUsed: true,
+      };
+    }
+    const escalationResult = await Promise.race([
+      escalationPromise,
+      new Promise<{ completed: false; error: Error | null }>((resolve) => {
+        escalationTimer = setTimeout(() => resolve({ completed: false, error: null }), PROFILE_BROWSER_CLOSE_ESCALATION_TIMEOUT_MS);
+        escalationTimer.unref?.();
+      }),
+    ]);
+    if (escalationTimer) clearTimeout(escalationTimer);
+    this.safeLog(escalationResult.completed ? "log" : "error", {
+      event: escalationResult.completed
+        ? "line_chat_chromium_close_escalation_completed"
+        : "line_chat_chromium_close_escalation_failed",
+      ...this.safeRuntimeMetadata(metadata, record.profileId),
+      launchId: record.launchId,
+      contextGeneration: record.generation,
+      workerPid: process.pid,
+      chromiumPid: null,
+      cleanupCompleted: escalationResult.completed,
+      errorName: escalationResult.error ? safeErrorName(escalationResult.error) : null,
+    });
+    return {
+      error: escalationResult.completed ? null : escalationResult.error ?? new Error("CHROMIUM_CONTEXT_CLOSE_TIMEOUT"),
+      escalationUsed: true,
+    };
+  }
+
   private markManagedContext(profilePath: string, delta: 1 | -1): void {
     const current = this.activeManagedContexts.get(profilePath) ?? 0;
     const next = current + delta;
@@ -2019,16 +2756,16 @@ export class LineChatSessionService {
   private async waitForProfileRelease(
     profilePath: string,
     metadata: LineChatProfileBrowserMetadata,
-  ): Promise<void> {
+  ): Promise<boolean> {
     const initiallyPresent = this.singletonArtifactNames(profilePath);
-    if (initiallyPresent.length === 0) return;
+    if (initiallyPresent.length === 0) return true;
 
-    this.logger.log(JSON.stringify({
+    this.safeLog("log", {
       event: "line_chat_profile_release_wait",
-      ...this.safeProfileMetadata(metadata),
+      ...this.safeRuntimeMetadata(metadata, profileIdentifier(profilePath)),
       artifactNames: initiallyPresent,
       maxWaitMs: PROFILE_BROWSER_RELEASE_WAIT_MS,
-    }));
+    });
 
     const startedAt = Date.now();
     let remaining = initiallyPresent;
@@ -2038,14 +2775,15 @@ export class LineChatSessionService {
     }
 
     if (remaining.length > 0) {
-      this.logger.warn(JSON.stringify({
+      this.safeLog("warn", {
         event: "line_chat_profile_release_wait",
-        ...this.safeProfileMetadata(metadata),
+        ...this.safeRuntimeMetadata(metadata, profileIdentifier(profilePath)),
         artifactNames: remaining,
         outcome: "TIMEOUT_BUSY",
         waitedMs: Math.min(PROFILE_BROWSER_RELEASE_WAIT_MS, Date.now() - startedAt),
-      }));
+      });
     }
+    return remaining.length === 0;
   }
 
   private singletonArtifactNames(profilePath: string): string[] {
@@ -2136,24 +2874,24 @@ export class LineChatSessionService {
 
   private async launchPlaywrightPersistentContext(
     userDataDir: string,
-    options?: LineChatSessionOptions
+    options?: LineChatSessionOptions,
+    metadata?: ChromiumLaunchMetadata,
   ): Promise<BrowserContext> {
     return withChromiumLaunchFailureDiagnostics(
       () => chromium.launchPersistentContext(userDataDir, {
         headless: options?.headless ?? true,
         viewport: options?.viewport ?? { width: 1280, height: 800 },
-        args: [
-          "--no-sandbox",
-          "--disable-setuid-sandbox",
-          "--disable-blink-features=AutomationControlled",
-          ...(options?.args || []),
-        ],
+        args: [...BASE_CHROMIUM_ARGS, ...(options?.args || [])],
         ...(options?.channel ? { channel: options.channel } : {}),
         ...(options?.env ? { env: options.env } : {}),
         ...(options?.timeout !== undefined ? { timeout: options.timeout } : {}),
       }),
       userDataDir,
       (event) => this.logger.error(event),
+      {
+        ...(metadata ?? {}),
+        workerPid: process.pid,
+      },
     );
   }
 }

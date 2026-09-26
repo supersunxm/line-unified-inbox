@@ -154,6 +154,8 @@ export class LineChatNovncRecoveryWorkerService {
             sessionId: session.id,
             sessionKey: RECOVERY_SESSION_KEY,
             profileStorageKey: session.profileStorageKey ?? undefined,
+            operationKind: "NOVNC_RECOVERY",
+            reuseContext: false,
           });
           const contextForCloseHandler = browserContext;
           contextForCloseHandler.once("close", () => {
