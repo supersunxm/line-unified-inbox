@@ -10,6 +10,12 @@ const ANSI_ESCAPE_SEQUENCE = new RegExp(String.raw`\u001b\[[0-?]*[ -/]*[@-~]`, "
 
 type LaunchFailureDiagnostic = {
   event: "line_chat_chromium_launch_failed";
+  launchId: string | null;
+  profileId: string | null;
+  operationKind: string | null;
+  sessionId: string | null;
+  storeCode: string | null;
+  workerPid: number;
   errorName: string | null;
   errorCode: string | null;
   errno: number | null;
@@ -149,7 +155,7 @@ function collectDiagnostic(error: unknown, profilePath: string, durationMs: numb
   const message = safeText(readProperty(error, "message")) || safeText(error);
   const stderrProperty = safeText(readProperty(error, "stderr"));
   const stdoutProperty = safeText(readProperty(error, "stdout"));
-  const process = readProperty(error, "spawnedProcess") ?? readProperty(error, "childProcess");
+  const childProcess = readProperty(error, "spawnedProcess") ?? readProperty(error, "childProcess");
   const browserLogs = captureSection(message, "Browser logs:", "Call log:");
   const callLog = captureSection(message, "Call log:", "");
   const launchLine = message.split(/\r?\n/u).find((line) => /<launching>\s+/iu.test(line)) ?? "";
@@ -157,28 +163,28 @@ function collectDiagnostic(error: unknown, profilePath: string, durationMs: numb
   const rawCommand = safeText(readProperty(error, "command")) || commandMatch?.[1]?.trim() || "";
   const executableProperty = safeText(readProperty(error, "executablePath"));
   const rawExecutable = executableProperty || rawCommand.match(/^(?:"([^"]+)"|'([^']+)'|(\S+))/u)?.slice(1).find(Boolean) || "";
-  const processPid = safeNumber(readProperty(process, "pid"));
+  const processPid = safeNumber(readProperty(childProcess, "pid"));
   const chromiumPid = processPid
     ?? safeNumber(readProperty(error, "pid"))
     ?? parseLogNumber(message, /<launched>\s+pid=(\d+)/iu)
     ?? parseLogNumber(message, /\bpid=(\d+)/iu);
-  const exitCode = safeNumber(readProperty(process, "exitCode"))
+  const exitCode = safeNumber(readProperty(childProcess, "exitCode"))
     ?? safeNumber(readProperty(error, "exitCode"))
     ?? parseLogNumber(message, /\bexitCode=(-?\d+)/iu);
-  const terminationSignal = safeScalar(readProperty(process, "signalCode"))
-    ?? safeScalar(readProperty(process, "signal"))
+  const terminationSignal = safeScalar(readProperty(childProcess, "signalCode"))
+    ?? safeScalar(readProperty(childProcess, "signal"))
     ?? safeScalar(readProperty(error, "signal"))
     ?? parseLogValue(message, /\bsignal=([^\s>]+)/iu);
   const processClosed = safeBoolean(readProperty(error, "processClosed"))
-    ?? safeBoolean(readProperty(process, "processClosed"))
+    ?? safeBoolean(readProperty(childProcess, "processClosed"))
     ?? (/\bprocessClosed\s*=\s*true/iu.test(message) ? true : null)
     ?? (/\bprocessClosed\s*=\s*false/iu.test(message) ? false : null)
     ?? (/<process did exit:/iu.test(message) ? true : null);
-  const processKilled = safeBoolean(readProperty(process, "killed"))
+  const processKilled = safeBoolean(readProperty(childProcess, "killed"))
     ?? safeBoolean(readProperty(error, "killed"))
     ?? (/(?:spawnedProcess|childProcess)\.killed\s*=\s*true/iu.test(message) ? true : null)
     ?? (/(?:spawnedProcess|childProcess)\.killed\s*=\s*false/iu.test(message) ? false : null);
-  const explicitSpawned = safeBoolean(readProperty(process, "spawned"))
+  const explicitSpawned = safeBoolean(readProperty(childProcess, "spawned"))
     ?? safeBoolean(readProperty(error, "spawned"));
   const errorCode = safeScalar(readProperty(error, "code"));
   const syscall = safeScalar(readProperty(error, "syscall"));
@@ -197,11 +203,17 @@ function collectDiagnostic(error: unknown, profilePath: string, durationMs: numb
       ? false
       : null;
   const cleanupCompleted = safeBoolean(readProperty(error, "cleanupCompleted"))
-    ?? safeBoolean(readProperty(process, "cleanupCompleted"))
+    ?? safeBoolean(readProperty(childProcess, "cleanupCompleted"))
     ?? (/finished temporary directories cleanup/iu.test(message) ? true : null);
 
   return {
     event: "line_chat_chromium_launch_failed",
+    launchId: null,
+    profileId: null,
+    operationKind: null,
+    sessionId: null,
+    storeCode: null,
+    workerPid: process.pid,
     errorName: boundedText(safeText(readProperty(error, "name")), profilePath, 100),
     errorCode: boundedText(errorCode ?? "", profilePath, 100),
     errno: safeNumber(readProperty(error, "errno")),
@@ -228,9 +240,27 @@ function collectDiagnostic(error: unknown, profilePath: string, durationMs: numb
   };
 }
 
-function formatFailureDiagnostic(error: unknown, profilePath: string, durationMs: number): string {
+function formatFailureDiagnostic(
+  error: unknown,
+  profilePath: string,
+  durationMs: number,
+  metadata: {
+    launchId?: string;
+    profileId?: string;
+    operationKind?: string;
+    sessionId?: string;
+    storeCode?: string;
+    workerPid?: number;
+  } = {},
+): string {
   try {
     const diagnostic = collectDiagnostic(error, profilePath, durationMs);
+    diagnostic.launchId = metadata.launchId ?? null;
+    diagnostic.profileId = metadata.profileId ?? null;
+    diagnostic.operationKind = metadata.operationKind?.slice(0, 80) ?? null;
+    diagnostic.sessionId = metadata.sessionId?.slice(0, 120) ?? null;
+    diagnostic.storeCode = metadata.storeCode?.slice(0, 80) ?? null;
+    diagnostic.workerPid = metadata.workerPid ?? process.pid;
     const trimOrder: Array<keyof Pick<LaunchFailureDiagnostic,
       "playwrightCallLog" | "chromiumStdout" | "chromiumStderr" | "launchCommand" | "errorMessage">> = [
       "playwrightCallLog",
@@ -245,12 +275,14 @@ function formatFailureDiagnostic(error: unknown, profilePath: string, durationMs
       while (serialized.length > MAX_EVENT_JSON_LENGTH && diagnostic[field]) {
         const current = diagnostic[field] ?? "";
         const nextLength = Math.max(0, Math.floor(current.length * 0.6));
-        setDiagnosticTextField(
-          diagnostic,
-          field,
-          nextLength > 0 ? `${current.slice(0, nextLength)}[TRUNCATED]` : null,
-        );
+        const replacement = nextLength > 0
+          ? `${current.slice(0, nextLength)}[TRUNCATED]`
+          : field === "errorMessage"
+            ? "Launch failure detail truncated."
+            : null;
+        setDiagnosticTextField(diagnostic, field, replacement);
         serialized = JSON.stringify(diagnostic);
+        if (field === "errorMessage" && nextLength === 0) break;
       }
     }
     if (serialized.length <= MAX_EVENT_JSON_LENGTH) return serialized;
@@ -259,6 +291,12 @@ function formatFailureDiagnostic(error: unknown, profilePath: string, durationMs
   }
   return JSON.stringify({
     event: "line_chat_chromium_launch_failed",
+    launchId: metadata.launchId ?? null,
+    profileId: metadata.profileId ?? null,
+    operationKind: metadata.operationKind?.slice(0, 80) ?? null,
+    sessionId: metadata.sessionId?.slice(0, 120) ?? null,
+    storeCode: metadata.storeCode?.slice(0, 80) ?? null,
+    workerPid: metadata.workerPid ?? process.pid,
     errorMessage: "Diagnostic extraction failed; original launch error preserved.",
   });
 }
@@ -267,6 +305,14 @@ export async function withChromiumLaunchFailureDiagnostics<T>(
   launch: () => Promise<T>,
   profilePath: string,
   logError: (event: string) => void,
+  metadata: {
+    launchId?: string;
+    profileId?: string;
+    operationKind?: string;
+    sessionId?: string;
+    storeCode?: string;
+    workerPid?: number;
+  } = {},
 ): Promise<T> {
   const startedAt = performance.now();
   try {
@@ -274,7 +320,7 @@ export async function withChromiumLaunchFailureDiagnostics<T>(
   } catch (error: unknown) {
     try {
       const durationMs = performance.now() - startedAt;
-      logError(formatFailureDiagnostic(error, profilePath, durationMs));
+      logError(formatFailureDiagnostic(error, profilePath, durationMs, metadata));
     } catch {
       // Preserve the original launch error even if formatting or logging fails.
     }

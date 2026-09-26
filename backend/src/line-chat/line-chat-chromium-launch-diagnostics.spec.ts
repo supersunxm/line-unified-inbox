@@ -38,12 +38,26 @@ test("Chromium launch diagnostics preserve the first failure and extract spawn d
       async () => { throw error; },
       profilePath,
       (line) => { event = line; },
+      {
+        launchId: "launch-safe-001",
+        profileId: "profile-safe-001",
+        operationKind: "MIRROR_SYNC",
+        sessionId: "session-safe-001",
+        storeCode: "29113",
+        workerPid: 42,
+      },
     ),
     (caught: unknown) => caught === originalError,
   );
 
   const diagnostic = JSON.parse(event) as Record<string, unknown>;
   assert.equal(diagnostic.event, "line_chat_chromium_launch_failed");
+  assert.equal(diagnostic.launchId, "launch-safe-001");
+  assert.equal(diagnostic.profileId, "profile-safe-001");
+  assert.equal(diagnostic.operationKind, "MIRROR_SYNC");
+  assert.equal(diagnostic.sessionId, "session-safe-001");
+  assert.equal(diagnostic.storeCode, "29113");
+  assert.equal(diagnostic.workerPid, 42);
   assert.equal(diagnostic.errorName, "Error");
   assert.equal(diagnostic.errorCode, "EAGAIN");
   assert.equal(diagnostic.errno, 11);

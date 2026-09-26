@@ -697,7 +697,11 @@ export class LineChatManagerMediaMaterializerService implements OnModuleInit, On
                   "--disable-blink-features=AutomationControlled",
                 ],
               },
-              { sessionId: target.session.id, sessionKey: target.session.sessionKey },
+              {
+                sessionId: target.session.id,
+                sessionKey: target.session.sessionKey,
+                operationKind: "MEDIA_MATERIALIZE",
+              },
             );
             const page = context.pages()[0] || await context.newPage();
             const firstRunnable = runnable[0];

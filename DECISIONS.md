@@ -1,3 +1,11 @@
+# Live Mirror Chromium profile supervisor pre-canary gate (2026-09-25)
+
+- Treat the Manager fleet as two physical browser profiles: `account-1 / pinklao-pilot-v1` and `profile-b / RBS Chonburi`. OA counts shown by each account overlap and are not additive.
+- Key the in-process Chromium supervisor, serialization lock, and retained context by the canonical physical profile path. Lexical aliases and symlinks must collapse to one physical key; store/OA/session labels must not create extra supervisors.
+- Reuse one healthy headless persistent context per physical profile, serialize operations per profile, close/reset pages between reads, and rotate at the existing age/operation bounds. Keep incompatible headful noVNC contexts ephemeral. Keep different OA bot resolutions fail-closed; if multiple sessions resolve the same bot ID, preserve deterministic first-candidate behavior.
+- The current 16-store validation exercised two saved local profiles for 480 read-only chat-list operations and observed two supervisors, 479 reuses, one bounded rotation, and no failure. Production `/proc` and cgroup PID/task measurements remain an observation requirement during the controlled canary because the local host is Darwin and Railway does not currently expose those counters.
+- Pre-canary status is `READY_FOR_16_STORE_CANARY`. This does not authorize deployment, restart, fleet changes, production writes, or expansion beyond the existing 16 stores; those actions retain their separate human authorization gates.
+
 # 2026-09-20: Worker Restart Canary B002 Outcome and Cleanup
 
 - The B002 restart canary was terminal but not a rollout pass: `PROFILE_BUSY_BEFORE_SEND` caused Attempt 1 to fail before send, and the automatic requeue created Attempt 2. The final records are preserved as audit history; they must not be rewritten to simulate the required one-attempt outcome.
@@ -2820,3 +2828,12 @@ Keep `StoreMaster.tiktokProfileUrl` as the only persisted TikTok profile URL. Po
 **Rationale:** The production follower synchronization job fetches LINE follower insight data on a D-1 schedule. Allowing the UI to use the current day as an endpoint produces a false 0/missing state even when historical snapshots are healthy. Keeping the UI boundary aligned with collection semantics avoids presenting missing current-day data as zero followers.
 
 **Data impact:** Presentation/query-date behavior only; no historical follower snapshots are rewritten or deleted.
+
+# 2026-09-25: LINE Chat Chromium P0 — per-profile supervised context
+
+- Reuse one healthy headless persistent context per resolved Manager profile path inside the worker process. Hold a FIFO path mutex from acquisition through operation cleanup; retain the existing database session lease.
+- Reset pages after each operation while preserving the persistent profile's cookies/storage. Keep headful/noVNC contexts ephemeral. Preserve profile directories and all current LINE/Mirror business semantics.
+- Rotate a retained context at the next operation after 20 minutes or 256 completed operations. On crash/launch/reset/close failure, degrade the profile and apply bounded 30/60/120/300-second recovery cooldowns. Close the owned context with bounded escalation; never kill an arbitrary PID or delete an unconfirmed live profile lock.
+- Record unique launch IDs, a hashed profile identity, operation kind and safe store/session context. Linux resource snapshots are best-effort, one per minute for routine events, and process scanning is bounded to 8 concurrent status reads. Failure telemetry bypasses throttling. Missing `/proc`/cgroup access remains explicit `NOT_AVAILABLE`/`PERMISSION_DENIED` and never blocks Manager work.
+- Evidence supports Chromium OS thread/task creation failure (`pthread_create` EAGAIN), but the exact cgroup/RLIMIT/runtime ceiling is unknown. Do not label this a proven child-process or memory leak. Distinct profiles may run concurrently; total retained contexts scale with active profile count. The mutex is process-local, so any future multi-replica configuration sharing profile storage requires a distributed path lease or profile sharding.
+- This decision is local code only. Production canary remains unapproved and was not run. Keep the current 16-store fleet and one worker replica; require a separately authorized 120-minute, 3-cycle 16/16 canary before discussing expansion.

@@ -308,6 +308,9 @@ export class LineChatManagerImageRelayWorkerService {
         headless: true,
         viewport: { width: 1280, height: 800 },
         args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-blink-features=AutomationControlled"],
+      }, {
+        operationKind: "IMAGE_RELAY",
+        storeCode: input.storeCode,
       });
       const page = context.pages()[0] || await context.newPage();
       const targetUrl = this.sessionService.buildChatRefererUrl(input.botId, input.lineChatUserId);
