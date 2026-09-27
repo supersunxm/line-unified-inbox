@@ -1,3 +1,8 @@
+# OPPO Historical crosswalk release publication gate (2026-09-27)
+
+- Keep the production crosswalk empty until the consuming backend release is deployed and healthy. The additive crosswalk schema migration is applied, but this release's source code and documentation have not been published; production service-path acceptance has not run.
+- Nineteen source/documentation Git blobs had been uploaded and are unreferenced when GitHub automatic review rejected creation of the exact commit tree, stating that trusted user authorization for the payload was not established. Do not route around that rejection through another upload or deploy path. Resume publication only after the exact-payload authorization gate is resolved through the trusted workflow.
+
 # OPPO Historical final completion — canonical source-ID conflict disposition (2026-09-27)
 
 - The production Historical backfill must remain fail-closed when an archive source ID matches a canonical Message whose timestamp or OA-scoped chat identity differs. The approved dry-run found 16,915 such conflicts; none may be silently treated as already imported or inserted as Historical without a defensible identity interpretation.
@@ -2869,3 +2874,12 @@ Keep `StoreMaster.tiktokProfileUrl` as the only persisted TikTok profile URL. Po
 # 2026-09-27: Target proof resolves unbound candidate OAs by canonical assigned profile
 
 The first production target proof confirmed that eligible candidate OAs have no per-OA Manager-session foreign key. Target proof must therefore resolve a missing OA association from the assigned Central Master Profile A/B value, using only the existing canonical active sessions `account-1` and `profile-b`. Any explicit association or profile hint that conflicts with the assignment remains a fail-closed mismatch. This lookup is read-only; it creates no OA/session binding and does not select another profile. Validate with regression tests before further production proof.
+
+# 2026-09-27: Historical Manager chats link through source-event crosswalks
+
+- Preserve canonical `Conversation.lineChatUserId`, `Customer.lineUserId`, canonical Messages, and operational state. A Historical Manager identity may join a canonical Conversation only when unique stable source-event IDs prove one exact Store/OA-scoped destination, matching direction and text, TEXT type, and no more than one second timestamp drift.
+- Persist only `LINK_SAFE` mappings in the additive `HistoricalConversationCrosswalk` table. Database checks reject other classifications, missing canonical destinations, missing source-event evidence, and empty anchors. Writes are insert-only; an existing table must exactly match a fresh safe preflight for idempotent replay.
+- Canonical timeline reads union the direct Historical chat ID and all safe crosswalk IDs for the same Store/OA/Conversation. Duplicate suppression keys on stable `sourceEventId` against raw or Manager-prefixed canonical external IDs in the same canonical Conversation. Text/time similarity alone is never a deduplication key.
+- Virtual Historical discovery excludes direct identities, safe crosslinks, and any identity with a canonical source-event match. Unanchored identities remain virtual and read-only; ambiguous or conflicting identities are not persisted.
+- Store 30282 evidence resolved the screenshot text to source event `631303932702359672` and canonical Conversation `e9f88a82-ffc4-45c0-b755-20a847fa6ef4` with a 3 ms timestamp delta. The canonical Conversation’s null LINE chat ID explains why the previous direct-key timeline read omitted that Historical chat. The nearby sticker and image remain `NON_TEXT_NOT_BACKFILLED` and do not block text visibility acceptance.
+- Production has only the additive table migration applied at this checkpoint. Crosswalk persistence follows code deployment; post-deployment acceptance must call the canonical service read path and prove zero missing text, source duplicates, and virtual copies for the canary and required representatives.

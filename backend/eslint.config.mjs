@@ -44,5 +44,15 @@ export default tseslint.config(
       },
     },
   },
+  {
+    files: ["scripts/historical-conversation-crosswalk.ts", "scripts/historical-crosswalk-acceptance.ts"],
+    languageOptions: {
+      parserOptions: {
+        projectService: false,
+        project: ["./tsconfig.historical-scripts.json"],
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
+  },
   { ignores: ["dist/**", "node_modules/**"] },
 );
