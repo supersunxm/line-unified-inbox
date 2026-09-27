@@ -29,6 +29,9 @@ type Store24hResponse = {
     responseRate24h: number | null;
   };
   stores: Store24hRow[];
+  sources?: { historicalTextMessages: number; currentMessages: number; exactDuplicatesSuppressed: number; historicalChats: number };
+  responderCoverage?: { status: string; knownHistoricalReplyCycles: number; unknownResponderReplies: number; distinctKnownResponders: number };
+  responders?: Array<{ storeId: string; storeName: string; source: "LINE_MANAGER_BIZ_ID" | "CANONICAL_USER_ID"; total: number; within24h: number; over24h: number; responderKey: string }>;
 };
 
 type Props = {
@@ -169,6 +172,11 @@ export function Store24hResponsePanel({ getStoreDisplayName, onOpenStore }: Prop
           <p className="mt-1 text-xs text-[var(--dash-text-secondary)]">
             ดูจำนวนและสัดส่วนบทสนทนาที่ร้านตอบลูกค้าภายใน 24 ชั่วโมง ในช่วงเวลาที่เลือก
           </p>
+          {data?.sources && (
+            <p className="mt-1 text-[10.5px] text-[var(--dash-text-tertiary)]">
+              รวมข้อความปัจจุบันและประวัติ · Historical {data.sources.historicalTextMessages.toLocaleString()} · ตัดรายการซ้ำตรงตัว {data.sources.exactDuplicatesSuppressed.toLocaleString()}
+            </p>
+          )}
         </div>
         {overview && (
           <div className="rounded-xl bg-[var(--dash-accent-soft)] px-4 py-2.5 text-right">
@@ -217,6 +225,29 @@ export function Store24hResponsePanel({ getStoreDisplayName, onOpenStore }: Prop
         <div className="mt-4 h-56 animate-pulse rounded-xl bg-[var(--dash-bg)]" />
       ) : data ? (
         <>
+          {data.responderCoverage && (
+            <section className="mt-4 rounded-xl border border-[var(--dash-border)] bg-[var(--dash-bg)] p-3">
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <h3 className="text-xs font-bold text-[var(--dash-text)]">Responder analytics</h3>
+                <p className="text-[10.5px] text-[var(--dash-text-tertiary)]">
+                  Historical replies with source ID {data.responderCoverage.knownHistoricalReplyCycles.toLocaleString()} · unknown sender {data.responderCoverage.unknownResponderReplies.toLocaleString()}
+                </p>
+              </div>
+              {data.responders && data.responders.length > 0 ? (
+                <div className="mt-2 divide-y divide-[var(--dash-border)]">
+                  {data.responders.slice(0, 5).map((responder) => (
+                    <div key={`${responder.storeId}:${responder.source}:${responder.responderKey}`} className="flex items-center justify-between gap-3 py-2 text-[11px]">
+                      <div className="min-w-0">
+                        <p className="truncate font-semibold text-[var(--dash-text)]">{responder.storeName}</p>
+                        <p className="text-[10px] text-[var(--dash-text-tertiary)]">Source responder #{responder.responderKey} · {responder.source === "LINE_MANAGER_BIZ_ID" ? "LINE OA Manager" : "Current staff account"}</p>
+                      </div>
+                      <span className="shrink-0 tabular-nums text-[var(--dash-text-secondary)]">{responder.total.toLocaleString()} replies · {responder.within24h.toLocaleString()} within 24h</span>
+                    </div>
+                  ))}
+                </div>
+              ) : <p className="mt-2 text-[10.5px] text-[var(--dash-text-tertiary)]">No responder identity was available in this period.</p>}
+            </section>
+          )}
           <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
             <div className="rounded-xl bg-[var(--dash-bg)] px-3 py-2.5">
               <div className="text-[10.5px] text-[var(--dash-text-tertiary)]">ตอบภายใน 24 ชม.</div>

@@ -1,4 +1,4 @@
-import type { ApiBmReplyStatus, ApiConversation, ApiCustomerEvent, ApiCustomerIntelligence, ApiFollowUpStatus, ApiPriority, ApiStore, ApiTopic, BackfillJobResponseDto, BmReplyStatusSummaryResponse, ProductCorrectionInsightResponse, NetworkAccuracyReport, ProductReviewQueueResponse, ApproveAliasResponse, RejectAliasResponse, TargetedReanalysisResponse, ConversationListResponse, ConversationMessagesResponse, CreateLineOaInput, DashboardAnalyticsResponse, FriendAttributionConfigDto, FriendAttributionSessionStatusResult, FriendSourceLink, FriendSourceLinksFilters, FriendSourceLinksGenerateResult, FriendSourceLinksSummaryItem, IdentifyFriendAttributionInput, IdentifyFriendAttributionResult, LineOfficialAccountResponse, LineOaCredentialHealth, LineOaTestResult, LineOaWebhookInfo, ProductMetadataResponse, ProductVariantMetadata, PurchaseAnalyticsResponse, SendConversationMessageResponse, StoreDeletionPreview, StoreMasterSuggestion, StorePrioritySummaryResponse, StoreRemovalResult, StoreInsightsSummary, StoreInsightsResponsePerformance, StoreInsightsResponder, StoreInsightsSales, StoreInsightsConversationResponse, StoreInsightsCustomerVoice, StoreInsightsCustomerVoiceDimension, StoreInsightsCustomerVoiceDrilldownResponse, StoreInsightsResponseCasesResponse, StoreInsightsResponseSegment, StoreInsightsResponseSort, SummaryDailyRow, ByStoreAccountRow, SyncBatchResult, UpdateCustomerSalesInfoInput, UpdateFriendshipStatusInput, UpdateFriendshipStatusResult, UpsertFriendAttributionConfigInput } from "@/types/api";
+import type { ApiBmReplyStatus, ApiConversation, ApiCustomerEvent, ApiCustomerIntelligence, ApiFollowUpStatus, ApiPriority, ApiStore, ApiTopic, BackfillJobResponseDto, BmReplyStatusSummaryResponse, ProductCorrectionInsightResponse, NetworkAccuracyReport, ProductReviewQueueResponse, ApproveAliasResponse, RejectAliasResponse, TargetedReanalysisResponse, ConversationListResponse, ConversationMessagesResponse, HistoricalVirtualChatListResponse, CreateLineOaInput, DashboardAnalyticsResponse, FriendAttributionConfigDto, FriendAttributionSessionStatusResult, FriendSourceLink, FriendSourceLinksFilters, FriendSourceLinksGenerateResult, FriendSourceLinksSummaryItem, IdentifyFriendAttributionInput, IdentifyFriendAttributionResult, LineOfficialAccountResponse, LineOaCredentialHealth, LineOaTestResult, LineOaWebhookInfo, ProductMetadataResponse, ProductVariantMetadata, PurchaseAnalyticsResponse, SendConversationMessageResponse, StoreDeletionPreview, StoreMasterSuggestion, StorePrioritySummaryResponse, StoreRemovalResult, StoreInsightsSummary, StoreInsightsResponsePerformance, StoreInsightsResponder, StoreInsightsSales, StoreInsightsConversationResponse, StoreInsightsCustomerVoice, StoreInsightsCustomerVoiceDimension, StoreInsightsCustomerVoiceDrilldownResponse, StoreInsightsResponseCasesResponse, StoreInsightsResponseSegment, StoreInsightsResponseSort, SummaryDailyRow, ByStoreAccountRow, SyncBatchResult, UpdateCustomerSalesInfoInput, UpdateFriendshipStatusInput, UpdateFriendshipStatusResult, UpsertFriendAttributionConfigInput } from "@/types/api";
 import { AUTH_UNAUTHORIZED_EVENT } from "@/lib/auth-session";
 import { API_BASE_URL } from "@/lib/runtime-config";
 
@@ -460,6 +460,15 @@ export const api = {
   storePrioritySummary: () => request<StorePrioritySummaryResponse>("/conversations/store-priority-summary"),
   conversation: (id: string, options?: ApiRequestOptions) => request<ApiConversation>(`/conversations/${id}`, options),
   conversationMessages: (id: string, page = 1, options?: ApiRequestOptions) => request<ConversationMessagesResponse>(`/conversations/${id}/messages?page=${page}&pageSize=30`, options),
+  historicalChats: (params?: Record<string, string | number | boolean | undefined>, options?: ApiRequestOptions) => {
+    const query = new URLSearchParams();
+    for (const [key, value] of Object.entries(params ?? {})) {
+      if (value !== undefined && value !== null && value !== "") query.set(key, String(value));
+    }
+    return request<HistoricalVirtualChatListResponse>(`/historical-timeline/chats?${query.toString()}`, options);
+  },
+  historicalChat: (id: string, options?: ApiRequestOptions) => request<ApiConversation>(`/historical-timeline/chats/${encodeURIComponent(id)}`, options),
+  historicalChatMessages: (id: string, page = 1, options?: ApiRequestOptions) => request<ConversationMessagesResponse>(`/historical-timeline/chats/${encodeURIComponent(id)}/messages?page=${page}&pageSize=30`, options),
   sendConversationMessage: (id: string, text: string, idempotencyKey: string) =>
     request<SendConversationMessageResponse>(`/conversations/${encodeURIComponent(id)}/messages`, {
       method: "POST",
@@ -577,13 +586,6 @@ export const api = {
     if (params.status && params.status !== "all") query.set("status", params.status);
     if (params.showArchived) query.set("showArchived", "true");
     return download(`/line-official-accounts/export.csv?${query.toString()}`);
-  },
-  exportLineOfficialAccountHandover: (params: { search?: string; status?: "all" | "active" | "issues"; showArchived?: boolean }) => {
-    const query = new URLSearchParams();
-    if (params.search?.trim()) query.set("search", params.search.trim());
-    if (params.status && params.status !== "all") query.set("status", params.status);
-    if (params.showArchived) query.set("showArchived", "true");
-    return download(`/line-official-accounts/handover.csv?${query.toString()}`);
   },
   createLineOfficialAccount: (input: CreateLineOaInput) => request<LineOfficialAccountResponse>("/line-official-accounts", { method: "POST", body: JSON.stringify(input) }),
   updateLineOfficialAccount: (id: string, input: Partial<CreateLineOaInput>) => request<LineOfficialAccountResponse>(`/line-official-accounts/${id}`, { method: "PATCH", body: JSON.stringify(input) }),
@@ -713,33 +715,6 @@ export const api = {
     request<import("@/types/api").ImpactSummary>(`/dashboard/action-impact?period=${encodeURIComponent(period || "today")}`),
   getOperationalMemory: (period?: string) =>
     request<import("@/types/api").OperationalMemorySummary>(`/dashboard/operational-memory?period=${encodeURIComponent(period || "today")}`),
-  previewBroadcast: (input: import("@/types/api").BroadcastPreviewInput) =>
-    request<import("@/types/api").BroadcastPreviewResult>("/broadcasts/preview", {
-      method: "POST",
-      body: JSON.stringify(input),
-    }),
-  saveBroadcastDraft: (input: import("@/types/api").BroadcastCreateInput) =>
-    request<import("@/types/api").BroadcastCampaignDetail>("/broadcasts/draft", {
-      method: "POST",
-      body: JSON.stringify(input),
-    }),
-  createBroadcast: (input: import("@/types/api").BroadcastCreateInput) =>
-    request<import("@/types/api").BroadcastCampaignDetail>("/broadcasts", {
-      method: "POST",
-      body: JSON.stringify(input),
-    }),
-  getBroadcastCampaign: (id: string) =>
-    request<import("@/types/api").BroadcastCampaignDetail>(`/broadcasts/${encodeURIComponent(id)}`),
-  listBroadcastCampaigns: (limit = 20, offset = 0) =>
-    request<{ items: import("@/types/api").BroadcastCampaignDetail[]; total: number }>(
-      `/broadcasts?limit=${limit}&offset=${offset}`,
-    ),
-  retryFailedBroadcast: (id: string) =>
-    request<import("@/types/api").BroadcastCampaignDetail>(
-      `/broadcasts/${encodeURIComponent(id)}/retry-failed`,
-      { method: "POST" },
-    ),
-
   uploadMassMessageImage: (file: File) => {
     const formData = new FormData();
     formData.append("file", file);
@@ -1089,43 +1064,16 @@ export const api = {
         method: "POST",
       },
     ),
-  completeGoogleReviewBatchStore: (
-    sessionId: string,
-    storeId: string,
-    body: {
-      storeId: string;
-      storeCode: string;
-      targetMonth: string;
-      batchItemId: string;
-      reviewsChecked: number;
-      reviewsWithPhoto: number;
-      photoReviewsInTargetMonth: number;
-      reviewsOver15ThaiWords: number;
-      qualifiedReviews: number;
-      qualificationRuleVersion: string;
-      auditCoverageStatus: "OLDER_THAN_TARGET_REACHED" | "END_OF_AVAILABLE_REVIEWS";
-      completionReason: "MONTHLY_STOP_BOUNDARY_REACHED" | "END_OF_REVIEW_FEED";
-      oldestReviewDateText?: string;
-    },
-  ) =>
-    request<{ success: boolean; storeId: string; remainingPending: number; idempotent?: boolean }>(
-      `/google-review-kpi/audit-session/${encodeURIComponent(sessionId)}/stores/${encodeURIComponent(storeId)}/complete`,
-      { method: "POST", body: JSON.stringify(body) },
-    ),
-  getNextGoogleReviewBatchStore: (sessionId: string) =>
-    request<{
-      sessionStatus: string;
-      targetMonth: string;
-      store: import("@/types/api").GoogleReviewAuditQueueStoreItem | null;
-    }>(`/google-review-kpi/audit-session/${encodeURIComponent(sessionId)}/next-store`),
-  flagGoogleReviewBatchStoreNeedsAttention: (
-    sessionId: string,
-    storeId: string,
-    body: { batchItemId: string; errorCode: string; errorMessage: string },
-  ) =>
-    request<{ success: boolean; storeId: string; status: string }>(
-      `/google-review-kpi/audit-session/${encodeURIComponent(sessionId)}/stores/${encodeURIComponent(storeId)}/flag-attention`,
-      { method: "POST", body: JSON.stringify(body) },
+  /**
+   * Issues a short-lived (30-min) Bearer token scoped to the given audit
+   * session.  Must be called from the dashboard (same-origin) immediately
+   * after a session is started or resumed so the token can be forwarded to
+   * the Chrome Extension via chrome.storage.local.
+   */
+  issueGoogleReviewRunnerToken: (sessionId: string) =>
+    request<{ runnerToken: string; expiresAt: string }>(
+      `/google-review-kpi/audit-session/${encodeURIComponent(sessionId)}/runner-token`,
+      { method: "POST" },
     ),
   getGoogleReviewWeeklyStores: () =>
     request<import("@/types/api").GoogleReviewWeeklyStoreItem[]>("/google-review-kpi/weekly/stores"),

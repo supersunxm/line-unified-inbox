@@ -3,6 +3,7 @@ import type { AuthRequest } from "./auth/auth.guard";
 import { StoreAccessService } from "./auth/store-access.service";
 import { PrismaService } from "./prisma.service";
 import { findFirstDeliveredHumanReplyAfter } from "./conversation-reply-state";
+import { HistoricalTimelineService } from "./historical-timeline.service";
 
 type ResponseBucket = "under4h" | "between4and12h" | "between12and24h" | "over24h";
 
@@ -70,6 +71,7 @@ export class DashboardResponseBucketsController {
   constructor(
     private readonly prisma: PrismaService,
     private readonly storeAccess: StoreAccessService,
+    private readonly historicalTimeline: HistoricalTimelineService,
   ) {}
 
   @Get("response-bucket-details")
@@ -169,128 +171,6 @@ export class DashboardResponseBucketsController {
   ) {
     const user = req?.user;
     if (!user) throw new ForbiddenException("Authentication required");
-
-    const range = parseDashboardRange(dateFrom, dateTo);
-    const accessibleStoreIds = await this.storeAccess.accessibleStoreIds(user);
-    const storeWhere = accessibleStoreIds === null
-      ? { isActive: true, archivedAt: null }
-      : { id: { in: accessibleStoreIds }, isActive: true, archivedAt: null };
-
-    const stores = await this.prisma.store.findMany({
-      where: storeWhere,
-      select: { id: true, name: true },
-      orderBy: { name: "asc" },
-    });
-    const storeIds = stores.map((store) => store.id);
-
-    const conversations = storeIds.length === 0
-      ? []
-      : await this.prisma.conversation.findMany({
-          where: {
-            storeId: { in: storeIds },
-            isQa: false,
-            lineOfficialAccount: { accountType: "STORE", isActive: true, archivedAt: null },
-            messages: { some: { direction: "INBOUND", sentAt: { gte: range.startDate, lt: range.endDateExclusive } } },
-          },
-          select: {
-            storeId: true,
-            createdAt: true,
-            messages: {
-              where: { sentAt: { gte: range.startDate, lt: responseWindowEnd(range.endDateExclusive) } },
-              select: { direction: true, deliveryStatus: true, sentAt: true, senderUserId: true, senderDisplayName: true, rawPayload: true },
-              orderBy: { sentAt: "asc" },
-            },
-          },
-        });
-
-    type StoreSummary = {
-      storeId: string;
-      storeName: string;
-      total: number;
-      responded: number;
-      within24h: number;
-      over24h: number;
-      pending: number;
-    };
-
-    const summaries = new Map<string, StoreSummary>(
-      stores.map((store) => [store.id, {
-        storeId: store.id,
-        storeName: store.name,
-        total: 0,
-        responded: 0,
-        within24h: 0,
-        over24h: 0,
-        pending: 0,
-      }]),
-    );
-
-    for (const conversation of conversations) {
-      if (!conversation.storeId) continue;
-      const summary = summaries.get(conversation.storeId);
-      if (!summary) continue;
-      summary.total++;
-
-      const firstInbound = conversation.messages.find(
-        (message) =>
-          message.direction === "INBOUND" &&
-          message.sentAt >= range.startDate &&
-          message.sentAt < range.endDateExclusive,
-      );
-      if (!firstInbound) {
-        summary.pending++;
-        continue;
-      }
-      const startAt = firstInbound.sentAt;
-      const firstOutbound = findFirstDeliveredHumanReplyAfter(conversation.messages, startAt);
-      if (!firstOutbound) {
-        summary.pending++;
-        continue;
-      }
-
-      const startTime = new Date(startAt).getTime();
-      const endTime = new Date(firstOutbound.sentAt).getTime();
-      if (endTime < startTime) {
-        summary.pending++;
-        continue;
-      }
-
-      summary.responded++;
-      const durationMinutes = Math.floor((endTime - startTime) / 60_000);
-      if (durationMinutes <= 24 * 60) summary.within24h++;
-      else summary.over24h++;
-    }
-
-    const rows = [...summaries.values()].map((summary) => ({
-      ...summary,
-      responseRate24h: summary.total > 0 ? Math.round((summary.within24h / summary.total) * 1000) / 10 : null,
-    }));
-
-    const total = rows.reduce((sum, row) => sum + row.total, 0);
-    const within24h = rows.reduce((sum, row) => sum + row.within24h, 0);
-    const responded = rows.reduce((sum, row) => sum + row.responded, 0);
-    const over24h = rows.reduce((sum, row) => sum + row.over24h, 0);
-    const pending = rows.reduce((sum, row) => sum + row.pending, 0);
-
-    return {
-      dateFrom: range.dateFrom,
-      dateTo: range.dateTo,
-      overview: {
-        storeCount: rows.length,
-        total,
-        responded,
-        within24h,
-        over24h,
-        pending,
-        responseRate24h: total > 0 ? Math.round((within24h / total) * 1000) / 10 : null,
-      },
-      stores: rows.sort((a, b) => {
-        if (a.total === 0 && b.total > 0) return 1;
-        if (b.total === 0 && a.total > 0) return -1;
-        const aRate = a.responseRate24h ?? 101;
-        const bRate = b.responseRate24h ?? 101;
-        return aRate - bRate || b.total - a.total || a.storeName.localeCompare(b.storeName);
-      }),
-    };
+    return this.historicalTimeline.replyAnalytics(user, { dateFrom, dateTo });
   }
 }

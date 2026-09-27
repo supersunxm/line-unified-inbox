@@ -23,7 +23,7 @@ import { randomUUID } from "node:crypto";
 import { createPdfDocumentUrl } from "./media/pdf-document-url";
 import { PDF_MIME_TYPE, readPdfMaxBytes, validatePdfBuffer, PdfValidationError } from "./media/pdf-media";
 import { LineChatMessageSendQueueService } from "./line-chat/line-chat-message-send-queue.service";
-import { isLineChatMirrorOnlyStore } from "./line-chat/line-chat-pilot.constants";
+import { HISTORICAL_TIMELINE_START, mapHistoricalTimelineMessage } from "./historical-timeline.service";
 
 const conversationBaseInclude = {
   customer: true,
@@ -63,27 +63,10 @@ export function resolveMessageSender(message: {
   senderUserId?: string | null;
   senderDisplayName?: string | null;
   sender?: { id: string; displayName: string | null } | null;
-  rawPayload?: unknown;
 }) {
   if (message.direction !== MessageDirection.OUTBOUND) return null;
-
-  const raw = message.rawPayload
-    && typeof message.rawPayload === "object"
-    && !Array.isArray(message.rawPayload)
-    ? message.rawPayload as Record<string, unknown>
-    : {};
-  const isManagerMirror = raw.provider === "LINE_MANAGER"
-    || raw.source === "LINE_MANAGER_MIRROR"
-    || raw.responderIdentitySource === "LINE_MANAGER_OWNER_NAME";
-  const snapshotName = message.senderDisplayName?.trim() || null;
-  const relationName = message.sender?.displayName?.trim() || null;
-  const displayName = isManagerMirror
-    ? snapshotName || relationName
-    : relationName || snapshotName;
-
-  if (!message.senderUserId && !message.sender && !displayName) return null;
-  if (!message.senderUserId && !message.sender && !isManagerMirror) return null;
-
+  const displayName = message.sender?.displayName?.trim() || message.senderDisplayName?.trim() || null;
+  if (!message.senderUserId && !message.sender) return null;
   return {
     userId: message.senderUserId ?? message.sender?.id ?? null,
     displayName: displayName ?? "Staff",
@@ -120,33 +103,6 @@ export class ConversationsService {
     private readonly realtime?: RealtimeEventService,
     @Optional() private readonly durableSendQueue?: LineChatMessageSendQueueService,
   ) { }
-
-  private async assertBlackAppSendAllowed(conversationId: string): Promise<void> {
-    const conversation = await this.prisma.conversation.findUnique({
-      where: { id: conversationId },
-      select: {
-        store: {
-          select: {
-            code: true,
-            storeMaster: { select: { externalStoreId: true } },
-          },
-        },
-      },
-    });
-    const storeCode = conversation?.store?.code?.trim()
-      || conversation?.store?.storeMaster?.externalStoreId?.trim()
-      || "";
-    if (!isLineChatMirrorOnlyStore(storeCode)) return;
-
-    Logger.warn(JSON.stringify({
-      event: "black_app_send_blocked_mirror_only",
-      conversationId,
-      storeCode,
-    }), "ConversationsService");
-    throw new ForbiddenException(
-      "ร้านนี้ย้ายไปตอบผ่าน LINE OA Manager แล้ว กรุณาใช้แอปเขียว",
-    );
-  }
 
   private async tryQueueManagerText(
     conversation: {
@@ -244,7 +200,7 @@ export class ConversationsService {
     void _encToken;
     void _tokenRecv;
     void _tokenUsed;
-    const sender = resolveMessageSender({ direction: safe.direction, senderUserId, senderDisplayName, sender: senderUser, rawPayload });
+    const sender = resolveMessageSender({ direction: safe.direction, senderUserId, senderDisplayName, sender: senderUser });
     const sticker = safe.messageType === MessageType.STICKER
       ? stickerPresentationFromRawPayload(rawPayload)
       : null;
@@ -734,12 +690,72 @@ export class ConversationsService {
   }
 
   async messages(id: string, page: number, pageSize: number) {
-    await this.get(id);
-    const safePage = Number.isFinite(page) && page > 0 ? Math.floor(page) : 1;
+    const conversation = await this.get(id);
+    const safePage = Number.isFinite(page) && page > 0 ? Math.min(5000, Math.floor(page)) : 1;
     const safeSize = Number.isFinite(pageSize) ? Math.min(100, Math.max(1, Math.floor(pageSize))) : 30;
-    const total = await this.prisma.message.count({ where: { conversationId: id } });
-    const items = await this.prisma.message.findMany({ where: { conversationId: id }, include: { media: true, sender: { select: { id: true, displayName: true } } }, orderBy: [{ sentAt: "desc" }, { id: "desc" }], skip: (safePage - 1) * safeSize, take: safeSize });
-    return { items: items.reverse().map((message) => this.safeMessage(message)), total, page: safePage, pageSize: safeSize, hasEarlier: safePage * safeSize < total };
+    const where = { conversationId: id };
+    const canonicalTotal = await this.prisma.message.count({ where });
+    const historicalModel = this.prisma.historicalTimelineMessage;
+    if (!conversation.lineChatUserId || typeof historicalModel?.count !== "function" || typeof historicalModel.findMany !== "function") {
+      const items = await this.prisma.message.findMany({ where, include: { media: true, sender: { select: { id: true, displayName: true } } }, orderBy: [{ sentAt: "desc" }, { id: "desc" }], skip: (safePage - 1) * safeSize, take: safeSize });
+      return { items: items.reverse().map((message) => this.safeMessage(message)), total: canonicalTotal, page: safePage, pageSize: safeSize, hasEarlier: safePage * safeSize < canonicalTotal };
+    }
+
+    const historicalWhere = {
+      storeId: conversation.storeId ?? undefined,
+      lineOfficialAccountId: conversation.lineOfficialAccountId,
+      lineChatUserId: conversation.lineChatUserId,
+      sentAt: { gte: HISTORICAL_TIMELINE_START },
+    };
+    const historicalTotal = await historicalModel.count({ where: historicalWhere });
+    const historicalRows = await historicalModel.findMany({
+      where: historicalWhere,
+      orderBy: [{ sentAt: "desc" }, { id: "desc" }],
+      take: Math.min(safePage * safeSize, historicalTotal),
+    });
+    const canonicalRows = await this.prisma.message.findMany({
+      where,
+      include: { media: true, sender: { select: { id: true, displayName: true } } },
+      orderBy: [{ sentAt: "desc" }, { id: "desc" }],
+      take: Math.min(canonicalTotal, safePage * safeSize),
+    });
+    let exactDuplicateIds = new Set<string>();
+    if (typeof this.prisma.$queryRaw === "function") {
+      const duplicateRows = await this.prisma.$queryRaw<Array<{ sourceEventId: string }>>(Prisma.sql`
+        SELECT DISTINCT h."sourceEventId"
+        FROM public."HistoricalTimelineMessage" h
+        JOIN public."Message" m ON m."conversationId" = ${id}
+          AND (m."externalMessageId" = h."sourceEventId"
+            OR m."externalMessageId" = 'line-chat-manager:' || h."sourceEventId")
+          AND m."direction" = h."direction"
+          AND m."messageType" = 'TEXT'::public."MessageType"
+          AND m."sentAt" = h."sentAt"
+          AND m."originalText" = h."text"
+        WHERE h."lineOfficialAccountId" = ${conversation.lineOfficialAccountId}
+          AND h."storeId" = ${conversation.storeId}
+          AND h."lineChatUserId" = ${conversation.lineChatUserId}
+          AND h."sentAt" >= ${HISTORICAL_TIMELINE_START}
+      `);
+      exactDuplicateIds = new Set(duplicateRows.map((row) => row.sourceEventId));
+    }
+    const total = Math.max(0, canonicalTotal + historicalTotal - exactDuplicateIds.size);
+    const merged = [
+      ...canonicalRows.map((message) => ({
+        sentAt: message.sentAt,
+        id: message.id,
+        item: this.safeMessage(message),
+      })),
+      ...historicalRows
+        .filter((message) => !exactDuplicateIds.has(message.sourceEventId))
+        .map((message) => ({
+          sentAt: message.sentAt,
+          id: message.id,
+          item: mapHistoricalTimelineMessage(message),
+        })),
+    ].sort((left, right) => right.sentAt.getTime() - left.sentAt.getTime() || right.id.localeCompare(left.id));
+    const startIndex = (safePage - 1) * safeSize;
+    const items = merged.slice(startIndex, startIndex + safeSize).reverse().map((row) => row.item);
+    return { items, total, page: safePage, pageSize: safeSize, hasEarlier: safePage * safeSize < total };
   }
 
   private async claimEligibleReplyToken(conversationId: string): Promise<{ messageId: string; replyToken: string; ageMs: number; ageBucket: string } | null> {
@@ -787,7 +803,6 @@ export class ConversationsService {
   }
 
   async sendMessage(id: string, dto: SendConversationMessageDto, operator: AuthUser) {
-    await this.assertBlackAppSendAllowed(id);
     const text = dto.text.trim();
     if (!text) throw new BadRequestException("กรุณาพิมพ์ข้อความ");
     if (text.length > 5000) throw new BadRequestException("ข้อความต้องไม่เกิน 5,000 ตัวอักษร");
@@ -1049,7 +1064,6 @@ export class ConversationsService {
   }
 
   async retryFailedMessage(conversationId: string, messageId: string, operator: AuthUser) {
-    await this.assertBlackAppSendAllowed(conversationId);
     const message = await this.prisma.message.findUnique({
       where: { id: messageId },
       include: {
@@ -1185,7 +1199,6 @@ export class ConversationsService {
   }
 
   async sendImage(id: string, file: { buffer: Buffer; mimetype: string; size: number }, idempotencyKey: string, operator: AuthUser) {
-    await this.assertBlackAppSendAllowed(id);
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(idempotencyKey)) throw new BadRequestException("idempotencyKey must be a UUID");
     const extensions: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "image/gif": "gif", "image/webp": "webp" };
     const mime = detectImageMime(file.buffer);
@@ -1314,7 +1327,6 @@ export class ConversationsService {
   }
 
   async sendPdf(id: string, file: { buffer: Buffer; mimetype: string; size: number; originalname?: string }, idempotencyKey: string, operator: AuthUser) {
-    await this.assertBlackAppSendAllowed(id);
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(idempotencyKey)) throw new BadRequestException("idempotencyKey must be a UUID");
     let pdf: ReturnType<typeof validatePdfBuffer>;
     try {
