@@ -1,7 +1,8 @@
-# OPPO Historical crosswalk release publication gate (2026-09-27)
+# OPPO Historical crosswalk publication and acceptance (2026-09-27)
 
-- Keep the production crosswalk empty until the consuming backend release is deployed and healthy. The additive crosswalk schema migration is applied, but this release's source code and documentation have not been published; production service-path acceptance has not run.
-- Nineteen source/documentation Git blobs had been uploaded and are unreferenced when GitHub automatic review rejected creation of the exact commit tree, stating that trusted user authorization for the payload was not established. Do not route around that rejection through another upload or deploy path. Resume publication only after the exact-payload authorization gate is resolved through the trusted workflow.
+- Keep production crosswalk writes sequenced after the consuming backend is deployed and healthy. The additive migration was applied first; after deployment, a fresh production preflight confirmed Store 30282 `LINK_SAFE`, 4,052 safe fleet identities, and zero ambiguity/conflict before the insert-only apply.
+- The exact 19-file change set was pushed on `codex/historical-crosswalk-20260927` using the explicitly authorized Git CLI fallback after GitHub tree creation was rejected. PR #371 passed all required checks and merged at `b0bc04b322abaa0eb1feb708c7392433792176ba`. No force push or Railway configuration change was used.
+- Persist only the freshly classified safe set. The production apply inserted 4,052 `HistoricalConversationCrosswalk` rows; read-only post-apply acceptance verified exact row matches, zero duplicates, zero ambiguous/conflicting persisted rows, and passing canary/representative timeline behavior. Keep canonical identity and operational records outside this crosswalk write path.
 
 # OPPO Historical final completion — canonical source-ID conflict disposition (2026-09-27)
 
