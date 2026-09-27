@@ -76,6 +76,8 @@ function createLeasePrisma() {
 
 function createService(options: {
   target?: ReturnType<typeof makeTarget>;
+  targetWithoutSession?: boolean;
+  activeProfileSession?: ReturnType<typeof makeTarget>["oa"]["lineChatSession"] | null;
   targetError?: string;
   auth?: "YES" | "NO" | "UNKNOWN";
   recentStatus?: "READY" | "FAILED";
@@ -84,6 +86,8 @@ function createService(options: {
   const target = options.target ?? makeTarget();
   const calls = {
     targetReads: 0,
+    profileSessionReads: 0,
+    requestedProfiles: [] as string[],
     managedLaunches: 0,
     closes: 0,
     recentReads: 0,
@@ -103,7 +107,14 @@ function createService(options: {
       calls.targetReads += 1;
       assert.equal(storeCode, "25610");
       if (options.targetError) throw new Error(options.targetError);
-      return target;
+      return options.targetWithoutSession
+        ? { ...target, oa: { ...target.oa, lineChatSession: null } }
+        : target;
+    },
+    getActiveTargetProofProfileSession: async (profile: string) => {
+      calls.profileSessionReads += 1;
+      calls.requestedProfiles.push(profile);
+      return options.activeProfileSession ?? null;
     },
   };
   const sessionService = {
@@ -192,6 +203,61 @@ test("target proof accepts the explicit Profile A label used by candidate invent
   const result = await service.prove({ ...validInput, assignedProfile: "Profile A" });
   assert.equal(result?.assignedProfile, "A");
   assert.equal(result?.targetResolution, "UNIQUE_VERIFIED");
+});
+
+test("an unbound candidate OA uses only the canonical active session for its assigned profile", async () => {
+  const activeProfileSession = makeTarget("a").oa.lineChatSession;
+  const { service, calls, writes } = createService({
+    targetWithoutSession: true,
+    activeProfileSession,
+  });
+  const result = await service.prove(validInput);
+
+  assert.equal(result?.targetResolution, "UNIQUE_VERIFIED");
+  assert.equal(result?.assignedProfile, "A");
+  assert.equal(result?.authStatus, "AUTHENTICATED");
+  assert.equal(calls.profileSessionReads, 1);
+  assert.deepEqual(calls.requestedProfiles, ["A"]);
+  assert.equal(calls.managedLaunches, 1);
+  assert.deepEqual(writes, ["ACQUIRE", "RENEW", "RELEASE"]);
+});
+
+test("an unbound Profile B candidate uses only the canonical Profile B session", async () => {
+  const { service, calls } = createService({
+    targetWithoutSession: true,
+    activeProfileSession: makeTarget("b").oa.lineChatSession,
+  });
+  const result = await service.prove({ ...validInput, assignedProfile: "B" });
+
+  assert.equal(result?.targetResolution, "UNIQUE_VERIFIED");
+  assert.equal(result?.assignedProfile, "B");
+  assert.deepEqual(calls.requestedProfiles, ["B"]);
+  assert.equal(calls.managedLaunches, 1);
+});
+
+test("an unbound candidate fails closed when its assigned profile has no active session", async () => {
+  const { service, calls, writes } = createService({ targetWithoutSession: true });
+  const result = await service.prove(validInput);
+
+  assert.equal(result?.targetResolution, "PROFILE_MISMATCH");
+  assert.equal(calls.profileSessionReads, 1);
+  assert.equal(calls.managedLaunches, 0);
+  assert.equal(calls.recentReads, 0);
+  assert.deepEqual(writes, []);
+});
+
+test("an unbound candidate never falls back to the other physical Manager profile", async () => {
+  const { service, calls, writes } = createService({
+    targetWithoutSession: true,
+    activeProfileSession: makeTarget("b").oa.lineChatSession,
+  });
+  const result = await service.prove(validInput);
+
+  assert.equal(result?.targetResolution, "PROFILE_MISMATCH");
+  assert.equal(calls.profileSessionReads, 1);
+  assert.equal(calls.managedLaunches, 0);
+  assert.equal(calls.recentReads, 0);
+  assert.deepEqual(writes, []);
 });
 
 async function verifySingleContextAcrossSupervisorBoundary(boundary: "AGE" | "OPERATIONS"): Promise<void> {

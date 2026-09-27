@@ -608,6 +608,28 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
     };
   }
 
+  /**
+   * Resolves a target-proof profile to its canonical active Manager session
+   * when a candidate OA has no per-OA session association yet. The workbook
+   * supplies the assigned profile; only the two canonical physical sessions
+   * are eligible, and callers still validate profile hints before use.
+   */
+  public async getActiveTargetProofProfileSession(
+    profile: "A" | "B",
+  ): Promise<MirrorSessionTarget | null> {
+    const sessionKey = profile === "A" ? "account-1" : "profile-b";
+    return this.prisma.lineChatSession.findFirst({
+      where: { sessionKey, status: LineChatSessionStatus.ACTIVE },
+      select: {
+        id: true,
+        sessionKey: true,
+        status: true,
+        profilePath: true,
+        profileStorageKey: true,
+      },
+    });
+  }
+
   private async syncStore(
     storeCode: string,
     catchUpStartAt: Date | null = null,

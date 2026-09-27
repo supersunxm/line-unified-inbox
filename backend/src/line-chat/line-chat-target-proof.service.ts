@@ -161,7 +161,8 @@ export class LineChatTargetProofService {
       return base(target.oa.id === validated.lineOfficialAccountId ? "PROFILE_MISMATCH" : "NOT_FOUND", target.selectionSource);
     }
 
-    const session = target.oa.lineChatSession;
+    const session = target.oa.lineChatSession
+      ?? await this.mirrorService.getActiveTargetProofProfileSession(validated.assignedProfile);
     if (!session || session.status !== "ACTIVE") {
       return base("PROFILE_MISMATCH", target.selectionSource);
     }

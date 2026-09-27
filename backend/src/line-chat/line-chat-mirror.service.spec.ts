@@ -198,6 +198,35 @@ async function withEnvAsync(
   }
 }
 
+test("target-proof profile lookup selects only the canonical active Manager session", async () => {
+  const queries: Array<Record<string, unknown>> = [];
+  const sessions = new Map([
+    ["account-1", { ...resolverTestSession("account-1"), sessionKey: "account-1" }],
+    ["profile-b", { ...resolverTestSession("profile-b"), sessionKey: "profile-b" }],
+  ]);
+  const prisma = {
+    lineChatSession: {
+      findFirst: async (query: Record<string, unknown>) => {
+        queries.push(query);
+        const where = query.where as { sessionKey: string };
+        return sessions.get(where.sessionKey) ?? null;
+      },
+    },
+  } as unknown as PrismaService;
+  const service = new LineChatMirrorService(
+    prisma,
+    {} as LineChatSessionService,
+    {} as LineChatProfileOperationCoordinator,
+  );
+
+  assert.equal((await service.getActiveTargetProofProfileSession("A"))?.sessionKey, "account-1");
+  assert.equal((await service.getActiveTargetProofProfileSession("B"))?.sessionKey, "profile-b");
+  assert.deepEqual(queries.map((query) => query.where), [
+    { sessionKey: "account-1", status: LineChatSessionStatus.ACTIVE },
+    { sessionKey: "profile-b", status: LineChatSessionStatus.ACTIVE },
+  ]);
+});
+
 test("Project B mirror pilot parses and deduplicates configured store codes", () => {
   withEnv(
     { LINE_CHAT_MIRROR_STORE_CODES: "20789, 29113;20789 29737" },
