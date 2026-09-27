@@ -10,6 +10,7 @@ import type {
   ConversationMessagesResponse,
 } from "@/types/api";
 import { MessageImage } from "@/app/message-image";
+import { MessageFileAttachment, MessageVideo } from "@/app/message-media";
 import { getMessageSenderName } from "@/app/message-sender";
 import { mapRealtimeMessage, subscribeToRealtimeEvents } from "@/app/realtime";
 import { formatRelativeTime } from "@/app/relative-time";
@@ -28,6 +29,7 @@ type StatusFilter = "all" | ApiBmReplyStatus;
 
 const PAGE_SIZE = 40;
 const HISTORICAL_PAGE_SIZE = 20;
+const STORE_CHATS_PARITY_REFRESH_MS = 30_000;
 const statusLabels: Record<ApiBmReplyStatus, string> = {
   NOT_REPLIED: "ยังไม่ตอบ",
   NOTIFIED_BM: "แจ้ง BM แล้ว",
@@ -246,24 +248,56 @@ export function MobileChatsApp() {
     });
   }, [selected?.id, user]);
 
+  useEffect(() => {
+    if (!user || !selected?.id || selected.historicalOnly || messages.page !== 1) return;
+
+    const conversationId = selected.id;
+    let active = true;
+    const refreshFromCanonical = async () => {
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+      try {
+        const [conversation, history] = await Promise.all([
+          api.conversation(conversationId),
+          api.conversationMessages(conversationId, 1),
+        ]);
+        if (!active) return;
+        setMessages(history);
+        setSelected((current) => current?.id === conversationId ? conversation : current);
+        setConversations((current) => current.map((item) => item.id === conversationId ? conversation : item));
+      } catch {
+        // Mirror parity refresh is best-effort. Existing realtime/manual refresh
+        // remains available if the background request temporarily fails.
+      }
+    };
+
+    const timer = window.setInterval(() => {
+      void refreshFromCanonical();
+    }, STORE_CHATS_PARITY_REFRESH_MS);
+
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, [messages.page, selected?.historicalOnly, selected?.id, user]);
+
   const loadList = useCallback(async () => {
     if (!user) return;
     const requestId = ++listRequestId.current;
     setListLoading(true);
     setListError(null);
     try {
-      const [response, historicalResponse] = await Promise.all([
-        api.conversations({
-          page,
-          pageSize: PAGE_SIZE,
-          search: search.trim() || undefined,
-          bmReplyStatus: status === "all" ? undefined : status,
-          storeId: storeId || undefined,
-        }),
-        status === "all"
-          ? api.historicalChats({ page: historicalPage, pageSize: HISTORICAL_PAGE_SIZE, search: search.trim() || undefined, storeId: storeId || undefined })
-          : Promise.resolve({ items: [], total: 0, page: historicalPage, pageSize: HISTORICAL_PAGE_SIZE, hasNextPage: false }),
-      ]);
+      const canonicalRequest = api.conversations({
+        page,
+        pageSize: PAGE_SIZE,
+        search: search.trim() || undefined,
+        bmReplyStatus: status === "all" ? undefined : status,
+        storeId: storeId || undefined,
+      });
+      const historicalRequest = status === "all"
+        ? api.historicalChats({ page: historicalPage, pageSize: HISTORICAL_PAGE_SIZE, search: search.trim() || undefined, storeId: storeId || undefined })
+          .catch(() => ({ items: [], total: 0, page: historicalPage, pageSize: HISTORICAL_PAGE_SIZE, hasNextPage: false }))
+        : Promise.resolve({ items: [], total: 0, page: historicalPage, pageSize: HISTORICAL_PAGE_SIZE, hasNextPage: false });
+      const [response, historicalResponse] = await Promise.all([canonicalRequest, historicalRequest]);
       if (requestId !== listRequestId.current) return;
       setConversations(response.items);
       setTotal(response.total);
@@ -711,19 +745,38 @@ export function MobileChatsApp() {
                               <MessageImage
                                 messageId={message.id}
                                 media={message.media}
-                                alt="รูปภาพจากลูกค้า"
+                                alt="รูปภาพในแชท"
                                 unavailableLabel="รูปภาพไม่ได้ถูกจัดเก็บ"
                                 errorLabel="โหลดรูปภาพไม่สำเร็จ"
                                 retryLabel="ลองอีกครั้ง"
                               />
+                            ) : message.messageType === "STICKER" && message.media ? (
+                              <MessageImage
+                                messageId={message.id}
+                                media={message.media}
+                                alt="สติกเกอร์ในแชท"
+                                unavailableLabel="สติกเกอร์ไม่ได้ถูกจัดเก็บ"
+                                errorLabel="โหลดสติกเกอร์ไม่สำเร็จ"
+                                retryLabel="ลองอีกครั้ง"
+                              />
                             ) : message.messageType === "STICKER" ? (
                               <MessageSticker sticker={message.sticker} />
+                            ) : message.messageType === "VIDEO" ? (
+                              <MessageVideo messageId={message.id} media={message.media} />
+                            ) : message.messageType === "FILE" ? (
+                              <MessageFileAttachment
+                                messageId={message.id}
+                                media={message.media}
+                                fileName={message.fileName}
+                              />
                             ) : (
                               <p className="whitespace-pre-wrap break-words text-[15px] leading-[1.45]">
                                 {content || "—"}
                               </p>
                             )}
-                            {message.fileName && <p className="mt-1 text-xs">📎 {message.fileName}</p>}
+                            {message.fileName && message.messageType !== "FILE" && (
+                              <p className="mt-1 text-xs">📎 {message.fileName}</p>
+                            )}
                             <div className="mt-1 flex items-center justify-between gap-2">
                               <p
                                 className={`text-[10px] ${

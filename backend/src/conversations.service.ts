@@ -23,6 +23,7 @@ import { randomUUID } from "node:crypto";
 import { createPdfDocumentUrl } from "./media/pdf-document-url";
 import { PDF_MIME_TYPE, readPdfMaxBytes, validatePdfBuffer, PdfValidationError } from "./media/pdf-media";
 import { LineChatMessageSendQueueService } from "./line-chat/line-chat-message-send-queue.service";
+import { isLineChatMirrorOnlyStore } from "./line-chat/line-chat-pilot.constants";
 import { HISTORICAL_TIMELINE_START, mapHistoricalTimelineMessage } from "./historical-timeline.service";
 
 const conversationBaseInclude = {
@@ -63,10 +64,27 @@ export function resolveMessageSender(message: {
   senderUserId?: string | null;
   senderDisplayName?: string | null;
   sender?: { id: string; displayName: string | null } | null;
+  rawPayload?: unknown;
 }) {
   if (message.direction !== MessageDirection.OUTBOUND) return null;
-  const displayName = message.sender?.displayName?.trim() || message.senderDisplayName?.trim() || null;
-  if (!message.senderUserId && !message.sender) return null;
+
+  const raw = message.rawPayload
+    && typeof message.rawPayload === "object"
+    && !Array.isArray(message.rawPayload)
+    ? message.rawPayload as Record<string, unknown>
+    : {};
+  const isManagerMirror = raw.provider === "LINE_MANAGER"
+    || raw.source === "LINE_MANAGER_MIRROR"
+    || raw.responderIdentitySource === "LINE_MANAGER_OWNER_NAME";
+  const snapshotName = message.senderDisplayName?.trim() || null;
+  const relationName = message.sender?.displayName?.trim() || null;
+  const displayName = isManagerMirror
+    ? snapshotName || relationName
+    : relationName || snapshotName;
+
+  if (!message.senderUserId && !message.sender && !displayName) return null;
+  if (!message.senderUserId && !message.sender && !isManagerMirror) return null;
+
   return {
     userId: message.senderUserId ?? message.sender?.id ?? null,
     displayName: displayName ?? "Staff",
@@ -103,6 +121,33 @@ export class ConversationsService {
     private readonly realtime?: RealtimeEventService,
     @Optional() private readonly durableSendQueue?: LineChatMessageSendQueueService,
   ) { }
+
+  private async assertBlackAppSendAllowed(conversationId: string): Promise<void> {
+    const conversation = await this.prisma.conversation.findUnique({
+      where: { id: conversationId },
+      select: {
+        store: {
+          select: {
+            code: true,
+            storeMaster: { select: { externalStoreId: true } },
+          },
+        },
+      },
+    });
+    const storeCode = conversation?.store?.code?.trim()
+      || conversation?.store?.storeMaster?.externalStoreId?.trim()
+      || "";
+    if (!isLineChatMirrorOnlyStore(storeCode)) return;
+
+    Logger.warn(JSON.stringify({
+      event: "black_app_send_blocked_mirror_only",
+      conversationId,
+      storeCode,
+    }), "ConversationsService");
+    throw new ForbiddenException(
+      "ร้านนี้ย้ายไปตอบผ่าน LINE OA Manager แล้ว กรุณาใช้แอปเขียว",
+    );
+  }
 
   private async tryQueueManagerText(
     conversation: {
@@ -200,7 +245,7 @@ export class ConversationsService {
     void _encToken;
     void _tokenRecv;
     void _tokenUsed;
-    const sender = resolveMessageSender({ direction: safe.direction, senderUserId, senderDisplayName, sender: senderUser });
+    const sender = resolveMessageSender({ direction: safe.direction, senderUserId, senderDisplayName, sender: senderUser, rawPayload });
     const sticker = safe.messageType === MessageType.STICKER
       ? stickerPresentationFromRawPayload(rawPayload)
       : null;
@@ -803,6 +848,7 @@ export class ConversationsService {
   }
 
   async sendMessage(id: string, dto: SendConversationMessageDto, operator: AuthUser) {
+    await this.assertBlackAppSendAllowed(id);
     const text = dto.text.trim();
     if (!text) throw new BadRequestException("กรุณาพิมพ์ข้อความ");
     if (text.length > 5000) throw new BadRequestException("ข้อความต้องไม่เกิน 5,000 ตัวอักษร");
@@ -1064,6 +1110,7 @@ export class ConversationsService {
   }
 
   async retryFailedMessage(conversationId: string, messageId: string, operator: AuthUser) {
+    await this.assertBlackAppSendAllowed(conversationId);
     const message = await this.prisma.message.findUnique({
       where: { id: messageId },
       include: {
@@ -1199,6 +1246,7 @@ export class ConversationsService {
   }
 
   async sendImage(id: string, file: { buffer: Buffer; mimetype: string; size: number }, idempotencyKey: string, operator: AuthUser) {
+    await this.assertBlackAppSendAllowed(id);
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(idempotencyKey)) throw new BadRequestException("idempotencyKey must be a UUID");
     const extensions: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "image/gif": "gif", "image/webp": "webp" };
     const mime = detectImageMime(file.buffer);
@@ -1327,6 +1375,7 @@ export class ConversationsService {
   }
 
   async sendPdf(id: string, file: { buffer: Buffer; mimetype: string; size: number; originalname?: string }, idempotencyKey: string, operator: AuthUser) {
+    await this.assertBlackAppSendAllowed(id);
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(idempotencyKey)) throw new BadRequestException("idempotencyKey must be a UUID");
     let pdf: ReturnType<typeof validatePdfBuffer>;
     try {

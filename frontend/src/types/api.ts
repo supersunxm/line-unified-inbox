@@ -1213,6 +1213,132 @@ export type MassMessageAudienceType =
 
 export type MassMessageStoreMode = "SINGLE" | "MULTIPLE" | "ALL";
 
+export type BroadcastFriendshipPeriod =
+  | "LE_6"
+  | "D7_29"
+  | "D30_89"
+  | "D90_179"
+  | "D180_364"
+  | "D365_PLUS";
+
+export type BroadcastTargeting =
+  | { mode: "ALL_FRIENDS" }
+  | { mode: "FRIENDSHIP_PERIOD"; periods: BroadcastFriendshipPeriod[] };
+
+export type BroadcastAdvanced = {
+  allowPartial: boolean;
+  maxVolume: number | null;
+};
+
+export type BroadcastSchedule =
+  | { mode: "NOW" }
+  | { mode: "SCHEDULED"; scheduledAt: string };
+
+export type BroadcastStorePreview = {
+  storeId: string;
+  masterStoreId: string | null;
+  externalStoreId: string | null;
+  storeName: string;
+  storeCode: string | null;
+  storeLocationText: string | null;
+  missingVariables: string[];
+  lineOfficialAccountId: string | null;
+  lineOaName: string | null;
+  isEligible: boolean;
+  skipReason: string | null;
+  warnings: string[];
+  estimatedReach: number | null;
+  targetReach: number | null;
+  followerCount: number | null;
+  snapshotDate: string | null;
+  status: "READY" | "BLOCKED";
+};
+
+export type BroadcastPreviewInput = {
+  storeSelection: {
+    mode: MassMessageStoreMode;
+    storeIds?: string[];
+  };
+  targeting: BroadcastTargeting;
+  advanced?: Partial<BroadcastAdvanced>;
+  messages?: BroadcastMessageItem[];
+};
+
+export type BroadcastPreviewResult = {
+  storeCount: number;
+  readyStoreCount: number;
+  blockedStoreCount: number;
+  warningStoreCount: number;
+  estimatedReach: number;
+  stores: BroadcastStorePreview[];
+};
+
+export type BroadcastMessageItem =
+  | { type: "text"; text: string }
+  | { type: "image"; originalContentUrl: string; previewImageUrl: string }
+  | { type: "rich_message"; richMessageId: string };
+
+export type BroadcastCreateInput = BroadcastPreviewInput & {
+  campaignRequestId: string;
+  title?: string;
+  messages: BroadcastMessageItem[];
+  schedule?: BroadcastSchedule;
+};
+
+export type BroadcastStoreDelivery = {
+  id: string;
+  storeId: string;
+  masterStoreId: string | null;
+  externalStoreId: string | null;
+  storeName: string;
+  storeCode: string | null;
+  lineOfficialAccountId: string | null;
+  lineOaName: string | null;
+  status: MassMessageStoreDeliveryStatus;
+  recipientCount: number;
+  processedCount: number;
+  successCount: number;
+  failedCount: number;
+  skipReason: string | null;
+  errorCode: string | null;
+  errorMessage: string | null;
+  startedAt: string | null;
+  completedAt: string | null;
+};
+
+export type BroadcastCampaignDetail = {
+  id: string;
+  campaignRequestId: string;
+  title: string | null;
+  audienceType: "ALL_FRIENDS" | "FRIENDSHIP_PERIOD";
+  storeMode: MassMessageStoreMode;
+  selectedStoreIds: string[];
+  status: MassMessageCampaignStatus;
+  createdById: string | null;
+  createdByName: string | null;
+  storeCount: number;
+  eligibleStoreCount: number;
+  skippedStoreCount: number;
+  estimatedRecipientCount: number;
+  processedRecipientCount: number;
+  successRecipientCount: number;
+  failedRecipientCount: number;
+  targeting: BroadcastTargeting | null;
+  advanced: BroadcastAdvanced | null;
+  schedule: BroadcastSchedule | null;
+  messages: BroadcastMessageItem[];
+  scheduledAt: string | null;
+  errorMessage: string | null;
+  startedAt: string | null;
+  completedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  duplicate?: boolean;
+  storeDeliveries?: BroadcastStoreDelivery[];
+};
+
+
+
 export type MassMessageCampaignStatus =
   | "DRAFT"
   | "PENDING"
@@ -2012,6 +2138,8 @@ export type GoogleReviewDailyBreakdownItem = {
   qualifiedReviews: number;
   reviewsChecked: number;
   reviewsWithPhoto: number;
+  reviewsOver15Words?: number;
+  isFrozen?: boolean;
   status: "OPEN" | "CLOSED";
 };
 
