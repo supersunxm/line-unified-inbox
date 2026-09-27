@@ -1,3 +1,8 @@
+# OPPO Historical crosswalk release publication gate (2026-09-27)
+
+- Keep the production crosswalk empty until the consuming backend release is deployed and healthy. The additive crosswalk schema migration is applied, but this release's source code and documentation have not been published; production service-path acceptance has not run.
+- Nineteen source/documentation Git blobs had been uploaded and are unreferenced when GitHub automatic review rejected creation of the exact commit tree, stating that trusted user authorization for the payload was not established. Do not route around that rejection through another upload or deploy path. Resume publication only after the exact-payload authorization gate is resolved through the trusted workflow.
+
 # OPPO Historical final completion — canonical source-ID conflict disposition (2026-09-27)
 
 - The production Historical backfill must remain fail-closed when an archive source ID matches a canonical Message whose timestamp or OA-scoped chat identity differs. The approved dry-run found 16,915 such conflicts; none may be silently treated as already imported or inserted as Historical without a defensible identity interpretation.

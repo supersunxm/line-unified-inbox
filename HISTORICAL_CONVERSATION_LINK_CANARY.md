@@ -4,7 +4,7 @@
 
 The Store 30282 Manager chat is deterministically linked to one canonical Conversation. The production read-only preflight classified the identity as `LINK_SAFE`; it has one compatible source-event anchor and a 3 ms timestamp difference. The canonical Conversation has no `lineChatUserId`, which explains why the prior Store/OA/chat-ID query omitted this Historical chat.
 
-The additive crosswalk migration has been applied. The timeline change and crosswalk persistence are awaiting the authorized release deployment; no crosswalk rows have been written yet.
+The additive crosswalk migration has been applied. The implementation is committed locally as `f5fba724`. Nineteen source/documentation Git blobs were uploaded before GitHub automatic review rejected creation of the commit tree, stating that trusted authorization for the exact upload was not established. The blobs are unreferenced; the remote branch remains at its base commit, with no pull request. The timeline change is unpublished and undeployed; no crosswalk rows have been written and no production API acceptance has been run. This canary is forensically `LINK_SAFE`, but it has not passed the deployed read-path acceptance gate.
 
 ## Scope and archive integrity
 
@@ -77,4 +77,4 @@ There are 18,250 compatible unique canonical source-event matches. Absolute time
 
 Before the crosswalk read path, `ConversationsService.messages()` selected Historical rows using the canonical Conversation’s `lineChatUserId`. For this canary that canonical field is null, while the Historical source uses `Udbf1776bbad5d0095a7cc5f3273cbf1e`; the Historical rows therefore could not enter that canonical timeline. The new path selects LINK_SAFE Historical identities by exact Store, OA, and canonical Conversation, and deduplicates using the stable source event ID. The source anchor itself remains one canonical message.
 
-The new migration `20260927120000_add_historical_conversation_crosswalk` is applied. It permits only `LINK_SAFE` evidence rows. Production crosswalk persistence, backend deployment, and post-deployment canary/API acceptance are pending. Stickers and images remain `NON_TEXT_NOT_BACKFILLED`; their absence does not block text acceptance.
+The new migration `20260927120000_add_historical_conversation_crosswalk` is applied. It permits only `LINK_SAFE` evidence rows. GitHub publication was blocked by automatic review; the branch has no published project commit or pull request. Production crosswalk persistence, backend deployment, and post-deployment canary/API acceptance have not occurred. Stickers and images remain `NON_TEXT_NOT_BACKFILLED`; their absence does not block text acceptance.

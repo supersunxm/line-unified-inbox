@@ -1,8 +1,8 @@
-# OPPO Historical Mirror — Final Delivery
+# OPPO Historical Mirror — Final Delivery Status
 
 ## Current status
 
-**RELEASE_PENDING_ACCEPTANCE.** Store 30282 has been resolved from the verified archive and production source-event evidence. The additive crosswalk migration is applied. The backend timeline change has passed local checks but is not deployed; no crosswalk rows have been persisted yet. Backend/API acceptance, representative checks, and final delivery remain pending release.
+**RELEASE_BLOCKED_UNPUBLISHED.** Store 30282 has been resolved from the verified archive and production source-event evidence. The additive crosswalk migration is applied, and the local implementation is committed as `f5fba724`. Before GitHub automatic review rejected creating the commit tree, 19 source/documentation Git blobs were uploaded; they are unreferenced, and no commit or pull request was published. Review stated that trusted authorization for uploading the exact payload to the repository was not established. The implementation is therefore unpublished and undeployed; no crosswalk rows have been persisted and no production API acceptance has been run.
 
 This report supersedes the earlier `PARTIAL_BLOCKED` checkpoint below. That earlier text-only import preflight could not join rows whose canonical `Conversation.lineChatUserId` differed or was null. The current source-event crosswalk independently classifies each Historical identity and persists only uniquely anchored, exact Store/OA-scoped `LINK_SAFE` links. It does not change the historical or canonical chat IDs.
 
@@ -44,13 +44,16 @@ There are 18,250 compatible unique canonical source anchors. Absolute timestamp 
 - The dedicated production acceptance runner uses the actual `ConversationsService.messages()` and virtual-chat service paths inside a read-only repeatable-read transaction.
 - Current release actions so far: one additive migration applied; zero crosswalk rows written; zero Conversation, Customer, Message, owner, BM, follow-up, nickname, queue/job, archive, or LINE-send mutations performed by this task.
 
-## Migration and deployment
+## Migration and release gate
 
 - `20260927120000_add_historical_conversation_crosswalk`: **APPLIED**. It was the only pending production migration.
-- Backend release and Railway readiness: **PENDING**.
-- Crosswalk rows: **PENDING deployment and the apply script’s repeated production preflight**.
-- Canary and representative backend/API acceptance: **PENDING**.
-- Signed-in browser acceptance: **PENDING**; it is not required to establish the backend service-path result.
+- Local release commit: `f5fba724` on `codex/historical-crosswalk-20260927`.
+- GitHub branch: created at base `4c120a0ae4d2340ebd3c8ea9df509bc9e47ade0f`; no project commit was published and no pull request exists.
+- Publication: **BLOCKED by automatic review**. Nineteen source/documentation Git blobs were uploaded before the GitHub tree-creation request was rejected with the reason that trusted user authorization for uploading the exact payload was not established. These blobs are unreferenced; no branch commit or pull request was created. No alternate publication route was attempted.
+- Backend release and Railway readiness: **NOT STARTED**.
+- Crosswalk rows: **0 persisted**; apply must wait until the deployed consumer is ready and the script repeats its production preflight.
+- Canary and representative backend/API acceptance: **NOT RUN**; the new production consumer is not deployed.
+- Signed-in browser acceptance: **PENDING** after backend/API acceptance; it is not the present blocker.
 
 ## Verification
 
@@ -71,4 +74,4 @@ The earlier text-only backfill attempt stopped on source-ID payload/scope rules 
 
 ## Next action
 
-Commit/push and merge the reviewed branch under approval `SUNN-HISTORICAL-FINAL-COMPLETION-20260927`, monitor the backend and any services triggered by existing Railway watch paths, then persist the freshly revalidated safe crosswalk and run the read-only canary/representative acceptance runner. Update this report with actual production results before declaring final delivery.
+Resolve the automatic review's exact-payload GitHub publication authorization gate. Once publication is allowed, continue under the existing master approval: review and merge the branch, monitor the backend and any services triggered by existing Railway watch paths, persist only freshly revalidated safe crosswalk rows, and run the read-only canary and representative acceptance runner. Do not report `DELIVERED_BACKEND_ACCEPTED` until those production checks pass.
