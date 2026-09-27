@@ -2859,3 +2859,7 @@ Keep `StoreMaster.tiktokProfileUrl` as the only persisted TikTok profile URL. Po
 - Run Manager redirect/auth proof and one bounded recent-chat-list page under `LineChatProfileOperationCoordinator.withProfileOperation()` and `LineChatSessionService`'s supervised context. The route uses the worker's existing timing-safe internal-secret gate. Context cleanup and the distributed lease lifecycle remain in `finally` paths.
 - Return only bounded target/auth/transport metadata. The endpoint does not call mutation, relay/send, Mirror state, reconciliation, or Historical Mirror services. The only intended DB mutations are the coordinator lease acquire, renewal and release.
 - This work is local-only. Do not invoke the route against production, apply the migration to production, enable Wave 1, or commit/push/deploy without separate authorization.
+
+# 2026-09-27: Target proof resolves unbound candidate OAs by canonical assigned profile
+
+The first production target proof confirmed that eligible candidate OAs have no per-OA Manager-session foreign key. Target proof must therefore resolve a missing OA association from the assigned Central Master Profile A/B value, using only the existing canonical active sessions `account-1` and `profile-b`. Any explicit association or profile hint that conflicts with the assignment remains a fail-closed mismatch. This lookup is read-only; it creates no OA/session binding and does not select another profile. Validate with regression tests before further production proof.
