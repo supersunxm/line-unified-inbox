@@ -48,9 +48,9 @@ The Railway production backend and frontend deployments currently report SUCCESS
 - Frontend targeted ESLint: passed.
 - Frontend build: passed.
 - Frontend tests: 593 passed.
-- Full backend tests: 2,094 passed; 11 failed in unrelated existing auth, send-retry, Line Chat nickname/health/image relay, and Store Insights export cases. Historical-focused tests passed. No Historical code is on the failing paths.
+- Full backend tests: 2,093 passed; 14 failed in existing auth/store-context, send-retry, nickname/health, image relay, Store Insights, and other unrelated cases. All Historical-focused tests passed; the 14 failures are in test files and code paths outside this change.
 - Frontend TypeScript check: existing errors remain in Auto Responses, Google Review, Store 360, and test fixtures; none are in the changed Historical timeline/API/UI files.
-- PostgreSQL migration integration, local API runtime checks, and production health/endpoint smoke tests could not be run from this environment.
+- PostgreSQL migration integration passed in PR CI against a clean database. A repeat local frontend build was blocked by sandbox denial of Turbopack's local port binding; PR frontend CI build passed. Local API runtime checks and production health/endpoint smoke tests could not be run from this environment.
 
 ## Exceptions
 
