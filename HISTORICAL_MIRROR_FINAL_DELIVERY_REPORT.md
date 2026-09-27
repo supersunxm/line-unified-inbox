@@ -1,13 +1,12 @@
 # OPPO HISTORICAL MIRROR — FINAL DELIVERY
 
 ## Goal
+
 Make LINE OA Manager text messages from 1 September 2026 onward available in lineoppo.click alongside current messages, with safe identity handling, read-only Historical views, and Historical-aware reply reporting.
 
 ## Status
 
-**PARTIAL_BLOCKED — local implementation and verification are complete; production backfill, deployment, and acceptance verification have not run.**
-
-The Railway production backend and frontend deployments currently report SUCCESS. No Historical timeline migration or application deployment was performed during this phase.
+**PARTIAL_BLOCKED — implementation is merged and production deployments succeeded, but the Historical text backfill and production user-level acceptance remain blocked on a controlled runner with access to both private archives and production Postgres.**
 
 ## Historical source coverage
 
@@ -17,58 +16,53 @@ The Railway production backend and frontend deployments currently report SUCCESS
 - Target-period chats: 7,217; 7,024 from verified archives and 193 held.
 - Earliest text: 1 September 2026, 00:29:10 Asia/Bangkok.
 - Source identity duplicates and conflicts in the archive scan: 0.
-- Production migration was not applied, and the approved archive inputs have not been backfilled into the read model.
-- Current production LineChatMirrorMessage rows contain chatRead events, not message text.
+- HistoricalTimelineMessage rows currently backfilled: 0. Current production LineChatMirrorMessage rows contain chatRead events, not message text.
 
-## Implementation prepared locally
+## Implementation and deployment
 
-- Additive `HistoricalTimelineMessage` table with source hashes, deterministic row IDs, and source identity constraints.
-- Insert-only, restart-safe backfill command that verifies archive hashes and current Store/OA mappings, skips exact duplicates, and fails closed on conflicts.
-- Authenticated read API for Historical-only chats and replies analytics.
-- Unified ordering and exact-source deduplication for canonical and Historical messages in existing conversations; reply KPI bucket drilldowns use the same merged evidence, including read-only virtual chats.
-- Separate read-only Historical chat discovery and virtual conversations. No send, retry, assignment, BM/follow-up, or customer mutation path is enabled for virtual chats.
-- Reply-time analytics merge canonical and Historical text; responder IDs are reported only when source metadata carries a stable identifier.
-- Rename/nickname validation status is UNKNOWN: the archive preserves customer profile display names but does not preserve the actual LINE OA Manager nickname observed at the time. No automatic rename is performed.
+- PR #367 merged as `8cc605f5a24a684e49b2b9dd01eb25bf4192f714`; final-head Application CI, Unified Auth CI, and Adaptive Auth CI passed.
+- Backend and frontend Railway deployments for that commit reached SUCCESS. Backend readiness uses `/health/readiness`; Railway reports the deployment healthy.
+- Five additional services redeployed because their existing watch patterns include `backend/prisma/**`: follower-backfill-worker, tiktok-daily-metrics-cron, rich-menu-publish-worker, line-chat-nickname-worker, and google-review-daily-collector. All reached SUCCESS. No Railway configuration was changed by this task.
+- The additive `20260927070000_add_historical_timeline_read_model` migration was processed by the successful backend pre-deploy `npx prisma migrate deploy` command. A direct production migration-ledger query was unavailable, so the ledger row was not independently read back.
+- The authenticated Historical API, unified canonical+Historical timeline, pagination, read-only virtual chats, Historical-aware reply/responder analytics, and UI integration are implemented and deployed. They have no Historical data to serve until backfill.
 
-## Production deployment and safety
+## Production worker activity observed
 
-- Backend/frontend/worker deployments performed for this phase: none.
-- Database migration applied: no.
-- Production Historical backfill: no.
-- Historical-caused LINE sends, operational-state changes, or duplicate production rows: 0, because no production read-model write occurred.
-- Production endpoint smoke tests: not run.
-- Destructive migrations: none proposed; the migration is additive.
+The automatic deployment also restarted the existing `line-chat-nickname-worker`. Its existing mirror reconciler ran with `apply=true` and a reconciliation start boundary of 21 September 2026. At the 08:16Z observation cutoff, per-store logs recorded 16 outbound canonical Message imports and 5 Conversation state recomputations. The reconciler processed 2,001 rows in apply-enabled cycles, which use its raw Mirror reconciliation metadata update path. These were produced by the pre-existing LineChatMirror reconciler, not by the Historical read-model backfill. The worker remained active at cutoff, so these counts describe the observed window and do not imply future activity has stopped.
+
+The reconciler implementation can update `bmReplyStatus`, `followUpStatus`, `ownerUserId`, and `latestMessageAt`, and can add ActivityHistory when reply status changes. The logs do not identify the affected conversations or exact field deltas, and production database access was unavailable to verify those before/after values or ActivityHistory count. No reconciler failures or auto-responses were logged in the observed windows; no LINE send path is called by the inspected outbound import method, and no LINE sends were observed. No automatic rollback was performed because the deployments succeeded and there is no evidence of data loss; the exact operational deltas still require a read-only production audit.
+
+No Historical read-model rows were inserted. The Historical backfill itself made no production data writes.
 
 ## Verification
 
 - Prisma schema validation: passed.
-- Backend TypeScript build: passed.
+- Backend TypeScript build and targeted ESLint: passed.
 - Historical-focused backend tests: 10 passed.
-- Backend targeted ESLint: passed.
-- Frontend targeted ESLint: passed.
-- Frontend build: passed.
-- Frontend tests: 593 passed.
-- Full backend tests: 2,093 passed; 14 failed in existing auth/store-context, send-retry, nickname/health, image relay, Store Insights, and other unrelated cases. All Historical-focused tests passed; the 14 failures are in test files and code paths outside this change.
-- Frontend TypeScript check: existing errors remain in Auto Responses, Google Review, Store 360, and test fixtures; none are in the changed Historical timeline/API/UI files.
-- PostgreSQL migration integration passed in PR CI against a clean database. A repeat local frontend build was blocked by sandbox denial of Turbopack's local port binding; PR frontend CI build passed. Local API runtime checks and production health/endpoint smoke tests could not be run from this environment.
+- Frontend targeted ESLint: passed; frontend tests: 593 passed.
+- Full backend suite: 2,093 passed; 14 failures were in existing auth/store-context, send-retry, nickname/health, image relay, and Store Insights tests outside the Historical change.
+- Frontend build passed in PR CI. A repeat local build was blocked by sandbox denial of Turbopack's local port binding.
+- PostgreSQL migration integration passed in PR CI against a clean database.
+- Production backend deployment and readiness: SUCCESS. Direct authenticated Historical endpoint smoke tests and a production migration-ledger readback were unavailable from this environment.
 
-## Exceptions
+## Exceptions and limits
 
-- Archive-held: Stores 28326 and 30606 (1,169 target text events, 193 chats); source hashes changed without an approved explanation.
-- Parent missing, Manager conflicts, and the 11 remaining raw chatRead identity conflicts stay outside this text-read-model scope; prior proven raw chatRead reconciliation completed with 0 safe missing records at its checkpoint.
-- Non-text media and non-message event types are not included.
-- Historical responder display names are not available in normalized archive metadata. 16,006 target outbound text events have a stable non-auto `bizId`; they can be grouped by a masked source identity after backfill, without inventing a staff name.
-- Production Store/OA mapping and exact canonical-message deduplication still require the fresh production preflight in the backfill command.
+- Stores 28326 and 30606 remain archive-held: 1,169 target text events and 193 chats. Their source hashes changed without an approved explanation.
+- Parent-missing events, Manager conflicts, and 11 remaining raw chatRead identity conflicts remain outside the text-read-model scope. Prior approved raw chatRead reconciliation ended with zero safe missing rows at its checkpoint.
+- Non-text media and non-message event types are excluded.
+- Historical responder display names are unavailable in normalized archive metadata. 16,006 target outbound text events have a stable non-auto `bizId`; these can be grouped by a masked source identity after backfill without inventing a staff name.
+- Production Store/OA mapping, existing canonical-message deduplication, and full-fleet usable-chat counts require a fresh production preflight in the backfill runner.
+- Nickname validation remains UNKNOWN because the archives do not preserve the actual LINE OA Manager nickname observed at the time. No automatic rename is performed.
 
 ## Acceptance
 
-1. Historical text visible in production for all safely mappable coverage: **not met** — read-model rows have not been backfilled.
-2. Historical/current ordered timeline: **implemented locally, production unverified**.
-3. Project-created duplicate timeline records: **0 observed; production comparison pending**.
-4. Operational-state protection and no customer-facing actions: **read/write boundaries implemented; production verification pending**.
-5. 24-hour KPI and responder analysis: **implemented locally; production coverage unavailable until backfill**. Nickname status remains UNKNOWN because observed Manager nicknames are absent from the source.
-6. Exclusions classified: **archive holds classified; full production Store/OA exceptions require fresh mapping preflight**.
+1. Historical text visible in production for all safely mappable coverage: **NOT MET** — no read-model rows have been backfilled.
+2. Historical/current ordered timeline in production: **IMPLEMENTED AND DEPLOYED, NOT VERIFIED WITH DATA** — the Historical side is empty.
+3. No project-created duplicate timeline records: **NO HISTORICAL DUPLICATES CREATED** — no Historical rows were inserted; a production-wide canonical deduplication comparison remains pending.
+4. Historical processing does not alter current operational state or trigger customer-facing actions: **HISTORICAL BACKFILL NOT RUN; FULL PRODUCTION VERIFICATION PENDING** — no LINE sends were observed, but the separate pre-existing reconciler made the production changes listed above and its exact field deltas were not available for audit.
+5. Historical 24-hour KPI, responder analytics, and nickname validation: **CODE DEPLOYED, DATA COVERAGE NOT MET** — no Historical messages are available to the analytics; nickname evidence remains UNKNOWN.
+6. Excluded populations have explicit classifications: **PARTIAL** — archive holds and source-level exceptions are classified; fresh production Store/OA and full-fleet classifications remain pending.
 
-## Required manual action
+## Required next step
 
-Provide a controlled one-off execution path that lets the approved backfill command access both the private Historical archive directory and the production database without exposing database credentials to this agent. The production Railway MCP connection currently redacts variable values, the Railway runtime has no Historical archive volume, and this shell cannot resolve the production host. Once that execution path exists, the command is ready to run with approval ID `SUNN-HISTORICAL-FINAL-COMPLETION-20260927`.
+Provision a controlled one-off runner that can read the approved private archives and access production Postgres without exposing credentials. First run the fresh read-only archive-hash, Store/OA, identity, duplicate, and worker-side-effect audit; then run the idempotent insert-only Historical backfill and verify the unified timeline, analytics, and operational-state snapshots. Keep Stores 28326 and 30606 held until independent provenance is available.
