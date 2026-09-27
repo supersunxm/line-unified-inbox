@@ -25,7 +25,7 @@ The Railway production backend and frontend deployments currently report SUCCESS
 - Additive `HistoricalTimelineMessage` table with source hashes, deterministic row IDs, and source identity constraints.
 - Insert-only, restart-safe backfill command that verifies archive hashes and current Store/OA mappings, skips exact duplicates, and fails closed on conflicts.
 - Authenticated read API for Historical-only chats and replies analytics.
-- Unified ordering and exact-source deduplication for canonical and Historical messages in existing conversations.
+- Unified ordering and exact-source deduplication for canonical and Historical messages in existing conversations; reply KPI bucket drilldowns use the same merged evidence, including read-only virtual chats.
 - Separate read-only Historical chat discovery and virtual conversations. No send, retry, assignment, BM/follow-up, or customer mutation path is enabled for virtual chats.
 - Reply-time analytics merge canonical and Historical text; responder IDs are reported only when source metadata carries a stable identifier.
 - Rename/nickname validation status is UNKNOWN: the archive preserves customer profile display names but does not preserve the actual LINE OA Manager nickname observed at the time. No automatic rename is performed.
@@ -43,7 +43,7 @@ The Railway production backend and frontend deployments currently report SUCCESS
 
 - Prisma schema validation: passed.
 - Backend TypeScript build: passed.
-- Historical-focused backend tests: 8 passed.
+- Historical-focused backend tests: 10 passed.
 - Backend targeted ESLint: passed.
 - Frontend targeted ESLint: passed.
 - Frontend build: passed.

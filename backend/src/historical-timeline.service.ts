@@ -70,6 +70,8 @@ type ReplyCounts = {
   unknownResponderReplies: number;
 };
 
+export type HistoricalResponseBucket = "under4h" | "between4and12h" | "between12and24h" | "over24h";
+
 function emptyReplyCounts(): ReplyCounts {
   return { total: 0, responded: 0, within24h: 0, over24h: 0, pending: 0, knownResponderReplies: 0, unknownResponderReplies: 0 };
 }
@@ -402,6 +404,225 @@ export class HistoricalTimelineService {
       page: safePage,
       pageSize: safeSize,
       hasEarlier: safePage * safeSize < total,
+    };
+  }
+
+  async responseBucketDetails(user: AuthUser, input: {
+    bucket: HistoricalResponseBucket;
+    dateFrom?: string;
+    dateTo?: string;
+    limit?: number;
+  }) {
+    if (!input.dateFrom || !input.dateTo) throw new BadRequestException("dateFrom and dateTo are required");
+    const startAt = parseBangkokDate(input.dateFrom, "dateFrom");
+    const endDateExclusive = parseBangkokDate(input.dateTo, "dateTo");
+    if (startAt.getTime() > endDateExclusive.getTime()) throw new BadRequestException("dateFrom must not be after dateTo");
+    const days = Math.floor((endDateExclusive.getTime() - startAt.getTime()) / 86_400_000) + 1;
+    if (days > 90) throw new BadRequestException("Dashboard date range cannot exceed 90 days");
+    endDateExclusive.setUTCDate(endDateExclusive.getUTCDate() + 1);
+    const responseWindowEnd = new Date(endDateExclusive.getTime() + 24 * 60 * 60 * 1000);
+    const accessibleStoreIds = await this.storeAccess.accessibleStoreIds(user);
+    const stores = await this.prisma.store.findMany({
+      where: {
+        isActive: true,
+        archivedAt: null,
+        ...(accessibleStoreIds === null ? {} : { id: { in: accessibleStoreIds } }),
+      },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    });
+    const storeIds = stores.map((store) => store.id);
+    if (storeIds.length === 0) return { bucket: input.bucket, dateFrom: input.dateFrom, dateTo: input.dateTo, total: 0, shown: 0, items: [] };
+
+    const [conversations, historicalRows] = await Promise.all([
+      this.prisma.conversation.findMany({
+        where: {
+          storeId: { in: storeIds },
+          isQa: false,
+          lineOfficialAccount: { accountType: "STORE", isActive: true, archivedAt: null },
+          messages: { some: { direction: MessageDirection.INBOUND, sentAt: { gte: startAt, lt: endDateExclusive } } },
+        },
+        select: {
+          id: true,
+          storeId: true,
+          lineOfficialAccountId: true,
+          lineChatUserId: true,
+          customer: { select: { displayName: true } },
+          store: { select: { name: true } },
+          messages: {
+            where: { sentAt: { gte: startAt, lt: responseWindowEnd } },
+            select: {
+              id: true,
+              externalMessageId: true,
+              direction: true,
+              messageType: true,
+              deliveryStatus: true,
+              originalText: true,
+              sentAt: true,
+              senderUserId: true,
+              senderDisplayName: true,
+              rawPayload: true,
+            },
+            orderBy: [{ sentAt: "asc" }, { id: "asc" }],
+          },
+        },
+      }),
+      this.prisma.historicalTimelineMessage.findMany({
+        where: {
+          storeId: { in: storeIds },
+          sentAt: { gte: startAt > HISTORICAL_TIMELINE_START ? startAt : HISTORICAL_TIMELINE_START, lt: responseWindowEnd },
+          lineOfficialAccount: { accountType: "STORE", isActive: true, archivedAt: null },
+        },
+        select: {
+          id: true,
+          storeId: true,
+          lineOfficialAccountId: true,
+          lineChatUserId: true,
+          sourceEventId: true,
+          direction: true,
+          text: true,
+          sentAt: true,
+          senderBizId: true,
+        },
+        orderBy: [{ sentAt: "asc" }, { id: "asc" }],
+      }),
+    ]);
+
+    const storeNames = new Map(stores.map((store) => [store.id, store.name]));
+    const customerIds = [...new Set(historicalRows.map((row) => row.lineChatUserId))];
+    const customers = customerIds.length > 0
+      ? await this.prisma.customer.findMany({
+          where: { lineUserId: { in: customerIds } },
+          select: { lineUserId: true, displayName: true },
+        })
+      : [];
+    const customerNames = new Map(customers.flatMap((customer) => customer.lineUserId
+      ? [[customer.lineUserId, customer.displayName] as const]
+      : []));
+    const chats = new Map<string, {
+      conversationId: string;
+      storeId: string;
+      storeName: string;
+      customerName: string;
+      messages: UnifiedReplyMessage[];
+    }>();
+    const keyFor = (storeId: string, lineOfficialAccountId: string, lineChatUserId: string | null, conversationId: string) =>
+      `${storeId}\u0000${lineOfficialAccountId}\u0000${lineChatUserId ?? `conversation:${conversationId}`}`;
+
+    for (const conversation of conversations) {
+      if (!conversation.storeId) continue;
+      const key = keyFor(conversation.storeId, conversation.lineOfficialAccountId, conversation.lineChatUserId, conversation.id);
+      const chat = chats.get(key) ?? {
+        conversationId: conversation.id,
+        storeId: conversation.storeId,
+        storeName: conversation.store?.name ?? "ไม่ระบุร้าน",
+        customerName: conversation.customer.displayName || "ลูกค้า LINE",
+        messages: [],
+      };
+      chat.messages.push(...conversation.messages.map((message) => ({
+        id: message.id,
+        direction: message.direction,
+        messageType: message.messageType,
+        sentAt: message.sentAt,
+        source: "CURRENT" as const,
+        sourceEventId: null,
+        externalMessageId: message.externalMessageId,
+        senderUserId: message.senderUserId,
+        senderDisplayName: message.senderDisplayName,
+        senderBizId: null,
+        deliveryStatus: message.deliveryStatus,
+        rawPayload: message.rawPayload,
+        text: message.originalText,
+      })));
+      chats.set(key, chat);
+    }
+
+    for (const message of historicalRows) {
+      const key = keyFor(message.storeId, message.lineOfficialAccountId, message.lineChatUserId, "");
+      const chat = chats.get(key) ?? {
+        conversationId: buildHistoricalVirtualConversationId(message.lineOfficialAccountId, message.lineChatUserId),
+        storeId: message.storeId,
+        storeName: storeNames.get(message.storeId) ?? "ไม่ระบุร้าน",
+        customerName: customerNames.get(message.lineChatUserId)?.trim() || "Historical LINE chat",
+        messages: [],
+      };
+      const duplicate = chat.messages.some((current) => {
+        const sameSource = current.externalMessageId === message.sourceEventId
+          || current.externalMessageId === `line-chat-manager:${message.sourceEventId}`;
+        return sameSource
+          && current.messageType === MessageType.TEXT
+          && current.direction === message.direction
+          && current.sentAt.getTime() === message.sentAt.getTime()
+          && current.text === message.text;
+      });
+      if (!duplicate) {
+        chat.messages.push({
+          id: message.id,
+          direction: message.direction,
+          messageType: MessageType.TEXT,
+          sentAt: message.sentAt,
+          source: "HISTORICAL",
+          sourceEventId: message.sourceEventId,
+          externalMessageId: null,
+          senderUserId: null,
+          senderDisplayName: null,
+          senderBizId: message.senderBizId,
+          deliveryStatus: MessageDeliveryStatus.DELIVERED,
+          rawPayload: null,
+          text: message.text,
+        });
+      }
+      chats.set(key, chat);
+    }
+
+    const matchesBucket = (durationMinutes: number) => {
+      if (input.bucket === "under4h") return durationMinutes < 240;
+      if (input.bucket === "between4and12h") return durationMinutes >= 240 && durationMinutes < 720;
+      if (input.bucket === "between12and24h") return durationMinutes >= 720 && durationMinutes < 1440;
+      return durationMinutes >= 1440;
+    };
+    const matched = [...chats.values()].flatMap((chat) => {
+      chat.messages.sort((left, right) => left.sentAt.getTime() - right.sentAt.getTime() || left.id.localeCompare(right.id));
+      const firstInbound = chat.messages.find((message) => message.direction === MessageDirection.INBOUND
+        && message.sentAt >= startAt && message.sentAt < endDateExclusive);
+      if (!firstInbound) return [];
+      const firstReply = chat.messages.find((message) => {
+        if (message.direction !== MessageDirection.OUTBOUND || message.sentAt < firstInbound.sentAt) return false;
+        if (message.source === "HISTORICAL") return isKnownHistoricalStaffResponder(message.senderBizId);
+        return isDeliveredHumanOutbound({
+          direction: message.direction,
+          deliveryStatus: message.deliveryStatus,
+          sentAt: message.sentAt,
+          senderUserId: message.senderUserId,
+          senderDisplayName: message.senderDisplayName,
+          rawPayload: message.rawPayload,
+        });
+      });
+      if (!firstReply) return [];
+      const elapsed = firstReply.sentAt.getTime() - firstInbound.sentAt.getTime();
+      if (elapsed < 0) return [];
+      const responseMinutes = Math.floor(elapsed / 60_000);
+      if (!matchesBucket(responseMinutes)) return [];
+      return [{
+        conversationId: chat.conversationId,
+        storeId: chat.storeId,
+        storeName: chat.storeName,
+        customerName: chat.customerName,
+        inboundText: firstInbound.text.trim() || "(ไม่มีข้อความตัวอักษร)",
+        firstInboundAt: firstInbound.sentAt.toISOString(),
+        firstOutboundAt: firstReply.sentAt.toISOString(),
+        responseMinutes,
+      }];
+    }).sort((left, right) => right.firstInboundAt.localeCompare(left.firstInboundAt)
+      || left.conversationId.localeCompare(right.conversationId));
+    const safeLimit = Math.min(200, Math.max(1, pageNumber(input.limit ?? 100, 100)));
+    return {
+      bucket: input.bucket,
+      dateFrom: input.dateFrom,
+      dateTo: input.dateTo,
+      total: matched.length,
+      shown: Math.min(safeLimit, matched.length),
+      items: matched.slice(0, safeLimit),
     };
   }
 

@@ -1,8 +1,5 @@
 import { BadRequestException, Controller, ForbiddenException, Get, Query, Req } from "@nestjs/common";
 import type { AuthRequest } from "./auth/auth.guard";
-import { StoreAccessService } from "./auth/store-access.service";
-import { PrismaService } from "./prisma.service";
-import { findFirstDeliveredHumanReplyAfter } from "./conversation-reply-state";
 import { HistoricalTimelineService } from "./historical-timeline.service";
 
 type ResponseBucket = "under4h" | "between4and12h" | "between12and24h" | "over24h";
@@ -14,63 +11,9 @@ const RESPONSE_BUCKETS = new Set<ResponseBucket>([
   "over24h",
 ]);
 
-function parseIsoDate(value: string, field: string): [number, number, number] {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    throw new BadRequestException(`${field} must use YYYY-MM-DD`);
-  }
-  const [year, month, day] = value.split("-").map(Number);
-  const probe = new Date(Date.UTC(year, month - 1, day));
-  if (
-    Number.isNaN(probe.getTime()) ||
-    probe.getUTCFullYear() !== year ||
-    probe.getUTCMonth() !== month - 1 ||
-    probe.getUTCDate() !== day
-  ) {
-    throw new BadRequestException(`${field} is invalid`);
-  }
-  return [year, month, day];
-}
-
-function bangkokMidnightUtc(value: string): Date {
-  const [year, month, day] = parseIsoDate(value, "date");
-  return new Date(Date.UTC(year, month - 1, day, -7, 0, 0, 0));
-}
-
-function parseDashboardRange(dateFrom?: string, dateTo?: string) {
-  if (!dateFrom || !dateTo) {
-    throw new BadRequestException("dateFrom and dateTo are required");
-  }
-
-  const fromParts = parseIsoDate(dateFrom, "dateFrom");
-  const toParts = parseIsoDate(dateTo, "dateTo");
-  const fromCalendar = Date.UTC(fromParts[0], fromParts[1] - 1, fromParts[2]);
-  const toCalendar = Date.UTC(toParts[0], toParts[1] - 1, toParts[2]);
-  if (fromCalendar > toCalendar) throw new BadRequestException("dateFrom must not be after dateTo");
-  const days = Math.floor((toCalendar - fromCalendar) / 86_400_000) + 1;
-  if (days > 90) throw new BadRequestException("Dashboard date range cannot exceed 90 days");
-
-  const startDate = bangkokMidnightUtc(dateFrom);
-  const endDateExclusive = bangkokMidnightUtc(dateTo);
-  endDateExclusive.setUTCDate(endDateExclusive.getUTCDate() + 1);
-  return { dateFrom, dateTo, startDate, endDateExclusive };
-}
-
-function matchesBucket(durationMinutes: number, bucket: ResponseBucket): boolean {
-  if (bucket === "under4h") return durationMinutes < 240;
-  if (bucket === "between4and12h") return durationMinutes >= 240 && durationMinutes < 720;
-  if (bucket === "between12and24h") return durationMinutes >= 720 && durationMinutes < 1440;
-  return durationMinutes >= 1440;
-}
-
-function responseWindowEnd(endDateExclusive: Date): Date {
-  return new Date(endDateExclusive.getTime() + 24 * 60 * 60 * 1000);
-}
-
 @Controller("dashboard")
 export class DashboardResponseBucketsController {
   constructor(
-    private readonly prisma: PrismaService,
-    private readonly storeAccess: StoreAccessService,
     private readonly historicalTimeline: HistoricalTimelineService,
   ) {}
 
@@ -88,79 +31,12 @@ export class DashboardResponseBucketsController {
       throw new BadRequestException("bucket must be one of under4h, between4and12h, between12and24h, over24h");
     }
 
-    const range = parseDashboardRange(dateFrom, dateTo);
-    const accessibleStoreIds = await this.storeAccess.accessibleStoreIds(user);
-    const storeFilter = accessibleStoreIds === null ? undefined : { in: accessibleStoreIds };
-    const limit = Math.min(200, Math.max(1, Number.parseInt(rawLimit ?? "100", 10) || 100));
-    const bucket = rawBucket as ResponseBucket;
-
-    const conversations = await this.prisma.conversation.findMany({
-      where: {
-        ...(storeFilter ? { storeId: storeFilter } : {}),
-        isQa: false,
-        lineOfficialAccount: { accountType: "STORE", isActive: true, archivedAt: null },
-        messages: { some: { direction: "INBOUND", sentAt: { gte: range.startDate, lt: range.endDateExclusive } } },
-      },
-      select: {
-        id: true,
-        storeId: true,
-        createdAt: true,
-        customer: { select: { displayName: true } },
-        store: { select: { name: true } },
-        messages: {
-          where: { sentAt: { gte: range.startDate, lt: responseWindowEnd(range.endDateExclusive) } },
-          select: {
-            direction: true,
-            deliveryStatus: true,
-            originalText: true,
-            sentAt: true,
-            senderUserId: true,
-            senderDisplayName: true,
-            rawPayload: true,
-          },
-          orderBy: { sentAt: "asc" },
-        },
-      },
-      orderBy: { createdAt: "desc" },
+    return this.historicalTimeline.responseBucketDetails(user, {
+      bucket: rawBucket as ResponseBucket,
+      dateFrom,
+      dateTo,
+      limit: Number.parseInt(rawLimit ?? "100", 10) || 100,
     });
-
-    const matched = conversations.flatMap((conversation) => {
-      const firstInbound = conversation.messages.find(
-        (message) =>
-          message.direction === "INBOUND" &&
-          message.sentAt >= range.startDate &&
-          message.sentAt < range.endDateExclusive,
-      );
-      if (!firstInbound) return [];
-      const startAt = firstInbound.sentAt;
-      const firstOutbound = findFirstDeliveredHumanReplyAfter(conversation.messages, startAt);
-      const startTime = new Date(startAt).getTime();
-      if (!firstOutbound) return [];
-      const endTime = new Date(firstOutbound.sentAt).getTime();
-      if (endTime < startTime) return [];
-      const responseMinutes = Math.floor((endTime - startTime) / 60_000);
-      if (!matchesBucket(responseMinutes, bucket)) return [];
-
-      return [{
-        conversationId: conversation.id,
-        storeId: conversation.storeId,
-        storeName: conversation.store?.name ?? "ไม่ระบุร้าน",
-        customerName: conversation.customer.displayName || "ลูกค้า LINE",
-        inboundText: firstInbound?.originalText?.trim() || "(ไม่มีข้อความตัวอักษร)",
-        firstInboundAt: firstInbound?.sentAt?.toISOString() ?? conversation.createdAt.toISOString(),
-        firstOutboundAt: firstOutbound.sentAt.toISOString(),
-        responseMinutes,
-      }];
-    });
-
-    return {
-      bucket,
-      dateFrom: range.dateFrom,
-      dateTo: range.dateTo,
-      total: matched.length,
-      shown: Math.min(limit, matched.length),
-      items: matched.slice(0, limit),
-    };
   }
 
   @Get("store-24h-response-summary")

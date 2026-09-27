@@ -120,3 +120,128 @@ test("reply analytics merges an exact live duplicate with Historical text and us
   assert.equal(result.responders[0]?.total, 1);
   assert.notEqual(result.responders[0]?.responderKey, "biz-1");
 });
+
+test("reply bucket details include Historical-only chats and ignore automatic replies", async () => {
+  const inboundAt = new Date("2026-09-01T02:00:00.000Z");
+  const history = [
+    {
+      id: "historical-inbound",
+      storeId: "store-1",
+      lineOfficialAccountId: "oa-1",
+      lineChatUserId: "chat-1",
+      sourceEventId: "event:inbound",
+      direction: MessageDirection.INBOUND,
+      text: "Historical customer message",
+      sentAt: inboundAt,
+      senderBizId: null,
+    },
+    {
+      id: "historical-auto-reply",
+      storeId: "store-1",
+      lineOfficialAccountId: "oa-1",
+      lineChatUserId: "chat-1",
+      sourceEventId: "event:auto",
+      direction: MessageDirection.OUTBOUND,
+      text: "Automatic response",
+      sentAt: new Date(inboundAt.getTime() + 10 * 60_000),
+      senderBizId: "__AUTO_RESPONSE",
+    },
+    {
+      id: "historical-human-reply",
+      storeId: "store-1",
+      lineOfficialAccountId: "oa-1",
+      lineChatUserId: "chat-1",
+      sourceEventId: "event:staff",
+      direction: MessageDirection.OUTBOUND,
+      text: "Staff response",
+      sentAt: new Date(inboundAt.getTime() + 30 * 60_000),
+      senderBizId: "biz-1",
+    },
+  ];
+  const prisma = {
+    store: { findMany: async () => [{ id: "store-1", name: "Store One" }] },
+    customer: { findMany: async () => [] },
+    conversation: { findMany: async () => [] },
+    historicalTimelineMessage: { findMany: async () => history },
+  } as unknown as PrismaService;
+  const storeAccess = { accessibleStoreIds: async () => null } as unknown as StoreAccessService;
+  const service = new HistoricalTimelineService(prisma, storeAccess);
+  const result = await service.responseBucketDetails({ id: "admin-1", email: "admin@example.com", displayName: "Admin", role: "ADMIN" } as AuthUser, {
+    bucket: "under4h",
+    dateFrom: "2026-09-01",
+    dateTo: "2026-09-01",
+  });
+
+  assert.equal(result.total, 1);
+  assert.equal(result.items[0]?.conversationId, buildHistoricalVirtualConversationId("oa-1", "chat-1"));
+  assert.equal(result.items[0]?.customerName, "Historical LINE chat");
+  assert.equal(result.items[0]?.inboundText, "Historical customer message");
+  assert.equal(result.items[0]?.responseMinutes, 30);
+});
+
+test("reply bucket details merge Historical replies into a canonical conversation by OA and chat identity", async () => {
+  const inboundAt = new Date("2026-09-01T02:00:00.000Z");
+  const history = [
+    {
+      id: "historical-inbound",
+      storeId: "store-1",
+      lineOfficialAccountId: "oa-1",
+      lineChatUserId: "chat-1",
+      sourceEventId: "event:inbound",
+      direction: MessageDirection.INBOUND,
+      text: "Customer message",
+      sentAt: inboundAt,
+      senderBizId: null,
+    },
+    {
+      id: "historical-reply",
+      storeId: "store-1",
+      lineOfficialAccountId: "oa-1",
+      lineChatUserId: "chat-1",
+      sourceEventId: "event:outbound",
+      direction: MessageDirection.OUTBOUND,
+      text: "Historical staff response",
+      sentAt: new Date(inboundAt.getTime() + 30 * 60_000),
+      senderBizId: "biz-1",
+    },
+  ];
+  const prisma = {
+    store: { findMany: async () => [{ id: "store-1", name: "Store One" }] },
+    customer: { findMany: async () => [] },
+    conversation: {
+      findMany: async () => [{
+        id: "conversation-1",
+        storeId: "store-1",
+        lineOfficialAccountId: "oa-1",
+        lineChatUserId: "chat-1",
+        customer: { displayName: "Customer One" },
+        store: { name: "Store One" },
+        messages: [{
+          id: "current-inbound",
+          externalMessageId: "line-chat-manager:event:inbound",
+          direction: MessageDirection.INBOUND,
+          messageType: MessageType.TEXT,
+          deliveryStatus: MessageDeliveryStatus.DELIVERED,
+          originalText: "Customer message",
+          sentAt: inboundAt,
+          senderUserId: null,
+          senderDisplayName: null,
+          rawPayload: null,
+        }],
+      }],
+    },
+    historicalTimelineMessage: { findMany: async () => history },
+  } as unknown as PrismaService;
+  const storeAccess = { accessibleStoreIds: async () => null } as unknown as StoreAccessService;
+  const service = new HistoricalTimelineService(prisma, storeAccess);
+  const result = await service.responseBucketDetails({ id: "admin-1", email: "admin@example.com", displayName: "Admin", role: "ADMIN" } as AuthUser, {
+    bucket: "under4h",
+    dateFrom: "2026-09-01",
+    dateTo: "2026-09-01",
+  });
+
+  assert.equal(result.total, 1);
+  assert.equal(result.items[0]?.conversationId, "conversation-1");
+  assert.equal(result.items[0]?.customerName, "Customer One");
+  assert.equal(result.items[0]?.responseMinutes, 30);
+});
