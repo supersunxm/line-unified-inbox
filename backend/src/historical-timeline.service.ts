@@ -204,6 +204,25 @@ export class HistoricalTimelineService {
           AND c."lineOfficialAccountId" = h."lineOfficialAccountId"
           AND c."lineChatUserId" = h."lineChatUserId"
       )`,
+      Prisma.sql`NOT EXISTS (
+        SELECT 1 FROM public."HistoricalConversationCrosswalk" x
+        WHERE x."storeId" = h."storeId"
+          AND x."lineOfficialAccountId" = h."lineOfficialAccountId"
+          AND x."historicalLineChatUserId" = h."lineChatUserId"
+          AND x."classification" = 'LINK_SAFE'
+          AND x."canonicalConversationId" IS NOT NULL
+      )`,
+      Prisma.sql`NOT EXISTS (
+        SELECT 1
+        FROM public."HistoricalTimelineMessage" h2
+        JOIN public."Message" m
+          ON m."externalMessageId" = h2."sourceEventId"
+          OR m."externalMessageId" = 'line-chat-manager:' || h2."sourceEventId"
+        WHERE h2."storeId" = h."storeId"
+          AND h2."lineOfficialAccountId" = h."lineOfficialAccountId"
+          AND h2."lineChatUserId" = h."lineChatUserId"
+          AND h2."sentAt" >= ${HISTORICAL_TIMELINE_START}
+      )`,
     ];
     if (accessibleStoreIds !== null) {
       if (accessibleStoreIds.length === 0) return { items: [], total: 0, page: safePage, pageSize: safePageSize, hasNextPage: false };

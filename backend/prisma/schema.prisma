@@ -603,6 +603,7 @@ model Store {
   googleReviewWeeklyKpis     GoogleReviewWeeklyKpi[]
   customerVoiceAnalyses      ConversationAnalytics[]
   historicalTimelineMessages HistoricalTimelineMessage[]
+  historicalConversationCrosswalks HistoricalConversationCrosswalk[]
 
   @@index([isActive])
   @@index([isActive, archivedAt])
@@ -719,6 +720,7 @@ model LineOfficialAccount {
   messageSendJobs             LineChatMessageSendJob[]
   healthEvents                LineChatHealthEvent[]               @relation("LineChatHealthEventOa")
   historicalTimelineMessages  HistoricalTimelineMessage[]
+  historicalConversationCrosswalks HistoricalConversationCrosswalk[]
 
   @@index([storeId, isActive])
   @@index([accountType, isActive, archivedAt])
@@ -919,6 +921,7 @@ model Conversation {
   autoResponseExecutions AutoResponseExecution[]     @relation("ConversationAutoResponseExecutions")
   nicknameSyncJobs      LineChatNicknameSyncJob[]
   messageSendJobs       LineChatMessageSendJob[]
+  historicalCrosswalks HistoricalConversationCrosswalk[] @relation("HistoricalCrosswalkCanonicalConversation")
 
   @@index([latestMessageAt])
   @@index([followUpStatus])
@@ -1000,6 +1003,26 @@ model HistoricalTimelineMessage {
   @@index([lineOfficialAccountId, lineChatUserId, sentAt(sort: Desc), id(sort: Desc)], map: "HistoricalTimelineMessage_chat_time_idx")
   @@index([storeId, sentAt], map: "HistoricalTimelineMessage_store_time_idx")
   @@index([sourceArchiveKey], map: "HistoricalTimelineMessage_archive_idx")
+}
+
+model HistoricalConversationCrosswalk {
+  id                       String              @id @default(uuid())
+  storeId                  String
+  lineOfficialAccountId    String
+  historicalLineChatUserId String
+  classification           String
+  canonicalConversationId  String?
+  evidenceType             String?
+  anchorCount              Int                 @default(0)
+  createdAt                DateTime            @default(now())
+  updatedAt                DateTime            @updatedAt
+  store                    Store               @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  lineOfficialAccount      LineOfficialAccount @relation(fields: [lineOfficialAccountId], references: [id], onDelete: Restrict)
+  canonicalConversation    Conversation?       @relation("HistoricalCrosswalkCanonicalConversation", fields: [canonicalConversationId], references: [id], onDelete: Restrict)
+
+  @@unique([storeId, lineOfficialAccountId, historicalLineChatUserId], map: "HistoricalConversationCrosswalk_identity_key")
+  @@index([classification, storeId], map: "HistoricalConversationCrosswalk_classification_store_idx")
+  @@index([canonicalConversationId], map: "HistoricalConversationCrosswalk_canonical_idx")
 }
 
 model MessageTranslationFeedback {

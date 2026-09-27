@@ -741,15 +741,35 @@ export class ConversationsService {
     const where = { conversationId: id };
     const canonicalTotal = await this.prisma.message.count({ where });
     const historicalModel = this.prisma.historicalTimelineMessage;
-    if (!conversation.lineChatUserId || typeof historicalModel?.count !== "function" || typeof historicalModel.findMany !== "function") {
+    if (!conversation.storeId || typeof historicalModel?.count !== "function" || typeof historicalModel.findMany !== "function") {
+      const items = await this.prisma.message.findMany({ where, include: { media: true, sender: { select: { id: true, displayName: true } } }, orderBy: [{ sentAt: "desc" }, { id: "desc" }], skip: (safePage - 1) * safeSize, take: safeSize });
+      return { items: items.reverse().map((message) => this.safeMessage(message)), total: canonicalTotal, page: safePage, pageSize: safeSize, hasEarlier: safePage * safeSize < canonicalTotal };
+    }
+
+    const historicalLineChatUserIds = new Set<string>();
+    if (conversation.lineChatUserId) historicalLineChatUserIds.add(conversation.lineChatUserId);
+    const crosswalkModel = this.prisma.historicalConversationCrosswalk;
+    if (typeof crosswalkModel?.findMany === "function") {
+      const safeLinks = await crosswalkModel.findMany({
+        where: {
+          storeId: conversation.storeId,
+          lineOfficialAccountId: conversation.lineOfficialAccountId,
+          canonicalConversationId: id,
+          classification: "LINK_SAFE",
+        },
+        select: { historicalLineChatUserId: true },
+      });
+      for (const link of safeLinks) historicalLineChatUserIds.add(link.historicalLineChatUserId);
+    }
+    if (historicalLineChatUserIds.size === 0) {
       const items = await this.prisma.message.findMany({ where, include: { media: true, sender: { select: { id: true, displayName: true } } }, orderBy: [{ sentAt: "desc" }, { id: "desc" }], skip: (safePage - 1) * safeSize, take: safeSize });
       return { items: items.reverse().map((message) => this.safeMessage(message)), total: canonicalTotal, page: safePage, pageSize: safeSize, hasEarlier: safePage * safeSize < canonicalTotal };
     }
 
     const historicalWhere = {
-      storeId: conversation.storeId ?? undefined,
+      storeId: conversation.storeId,
       lineOfficialAccountId: conversation.lineOfficialAccountId,
-      lineChatUserId: conversation.lineChatUserId,
+      lineChatUserId: { in: [...historicalLineChatUserIds] },
       sentAt: { gte: HISTORICAL_TIMELINE_START },
     };
     const historicalTotal = await historicalModel.count({ where: historicalWhere });
@@ -772,13 +792,9 @@ export class ConversationsService {
         JOIN public."Message" m ON m."conversationId" = ${id}
           AND (m."externalMessageId" = h."sourceEventId"
             OR m."externalMessageId" = 'line-chat-manager:' || h."sourceEventId")
-          AND m."direction" = h."direction"
-          AND m."messageType" = 'TEXT'::public."MessageType"
-          AND m."sentAt" = h."sentAt"
-          AND m."originalText" = h."text"
         WHERE h."lineOfficialAccountId" = ${conversation.lineOfficialAccountId}
           AND h."storeId" = ${conversation.storeId}
-          AND h."lineChatUserId" = ${conversation.lineChatUserId}
+          AND h."lineChatUserId" IN (${Prisma.join([...historicalLineChatUserIds])})
           AND h."sentAt" >= ${HISTORICAL_TIMELINE_START}
       `);
       exactDuplicateIds = new Set(duplicateRows.map((row) => row.sourceEventId));

@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { appendFileSync, chmodSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { MessageDirection, MessageType, Prisma, PrismaClient } from "@prisma/client";
+import { LineAccountType, MessageDirection, MessageType, Prisma, PrismaClient } from "@prisma/client";
 
 const APPROVAL_ID = "SUNN-HISTORICAL-FINAL-COMPLETION-20260927";
 const TARGET_START = new Date("2026-08-31T17:00:00.000Z");
@@ -80,7 +80,7 @@ type CanonicalExisting = {
     lineChatUserId: string | null;
   };
 };
-type OaRow = { id: string; storeId: string | null; basicId: string; accountType: string };
+type OaRow = { id: string; storeId: string | null; basicId: string | null; accountType: LineAccountType };
 type ArchiveLedger = {
   archives: Array<{
     storeCode: string;
@@ -224,10 +224,15 @@ function verifyArchiveSnapshot(): { stores: RegistryStore[]; ledger: ArchiveLedg
       if (!isTextMessage(event)) continue;
       const timestamp = Date.parse(event.timestamp);
       if (!Number.isFinite(timestamp) || timestamp < TARGET_START.getTime()) continue;
+      const direction = event.direction === MessageDirection.INBOUND
+        ? MessageDirection.INBOUND
+        : event.direction === MessageDirection.OUTBOUND
+          ? MessageDirection.OUTBOUND
+          : null;
       if (event.storeId !== store.storeId || !/^U[a-f0-9]{32}$/iu.test(event.conversationId)
         || !event.sourceEventId?.trim()
         || event.deterministicIdentity !== `line-chat-manager:${event.sourceEventId}`
-        || ![MessageDirection.INBOUND, MessageDirection.OUTBOUND].includes(event.direction as MessageDirection)
+        || direction === null
         || !isRecord(event.rawMetadata)
         || (event.rawMetadata.sourceChatId !== undefined && event.rawMetadata.sourceChatId !== event.conversationId)) {
         throw new Error(`TEXT_EVENT_IDENTITY_INVALID_${store.storeCode}`);
@@ -248,7 +253,7 @@ function verifyArchiveSnapshot(): { stores: RegistryStore[]; ledger: ArchiveLedg
         lineChatUserId: event.conversationId,
         sourceEventId: event.sourceEventId,
         sourceEventType: event.type,
-        direction: event.direction as MessageDirection,
+        direction,
         text: event.text as string,
         sentAt: new Date(timestamp),
         senderBizId,

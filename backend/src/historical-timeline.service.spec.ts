@@ -20,6 +20,29 @@ test("Historical virtual conversation IDs are deterministic and scoped by OA and
   assert.ok(id.startsWith("historical:"));
 });
 
+test("virtual Historical discovery leaves only chats without direct, safe-link, or canonical source anchors", async () => {
+  const queries: string[] = [];
+  const prisma = {
+    $queryRaw: async (query: { sql: string }) => {
+      queries.push(query.sql);
+      return queries.length === 1 ? [{ total: 0n }] : [];
+    },
+  } as unknown as PrismaService;
+  const storeAccess = { accessibleStoreIds: async () => null } as unknown as StoreAccessService;
+  const service = new HistoricalTimelineService(prisma, storeAccess);
+  const result = await service.listVirtualChats({ id: "admin-1", email: "admin@example.com", displayName: "Admin", role: "ADMIN" } as AuthUser, { storeId: "store-1" });
+
+  assert.equal(result.total, 0);
+  assert.equal(queries.length, 2);
+  for (const query of queries) {
+    assert.match(query, /HistoricalConversationCrosswalk/);
+    assert.match(query, /LINK_SAFE/);
+    assert.match(query, /canonicalConversationId/);
+    assert.match(query, /HistoricalTimelineMessage.*JOIN public\."Message"/s);
+    assert.match(query, /externalMessageId/);
+  }
+});
+
 test("Historical messages remain text-only and expose no inferred staff name", () => {
   const base = {
     id: "hist-1",

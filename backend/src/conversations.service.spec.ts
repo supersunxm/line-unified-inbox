@@ -13,6 +13,51 @@ const noopOperations = {
   getLatestResetAt: async () => null,
 } as unknown as OperationsService;
 
+void test("messages merges safe source-linked Historical rows into a canonical conversation without a LINE ID", async () => {
+  const conversation = { id: "conversation-linked", storeId: "store-1", lineOfficialAccountId: "oa-1", lineChatUserId: null };
+  const historicalRows = [
+    { id: "historical-new", storeId: "store-1", lineOfficialAccountId: "oa-1", lineChatUserId: "Ulegacy", sourceEventId: "event:new", sourceEventType: "message", direction: MessageDirection.INBOUND, text: "Historical text", sentAt: new Date("2026-09-11T05:00:00.100Z"), senderBizId: null },
+    { id: "historical-duplicate", storeId: "store-1", lineOfficialAccountId: "oa-1", lineChatUserId: "Ulegacy", sourceEventId: "event:duplicate", sourceEventType: "message", direction: MessageDirection.INBOUND, text: "Duplicate text", sentAt: new Date("2026-09-11T05:00:00.200Z"), senderBizId: null },
+  ];
+  const canonicalRows = [
+    { id: "canonical-duplicate", conversationId: conversation.id, direction: MessageDirection.INBOUND, messageType: "TEXT", originalText: "Canonical duplicate", sentAt: new Date("2026-09-11T05:00:00.190Z"), externalMessageId: "line-chat-manager:event:duplicate" },
+  ];
+  let crosswalkQuery: unknown;
+  let historicalLineChatUserIds: string[] = [];
+  const prisma = {
+    message: {
+      count: async () => canonicalRows.length,
+      findMany: async ({ take }: { take: number }) => canonicalRows.slice(0, take),
+    },
+    historicalTimelineMessage: {
+      count: async () => historicalRows.length,
+      findMany: async ({ take, where }: { take: number; where: { lineChatUserId: { in: string[] } } }) => {
+        historicalLineChatUserIds = where.lineChatUserId.in;
+        return historicalRows.slice(0, take);
+      },
+    },
+    historicalConversationCrosswalk: {
+      findMany: async (query: unknown) => {
+        crosswalkQuery = query;
+        return [{ historicalLineChatUserId: "Ulegacy" }];
+      },
+    },
+    $queryRaw: async () => [{ sourceEventId: "event:duplicate" }],
+  } as unknown as PrismaService;
+  const service = new ConversationsService(prisma, noopOperations);
+  service.get = async () => conversation as never;
+
+  const result = await service.messages(conversation.id, 1, 10);
+
+  assert.equal(result.total, 2);
+  assert.deepEqual(result.items.map((item) => item.id), ["historical-new", "canonical-duplicate"]);
+  assert.deepEqual(historicalLineChatUserIds, ["Ulegacy"]);
+  assert.deepEqual(crosswalkQuery, {
+    where: { storeId: "store-1", lineOfficialAccountId: "oa-1", canonicalConversationId: conversation.id, classification: "LINK_SAFE" },
+    select: { historicalLineChatUserId: true },
+  });
+});
+
 void test("message sender serialization uses the canonical User relation and never invents an outbound author", () => {
   assert.deepEqual(resolveMessageSender({ direction: MessageDirection.OUTBOUND, senderUserId: "user-1", senderDisplayName: "Old name", sender: { id: "user-1", displayName: "Canonical name" } }), { userId: "user-1", displayName: "Canonical name" });
   assert.deepEqual(resolveMessageSender({ direction: MessageDirection.OUTBOUND, senderUserId: "user-1", senderDisplayName: "Snapshot name", sender: null }), { userId: "user-1", displayName: "Snapshot name" });
@@ -240,6 +285,7 @@ void test("idempotent outbound retry repairs reply status and owner before retur
     externalMessageId: "outbound:123e4567-e89b-42d3-a456-426614174013",
     direction: "OUTBOUND",
     messageType: "TEXT",
+    deliveryStatus: "DELIVERED",
     originalText: "Already delivered",
     sentAt: new Date("2026-09-18T06:30:00.000Z"),
   };
@@ -1222,6 +1268,7 @@ void test("retryFailedMessage resends message using durable mapping and marks it
       },
     },
     conversation: {
+      findUnique: async () => ({ store: { code: "9999", storeMaster: null } }),
       update: async () => ({}),
       updateMany: async () => ({ count: 0 }),
     },
@@ -1285,6 +1332,7 @@ void test("retryFailedMessage is idempotent and does NOT duplicate already-deliv
   let pushCalled = false;
   const prisma = {
     message: { findUnique: async () => deliveredMessage },
+    conversation: { findUnique: async () => ({ store: { code: "9999", storeMaster: null }, bmReplyStatus: "REPLIED", followUpStatus: "COMPLETED", ownerUserId: "staff-1" }) },
   } as unknown as PrismaService;
 
   const lineMessaging = {
