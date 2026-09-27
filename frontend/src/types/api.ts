@@ -90,6 +90,8 @@ export type ApiOperationalState = {
 
 export type ApiConversation = {
   id: string;
+  historicalOnly?: boolean;
+  historicalMessageCount?: number;
   latestMessageAt: string;
   priority: ApiPriority;
   followUpStatus: ApiFollowUpStatus;
@@ -118,6 +120,9 @@ export type ApiConversation = {
     latitude: number | null;
     longitude: number | null;
     deliveryStatus?: "DELIVERED" | "FAILED" | null;
+    historical?: boolean;
+    sourceEventId?: string;
+    sourceEventType?: string;
   }>;
   products: Array<{ source: string | null; confidence: number | null; matchedPhrase?: string | null; detectionMethod?: string | null; productModel: { id: string; name: string; classificationLevel?: string; productSeries: { id: string; name: string; productGroup?: string } } }>;
   topics: Array<{ source: string | null; confidence: number | null; topic: { id: string; name: string; category: string } }>;
@@ -155,6 +160,7 @@ export type ApiCustomerEvent = {
 };
 
 export type ConversationListResponse = { items: ApiConversation[]; total: number; page: number; pageSize: number };
+export type HistoricalVirtualChatListResponse = { items: ApiConversation[]; total: number; page: number; pageSize: number; hasNextPage: boolean };
 export type SendConversationMessageResponse = {
   message: ApiConversation["messages"][number];
   bmReplyStatus: "REPLIED";

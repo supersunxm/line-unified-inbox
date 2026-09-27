@@ -24,6 +24,7 @@ import { createPdfDocumentUrl } from "./media/pdf-document-url";
 import { PDF_MIME_TYPE, readPdfMaxBytes, validatePdfBuffer, PdfValidationError } from "./media/pdf-media";
 import { LineChatMessageSendQueueService } from "./line-chat/line-chat-message-send-queue.service";
 import { isLineChatMirrorOnlyStore } from "./line-chat/line-chat-pilot.constants";
+import { HISTORICAL_TIMELINE_START, mapHistoricalTimelineMessage } from "./historical-timeline.service";
 
 const conversationBaseInclude = {
   customer: true,
@@ -734,12 +735,72 @@ export class ConversationsService {
   }
 
   async messages(id: string, page: number, pageSize: number) {
-    await this.get(id);
-    const safePage = Number.isFinite(page) && page > 0 ? Math.floor(page) : 1;
+    const conversation = await this.get(id);
+    const safePage = Number.isFinite(page) && page > 0 ? Math.min(5000, Math.floor(page)) : 1;
     const safeSize = Number.isFinite(pageSize) ? Math.min(100, Math.max(1, Math.floor(pageSize))) : 30;
-    const total = await this.prisma.message.count({ where: { conversationId: id } });
-    const items = await this.prisma.message.findMany({ where: { conversationId: id }, include: { media: true, sender: { select: { id: true, displayName: true } } }, orderBy: [{ sentAt: "desc" }, { id: "desc" }], skip: (safePage - 1) * safeSize, take: safeSize });
-    return { items: items.reverse().map((message) => this.safeMessage(message)), total, page: safePage, pageSize: safeSize, hasEarlier: safePage * safeSize < total };
+    const where = { conversationId: id };
+    const canonicalTotal = await this.prisma.message.count({ where });
+    const historicalModel = this.prisma.historicalTimelineMessage;
+    if (!conversation.lineChatUserId || typeof historicalModel?.count !== "function" || typeof historicalModel.findMany !== "function") {
+      const items = await this.prisma.message.findMany({ where, include: { media: true, sender: { select: { id: true, displayName: true } } }, orderBy: [{ sentAt: "desc" }, { id: "desc" }], skip: (safePage - 1) * safeSize, take: safeSize });
+      return { items: items.reverse().map((message) => this.safeMessage(message)), total: canonicalTotal, page: safePage, pageSize: safeSize, hasEarlier: safePage * safeSize < canonicalTotal };
+    }
+
+    const historicalWhere = {
+      storeId: conversation.storeId ?? undefined,
+      lineOfficialAccountId: conversation.lineOfficialAccountId,
+      lineChatUserId: conversation.lineChatUserId,
+      sentAt: { gte: HISTORICAL_TIMELINE_START },
+    };
+    const historicalTotal = await historicalModel.count({ where: historicalWhere });
+    const historicalRows = await historicalModel.findMany({
+      where: historicalWhere,
+      orderBy: [{ sentAt: "desc" }, { id: "desc" }],
+      take: Math.min(safePage * safeSize, historicalTotal),
+    });
+    const canonicalRows = await this.prisma.message.findMany({
+      where,
+      include: { media: true, sender: { select: { id: true, displayName: true } } },
+      orderBy: [{ sentAt: "desc" }, { id: "desc" }],
+      take: Math.min(canonicalTotal, safePage * safeSize),
+    });
+    let exactDuplicateIds = new Set<string>();
+    if (typeof this.prisma.$queryRaw === "function") {
+      const duplicateRows = await this.prisma.$queryRaw<Array<{ sourceEventId: string }>>(Prisma.sql`
+        SELECT DISTINCT h."sourceEventId"
+        FROM public."HistoricalTimelineMessage" h
+        JOIN public."Message" m ON m."conversationId" = ${id}
+          AND (m."externalMessageId" = h."sourceEventId"
+            OR m."externalMessageId" = 'line-chat-manager:' || h."sourceEventId")
+          AND m."direction" = h."direction"
+          AND m."messageType" = 'TEXT'::public."MessageType"
+          AND m."sentAt" = h."sentAt"
+          AND m."originalText" = h."text"
+        WHERE h."lineOfficialAccountId" = ${conversation.lineOfficialAccountId}
+          AND h."storeId" = ${conversation.storeId}
+          AND h."lineChatUserId" = ${conversation.lineChatUserId}
+          AND h."sentAt" >= ${HISTORICAL_TIMELINE_START}
+      `);
+      exactDuplicateIds = new Set(duplicateRows.map((row) => row.sourceEventId));
+    }
+    const total = Math.max(0, canonicalTotal + historicalTotal - exactDuplicateIds.size);
+    const merged = [
+      ...canonicalRows.map((message) => ({
+        sentAt: message.sentAt,
+        id: message.id,
+        item: this.safeMessage(message),
+      })),
+      ...historicalRows
+        .filter((message) => !exactDuplicateIds.has(message.sourceEventId))
+        .map((message) => ({
+          sentAt: message.sentAt,
+          id: message.id,
+          item: mapHistoricalTimelineMessage(message),
+        })),
+    ].sort((left, right) => right.sentAt.getTime() - left.sentAt.getTime() || right.id.localeCompare(left.id));
+    const startIndex = (safePage - 1) * safeSize;
+    const items = merged.slice(startIndex, startIndex + safeSize).reverse().map((row) => row.item);
+    return { items, total, page: safePage, pageSize: safeSize, hasEarlier: safePage * safeSize < total };
   }
 
   private async claimEligibleReplyToken(conversationId: string): Promise<{ messageId: string; replyToken: string; ageMs: number; ageBucket: string } | null> {

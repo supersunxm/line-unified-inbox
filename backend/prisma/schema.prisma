@@ -602,6 +602,7 @@ model Store {
   googleReviewDailyKpis      GoogleReviewDailyKpi[]
   googleReviewWeeklyKpis     GoogleReviewWeeklyKpi[]
   customerVoiceAnalyses      ConversationAnalytics[]
+  historicalTimelineMessages HistoricalTimelineMessage[]
 
   @@index([isActive])
   @@index([isActive, archivedAt])
@@ -717,6 +718,7 @@ model LineOfficialAccount {
   nicknameSyncJobs            LineChatNicknameSyncJob[]
   messageSendJobs             LineChatMessageSendJob[]
   healthEvents                LineChatHealthEvent[]               @relation("LineChatHealthEventOa")
+  historicalTimelineMessages  HistoricalTimelineMessage[]
 
   @@index([storeId, isActive])
   @@index([accountType, isActive, archivedAt])
@@ -974,6 +976,30 @@ model Message {
   @@index([conversationId, deliveryStatus])
   @@index([conversationId, lineReplyTokenUsedAt, lineReplyTokenReceivedAt])
   @@index([senderUserId])
+}
+
+model HistoricalTimelineMessage {
+  id                    String              @id
+  storeId               String
+  lineOfficialAccountId String
+  lineChatUserId        String
+  sourceEventId         String
+  sourceEventType       String
+  direction             MessageDirection
+  text                  String
+  sentAt                DateTime
+  senderBizId           String?
+  sourceArchiveKey      String
+  sourceArchiveSha256   String
+  sourcePageIdentity    String?
+  createdAt             DateTime            @default(now())
+  store                 Store               @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  lineOfficialAccount   LineOfficialAccount @relation(fields: [lineOfficialAccountId], references: [id], onDelete: Restrict)
+
+  @@unique([lineOfficialAccountId, lineChatUserId, sourceEventId], map: "HistoricalTimelineMessage_source_identity_key")
+  @@index([lineOfficialAccountId, lineChatUserId, sentAt(sort: Desc), id(sort: Desc)], map: "HistoricalTimelineMessage_chat_time_idx")
+  @@index([storeId, sentAt], map: "HistoricalTimelineMessage_store_time_idx")
+  @@index([sourceArchiveKey], map: "HistoricalTimelineMessage_archive_idx")
 }
 
 model MessageTranslationFeedback {

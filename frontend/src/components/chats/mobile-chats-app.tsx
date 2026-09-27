@@ -28,6 +28,7 @@ type MobileView = "list" | "chat" | "info";
 type StatusFilter = "all" | ApiBmReplyStatus;
 
 const PAGE_SIZE = 40;
+const HISTORICAL_PAGE_SIZE = 20;
 const STORE_CHATS_PARITY_REFRESH_MS = 30_000;
 const statusLabels: Record<ApiBmReplyStatus, string> = {
   NOT_REPLIED: "ยังไม่ตอบ",
@@ -141,6 +142,9 @@ export function MobileChatsApp() {
   const [view, setView] = useState<MobileView>("list");
   const [routingReady, setRoutingReady] = useState(false);
   const [conversations, setConversations] = useState<ApiConversation[]>([]);
+  const [historicalConversations, setHistoricalConversations] = useState<ApiConversation[]>([]);
+  const [historicalTotal, setHistoricalTotal] = useState(0);
+  const [historicalPage, setHistoricalPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
@@ -172,6 +176,7 @@ export function MobileChatsApp() {
   const openedFromList = useRef(false);
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const historicalTotalPages = Math.max(1, Math.ceil(historicalTotal / HISTORICAL_PAGE_SIZE));
   const statusCounts = useMemo(() => ({
     all: summary.notReplied + summary.notifiedBm + summary.replied,
     NOT_REPLIED: summary.notReplied,
@@ -244,7 +249,7 @@ export function MobileChatsApp() {
   }, [selected?.id, user]);
 
   useEffect(() => {
-    if (!user || !selected?.id || messages.page !== 1) return;
+    if (!user || !selected?.id || selected.historicalOnly || messages.page !== 1) return;
 
     const conversationId = selected.id;
     let active = true;
@@ -273,7 +278,7 @@ export function MobileChatsApp() {
       active = false;
       window.clearInterval(timer);
     };
-  }, [messages.page, selected?.id, user]);
+  }, [messages.page, selected?.historicalOnly, selected?.id, user]);
 
   const loadList = useCallback(async () => {
     if (!user) return;
@@ -281,22 +286,29 @@ export function MobileChatsApp() {
     setListLoading(true);
     setListError(null);
     try {
-      const response = await api.conversations({
+      const canonicalRequest = api.conversations({
         page,
         pageSize: PAGE_SIZE,
         search: search.trim() || undefined,
         bmReplyStatus: status === "all" ? undefined : status,
         storeId: storeId || undefined,
       });
+      const historicalRequest = status === "all"
+        ? api.historicalChats({ page: historicalPage, pageSize: HISTORICAL_PAGE_SIZE, search: search.trim() || undefined, storeId: storeId || undefined })
+          .catch(() => ({ items: [], total: 0, page: historicalPage, pageSize: HISTORICAL_PAGE_SIZE, hasNextPage: false }))
+        : Promise.resolve({ items: [], total: 0, page: historicalPage, pageSize: HISTORICAL_PAGE_SIZE, hasNextPage: false });
+      const [response, historicalResponse] = await Promise.all([canonicalRequest, historicalRequest]);
       if (requestId !== listRequestId.current) return;
       setConversations(response.items);
       setTotal(response.total);
+      setHistoricalConversations(historicalResponse.items);
+      setHistoricalTotal(historicalResponse.total);
     } catch (error) {
       if (requestId === listRequestId.current) setListError(error instanceof Error ? error.message : "โหลดรายการแชทไม่สำเร็จ");
     } finally {
       if (requestId === listRequestId.current) setListLoading(false);
     }
-  }, [page, search, status, storeId, user]);
+  }, [historicalPage, page, search, status, storeId, user]);
 
   useEffect(() => {
     if (!user) return;
@@ -334,11 +346,15 @@ export function MobileChatsApp() {
       updateUrlConversation(id, "replace");
     }
     try {
-      const [conversation, history] = await Promise.all([api.conversation(id), api.conversationMessages(id)]);
+      const historical = seed?.historicalOnly === true || id.startsWith("historical:");
+      const [conversation, history] = historical
+        ? await Promise.all([api.historicalChat(id), api.historicalChatMessages(id)])
+        : await Promise.all([api.conversation(id), api.conversationMessages(id)]);
       setSelected(conversation);
       setMessages(history);
       scrollMessagesToBottom();
-      void api.customerIntelligence(conversation.customer.id).then(setIntelligence).catch(() => undefined);
+      if (!conversation.historicalOnly) void api.customerIntelligence(conversation.customer.id).then(setIntelligence).catch(() => undefined);
+      else setIntelligenceLoading(false);
     } catch (error) {
       setChatError(error instanceof Error ? error.message : "โหลดห้องแชทไม่สำเร็จ");
     } finally {
@@ -388,7 +404,7 @@ export function MobileChatsApp() {
   }, [updateUrlConversation]);
 
   const sendReply = useCallback(async () => {
-    if (!selected || !user || user.role === "VIEWER" || !replyText.trim() || replySending) return;
+    if (!selected || selected.historicalOnly || !user || user.role === "VIEWER" || !replyText.trim() || replySending) return;
     const text = replyText.trim();
     setReplySending(true);
     setReplyError(null);
@@ -416,7 +432,7 @@ export function MobileChatsApp() {
   const [retryingMessageId, setRetryingMessageId] = useState<string | null>(null);
 
   const retryFailedMessage = useCallback(async (messageId: string) => {
-    if (!selected || !user || user.role === "VIEWER" || retryingMessageId) return;
+    if (!selected || selected.historicalOnly || !user || user.role === "VIEWER" || retryingMessageId) return;
     setRetryingMessageId(messageId);
     setReplyError(null);
     try {
@@ -442,7 +458,9 @@ export function MobileChatsApp() {
     if (!selected || !messages.hasEarlier || chatLoading) return;
     setChatLoading(true);
     try {
-      const earlier = await api.conversationMessages(selected.id, messages.page + 1);
+      const earlier = selected.historicalOnly
+        ? await api.historicalChatMessages(selected.id, messages.page + 1)
+        : await api.conversationMessages(selected.id, messages.page + 1);
       setMessages((current) => ({ ...earlier, items: [...earlier.items, ...current.items] }));
     } finally {
       setChatLoading(false);
@@ -450,7 +468,7 @@ export function MobileChatsApp() {
   }, [chatLoading, messages.hasEarlier, messages.page, selected]);
 
   const updateBmStatus = useCallback(async (next: ApiBmReplyStatus) => {
-    if (!selected || !user || user.role === "VIEWER") return;
+    if (!selected || selected.historicalOnly || !user || user.role === "VIEWER") return;
     const previous = selected.bmReplyStatus;
     setSelected({ ...selected, bmReplyStatus: next });
     try {
@@ -486,7 +504,7 @@ export function MobileChatsApp() {
   }, [loadList, refreshSummary, status, statusUpdatingId, user]);
 
   const openManager = useCallback(async () => {
-    if (!selected) return;
+    if (!selected || selected.historicalOnly) return;
     const result = await openLineOaManager({
       managerUrl: selected.resolvedLineOaManagerUrl || selected.store.lineManagerUrl,
       customerName: selected.customer.displayName,
@@ -528,7 +546,7 @@ export function MobileChatsApp() {
               <input
                 type="search"
                 value={search}
-                onChange={(event) => { setSearch(event.target.value); setPage(1); }}
+                onChange={(event) => { setSearch(event.target.value); setPage(1); setHistoricalPage(1); }}
                 placeholder="ค้นหาลูกค้า ร้านค้า หรือข้อความ"
                 className="h-11 w-full rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface-subtle)] pl-9 pr-3 text-base outline-none focus:border-[var(--app-accent)]"
               />
@@ -543,7 +561,7 @@ export function MobileChatsApp() {
                 <button
                   key={value}
                   type="button"
-                  onClick={() => { setStatus(value); setPage(1); }}
+                  onClick={() => { setStatus(value); setPage(1); setHistoricalPage(1); }}
                   className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold ${status === value ? "bg-[var(--app-accent)] text-white" : "border border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-text-secondary)]"}`}
                 >
                   {label} <span className="ml-1 opacity-80">{statusCounts[value].toLocaleString()}</span>
@@ -564,7 +582,7 @@ export function MobileChatsApp() {
               </div>
             ) : listError ? (
               <div className="p-8 text-center"><p className="text-sm font-semibold text-[var(--app-danger)]">{listError}</p><button onClick={() => void loadList()} className="mt-3 rounded-xl bg-[var(--app-accent)] px-4 py-2 text-sm font-semibold text-white">ลองอีกครั้ง</button></div>
-            ) : conversations.length === 0 ? (
+            ) : conversations.length === 0 && !(status === "all" && historicalConversations.length > 0) ? (
               <div className="p-10 text-center"><p className="text-base font-bold">ไม่พบบทสนทนา</p><p className="mt-1 text-sm text-[var(--app-text-tertiary)]">ลองเปลี่ยนคำค้นหาหรือสถานะ</p></div>
             ) : (
               <div className="divide-y divide-[var(--app-border-subtle)]">
@@ -612,6 +630,53 @@ export function MobileChatsApp() {
                 <button disabled={page >= totalPages || listLoading} onClick={() => setPage((value) => Math.min(totalPages, value + 1))} className="rounded-xl border border-[var(--app-border)] px-3 py-2 text-sm font-semibold disabled:opacity-40">ถัดไป</button>
               </div>
             )}
+            {status === "all" && (
+              <section className="border-t-4 border-[var(--app-bg)]">
+                <div className="border-b border-[var(--app-border-subtle)] bg-[var(--app-surface-subtle)]/60 px-3 py-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <h2 className="text-sm font-bold">ประวัติแชทจาก LINE OA Manager</h2>
+                    <span className="rounded-full bg-[var(--app-accent-soft)] px-2 py-0.5 text-[10px] font-semibold text-[var(--app-accent)]">อ่านอย่างเดียว</span>
+                  </div>
+                  <p className="mt-1 text-xs text-[var(--app-text-tertiary)]">ห้องประวัติที่ยังไม่มีแชทปัจจุบันในระบบ</p>
+                </div>
+                {historicalConversations.length > 0 ? (
+                  <div className="divide-y divide-[var(--app-border-subtle)]">
+                    {historicalConversations.map((conversation) => (
+                      <button
+                        key={conversation.id}
+                        type="button"
+                        onClick={() => void loadConversation(conversation.id, conversation, true)}
+                        className="flex w-full items-start gap-3 px-3 py-3 text-left active:opacity-70"
+                      >
+                        <Avatar conversation={conversation} />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="truncate text-[15px] font-bold">{conversation.customer.displayName}</p>
+                            <span className="shrink-0 text-[11px] text-[var(--app-text-tertiary)]">{formatRelativeTime(conversation.latestMessageAt, "th")}</span>
+                          </div>
+                          <p className="mt-1 line-clamp-2 text-sm leading-5 text-[var(--app-text-secondary)]">{previewText(conversation)}</p>
+                          <div className="mt-2 flex items-center justify-between gap-2">
+                            <span className="truncate text-[11px] text-[var(--app-text-tertiary)]">{conversation.store.name}</span>
+                            <span className="shrink-0 text-[10px] text-[var(--app-text-tertiary)]">{conversation.historicalMessageCount?.toLocaleString()} ข้อความ</span>
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                ) : listLoading ? (
+                  <div className="px-3 py-5 text-center text-xs text-[var(--app-text-tertiary)]">กำลังโหลดประวัติ...</div>
+                ) : (
+                  <div className="px-3 py-5 text-center text-xs text-[var(--app-text-tertiary)]">ไม่พบห้องประวัติที่ตรงกับเงื่อนไข</div>
+                )}
+                {historicalTotalPages > 1 && (
+                  <div className="flex items-center justify-between border-t border-[var(--app-border)] px-3 py-3">
+                    <button disabled={historicalPage <= 1 || listLoading} onClick={() => setHistoricalPage((value) => Math.max(1, value - 1))} className="rounded-xl border border-[var(--app-border)] px-3 py-2 text-sm font-semibold disabled:opacity-40">ก่อนหน้า</button>
+                    <span className="text-xs text-[var(--app-text-tertiary)]">ประวัติหน้า {historicalPage} / {historicalTotalPages} · {historicalTotal.toLocaleString()} ห้อง</span>
+                    <button disabled={historicalPage >= historicalTotalPages || listLoading} onClick={() => setHistoricalPage((value) => Math.min(historicalTotalPages, value + 1))} className="rounded-xl border border-[var(--app-border)] px-3 py-2 text-sm font-semibold disabled:opacity-40">ถัดไป</button>
+                  </div>
+                )}
+              </section>
+            )}
           </main>
           <MobileBottomNav onMore={() => setMoreOpen(true)} />
           {moreOpen && <MoreSheet user={user} onClose={() => setMoreOpen(false)} />}
@@ -628,7 +693,7 @@ export function MobileChatsApp() {
               <p className="truncate text-[11px] text-[var(--app-text-tertiary)]">{selected?.store.name || ""}</p>
             </button>
             <button type="button" onClick={() => setView(view === "info" ? "chat" : "info")} className={`flex h-10 min-w-10 items-center justify-center rounded-full px-2 text-xs font-bold ${view === "info" ? "bg-[var(--app-accent-soft)] text-[var(--app-accent)]" : "bg-[var(--app-surface-subtle)] text-[var(--app-text-secondary)]"}`} aria-label="ข้อมูลลูกค้า">ⓘ</button>
-            <button type="button" onClick={() => void openManager()} className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--app-surface-subtle)] text-lg" aria-label="เปิดใน LINE OA">↗</button>
+            {!selected?.historicalOnly && <button type="button" onClick={() => void openManager()} className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--app-surface-subtle)] text-lg" aria-label="เปิดใน LINE OA">↗</button>}
           </header>
 
           {view === "chat" ? (
@@ -637,6 +702,7 @@ export function MobileChatsApp() {
                 <span className="text-[11px] text-[var(--app-text-tertiary)]">{messages.total.toLocaleString()} ข้อความ</span>
                 <button type="button" onClick={() => setShowOriginal((value) => !value)} className="rounded-full px-2 py-1 text-[11px] font-semibold text-[var(--app-accent)]">{showOriginal ? "ดูคำแปล" : "ดูต้นฉบับ"}</button>
               </div>
+              {selected?.historicalOnly && <div className="shrink-0 border-b border-[var(--app-border)] bg-[var(--app-accent-soft)] px-3 py-2 text-center text-xs font-medium text-[var(--app-accent)]">ประวัติจาก LINE OA Manager · ห้องนี้อ่านอย่างเดียว</div>}
               <div className="min-h-0 flex-1 space-y-2.5 overflow-y-auto overscroll-contain bg-[var(--app-surface-subtle)]/35 px-3 py-3">
                 {messages.hasEarlier && <div className="pb-1 text-center"><button onClick={() => void loadEarlier()} disabled={chatLoading} className="rounded-full border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-1.5 text-xs font-semibold">โหลดข้อความก่อนหน้า</button></div>}
                 {chatLoading && messages.items.length === 0 && <div className="py-16 text-center text-sm text-[var(--app-text-tertiary)]">กำลังโหลดข้อความ...</div>}
@@ -745,7 +811,11 @@ export function MobileChatsApp() {
                 })}
                 <div ref={messageEndRef} />
               </div>
-              <div className="shrink-0 border-t border-[var(--app-border)] bg-[var(--app-surface)] px-2.5 pt-2" style={{ paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))" }}>
+              {selected?.historicalOnly ? (
+                <div className="shrink-0 border-t border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-3 text-center text-xs text-[var(--app-text-tertiary)]" style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}>
+                  ห้องประวัติเปิดอ่านได้เท่านั้น ไม่สามารถส่งข้อความหรือเปลี่ยนสถานะได้
+                </div>
+              ) : <div className="shrink-0 border-t border-[var(--app-border)] bg-[var(--app-surface)] px-2.5 pt-2" style={{ paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))" }}>
                 <div className="flex items-end gap-2">
                   <textarea
                     rows={1}
@@ -758,21 +828,21 @@ export function MobileChatsApp() {
                   <button type="button" onClick={() => void sendReply()} disabled={!replyText.trim() || replySending || user.role === "VIEWER"} className="h-11 shrink-0 rounded-[1.35rem] bg-[var(--app-accent)] px-4 text-sm font-bold text-white disabled:opacity-40">{replySending ? "..." : "ส่ง"}</button>
                 </div>
                 {replyError && <p className="mt-1.5 px-1 text-xs text-[var(--app-danger)]">{replyError}</p>}
-              </div>
+              </div>}
             </div>
           ) : (
             <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-[var(--app-bg)] px-3 py-3" style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}>
               {selected && (
                 <div className="space-y-3">
                   <section className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-[var(--app-text-tertiary)]">สถานะการตอบ</p>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-[var(--app-text-tertiary)]">{selected.historicalOnly ? "ประวัติแชท" : "สถานะการตอบ"}</p>
                     <div className="mt-3 flex items-center justify-between gap-3">
                       <div><p className="text-sm font-bold">{selected.customer.displayName}</p><p className="mt-0.5 text-xs text-[var(--app-text-tertiary)]">{selected.store.name}</p></div>
-                      <select value={selected.bmReplyStatus} disabled={user.role === "VIEWER"} onChange={(event) => void updateBmStatus(event.target.value as ApiBmReplyStatus)} className="h-10 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-subtle)] px-2 text-sm font-semibold">
+                      {selected.historicalOnly ? <span className="rounded-full bg-[var(--app-accent-soft)] px-2 py-1 text-[10px] font-semibold text-[var(--app-accent)]">อ่านอย่างเดียว</span> : <select value={selected.bmReplyStatus} disabled={user.role === "VIEWER"} onChange={(event) => void updateBmStatus(event.target.value as ApiBmReplyStatus)} className="h-10 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-subtle)] px-2 text-sm font-semibold">
                         <option value="NOT_REPLIED">ยังไม่ตอบ</option><option value="NOTIFIED_BM">แจ้ง BM แล้ว</option><option value="REPLIED">ตอบแล้ว</option>
-                      </select>
+                      </select>}
                     </div>
-                    <button type="button" onClick={() => void openManager()} className="mt-3 w-full rounded-xl bg-[var(--app-accent)] px-3 py-2.5 text-sm font-bold text-white">เปิดใน LINE OA ↗</button>
+                    {selected.historicalOnly ? <p className="mt-3 text-xs leading-5 text-[var(--app-text-tertiary)]">ห้องนี้แสดงข้อความย้อนหลังที่จับคู่บัญชี LINE และร้านค้าได้ โดยไม่มีข้อมูลสถานะปฏิบัติงาน</p> : <button type="button" onClick={() => void openManager()} className="mt-3 w-full rounded-xl bg-[var(--app-accent)] px-3 py-2.5 text-sm font-bold text-white">เปิดใน LINE OA ↗</button>}
                   </section>
 
                   <section className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4">
