@@ -1,3 +1,9 @@
+# OPPO Historical final completion — canonical source-ID conflict disposition (2026-09-27)
+
+- The production Historical backfill must remain fail-closed when an archive source ID matches a canonical Message whose timestamp or OA-scoped chat identity differs. The approved dry-run found 16,915 such conflicts; none may be silently treated as already imported or inserted as Historical without a defensible identity interpretation.
+- Keep the current insert-only backfill guard unchanged. Do not alter canonical data under approval `SUNN-HISTORICAL-FINAL-COMPLETION-20260927`. Resume only after human resolution of the chat/time interpretation or separate approval of an explicit conflict-hold policy, followed by a fresh read-only preflight.
+- The 60 `IMPORTED` rows and 13 reply/follow-up transitions audited in this phase came from the pre-existing apply-enabled Mirror reconciler, not the Historical backfill. Preserve and audit them separately; no rollback was authorized or performed.
+
 # W1.3A-R3 target-proof context ownership (2026-09-26)
 
 - A target-proof request holds one coordinator lease and one supervisor-managed context across both Manager authentication and recent-chat discovery. Discovery accepts that caller-owned context and skips its launcher and close wrapper; target proof releases the managed operation once in its own `finally` path.
