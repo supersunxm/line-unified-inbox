@@ -3,7 +3,6 @@ import { NestFactory } from "@nestjs/core";
 import { Logger } from "@nestjs/common";
 import { createServer, request as httpRequest, type IncomingMessage, type ServerResponse } from "node:http";
 import { connect as netConnect } from "node:net";
-import { timingSafeEqual } from "node:crypto";
 import { LineChatNicknameWorkerModule } from "./line-chat-nickname-worker.module";
 import { LineChatNicknameWorkerService } from "./line-chat-nickname-worker.service";
 import { LineChatManagerMessageRelayWorkerService } from "./line-chat-manager-message-relay-worker.service";
@@ -13,6 +12,9 @@ import { LineChatRecentResolverService } from "./line-chat-recent-resolver.servi
 import { LineChatSessionService } from "./line-chat-session.service";
 import { LineChatSeptemberInventoryService } from "./line-chat-september-inventory.service";
 import { LineChatMirrorService } from "./line-chat-mirror.service";
+import { LineChatTargetProofService } from "./line-chat-target-proof.service";
+import { handleLineChatTargetProofRoute } from "./line-chat-target-proof-route";
+import { matchesLineChatWorkerSecret } from "./line-chat-worker-auth";
 import {
   isPinklaoResolverStartupEnabled,
   runPinklaoResolverStartupDiagnostic,
@@ -34,14 +36,6 @@ function writeJson(response: ServerResponse, statusCode: number, body: unknown):
   response.statusCode = statusCode;
   response.setHeader("Content-Type", "application/json; charset=utf-8");
   response.end(JSON.stringify(body));
-}
-
-function secretMatches(received: string | string[] | undefined, expected: string): boolean {
-  const candidate = Array.isArray(received) ? received[0] ?? "" : received ?? "";
-  const receivedBuffer = Buffer.from(candidate);
-  const expectedBuffer = Buffer.from(expected);
-  if (receivedBuffer.length !== expectedBuffer.length || expectedBuffer.length === 0) return false;
-  return timingSafeEqual(receivedBuffer, expectedBuffer);
 }
 
 async function readJsonBody(request: IncomingMessage): Promise<unknown> {
@@ -155,6 +149,7 @@ async function bootstrap() {
   const sessionService = app.get(LineChatSessionService);
   const septemberInventory = app.get(LineChatSeptemberInventoryService);
   const mirrorService = app.get(LineChatMirrorService);
+  const targetProofService = app.get(LineChatTargetProofService);
   const relayContexts = new Map<string, ManagerRelayConversationSnapshot>();
   installRelayContextLoader(textRelay, relayContexts);
   installRelayContextLoader(imageRelay, relayContexts);
@@ -183,7 +178,20 @@ async function bootstrap() {
         return;
       }
 
-      if (!internalSecret || !secretMatches(request.headers["x-line-chat-internal-secret"], internalSecret)) {
+      const targetProofResponse = await handleLineChatTargetProofRoute({
+        method: request.method,
+        pathname: requestUrl.pathname,
+        receivedSecret: request.headers["x-line-chat-internal-secret"],
+        expectedSecret: internalSecret,
+        readBody: () => readJsonBody(request),
+        service: targetProofService,
+      });
+      if (targetProofResponse) {
+        writeJson(response, targetProofResponse.statusCode, targetProofResponse.body);
+        return;
+      }
+
+      if (!internalSecret || !matchesLineChatWorkerSecret(request.headers["x-line-chat-internal-secret"], internalSecret)) {
         writeJson(response, 401, { success: false, error: "UNAUTHORIZED" });
         return;
       }

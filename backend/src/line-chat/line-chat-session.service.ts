@@ -833,16 +833,30 @@ export class LineChatSessionService implements OnModuleDestroy {
     profilePath: string;
     headless?: boolean;
     customLauncher?: ContextLauncher;
+    /** Caller-owned managed context; the caller remains responsible for releasing it. */
+    existingManagedContext?: BrowserContext;
     maxPages?: number;
     maxChats?: number;
+    includeTransportMetadata?: boolean;
     operationContext?: import("./line-chat-profile-operation-coordinator.service").LineChatProfileOperationContext;
   }): Promise<LineChatRecentDiscoveryResult> {
+    const startedAt = Date.now();
     // Keep the default realtime window small, but allow the resolver's explicit
     // expanded fallback to search deeper for older conversations. This remains
     // bounded to protect the shared LINE OA Manager profile.
     const maxPages = Math.min(20, Math.max(1, input.maxPages ?? 5));
     const maxChats = Math.min(500, Math.max(1, input.maxChats ?? 125));
     const result = await this.discoverChatPages(input, maxPages, maxChats, true);
+    const transportMetadata = input.includeTransportMetadata
+      ? {
+          recentChatHttpStatus: result.recentChatHttpStatus ?? null,
+          chatListRequestObserved: result.chatListRequestObserved ?? false,
+          responseStructureValid: result.responseStructureValid ?? false,
+          latestEventPresent: result.latestEventPresent ?? false,
+          itemCount: result.itemCount ?? null,
+          discoveryDurationMs: Math.max(0, Date.now() - startedAt),
+        }
+      : {};
     const failure = result.pagesFetched === 0
       || Boolean(result.enumerationError)
       || result.invalidUserRecords > 0
@@ -856,6 +870,7 @@ export class LineChatSessionService implements OnModuleDestroy {
         totalRawRecords: result.totalRawRecords,
         failureReason: authFailure ? "SESSION_AUTH" : "TRANSPORT",
         failureDetail: (result.enumerationError ?? "CHAT_LIST_DISCOVERY_FAILED").slice(0, 240),
+        ...transportMetadata,
       };
     }
     return {
@@ -863,6 +878,7 @@ export class LineChatSessionService implements OnModuleDestroy {
       chats: result.chats,
       pagesFetched: result.pagesFetched,
       totalRawRecords: result.totalRawRecords,
+      ...transportMetadata,
     };
   }
 
@@ -1093,6 +1109,8 @@ export class LineChatSessionService implements OnModuleDestroy {
     profilePath: string;
     headless?: boolean;
     customLauncher?: ContextLauncher;
+    existingManagedContext?: BrowserContext;
+    includeTransportMetadata?: boolean;
     pageObserver?: LineChatDiscoveryPageObserver;
     operationContext?: import("./line-chat-profile-operation-coordinator.service").LineChatProfileOperationContext;
   }, maxPages: number, maxChats: number, boundedWindow: boolean, pageObserver?: LineChatDiscoveryPageObserver, maxDurationMs?: number, cursorState?: {
@@ -1116,7 +1134,7 @@ export class LineChatSessionService implements OnModuleDestroy {
 
     const launcher = input.customLauncher ?? this.defaultLauncher;
     input.operationContext?.assertOwnership();
-    const context = await launcher(resolvedProfile, {
+    const context = input.existingManagedContext ?? await launcher(resolvedProfile, {
       profilePath: resolvedProfile,
       headless: input.headless ?? true,
     }, {
@@ -1215,11 +1233,18 @@ export class LineChatSessionService implements OnModuleDestroy {
             reachedTimeLimit ? "Chat-list time limit reached." : "LINE OA Manager v2 chat-list response was not observed.",
             reachedTimeLimit ? "PARTIAL" : "UNVERIFIED",
           ),
+          ...(input.includeTransportMetadata ? { chatListRequestObserved: true } : {}),
           timeLimitReached: reachedTimeLimit,
         };
       }
       if (firstResponse.status !== 200) {
-        return this.emptyDiscoveryResult(botId, endpoint, `LINE OA Manager chat-list returned HTTP ${firstResponse.status}`, "PARTIAL");
+        return {
+          ...this.emptyDiscoveryResult(botId, endpoint, `LINE OA Manager chat-list returned HTTP ${firstResponse.status}`, "PARTIAL"),
+          ...(input.includeTransportMetadata ? {
+            recentChatHttpStatus: firstResponse.status,
+            chatListRequestObserved: true,
+          } : {}),
+        };
       }
 
       const firstPageBody = await this.withTimeout(
@@ -1235,15 +1260,34 @@ export class LineChatSessionService implements OnModuleDestroy {
             reachedTimeLimit ? "Chat-list time limit reached." : "LINE OA Manager chat-list response parsing timed out.",
             "PARTIAL",
           ),
+          ...(input.includeTransportMetadata ? {
+            recentChatHttpStatus: firstResponse.status,
+            chatListRequestObserved: true,
+          } : {}),
           timeLimitReached: reachedTimeLimit,
         };
       }
-      if (!firstPageBody.ok) return this.emptyDiscoveryResult(botId, endpoint, firstPageBody.error, "PARTIAL");
+      if (!firstPageBody.ok) {
+        return {
+          ...this.emptyDiscoveryResult(botId, endpoint, firstPageBody.error, "PARTIAL"),
+          ...(input.includeTransportMetadata ? {
+            recentChatHttpStatus: firstResponse.status,
+            chatListRequestObserved: true,
+          } : {}),
+        };
+      }
       let firstPage;
       try {
         firstPage = parseLineChatListPage(firstPageBody.body);
       } catch {
-        return this.emptyDiscoveryResult(botId, endpoint, "LINE OA Manager v2 chat-list response had an unsupported or malformed envelope.", "PARTIAL");
+        return {
+          ...this.emptyDiscoveryResult(botId, endpoint, "LINE OA Manager v2 chat-list response had an unsupported or malformed envelope.", "PARTIAL"),
+          ...(input.includeTransportMetadata ? {
+            recentChatHttpStatus: firstResponse.status,
+            chatListRequestObserved: true,
+            responseStructureValid: false,
+          } : {}),
+        };
       }
       const continuing = typeof cursorState?.startNext === "string" && cursorState.startNext.length > 0;
       const pages: Array<typeof firstPage> = [];
@@ -1389,9 +1433,19 @@ export class LineChatSessionService implements OnModuleDestroy {
         timeLimitReached: discoveryTimeLimitReached,
         ...(enumerationError ? { enumerationError } : {}),
         ...(stoppedEarlyByObserver ? { stoppedEarlyByObserver: true } : {}),
+        ...(input.includeTransportMetadata ? {
+          recentChatHttpStatus: firstResponse.status,
+          chatListRequestObserved: true,
+          responseStructureValid: true,
+          latestEventPresent: firstPage.chats.some((chat) => chat.lastMessageTimestampStatus !== "NO_LATEST_EVENT"),
+          itemCount: firstPage.totalRawRecords,
+          discoveryDurationMs: Math.max(0, Date.now() - startedAtMs),
+        } : {}),
       };
     } finally {
-      await this.closeManagedPersistentContext(context, resolvedProfile);
+      if (!input.existingManagedContext) {
+        await this.closeManagedPersistentContext(context, resolvedProfile);
+      }
     }
   }
 

@@ -2186,6 +2186,7 @@ enum LineChatProfileOperationKind {
   MANUAL_DIAGNOSTIC
   MIRROR_SYNC
   HISTORICAL_BACKFILL
+  TARGET_PROOF
 }
 
 enum LineChatMirrorSyncStatus {

@@ -250,6 +250,46 @@ test("session discovery captures the natural v2 GET and enumerates subsequent pa
   assert.equal(mock.wasClosed(), true);
 });
 
+test("target-proof recent discovery exposes safe first-page metadata and closes the profile page", async () => {
+  const profilePath = fs.mkdtempSync(path.join(os.tmpdir(), "line-chat-target-proof-discovery-"));
+  const mock = mockNaturalDiscoveryContext([{
+    body: {
+      list: [{
+        chatId: VALID_USER_ID,
+        chatType: "USER",
+        latestEvent: { timestamp: 1788152400 },
+      }],
+      next: "private-next-page-cursor",
+    },
+    status: 200,
+  }]);
+  const launcher: ContextLauncher = async () => mock.context;
+  try {
+    const service = new LineChatSessionService(launcher);
+    const result = await service.discoverRecentChats({
+      botId: "Ubot",
+      profilePath,
+      customLauncher: launcher,
+      maxPages: 1,
+      maxChats: 5,
+      includeTransportMetadata: true,
+    });
+
+    assert.equal(result.status, "READY");
+    assert.equal(result.pagesFetched, 1);
+    assert.equal(mock.calls.length, 0);
+    assert.equal(result.recentChatHttpStatus, 200);
+    assert.equal(result.chatListRequestObserved, true);
+    assert.equal(result.responseStructureValid, true);
+    assert.equal(result.latestEventPresent, true);
+    assert.equal(result.itemCount, 1);
+    assert.equal(typeof result.discoveryDurationMs, "number");
+    assert.equal(mock.wasClosed(), true);
+  } finally {
+    fs.rmSync(profilePath, { recursive: true, force: true });
+  }
+});
+
 test("chunked discovery resumes with an opaque in-process continuation", async () => {
   const secondId = `U${"2b".repeat(16)}`;
   const thirdId = `U${"3c".repeat(16)}`;
