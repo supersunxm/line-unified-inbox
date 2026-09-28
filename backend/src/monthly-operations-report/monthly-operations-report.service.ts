@@ -27,6 +27,33 @@ type ReportResponseCycle = {
 const AUTO_REPLY_BOT_DISPLAY_NAME = "Auto Reply Bot";
 
 export type ReplyKpiCoverage = "complete" | "partial" | "not_covered";
+export type ZeroRateForensicClassification =
+  | "NO_ELIGIBLE_CYCLE"
+  | "REPLY_OVER_24H"
+  | "AUTO_ONLY"
+  | "NO_REPLY"
+  | "OUTBOUND_OUTSIDE_CYCLE"
+  | "UNMAPPED_OR_VIRTUAL"
+  | "UNEXPECTED_WITHIN_24H";
+
+export function classifyZeroRateForensic(input: {
+  total: number;
+  within24h: number;
+  over24h: number;
+  responded: number;
+  historicalAutoOutbound: number;
+  historicalNonAutoOutbound: number;
+  virtualHistoricalRows: number;
+}): ZeroRateForensicClassification {
+  if (input.total === 0) return "NO_ELIGIBLE_CYCLE";
+  if (input.within24h > 0) return "UNEXPECTED_WITHIN_24H";
+  if (input.over24h > 0) return "REPLY_OVER_24H";
+  if (input.historicalAutoOutbound > 0 && input.historicalNonAutoOutbound === 0) return "AUTO_ONLY";
+  if (input.historicalNonAutoOutbound > 0 && input.responded === 0) {
+    return input.virtualHistoricalRows > 0 ? "UNMAPPED_OR_VIRTUAL" : "OUTBOUND_OUTSIDE_CYCLE";
+  }
+  return "NO_REPLY";
+}
 
 type ReplyCoverageInput = {
   mirrorAvailable: boolean;
@@ -989,24 +1016,15 @@ export class MonthlyOperationsReportService {
       }
 
       const overview = analytics.overview;
-      let classification:
-        | "NO_ELIGIBLE_CYCLE"
-        | "REPLY_OVER_24H"
-        | "AUTO_ONLY"
-        | "NO_REPLY"
-        | "OUTBOUND_OUTSIDE_CYCLE"
-        | "UNMAPPED_OR_VIRTUAL"
-        | "UNEXPECTED_WITHIN_24H";
-
-      if (overview.total === 0) classification = "NO_ELIGIBLE_CYCLE";
-      else if (overview.within24h > 0) classification = "UNEXPECTED_WITHIN_24H";
-      else if (overview.over24h > 0) classification = "REPLY_OVER_24H";
-      else if (historicalAutoOutbound > 0 && historicalNonAutoOutbound === 0) classification = "AUTO_ONLY";
-      else if (historicalNonAutoOutbound > 0 && overview.responded === 0) {
-        classification = analytics.sources.virtualHistoricalRows > 0
-          ? "UNMAPPED_OR_VIRTUAL"
-          : "OUTBOUND_OUTSIDE_CYCLE";
-      } else classification = "NO_REPLY";
+      const classification = classifyZeroRateForensic({
+        total: overview.total,
+        within24h: overview.within24h,
+        over24h: overview.over24h,
+        responded: overview.responded,
+        historicalAutoOutbound,
+        historicalNonAutoOutbound,
+        virtualHistoricalRows: analytics.sources.virtualHistoricalRows,
+      });
 
       stores.push({
         storeId: store.storeId,
