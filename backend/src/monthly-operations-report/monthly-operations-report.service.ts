@@ -147,6 +147,7 @@ export class MonthlyOperationsReportService {
             id: true,
             name: true,
             code: true,
+            region: true,
             storeMaster: {
               select: {
                 externalStoreId: true,
