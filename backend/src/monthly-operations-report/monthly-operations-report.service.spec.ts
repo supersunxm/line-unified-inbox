@@ -208,15 +208,15 @@ describe("MonthlyOperationsReportService XLSX export", () => {
     await workbook.xlsx.load(file.buffer as unknown as ExcelJS.Buffer);
 
     expect(workbook.worksheets.map((sheet) => sheet.name)).toEqual([
-      "运营明细",
-      "汇总",
-      "账号分组汇总",
-      "口径说明",
+      "Operations Detail",
+      "Summary",
+      "Region Summary",
+      "Methodology",
     ]);
 
-    const detail = workbook.getWorksheet("运营明细")!;
+    const detail = workbook.getWorksheet("Operations Detail")!;
     expect(detail.columnCount).toBe(35);
-    expect(detail.getRow(1).values).toContain("本月24小时以内回复数");
+    expect(detail.getRow(1).values).toContain("Replies Within 24h - Month");
     expect(detail.getCell("A2").value).toBe(1);
     expect(detail.getCell("F2").value).toBe("25610");
     expect(detail.getCell("U2").value).toBe(3);
@@ -315,7 +315,7 @@ describe("MonthlyOperationsReportService XLSX production-scale export", () => {
 
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.load(file.buffer as unknown as ExcelJS.Buffer);
-    const detail = workbook.getWorksheet("运营明细")!;
+    const detail = workbook.getWorksheet("Operations Detail")!;
     expect(detail.rowCount).toBe(147);
     expect(detail.columnCount).toBe(35);
   });
