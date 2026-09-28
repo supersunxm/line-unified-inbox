@@ -488,19 +488,6 @@ export class HistoricalTimelineService {
         skip: (safePage - 1) * safeSize,
         take: safeSize,
       }),
-      this.prisma.historicalConversationCrosswalk.findMany({
-        where: {
-          storeId: { in: storeIds },
-          classification: "LINK_SAFE",
-          canonicalConversationId: { not: null },
-        },
-        select: {
-          storeId: true,
-          lineOfficialAccountId: true,
-          historicalLineChatUserId: true,
-          canonicalConversationId: true,
-        },
-      }),
     ]);
     return {
       items: records.reverse().map((record) => mapHistoricalTimelineMessage(record)),
@@ -544,7 +531,7 @@ export class HistoricalTimelineService {
           storeId: { in: storeIds },
           isQa: false,
           lineOfficialAccount: { accountType: "STORE", isActive: true, archivedAt: null },
-          messages: { some: { sentAt: { gte: startAt, lt: responseWindowEnd } } },
+          messages: { some: { direction: MessageDirection.INBOUND, sentAt: { gte: startAt, lt: endDateExclusive } } },
         },
         select: {
           id: true,
@@ -615,23 +602,230 @@ export class HistoricalTimelineService {
 
     for (const conversation of conversations) {
       if (!conversation.storeId) continue;
-      const identity = conversation.lineChatUserId
-        ? historicalIdentityKey(conversation.storeId, conversation.lineOfficialAccountId, conversation.lineChatUserId)
-        : null;
-      const key = crosswalkCanonicalConversationIds.has(conversation.id)
-        ? canonicalChatKey(conversation.id)
-        : directChatKey(conversation.storeId, conversation.lineOfficialAccountId, conversation.lineChatUserId, conversation.id);
-      if (identity) setUniqueKey(directConversationKeyByIdentity, identity, key);
-      chatScopes.set(key, {
+      const key = keyFor(conversation.storeId, conversation.lineOfficialAccountId, conversation.lineChatUserId, conversation.id);
+      const chat = chats.get(key) ?? {
+        conversationId: conversation.id,
         storeId: conversation.storeId,
-        lineOfficialAccountId: conversation.lineOfficialAccountId,
-        lineChatUserId: conversation.lineChatUserId,
+        storeName: conversation.store?.name ?? "ไม่ระบุร้าน",
+        customerName: conversation.customer.displayName || "ลูกค้า LINE",
+        messages: [],
+      };
+      chat.messages.push(...conversation.messages.map((message) => ({
+        id: message.id,
+        direction: message.direction,
+        messageType: message.messageType,
+        sentAt: message.sentAt,
+        source: "CURRENT" as const,
+        sourceEventId: null,
+        externalMessageId: message.externalMessageId,
+        senderUserId: message.senderUserId,
+        senderDisplayName: message.senderDisplayName,
+        senderBizId: null,
+        deliveryStatus: message.deliveryStatus,
+        rawPayload: message.rawPayload,
+        text: message.originalText,
+      })));
+      chats.set(key, chat);
+    }
+
+    for (const message of historicalRows) {
+      const key = keyFor(message.storeId, message.lineOfficialAccountId, message.lineChatUserId, "");
+      const chat = chats.get(key) ?? {
+        conversationId: buildHistoricalVirtualConversationId(message.lineOfficialAccountId, message.lineChatUserId),
+        storeId: message.storeId,
+        storeName: storeNames.get(message.storeId) ?? "ไม่ระบุร้าน",
+        customerName: customerNames.get(message.lineChatUserId)?.trim() || "Historical LINE chat",
+        messages: [],
+      };
+      const duplicate = chat.messages.some((current) => {
+        const sameSource = current.externalMessageId === message.sourceEventId
+          || current.externalMessageId === `line-chat-manager:${message.sourceEventId}`;
+        return sameSource
+          && current.messageType === MessageType.TEXT
+          && current.direction === message.direction
+          && current.sentAt.getTime() === message.sentAt.getTime()
+          && current.text === message.text;
       });
+      if (!duplicate) {
+        chat.messages.push({
+          id: message.id,
+          direction: message.direction,
+          messageType: MessageType.TEXT,
+          sentAt: message.sentAt,
+          source: "HISTORICAL",
+          sourceEventId: message.sourceEventId,
+          externalMessageId: null,
+          senderUserId: null,
+          senderDisplayName: null,
+          senderBizId: message.senderBizId,
+          deliveryStatus: MessageDeliveryStatus.DELIVERED,
+          rawPayload: null,
+          text: message.text,
+        });
+      }
+      chats.set(key, chat);
+    }
+
+    const matchesBucket = (durationMinutes: number) => {
+      if (input.bucket === "under4h") return durationMinutes < 240;
+      if (input.bucket === "between4and12h") return durationMinutes >= 240 && durationMinutes < 720;
+      if (input.bucket === "between12and24h") return durationMinutes >= 720 && durationMinutes < 1440;
+      return durationMinutes >= 1440;
+    };
+    const matched = [...chats.values()].flatMap((chat) => {
+      chat.messages.sort((left, right) => left.sentAt.getTime() - right.sentAt.getTime() || left.id.localeCompare(right.id));
+      const firstInbound = chat.messages.find((message) => message.direction === MessageDirection.INBOUND
+        && message.sentAt >= startAt && message.sentAt < endDateExclusive);
+      if (!firstInbound) return [];
+      const firstReply = chat.messages.find((message) => {
+        if (message.direction !== MessageDirection.OUTBOUND || message.sentAt < firstInbound.sentAt) return false;
+        if (message.source === "HISTORICAL") return isHistoricalReplyEvidence(message.senderBizId);
+        return isCurrentReplyEvidence({
+          direction: message.direction,
+          deliveryStatus: message.deliveryStatus,
+          sentAt: message.sentAt,
+          senderUserId: message.senderUserId,
+          senderDisplayName: message.senderDisplayName,
+          rawPayload: message.rawPayload,
+        });
+      });
+      if (!firstReply) return [];
+      const elapsed = firstReply.sentAt.getTime() - firstInbound.sentAt.getTime();
+      if (elapsed < 0) return [];
+      const responseMinutes = Math.floor(elapsed / 60_000);
+      if (!matchesBucket(responseMinutes)) return [];
+      return [{
+        conversationId: chat.conversationId,
+        storeId: chat.storeId,
+        storeName: chat.storeName,
+        customerName: chat.customerName,
+        inboundText: firstInbound.text.trim() || "(ไม่มีข้อความตัวอักษร)",
+        firstInboundAt: firstInbound.sentAt.toISOString(),
+        firstOutboundAt: firstReply.sentAt.toISOString(),
+        responseMinutes,
+      }];
+    }).sort((left, right) => right.firstInboundAt.localeCompare(left.firstInboundAt)
+      || left.conversationId.localeCompare(right.conversationId));
+    const safeLimit = Math.min(200, Math.max(1, pageNumber(input.limit ?? 100, 100)));
+    return {
+      bucket: input.bucket,
+      dateFrom: input.dateFrom,
+      dateTo: input.dateTo,
+      total: matched.length,
+      shown: Math.min(safeLimit, matched.length),
+      items: matched.slice(0, safeLimit),
+    };
+  }
+
+  async replyAnalytics(user: AuthUser, input: {
+    dateFrom?: string;
+    dateTo?: string;
+    storeId?: string;
+    mode?: HistoricalReplyAnalyticsMode;
+  }) {
+    if (!input.dateFrom || !input.dateTo) throw new BadRequestException("dateFrom and dateTo are required");
+    const startAt = parseBangkokDate(input.dateFrom, "dateFrom");
+    const endDateExclusive = parseBangkokDate(input.dateTo, "dateTo");
+    if (startAt.getTime() > endDateExclusive.getTime()) throw new BadRequestException("dateFrom must not be after dateTo");
+    const days = Math.floor((endDateExclusive.getTime() - startAt.getTime()) / 86_400_000) + 1;
+    if (days > 90) throw new BadRequestException("Dashboard date range cannot exceed 90 days");
+    endDateExclusive.setUTCDate(endDateExclusive.getUTCDate() + 1);
+    const responseWindowEnd = new Date(endDateExclusive.getTime() + 24 * 60 * 60 * 1000);
+    const accessibleStoreIds = await this.storeAccess.accessibleStoreIds(user);
+    if (input.storeId && accessibleStoreIds !== null && !accessibleStoreIds.includes(input.storeId)) {
+      throw new ForbiddenException("Store is outside the user store scope");
+    }
+    const storeWhere = {
+      isActive: true,
+      archivedAt: null,
+      ...(input.storeId ? { id: input.storeId } : accessibleStoreIds === null ? {} : { id: { in: accessibleStoreIds } }),
+    };
+    const stores = await this.prisma.store.findMany({
+      where: storeWhere,
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    });
+    const storeIds = stores.map((store) => store.id);
+    if (storeIds.length === 0) {
+      return {
+        dateFrom: input.dateFrom,
+        dateTo: input.dateTo,
+        timezone: "Asia/Bangkok",
+        targetStart: HISTORICAL_TIMELINE_START.toISOString(),
+        overview: { storeCount: 0, total: 0, responded: 0, within24h: 0, over24h: 0, pending: 0, responseRate24h: null, knownResponderReplies: 0, unknownResponderReplies: 0 },
+        stores: [],
+        dates: [],
+        months: [],
+        responders: [],
+        sources: { historicalTextMessages: 0, currentMessages: 0, exactDuplicatesSuppressed: 0, historicalChats: 0 },
+      };
+    }
+
+    const [historicalRows, conversations] = await Promise.all([
+      this.prisma.historicalTimelineMessage.findMany({
+        where: {
+          storeId: { in: storeIds },
+          sentAt: { gte: startAt, lt: responseWindowEnd },
+          lineOfficialAccount: { accountType: "STORE", isActive: true, archivedAt: null },
+        },
+        select: {
+          id: true,
+          storeId: true,
+          lineOfficialAccountId: true,
+          lineChatUserId: true,
+          sourceEventId: true,
+          sourceEventType: true,
+          direction: true,
+          text: true,
+          sentAt: true,
+          senderBizId: true,
+        },
+        orderBy: [{ sentAt: "asc" }, { id: "asc" }],
+      }),
+      this.prisma.conversation.findMany({
+        where: {
+          storeId: { in: storeIds },
+          isQa: false,
+          lineOfficialAccount: { accountType: "STORE", isActive: true, archivedAt: null },
+          messages: { some: { direction: MessageDirection.INBOUND, sentAt: { gte: startAt, lt: endDateExclusive } } },
+        },
+        select: {
+          id: true,
+          storeId: true,
+          lineOfficialAccountId: true,
+          lineChatUserId: true,
+          messages: {
+            where: { sentAt: { gte: startAt, lt: responseWindowEnd } },
+            select: {
+              id: true,
+              externalMessageId: true,
+              direction: true,
+              messageType: true,
+              deliveryStatus: true,
+              originalText: true,
+              sentAt: true,
+              senderUserId: true,
+              senderDisplayName: true,
+              rawPayload: true,
+            },
+            orderBy: [{ sentAt: "asc" }, { id: "asc" }],
+          },
+        },
+      }),
+    ]);
+
+    const chatMessages = new Map<string, UnifiedReplyMessage[]>();
+    const chatScopes = new Map<string, { storeId: string; lineOfficialAccountId: string; lineChatUserId: string | null }>();
+    const chatKey = (storeId: string, lineOfficialAccountId: string, lineChatUserId: string | null, conversationId: string) =>
+      `${storeId}\u0000${lineOfficialAccountId}\u0000${lineChatUserId ?? `conversation:${conversationId}`}`;
+    let currentMessageCount = 0;
+    for (const conversation of conversations) {
+      if (!conversation.storeId) continue;
+      const key = chatKey(conversation.storeId, conversation.lineOfficialAccountId, conversation.lineChatUserId, conversation.id);
+      chatScopes.set(key, { storeId: conversation.storeId, lineOfficialAccountId: conversation.lineOfficialAccountId, lineChatUserId: conversation.lineChatUserId });
       const messages = chatMessages.get(key) ?? [];
       for (const message of conversation.messages) {
         currentMessageCount += 1;
-        const sourceEventId = normalizeSourceEventId(message.externalMessageId);
-        if (sourceEventId) setUniqueKey(sourceEventConversationKey, sourceEventId, key);
         messages.push({
           id: message.id,
           direction: message.direction,
@@ -652,26 +846,8 @@ export class HistoricalTimelineService {
     }
     let duplicateHistoricalRows = 0;
     for (const message of historicalRows) {
-      const identity = historicalIdentityKey(message.storeId, message.lineOfficialAccountId, message.lineChatUserId);
-      const crosswalkConversationId = crosswalkByHistoricalIdentity.get(identity);
-      const crosswalkKey = crosswalkConversationId ? canonicalChatKey(crosswalkConversationId) : null;
-      const sourceAnchorKey = sourceEventConversationKey.get(message.sourceEventId) ?? null;
-      const directKey = directConversationKeyByIdentity.get(identity) ?? null;
-      const key = crosswalkKey
-        ?? sourceAnchorKey
-        ?? directKey
-        ?? directChatKey(message.storeId, message.lineOfficialAccountId, message.lineChatUserId, "");
-
-      if (crosswalkKey) crosswalkLinkedHistoricalRows += 1;
-      else if (sourceAnchorKey) sourceAnchoredHistoricalRows += 1;
-      else if (directKey) directLinkedHistoricalRows += 1;
-      else virtualHistoricalRows += 1;
-
-      chatScopes.set(key, {
-        storeId: message.storeId,
-        lineOfficialAccountId: message.lineOfficialAccountId,
-        lineChatUserId: message.lineChatUserId,
-      });
+      const key = chatKey(message.storeId, message.lineOfficialAccountId, message.lineChatUserId, "");
+      chatScopes.set(key, { storeId: message.storeId, lineOfficialAccountId: message.lineOfficialAccountId, lineChatUserId: message.lineChatUserId });
       const messages = chatMessages.get(key) ?? [];
       const duplicate = messages.some((current) => {
         const hasSameSource = current.externalMessageId === message.sourceEventId
