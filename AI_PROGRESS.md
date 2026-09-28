@@ -5868,3 +5868,14 @@ Current state: local follow-up fix and checks are complete; the follow-up commit
 - Resolved the repeated `AI_PROGRESS.md` and `DECISIONS.md` conflicts by keeping main's added Monthly Operations coverage entries and all Historical Final Completion entries.
 - `git diff --check` passed. The three-dot diff against current `origin/main` contains exactly the eight expected Markdown files; no backend, frontend, Prisma, Railway, or Live Mirror paths are in the PR diff.
 - Next: commit and push this resolution, then inspect the updated PR checks and mergeability.
+
+
+## 2026-09-28 — Reply KPI cycle-level coverage correction
+
+- Production validation showed the previous store-level proof rule was too strict: requiring every relevant chat to reach the global Sep 1 historical boundary resulted in 0/146 stores classified complete.
+- Replaced chat-level coverage proof with response-cycle-level proof.
+- A response cycle is KPI-eligible only when it has a human answer or its 24-hour SLA deadline has passed. Open cycles younger than 24 hours are excluded from the denominator.
+- A <=24h human reply is a definitive successful outcome even without Manager historical proof.
+- A failure (no reply within 24h or first reply after 24h) is considered proven only when Manager history reaches to/before the cycle start and the store has a successful Manager sync after the cycle's 24h deadline.
+- Store coverage is complete only when all eligible cycles have proven outcomes; UI now shows covered/eligible cycle counts.
+- No Live Mirror or Historical Mirror write-path code changed.
