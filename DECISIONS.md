@@ -2946,3 +2946,16 @@ The first production target proof confirmed that eligible candidate OAs have no 
 - Keep metadata-only text empty; preserve sourceEventId, timestamp order, and archive evidence; render read-only placeholders; do not fabricate binaries or mutate current Conversation/Customer records.
 - Deployment is blocked because line-chat-nickname-worker watches backend/prisma/**. A normal migration deployment restarts Live Mirror. Do not alter watch rules or evade Prisma migration; keep H3 READY_BUT_BLOCKED_BY_LIVE_MIRROR_ISOLATION.
 - Root Markdown reports are outside Railway watch paths. Docs-only PR #380 is open; H3 draft PR #379 is marked DO NOT MERGE. No merge is allowed until docs CI passes; H3 remains blocked.
+
+
+## 2026-09-28 — 24h reply coverage is proven per response cycle, not per entire chat history
+
+**Correction:** The earlier requirement that every relevant chat must have historical coverage back to the report-month boundary was overly strict and could never classify stores with genuinely new mid-month chats as complete.
+
+**Eligibility:** An unanswered cycle enters the 24h KPI denominator only after its 24h deadline passes. A cycle with a human answer is eligible immediately.
+
+**Proof:** A <=24h human answer is definitively successful. A failed SLA outcome requires negative-evidence proof: Manager history at or before the cycle start plus a successful store sync at or after the 24h deadline.
+
+**Store status:** `complete` means every eligible cycle has a proven outcome; `partial` means only some are proven; `not_covered` means none are proven and no usable mirror coverage is available.
+
+**Isolation:** This is report-only read logic. Live Mirror and Historical Mirror collection/write paths remain unchanged.
