@@ -756,15 +756,74 @@ export class HistoricalTimelineService {
             isActive: true,
             archivedAt: null,
           },
-          select: { id: true, storeId: true },
+          select: {
+            id: true,
+            storeId: true,
+            basicId: true,
+            channelId: true,
+            destinationId: true,
+          },
         });
-    const currentStoreIdByOaId = new Map(
-      activeOas
-        .filter((oa): oa is typeof oa & { storeId: string } => Boolean(oa.storeId))
-        .map((oa) => [oa.id, oa.storeId] as const),
-    );
-    const activeOaIds = [...currentStoreIdByOaId.keys()];
-    if (storeIds.length === 0 || activeOaIds.length === 0) {
+
+    type CurrentOaIdentity = { currentOaId: string; currentStoreId: string };
+    const stableKeys = (oa: { basicId: string | null; channelId: string | null; destinationId: string | null }) => {
+      const keys: string[] = [];
+      const basicId = oa.basicId?.trim().toLowerCase();
+      const channelId = oa.channelId?.trim();
+      const destinationId = oa.destinationId?.trim();
+      if (basicId) keys.push(`basic:${basicId}`);
+      if (channelId) keys.push(`channel:${channelId}`);
+      if (destinationId) keys.push(`destination:${destinationId}`);
+      return keys;
+    };
+
+    const currentIdentityByStableKey = new Map<string, CurrentOaIdentity | null>();
+    const currentIdentityByOaId = new Map<string, CurrentOaIdentity>();
+    for (const oa of activeOas) {
+      if (!oa.storeId) continue;
+      const identity = { currentOaId: oa.id, currentStoreId: oa.storeId };
+      currentIdentityByOaId.set(oa.id, identity);
+      for (const key of stableKeys(oa)) {
+        const existing = currentIdentityByStableKey.get(key);
+        if (!existing) currentIdentityByStableKey.set(key, identity);
+        else if (existing.currentOaId !== identity.currentOaId) currentIdentityByStableKey.set(key, null);
+      }
+    }
+
+    const basicIds = [...new Set(activeOas.map((oa) => oa.basicId?.trim()).filter((value): value is string => Boolean(value)))];
+    const channelIds = [...new Set(activeOas.map((oa) => oa.channelId?.trim()).filter((value): value is string => Boolean(value)))];
+    const destinationIds = [...new Set(activeOas.map((oa) => oa.destinationId?.trim()).filter((value): value is string => Boolean(value)))];
+    const aliasOr = [
+      ...(basicIds.length > 0 ? [{ basicId: { in: basicIds } }] : []),
+      ...(channelIds.length > 0 ? [{ channelId: { in: channelIds } }] : []),
+      ...(destinationIds.length > 0 ? [{ destinationId: { in: destinationIds } }] : []),
+    ];
+    const aliasOas = aliasOr.length === 0
+      ? []
+      : await this.prisma.lineOfficialAccount.findMany({
+          where: { accountType: "STORE", OR: aliasOr },
+          select: {
+            id: true,
+            storeId: true,
+            basicId: true,
+            channelId: true,
+            destinationId: true,
+          },
+        });
+
+    for (const alias of aliasOas) {
+      if (currentIdentityByOaId.has(alias.id)) continue;
+      const matches = stableKeys(alias)
+        .map((key) => currentIdentityByStableKey.get(key))
+        .filter((identity): identity is CurrentOaIdentity => Boolean(identity));
+      const uniqueCurrentOaIds = [...new Set(matches.map((identity) => identity.currentOaId))];
+      if (uniqueCurrentOaIds.length !== 1) continue;
+      const identity = matches.find((candidate) => candidate.currentOaId === uniqueCurrentOaIds[0]);
+      if (identity) currentIdentityByOaId.set(alias.id, identity);
+    }
+
+    const oaFamilyIds = [...currentIdentityByOaId.keys()];
+    if (storeIds.length === 0 || oaFamilyIds.length === 0) {
       return {
         dateFrom: input.dateFrom,
         dateTo: input.dateTo,
@@ -782,9 +841,8 @@ export class HistoricalTimelineService {
     const [historicalRows, conversations, crosswalks] = await Promise.all([
       this.prisma.historicalTimelineMessage.findMany({
         where: {
-          lineOfficialAccountId: { in: activeOaIds },
+          lineOfficialAccountId: { in: oaFamilyIds },
           sentAt: { gte: startAt, lt: responseWindowEnd },
-          lineOfficialAccount: { accountType: "STORE", isActive: true, archivedAt: null },
         },
         select: {
           id: true,
@@ -832,7 +890,7 @@ export class HistoricalTimelineService {
       }),
       this.prisma.historicalConversationCrosswalk.findMany({
         where: {
-          lineOfficialAccountId: { in: activeOaIds },
+          lineOfficialAccountId: { in: oaFamilyIds },
           classification: "LINK_SAFE",
           canonicalConversationId: { not: null },
         },
@@ -857,10 +915,12 @@ export class HistoricalTimelineService {
     const crosswalkCanonicalConversationIds = new Set<string>();
     for (const row of crosswalks) {
       if (!row.canonicalConversationId) continue;
-      const currentStoreId = currentStoreIdByOaId.get(row.lineOfficialAccountId);
-      if (!currentStoreId) continue;
+      const currentIdentity = currentIdentityByOaId.get(row.lineOfficialAccountId);
+      const currentStoreId = currentIdentity?.currentStoreId;
+      const currentOaId = currentIdentity?.currentOaId;
+      if (!currentStoreId || !currentOaId) continue;
       crosswalkByHistoricalIdentity.set(
-        historicalIdentityKey(currentStoreId, row.lineOfficialAccountId, row.historicalLineChatUserId),
+        historicalIdentityKey(currentStoreId, currentOaId, row.historicalLineChatUserId),
         row.canonicalConversationId,
       );
       crosswalkCanonicalConversationIds.add(row.canonicalConversationId);
@@ -898,17 +958,19 @@ export class HistoricalTimelineService {
       if (!current || rank[path] > rank[current]) chatMergePath.set(key, path);
     };
     for (const conversation of conversations) {
-      const currentStoreId = currentStoreIdByOaId.get(conversation.lineOfficialAccountId) ?? conversation.storeId;
+      const currentIdentity = currentIdentityByOaId.get(conversation.lineOfficialAccountId);
+      const currentStoreId = currentIdentity?.currentStoreId ?? conversation.storeId;
+      const currentOaId = currentIdentity?.currentOaId ?? conversation.lineOfficialAccountId;
       if (!currentStoreId) continue;
       const identity = conversation.lineChatUserId
-        ? historicalIdentityKey(currentStoreId, conversation.lineOfficialAccountId, conversation.lineChatUserId)
+        ? historicalIdentityKey(currentStoreId, currentOaId, conversation.lineChatUserId)
         : null;
       const key = crosswalkCanonicalConversationIds.has(conversation.id)
         ? canonicalChatKey(conversation.id)
-        : directChatKey(currentStoreId, conversation.lineOfficialAccountId, conversation.lineChatUserId, conversation.id);
+        : directChatKey(currentStoreId, currentOaId, conversation.lineChatUserId, conversation.id);
       if (identity) setUniqueKey(directConversationKeyByIdentity, identity, key);
       setMergePath(key, "CANONICAL");
-      chatScopes.set(key, { storeId: currentStoreId, lineOfficialAccountId: conversation.lineOfficialAccountId, lineChatUserId: conversation.lineChatUserId });
+      chatScopes.set(key, { storeId: currentStoreId, lineOfficialAccountId: currentOaId, lineChatUserId: conversation.lineChatUserId });
       const messages = chatMessages.get(key) ?? [];
       for (const message of conversation.messages) {
         currentMessageCount += 1;
@@ -932,11 +994,26 @@ export class HistoricalTimelineService {
       }
       chatMessages.set(key, messages);
     }
+    const historicalInboundMessages = historicalRows.filter((message) => message.direction === MessageDirection.INBOUND).length;
+    const historicalAutoOutboundMessages = historicalRows.filter((message) =>
+      message.direction === MessageDirection.OUTBOUND && message.senderBizId === "__AUTO_RESPONSE",
+    ).length;
+    const historicalNonAutoOutboundMessages = historicalRows.filter((message) =>
+      message.direction === MessageDirection.OUTBOUND && message.senderBizId !== "__AUTO_RESPONSE",
+    ).length;
+    const historicalUnknownResponderOutboundMessages = historicalRows.filter((message) =>
+      message.direction === MessageDirection.OUTBOUND
+      && message.senderBizId !== "__AUTO_RESPONSE"
+      && !message.senderBizId?.trim(),
+    ).length;
+
     let duplicateHistoricalRows = 0;
     for (const message of historicalRows) {
-      const currentStoreId = currentStoreIdByOaId.get(message.lineOfficialAccountId);
-      if (!currentStoreId) continue;
-      const identity = historicalIdentityKey(currentStoreId, message.lineOfficialAccountId, message.lineChatUserId);
+      const currentIdentity = currentIdentityByOaId.get(message.lineOfficialAccountId);
+      const currentStoreId = currentIdentity?.currentStoreId;
+      const currentOaId = currentIdentity?.currentOaId;
+      if (!currentStoreId || !currentOaId) continue;
+      const identity = historicalIdentityKey(currentStoreId, currentOaId, message.lineChatUserId);
       const crosswalkConversationId = crosswalkByHistoricalIdentity.get(identity);
       const crosswalkKey = crosswalkConversationId ? canonicalChatKey(crosswalkConversationId) : null;
       const sourceAnchorKey = sourceEventConversationKey.get(message.sourceEventId) ?? null;
@@ -944,7 +1021,7 @@ export class HistoricalTimelineService {
       const key = crosswalkKey
         ?? sourceAnchorKey
         ?? directKey
-        ?? directChatKey(currentStoreId, message.lineOfficialAccountId, message.lineChatUserId, "");
+        ?? directChatKey(currentStoreId, currentOaId, message.lineChatUserId, "");
 
       if (crosswalkKey) {
         crosswalkLinkedHistoricalRows += 1;
@@ -960,7 +1037,7 @@ export class HistoricalTimelineService {
         setMergePath(key, "VIRTUAL");
       }
 
-      chatScopes.set(key, { storeId: currentStoreId, lineOfficialAccountId: message.lineOfficialAccountId, lineChatUserId: message.lineChatUserId });
+      chatScopes.set(key, { storeId: currentStoreId, lineOfficialAccountId: currentOaId, lineChatUserId: message.lineChatUserId });
       const messages = chatMessages.get(key) ?? [];
       const duplicate = messages.some((current) => {
         const hasSameSource = current.externalMessageId === message.sourceEventId
@@ -1173,6 +1250,11 @@ export class HistoricalTimelineService {
         sourceAnchoredHistoricalRows,
         directLinkedHistoricalRows,
         virtualHistoricalRows,
+        historicalInboundMessages,
+        historicalAutoOutboundMessages,
+        historicalNonAutoOutboundMessages,
+        historicalUnknownResponderOutboundMessages,
+        oaFamilySize: oaFamilyIds.length,
       },
     };
   }

@@ -2,7 +2,7 @@ import { BadRequestException, Injectable, Logger } from "@nestjs/common";
 import { LineChatMirrorDirection, MessageDeliveryStatus, MessageDirection, MessageType, Prisma } from "@prisma/client";
 import type { AuthUser } from "../auth/auth.guard";
 import { StoreAccessService } from "../auth/store-access.service";
-import { bangkokDateRangeToUtcBounds, formatDbDateToIso, getTodayBangkokDateString, toUtcDateForDb } from "../follower-insights/date-utils";
+import { formatDbDateToIso, getTodayBangkokDateString, toUtcDateForDb } from "../follower-insights/date-utils";
 import { type AnalyticsMessage, bangkokMonthBounds } from "../mobile/monthly-summary.service";
 import { HistoricalTimelineService } from "../historical-timeline.service";
 import { PrismaService } from "../prisma.service";
@@ -978,42 +978,20 @@ export class MonthlyOperationsReportService {
       )
       .slice(0, sampleSize);
 
-    const bounds = bangkokDateRangeToUtcBounds(report.period.start, report.period.replyKpiThrough);
     const stores = [];
     for (const store of zeroStores) {
-      const [analytics, historicalCounts] = await Promise.all([
-        this.historicalTimeline.replyAnalytics(user, {
-          dateFrom: report.period.start,
-          dateTo: report.period.replyKpiThrough,
-          storeId: store.storeId,
-          mode: "RESPONSE_CYCLES",
-          auditLimit: 12,
-        }),
-        this.prisma.historicalTimelineMessage.groupBy({
-          by: ["direction", "senderBizId"],
-          where: {
-            storeId: store.storeId,
-            sentAt: { gte: bounds.startUtc, lt: bounds.endExclusiveUtc },
-          },
-          _count: { _all: true },
-        }),
-      ]);
+      const analytics = await this.historicalTimeline.replyAnalytics(user, {
+        dateFrom: report.period.start,
+        dateTo: report.period.replyKpiThrough,
+        storeId: store.storeId,
+        mode: "RESPONSE_CYCLES",
+        auditLimit: 12,
+      });
 
-      let historicalInbound = 0;
-      let historicalAutoOutbound = 0;
-      let historicalNonAutoOutbound = 0;
-      let historicalUnknownResponderOutbound = 0;
-      for (const row of historicalCounts) {
-        const count = row._count._all;
-        if (row.direction === MessageDirection.INBOUND) historicalInbound += count;
-        if (row.direction === MessageDirection.OUTBOUND && row.senderBizId === "__AUTO_RESPONSE") {
-          historicalAutoOutbound += count;
-        }
-        if (row.direction === MessageDirection.OUTBOUND && row.senderBizId !== "__AUTO_RESPONSE") {
-          historicalNonAutoOutbound += count;
-          if (!row.senderBizId?.trim()) historicalUnknownResponderOutbound += count;
-        }
-      }
+      const historicalInbound = analytics.sources.historicalInboundMessages ?? 0;
+      const historicalAutoOutbound = analytics.sources.historicalAutoOutboundMessages ?? 0;
+      const historicalNonAutoOutbound = analytics.sources.historicalNonAutoOutboundMessages ?? 0;
+      const historicalUnknownResponderOutbound = analytics.sources.historicalUnknownResponderOutboundMessages ?? 0;
 
       const overview = analytics.overview;
       const classification = classifyZeroRateForensic({

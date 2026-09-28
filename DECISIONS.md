@@ -3042,3 +3042,16 @@ The first production target proof confirmed that eligible candidate OAs have no 
 **Aggregation:** Current Store.id remains the reporting dimension. Historical Store.id is treated as archival metadata for SLA reads when the same active OA proves identity.
 
 **Isolation:** Read-path only. No Historical rows/crosswalks, current Store/OA assignments, canonical messages, or Mirror workers are changed.
+
+
+## 2026-09-28 — Historical SLA identity is an OA family, not a single database OA row
+
+**Decision:** Historical reply analytics treats stable LINE OA identity as a family of database OA rows when they share a unique current basicId, channelId, or destinationId.
+
+**Fail-closed rule:** An archived/legacy OA row is mapped to a current OA only when its stable identifiers resolve to exactly one current OA in scope. Ambiguous matches are excluded.
+
+**Reason:** Database OA rows can be replaced during migration/import while representing the same real LINE OA. Restricting Historical reads to only the current OA row can falsely drop valid replies.
+
+**Forensics:** Zero-rate Historical evidence must come from the same OA-family-aware analytics source as the KPI; it must not use a separate Store.id-only query.
+
+**Isolation:** Read-path only. No OA aliases, Store assignments, Historical rows/crosswalks, canonical messages, or Mirror workers are mutated.
