@@ -8,6 +8,7 @@ import {
   buildHistoricalVirtualConversationId,
   classifyResponseDuration,
   HistoricalTimelineService,
+  isHistoricalReplyEvidence,
   isKnownHistoricalStaffResponder,
   mapHistoricalTimelineMessage,
 } from "./historical-timeline.service";
@@ -67,6 +68,13 @@ test("Historical responder identity only accepts a source bizId that is not the 
   assert.equal(isKnownHistoricalStaffResponder(null), false);
   assert.equal(isKnownHistoricalStaffResponder("  "), false);
   assert.equal(isKnownHistoricalStaffResponder("__AUTO_RESPONSE"), false);
+});
+
+test("Historical reply evidence accepts non-auto outbound even when responder identity is unknown", () => {
+  assert.equal(isHistoricalReplyEvidence("biz-1"), true);
+  assert.equal(isHistoricalReplyEvidence(null), true);
+  assert.equal(isHistoricalReplyEvidence(""), true);
+  assert.equal(isHistoricalReplyEvidence("__AUTO_RESPONSE"), false);
 });
 
 test("24-hour reply classification includes the exact 24-hour boundary", () => {
@@ -267,4 +275,102 @@ test("reply bucket details merge Historical replies into a canonical conversatio
   assert.equal(result.items[0]?.conversationId, "conversation-1");
   assert.equal(result.items[0]?.customerName, "Customer One");
   assert.equal(result.items[0]?.responseMinutes, 30);
+});
+
+
+test("reply analytics counts Historical outbound without responder identity as a reply", async () => {
+  const inboundAt = new Date("2026-09-01T02:00:00.000Z");
+  const history = [
+    {
+      id: "historical-inbound-unknown-responder",
+      storeId: "store-1",
+      lineOfficialAccountId: "oa-1",
+      lineChatUserId: "chat-1",
+      sourceEventId: "event:inbound-unknown",
+      sourceEventType: "messageReceived",
+      direction: MessageDirection.INBOUND,
+      text: "Customer message",
+      sentAt: inboundAt,
+      senderBizId: null,
+    },
+    {
+      id: "historical-outbound-unknown-responder",
+      storeId: "store-1",
+      lineOfficialAccountId: "oa-1",
+      lineChatUserId: "chat-1",
+      sourceEventId: "event:outbound-unknown",
+      sourceEventType: "messageSent",
+      direction: MessageDirection.OUTBOUND,
+      text: "Store response",
+      sentAt: new Date(inboundAt.getTime() + 45 * 60_000),
+      senderBizId: null,
+    },
+  ];
+  const prisma = {
+    store: { findMany: async () => [{ id: "store-1", name: "Store One" }] },
+    historicalTimelineMessage: { findMany: async () => history },
+    conversation: { findMany: async () => [] },
+  } as unknown as PrismaService;
+  const storeAccess = { accessibleStoreIds: async () => null } as unknown as StoreAccessService;
+  const service = new HistoricalTimelineService(prisma, storeAccess);
+  const result = await service.replyAnalytics(
+    { id: "admin-1", email: "admin@example.com", displayName: "Admin", role: "ADMIN" } as AuthUser,
+    { dateFrom: "2026-09-01", dateTo: "2026-09-01" },
+  );
+
+  assert.equal(result.overview.total, 1);
+  assert.equal(result.overview.responded, 1);
+  assert.equal(result.overview.within24h, 1);
+  assert.equal(result.overview.pending, 0);
+  assert.equal(result.overview.knownResponderReplies, 0);
+  assert.equal(result.overview.unknownResponderReplies, 1);
+  assert.equal(result.responders.length, 0);
+});
+
+test("reply analytics still excludes Historical auto-response evidence", async () => {
+  const inboundAt = new Date("2026-09-01T02:00:00.000Z");
+  const history = [
+    {
+      id: "historical-inbound-auto",
+      storeId: "store-1",
+      lineOfficialAccountId: "oa-1",
+      lineChatUserId: "chat-1",
+      sourceEventId: "event:inbound-auto",
+      sourceEventType: "messageReceived",
+      direction: MessageDirection.INBOUND,
+      text: "Customer message",
+      sentAt: inboundAt,
+      senderBizId: null,
+    },
+    {
+      id: "historical-auto-only",
+      storeId: "store-1",
+      lineOfficialAccountId: "oa-1",
+      lineChatUserId: "chat-1",
+      sourceEventId: "event:auto-only",
+      sourceEventType: "messageSent",
+      direction: MessageDirection.OUTBOUND,
+      text: "Automatic response",
+      sentAt: new Date(inboundAt.getTime() + 5 * 60_000),
+      senderBizId: "__AUTO_RESPONSE",
+    },
+  ];
+  const prisma = {
+    store: { findMany: async () => [{ id: "store-1", name: "Store One" }] },
+    historicalTimelineMessage: { findMany: async () => history },
+    conversation: { findMany: async () => [] },
+  } as unknown as PrismaService;
+  const storeAccess = { accessibleStoreIds: async () => null } as unknown as StoreAccessService;
+  const service = new HistoricalTimelineService(prisma, storeAccess);
+  const result = await service.replyAnalytics(
+    { id: "admin-1", email: "admin@example.com", displayName: "Admin", role: "ADMIN" } as AuthUser,
+    { dateFrom: "2026-09-01", dateTo: "2026-09-01" },
+  );
+
+  assert.equal(result.overview.total, 1);
+  assert.equal(result.overview.responded, 0);
+  assert.equal(result.overview.within24h, 0);
+  assert.equal(result.overview.pending, 1);
+  assert.equal(result.overview.knownResponderReplies, 0);
+  assert.equal(result.overview.unknownResponderReplies, 0);
 });
