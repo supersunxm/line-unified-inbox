@@ -629,10 +629,18 @@ export class MonthlyOperationsReportService {
       (summary, store) => {
         summary.inboundMessages += store.chat.inboundMessages;
         summary.focusInboundMessages += store.chat.focusInboundMessages;
-        summary.responseCycles += store.chat.responseCycles;
-        summary.repliedWithin24h += store.chat.repliedWithin24h;
-        summary.focusResponseCycles += store.chat.focusResponseCycles;
-        summary.focusRepliedWithin24h += store.chat.focusRepliedWithin24h;
+        summary.observedResponseCycles += store.chat.responseCycles;
+        summary.observedRepliedWithin24h += store.chat.repliedWithin24h;
+        summary.observedFocusResponseCycles += store.chat.focusResponseCycles;
+        summary.observedFocusRepliedWithin24h += store.chat.focusRepliedWithin24h;
+        summary.mirrorFallbackReplies += store.chat.mirrorFallbackReplies;
+        summary.mirrorFallbackUnmapped += store.chat.mirrorFallbackUnmapped;
+        if (store.chat.replyCoverage === "complete") {
+          summary.responseCycles += store.chat.responseCycles;
+          summary.repliedWithin24h += store.chat.repliedWithin24h;
+          summary.focusResponseCycles += store.chat.focusResponseCycles;
+          summary.focusRepliedWithin24h += store.chat.focusRepliedWithin24h;
+        }
         if (store.followers.monthGrowth !== null) summary.monthFollowerGrowth += store.followers.monthGrowth;
         if (store.followers.focusGrowth !== null) summary.focusFollowerGrowth += store.followers.focusGrowth;
         return summary;
@@ -644,6 +652,12 @@ export class MonthlyOperationsReportService {
         repliedWithin24h: 0,
         focusResponseCycles: 0,
         focusRepliedWithin24h: 0,
+        observedResponseCycles: 0,
+        observedRepliedWithin24h: 0,
+        observedFocusResponseCycles: 0,
+        observedFocusRepliedWithin24h: 0,
+        mirrorFallbackReplies: 0,
+        mirrorFallbackUnmapped: 0,
         monthFollowerGrowth: 0,
         focusFollowerGrowth: 0,
       },
@@ -665,23 +679,35 @@ export class MonthlyOperationsReportService {
         followerComplete: stores.filter((store) => store.dataQuality.followerCoverage === "complete").length,
         followerPartial: stores.filter((store) => store.dataQuality.followerCoverage === "partial").length,
         followerMissing: stores.filter((store) => store.dataQuality.followerCoverage === "missing").length,
+        replyComplete: stores.filter((store) => store.chat.replyCoverage === "complete").length,
+        replyPartial: stores.filter((store) => store.chat.replyCoverage === "partial").length,
+        replyNotCovered: stores.filter((store) => store.chat.replyCoverage === "not_covered").length,
       },
       totals: {
         ...totals,
         replyRateWithin24h: totals.responseCycles === 0 ? null : totals.repliedWithin24h / totals.responseCycles,
         focusReplyRateWithin24h: totals.focusResponseCycles === 0 ? null : totals.focusRepliedWithin24h / totals.focusResponseCycles,
+        observedReplyRateWithin24h: totals.observedResponseCycles === 0
+          ? null
+          : totals.observedRepliedWithin24h / totals.observedResponseCycles,
+        observedFocusReplyRateWithin24h: totals.observedFocusResponseCycles === 0
+          ? null
+          : totals.observedFocusRepliedWithin24h / totals.observedFocusResponseCycles,
       },
       stores,
       dataContract: {
         followerSource: "LineOaFollowerSnapshot",
-        chatSource: "Message",
-        responseDefinition: "first delivered human staff outbound after an inbound response cycle, including LINE Manager mirrored human replies, within 24 hours",
+        chatSource: "Message + LineChatMirrorMessage read-only fallback",
+        responseDefinition: "first delivered human staff outbound after an inbound response cycle, including deduplicated LINE Manager mirror fallback, within 24 hours",
+        replyCoverageDefinition: "official KPI includes only stores whose enabled Manager mirror has a successful sync and FAST_PATH_COMPLETE historical coverage for every relevant chat in the selected month",
+        lineChatMirrorRead: true,
         historicalTimelineRead: false,
         liveMirrorWrite: false,
         historicalMirrorWrite: false,
       },
     };
   }
+
   async exportXlsx(user: AuthUser, requestedMonth?: string): Promise<{
     buffer: Buffer;
     filename: string;
