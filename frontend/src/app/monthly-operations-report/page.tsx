@@ -291,7 +291,7 @@ function ReportContent() {
     setAuditError(null);
     try {
       const response = await fetch(
-        \`/api-backend/monthly-operations-report/audit?month=\${encodeURIComponent(month)}&sample=20\`,
+        `/api-backend/monthly-operations-report/audit?month=${encodeURIComponent(month)}&sample=20`,
         { credentials: "include", cache: "no-store" },
       );
       if (response.status === 401) {
@@ -299,7 +299,7 @@ function ReportContent() {
         return;
       }
       if (!response.ok) {
-        let message = \`Audit ไม่สำเร็จ (\${response.status})\`;
+        let message = `Audit ไม่สำเร็จ (${response.status})`;
         try {
           const body = await response.json() as { message?: string | string[] };
           if (body.message) message = Array.isArray(body.message) ? body.message.join(", ") : body.message;
@@ -503,9 +503,9 @@ function ReportContent() {
                   </p>
                 </div>
                 {audit ? (
-                  <span className={\`inline-flex rounded-full px-3 py-1 text-xs font-semibold \${
+                  <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
                     audit.checks.status === "PASS" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"
-                  }\`}>
+                  }`}>
                     {audit.checks.status}
                   </span>
                 ) : null}
@@ -520,9 +520,9 @@ function ReportContent() {
               {audit ? (
                 <>
                   <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                    <MetricCard label="Stores Audited" value={formatNumber(audit.storesAudited)} detail={\`high \${audit.selection.high} · mid \${audit.selection.mid} · low \${audit.selection.low} · zero \${audit.selection.zero}\`} />
-                    <MetricCard label="Aggregate Match" value={\`\${audit.checks.aggregateMatches}/\${audit.checks.total}\`} />
-                    <MetricCard label="Cycle Structure Valid" value={\`\${audit.checks.sampledCyclesValid}/\${audit.checks.total}\`} />
+                    <MetricCard label="Stores Audited" value={formatNumber(audit.storesAudited)} detail={`high ${audit.selection.high} · mid ${audit.selection.mid} · low ${audit.selection.low} · zero ${audit.selection.zero}`} />
+                    <MetricCard label="Aggregate Match" value={`${audit.checks.aggregateMatches}/${audit.checks.total}`} />
+                    <MetricCard label="Cycle Structure Valid" value={`${audit.checks.sampledCyclesValid}/${audit.checks.total}`} />
                     <MetricCard label="KPI Through" value={audit.kpiThrough} />
                   </div>
                   <div className="mt-4 overflow-x-auto">
