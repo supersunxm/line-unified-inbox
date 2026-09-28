@@ -1,13 +1,85 @@
 import { BadRequestException, Injectable } from "@nestjs/common";
-import { MessageDirection, Prisma } from "@prisma/client";
+import { MessageDeliveryStatus, MessageDirection, Prisma } from "@prisma/client";
 import type { AuthUser } from "../auth/auth.guard";
 import { StoreAccessService } from "../auth/store-access.service";
 import { formatDbDateToIso, getTodayBangkokDateString, toUtcDateForDb } from "../follower-insights/date-utils";
-import { calculateResponseCycles, type AnalyticsMessage, bangkokMonthBounds } from "../mobile/monthly-summary.service";
+import { type AnalyticsMessage, bangkokMonthBounds } from "../mobile/monthly-summary.service";
 import { PrismaService } from "../prisma.service";
 
 const BANGKOK_OFFSET_MS = 7 * 60 * 60 * 1000;
 const RESPONSE_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+
+type ReportAnalyticsMessage = AnalyticsMessage & {
+  deliveryStatus: MessageDeliveryStatus;
+  rawPayload: Prisma.JsonValue | null;
+};
+
+type ReportResponseCycle = {
+  conversationId: string;
+  startedAt: Date;
+  answeredAt: Date | null;
+  durationSeconds: number | null;
+};
+
+const AUTO_REPLY_BOT_DISPLAY_NAME = "Auto Reply Bot";
+
+function jsonObject(value: Prisma.JsonValue | null): Record<string, Prisma.JsonValue> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, Prisma.JsonValue>
+    : {};
+}
+
+export function isReportHumanReply(message: ReportAnalyticsMessage) {
+  if (
+    message.direction !== MessageDirection.OUTBOUND
+    || message.deliveryStatus !== MessageDeliveryStatus.DELIVERED
+  ) {
+    return false;
+  }
+  const raw = jsonObject(message.rawPayload);
+  const automated = message.senderDisplayName?.trim() === AUTO_REPLY_BOT_DISPLAY_NAME
+    || raw.source === "AUTO_RESPONSE"
+    || raw.managerBizId === "__AUTO_RESPONSE";
+  if (automated) return false;
+  return Boolean(message.senderUserId)
+    || raw.source === "LINE_MANAGER_MIRROR"
+    || raw.provider === "LINE_MANAGER";
+}
+
+export function calculateReportResponseCycles(messages: ReportAnalyticsMessage[]): ReportResponseCycle[] {
+  const sorted = [...messages].sort((left, right) => {
+    const timestamp = left.sentAt.getTime() - right.sentAt.getTime();
+    return timestamp
+      || left.conversationId.localeCompare(right.conversationId)
+      || left.id.localeCompare(right.id);
+  });
+  const open = new Map<string, Date>();
+  const cycles: ReportResponseCycle[] = [];
+  for (const message of sorted) {
+    if (message.direction === MessageDirection.INBOUND) {
+      if (!open.has(message.conversationId)) open.set(message.conversationId, message.sentAt);
+      continue;
+    }
+    if (!isReportHumanReply(message)) continue;
+    const startedAt = open.get(message.conversationId);
+    if (!startedAt) continue;
+    cycles.push({
+      conversationId: message.conversationId,
+      startedAt,
+      answeredAt: message.sentAt,
+      durationSeconds: Math.max(0, (message.sentAt.getTime() - startedAt.getTime()) / 1000),
+    });
+    open.delete(message.conversationId);
+  }
+  for (const [conversationId, startedAt] of open) {
+    cycles.push({ conversationId, startedAt, answeredAt: null, durationSeconds: null });
+  }
+  return cycles.sort((left, right) =>
+    left.startedAt.getTime() - right.startedAt.getTime()
+    || left.conversationId.localeCompare(right.conversationId),
+  );
+}
 
 type Snapshot = {
   lineOaId: string;
@@ -202,6 +274,8 @@ export class MonthlyOperationsReportService {
             sentAt: true,
             senderUserId: true,
             senderDisplayName: true,
+            deliveryStatus: true,
+            rawPayload: true,
             conversation: {
               select: {
                 lineOfficialAccountId: true,
@@ -211,7 +285,7 @@ export class MonthlyOperationsReportService {
           orderBy: [{ sentAt: "asc" }, { id: "asc" }],
         });
 
-    const messagesByAccount = new Map<string, AnalyticsMessage[]>();
+    const messagesByAccount = new Map<string, ReportAnalyticsMessage[]>();
     for (const message of messages) {
       const lineOaId = message.conversation.lineOfficialAccountId;
       const current = messagesByAccount.get(lineOaId) ?? [];
@@ -223,6 +297,8 @@ export class MonthlyOperationsReportService {
         sentAt: message.sentAt,
         senderUserId: message.senderUserId,
         senderDisplayName: message.senderDisplayName,
+        deliveryStatus: message.deliveryStatus,
+        rawPayload: message.rawPayload,
       });
       messagesByAccount.set(lineOaId, current);
     }
@@ -233,7 +309,7 @@ export class MonthlyOperationsReportService {
       )
       .map((account) => {
         const accountMessages = messagesByAccount.get(account.id) ?? [];
-        const cycles = calculateResponseCycles(accountMessages);
+        const cycles = calculateReportResponseCycles(accountMessages);
         const periodCycles = cycles.filter((cycle) => intervalContains(cycle.startedAt, bounds.start, periodEnd));
         const focusCycles = cycles.filter((cycle) => intervalContains(cycle.startedAt, effectiveFocusStart, periodEnd));
         const repliedWithin24h = periodCycles.filter(
@@ -351,7 +427,7 @@ export class MonthlyOperationsReportService {
       dataContract: {
         followerSource: "LineOaFollowerSnapshot",
         chatSource: "Message",
-        responseDefinition: "first human staff outbound after an inbound response cycle, within 24 hours",
+        responseDefinition: "first delivered human staff outbound after an inbound response cycle, including LINE Manager mirrored human replies, within 24 hours",
         historicalTimelineRead: false,
         liveMirrorWrite: false,
         historicalMirrorWrite: false,

@@ -2896,3 +2896,14 @@ The first production target proof confirmed that eligible candidate OAs have no 
 - Allowed: Store Master reads, `LineOaFollowerSnapshot` reads, canonical `Message` reads, shared pure response-cycle helper, report controller/service/module registration.
 - Not allowed: line-chat worker changes, Mirror scheduler/lease/session changes, Historical Timeline writes, crosswalk writes, Message writes, schema migration for this P0.
 - Report output must declare its data sources and Mirror write flags so consumers can audit the boundary.
+
+
+## 2026-09-28 — Monthly response KPI accepts canonical LINE Manager human replies
+
+**Decision:** Monthly Operations Report response cycles count a delivered outbound as human when either an internal `senderUserId` is present or canonical message metadata identifies a LINE Manager mirrored human response.
+
+**Evidence boundary:** `rawPayload.source = LINE_MANAGER_MIRROR` or `rawPayload.provider = LINE_MANAGER` is accepted only when the message is delivered and not identified as an automated response. `Auto Reply Bot`, `AUTO_RESPONSE`, and `__AUTO_RESPONSE` remain excluded.
+
+**Rationale:** Project B canonical imports intentionally preserve Manager-visible responder identity even when no internal user mapping exists. The reconciler already uses this metadata for reply state, so reporting must not discard those legitimate human responses.
+
+**Isolation:** This is report-layer classification only. No Live Mirror or Historical Mirror collector, browser session, reconciler, lease, backfill, or persistence behavior is changed.

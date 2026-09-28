@@ -5755,3 +5755,13 @@ Current state: local follow-up fix and checks are complete; the follow-up commit
 - Page shows report scope, production totals, <=24h response KPI, follower coverage, per-store rows, search, month selection, and explicit Mirror isolation flags.
 - Added sidebar navigation under Tools.
 - No Live Mirror or Historical Mirror implementation files were changed.
+
+
+## 2026-09-28 — Monthly Operations Report reply KPI reconciliation
+
+- Production validation UI exposed suspicious 0% reply rates for stores with substantial inbound volume.
+- Root cause confirmed in code: report response cycles required `senderUserId`, while canonical Manager-mirrored human outbound messages may intentionally have `senderUserId = null` but carry `rawPayload.source = LINE_MANAGER_MIRROR` / `provider = LINE_MANAGER`.
+- Mirror reconciler already treats those canonical messages as human replies for conversation state.
+- Report-only fix now applies the same human-reply evidence without changing Mirror collectors/reconciliation.
+- Report cycles additionally require `deliveryStatus = DELIVERED` and continue excluding Auto Reply Bot / AUTO_RESPONSE messages.
+- Added regression coverage for internal-user replies, Manager replies without user mapping, auto replies, failed outbound, consecutive inbound cycles, and unresolved cycles.
