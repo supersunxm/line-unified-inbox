@@ -711,7 +711,6 @@ export class HistoricalTimelineService {
       bucket: input.bucket,
       dateFrom: input.dateFrom,
       dateTo: input.dateTo,
-      mode: analyticsMode,
       total: matched.length,
       shown: Math.min(safeLimit, matched.length),
       items: matched.slice(0, safeLimit),
@@ -993,6 +992,7 @@ export class HistoricalTimelineService {
     return {
       dateFrom: input.dateFrom,
       dateTo: input.dateTo,
+      mode: analyticsMode,
       timezone: "Asia/Bangkok",
       targetStart: HISTORICAL_TIMELINE_START.toISOString(),
       overview: {
