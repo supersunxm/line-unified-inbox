@@ -1,4 +1,3 @@
-import { BadRequestException } from "@nestjs/common";
 import { pickLatestSnapshotOnOrBefore } from "./monthly-operations-report.service";
 
 describe("MonthlyOperationsReportService helpers", () => {
