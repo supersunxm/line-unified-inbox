@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, Logger } from "@nestjs/common";
-import { MessageDeliveryStatus, MessageDirection, Prisma } from "@prisma/client";
+import { LineChatMirrorDirection, MessageDeliveryStatus, MessageDirection, MessageType, Prisma } from "@prisma/client";
 import type { AuthUser } from "../auth/auth.guard";
 import { StoreAccessService } from "../auth/store-access.service";
 import { formatDbDateToIso, getTodayBangkokDateString, toUtcDateForDb } from "../follower-insights/date-utils";
@@ -24,6 +24,52 @@ type ReportResponseCycle = {
 };
 
 const AUTO_REPLY_BOT_DISPLAY_NAME = "Auto Reply Bot";
+
+export type ReplyKpiCoverage = "complete" | "partial" | "not_covered";
+
+type ReplyCoverageInput = {
+  mirrorEnabled: boolean;
+  lastSuccessfulSyncAt: Date | null;
+  relevantChats: number;
+  completeChats: number;
+};
+
+export function classifyReplyKpiCoverage(input: ReplyCoverageInput): ReplyKpiCoverage {
+  if (!input.mirrorEnabled || !input.lastSuccessfulSyncAt) return "not_covered";
+  if (input.relevantChats <= 0) return "partial";
+  return input.completeChats === input.relevantChats ? "complete" : "partial";
+}
+
+function managerMessageIdFromCanonical(message: {
+  externalMessageId: string | null;
+  rawPayload: Prisma.JsonValue | null;
+}): string | null {
+  const raw = jsonObject(message.rawPayload);
+  if (typeof raw.managerMessageId === "string" && raw.managerMessageId.trim()) {
+    return raw.managerMessageId.trim();
+  }
+  const external = message.externalMessageId?.trim() || "";
+  if (external.startsWith("line-chat-manager:")) {
+    return external.slice("line-chat-manager:".length);
+  }
+  return external || null;
+}
+
+function mirrorConversationKey(lineOfficialAccountId: string, lineChatUserId: string): string {
+  return lineOfficialAccountId + "::" + lineChatUserId;
+}
+
+function setUniqueConversation(
+  map: Map<string, string | null>,
+  key: string,
+  conversationId: string,
+): void {
+  if (!map.has(key)) {
+    map.set(key, conversationId);
+    return;
+  }
+  if (map.get(key) !== conversationId) map.set(key, null);
+}
 
 function jsonObject(value: Prisma.JsonValue | null): Record<string, Prisma.JsonValue> {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -118,10 +164,15 @@ export type MonthlyOperationsStoreRow = {
     focusRepliedWithin24h: number;
     replyRateWithin24h: number | null;
     focusReplyRateWithin24h: number | null;
+    observedReplyRateWithin24h: number | null;
+    observedFocusReplyRateWithin24h: number | null;
+    replyCoverage: ReplyKpiCoverage;
+    mirrorFallbackReplies: number;
+    mirrorFallbackUnmapped: number;
   };
   dataQuality: {
     followerCoverage: "complete" | "partial" | "missing";
-    chatCoverage: "canonical_message_timeline";
+    chatCoverage: "canonical_plus_manager_fallback";
     notes: string[];
   };
 };
