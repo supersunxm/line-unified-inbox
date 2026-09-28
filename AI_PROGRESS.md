@@ -5744,3 +5744,14 @@ Current state: local follow-up fix and checks are complete; the follow-up commit
 - PR: #373.
 - Verification: Application CI started; backend/frontend/android jobs pending at time of this entry.
 - Next: repair any CI findings only inside the report module/app registration, then verify diff still excludes Mirror paths.
+
+
+## 2026-09-28 — Monthly Operations Report production validation UI
+
+- Production backend deployment verified on merge commit `0cdfeb8f2285264ecf1cd2946edc2feb35b9db86`; Railway status SUCCESS.
+- Nest startup log confirms `GET /monthly-operations-report` is registered and application startup completed successfully.
+- Direct aggregate validation is authentication-bound; no unauthenticated/public bypass was introduced.
+- Added authenticated frontend page `/monthly-operations-report` using the existing Dashboard access policy and browser session.
+- Page shows report scope, production totals, <=24h response KPI, follower coverage, per-store rows, search, month selection, and explicit Mirror isolation flags.
+- Added sidebar navigation under Tools.
+- No Live Mirror or Historical Mirror implementation files were changed.
