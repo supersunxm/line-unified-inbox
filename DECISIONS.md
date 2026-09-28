@@ -2970,3 +2970,16 @@ The first production target proof confirmed that eligible candidate OAs have no 
 **Current month:** The report's 24h KPI uses a matured cutoff two Bangkok calendar days before the current date. This guarantees that all included chats have had a complete 24-hour reply window. Follower and inbound-volume cards may still show through the current day.
 
 **Isolation:** This is a read-only reporting integration. It does not rerun Historical collection, change crosswalks, alter Historical rows, or modify Live Mirror collection/reconciliation.
+
+
+## 2026-09-28 — Reply evidence and responder identity are separate dimensions
+
+**Decision:** For 24h SLA analytics, a persisted outbound message can prove that the store replied even when the archive does not prove which staff member replied.
+
+**Historical rows:** An OUTBOUND Historical text row is reply evidence unless its source responder marker is the explicit `__AUTO_RESPONSE` sentinel. A non-auto `senderBizId` gives known responder attribution; a missing responder marker remains an unknown responder but still counts as a reply.
+
+**Canonical rows:** A delivered, non-automated OUTBOUND canonical message is reply evidence even when `senderUserId` is absent. Staff attribution remains known only when a proven internal sender ID exists.
+
+**Rationale:** SLA asks whether the store replied within the time window; responder analytics asks who replied. Conflating the two caused legitimate unattributed outbound replies to be treated as pending/non-responses.
+
+**Isolation:** Read-only analytics classification only. No Historical data, crosswalks, Live Mirror collection, or persistence semantics are changed.
