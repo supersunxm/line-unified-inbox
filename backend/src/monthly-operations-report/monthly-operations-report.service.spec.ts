@@ -226,3 +226,97 @@ describe("MonthlyOperationsReportService XLSX export", () => {
     expect(file.filename).toBe("OPPO_LINE_monthly_operations_2026-09_1stores.xlsx");
   });
 });
+
+
+describe("MonthlyOperationsReportService XLSX production-scale export", () => {
+  it("exports 146 production-scale store rows without throwing", async () => {
+    const { MonthlyOperationsReportService } = await import("./monthly-operations-report.service");
+    const service = new MonthlyOperationsReportService({} as never, {} as never);
+    const stores = Array.from({ length: 146 }, (_, index) => ({
+      storeId: "store-" + index,
+      externalStoreId: String(20000 + index),
+      storeName: "OPPO Store " + index,
+      accountName: "OPPO Store " + index,
+      lineOaId: "oa-" + index,
+      lineBasicId: "@oa" + index,
+      province: index % 2 === 0 ? "Bangkok" : "Chonburi",
+      region: index % 2 === 0 ? "Central" : "Eastern",
+      amName: null,
+      bmName: "BM " + index,
+      followers: {
+        monthStart: 1000 + index,
+        monthStartDate: "2026-09-01",
+        focusStart: 1010 + index,
+        focusStartDate: "2026-09-20",
+        periodEnd: 1020 + index,
+        periodEndDate: "2026-09-28",
+        monthGrowth: 20,
+        focusGrowth: 10,
+      },
+      chat: {
+        inboundMessages: 100 + index,
+        focusInboundMessages: 30 + index,
+        responseCycles: 50,
+        repliedWithin24h: 40,
+        focusResponseCycles: 20,
+        focusRepliedWithin24h: 16,
+        replyRateWithin24h: 0.8,
+        focusReplyRateWithin24h: 0.8,
+      },
+      dataQuality: {
+        followerCoverage: "complete",
+        chatCoverage: "canonical_message_timeline",
+        notes: [],
+      },
+    }));
+
+    (service as unknown as { get: () => Promise<unknown> }).get = async () => ({
+      period: {
+        month: "2026-09",
+        timezone: "Asia/Bangkok",
+        isCurrentMonth: true,
+        start: "2026-09-01",
+        focusStart: "2026-09-20",
+        through: "2026-09-28",
+        generatedAt: "2026-09-28T04:50:00.000Z",
+      },
+      scope: {
+        stores: stores.length,
+        lineAccounts: stores.length,
+        followerComplete: stores.length,
+        followerPartial: 0,
+        followerMissing: 0,
+      },
+      totals: {
+        inboundMessages: stores.reduce((sum, store) => sum + store.chat.inboundMessages, 0),
+        focusInboundMessages: stores.reduce((sum, store) => sum + store.chat.focusInboundMessages, 0),
+        responseCycles: stores.reduce((sum, store) => sum + store.chat.responseCycles, 0),
+        repliedWithin24h: stores.reduce((sum, store) => sum + store.chat.repliedWithin24h, 0),
+        focusResponseCycles: stores.reduce((sum, store) => sum + store.chat.focusResponseCycles, 0),
+        focusRepliedWithin24h: stores.reduce((sum, store) => sum + store.chat.focusRepliedWithin24h, 0),
+        monthFollowerGrowth: stores.length * 20,
+        focusFollowerGrowth: stores.length * 10,
+        replyRateWithin24h: 0.8,
+        focusReplyRateWithin24h: 0.8,
+      },
+      stores,
+      dataContract: {
+        followerSource: "LineOaFollowerSnapshot",
+        chatSource: "Message",
+        responseDefinition: "test",
+        historicalTimelineRead: false,
+        liveMirrorWrite: false,
+        historicalMirrorWrite: false,
+      },
+    });
+
+    const file = await service.exportXlsx({} as never, "2026-09");
+    expect(file.buffer.length).toBeGreaterThan(1000);
+
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(file.buffer as unknown as ExcelJS.Buffer);
+    const detail = workbook.getWorksheet("运营明细")!;
+    expect(detail.rowCount).toBe(147);
+    expect(detail.columnCount).toBe(35);
+  });
+});
