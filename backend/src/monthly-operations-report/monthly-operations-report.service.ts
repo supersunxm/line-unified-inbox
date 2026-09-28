@@ -1023,7 +1023,7 @@ export class MonthlyOperationsReportService {
         responded: overview.responded,
         historicalAutoOutbound,
         historicalNonAutoOutbound,
-        virtualHistoricalRows: analytics.sources.virtualHistoricalRows,
+        virtualHistoricalRows: analytics.sources.virtualHistoricalRows ?? 0,
       });
 
       stores.push({
