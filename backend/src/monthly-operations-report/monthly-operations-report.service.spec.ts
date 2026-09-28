@@ -228,7 +228,7 @@ describe("MonthlyOperationsReportService helpers", () => {
 describe("MonthlyOperationsReportService XLSX export", () => {
   it("exports the August-compatible 35-column detail layout without inventing tag history", async () => {
     const { MonthlyOperationsReportService } = await import("./monthly-operations-report.service");
-    const service = new MonthlyOperationsReportService({} as never, {} as never);
+    const service = new MonthlyOperationsReportService({} as never, {} as never, {} as never);
     (service as unknown as { get: () => Promise<unknown> }).get = async () => ({
       period: {
         month: "2026-09",
@@ -353,7 +353,7 @@ describe("MonthlyOperationsReportService XLSX export", () => {
 describe("MonthlyOperationsReportService XLSX production-scale export", () => {
   it("exports 146 production-scale store rows without throwing", async () => {
     const { MonthlyOperationsReportService } = await import("./monthly-operations-report.service");
-    const service = new MonthlyOperationsReportService({} as never, {} as never);
+    const service = new MonthlyOperationsReportService({} as never, {} as never, {} as never);
     const stores = Array.from({ length: 146 }, (_, index) => ({
       storeId: "store-" + index,
       externalStoreId: String(20000 + index),
@@ -469,7 +469,7 @@ describe("MonthlyOperationsReportService XLSX production-scale export", () => {
 describe("MonthlyOperationsReportService XLSX reply coverage", () => {
   it("leaves official reply KPI cells blank when reply coverage is partial", async () => {
     const { MonthlyOperationsReportService } = await import("./monthly-operations-report.service");
-    const service = new MonthlyOperationsReportService({} as never, {} as never);
+    const service = new MonthlyOperationsReportService({} as never, {} as never, {} as never);
     (service as unknown as { get: () => Promise<unknown> }).get = async () => ({
       period: {
         month: "2026-09",

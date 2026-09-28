@@ -2959,3 +2959,14 @@ The first production target proof confirmed that eligible candidate OAs have no 
 **Store status:** `complete` means every eligible cycle has a proven outcome; `partial` means only some are proven; `not_covered` means none are proven and no usable mirror coverage is available.
 
 **Isolation:** This is report-only read logic. Live Mirror and Historical Mirror collection/write paths remain unchanged.
+
+
+## 2026-09-28 — Monthly 24h KPI uses the completed Historical Timeline read model
+
+**Correction:** Historical collection/read-model delivery is already complete for the approved scope, so Monthly Operations Report must not use Live Mirror backfill checkpoint fields as the authoritative historical-coverage gate.
+
+**Source of truth:** `HistoricalTimelineService.replyAnalytics()` merges persisted Historical Timeline text rows with canonical messages, suppresses exact source duplicates, and preserves Historical responder evidence. Monthly Operations Report reuses this service rather than recreating Historical coverage semantics.
+
+**Current month:** The report's 24h KPI uses a matured cutoff two Bangkok calendar days before the current date. This guarantees that all included chats have had a complete 24-hour reply window. Follower and inbound-volume cards may still show through the current day.
+
+**Isolation:** This is a read-only reporting integration. It does not rerun Historical collection, change crosswalks, alter Historical rows, or modify Live Mirror collection/reconciliation.

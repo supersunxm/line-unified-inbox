@@ -5879,3 +5879,14 @@ Current state: local follow-up fix and checks are complete; the follow-up commit
 - A failure (no reply within 24h or first reply after 24h) is considered proven only when Manager history reaches to/before the cycle start and the store has a successful Manager sync after the cycle's 24h deadline.
 - Store coverage is complete only when all eligible cycles have proven outcomes; UI now shows covered/eligible cycle counts.
 - No Live Mirror or Historical Mirror write-path code changed.
+
+
+## 2026-09-28 — Monthly Report corrected to use completed Historical Timeline
+
+- Corrected a source-of-truth mistake in Monthly Operations Report: reply KPI coverage must not be inferred from Live Mirror `LineChatMirrorChat` backfill markers after the Historical project has already delivered its own production read model.
+- Monthly Operations Report now reuses `HistoricalTimelineService.replyAnalytics()`, the production-accepted service that merges `HistoricalTimelineMessage` with canonical `Message` data and suppresses exact source duplicates.
+- Historical completion/read-model data is now the official source for monthly 24h reply KPI.
+- Current-month reply KPI is conservatively cut off two Bangkok calendar days before today so every included chat has a fully elapsed 24-hour response window.
+- Inbound/follower metrics continue through the current report date; only the SLA KPI uses the matured cutoff.
+- Live Mirror reads remain diagnostic only and do not determine official reply coverage.
+- No Historical import/backfill/crosswalk data and no Live Mirror worker/reconciler/write path were modified.
