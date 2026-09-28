@@ -5,7 +5,7 @@ import { StoreAccessService } from "../auth/store-access.service";
 import { formatDbDateToIso, getTodayBangkokDateString, toUtcDateForDb } from "../follower-insights/date-utils";
 import { type AnalyticsMessage, bangkokMonthBounds } from "../mobile/monthly-summary.service";
 import { PrismaService } from "../prisma.service";
-import ExcelJS from "exceljs";
+import * as ExcelJS from "exceljs";
 
 const BANGKOK_OFFSET_MS = 7 * 60 * 60 * 1000;
 const RESPONSE_WINDOW_MS = 24 * 60 * 60 * 1000;
