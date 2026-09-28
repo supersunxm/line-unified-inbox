@@ -5786,3 +5786,12 @@ Current state: local follow-up fix and checks are complete; the follow-up commit
 - Added structured success/failure logging for XLSX generation.
 - Added a production-scale regression test with 146 stores.
 - No Live Mirror or Historical Mirror implementation files changed.
+
+
+## 2026-09-28 — Monthly XLSX runtime import hotfix
+
+- Production structured log identified exact export failure: `Cannot read properties of undefined (reading 'Workbook')`.
+- Root cause: default-import interoperability for `exceljs` in the production CommonJS bundle; TypeScript/CI did not expose the runtime default export mismatch.
+- Switched Monthly Operations Report exporter and its tests to runtime-safe namespace import: `import * as ExcelJS from "exceljs"`.
+- Normal report endpoint remained healthy (HTTP 200); only XLSX export was affected.
+- No Live Mirror or Historical Mirror implementation files changed.
