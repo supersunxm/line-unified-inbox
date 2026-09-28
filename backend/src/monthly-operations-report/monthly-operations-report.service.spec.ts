@@ -3,6 +3,7 @@ import { MessageDeliveryStatus, MessageDirection } from "@prisma/client";
 import {
   calculateReportResponseCycles,
   classifyReplyKpiCoverage,
+  classifyZeroRateForensic,
   isReplyCycleCovered,
   isReplyCycleEligible,
   isReportHumanReply,
@@ -201,6 +202,58 @@ describe("MonthlyOperationsReportService helpers", () => {
       lastSuccessfulSyncAt: new Date("2026-09-28T00:00:00.000Z"),
       historicalBackfillOldestAt: new Date("2026-09-05T00:30:00.000Z"),
     })).toBe(false);
+  });
+
+  it("classifies zero-rate forensic causes deterministically", () => {
+    expect(classifyZeroRateForensic({
+      total: 0,
+      within24h: 0,
+      over24h: 0,
+      responded: 0,
+      historicalAutoOutbound: 0,
+      historicalNonAutoOutbound: 0,
+      virtualHistoricalRows: 0,
+    })).toBe("NO_ELIGIBLE_CYCLE");
+
+    expect(classifyZeroRateForensic({
+      total: 12,
+      within24h: 0,
+      over24h: 5,
+      responded: 5,
+      historicalAutoOutbound: 0,
+      historicalNonAutoOutbound: 5,
+      virtualHistoricalRows: 0,
+    })).toBe("REPLY_OVER_24H");
+
+    expect(classifyZeroRateForensic({
+      total: 8,
+      within24h: 0,
+      over24h: 0,
+      responded: 0,
+      historicalAutoOutbound: 6,
+      historicalNonAutoOutbound: 0,
+      virtualHistoricalRows: 0,
+    })).toBe("AUTO_ONLY");
+
+    expect(classifyZeroRateForensic({
+      total: 8,
+      within24h: 0,
+      over24h: 0,
+      responded: 0,
+      historicalAutoOutbound: 0,
+      historicalNonAutoOutbound: 3,
+      virtualHistoricalRows: 2,
+    })).toBe("UNMAPPED_OR_VIRTUAL");
+
+    expect(classifyZeroRateForensic({
+      total: 8,
+      within24h: 0,
+      over24h: 0,
+      responded: 0,
+      historicalAutoOutbound: 0,
+      historicalNonAutoOutbound: 0,
+      virtualHistoricalRows: 0,
+    })).toBe("NO_REPLY");
   });
 
   it("does not let an auto reply close a response cycle", () => {
