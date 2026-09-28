@@ -536,12 +536,34 @@ export class MonthlyOperationsReportService {
         const focusRepliedWithin24h = focusCycles.filter(
           (cycle) => cycle.durationSeconds !== null && cycle.durationSeconds <= 24 * 60 * 60,
         ).length;
+        const observedReplyRateWithin24h = periodCycles.length === 0
+          ? null
+          : repliedWithin24h / periodCycles.length;
+        const observedFocusReplyRateWithin24h = focusCycles.length === 0
+          ? null
+          : focusRepliedWithin24h / focusCycles.length;
         const inboundMessages = accountMessages.filter(
           (message) => message.direction === MessageDirection.INBOUND && intervalContains(message.sentAt, bounds.start, periodEnd),
         ).length;
         const focusInboundMessages = accountMessages.filter(
           (message) => message.direction === MessageDirection.INBOUND && intervalContains(message.sentAt, effectiveFocusStart, periodEnd),
         ).length;
+
+        const state = mirrorStateByAccount.get(account.id);
+        const relevantChats = mirrorChatsByAccount.get(account.id) ?? [];
+        const completeChats = relevantChats.filter((chat) =>
+          chat.historicalBackfillStatus === "FAST_PATH_COMPLETE"
+          && Boolean(chat.historicalBackfillOldestAt)
+          && chat.historicalBackfillOldestAt!.getTime() <= bounds.start.getTime(),
+        ).length;
+        const replyCoverage = classifyReplyKpiCoverage({
+          mirrorEnabled: state?.enabled === true,
+          lastSuccessfulSyncAt: state?.lastSuccessfulSyncAt ?? null,
+          relevantChats: relevantChats.length,
+          completeChats,
+        });
+        const mirrorFallbackReplies = mirrorFallbackRepliesByAccount.get(account.id) ?? 0;
+        const mirrorFallbackUnmapped = mirrorFallbackUnmappedByAccount.get(account.id) ?? 0;
 
         const startSnapshot = pickLatestSnapshotOnOrBefore(snapshots, account.id, monthStartIso, monthStartIso);
         const focusSnapshot = pickLatestSnapshotOnOrBefore(snapshots, account.id, focusStartIso, monthStartIso);
@@ -555,6 +577,9 @@ export class MonthlyOperationsReportService {
         if (!startSnapshot) notes.push("follower_month_start_missing");
         if (!focusSnapshot) notes.push("follower_focus_start_missing");
         if (!endSnapshot) notes.push("follower_period_end_missing");
+        if (replyCoverage !== "complete") notes.push("reply_coverage_" + replyCoverage);
+        if (mirrorFallbackReplies > 0) notes.push("mirror_fallback_replies=" + mirrorFallbackReplies);
+        if (mirrorFallbackUnmapped > 0) notes.push("mirror_fallback_unmapped=" + mirrorFallbackUnmapped);
 
         return {
           storeId: account.store.id,
@@ -584,12 +609,17 @@ export class MonthlyOperationsReportService {
             repliedWithin24h,
             focusResponseCycles: focusCycles.length,
             focusRepliedWithin24h,
-            replyRateWithin24h: periodCycles.length === 0 ? null : repliedWithin24h / periodCycles.length,
-            focusReplyRateWithin24h: focusCycles.length === 0 ? null : focusRepliedWithin24h / focusCycles.length,
+            replyRateWithin24h: replyCoverage === "complete" ? observedReplyRateWithin24h : null,
+            focusReplyRateWithin24h: replyCoverage === "complete" ? observedFocusReplyRateWithin24h : null,
+            observedReplyRateWithin24h,
+            observedFocusReplyRateWithin24h,
+            replyCoverage,
+            mirrorFallbackReplies,
+            mirrorFallbackUnmapped,
           },
           dataQuality: {
             followerCoverage: followerPoints === 3 ? "complete" : followerPoints === 0 ? "missing" : "partial",
-            chatCoverage: "canonical_message_timeline",
+            chatCoverage: "canonical_plus_manager_fallback",
             notes,
           },
         };
