@@ -5809,3 +5809,15 @@ Current state: local follow-up fix and checks are complete; the follow-up commit
 - Translated all detail headers, summary metrics, and methodology labels/definitions to English.
 - No KPI calculation, Store Master mapping, Live Mirror, Historical Mirror, or database behavior changed in this presentation-only patch.
 - Separate data-quality finding: fleet-wide 24h reply rate must not yet be treated as complete-fleet performance because reply evidence is currently non-zero for only a small subset of stores; coverage logic will be handled separately.
+
+
+## 2026-09-28 — Monthly Operations Report reply KPI coverage finalization
+
+- Added report-only, read-only fallback from `LineChatMirrorMessage` for human Manager outbound rows that are not already represented in canonical `Message`.
+- Fallback mapping order mirrors reconciliation evidence without writes: existing canonical conversation ID, direct `lineChatUserId`, then exact inbound manager message evidence.
+- Canonical and Manager rows are deduplicated by canonical message ID, canonical external ID, and Manager message ID before response-cycle calculation.
+- Added per-store reply KPI coverage: `complete`, `partial`, `not_covered`.
+- Official 24h reply rates now include only `complete` stores. Partial/not-covered stores expose observed diagnostics but show N/A for the official KPI instead of false 0%.
+- Added fleet scope counts for complete/partial/not-covered reply coverage and counts of Manager fallback rows used/unmapped.
+- Updated XLSX and UI to surface coverage and keep incomplete reply KPI cells blank.
+- No Live Mirror/Historical Mirror worker, reconciler, browser/session, lease, backfill, or write path changed.
