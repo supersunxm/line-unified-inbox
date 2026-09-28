@@ -60,6 +60,7 @@ type MonthlyOperationsReport = {
     focusStart: string;
     through: string;
     generatedAt: string;
+    replyKpiThrough: string | null;
   };
   scope: {
     stores: number;
@@ -305,7 +306,7 @@ function ReportContent() {
               <MetricCard
                 label="ตอบภายใน 24 ชม."
                 value={formatRate(report.totals.replyRateWithin24h)}
-                detail={`${formatNumber(report.totals.repliedWithin24h)} / ${formatNumber(report.totals.responseCycles)} eligible cycles · ${formatNumber(report.scope.replyComplete)}/${formatNumber(report.scope.stores)} stores complete`}
+                detail={`${formatNumber(report.totals.repliedWithin24h)} / ${formatNumber(report.totals.responseCycles)} eligible chats · KPI through ${report.period.replyKpiThrough ?? "—"}`}
               />
               <MetricCard label="Follower Growth" value={formatNumber(report.totals.monthFollowerGrowth)} detail={`ช่วง 20 เป็นต้นมา ${formatNumber(report.totals.focusFollowerGrowth)}`} />
             </section>
@@ -324,7 +325,7 @@ function ReportContent() {
                 <div>
                   <h2 className="text-base font-semibold">Production data check</h2>
                   <p className="mt-1 text-xs text-[var(--app-text-secondary)]">
-                    Official 24h KPI ใช้เฉพาะ response cycles ที่พ้น SLA 24 ชม. หรือมีคำตอบแล้ว และต้องพิสูจน์ outcome ได้ครบทุก eligible cycle ของร้าน
+                    Official 24h KPI ใช้ Historical Timeline ที่ merge historical + canonical data แล้ว และตัดวันล่าสุดที่ยังไม่ครบหน้าต่างตอบกลับ 24 ชั่วโมงออก
                   </p>
                 </div>
                 <input
@@ -376,7 +377,7 @@ function ReportContent() {
                         <td className="px-3 py-3">
                           <ReplyCoverageBadge value={store.chat.replyCoverage} />
                           <div className="mt-1 text-[11px] text-[var(--app-text-tertiary)]">
-                            covered {formatNumber(store.chat.coveredResponseCycles)} / {formatNumber(store.chat.responseCycles)} eligible cycles
+                            Historical timeline: {formatNumber(store.chat.coveredResponseCycles)} eligible chats
                           </div>
                           {store.chat.replyCoverage !== "complete" && store.chat.observedReplyRateWithin24h !== null ? (
                             <div className="mt-1 text-[11px] text-[var(--app-text-tertiary)]">
