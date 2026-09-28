@@ -5955,3 +5955,14 @@ Current state: local follow-up fix and checks are complete; the follow-up commit
 - Historical rows/crosswalks/conversations are normalized back to the OA's current Store.id for aggregation.
 - Added regression coverage proving a Historical row under a legacy store ID joins a current-store canonical reply through the same OA and produces a <=24h response cycle.
 - No Historical rows, crosswalks, Store records, OA assignments, or Mirror worker state are modified.
+
+
+## 2026-09-28 — Historical SLA reads include stable OA alias families
+
+- Production validation showed OPPO Central Nakhon still at 0/83 after Store.id normalization even though LINE Manager visibly contained human replies.
+- Follow-up root cause: Historical rows can be attached to an older LineOfficialAccount database row while the current store uses a newer OA row for the same real LINE OA.
+- Historical reply analytics now builds a fail-closed OA family from stable identifiers (basicId, channelId, destinationId), includes matching archived/legacy OA records in read scope, and normalizes those aliases back to the current OA/current store before cycle aggregation.
+- Historical read queries no longer require the legacy OA row itself to be active/unarchived.
+- Zero-Rate Forensics now reuses Historical reply analytics evidence counts instead of issuing a separate Store.id-scoped Historical count query.
+- Added regression coverage for current OA + legacy OA record with the same basicId.
+- No OA records, Historical rows, crosswalks, Store mappings, or Mirror workers are modified.
