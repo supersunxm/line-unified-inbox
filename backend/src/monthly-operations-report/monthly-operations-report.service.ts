@@ -514,11 +514,23 @@ export class MonthlyOperationsReportService {
     const mirrorStateByAccount = new Map(
       mirrorStates.map((state) => [state.lineOfficialAccountId, state] as const),
     );
-    const mirrorChatsByAccount = new Map<string, typeof mirrorChats>();
+    const mirrorRelevantChatCountByAccount = new Map<string, number>();
+    const mirrorCompleteChatCountByAccount = new Map<string, number>();
     for (const chat of mirrorChats) {
-      const current = mirrorChatsByAccount.get(chat.lineOfficialAccountId) ?? [];
-      current.push(chat);
-      mirrorChatsByAccount.set(chat.lineOfficialAccountId, current);
+      mirrorRelevantChatCountByAccount.set(
+        chat.lineOfficialAccountId,
+        (mirrorRelevantChatCountByAccount.get(chat.lineOfficialAccountId) ?? 0) + 1,
+      );
+      if (
+        chat.historicalBackfillStatus === "FAST_PATH_COMPLETE"
+        && Boolean(chat.historicalBackfillOldestAt)
+        && chat.historicalBackfillOldestAt!.getTime() <= bounds.start.getTime()
+      ) {
+        mirrorCompleteChatCountByAccount.set(
+          chat.lineOfficialAccountId,
+          (mirrorCompleteChatCountByAccount.get(chat.lineOfficialAccountId) ?? 0) + 1,
+        );
+      }
     }
 
     const stores: MonthlyOperationsStoreRow[] = accounts
@@ -550,16 +562,12 @@ export class MonthlyOperationsReportService {
         ).length;
 
         const state = mirrorStateByAccount.get(account.id);
-        const relevantChats = mirrorChatsByAccount.get(account.id) ?? [];
-        const completeChats = relevantChats.filter((chat) =>
-          chat.historicalBackfillStatus === "FAST_PATH_COMPLETE"
-          && Boolean(chat.historicalBackfillOldestAt)
-          && chat.historicalBackfillOldestAt!.getTime() <= bounds.start.getTime(),
-        ).length;
+        const relevantChats = mirrorRelevantChatCountByAccount.get(account.id) ?? 0;
+        const completeChats = mirrorCompleteChatCountByAccount.get(account.id) ?? 0;
         const replyCoverage = classifyReplyKpiCoverage({
           mirrorEnabled: state?.enabled === true,
           lastSuccessfulSyncAt: state?.lastSuccessfulSyncAt ?? null,
-          relevantChats: relevantChats.length,
+          relevantChats,
           completeChats,
         });
         const mirrorFallbackReplies = mirrorFallbackRepliesByAccount.get(account.id) ?? 0;
