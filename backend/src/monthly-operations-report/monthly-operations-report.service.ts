@@ -769,6 +769,12 @@ export class MonthlyOperationsReportService {
         replyPartial: stores.filter((store) => store.chat.replyCoverage === "partial").length,
         replyNotCovered: stores.filter((store) => store.chat.replyCoverage === "not_covered").length,
       },
+      historicalSources: {
+        historicalTextMessages: historicalMonthAnalytics?.sources.historicalTextMessages ?? 0,
+        currentMessages: historicalMonthAnalytics?.sources.currentMessages ?? 0,
+        exactDuplicatesSuppressed: historicalMonthAnalytics?.sources.exactDuplicatesSuppressed ?? 0,
+        historicalChats: historicalMonthAnalytics?.sources.historicalChats ?? 0,
+      },
       totals: {
         ...totals,
         replyRateWithin24h: totals.responseCycles === 0 ? null : totals.repliedWithin24h / totals.responseCycles,
@@ -924,8 +930,8 @@ export class MonthlyOperationsReportService {
         ["Reply KPI Coverage - Partial Stores", report.scope.replyPartial, report.period.month, "Excluded from official 24h KPI"],
         ["Reply KPI Coverage - Not Covered Stores", report.scope.replyNotCovered, report.period.month, "Excluded from official 24h KPI"],
         ["Historical KPI Through", report.period.replyKpiThrough ?? "", report.period.month, "Current-month KPI excludes the latest two Bangkok calendar days to guarantee a full 24h response window"],
-        ["Historical Text Messages", historicalMonthAnalytics?.sources.historicalTextMessages ?? 0, report.period.month, "Historical Timeline read model rows used by reply analytics"],
-        ["Canonical Messages in KPI", historicalMonthAnalytics?.sources.currentMessages ?? 0, report.period.month, "Current canonical messages merged into the Historical Timeline analytics"],
+        ["Historical Text Messages", report.historicalSources.historicalTextMessages, report.period.month, "Historical Timeline read model rows used by reply analytics"],
+        ["Canonical Messages in KPI", report.historicalSources.currentMessages, report.period.month, "Current canonical messages merged into the Historical Timeline analytics"],
         ["Follower Growth - Month", report.totals.monthFollowerGrowth, monthPeriod, ""],
         ["Follower Growth - Since Day 20", report.totals.focusFollowerGrowth, focusPeriod, ""],
         ["Inbound Messages - Month", report.totals.inboundMessages, monthPeriod, "Canonical Message inbound"],
