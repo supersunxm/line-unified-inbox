@@ -384,11 +384,6 @@ function ReportContent() {
                               observed {formatRate(store.chat.observedReplyRateWithin24h)} · not official
                             </div>
                           ) : null}
-                          {store.chat.mirrorFallbackReplies > 0 ? (
-                            <div className="mt-1 text-[11px] text-[var(--app-text-tertiary)]">
-                              +{formatNumber(store.chat.mirrorFallbackReplies)} Manager fallback replies
-                            </div>
-                          ) : null}
                           <div className="mt-1 text-[11px] text-[var(--app-text-tertiary)]">
                             Follower: <CoverageBadge value={store.dataQuality.followerCoverage} />
                           </div>
