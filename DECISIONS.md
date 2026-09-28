@@ -2884,3 +2884,15 @@ The first production target proof confirmed that eligible candidate OAs have no 
 - Virtual Historical discovery excludes direct identities, safe crosslinks, and any identity with a canonical source-event match. Unanchored identities remain virtual and read-only; ambiguous or conflicting identities are not persisted.
 - Store 30282 evidence resolved the screenshot text to source event `631303932702359672` and canonical Conversation `e9f88a82-ffc4-45c0-b755-20a847fa6ef4` with a 3 ms timestamp delta. The canonical Conversation’s null LINE chat ID explains why the previous direct-key timeline read omitted that Historical chat. The nearby sticker and image remain `NON_TEXT_NOT_BACKFILLED` and do not block text visibility acceptance.
 - Production has only the additive table migration applied at this checkpoint. Crosswalk persistence follows code deployment; post-deployment acceptance must call the canonical service read path and prove zero missing text, source duplicates, and virtual copies for the canary and required representatives.
+
+
+## 2026-09-28 — Monthly Operations Report must remain read-only and Mirror-isolated
+
+**Decision:** Build the monthly operations report as a separate NestJS module that reads existing canonical reporting data. It must not modify Live Mirror polling/reconciliation, Historical Mirror collection/backfill/crosswalk, or their state machines.
+
+**Rationale:** The reporting feature needs Store Master metadata, follower snapshots, and message timelines that already exist. Reusing those read models avoids duplicate ingestion and prevents reporting work from destabilizing Mirror collection.
+
+**Implementation boundary:**
+- Allowed: Store Master reads, `LineOaFollowerSnapshot` reads, canonical `Message` reads, shared pure response-cycle helper, report controller/service/module registration.
+- Not allowed: line-chat worker changes, Mirror scheduler/lease/session changes, Historical Timeline writes, crosswalk writes, Message writes, schema migration for this P0.
+- Report output must declare its data sources and Mirror write flags so consumers can audit the boundary.
