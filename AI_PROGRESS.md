@@ -5945,3 +5945,13 @@ Current state: local follow-up fix and checks are complete; the follow-up commit
 - The UI shows the per-store cause, response-cycle totals, late/pending counts, Historical outbound counts, auto-response counts, and remaining virtual Historical rows.
 - Added deterministic regression tests for the forensic classifier.
 - No Monthly KPI formula, Historical data, crosswalk, canonical message, or Mirror worker state is modified.
+
+
+## 2026-09-28 — Historical reply analytics normalized by current LINE OA identity
+
+- User-provided Manager recording for OPPO Central Nakhon showed clear human replies on Sep 26 despite Monthly Report classifying the store as 0/83 and Zero-Rate Forensics reporting Hist Outbound = 0.
+- Root cause identified in read analytics: Historical rows and crosswalks were hard-filtered by the current Store.id. Historical imports can retain a legacy Store.id while preserving the same LineOfficialAccount.id, causing valid Historical outbound evidence to be excluded from current-store analytics.
+- Reply analytics now resolves active STORE OAs for the current report scope and uses LineOfficialAccount.id as the historical read identity.
+- Historical rows/crosswalks/conversations are normalized back to the OA's current Store.id for aggregation.
+- Added regression coverage proving a Historical row under a legacy store ID joins a current-store canonical reply through the same OA and produces a <=24h response cycle.
+- No Historical rows, crosswalks, Store records, OA assignments, or Mirror worker state are modified.
