@@ -71,6 +71,7 @@ type ReplyCounts = {
 };
 
 export type HistoricalResponseBucket = "under4h" | "between4and12h" | "between12and24h" | "over24h";
+export type HistoricalReplyAnalyticsMode = "CHAT_FIRST_REPLY" | "RESPONSE_CYCLES";
 
 function emptyReplyCounts(): ReplyCounts {
   return { total: 0, responded: 0, within24h: 0, over24h: 0, pending: 0, knownResponderReplies: 0, unknownResponderReplies: 0 };
@@ -103,6 +104,52 @@ function rate(count: number, total: number): number | null {
   return total === 0 ? null : Math.round((count / total) * 1000) / 10;
 }
 
+function isUnifiedReplyEvidence(message: UnifiedReplyMessage): boolean {
+  if (message.direction !== MessageDirection.OUTBOUND) return false;
+  if (message.source === "HISTORICAL") return isHistoricalReplyEvidence(message.senderBizId);
+  return isCurrentReplyEvidence({
+    direction: message.direction,
+    deliveryStatus: message.deliveryStatus,
+    sentAt: message.sentAt,
+    senderUserId: message.senderUserId,
+    senderDisplayName: message.senderDisplayName,
+    rawPayload: message.rawPayload,
+  });
+}
+
+type UnifiedReplyCycle = {
+  firstInbound: UnifiedReplyMessage;
+  humanReply: UnifiedReplyMessage | null;
+};
+
+export function calculateUnifiedReplyCycles(
+  messages: readonly UnifiedReplyMessage[],
+  startAt: Date,
+  endDateExclusive: Date,
+): UnifiedReplyCycle[] {
+  const sorted = [...messages].sort((left, right) =>
+    left.sentAt.getTime() - right.sentAt.getTime() || left.id.localeCompare(right.id),
+  );
+  const cycles: UnifiedReplyCycle[] = [];
+  let firstInbound: UnifiedReplyMessage | null = null;
+
+  for (const message of sorted) {
+    if (
+      message.direction === MessageDirection.INBOUND
+      && message.sentAt >= startAt
+      && message.sentAt < endDateExclusive
+    ) {
+      if (!firstInbound) firstInbound = message;
+      continue;
+    }
+    if (!firstInbound || message.sentAt < firstInbound.sentAt || !isUnifiedReplyEvidence(message)) continue;
+    cycles.push({ firstInbound, humanReply: message });
+    firstInbound = null;
+  }
+
+  if (firstInbound) cycles.push({ firstInbound, humanReply: null });
+  return cycles;
+}
 function deterministicVirtualCustomerId(lineOfficialAccountId: string, lineChatUserId: string): string {
   const hash = createHash("sha256").update(`${lineOfficialAccountId}\u0000${lineChatUserId}`).digest("hex");
   return `historical-customer:${hash}`;
@@ -670,7 +717,12 @@ export class HistoricalTimelineService {
     };
   }
 
-  async replyAnalytics(user: AuthUser, input: { dateFrom?: string; dateTo?: string; storeId?: string }) {
+  async replyAnalytics(user: AuthUser, input: {
+    dateFrom?: string;
+    dateTo?: string;
+    storeId?: string;
+    mode?: HistoricalReplyAnalyticsMode;
+  }) {
     if (!input.dateFrom || !input.dateTo) throw new BadRequestException("dateFrom and dateTo are required");
     const startAt = parseBangkokDate(input.dateFrom, "dateFrom");
     const endDateExclusive = parseBangkokDate(input.dateTo, "dateTo");
