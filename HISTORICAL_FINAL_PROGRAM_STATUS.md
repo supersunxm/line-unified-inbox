@@ -27,7 +27,7 @@ Base: origin/main at df527c7b8f852007ded02a78358c5039fd470163
 - Migration required: YES. Add typed messageType, mediaMetadata, and fileName. Preserve sourceEventType, sourceEventId, archive provenance, direction, sentAt ordering, and unique Historical identity. Crosswalk resolution remains scoped and read-only; text analytics selects TEXT.
 - Live Mirror restart required by normal deployment: YES. Railway line-chat-nickname-worker watches backend/prisma/**, including this migration. line-unified-inbox watches backend/** and its pre-deploy runs Prisma migrations and Store Master sync. frontend watches frontend/**.
 - Local implementation: migration-based mapper, metadata-only backfill, read-only placeholders, and deterministic tests are complete on the feature branch. Production lacks the three columns; no migration or media backfill was applied.
-- Branch: codex/historical-final-completion-20260928. PR: none. Deployment: none.
+- Branch: codex/historical-final-completion-20260928. PR: #379, draft and marked DO NOT MERGE. Deployment: none.
 - Final result: READY_BUT_BLOCKED_BY_LIVE_MIRROR_ISOLATION (65%).
 
 ## H4 Names / Responders
@@ -46,9 +46,9 @@ Root Markdown reports do not match Railway service watch paths, so docs-only pub
 
 ## Git and Publication
 
-- Implementation commit: 0258da2b. Reports are committed separately. No hosted PR or publication was possible with the current GitHub authentication.
-- Pull requests: none. Merged: no.
-- Unmerged intentionally: feature branch, because its migration triggers the Live Mirror worker watch. Separate docs-only publication is safe by path analysis; hosted publication requires valid GitHub authorization and CI.
+- Feature commits 0258da2b and 8a3cfad4 are pushed. Draft PR #379 is open. Docs-only branch codex/historical-final-reports-20260928 is pushed at 1193387e; PR #380 is open; its current head has no Actions runs or combined status checks.
+- Pull requests: #379 (draft H3; DO NOT MERGE) and #380 (docs-only). Merged: no.
+- Unmerged intentionally: #379 remains a draft because its migration triggers the Live Mirror worker watch. PR #380 is docs-only and remains unmerged because no CI runs/status checks are present; merge only after CI passes and the watch-path check remains safe.
 
 ## Changed-file inventory
 
