@@ -128,6 +128,7 @@ function ReportContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [downloading, setDownloading] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -159,6 +160,43 @@ function ReportContent() {
   }, [month]);
 
   useEffect(() => { void load(); }, [load]);
+
+  const downloadXlsx = useCallback(async () => {
+    setDownloading(true);
+    setError(null);
+    try {
+      const response = await fetch(`/api-backend/monthly-operations-report/export?month=${encodeURIComponent(month)}`, {
+        credentials: "include",
+      });
+      if (response.status === 401) {
+        window.location.replace("/login");
+        return;
+      }
+      if (!response.ok) {
+        let message = `ดาวน์โหลด Excel ไม่สำเร็จ (${response.status})`;
+        try {
+          const body = await response.json() as { message?: string | string[] };
+          if (body.message) message = Array.isArray(body.message) ? body.message.join(", ") : body.message;
+        } catch {}
+        throw new Error(message);
+      }
+      const blob = await response.blob();
+      const disposition = response.headers.get("Content-Disposition") ?? "";
+      const filename = disposition.match(/filename="([^"]+)"/)?.[1] ?? `OPPO_LINE_monthly_operations_${month}.xlsx`;
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = filename;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "ไม่สามารถดาวน์โหลด Excel ได้");
+    } finally {
+      setDownloading(false);
+    }
+  }, [month]);
 
   const rows = useMemo(() => {
     if (!report) return [];
@@ -203,9 +241,17 @@ function ReportContent() {
               type="button"
               onClick={() => void load()}
               disabled={loading}
-              className="h-10 rounded-xl bg-[var(--app-accent)] px-4 text-sm font-semibold text-white disabled:opacity-60"
+              className="h-10 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] px-4 text-sm font-semibold text-[var(--app-text-primary)] disabled:opacity-60"
             >
               {loading ? "กำลังโหลด…" : "รีเฟรช"}
+            </button>
+            <button
+              type="button"
+              onClick={() => void downloadXlsx()}
+              disabled={downloading || loading || !report}
+              className="h-10 rounded-xl bg-[var(--app-accent)] px-4 text-sm font-semibold text-white disabled:opacity-60"
+            >
+              {downloading ? "กำลังสร้าง Excel…" : "ดาวน์โหลด XLSX"}
             </button>
           </div>
         </div>

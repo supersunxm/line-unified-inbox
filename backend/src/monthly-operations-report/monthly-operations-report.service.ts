@@ -5,6 +5,7 @@ import { StoreAccessService } from "../auth/store-access.service";
 import { formatDbDateToIso, getTodayBangkokDateString, toUtcDateForDb } from "../follower-insights/date-utils";
 import { type AnalyticsMessage, bangkokMonthBounds } from "../mobile/monthly-summary.service";
 import { PrismaService } from "../prisma.service";
+import ExcelJS from "exceljs";
 
 const BANGKOK_OFFSET_MS = 7 * 60 * 60 * 1000;
 const RESPONSE_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -434,4 +435,166 @@ export class MonthlyOperationsReportService {
       },
     };
   }
+  async exportXlsx(user: AuthUser, requestedMonth?: string): Promise<{
+    buffer: Buffer;
+    filename: string;
+    contentType: string;
+  }> {
+    const report = await this.get(user, requestedMonth);
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = "OPPO LINE OA Monitor";
+    workbook.created = new Date();
+
+    const detailHeaders = [
+      "序号", "来源账号", "标准门店名称", "后台账号名称", "Google表ACCOUNT NAME",
+      "STORE ID", "AM", "BM NAME", "Line账号ID", "省份 Province", "区域 Region",
+      "匹配状态", "匹配方式", "月初累计好友", "20日累计好友", "期末累计好友",
+      "本月累计新增粉丝", "20日后新增粉丝", "本月用户私信数", "20日后用户私信数",
+      "本月24小时以内回复数", "20日后24小时以内回复数", "本月回复率", "20日后回复率",
+      "本月已打标签人数", "本月未打标签人数", "本月标签统计基数", "本月标签覆盖率",
+      "20日后已打标签人数", "20日后未打标签人数", "20日后标签统计基数", "20日后标签覆盖率",
+      "聊天列表检查数", "数据状态", "备注",
+    ];
+
+    const detail = workbook.addWorksheet("运营明细", {
+      views: [{ state: "frozen", ySplit: 1, xSplit: 3 }],
+    });
+    detail.addRow(detailHeaders);
+    detail.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
+    detail.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1F4E78" } };
+    detail.getRow(1).alignment = { vertical: "middle", horizontal: "center", wrapText: true };
+    detail.getRow(1).height = 34;
+
+    report.stores.forEach((store, index) => {
+      const dataStatus = store.dataQuality.followerCoverage === "complete" && store.dataQuality.notes.length === 0
+        ? "COMPLETE"
+        : store.dataQuality.followerCoverage === "missing"
+          ? "MISSING"
+          : "PARTIAL";
+      const notes = [...store.dataQuality.notes, "tag_history_unavailable"].join("; ");
+      detail.addRow([
+        index + 1, "STORE", store.storeName, store.accountName ?? "", store.accountName ?? "",
+        store.externalStoreId ?? "", store.amName ?? "", store.bmName ?? "", store.lineBasicId ?? "",
+        store.province ?? "", store.region ?? "", store.externalStoreId ? "MATCHED" : "UNMATCHED",
+        store.externalStoreId ? "STORE_MASTER" : "STORE_FALLBACK",
+        store.followers.monthStart, store.followers.focusStart, store.followers.periodEnd,
+        store.followers.monthGrowth, store.followers.focusGrowth,
+        store.chat.inboundMessages, store.chat.focusInboundMessages,
+        store.chat.repliedWithin24h, store.chat.focusRepliedWithin24h,
+        store.chat.replyRateWithin24h, store.chat.focusReplyRateWithin24h,
+        null, null, null, null, null, null, null, null,
+        store.chat.responseCycles, dataStatus, notes,
+      ]);
+    });
+
+    const widths = [8, 12, 30, 28, 28, 14, 16, 28, 18, 18, 16, 14, 16, 14, 14, 14, 16, 16, 16, 16, 18, 18, 14, 14, 16, 16, 16, 16, 16, 16, 16, 16, 16, 14, 40];
+    detail.columns.forEach((column, index) => { column.width = widths[index] ?? 14; });
+    detail.getColumn(23).numFmt = "0.0%";
+    detail.getColumn(24).numFmt = "0.0%";
+    detail.getColumn(28).numFmt = "0.0%";
+    detail.getColumn(32).numFmt = "0.0%";
+    detail.eachRow((row, rowNumber) => {
+      if (rowNumber > 1) row.alignment = { vertical: "top", wrapText: true };
+    });
+    if (report.stores.length > 0) {
+      detail.autoFilter = {
+        from: { row: 1, column: 1 },
+        to: { row: report.stores.length + 1, column: detailHeaders.length },
+      };
+    }
+
+    const summary = workbook.addWorksheet("汇总", { views: [{ state: "frozen", ySplit: 2 }] });
+    summary.mergeCells("A1:D1");
+    summary.getCell("A1").value = "OPPO LINE Monthly Operations Report — " + report.period.month;
+    summary.getCell("A1").font = { bold: true, size: 16, color: { argb: "FFFFFFFF" } };
+    summary.getCell("A1").fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1F4E78" } };
+    summary.getCell("A1").alignment = { vertical: "middle", horizontal: "center" };
+    summary.getRow(1).height = 28;
+    summary.addRow(["指标", "数值", "期间/口径", "备注"]);
+    summary.getRow(2).font = { bold: true };
+    summary.getRow(2).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFD9EAF7" } };
+
+    const monthPeriod = report.period.start + " → " + report.period.through;
+    const focusPeriod = report.period.focusStart + " → " + report.period.through;
+    const metrics: Array<[string, string | number | null, string, string]> = [
+      ["门店数", report.scope.stores, report.period.month, ""],
+      ["LINE OA数", report.scope.lineAccounts, report.period.month, ""],
+      ["Follower snapshot 完整", report.scope.followerComplete, report.period.start + " / " + report.period.focusStart + " / " + report.period.through, ""],
+      ["Follower snapshot 部分", report.scope.followerPartial, report.period.month, ""],
+      ["Follower snapshot 缺失", report.scope.followerMissing, report.period.month, ""],
+      ["本月新增粉丝", report.totals.monthFollowerGrowth, monthPeriod, ""],
+      ["20日后新增粉丝", report.totals.focusFollowerGrowth, focusPeriod, ""],
+      ["本月用户私信数", report.totals.inboundMessages, monthPeriod, "Canonical Message inbound"],
+      ["20日后用户私信数", report.totals.focusInboundMessages, focusPeriod, "Canonical Message inbound"],
+      ["本月Response Cycles", report.totals.responseCycles, monthPeriod, "连续inbound直到human reply为1 cycle"],
+      ["本月24小时以内回复数", report.totals.repliedWithin24h, monthPeriod, "Delivered human reply <= 24h"],
+      ["本月24小时回复率", report.totals.replyRateWithin24h, monthPeriod, "24h replies / response cycles"],
+      ["20日后24小时以内回复数", report.totals.focusRepliedWithin24h, focusPeriod, ""],
+      ["20日后24小时回复率", report.totals.focusReplyRateWithin24h, focusPeriod, ""],
+    ];
+    metrics.forEach((row) => summary.addRow(row));
+    summary.getColumn(1).width = 28;
+    summary.getColumn(2).width = 18;
+    summary.getColumn(3).width = 28;
+    summary.getColumn(4).width = 44;
+    for (let rowNumber = 3; rowNumber <= summary.rowCount; rowNumber += 1) {
+      const key = String(summary.getCell("A" + rowNumber).value ?? "");
+      if (key.includes("回复率")) summary.getCell("B" + rowNumber).numFmt = "0.0%";
+    }
+
+    const regionSummary = workbook.addWorksheet("账号分组汇总", { views: [{ state: "frozen", ySplit: 1 }] });
+    regionSummary.addRow(["Region", "Stores", "Inbound", "Response Cycles", "<=24h Replies", "24h Reply Rate", "Follower Growth"]);
+    regionSummary.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
+    regionSummary.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1F4E78" } };
+    const byRegion = new Map<string, { stores: number; inbound: number; cycles: number; replies: number; followerGrowth: number }>();
+    for (const store of report.stores) {
+      const key = store.region || "Unspecified";
+      const current = byRegion.get(key) ?? { stores: 0, inbound: 0, cycles: 0, replies: 0, followerGrowth: 0 };
+      current.stores += 1;
+      current.inbound += store.chat.inboundMessages;
+      current.cycles += store.chat.responseCycles;
+      current.replies += store.chat.repliedWithin24h;
+      current.followerGrowth += store.followers.monthGrowth ?? 0;
+      byRegion.set(key, current);
+    }
+    for (const [region, values] of [...byRegion.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+      regionSummary.addRow([
+        region, values.stores, values.inbound, values.cycles, values.replies,
+        values.cycles === 0 ? null : values.replies / values.cycles,
+        values.followerGrowth,
+      ]);
+    }
+    regionSummary.columns = [
+      { width: 18 }, { width: 12 }, { width: 14 }, { width: 18 }, { width: 16 }, { width: 16 }, { width: 16 },
+    ];
+    regionSummary.getColumn(6).numFmt = "0.0%";
+
+    const methodology = workbook.addWorksheet("口径说明");
+    methodology.addRow(["项目", "口径"]);
+    methodology.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
+    methodology.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1F4E78" } };
+    const methodologyRows = [
+      ["时区", "Asia/Bangkok"],
+      ["Follower", "读取 LineOaFollowerSnapshot。月初、20日、期末按该日期或之前最近可用的当月快照；不会回退到上个月。"],
+      ["本月用户私信数", "Canonical Message timeline 中 direction=INBOUND 的消息数。"],
+      ["Response Cycle", "同一会话连续 inbound 直到首个 delivered human outbound 视为一个 cycle。"],
+      ["Human Reply", "内部 senderUserId 或 canonical LINE Manager metadata(source=LINE_MANAGER_MIRROR/provider=LINE_MANAGER)；自动回复不计。"],
+      ["24小时回复", "Response cycle 首个 human reply 与 cycle 开始时间差 <=24小时。"],
+      ["Tag字段", "当前 P0 尚无可靠 historical tag snapshot，因此 Y:AF 留空，并在备注写 tag_history_unavailable。"],
+      ["Mirror隔离", "报表只读 Message / follower snapshots / Store Master；不写 Live Mirror 或 Historical Mirror。"],
+      ["生成时间", report.period.generatedAt],
+    ];
+    methodologyRows.forEach((row) => methodology.addRow(row));
+    methodology.getColumn(1).width = 24;
+    methodology.getColumn(2).width = 100;
+    methodology.getColumn(2).alignment = { wrapText: true, vertical: "top" };
+
+    const arrayBuffer = await workbook.xlsx.writeBuffer();
+    return {
+      buffer: Buffer.from(arrayBuffer),
+      filename: "OPPO_LINE_monthly_operations_" + report.period.month + "_" + report.scope.stores + "stores.xlsx",
+      contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    };
+  }
+
 }

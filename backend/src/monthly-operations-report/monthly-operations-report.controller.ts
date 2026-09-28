@@ -1,10 +1,19 @@
-import { Controller, Get, Query, Req } from "@nestjs/common";
+import { Controller, Get, Query, Req, Res } from "@nestjs/common";
+import type { Response } from "express";
 import type { AuthRequest } from "../auth/auth.guard";
 import { MonthlyOperationsReportService } from "./monthly-operations-report.service";
 
 @Controller("monthly-operations-report")
 export class MonthlyOperationsReportController {
   constructor(private readonly report: MonthlyOperationsReportService) {}
+
+  @Get("export")
+  async export(@Req() request: AuthRequest, @Res() response: Response, @Query("month") month?: string) {
+    const file = await this.report.exportXlsx(request.user!, month);
+    response.setHeader("Content-Type", file.contentType);
+    response.setHeader("Content-Disposition", `attachment; filename="${file.filename}"`);
+    response.send(file.buffer);
+  }
 
   @Get()
   async get(@Req() request: AuthRequest, @Query("month") month?: string) {

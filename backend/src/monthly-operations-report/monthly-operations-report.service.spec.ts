@@ -1,3 +1,4 @@
+import ExcelJS from "exceljs";
 import { MessageDeliveryStatus, MessageDirection } from "@prisma/client";
 import {
   calculateReportResponseCycles,
@@ -124,5 +125,104 @@ describe("MonthlyOperationsReportService helpers", () => {
 
     expect(cycles).toHaveLength(1);
     expect(cycles[0].answeredAt).toBeNull();
+  });
+});
+
+
+describe("MonthlyOperationsReportService XLSX export", () => {
+  it("exports the August-compatible 35-column detail layout without inventing tag history", async () => {
+    const { MonthlyOperationsReportService } = await import("./monthly-operations-report.service");
+    const service = new MonthlyOperationsReportService({} as never, {} as never);
+    (service as unknown as { get: () => Promise<unknown> }).get = async () => ({
+      period: {
+        month: "2026-09",
+        timezone: "Asia/Bangkok",
+        isCurrentMonth: true,
+        start: "2026-09-01",
+        focusStart: "2026-09-20",
+        through: "2026-09-28",
+        generatedAt: "2026-09-28T04:30:00.000Z",
+      },
+      scope: { stores: 1, lineAccounts: 1, followerComplete: 1, followerPartial: 0, followerMissing: 0 },
+      totals: {
+        inboundMessages: 10,
+        focusInboundMessages: 3,
+        responseCycles: 4,
+        repliedWithin24h: 3,
+        focusResponseCycles: 2,
+        focusRepliedWithin24h: 2,
+        monthFollowerGrowth: 20,
+        focusFollowerGrowth: 5,
+        replyRateWithin24h: 0.75,
+        focusReplyRateWithin24h: 1,
+      },
+      stores: [{
+        storeId: "store-1",
+        externalStoreId: "25610",
+        storeName: "OPPO Central World",
+        accountName: "OPPO Central World",
+        lineOaId: "oa-1",
+        lineBasicId: "@126fiiqf",
+        province: "Bangkok",
+        region: "Central",
+        amName: null,
+        bmName: "BM Test",
+        followers: {
+          monthStart: 100,
+          monthStartDate: "2026-09-01",
+          focusStart: 115,
+          focusStartDate: "2026-09-20",
+          periodEnd: 120,
+          periodEndDate: "2026-09-28",
+          monthGrowth: 20,
+          focusGrowth: 5,
+        },
+        chat: {
+          inboundMessages: 10,
+          focusInboundMessages: 3,
+          responseCycles: 4,
+          repliedWithin24h: 3,
+          focusResponseCycles: 2,
+          focusRepliedWithin24h: 2,
+          replyRateWithin24h: 0.75,
+          focusReplyRateWithin24h: 1,
+        },
+        dataQuality: {
+          followerCoverage: "complete",
+          chatCoverage: "canonical_message_timeline",
+          notes: [],
+        },
+      }],
+      dataContract: {
+        followerSource: "LineOaFollowerSnapshot",
+        chatSource: "Message",
+        responseDefinition: "test",
+        historicalTimelineRead: false,
+        liveMirrorWrite: false,
+        historicalMirrorWrite: false,
+      },
+    });
+
+    const file = await service.exportXlsx({} as never, "2026-09");
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(file.buffer as unknown as ExcelJS.Buffer);
+
+    expect(workbook.worksheets.map((sheet) => sheet.name)).toEqual([
+      "运营明细",
+      "汇总",
+      "账号分组汇总",
+      "口径说明",
+    ]);
+
+    const detail = workbook.getWorksheet("运营明细")!;
+    expect(detail.columnCount).toBe(35);
+    expect(detail.getRow(1).values).toContain("本月24小时以内回复数");
+    expect(detail.getCell("A2").value).toBe(1);
+    expect(detail.getCell("F2").value).toBe("25610");
+    expect(detail.getCell("U2").value).toBe(3);
+    expect(detail.getCell("W2").value).toBe(0.75);
+    expect(detail.getCell("Y2").value).toBeNull();
+    expect(String(detail.getCell("AI2").value)).toContain("tag_history_unavailable");
+    expect(file.filename).toBe("OPPO_LINE_monthly_operations_2026-09_1stores.xlsx");
   });
 });
