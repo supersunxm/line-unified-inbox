@@ -14,6 +14,9 @@ type HistoricalRecord = {
   id: string;
   direction: MessageDirection;
   text: string;
+  messageType?: MessageType;
+  mediaMetadata?: Prisma.JsonValue | null;
+  fileName?: string | null;
   sentAt: Date;
   senderBizId: string | null;
   sourceEventId: string;
@@ -35,8 +38,13 @@ type VirtualChatRow = {
   messageCount: number;
   previewId: string;
   previewText: string;
+  previewMessageType: MessageType;
+  previewMediaMetadata: Prisma.JsonValue | null;
+  previewFileName: string | null;
   previewDirection: MessageDirection;
   previewSentAt: Date;
+  previewSourceEventId: string;
+  previewSourceEventType: string;
   previewSenderBizId: string | null;
   customerId: string | null;
   customerDisplayName: string | null;
@@ -134,17 +142,27 @@ export function mapHistoricalTimelineMessage(record: HistoricalRecord) {
       : record.senderBizId
         ? "Store staff"
         : null;
+  const metadata = typeof record.mediaMetadata === "object" && record.mediaMetadata !== null && !Array.isArray(record.mediaMetadata)
+    ? record.mediaMetadata
+    : {};
+  const mediaDetails = {
+    availability: "availability" in metadata && metadata.availability === "METADATA_ONLY" ? "METADATA_ONLY" as const : null,
+    packageId: "packageId" in metadata && typeof metadata.packageId === "string" ? metadata.packageId : null,
+    stickerId: "stickerId" in metadata && typeof metadata.stickerId === "string" ? metadata.stickerId : null,
+    resourceType: "resourceType" in metadata && typeof metadata.resourceType === "string" ? metadata.resourceType : null,
+    duration: "duration" in metadata && typeof metadata.duration === "number" ? metadata.duration : null,
+  };
   return {
     id: record.id,
     direction: record.direction,
-    messageType: MessageType.TEXT,
-    originalText: record.text,
+    messageType: record.messageType ?? MessageType.TEXT,
+    originalText: record.messageType && record.messageType !== MessageType.TEXT ? "" : record.text,
     originalLanguage: null,
     translatedThai: null,
     translatedEnglish: null,
     translatedChinese: null,
     sentAt: record.sentAt.toISOString(),
-    fileName: null,
+    fileName: record.fileName ?? null,
     sender: senderName ? { userId: null, displayName: senderName } : null,
     media: null,
     latitude: null,
@@ -153,6 +171,8 @@ export function mapHistoricalTimelineMessage(record: HistoricalRecord) {
     historical: true,
     sourceEventId: record.sourceEventId,
     sourceEventType: record.sourceEventType,
+    historicalMediaMetadata: record.messageType && record.messageType !== MessageType.TEXT ? mediaDetails : null,
+    ...(record.messageType === MessageType.STICKER ? { sticker: { text: null, keywords: [] } } : {}),
   };
 }
 
@@ -269,6 +289,9 @@ export class HistoricalTimelineService {
         oa."connectionStatus"::text AS "connectionStatus", oa."isActive" AS "oaActive",
         oa."lastWebhookReceivedAt", c."lineChatUserId", c."latestMessageAt", c."messageCount",
         latest."id" AS "previewId", latest."text" AS "previewText",
+        latest."messageType" AS "previewMessageType", latest."mediaMetadata" AS "previewMediaMetadata",
+        latest."fileName" AS "previewFileName", latest."sourceEventId" AS "previewSourceEventId",
+        latest."sourceEventType" AS "previewSourceEventType",
         latest."direction" AS "previewDirection", latest."sentAt" AS "previewSentAt",
         latest."senderBizId" AS "previewSenderBizId", cu."id" AS "customerId",
         cu."displayName" AS "customerDisplayName", cu."pictureUrl" AS "customerPictureUrl",
@@ -279,7 +302,8 @@ export class HistoricalTimelineService {
       JOIN public."LineOfficialAccount" oa ON oa."id" = c."lineOfficialAccountId"
       LEFT JOIN public."Customer" cu ON cu."lineUserId" = c."lineChatUserId"
       JOIN LATERAL (
-        SELECT h."id", h."text", h."direction", h."sentAt", h."senderBizId"
+        SELECT h."id", h."text", h."direction", h."sentAt", h."senderBizId",
+          h."messageType", h."mediaMetadata", h."fileName", h."sourceEventId", h."sourceEventType"
         FROM public."HistoricalTimelineMessage" h
         WHERE h."storeId" = c."storeId"
           AND h."lineOfficialAccountId" = c."lineOfficialAccountId"
@@ -304,10 +328,13 @@ export class HistoricalTimelineService {
       id: row.previewId,
       direction: row.previewDirection,
       text: row.previewText,
+      messageType: row.previewMessageType,
+      mediaMetadata: row.previewMediaMetadata,
+      fileName: row.previewFileName,
       sentAt: row.previewSentAt,
       senderBizId: row.previewSenderBizId,
-      sourceEventId: "",
-      sourceEventType: "message",
+      sourceEventId: row.previewSourceEventId,
+      sourceEventType: row.previewSourceEventType,
     });
     return {
       id: buildHistoricalVirtualConversationId(row.lineOfficialAccountId, row.lineChatUserId),
@@ -391,8 +418,13 @@ export class HistoricalTimelineService {
       messageCount: count,
       previewId: record.id,
       previewText: record.text,
+      previewMessageType: record.messageType,
+      previewMediaMetadata: record.mediaMetadata,
+      previewFileName: record.fileName,
       previewDirection: record.direction,
       previewSentAt: record.sentAt,
+      previewSourceEventId: record.sourceEventId,
+      previewSourceEventType: record.sourceEventType,
       previewSenderBizId: record.senderBizId,
       customerId: customer?.id ?? null,
       customerDisplayName: customer?.displayName ?? null,
@@ -489,6 +521,7 @@ export class HistoricalTimelineService {
       this.prisma.historicalTimelineMessage.findMany({
         where: {
           storeId: { in: storeIds },
+          messageType: MessageType.TEXT,
           sentAt: { gte: startAt > HISTORICAL_TIMELINE_START ? startAt : HISTORICAL_TIMELINE_START, lt: responseWindowEnd },
           lineOfficialAccount: { accountType: "STORE", isActive: true, archivedAt: null },
         },
@@ -688,6 +721,7 @@ export class HistoricalTimelineService {
       this.prisma.historicalTimelineMessage.findMany({
         where: {
           storeId: { in: storeIds },
+          messageType: MessageType.TEXT,
           sentAt: { gte: startAt, lt: responseWindowEnd },
           lineOfficialAccount: { accountType: "STORE", isActive: true, archivedAt: null },
         },

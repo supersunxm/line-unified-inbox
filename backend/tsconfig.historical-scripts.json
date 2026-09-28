@@ -4,5 +4,15 @@
     "noEmit": true,
     "incremental": false
   },
-  "include": ["scripts/historical-conversation-crosswalk.ts", "scripts/historical-crosswalk-acceptance.ts"]
+  "include": [
+    "scripts/historical-conversation-crosswalk.ts",
+    "scripts/historical-crosswalk-acceptance.ts",
+    "scripts/historical-timeline-backfill.ts",
+    "scripts/historical-final-conflict-audit.ts",
+    "scripts/historical-final-evidence-inventory.ts",
+    "scripts/historical-archive-recovery-30606.ts",
+    "scripts/historical-media-backfill.ts",
+    "src/historical-media.ts",
+    "src/historical-source-classifier.ts"
+  ]
 }

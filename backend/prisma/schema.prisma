@@ -988,8 +988,11 @@ model HistoricalTimelineMessage {
   lineChatUserId        String
   sourceEventId         String
   sourceEventType       String
+  messageType           MessageType         @default(TEXT)
   direction             MessageDirection
   text                  String
+  mediaMetadata         Json?
+  fileName              String?
   sentAt                DateTime
   senderBizId           String?
   sourceArchiveKey      String

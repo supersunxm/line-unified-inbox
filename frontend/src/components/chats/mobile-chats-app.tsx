@@ -10,6 +10,7 @@ import type {
   ConversationMessagesResponse,
 } from "@/types/api";
 import { MessageImage } from "@/app/message-image";
+import { HistoricalMediaPlaceholder } from "@/app/historical-media-placeholder-view";
 import { MessageFileAttachment, MessageVideo } from "@/app/message-media";
 import { getMessageSenderName } from "@/app/message-sender";
 import { mapRealtimeMessage, subscribeToRealtimeEvents } from "@/app/realtime";
@@ -741,7 +742,9 @@ export function MobileChatsApp() {
                                 {senderName}
                               </p>
                             )}
-                            {message.messageType === "IMAGE" ? (
+                            {message.historical && message.messageType !== "TEXT" ? (
+                              <HistoricalMediaPlaceholder message={message} />
+                            ) : message.messageType === "IMAGE" ? (
                               <MessageImage
                                 messageId={message.id}
                                 media={message.media}

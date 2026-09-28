@@ -62,6 +62,32 @@ test("Historical messages remain text-only and expose no inferred staff name", (
   assert.equal(automatic.sender?.displayName, "Automated response");
 });
 
+test("Historical media maps to a typed read-only placeholder with source identity and metadata", () => {
+  const item = mapHistoricalTimelineMessage({
+    id: "hist-sticker-1",
+    sourceEventId: "event:sticker:stable",
+    sourceEventType: "messageSent",
+    direction: MessageDirection.OUTBOUND,
+    messageType: MessageType.STICKER,
+    text: "",
+    mediaMetadata: { availability: "METADATA_ONLY", packageId: "pkg-1", stickerId: "sticker-1", resourceType: "STATIC" },
+    sentAt: new Date("2026-09-01T01:00:00.000Z"),
+    senderBizId: "biz-1",
+  });
+
+  assert.equal(item.messageType, MessageType.STICKER);
+  assert.equal(item.originalText, "");
+  assert.equal(item.historical, true);
+  assert.equal(item.sourceEventId, "event:sticker:stable");
+  assert.deepEqual(item.historicalMediaMetadata, {
+    availability: "METADATA_ONLY",
+    packageId: "pkg-1",
+    stickerId: "sticker-1",
+    resourceType: "STATIC",
+    duration: null,
+  });
+});
+
 test("Historical responder identity only accepts a source bizId that is not the auto-response marker", () => {
   assert.equal(isKnownHistoricalStaffResponder("biz-1"), true);
   assert.equal(isKnownHistoricalStaffResponder(null), false);

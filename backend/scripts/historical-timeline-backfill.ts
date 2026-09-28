@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { appendFileSync, chmodSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { LineAccountType, MessageDirection, MessageType, Prisma, PrismaClient } from "@prisma/client";
+import { classifyHistoricalSourceCandidate, type HistoricalCanonicalSource } from "../src/historical-source-classifier";
 
 const APPROVAL_ID = "SUNN-HISTORICAL-FINAL-COMPLETION-20260927";
 const TARGET_START = new Date("2026-08-31T17:00:00.000Z");
@@ -25,6 +26,7 @@ const INVENTORY_PATH = path.join(ROOT, "production-import/WAVE1A_FULL_CHATREAD_I
 const AUDIT_PATH = path.join(COMPLETION_ROOT, "HISTORICAL_TIMELINE_BACKFILL_AUDIT.ndjson");
 const STATE_PATH = path.join(COMPLETION_ROOT, "HISTORICAL_TIMELINE_BACKFILL_STATE.json");
 const BATCH_SIZE = 500;
+let currentStage = "INITIALIZATION";
 
 type JsonRecord = Record<string, unknown>;
 type RegistryStore = {
@@ -68,7 +70,24 @@ type Candidate = {
   sourcePageIdentity: string | null;
 };
 type HistoricalExisting = Candidate;
+const HISTORICAL_EXISTING_SELECT = {
+  id: true,
+  storeId: true,
+  lineOfficialAccountId: true,
+  lineChatUserId: true,
+  sourceEventId: true,
+  sourceEventType: true,
+  direction: true,
+  text: true,
+  sentAt: true,
+  senderBizId: true,
+  sourceArchiveKey: true,
+  sourceArchiveSha256: true,
+  sourcePageIdentity: true,
+} satisfies Prisma.HistoricalTimelineMessageSelect;
 type CanonicalExisting = {
+  id: string;
+  conversationId: string;
   externalMessageId: string | null;
   direction: MessageDirection;
   messageType: MessageType;
@@ -327,26 +346,36 @@ function exactCanonicalMatch(existing: CanonicalExisting, candidate: Candidate):
 
 async function readExisting(prisma: PrismaClient | Prisma.TransactionClient, candidates: Candidate[]): Promise<{
   historicalByIdentity: Map<string, HistoricalExisting>;
-  historicalById: Map<string, HistoricalExisting>;
-  canonicalBySourceId: Map<string, CanonicalExisting>;
+  historicalById: Map<string, { id: string }>;
+  canonicalBySourceId: Map<string, CanonicalExisting[]>;
+  directConversationByIdentity: Map<string, string[]>;
+  safeCrosswalkByIdentity: Map<string, string[]>;
 }> {
   const historicalByIdentity = new Map<string, HistoricalExisting>();
-  const historicalById = new Map<string, HistoricalExisting>();
-  const canonicalBySourceId = new Map<string, CanonicalExisting>();
+  const historicalById = new Map<string, { id: string }>();
+  const canonicalBySourceId = new Map<string, CanonicalExisting[]>();
+  const directConversationByIdentity = new Map<string, string[]>();
+  const safeCrosswalkByIdentity = new Map<string, string[]>();
   for (let offset = 0; offset < candidates.length; offset += BATCH_SIZE) {
     const batch = candidates.slice(offset, offset + BATCH_SIZE);
-    const [historicalRows, idRows, canonicalRows] = await Promise.all([
+    const [historicalRows, idRows, canonicalRows, conversationRows, crosswalkRows] = await Promise.all([
       prisma.historicalTimelineMessage.findMany({
         where: { OR: batch.map((candidate) => ({
           lineOfficialAccountId: candidate.lineOfficialAccountId,
           lineChatUserId: candidate.lineChatUserId,
           sourceEventId: candidate.sourceEventId,
         })) },
-      }) as Promise<HistoricalExisting[]>,
-      prisma.historicalTimelineMessage.findMany({ where: { id: { in: batch.map((candidate) => candidate.id) } } }) as Promise<HistoricalExisting[]>,
+        select: HISTORICAL_EXISTING_SELECT,
+      }),
+      prisma.historicalTimelineMessage.findMany({
+        where: { id: { in: batch.map((candidate) => candidate.id) } },
+        select: { id: true },
+      }),
       prisma.message.findMany({
         where: { externalMessageId: { in: [...new Set(batch.flatMap(canonicalSourceIds))] } },
         select: {
+          id: true,
+          conversationId: true,
           externalMessageId: true,
           direction: true,
           messageType: true,
@@ -355,19 +384,53 @@ async function readExisting(prisma: PrismaClient | Prisma.TransactionClient, can
           conversation: { select: { storeId: true, lineOfficialAccountId: true, lineChatUserId: true } },
         },
       }) as Promise<CanonicalExisting[]>,
+      prisma.conversation.findMany({
+        where: { OR: batch.map((candidate) => ({
+          storeId: candidate.storeId,
+          lineOfficialAccountId: candidate.lineOfficialAccountId,
+          lineChatUserId: candidate.lineChatUserId,
+        })) },
+        select: { id: true, storeId: true, lineOfficialAccountId: true, lineChatUserId: true },
+      }),
+      prisma.historicalConversationCrosswalk.findMany({
+        where: {
+          classification: "LINK_SAFE",
+          canonicalConversationId: { not: null },
+          OR: batch.map((candidate) => ({
+            storeId: candidate.storeId,
+            lineOfficialAccountId: candidate.lineOfficialAccountId,
+            historicalLineChatUserId: candidate.lineChatUserId,
+          })),
+        },
+        select: { storeId: true, lineOfficialAccountId: true, historicalLineChatUserId: true, canonicalConversationId: true },
+      }),
     ]);
     for (const row of historicalRows) {
       historicalByIdentity.set(stableUniqueIdentity(row), row);
-      historicalById.set(row.id, row);
+      historicalById.set(row.id, { id: row.id });
     }
     for (const row of idRows) historicalById.set(row.id, row);
-    for (const row of canonicalRows) if (row.externalMessageId) canonicalBySourceId.set(row.externalMessageId, row);
+    for (const row of canonicalRows) {
+      if (!row.externalMessageId) continue;
+      canonicalBySourceId.set(row.externalMessageId, [...(canonicalBySourceId.get(row.externalMessageId) ?? []), row]);
+    }
+    for (const row of conversationRows) {
+      if (!row.storeId || !row.lineChatUserId) continue;
+      const key = `${row.storeId}\u0000${row.lineOfficialAccountId}\u0000${row.lineChatUserId}`;
+      directConversationByIdentity.set(key, [...(directConversationByIdentity.get(key) ?? []), row.id]);
+    }
+    for (const row of crosswalkRows) {
+      if (!row.canonicalConversationId) continue;
+      const key = `${row.storeId}\u0000${row.lineOfficialAccountId}\u0000${row.historicalLineChatUserId}`;
+      safeCrosswalkByIdentity.set(key, [...(safeCrosswalkByIdentity.get(key) ?? []), row.canonicalConversationId]);
+    }
   }
-  return { historicalByIdentity, historicalById, canonicalBySourceId };
+  return { historicalByIdentity, historicalById, canonicalBySourceId, directConversationByIdentity, safeCrosswalkByIdentity };
 }
 
 function classifyCandidates(candidates: Candidate[], existing: Awaited<ReturnType<typeof readExisting>>) {
   const insert: Candidate[] = [];
+  const heldNoDestination: Candidate[] = [];
   let alreadyHistorical = 0;
   let alreadyCanonical = 0;
   for (const candidate of candidates) {
@@ -379,18 +442,43 @@ function classifyCandidates(candidates: Candidate[], existing: Awaited<ReturnTyp
     }
     const idCollision = existing.historicalById.get(candidate.id);
     if (idCollision) throw new Error("HISTORICAL_DETERMINISTIC_ID_COLLISION");
-    const canonicalRows = canonicalSourceIds(candidate)
-      .map((sourceId) => existing.canonicalBySourceId.get(sourceId))
-      .filter((row): row is CanonicalExisting => Boolean(row));
-    if (canonicalRows.length > 1) throw new Error("CANONICAL_SOURCE_ID_NOT_UNIQUE");
-    if (canonicalRows.length === 1) {
-      if (!exactCanonicalMatch(canonicalRows[0], candidate)) throw new Error("CANONICAL_SOURCE_ID_PAYLOAD_OR_SCOPE_CONFLICT");
+    const canonicalRows = [...new Map(canonicalSourceIds(candidate)
+      .flatMap((sourceId) => existing.canonicalBySourceId.get(sourceId) ?? [])
+      .map((row) => [row.id, row])).values()];
+    const identityKey = `${candidate.storeId}\u0000${candidate.lineOfficialAccountId}\u0000${candidate.lineChatUserId}`;
+    const result = classifyHistoricalSourceCandidate({
+      candidate: { ...candidate, messageType: "TEXT" },
+      canonicalMatches: canonicalRows.map((row): HistoricalCanonicalSource => ({
+        id: row.id,
+        conversationId: row.conversationId,
+        externalMessageId: row.externalMessageId,
+        storeId: row.conversation.storeId,
+        lineOfficialAccountId: row.conversation.lineOfficialAccountId,
+        lineChatUserId: row.conversation.lineChatUserId,
+        direction: row.direction,
+        messageType: row.messageType,
+        text: row.originalText,
+        sentAt: row.sentAt,
+      })),
+      directConversationIds: existing.directConversationByIdentity.get(identityKey) ?? [],
+      safeCrosswalkConversationIds: existing.safeCrosswalkByIdentity.get(identityKey) ?? [],
+      archiveApproved: true,
+    });
+    if (["CANONICAL_EXACT", "CANONICAL_EQUIVALENT_WITH_TIME_DRIFT", "CANONICAL_EQUIVALENT_VIA_SAFE_CROSSWALK"].includes(result.classification)) {
       alreadyCanonical += 1;
       continue;
     }
-    insert.push(candidate);
+    if (result.classification === "SAFE_HISTORICAL_MISSING") {
+      insert.push(candidate);
+      continue;
+    }
+    if (result.classification === "NO_PROVABLE_DESTINATION") {
+      heldNoDestination.push(candidate);
+      continue;
+    }
+    throw new Error(`CANONICAL_SOURCE_ID_${result.classification}`);
   }
-  return { insert, alreadyHistorical, alreadyCanonical };
+  return { insert, heldNoDestination, alreadyHistorical, alreadyCanonical };
 }
 
 function writeState(value: JsonRecord): void {
@@ -445,18 +533,9 @@ async function applyBatch(
       ? 0
       : (await tx.historicalTimelineMessage.createMany({ data: classification.insert, skipDuplicates: true })).count;
     const after = await readExisting(tx, batch);
-    for (const candidate of batch) {
-      const persisted = after.historicalByIdentity.get(stableUniqueIdentity(candidate));
-      if (persisted) {
-        if (!exactHistoricalMatch(persisted, candidate)) throw new Error("BATCH_POSTWRITE_VERIFICATION_FAILED");
-        continue;
-      }
-      const canonicalRows = canonicalSourceIds(candidate)
-        .map((sourceId) => after.canonicalBySourceId.get(sourceId))
-        .filter((row): row is CanonicalExisting => Boolean(row));
-      if (canonicalRows.length !== 1 || !exactCanonicalMatch(canonicalRows[0], candidate)) {
-        throw new Error("BATCH_POSTWRITE_VERIFICATION_FAILED");
-      }
+    const verified = classifyCandidates(batch, after);
+    if (verified.insert.length !== 0 || verified.heldNoDestination.length + verified.alreadyHistorical + verified.alreadyCanonical !== batch.length) {
+      throw new Error("BATCH_POSTWRITE_VERIFICATION_FAILED");
     }
       return {
       inserted,
@@ -488,22 +567,31 @@ async function main(): Promise<void> {
   const targetEnvironmentIndex = process.argv.indexOf("--target-environment");
   if (apply && process.argv[targetEnvironmentIndex + 1] !== "production") throw new Error("PRODUCTION_WRITE_REQUIRES_EXPLICIT_PRODUCTION_TARGET");
 
+  currentStage = "ARCHIVE_SNAPSHOT_VERIFICATION";
   const archive = verifyArchiveSnapshot();
   const candidates = archive.candidates;
   const prisma = new PrismaClient();
   const startedAt = new Date().toISOString();
   try {
-    const oaByStoreId = await resolveMappings(prisma, archive.stores);
-    for (const candidate of candidates) {
-      const oaId = oaByStoreId.get(candidate.storeId);
-      if (!oaId) throw new Error("CANDIDATE_STORE_HAS_NO_PROVEN_OA_MAPPING");
-      candidate.lineOfficialAccountId = oaId;
-      candidate.id = canonicalId(candidate);
-    }
-    const identitySet = new Set(candidates.map(stableUniqueIdentity));
-    if (identitySet.size !== candidates.length) throw new Error("PRODUCTION_IDENTITY_IS_NOT_UNIQUE");
-    const existing = await readExisting(prisma, candidates);
-    const classification = classifyCandidates(candidates, existing);
+    currentStage = "PRODUCTION_READ_ONLY_PREFLIGHT";
+    const preflight = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SET TRANSACTION READ ONLY`;
+      currentStage = "PRODUCTION_OA_MAPPING";
+      const oaByStoreId = await resolveMappings(tx, archive.stores);
+      for (const candidate of candidates) {
+        const oaId = oaByStoreId.get(candidate.storeId);
+        if (!oaId) throw new Error("CANDIDATE_STORE_HAS_NO_PROVEN_OA_MAPPING");
+        candidate.lineOfficialAccountId = oaId;
+        candidate.id = canonicalId(candidate);
+      }
+      const identitySet = new Set(candidates.map(stableUniqueIdentity));
+      if (identitySet.size !== candidates.length) throw new Error("PRODUCTION_IDENTITY_IS_NOT_UNIQUE");
+      currentStage = "PRODUCTION_EXISTING_MESSAGE_AND_DESTINATION_CLASSIFICATION";
+      const existing = await readExisting(tx, candidates);
+      currentStage = "PRODUCTION_CLASSIFICATION_COMPLETE";
+      return { oaByStoreId, classification: classifyCandidates(candidates, existing) };
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead, timeout: 300_000, maxWait: 30_000 });
+    const { oaByStoreId, classification } = preflight;
     const plan = {
       approvalId: apply ? suppliedApproval : null,
       mode: apply ? "APPLY_INSERT_ONLY" : "DRY_RUN",
@@ -515,6 +603,7 @@ async function main(): Promise<void> {
       mappedStoreOaPairs: oaByStoreId.size,
       alreadyHistoricalRows: classification.alreadyHistorical,
       alreadyCanonicalRows: classification.alreadyCanonical,
+      heldNoProvenDestinationRows: classification.heldNoDestination.length,
       plannedInserts: classification.insert.length,
       writeTarget: "HistoricalTimelineMessage",
       otherProductionTablesWritten: [],
@@ -569,6 +658,7 @@ async function main(): Promise<void> {
       insertedThisRun: insertedTotal,
       alreadyHistoricalAfter: finalClassification.alreadyHistorical,
       alreadyCanonicalAfter: finalClassification.alreadyCanonical,
+      heldNoProvenDestinationAfter: finalClassification.heldNoDestination.length,
       plannedInsertsAfter: 0,
       writeTarget: "HistoricalTimelineMessage",
       archiveLedgerSha256: archive.ledgerSha256,
@@ -578,6 +668,7 @@ async function main(): Promise<void> {
       insertedThisRun: insertedTotal,
       alreadyHistoricalAfter: finalClassification.alreadyHistorical,
       alreadyCanonicalAfter: finalClassification.alreadyCanonical,
+      heldNoProvenDestinationAfter: finalClassification.heldNoDestination.length,
       secondDryRunPlannedInserts: 0,
       stores: archive.stores.length,
     }));
@@ -588,8 +679,13 @@ async function main(): Promise<void> {
 
 if (require.main === module) {
   void main().catch((error: unknown) => {
-    const message = error instanceof Error ? error.message : "UNKNOWN_FAILURE";
-    console.error(JSON.stringify({ event: "HISTORICAL_TIMELINE_BACKFILL_FAILED", code: message.split("\n")[0] }));
+    const message = error instanceof Error && error.message.trim().length > 0
+      ? error.message
+      : error instanceof Error
+        ? `EMPTY_${error.constructor.name || "ERROR"}`
+        : `UNEXPECTED_${typeof error}`;
+    const safeCode = message.split(/\r?\n/u).map((line) => line.trim()).find((line) => line.length > 0) ?? "UNKNOWN_FAILURE";
+    console.error(JSON.stringify({ event: "HISTORICAL_TIMELINE_BACKFILL_FAILED", stage: currentStage, code: safeCode }));
     process.exitCode = 1;
   });
 }
@@ -599,6 +695,7 @@ export {
   exactCanonicalMatch,
   exactHistoricalMatch,
   isTextMessage,
+  resolveMappings,
   stableUniqueIdentity,
   verifyArchiveSnapshot,
 };

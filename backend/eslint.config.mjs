@@ -45,7 +45,15 @@ export default tseslint.config(
     },
   },
   {
-    files: ["scripts/historical-conversation-crosswalk.ts", "scripts/historical-crosswalk-acceptance.ts"],
+    files: [
+      "scripts/historical-conversation-crosswalk.ts",
+      "scripts/historical-crosswalk-acceptance.ts",
+      "scripts/historical-timeline-backfill.ts",
+      "scripts/historical-final-conflict-audit.ts",
+      "scripts/historical-final-evidence-inventory.ts",
+      "scripts/historical-archive-recovery-30606.ts",
+      "scripts/historical-media-backfill.ts",
+    ],
     languageOptions: {
       parserOptions: {
         projectService: false,

@@ -13,6 +13,7 @@ import type { PrimarySection } from "./primary-navigation";
 import { applyStoreMasterSelection, clearStoreMasterSelection, synchronizedStoreMasterData } from "./store-master-form";
 import { formatRelativeTime } from "./relative-time";
 import { MessageImage } from "./message-image";
+import { HistoricalMediaPlaceholder } from "./historical-media-placeholder-view";
 import { MessageTranslationAction } from "./message-translation-action";
 import { getMessageSenderName } from "./message-sender";
 import { lineStickerLabel, MessageSticker } from "./message-sticker";
@@ -4826,10 +4827,10 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                                     }`}
                                   >
                                     {senderName && <p data-message-sender className={`mb-1 text-[11px] font-semibold ${isFailed ? "text-red-200" : "text-[var(--app-text-secondary)]"}`}>{senderName}</p>}
-                                    {message.messageType === "IMAGE" ? <MessageImage messageId={message.id} media={message.media} alt={text.customerImage} unavailableLabel={text.imageUnavailable} errorLabel={text.imageLoadError} retryLabel={text.retryImage} /> : message.messageType === "STICKER" ? <MessageSticker sticker={message.sticker} language={language} /> : (
+                                    {message.historical && message.messageType !== "TEXT" ? <HistoricalMediaPlaceholder message={message} /> : message.messageType === "IMAGE" ? <MessageImage messageId={message.id} media={message.media} alt={text.customerImage} unavailableLabel={text.imageUnavailable} errorLabel={text.imageLoadError} retryLabel={text.retryImage} /> : message.messageType === "STICKER" ? <MessageSticker sticker={message.sticker} language={language} /> : (
                                       <p className="whitespace-pre-wrap text-sm leading-relaxed">{content}</p>
                                     )}
-                                    {message.fileName && <p className="mt-1 text-xs font-medium">📎 {message.fileName}</p>}
+                                    {message.fileName && !(message.historical && message.messageType === "FILE") && <p className="mt-1 text-xs font-medium">📎 {message.fileName}</p>}
                                     <MessageTranslationAction message={message} userRole={authUser.role} onTranslated={(translatedText) => updateMessageEnglishTranslation(message.id, translatedText)} />
                                     <p className={`mt-1 text-[10px] font-tabular font-mono ${isFailed ? "text-red-300" : "text-[var(--app-text-tertiary)]"} ${inbound ? "" : "text-right"}`}>
                                       {new Intl.DateTimeFormat(language, { timeStyle: "short" }).format(date)}
