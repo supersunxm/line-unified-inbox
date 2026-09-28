@@ -5934,3 +5934,14 @@ Current state: local follow-up fix and checks are complete; the follow-up commit
 - Monthly audit recomputes each sampled store through the same Historical response-cycle engine and checks aggregate parity with the report plus structural validity of sampled cycles.
 - Added a Run KPI Audit button/panel to the Monthly Operations Report UI. The endpoint is on-demand only and does not add work to normal report loads.
 - No Live Mirror/Historical Mirror collection, persistence, crosswalk writes, or worker behavior changed.
+
+
+## 2026-09-28 — Zero-rate 24h KPI forensic audit
+
+- Added a manual read-only forensic flow for stores whose official 24h reply rate is 0% despite complete Historical coverage.
+- The flow inspects up to 10 highest-volume zero-rate stores and recomputes Historical response-cycle analytics per store.
+- It classifies each store as NO_ELIGIBLE_CYCLE, REPLY_OVER_24H, AUTO_ONLY, NO_REPLY, OUTBOUND_OUTSIDE_CYCLE, UNMAPPED_OR_VIRTUAL, or UNEXPECTED_WITHIN_24H.
+- Historical evidence counts include inbound, explicit auto outbound, non-auto outbound, and unknown-responder outbound within the matured KPI window.
+- The UI shows the per-store cause, response-cycle totals, late/pending counts, Historical outbound counts, auto-response counts, and remaining virtual Historical rows.
+- Added deterministic regression tests for the forensic classifier.
+- No Monthly KPI formula, Historical data, crosswalk, canonical message, or Mirror worker state is modified.
