@@ -306,7 +306,7 @@ function ReportContent() {
               <MetricCard
                 label="ตอบภายใน 24 ชม."
                 value={formatRate(report.totals.replyRateWithin24h)}
-                detail={`${formatNumber(report.totals.repliedWithin24h)} / ${formatNumber(report.totals.responseCycles)} eligible chats · KPI through ${report.period.replyKpiThrough ?? "—"}`}
+                detail={`${formatNumber(report.totals.repliedWithin24h)} / ${formatNumber(report.totals.responseCycles)} response cycles · KPI through ${report.period.replyKpiThrough ?? "—"}`}
               />
               <MetricCard label="Follower Growth" value={formatNumber(report.totals.monthFollowerGrowth)} detail={`ช่วง 20 เป็นต้นมา ${formatNumber(report.totals.focusFollowerGrowth)}`} />
             </section>
@@ -377,7 +377,7 @@ function ReportContent() {
                         <td className="px-3 py-3">
                           <ReplyCoverageBadge value={store.chat.replyCoverage} />
                           <div className="mt-1 text-[11px] text-[var(--app-text-tertiary)]">
-                            Historical timeline: {formatNumber(store.chat.coveredResponseCycles)} eligible chats
+                            Historical timeline: {formatNumber(store.chat.coveredResponseCycles)} response cycles
                           </div>
                           {store.chat.replyCoverage !== "complete" && store.chat.observedReplyRateWithin24h !== null ? (
                             <div className="mt-1 text-[11px] text-[var(--app-text-tertiary)]">
