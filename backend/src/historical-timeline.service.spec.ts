@@ -146,6 +146,7 @@ test("reply analytics merges an exact live duplicate with Historical text and us
   const prisma = {
     store: { findMany: async () => [{ id: "store-1", name: "Store One" }] },
     historicalTimelineMessage: { findMany: async () => history },
+    historicalConversationCrosswalk: { findMany: async () => [] },
     conversation: {
       findMany: async () => [{
         id: "conversation-1",
@@ -341,6 +342,7 @@ test("reply analytics counts Historical outbound without responder identity as a
   const prisma = {
     store: { findMany: async () => [{ id: "store-1", name: "Store One" }] },
     historicalTimelineMessage: { findMany: async () => history },
+    historicalConversationCrosswalk: { findMany: async () => [] },
     conversation: { findMany: async () => [] },
   } as unknown as PrismaService;
   const storeAccess = { accessibleStoreIds: async () => null } as unknown as StoreAccessService;
@@ -390,6 +392,7 @@ test("reply analytics still excludes Historical auto-response evidence", async (
   const prisma = {
     store: { findMany: async () => [{ id: "store-1", name: "Store One" }] },
     historicalTimelineMessage: { findMany: async () => history },
+    historicalConversationCrosswalk: { findMany: async () => [] },
     conversation: { findMany: async () => [] },
   } as unknown as PrismaService;
   const storeAccess = { accessibleStoreIds: async () => null } as unknown as StoreAccessService;
@@ -433,6 +436,7 @@ test("reply analytics RESPONSE_CYCLES mode counts repeated customer-contact epis
   const prisma = {
     store: { findMany: async () => [{ id: "store-1", name: "Store One" }] },
     historicalTimelineMessage: { findMany: async () => history },
+    historicalConversationCrosswalk: { findMany: async () => [] },
     conversation: { findMany: async () => [] },
   } as unknown as PrismaService;
   const storeAccess = { accessibleStoreIds: async () => null } as unknown as StoreAccessService;
@@ -447,4 +451,131 @@ test("reply analytics RESPONSE_CYCLES mode counts repeated customer-contact epis
   assert.equal(result.overview.within24h, 2);
   assert.equal(result.overview.knownResponderReplies, 1);
   assert.equal(result.overview.unknownResponderReplies, 1);
+});
+
+test("reply analytics merges Historical rows through LINK_SAFE crosswalk when chat IDs differ", async () => {
+  const inboundAt = new Date("2026-09-01T02:00:00.000Z");
+  const history = [
+    {
+      id: "historical-inbound-crosswalk",
+      storeId: "store-1",
+      lineOfficialAccountId: "oa-1",
+      lineChatUserId: "historical-chat-id",
+      sourceEventId: "event:historical-inbound",
+      sourceEventType: "messageReceived",
+      direction: MessageDirection.INBOUND,
+      text: "Customer message",
+      sentAt: inboundAt,
+      senderBizId: null,
+    },
+  ];
+  const prisma = {
+    store: { findMany: async () => [{ id: "store-1", name: "Store One" }] },
+    historicalTimelineMessage: { findMany: async () => history },
+    historicalConversationCrosswalk: {
+      findMany: async () => [{
+        storeId: "store-1",
+        lineOfficialAccountId: "oa-1",
+        historicalLineChatUserId: "historical-chat-id",
+        canonicalConversationId: "conversation-1",
+      }],
+    },
+    conversation: {
+      findMany: async () => [{
+        id: "conversation-1",
+        storeId: "store-1",
+        lineOfficialAccountId: "oa-1",
+        lineChatUserId: null,
+        messages: [{
+          id: "canonical-outbound-crosswalk",
+          externalMessageId: "canonical-outbound-1",
+          direction: MessageDirection.OUTBOUND,
+          messageType: MessageType.TEXT,
+          deliveryStatus: MessageDeliveryStatus.DELIVERED,
+          originalText: "Store response",
+          sentAt: new Date(inboundAt.getTime() + 30 * 60_000),
+          senderUserId: "staff-1",
+          senderDisplayName: "Staff One",
+          rawPayload: null,
+        }],
+      }],
+    },
+  } as unknown as PrismaService;
+  const storeAccess = { accessibleStoreIds: async () => null } as unknown as StoreAccessService;
+  const service = new HistoricalTimelineService(prisma, storeAccess);
+  const result = await service.replyAnalytics(
+    { id: "admin-1", email: "admin@example.com", displayName: "Admin", role: "ADMIN" } as AuthUser,
+    { dateFrom: "2026-09-01", dateTo: "2026-09-01", mode: "RESPONSE_CYCLES" },
+  );
+
+  assert.equal(result.overview.total, 1);
+  assert.equal(result.overview.responded, 1);
+  assert.equal(result.overview.within24h, 1);
+  assert.equal(result.sources.crosswalkLinkedHistoricalRows, 1);
+  assert.equal(result.sources.virtualHistoricalRows, 0);
+});
+
+test("reply analytics uses exact source-event anchor when no crosswalk exists", async () => {
+  const inboundAt = new Date("2026-09-01T02:00:00.000Z");
+  const history = [
+    {
+      id: "historical-inbound-anchor",
+      storeId: "store-1",
+      lineOfficialAccountId: "oa-1",
+      lineChatUserId: "historical-chat-id",
+      sourceEventId: "event:shared-inbound",
+      sourceEventType: "messageReceived",
+      direction: MessageDirection.INBOUND,
+      text: "Customer message",
+      sentAt: inboundAt,
+      senderBizId: null,
+    },
+    {
+      id: "historical-outbound-anchor",
+      storeId: "store-1",
+      lineOfficialAccountId: "oa-1",
+      lineChatUserId: "historical-chat-id",
+      sourceEventId: "event:historical-outbound",
+      sourceEventType: "messageSent",
+      direction: MessageDirection.OUTBOUND,
+      text: "Historical response",
+      sentAt: new Date(inboundAt.getTime() + 20 * 60_000),
+      senderBizId: "biz-1",
+    },
+  ];
+  const prisma = {
+    store: { findMany: async () => [{ id: "store-1", name: "Store One" }] },
+    historicalTimelineMessage: { findMany: async () => history },
+    historicalConversationCrosswalk: { findMany: async () => [] },
+    conversation: {
+      findMany: async () => [{
+        id: "conversation-1",
+        storeId: "store-1",
+        lineOfficialAccountId: "oa-1",
+        lineChatUserId: null,
+        messages: [{
+          id: "current-inbound-anchor",
+          externalMessageId: "line-chat-manager:event:shared-inbound",
+          direction: MessageDirection.INBOUND,
+          messageType: MessageType.TEXT,
+          deliveryStatus: MessageDeliveryStatus.DELIVERED,
+          originalText: "Customer message",
+          sentAt: inboundAt,
+          senderUserId: null,
+          senderDisplayName: null,
+          rawPayload: null,
+        }],
+      }],
+    },
+  } as unknown as PrismaService;
+  const storeAccess = { accessibleStoreIds: async () => null } as unknown as StoreAccessService;
+  const service = new HistoricalTimelineService(prisma, storeAccess);
+  const result = await service.replyAnalytics(
+    { id: "admin-1", email: "admin@example.com", displayName: "Admin", role: "ADMIN" } as AuthUser,
+    { dateFrom: "2026-09-01", dateTo: "2026-09-01", mode: "RESPONSE_CYCLES" },
+  );
+
+  assert.equal(result.overview.total, 1);
+  assert.equal(result.overview.within24h, 1);
+  assert.equal(result.sources.sourceAnchoredHistoricalRows, 1);
 });

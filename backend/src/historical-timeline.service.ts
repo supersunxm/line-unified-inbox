@@ -531,7 +531,7 @@ export class HistoricalTimelineService {
           storeId: { in: storeIds },
           isQa: false,
           lineOfficialAccount: { accountType: "STORE", isActive: true, archivedAt: null },
-          messages: { some: { direction: MessageDirection.INBOUND, sentAt: { gte: startAt, lt: endDateExclusive } } },
+          messages: { some: { sentAt: { gte: startAt, lt: responseWindowEnd } } },
         },
         select: {
           id: true,
@@ -761,7 +761,7 @@ export class HistoricalTimelineService {
       };
     }
 
-    const [historicalRows, conversations] = await Promise.all([
+    const [historicalRows, conversations, crosswalks] = await Promise.all([
       this.prisma.historicalTimelineMessage.findMany({
         where: {
           storeId: { in: storeIds },
@@ -812,20 +812,77 @@ export class HistoricalTimelineService {
           },
         },
       }),
+      this.prisma.historicalConversationCrosswalk.findMany({
+        where: {
+          storeId: { in: storeIds },
+          classification: "LINK_SAFE",
+          canonicalConversationId: { not: null },
+        },
+        select: {
+          storeId: true,
+          lineOfficialAccountId: true,
+          historicalLineChatUserId: true,
+          canonicalConversationId: true,
+        },
+      }),
     ]);
 
     const chatMessages = new Map<string, UnifiedReplyMessage[]>();
     const chatScopes = new Map<string, { storeId: string; lineOfficialAccountId: string; lineChatUserId: string | null }>();
-    const chatKey = (storeId: string, lineOfficialAccountId: string, lineChatUserId: string | null, conversationId: string) =>
+    const directChatKey = (storeId: string, lineOfficialAccountId: string, lineChatUserId: string | null, conversationId: string) =>
       `${storeId}\u0000${lineOfficialAccountId}\u0000${lineChatUserId ?? `conversation:${conversationId}`}`;
+    const canonicalChatKey = (conversationId: string) => `canonical:${conversationId}`;
+    const historicalIdentityKey = (storeId: string, lineOfficialAccountId: string, lineChatUserId: string) =>
+      `${storeId}\u0000${lineOfficialAccountId}\u0000${lineChatUserId}`;
+
+    const crosswalkByHistoricalIdentity = new Map<string, string>();
+    const crosswalkCanonicalConversationIds = new Set<string>();
+    for (const row of crosswalks) {
+      if (!row.canonicalConversationId) continue;
+      crosswalkByHistoricalIdentity.set(
+        historicalIdentityKey(row.storeId, row.lineOfficialAccountId, row.historicalLineChatUserId),
+        row.canonicalConversationId,
+      );
+      crosswalkCanonicalConversationIds.add(row.canonicalConversationId);
+    }
+
+    const directConversationKeyByIdentity = new Map<string, string | null>();
+    const sourceEventConversationKey = new Map<string, string | null>();
+    const setUniqueKey = (map: Map<string, string | null>, identity: string, key: string) => {
+      if (!map.has(identity)) {
+        map.set(identity, key);
+        return;
+      }
+      if (map.get(identity) !== key) map.set(identity, null);
+    };
+    const normalizedSourceEventId = (externalMessageId: string | null): string | null => {
+      const value = externalMessageId?.trim();
+      if (!value) return null;
+      return value.startsWith("line-chat-manager:")
+        ? value.slice("line-chat-manager:".length)
+        : value;
+    };
+
     let currentMessageCount = 0;
+    let crosswalkLinkedHistoricalRows = 0;
+    let sourceAnchoredHistoricalRows = 0;
+    let directLinkedHistoricalRows = 0;
+    let virtualHistoricalRows = 0;
     for (const conversation of conversations) {
       if (!conversation.storeId) continue;
-      const key = chatKey(conversation.storeId, conversation.lineOfficialAccountId, conversation.lineChatUserId, conversation.id);
+      const identity = conversation.lineChatUserId
+        ? historicalIdentityKey(conversation.storeId, conversation.lineOfficialAccountId, conversation.lineChatUserId)
+        : null;
+      const key = crosswalkCanonicalConversationIds.has(conversation.id)
+        ? canonicalChatKey(conversation.id)
+        : directChatKey(conversation.storeId, conversation.lineOfficialAccountId, conversation.lineChatUserId, conversation.id);
+      if (identity) setUniqueKey(directConversationKeyByIdentity, identity, key);
       chatScopes.set(key, { storeId: conversation.storeId, lineOfficialAccountId: conversation.lineOfficialAccountId, lineChatUserId: conversation.lineChatUserId });
       const messages = chatMessages.get(key) ?? [];
       for (const message of conversation.messages) {
         currentMessageCount += 1;
+        const sourceEventId = normalizedSourceEventId(message.externalMessageId);
+        if (sourceEventId) setUniqueKey(sourceEventConversationKey, sourceEventId, key);
         messages.push({
           id: message.id,
           direction: message.direction,
@@ -846,7 +903,21 @@ export class HistoricalTimelineService {
     }
     let duplicateHistoricalRows = 0;
     for (const message of historicalRows) {
-      const key = chatKey(message.storeId, message.lineOfficialAccountId, message.lineChatUserId, "");
+      const identity = historicalIdentityKey(message.storeId, message.lineOfficialAccountId, message.lineChatUserId);
+      const crosswalkConversationId = crosswalkByHistoricalIdentity.get(identity);
+      const crosswalkKey = crosswalkConversationId ? canonicalChatKey(crosswalkConversationId) : null;
+      const sourceAnchorKey = sourceEventConversationKey.get(message.sourceEventId) ?? null;
+      const directKey = directConversationKeyByIdentity.get(identity) ?? null;
+      const key = crosswalkKey
+        ?? sourceAnchorKey
+        ?? directKey
+        ?? directChatKey(message.storeId, message.lineOfficialAccountId, message.lineChatUserId, "");
+
+      if (crosswalkKey) crosswalkLinkedHistoricalRows += 1;
+      else if (sourceAnchorKey) sourceAnchoredHistoricalRows += 1;
+      else if (directKey) directLinkedHistoricalRows += 1;
+      else virtualHistoricalRows += 1;
+
       chatScopes.set(key, { storeId: message.storeId, lineOfficialAccountId: message.lineOfficialAccountId, lineChatUserId: message.lineChatUserId });
       const messages = chatMessages.get(key) ?? [];
       const duplicate = messages.some((current) => {
@@ -1014,6 +1085,10 @@ export class HistoricalTimelineService {
         currentMessages: currentMessageCount,
         exactDuplicatesSuppressed: duplicateHistoricalRows,
         historicalChats: historicalChatCount,
+        crosswalkLinkedHistoricalRows,
+        sourceAnchoredHistoricalRows,
+        directLinkedHistoricalRows,
+        virtualHistoricalRows,
       },
     };
   }

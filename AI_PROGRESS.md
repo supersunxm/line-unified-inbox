@@ -5912,3 +5912,14 @@ Current state: local follow-up fix and checks are complete; the follow-up commit
 - Historical/canonical merge and exact source deduplication are unchanged.
 - Added regression coverage for multiple cycles in one chat, consecutive inbound collapse, auto-response exclusion, and unknown-responder reply evidence.
 - No Historical data, crosswalks, Live Mirror worker, or write path changed.
+
+
+## 2026-09-28 — Historical reply analytics now consumes proven crosswalks
+
+- Production Monthly Operations Report still showed many zero 24h reply stores despite complete Historical collection.
+- Root cause: `HistoricalTimelineService.replyAnalytics()` grouped Historical and canonical messages only by raw Store/OA/`lineChatUserId`, while the final Historical delivery proved many identities require `HistoricalConversationCrosswalk` `LINK_SAFE` mappings or exact source-event anchors.
+- Added read-only grouping priority for reply analytics: LINK_SAFE canonical conversation, exact source-event anchor, direct Store/OA/chat match, then virtual Historical chat.
+- Canonical conversations with any activity in the response window are now eligible for merge, not only those with canonical inbound rows in the report interval.
+- Added diagnostics for crosswalk-linked, source-anchored, direct-linked, and virtual Historical rows.
+- Added regression tests for differing Historical/canonical chat IDs joined by LINK_SAFE and for exact source-event anchor merging.
+- No crosswalks, Historical rows, canonical messages, or Mirror state are modified.
