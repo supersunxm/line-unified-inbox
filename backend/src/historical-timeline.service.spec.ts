@@ -589,12 +589,12 @@ test("reply analytics uses exact source-event anchor when no crosswalk exists", 
 });
 
 
-test("reply analytics remaps legacy Historical storeId through current OA identity", async () => {
+test("reply analytics remaps legacy Historical OA alias through stable current OA identity", async () => {
   const inboundAt = new Date("2026-09-26T09:06:00.000Z");
   const history = [{
-    id: "historical-inbound-legacy-store",
+    id: "historical-inbound-legacy-oa",
     storeId: "legacy-store-id",
-    lineOfficialAccountId: "oa-1",
+    lineOfficialAccountId: "oa-legacy",
     lineChatUserId: "manager-chat-1",
     sourceEventId: "event:legacy-inbound",
     sourceEventType: "messageReceived",
@@ -604,19 +604,49 @@ test("reply analytics remaps legacy Historical storeId through current OA identi
     senderBizId: null,
   }];
 
+  let oaLookupCount = 0;
   const prisma = {
     store: { findMany: async () => [{ id: "store-1", name: "Store One" }] },
-    lineOfficialAccount: { findMany: async () => [{ id: "oa-1", storeId: "store-1" }] },
+    lineOfficialAccount: {
+      findMany: async () => {
+        oaLookupCount += 1;
+        if (oaLookupCount === 1) {
+          return [{
+            id: "oa-current",
+            storeId: "store-1",
+            basicId: "@sameoa",
+            channelId: "channel-current",
+            destinationId: "destination-current",
+          }];
+        }
+        return [
+          {
+            id: "oa-current",
+            storeId: "store-1",
+            basicId: "@sameoa",
+            channelId: "channel-current",
+            destinationId: "destination-current",
+          },
+          {
+            id: "oa-legacy",
+            storeId: "legacy-store-id",
+            basicId: "@sameoa",
+            channelId: null,
+            destinationId: null,
+          },
+        ];
+      },
+    },
     historicalTimelineMessage: { findMany: async () => history },
     historicalConversationCrosswalk: { findMany: async () => [] },
     conversation: {
       findMany: async () => [{
         id: "conversation-1",
         storeId: "store-1",
-        lineOfficialAccountId: "oa-1",
+        lineOfficialAccountId: "oa-current",
         lineChatUserId: "manager-chat-1",
         messages: [{
-          id: "canonical-outbound-current-store",
+          id: "canonical-outbound-current-oa",
           externalMessageId: "event:reply",
           direction: MessageDirection.OUTBOUND,
           messageType: MessageType.TEXT,
@@ -642,4 +672,6 @@ test("reply analytics remaps legacy Historical storeId through current OA identi
   assert.equal(result.overview.responded, 1);
   assert.equal(result.overview.within24h, 1);
   assert.equal(result.stores[0]?.storeId, "store-1");
+  assert.equal(result.sources.oaFamilySize, 2);
+  assert.equal(result.sources.historicalInboundMessages, 1);
 });
