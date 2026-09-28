@@ -711,6 +711,7 @@ export class HistoricalTimelineService {
       bucket: input.bucket,
       dateFrom: input.dateFrom,
       dateTo: input.dateTo,
+      mode: analyticsMode,
       total: matched.length,
       shown: Math.min(safeLimit, matched.length),
       items: matched.slice(0, safeLimit),
@@ -889,6 +890,7 @@ export class HistoricalTimelineService {
     let unknownResponderReplies = 0;
     let historicalChatCount = 0;
 
+    const analyticsMode = input.mode ?? "CHAT_FIRST_REPLY";
     for (const [key, messages] of chatMessages) {
       const scope = chatScopes.get(key);
       if (!scope) continue;
@@ -897,67 +899,67 @@ export class HistoricalTimelineService {
       messages.sort((left, right) => left.sentAt.getTime() - right.sentAt.getTime() || left.id.localeCompare(right.id));
       const historicalInChat = messages.some((message) => message.source === "HISTORICAL");
       if (historicalInChat) historicalChatCount += 1;
-      const firstInbound = messages.find((message) =>
-        message.direction === MessageDirection.INBOUND
-        && message.sentAt >= startAt
-        && message.sentAt < endDateExclusive);
-      if (!firstInbound) continue;
 
-      const humanReply = messages.find((message) => {
-        if (message.direction !== MessageDirection.OUTBOUND || message.sentAt < firstInbound.sentAt) return false;
-        if (message.source === "HISTORICAL") return isHistoricalReplyEvidence(message.senderBizId);
-        return isCurrentReplyEvidence({
-          direction: message.direction,
-          deliveryStatus: message.deliveryStatus,
-          sentAt: message.sentAt,
-          senderUserId: message.senderUserId,
-          senderDisplayName: message.senderDisplayName,
-          rawPayload: message.rawPayload,
-        });
-      });
-      const dateKey = bangkokDateKey(firstInbound.sentAt, "day");
-      const monthKey = bangkokDateKey(firstInbound.sentAt, "month");
-      const dateCount = dateCounts.get(dateKey) ?? emptyReplyCounts();
-      const monthCount = monthCounts.get(monthKey) ?? emptyReplyCounts();
-      const responseCounts = [storeCountsForStore, dateCount, monthCount];
-      for (const count of responseCounts) count.total += 1;
-      if (!humanReply) {
-        for (const count of responseCounts) count.pending += 1;
-      } else {
-        const replyClass = classifyResponseDuration(firstInbound.sentAt, humanReply.sentAt);
-        const within24h = replyClass === "WITHIN_24H";
-        const responderId = humanReply.source === "HISTORICAL" ? humanReply.senderBizId : humanReply.senderUserId;
-        const responderKnown = Boolean(responderId?.trim());
-        for (const count of responseCounts) {
-          count.responded += 1;
-          if (within24h) count.within24h += 1;
-          else count.over24h += 1;
-          if (responderKnown) count.knownResponderReplies += 1;
-          else count.unknownResponderReplies += 1;
+      const cycles: UnifiedReplyCycle[] = analyticsMode === "RESPONSE_CYCLES"
+        ? calculateUnifiedReplyCycles(messages, startAt, endDateExclusive)
+        : (() => {
+            const firstInbound = messages.find((message) =>
+              message.direction === MessageDirection.INBOUND
+              && message.sentAt >= startAt
+              && message.sentAt < endDateExclusive);
+            if (!firstInbound) return [];
+            const humanReply = messages.find((message) =>
+              message.sentAt >= firstInbound.sentAt && isUnifiedReplyEvidence(message));
+            return [{ firstInbound, humanReply: humanReply ?? null }];
+          })();
+
+      for (const cycle of cycles) {
+        const firstInbound = cycle.firstInbound;
+        const humanReply = cycle.humanReply;
+        const dateKey = bangkokDateKey(firstInbound.sentAt, "day");
+        const monthKey = bangkokDateKey(firstInbound.sentAt, "month");
+        const dateCount = dateCounts.get(dateKey) ?? emptyReplyCounts();
+        const monthCount = monthCounts.get(monthKey) ?? emptyReplyCounts();
+        const responseCounts = [storeCountsForStore, dateCount, monthCount];
+        for (const count of responseCounts) count.total += 1;
+
+        if (!humanReply) {
+          for (const count of responseCounts) count.pending += 1;
+        } else {
+          const replyClass = classifyResponseDuration(firstInbound.sentAt, humanReply.sentAt);
+          const within24h = replyClass === "WITHIN_24H";
+          const responderId = humanReply.source === "HISTORICAL" ? humanReply.senderBizId : humanReply.senderUserId;
+          const responderKnown = Boolean(responderId?.trim());
+          for (const count of responseCounts) {
+            count.responded += 1;
+            if (within24h) count.within24h += 1;
+            else count.over24h += 1;
+            if (responderKnown) count.knownResponderReplies += 1;
+            else count.unknownResponderReplies += 1;
+          }
+          if (!responderKnown) unknownResponderReplies += 1;
+          if (responderId) {
+            const responderSource = humanReply.source === "HISTORICAL" ? "LINE_MANAGER_BIZ_ID" : "CANONICAL_USER_ID";
+            const responderKey = scope.storeId + "\u0000" + responderSource + "\u0000" + responderId;
+            const responder = responderCounts.get(responderKey) ?? {
+              storeId: scope.storeId,
+              responderId,
+              source: responderSource,
+              total: 0,
+              within24h: 0,
+              over24h: 0,
+            };
+            responder.total += 1;
+            if (within24h) responder.within24h += 1;
+            else responder.over24h += 1;
+            responderCounts.set(responderKey, responder);
+            if (humanReply.source === "HISTORICAL") exactHistoricalResponders += 1;
+          }
         }
-        if (!responderKnown) unknownResponderReplies += 1;
-        if (responderId) {
-          const responderSource = humanReply.source === "HISTORICAL" ? "LINE_MANAGER_BIZ_ID" : "CANONICAL_USER_ID";
-          const responderKey = `${scope.storeId}\u0000${responderSource}\u0000${responderId}`;
-          const responder = responderCounts.get(responderKey) ?? {
-            storeId: scope.storeId,
-            responderId,
-            source: responderSource,
-            total: 0,
-            within24h: 0,
-            over24h: 0,
-          };
-          responder.total += 1;
-          if (within24h) responder.within24h += 1;
-          else responder.over24h += 1;
-          responderCounts.set(responderKey, responder);
-          if (humanReply.source === "HISTORICAL") exactHistoricalResponders += 1;
-        }
+        dateCounts.set(dateKey, dateCount);
+        monthCounts.set(monthKey, monthCount);
       }
-      dateCounts.set(dateKey, dateCount);
-      monthCounts.set(monthKey, monthCount);
     }
-
     const serializeCounts = (counts: ReplyCounts) => ({
       ...counts,
       responseRate24h: rate(counts.within24h, counts.total),
