@@ -2885,6 +2885,30 @@ The first production target proof confirmed that eligible candidate OAs have no 
 - Store 30282 evidence resolved the screenshot text to source event `631303932702359672` and canonical Conversation `e9f88a82-ffc4-45c0-b755-20a847fa6ef4` with a 3 ms timestamp delta. The canonical Conversation’s null LINE chat ID explains why the previous direct-key timeline read omitted that Historical chat. The nearby sticker and image remain `NON_TEXT_NOT_BACKFILLED` and do not block text visibility acceptance.
 - Production has only the additive table migration applied at this checkpoint. Crosswalk persistence follows code deployment; post-deployment acceptance must call the canonical service read path and prove zero missing text, source duplicates, and virtual copies for the canary and required representatives.
 
+
+## 2026-09-28 — Monthly Operations Report must remain read-only and Mirror-isolated
+
+**Decision:** Build the monthly operations report as a separate NestJS module that reads existing canonical reporting data. It must not modify Live Mirror polling/reconciliation, Historical Mirror collection/backfill/crosswalk, or their state machines.
+
+**Rationale:** The reporting feature needs Store Master metadata, follower snapshots, and message timelines that already exist. Reusing those read models avoids duplicate ingestion and prevents reporting work from destabilizing Mirror collection.
+
+**Implementation boundary:**
+- Allowed: Store Master reads, `LineOaFollowerSnapshot` reads, canonical `Message` reads, shared pure response-cycle helper, report controller/service/module registration.
+- Not allowed: line-chat worker changes, Mirror scheduler/lease/session changes, Historical Timeline writes, crosswalk writes, Message writes, schema migration for this P0.
+- Report output must declare its data sources and Mirror write flags so consumers can audit the boundary.
+
+
+## 2026-09-28 — Monthly response KPI accepts canonical LINE Manager human replies
+
+**Decision:** Monthly Operations Report response cycles count a delivered outbound as human when either an internal `senderUserId` is present or canonical message metadata identifies a LINE Manager mirrored human response.
+
+**Evidence boundary:** `rawPayload.source = LINE_MANAGER_MIRROR` or `rawPayload.provider = LINE_MANAGER` is accepted only when the message is delivered and not identified as an automated response. `Auto Reply Bot`, `AUTO_RESPONSE`, and `__AUTO_RESPONSE` remain excluded.
+
+**Rationale:** Project B canonical imports intentionally preserve Manager-visible responder identity even when no internal user mapping exists. The reconciler already uses this metadata for reply state, so reporting must not discard those legitimate human responses.
+
+**Isolation:** This is report-layer classification only. No Live Mirror or Historical Mirror collector, browser session, reconciler, lease, backfill, or persistence behavior is changed.
+
+
 # 2026-09-28 — H1 source identity and archive proof remain fail-closed
 
 - Base the final Historical completion program on a fresh isolated worktree at the fetched `origin/main` commit; preserve the existing dirty checkout and its branch.

@@ -46,9 +46,10 @@ Root Markdown reports do not match Railway service watch paths, so docs-only pub
 
 ## Git and Publication
 
-- Feature commits 0258da2b and 8a3cfad4 are pushed. Draft PR #379 is open. Docs-only branch codex/historical-final-reports-20260928 is pushed at 1193387e; PR #380 is open; its current head has no Actions runs or combined status checks.
+- Feature commits 0258da2b and 8a3cfad4 are pushed. Draft PR #379 is open. Docs-only PR #380 is on codex/historical-final-reports-20260928; its prior head was 86545d1d.
+- Current origin/main `4610df1a3db95afe158b91e576bdf201c23b80fc` was merged into the docs branch to resolve overlapping AI_PROGRESS.md and DECISIONS.md entries while preserving both histories.
 - Pull requests: #379 (draft H3; DO NOT MERGE) and #380 (docs-only). Merged: no.
-- Unmerged intentionally: #379 remains a draft because its migration triggers the Live Mirror worker watch. PR #380 is docs-only and remains unmerged because no CI runs/status checks are present; merge only after CI passes and the watch-path check remains safe.
+- Unmerged intentionally: #379 remains a draft because its migration triggers the Live Mirror worker watch. PR #380 remains unmerged pending post-push CI and GitHub mergeability checks.
 
 ## Changed-file inventory
 

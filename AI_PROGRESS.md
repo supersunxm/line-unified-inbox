@@ -5733,6 +5733,84 @@ Current state: local follow-up fix and checks are complete; the follow-up commit
 - **Safety:** The crosswalk apply performed 4,052 INSERTs into `HistoricalConversationCrosswalk` only. No Conversation, Customer, canonical Message, owner, BM, follow-up, nickname, queue/job, archive, or LINE-send action was part of the crosswalk scripts. The signed-in browser check remains pending; authenticated conversation HTTP was not run because no signed-in session was available.
 - **Current status:** `DELIVERED_BACKEND_ACCEPTED`. Sunn may perform the separate signed-in visual confirmation; no further production data action is pending for this phase.
 
+
+## 2026-09-28 — Monthly Operations Report P0 (isolated from Mirror)
+
+- Created branch `feature/monthly-operations-report-p0`.
+- Added read-only `GET /monthly-operations-report?month=YYYY-MM`.
+- Reused existing Store Master, `LineOaFollowerSnapshot`, canonical `Message` timeline, and existing response-cycle helper.
+- Added per-store follower start/focus/end snapshots, follower growth, inbound volume, actual <=24h reply cycles/rates, and data-quality flags.
+- Explicitly excluded all writes to Live Mirror and Historical Mirror data paths; no Prisma migration and no worker/scheduler changes.
+- PR: #373.
+- Verification: Application CI started; backend/frontend/android jobs pending at time of this entry.
+- Next: repair any CI findings only inside the report module/app registration, then verify diff still excludes Mirror paths.
+
+
+## 2026-09-28 — Monthly Operations Report production validation UI
+
+- Production backend deployment verified on merge commit `0cdfeb8f2285264ecf1cd2946edc2feb35b9db86`; Railway status SUCCESS.
+- Nest startup log confirms `GET /monthly-operations-report` is registered and application startup completed successfully.
+- Direct aggregate validation is authentication-bound; no unauthenticated/public bypass was introduced.
+- Added authenticated frontend page `/monthly-operations-report` using the existing Dashboard access policy and browser session.
+- Page shows report scope, production totals, <=24h response KPI, follower coverage, per-store rows, search, month selection, and explicit Mirror isolation flags.
+- Added sidebar navigation under Tools.
+- No Live Mirror or Historical Mirror implementation files were changed.
+
+
+## 2026-09-28 — Monthly Operations Report reply KPI reconciliation
+
+- Production validation UI exposed suspicious 0% reply rates for stores with substantial inbound volume.
+- Root cause confirmed in code: report response cycles required `senderUserId`, while canonical Manager-mirrored human outbound messages may intentionally have `senderUserId = null` but carry `rawPayload.source = LINE_MANAGER_MIRROR` / `provider = LINE_MANAGER`.
+- Mirror reconciler already treats those canonical messages as human replies for conversation state.
+- Report-only fix now applies the same human-reply evidence without changing Mirror collectors/reconciliation.
+- Report cycles additionally require `deliveryStatus = DELIVERED` and continue excluding Auto Reply Bot / AUTO_RESPONSE messages.
+- Added regression coverage for internal-user replies, Manager replies without user mapping, auto replies, failed outbound, consecutive inbound cycles, and unresolved cycles.
+
+
+## 2026-09-28 — Monthly Operations Report XLSX exporter
+
+- Added authenticated `GET /monthly-operations-report/export?month=YYYY-MM`.
+- Export reuses the same report service as the production UI so XLSX and on-screen totals share one source of truth.
+- Workbook includes `运营明细`, `汇总`, `账号分组汇总`, and `口径说明`.
+- `运营明细` preserves the August report's 35-column A:AI layout.
+- Historical tag columns Y:AF remain blank until reliable historical tag snapshots exist; rows explicitly note `tag_history_unavailable`.
+- Added `下载 XLSX` action to `/monthly-operations-report`.
+- No Live Mirror or Historical Mirror implementation files or persistence paths changed.
+
+
+## 2026-09-28 — Monthly Operations XLSX export 500 hotfix
+
+- Production confirmed `GET /monthly-operations-report` remains healthy (HTTP 200); only `/monthly-operations-report/export` returned HTTP 500.
+- XLSX generation was rewritten to use the same conservative ExcelJS pattern already used by the production Google Review exporter: define worksheet columns first, then append primitive row objects.
+- Removed unnecessary complex worksheet layout operations from the export path while preserving the 35-column A:AI detail contract.
+- Added structured success/failure logging for XLSX generation.
+- Added a production-scale regression test with 146 stores.
+- No Live Mirror or Historical Mirror implementation files changed.
+
+
+## 2026-09-28 — Monthly XLSX runtime import hotfix
+
+- Production structured log identified exact export failure: `Cannot read properties of undefined (reading 'Workbook')`.
+- Root cause: default-import interoperability for `exceljs` in the production CommonJS bundle; TypeScript/CI did not expose the runtime default export mismatch.
+- Switched Monthly Operations Report exporter and its tests to runtime-safe namespace import: `import * as ExcelJS from "exceljs"`.
+- Normal report endpoint remained healthy (HTTP 200); only XLSX export was affected.
+- No Live Mirror or Historical Mirror implementation files changed.
+
+
+## 2026-09-28 — Monthly report English workbook headings
+
+- Reviewed the generated 146-store September XLSX.
+- Workbook structure is valid: 146 store rows and 35 detail columns.
+- Changed exported workbook presentation to English only:
+  - `Operations Detail`
+  - `Summary`
+  - `Region Summary`
+  - `Methodology`
+- Translated all detail headers, summary metrics, and methodology labels/definitions to English.
+- No KPI calculation, Store Master mapping, Live Mirror, Historical Mirror, or database behavior changed in this presentation-only patch.
+- Separate data-quality finding: fleet-wide 24h reply rate must not yet be treated as complete-fleet performance because reply evidence is currently non-zero for only a small subset of stores; coverage logic will be handled separately.
+
+
 ## 2026-09-28 — Isolated Historical final-completion run
 
 - Created a fresh worktree on `codex/historical-final-completion-20260928` from `origin/main` at `df527c7b8f852007ded02a78358c5039fd470163`; the existing dirty checkout and older Historical branches remain untouched.
@@ -5764,3 +5842,10 @@ Current state: local follow-up fix and checks are complete; the follow-up commit
 - Changed-file inventory and final report are in HISTORICAL_FINAL_PROGRAM_STATUS.md and HISTORICAL_MIRROR_FINAL_COMPLETION_REPORT.md. No production writes, deployments, LINE sends, canonical mutations, or Live Mirror changes occurred; dirty primary checkout untouched.
 - Root Markdown is outside Railway watch paths. Docs-only PR #380 and H3 draft PR #379 are open; both target main at 0abac727. GitHub currently reports no Actions runs or combined status checks for PR #380, so it remains unmerged. The H3 draft must not merge. Existing unrelated full lint/test/typecheck failures remain documented.
 - Checks recorded: 37 focused Historical tests, 606 frontend tests, backend/frontend builds, Prisma validation/generation, Historical-script TypeScript, targeted ESLint, H1 dry-runs, H2 read-only classification, and diff check.
+
+## 2026-09-28 — Historical docs PR conflict resolution
+
+- Fetched `origin/main` at `4610df1a3db95afe158b91e576bdf201c23b80fc` and merged it into `codex/historical-final-reports-20260928`, previously at `86545d1d10f8b3beb485a280e4dcf08613f657c4`.
+- Manually resolved the `AI_PROGRESS.md` and `DECISIONS.md` conflicts, retaining the Monthly Operations entries from main and the Historical Final Completion entries from PR #380. No duplicate section headings or conflict markers remain.
+- `git diff --check` passed. The diff against current `origin/main` contains exactly the eight expected root Markdown files; no source, Prisma, frontend, or Live Mirror paths are in the PR diff.
+- Next: push the existing PR branch and inspect GitHub Actions, required statuses, and mergeability.
