@@ -160,6 +160,31 @@ export function isKnownHistoricalStaffResponder(senderBizId: string | null): boo
   return Boolean(senderBizId?.trim()) && senderBizId !== "__AUTO_RESPONSE";
 }
 
+export function isHistoricalReplyEvidence(senderBizId: string | null): boolean {
+  return senderBizId !== "__AUTO_RESPONSE";
+}
+
+function isCurrentReplyEvidence(message: {
+  direction: MessageDirection;
+  deliveryStatus: MessageDeliveryStatus | null;
+  sentAt: Date;
+  senderUserId: string | null;
+  senderDisplayName: string | null;
+  rawPayload: unknown;
+}): boolean {
+  return message.direction === MessageDirection.OUTBOUND
+    && message.deliveryStatus === MessageDeliveryStatus.DELIVERED
+    && !isAutomatedOutboundMessage({
+      direction: message.direction,
+      deliveryStatus: message.deliveryStatus,
+      sentAt: message.sentAt,
+      senderUserId: message.senderUserId,
+      senderDisplayName: message.senderDisplayName,
+      rawPayload: message.rawPayload,
+    });
+}
+
+
 export function classifyResponseDuration(firstInboundAt: Date, firstReplyAt: Date): "WITHIN_24H" | "OVER_24H" {
   return firstReplyAt.getTime() - firstInboundAt.getTime() <= 24 * 60 * 60 * 1000 ? "WITHIN_24H" : "OVER_24H";
 }
@@ -607,8 +632,8 @@ export class HistoricalTimelineService {
       if (!firstInbound) return [];
       const firstReply = chat.messages.find((message) => {
         if (message.direction !== MessageDirection.OUTBOUND || message.sentAt < firstInbound.sentAt) return false;
-        if (message.source === "HISTORICAL") return isKnownHistoricalStaffResponder(message.senderBizId);
-        return isDeliveredHumanOutbound({
+        if (message.source === "HISTORICAL") return isHistoricalReplyEvidence(message.senderBizId);
+        return isCurrentReplyEvidence({
           direction: message.direction,
           deliveryStatus: message.deliveryStatus,
           sentAt: message.sentAt,
@@ -828,8 +853,8 @@ export class HistoricalTimelineService {
 
       const humanReply = messages.find((message) => {
         if (message.direction !== MessageDirection.OUTBOUND || message.sentAt < firstInbound.sentAt) return false;
-        if (message.source === "HISTORICAL") return isKnownHistoricalStaffResponder(message.senderBizId);
-        return isDeliveredHumanOutbound({
+        if (message.source === "HISTORICAL") return isHistoricalReplyEvidence(message.senderBizId);
+        return isCurrentReplyEvidence({
           direction: message.direction,
           deliveryStatus: message.deliveryStatus,
           sentAt: message.sentAt,
@@ -838,19 +863,6 @@ export class HistoricalTimelineService {
           rawPayload: message.rawPayload,
         });
       });
-      const unknownOutbound = !humanReply && messages.some((message) => {
-        if (message.direction !== MessageDirection.OUTBOUND || message.sentAt < firstInbound.sentAt) return false;
-        if (message.source === "HISTORICAL") return !message.senderBizId;
-        return !message.senderUserId && !isAutomatedOutboundMessage({
-          direction: message.direction,
-          deliveryStatus: message.deliveryStatus,
-          sentAt: message.sentAt,
-          senderUserId: message.senderUserId,
-          senderDisplayName: message.senderDisplayName,
-          rawPayload: message.rawPayload,
-        });
-      });
-
       const dateKey = bangkokDateKey(firstInbound.sentAt, "day");
       const monthKey = bangkokDateKey(firstInbound.sentAt, "month");
       const dateCount = dateCounts.get(dateKey) ?? emptyReplyCounts();
@@ -859,20 +871,19 @@ export class HistoricalTimelineService {
       for (const count of responseCounts) count.total += 1;
       if (!humanReply) {
         for (const count of responseCounts) count.pending += 1;
-        if (unknownOutbound) {
-          unknownResponderReplies += 1;
-          for (const count of responseCounts) count.unknownResponderReplies += 1;
-        }
       } else {
         const replyClass = classifyResponseDuration(firstInbound.sentAt, humanReply.sentAt);
         const within24h = replyClass === "WITHIN_24H";
+        const responderId = humanReply.source === "HISTORICAL" ? humanReply.senderBizId : humanReply.senderUserId;
+        const responderKnown = Boolean(responderId?.trim());
         for (const count of responseCounts) {
           count.responded += 1;
           if (within24h) count.within24h += 1;
           else count.over24h += 1;
-          count.knownResponderReplies += 1;
+          if (responderKnown) count.knownResponderReplies += 1;
+          else count.unknownResponderReplies += 1;
         }
-        const responderId = humanReply.source === "HISTORICAL" ? humanReply.senderBizId : humanReply.senderUserId;
+        if (!responderKnown) unknownResponderReplies += 1;
         if (responderId) {
           const responderSource = humanReply.source === "HISTORICAL" ? "LINE_MANAGER_BIZ_ID" : "CANONICAL_USER_ID";
           const responderKey = `${scope.storeId}\u0000${responderSource}\u0000${responderId}`;
