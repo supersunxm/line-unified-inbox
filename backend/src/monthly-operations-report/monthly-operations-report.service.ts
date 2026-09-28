@@ -4,6 +4,7 @@ import type { AuthUser } from "../auth/auth.guard";
 import { StoreAccessService } from "../auth/store-access.service";
 import { formatDbDateToIso, getTodayBangkokDateString, toUtcDateForDb } from "../follower-insights/date-utils";
 import { type AnalyticsMessage, bangkokMonthBounds } from "../mobile/monthly-summary.service";
+import { HistoricalTimelineService } from "../historical-timeline.service";
 import { PrismaService } from "../prisma.service";
 import * as ExcelJS from "exceljs";
 
@@ -266,6 +267,7 @@ export class MonthlyOperationsReportService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly storeAccess: StoreAccessService,
+    private readonly historicalTimeline: HistoricalTimelineService,
   ) {}
 
   async get(user: AuthUser, requestedMonth?: string) {
@@ -284,6 +286,30 @@ export class MonthlyOperationsReportService {
     const focusStartIso = localDate(effectiveFocusStart);
     const periodEndIso = getTodayBangkokDateString(
       isCurrentMonth ? now : new Date(bounds.end.getTime() - 1),
+    );
+
+    const kpiThroughDate = isCurrentMonth
+      ? new Date(now.getTime() - 48 * 60 * 60 * 1000)
+      : new Date(bounds.end.getTime() - 1);
+    const kpiThroughIso = localDate(kpiThroughDate);
+    const hasMaturedKpiWindow = kpiThroughDate.getTime() >= bounds.start.getTime();
+    const historicalMonthAnalytics = hasMaturedKpiWindow
+      ? await this.historicalTimeline.replyAnalytics(user, {
+          dateFrom: monthStartIso,
+          dateTo: kpiThroughIso,
+        })
+      : null;
+    const historicalFocusAnalytics = hasMaturedKpiWindow && kpiThroughDate.getTime() >= effectiveFocusStart.getTime()
+      ? await this.historicalTimeline.replyAnalytics(user, {
+          dateFrom: focusStartIso,
+          dateTo: kpiThroughIso,
+        })
+      : null;
+    const historicalMonthByStore = new Map(
+      (historicalMonthAnalytics?.stores ?? []).map((row) => [row.storeId, row] as const),
+    );
+    const historicalFocusByStore = new Map(
+      (historicalFocusAnalytics?.stores ?? []).map((row) => [row.storeId, row] as const),
     );
 
     const accessibleStoreIds = await this.storeAccess.accessibleStoreIds(user);
@@ -561,6 +587,8 @@ export class MonthlyOperationsReportService {
       )
       .map((account) => {
         const accountMessages = messagesByAccount.get(account.id) ?? [];
+        const historicalMonthKpi = historicalMonthByStore.get(account.store.id);
+        const historicalFocusKpi = historicalFocusByStore.get(account.store.id);
         const cycles = calculateReportResponseCycles(accountMessages);
         const periodCycles = cycles.filter((cycle) => intervalContains(cycle.startedAt, bounds.start, periodEnd));
         const focusCycles = cycles.filter((cycle) => intervalContains(cycle.startedAt, effectiveFocusStart, periodEnd));
@@ -602,11 +630,17 @@ export class MonthlyOperationsReportService {
           (message) => message.direction === MessageDirection.INBOUND && intervalContains(message.sentAt, effectiveFocusStart, periodEnd),
         ).length;
 
-        const replyCoverage = classifyReplyKpiCoverage({
-          mirrorAvailable,
-          eligibleCycles: eligiblePeriodCycles.length,
-          coveredCycles: coveredPeriodCycles.length,
-        });
+        const historicalResponseCycles = historicalMonthKpi?.total ?? 0;
+        const historicalRepliesWithin24h = historicalMonthKpi?.within24h ?? 0;
+        const historicalFocusResponseCycles = historicalFocusKpi?.total ?? 0;
+        const historicalFocusRepliesWithin24h = historicalFocusKpi?.within24h ?? 0;
+        const historicalReplyRate = historicalMonthKpi?.responseRate24h == null
+          ? null
+          : historicalMonthKpi.responseRate24h / 100;
+        const historicalFocusReplyRate = historicalFocusKpi?.responseRate24h == null
+          ? null
+          : historicalFocusKpi.responseRate24h / 100;
+        const replyCoverage: ReplyKpiCoverage = hasMaturedKpiWindow ? "complete" : "not_covered";
         const mirrorFallbackReplies = mirrorFallbackRepliesByAccount.get(account.id) ?? 0;
         const mirrorFallbackUnmapped = mirrorFallbackUnmappedByAccount.get(account.id) ?? 0;
 
@@ -623,8 +657,9 @@ export class MonthlyOperationsReportService {
         if (!focusSnapshot) notes.push("follower_focus_start_missing");
         if (!endSnapshot) notes.push("follower_period_end_missing");
         if (replyCoverage !== "complete") notes.push("reply_coverage_" + replyCoverage);
-        if (eligiblePeriodCycles.length > 0) {
-          notes.push("reply_cycle_coverage=" + coveredPeriodCycles.length + "/" + eligiblePeriodCycles.length);
+        if (hasMaturedKpiWindow) {
+          notes.push("reply_kpi_source=historical_timeline_service");
+          notes.push("reply_kpi_through=" + kpiThroughIso);
         }
         if (mirrorFallbackReplies > 0) notes.push("mirror_fallback_replies=" + mirrorFallbackReplies);
         if (mirrorFallbackUnmapped > 0) notes.push("mirror_fallback_unmapped=" + mirrorFallbackUnmapped);
@@ -653,19 +688,19 @@ export class MonthlyOperationsReportService {
           chat: {
             inboundMessages,
             focusInboundMessages,
-            responseCycles: eligiblePeriodCycles.length,
-            repliedWithin24h,
-            focusResponseCycles: eligibleFocusCycles.length,
-            focusRepliedWithin24h,
-            replyRateWithin24h: replyCoverage === "complete" ? observedReplyRateWithin24h : null,
-            focusReplyRateWithin24h: replyCoverage === "complete" ? observedFocusReplyRateWithin24h : null,
+            responseCycles: historicalResponseCycles,
+            repliedWithin24h: historicalRepliesWithin24h,
+            focusResponseCycles: historicalFocusResponseCycles,
+            focusRepliedWithin24h: historicalFocusRepliesWithin24h,
+            replyRateWithin24h: replyCoverage === "complete" ? historicalReplyRate : null,
+            focusReplyRateWithin24h: replyCoverage === "complete" ? historicalFocusReplyRate : null,
             observedReplyRateWithin24h,
             observedFocusReplyRateWithin24h,
             replyCoverage,
             mirrorFallbackReplies,
             mirrorFallbackUnmapped,
-            coveredResponseCycles: coveredPeriodCycles.length,
-            coveredFocusResponseCycles: coveredFocusCycles.length,
+            coveredResponseCycles: historicalResponseCycles,
+            coveredFocusResponseCycles: historicalFocusResponseCycles,
           },
           dataQuality: {
             followerCoverage: followerPoints === 3 ? "complete" : followerPoints === 0 ? "missing" : "partial",
@@ -722,6 +757,7 @@ export class MonthlyOperationsReportService {
         focusStart: focusStartIso,
         through: periodEndIso,
         generatedAt: now.toISOString(),
+        replyKpiThrough: hasMaturedKpiWindow ? kpiThroughIso : null,
       },
       scope: {
         stores: stores.length,
@@ -747,11 +783,11 @@ export class MonthlyOperationsReportService {
       stores,
       dataContract: {
         followerSource: "LineOaFollowerSnapshot",
-        chatSource: "Message + LineChatMirrorMessage read-only fallback",
-        responseDefinition: "first delivered human staff outbound after an inbound response cycle, including deduplicated LINE Manager mirror fallback, within 24 hours",
-        replyCoverageDefinition: "official KPI includes only stores whose eligible response cycles all have outcome proof; successful replies within 24h are definitive, while failures require Manager history covering the cycle start and a successful sync past the 24h deadline",
+        chatSource: "HistoricalTimelineService merged historical + canonical timeline",
+        responseDefinition: "first human reply after the first inbound in each chat, using the completed Historical Timeline read model merged with canonical messages; current-month KPI is cut off at a fully matured date",
+        replyCoverageDefinition: "Historical project completion is the reply-KPI source of truth. Current-month KPI excludes the latest two Bangkok calendar days so every included chat has a full 24-hour response window.",
         lineChatMirrorRead: true,
-        historicalTimelineRead: false,
+        historicalTimelineRead: true,
         liveMirrorWrite: false,
         historicalMirrorWrite: false,
       },
