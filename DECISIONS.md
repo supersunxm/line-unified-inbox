@@ -2909,6 +2909,19 @@ The first production target proof confirmed that eligible candidate OAs have no 
 **Isolation:** This is report-layer classification only. No Live Mirror or Historical Mirror collector, browser session, reconciler, lease, backfill, or persistence behavior is changed.
 
 
+## 2026-09-28 — Official 24h reply KPI requires proven Manager mirror coverage
+
+**Decision:** Monthly Operations Report may read canonical `Message` plus a deduplicated, read-only `LineChatMirrorMessage` fallback, but an official per-store 24h reply rate is published only when Manager mirror coverage is proven complete for the selected month.
+
+**Coverage rule:** A store is `complete` only when its Manager mirror is enabled, has a successful sync, and every relevant `LineChatMirrorChat` in the selected period has `FAST_PATH_COMPLETE` historical coverage reaching the report start boundary. Enabled stores without complete proof are `partial`; stores without an enabled/successful mirror are `not_covered`.
+
+**Fallback rule:** A Manager outbound row is used only when it is human, not already represented in canonical `Message`, and maps uniquely to a canonical conversation using persisted conversation mapping or exact inbound message evidence. Ambiguous/unmapped rows are excluded and counted for diagnostics.
+
+**Presentation rule:** Partial/not-covered stores show N/A for official 24h KPI rather than 0%. Fleet-level official rate aggregates only complete-coverage stores.
+
+**Isolation:** Reporting reads Mirror tables only. It does not change Live Mirror or Historical Mirror collection, reconciliation, mappings, sessions, leases, backfill, or persistence.
+
+
 # 2026-09-28 — H1 source identity and archive proof remain fail-closed
 
 - Base the final Historical completion program on a fresh isolated worktree at the fetched `origin/main` commit; preserve the existing dirty checkout and its branch.

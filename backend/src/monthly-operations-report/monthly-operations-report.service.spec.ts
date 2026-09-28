@@ -2,6 +2,7 @@ import * as ExcelJS from "exceljs";
 import { MessageDeliveryStatus, MessageDirection } from "@prisma/client";
 import {
   calculateReportResponseCycles,
+  classifyReplyKpiCoverage,
   isReportHumanReply,
   pickLatestSnapshotOnOrBefore,
 } from "./monthly-operations-report.service";
@@ -107,6 +108,27 @@ describe("MonthlyOperationsReportService helpers", () => {
     expect(cycles[0].durationSeconds).toBe(1800);
   });
 
+  it("classifies reply KPI coverage conservatively", () => {
+    expect(classifyReplyKpiCoverage({
+      mirrorEnabled: false,
+      lastSuccessfulSyncAt: null,
+      relevantChats: 0,
+      completeChats: 0,
+    })).toBe("not_covered");
+    expect(classifyReplyKpiCoverage({
+      mirrorEnabled: true,
+      lastSuccessfulSyncAt: new Date("2026-09-28T00:00:00.000Z"),
+      relevantChats: 10,
+      completeChats: 6,
+    })).toBe("partial");
+    expect(classifyReplyKpiCoverage({
+      mirrorEnabled: true,
+      lastSuccessfulSyncAt: new Date("2026-09-28T00:00:00.000Z"),
+      relevantChats: 10,
+      completeChats: 10,
+    })).toBe("complete");
+  });
+
   it("does not let an auto reply close a response cycle", () => {
     const cycles = calculateReportResponseCycles([
       message({
@@ -143,7 +165,16 @@ describe("MonthlyOperationsReportService XLSX export", () => {
         through: "2026-09-28",
         generatedAt: "2026-09-28T04:30:00.000Z",
       },
-      scope: { stores: 1, lineAccounts: 1, followerComplete: 1, followerPartial: 0, followerMissing: 0 },
+      scope: {
+        stores: 1,
+        lineAccounts: 1,
+        followerComplete: 1,
+        followerPartial: 0,
+        followerMissing: 0,
+        replyComplete: 1,
+        replyPartial: 0,
+        replyNotCovered: 0,
+      },
       totals: {
         inboundMessages: 10,
         focusInboundMessages: 3,
@@ -155,6 +186,14 @@ describe("MonthlyOperationsReportService XLSX export", () => {
         focusFollowerGrowth: 5,
         replyRateWithin24h: 0.75,
         focusReplyRateWithin24h: 1,
+        observedResponseCycles: 4,
+        observedRepliedWithin24h: 3,
+        observedFocusResponseCycles: 2,
+        observedFocusRepliedWithin24h: 2,
+        observedReplyRateWithin24h: 0.75,
+        observedFocusReplyRateWithin24h: 1,
+        mirrorFallbackReplies: 1,
+        mirrorFallbackUnmapped: 0,
       },
       stores: [{
         storeId: "store-1",
@@ -186,10 +225,15 @@ describe("MonthlyOperationsReportService XLSX export", () => {
           focusRepliedWithin24h: 2,
           replyRateWithin24h: 0.75,
           focusReplyRateWithin24h: 1,
+          observedReplyRateWithin24h: 0.75,
+          observedFocusReplyRateWithin24h: 1,
+          replyCoverage: "complete",
+          mirrorFallbackReplies: 1,
+          mirrorFallbackUnmapped: 0,
         },
         dataQuality: {
           followerCoverage: "complete",
-          chatCoverage: "canonical_message_timeline",
+          chatCoverage: "canonical_plus_manager_fallback",
           notes: [],
         },
       }],
@@ -197,6 +241,8 @@ describe("MonthlyOperationsReportService XLSX export", () => {
         followerSource: "LineOaFollowerSnapshot",
         chatSource: "Message",
         responseDefinition: "test",
+        replyCoverageDefinition: "test",
+        lineChatMirrorRead: true,
         historicalTimelineRead: false,
         liveMirrorWrite: false,
         historicalMirrorWrite: false,
@@ -262,10 +308,15 @@ describe("MonthlyOperationsReportService XLSX production-scale export", () => {
         focusRepliedWithin24h: 16,
         replyRateWithin24h: 0.8,
         focusReplyRateWithin24h: 0.8,
+        observedReplyRateWithin24h: 0.8,
+        observedFocusReplyRateWithin24h: 0.8,
+        replyCoverage: "complete",
+        mirrorFallbackReplies: 0,
+        mirrorFallbackUnmapped: 0,
       },
       dataQuality: {
         followerCoverage: "complete",
-        chatCoverage: "canonical_message_timeline",
+        chatCoverage: "canonical_plus_manager_fallback",
         notes: [],
       },
     }));
@@ -286,6 +337,9 @@ describe("MonthlyOperationsReportService XLSX production-scale export", () => {
         followerComplete: stores.length,
         followerPartial: 0,
         followerMissing: 0,
+        replyComplete: stores.length,
+        replyPartial: 0,
+        replyNotCovered: 0,
       },
       totals: {
         inboundMessages: stores.reduce((sum, store) => sum + store.chat.inboundMessages, 0),
@@ -298,12 +352,22 @@ describe("MonthlyOperationsReportService XLSX production-scale export", () => {
         focusFollowerGrowth: stores.length * 10,
         replyRateWithin24h: 0.8,
         focusReplyRateWithin24h: 0.8,
+        observedResponseCycles: stores.reduce((sum, store) => sum + store.chat.responseCycles, 0),
+        observedRepliedWithin24h: stores.reduce((sum, store) => sum + store.chat.repliedWithin24h, 0),
+        observedFocusResponseCycles: stores.reduce((sum, store) => sum + store.chat.focusResponseCycles, 0),
+        observedFocusRepliedWithin24h: stores.reduce((sum, store) => sum + store.chat.focusRepliedWithin24h, 0),
+        observedReplyRateWithin24h: 0.8,
+        observedFocusReplyRateWithin24h: 0.8,
+        mirrorFallbackReplies: 0,
+        mirrorFallbackUnmapped: 0,
       },
       stores,
       dataContract: {
         followerSource: "LineOaFollowerSnapshot",
         chatSource: "Message",
         responseDefinition: "test",
+        replyCoverageDefinition: "test",
+        lineChatMirrorRead: true,
         historicalTimelineRead: false,
         liveMirrorWrite: false,
         historicalMirrorWrite: false,
@@ -318,5 +382,116 @@ describe("MonthlyOperationsReportService XLSX production-scale export", () => {
     const detail = workbook.getWorksheet("Operations Detail")!;
     expect(detail.rowCount).toBe(147);
     expect(detail.columnCount).toBe(35);
+  });
+});
+
+
+describe("MonthlyOperationsReportService XLSX reply coverage", () => {
+  it("leaves official reply KPI cells blank when reply coverage is partial", async () => {
+    const { MonthlyOperationsReportService } = await import("./monthly-operations-report.service");
+    const service = new MonthlyOperationsReportService({} as never, {} as never);
+    (service as unknown as { get: () => Promise<unknown> }).get = async () => ({
+      period: {
+        month: "2026-09",
+        timezone: "Asia/Bangkok",
+        isCurrentMonth: true,
+        start: "2026-09-01",
+        focusStart: "2026-09-20",
+        through: "2026-09-28",
+        generatedAt: "2026-09-28T05:00:00.000Z",
+      },
+      scope: {
+        stores: 1,
+        lineAccounts: 1,
+        followerComplete: 1,
+        followerPartial: 0,
+        followerMissing: 0,
+        replyComplete: 0,
+        replyPartial: 1,
+        replyNotCovered: 0,
+      },
+      totals: {
+        inboundMessages: 10,
+        focusInboundMessages: 3,
+        responseCycles: 0,
+        repliedWithin24h: 0,
+        focusResponseCycles: 0,
+        focusRepliedWithin24h: 0,
+        observedResponseCycles: 4,
+        observedRepliedWithin24h: 3,
+        observedFocusResponseCycles: 2,
+        observedFocusRepliedWithin24h: 2,
+        monthFollowerGrowth: 20,
+        focusFollowerGrowth: 5,
+        replyRateWithin24h: null,
+        focusReplyRateWithin24h: null,
+        observedReplyRateWithin24h: 0.75,
+        observedFocusReplyRateWithin24h: 1,
+        mirrorFallbackReplies: 2,
+        mirrorFallbackUnmapped: 1,
+      },
+      stores: [{
+        storeId: "store-1",
+        externalStoreId: "25610",
+        storeName: "OPPO Central World",
+        accountName: "OPPO Central World",
+        lineOaId: "oa-1",
+        lineBasicId: "@126fiiqf",
+        province: "Bangkok",
+        region: "Central",
+        amName: null,
+        bmName: "BM Test",
+        followers: {
+          monthStart: 100,
+          monthStartDate: "2026-09-01",
+          focusStart: 115,
+          focusStartDate: "2026-09-20",
+          periodEnd: 120,
+          periodEndDate: "2026-09-28",
+          monthGrowth: 20,
+          focusGrowth: 5,
+        },
+        chat: {
+          inboundMessages: 10,
+          focusInboundMessages: 3,
+          responseCycles: 4,
+          repliedWithin24h: 3,
+          focusResponseCycles: 2,
+          focusRepliedWithin24h: 2,
+          replyRateWithin24h: null,
+          focusReplyRateWithin24h: null,
+          observedReplyRateWithin24h: 0.75,
+          observedFocusReplyRateWithin24h: 1,
+          replyCoverage: "partial",
+          mirrorFallbackReplies: 2,
+          mirrorFallbackUnmapped: 1,
+        },
+        dataQuality: {
+          followerCoverage: "complete",
+          chatCoverage: "canonical_plus_manager_fallback",
+          notes: ["reply_coverage_partial"],
+        },
+      }],
+      dataContract: {
+        followerSource: "LineOaFollowerSnapshot",
+        chatSource: "Message + LineChatMirrorMessage read-only fallback",
+        responseDefinition: "test",
+        replyCoverageDefinition: "test",
+        lineChatMirrorRead: true,
+        historicalTimelineRead: false,
+        liveMirrorWrite: false,
+        historicalMirrorWrite: false,
+      },
+    });
+
+    const file = await service.exportXlsx({} as never, "2026-09");
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(file.buffer as unknown as ExcelJS.Buffer);
+    const detail = workbook.getWorksheet("Operations Detail")!;
+    expect(detail.getCell("U2").value).toBeNull();
+    expect(detail.getCell("W2").value).toBeNull();
+    expect(detail.getCell("AG2").value).toBeNull();
+    expect(detail.getCell("AH2").value).toBe("PARTIAL");
+    expect(String(detail.getCell("AI2").value)).toContain("reply_coverage_partial");
   });
 });

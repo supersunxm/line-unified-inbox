@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { AuthorizedSection } from "../authorized-workspace";
 
 type FollowerCoverage = "complete" | "partial" | "missing";
+type ReplyCoverage = "complete" | "partial" | "not_covered";
 
 type ReportStore = {
   storeId: string;
@@ -35,6 +36,11 @@ type ReportStore = {
     focusRepliedWithin24h: number;
     replyRateWithin24h: number | null;
     focusReplyRateWithin24h: number | null;
+    observedReplyRateWithin24h: number | null;
+    observedFocusReplyRateWithin24h: number | null;
+    replyCoverage: ReplyCoverage;
+    mirrorFallbackReplies: number;
+    mirrorFallbackUnmapped: number;
   };
   dataQuality: {
     followerCoverage: FollowerCoverage;
@@ -59,6 +65,9 @@ type MonthlyOperationsReport = {
     followerComplete: number;
     followerPartial: number;
     followerMissing: number;
+    replyComplete: number;
+    replyPartial: number;
+    replyNotCovered: number;
   };
   totals: {
     inboundMessages: number;
@@ -71,12 +80,21 @@ type MonthlyOperationsReport = {
     focusFollowerGrowth: number;
     replyRateWithin24h: number | null;
     focusReplyRateWithin24h: number | null;
+    observedResponseCycles: number;
+    observedRepliedWithin24h: number;
+    observedFocusResponseCycles: number;
+    observedFocusRepliedWithin24h: number;
+    observedReplyRateWithin24h: number | null;
+    observedFocusReplyRateWithin24h: number | null;
+    mirrorFallbackReplies: number;
+    mirrorFallbackUnmapped: number;
   };
   stores: ReportStore[];
   dataContract: {
     followerSource: string;
     chatSource: string;
     responseDefinition: string;
+    lineChatMirrorRead: boolean;
     historicalTimelineRead: boolean;
     liveMirrorWrite: boolean;
     historicalMirrorWrite: boolean;
@@ -109,6 +127,16 @@ function CoverageBadge({ value }: { value: FollowerCoverage }) {
     : value === "partial"
       ? "bg-amber-50 text-amber-700"
       : "bg-rose-50 text-rose-700";
+  return <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${className}`}>{label}</span>;
+}
+
+function ReplyCoverageBadge({ value }: { value: ReplyCoverage }) {
+  const label = value === "complete" ? "Complete" : value === "partial" ? "Partial" : "Not covered";
+  const className = value === "complete"
+    ? "bg-emerald-50 text-emerald-700"
+    : value === "partial"
+      ? "bg-amber-50 text-amber-700"
+      : "bg-slate-100 text-slate-600";
   return <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${className}`}>{label}</span>;
 }
 
@@ -272,14 +300,21 @@ function ReportContent() {
             <section className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               <MetricCard label="ร้านในรายงาน" value={formatNumber(report.scope.stores)} detail={`${formatNumber(report.scope.lineAccounts)} LINE OA`} />
               <MetricCard label="ข้อความลูกค้าเดือนนี้" value={formatNumber(report.totals.inboundMessages)} detail={`ตั้งแต่ ${report.period.start} ถึง ${report.period.through}`} />
-              <MetricCard label="ตอบภายใน 24 ชม." value={formatRate(report.totals.replyRateWithin24h)} detail={`${formatNumber(report.totals.repliedWithin24h)} / ${formatNumber(report.totals.responseCycles)} response cycles`} />
+              <MetricCard
+                label="ตอบภายใน 24 ชม."
+                value={formatRate(report.totals.replyRateWithin24h)}
+                detail={`${formatNumber(report.totals.repliedWithin24h)} / ${formatNumber(report.totals.responseCycles)} eligible cycles · ${formatNumber(report.scope.replyComplete)}/${formatNumber(report.scope.stores)} stores complete`}
+              />
               <MetricCard label="Follower Growth" value={formatNumber(report.totals.monthFollowerGrowth)} detail={`ช่วง 20 เป็นต้นมา ${formatNumber(report.totals.focusFollowerGrowth)}`} />
             </section>
 
-            <section className="mt-3 grid gap-3 sm:grid-cols-3">
+            <section className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
               <MetricCard label="Follower snapshot ครบ" value={formatNumber(report.scope.followerComplete)} />
               <MetricCard label="Follower snapshot บางส่วน" value={formatNumber(report.scope.followerPartial)} />
               <MetricCard label="Follower snapshot ไม่มี" value={formatNumber(report.scope.followerMissing)} />
+              <MetricCard label="Reply KPI coverage ครบ" value={formatNumber(report.scope.replyComplete)} detail="รวมใน official 24h KPI" />
+              <MetricCard label="Reply KPI coverage บางส่วน" value={formatNumber(report.scope.replyPartial)} detail="แสดง N/A ใน official KPI" />
+              <MetricCard label="Reply KPI ยังไม่ครอบคลุม" value={formatNumber(report.scope.replyNotCovered)} detail="แสดง N/A ไม่ใช่ 0%" />
             </section>
 
             <section className="mt-5 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4 shadow-[var(--app-shadow-sm)]">
@@ -287,7 +322,7 @@ function ReportContent() {
                 <div>
                   <h2 className="text-base font-semibold">Production data check</h2>
                   <p className="mt-1 text-xs text-[var(--app-text-secondary)]">
-                    Response KPI ใช้ first human staff outbound หลัง inbound cycle และต้องไม่เกิน 24 ชั่วโมง
+                    Official 24h KPI ใช้เฉพาะร้านที่ reply coverage = Complete; Partial / Not covered จะแสดง N/A แทน 0%
                   </p>
                 </div>
                 <input
@@ -312,7 +347,7 @@ function ReportContent() {
                       <th className="px-3 py-3 text-right">Inbound</th>
                       <th className="px-3 py-3 text-right">≤24h</th>
                       <th className="px-3 py-3 text-right">24h Rate</th>
-                      <th className="px-3 py-3">Coverage</th>
+                      <th className="px-3 py-3">Reply Coverage</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -332,12 +367,27 @@ function ReportContent() {
                         <td className="px-3 py-3 text-right">{formatNumber(store.followers.periodEnd)}</td>
                         <td className="px-3 py-3 text-right">{formatNumber(store.followers.monthGrowth)}</td>
                         <td className="px-3 py-3 text-right">{formatNumber(store.chat.inboundMessages)}</td>
-                        <td className="px-3 py-3 text-right">{formatNumber(store.chat.repliedWithin24h)}</td>
-                        <td className="px-3 py-3 text-right">{formatRate(store.chat.replyRateWithin24h)}</td>
+                        <td className="px-3 py-3 text-right">
+                          {store.chat.replyCoverage === "complete" ? formatNumber(store.chat.repliedWithin24h) : "N/A"}
+                        </td>
+                        <td className="px-3 py-3 text-right">{store.chat.replyCoverage === "complete" ? formatRate(store.chat.replyRateWithin24h) : "N/A"}</td>
                         <td className="px-3 py-3">
-                          <CoverageBadge value={store.dataQuality.followerCoverage} />
+                          <ReplyCoverageBadge value={store.chat.replyCoverage} />
+                          {store.chat.replyCoverage !== "complete" && store.chat.observedReplyRateWithin24h !== null ? (
+                            <div className="mt-1 text-[11px] text-[var(--app-text-tertiary)]">
+                              observed {formatRate(store.chat.observedReplyRateWithin24h)} · not official
+                            </div>
+                          ) : null}
+                          {store.chat.mirrorFallbackReplies > 0 ? (
+                            <div className="mt-1 text-[11px] text-[var(--app-text-tertiary)]">
+                              +{formatNumber(store.chat.mirrorFallbackReplies)} Manager fallback replies
+                            </div>
+                          ) : null}
+                          <div className="mt-1 text-[11px] text-[var(--app-text-tertiary)]">
+                            Follower: <CoverageBadge value={store.dataQuality.followerCoverage} />
+                          </div>
                           {store.dataQuality.notes.length > 0 ? (
-                            <div className="mt-1 max-w-56 text-[11px] text-[var(--app-text-tertiary)]">{store.dataQuality.notes.join(", ")}</div>
+                            <div className="mt-1 max-w-64 text-[11px] text-[var(--app-text-tertiary)]">{store.dataQuality.notes.join(", ")}</div>
                           ) : null}
                         </td>
                       </tr>
@@ -351,9 +401,9 @@ function ReportContent() {
             <section className="mt-4 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface-subtle)] p-4 text-xs text-[var(--app-text-secondary)]">
               <div className="font-semibold text-[var(--app-text-primary)]">Isolation check</div>
               <div className="mt-2 grid gap-1 md:grid-cols-3">
+                <div>Manager Mirror read: <strong>{report.dataContract.lineChatMirrorRead ? "YES" : "NO"}</strong></div>
                 <div>Live Mirror write: <strong>{report.dataContract.liveMirrorWrite ? "YES" : "NO"}</strong></div>
                 <div>Historical Mirror write: <strong>{report.dataContract.historicalMirrorWrite ? "YES" : "NO"}</strong></div>
-                <div>Historical Timeline read: <strong>{report.dataContract.historicalTimelineRead ? "YES" : "NO"}</strong></div>
               </div>
             </section>
           </>

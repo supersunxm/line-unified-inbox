@@ -5811,6 +5811,18 @@ Current state: local follow-up fix and checks are complete; the follow-up commit
 - Separate data-quality finding: fleet-wide 24h reply rate must not yet be treated as complete-fleet performance because reply evidence is currently non-zero for only a small subset of stores; coverage logic will be handled separately.
 
 
+## 2026-09-28 — Monthly Operations Report reply KPI coverage finalization
+
+- Added report-only, read-only fallback from `LineChatMirrorMessage` for human Manager outbound rows that are not already represented in canonical `Message`.
+- Fallback mapping order mirrors reconciliation evidence without writes: existing canonical conversation ID, direct `lineChatUserId`, then exact inbound manager message evidence.
+- Canonical and Manager rows are deduplicated by canonical message ID, canonical external ID, and Manager message ID before response-cycle calculation.
+- Added per-store reply KPI coverage: `complete`, `partial`, `not_covered`.
+- Official 24h reply rates now include only `complete` stores. Partial/not-covered stores expose observed diagnostics but show N/A for the official KPI instead of false 0%.
+- Added fleet scope counts for complete/partial/not-covered reply coverage and counts of Manager fallback rows used/unmapped.
+- Updated XLSX and UI to surface coverage and keep incomplete reply KPI cells blank.
+- No Live Mirror/Historical Mirror worker, reconciler, browser/session, lease, backfill, or write path changed.
+
+
 ## 2026-09-28 — Isolated Historical final-completion run
 
 - Created a fresh worktree on `codex/historical-final-completion-20260928` from `origin/main` at `df527c7b8f852007ded02a78358c5039fd470163`; the existing dirty checkout and older Historical branches remain untouched.
@@ -5849,3 +5861,10 @@ Current state: local follow-up fix and checks are complete; the follow-up commit
 - Manually resolved the `AI_PROGRESS.md` and `DECISIONS.md` conflicts, retaining the Monthly Operations entries from main and the Historical Final Completion entries from PR #380. No duplicate section headings or conflict markers remain.
 - `git diff --check` passed. The diff against current `origin/main` contains exactly the eight expected root Markdown files; no source, Prisma, frontend, or Live Mirror paths are in the PR diff.
 - Next: push the existing PR branch and inspect GitHub Actions, required statuses, and mergeability.
+
+## 2026-09-28 — Historical docs PR synchronized to latest main
+
+- Fetched and merged latest `origin/main` at `e1a9143b2b21d8f1926facf4e074abf37a34960f` into `codex/historical-final-reports-20260928`.
+- Resolved the repeated `AI_PROGRESS.md` and `DECISIONS.md` conflicts by keeping main's added Monthly Operations coverage entries and all Historical Final Completion entries.
+- `git diff --check` passed. The three-dot diff against current `origin/main` contains exactly the eight expected Markdown files; no backend, frontend, Prisma, Railway, or Live Mirror paths are in the PR diff.
+- Next: commit and push this resolution, then inspect the updated PR checks and mergeability.
