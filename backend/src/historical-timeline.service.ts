@@ -5,7 +5,7 @@ import type { AuthUser } from "./auth/auth.guard";
 import { StoreAccessService } from "./auth/store-access.service";
 import { PrismaService } from "./prisma.service";
 import { isValidManagerUrl } from "./store-master/store-master.utils";
-import { isAutomatedOutboundMessage, isDeliveredHumanOutbound } from "./conversation-reply-state";
+import { isAutomatedOutboundMessage } from "./conversation-reply-state";
 
 export const HISTORICAL_TIMELINE_START = new Date("2026-08-31T17:00:00.000Z");
 export const HISTORICAL_VIRTUAL_ID_PREFIX = "historical:";
