@@ -5890,3 +5890,14 @@ Current state: local follow-up fix and checks are complete; the follow-up commit
 - Inbound/follower metrics continue through the current report date; only the SLA KPI uses the matured cutoff.
 - Live Mirror reads remain diagnostic only and do not determine official reply coverage.
 - No Historical import/backfill/crosswalk data and no Live Mirror worker/reconciler/write path were modified.
+
+
+## 2026-09-28 — Historical reply evidence separated from responder identity
+
+- Production Monthly Operations Report now has 146/146 Historical coverage, but the 24h reply rate remained implausibly low because Historical analytics only treated outbound rows with a non-auto `senderBizId` as replies.
+- Historical archive evidence contains three outbound classes: known Manager responder, explicit auto-response, and outbound with no responder marker.
+- Corrected SLA semantics: any Historical OUTBOUND text row that is not the explicit `__AUTO_RESPONSE` marker is reply evidence, even when responder identity is unknown.
+- Responder attribution remains strict: rows without `senderBizId` increment unknown-responder counts and are not attributed to a staff identity.
+- Canonical/current delivered outbound is reply evidence when delivered and non-automated, even if the internal sender mapping is absent.
+- Added regression coverage for unknown-responder Historical replies and explicit auto-response exclusion.
+- No Historical rows, crosswalks, Live Mirror state, or worker behavior changed.
