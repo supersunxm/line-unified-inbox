@@ -763,11 +763,12 @@ export class MonthlyOperationsReportService {
       detail.getRow(1).alignment = { vertical: "middle", horizontal: "center", wrapText: true };
 
       for (const [index, store] of report.stores.entries()) {
-        const dataStatus = store.dataQuality.followerCoverage === "complete" && store.dataQuality.notes.length === 0
-          ? "COMPLETE"
-          : store.dataQuality.followerCoverage === "missing"
-            ? "MISSING"
+        const dataStatus = store.dataQuality.followerCoverage === "missing" || store.chat.replyCoverage === "not_covered"
+          ? "MISSING"
+          : store.dataQuality.followerCoverage === "complete" && store.chat.replyCoverage === "complete"
+            ? "COMPLETE"
             : "PARTIAL";
+        const replyKpiEligible = store.chat.replyCoverage === "complete";
         detail.addRow({
           seq: index + 1,
           sourceAccount: "STORE",
@@ -789,8 +790,8 @@ export class MonthlyOperationsReportService {
           focusGrowth: store.followers.focusGrowth,
           inbound: store.chat.inboundMessages,
           focusInbound: store.chat.focusInboundMessages,
-          replied24h: store.chat.repliedWithin24h,
-          focusReplied24h: store.chat.focusRepliedWithin24h,
+          replied24h: replyKpiEligible ? store.chat.repliedWithin24h : null,
+          focusReplied24h: replyKpiEligible ? store.chat.focusRepliedWithin24h : null,
           replyRate24h: store.chat.replyRateWithin24h,
           focusReplyRate24h: store.chat.focusReplyRateWithin24h,
           tagged: null,
@@ -801,7 +802,7 @@ export class MonthlyOperationsReportService {
           focusUntagged: null,
           focusTagBase: null,
           focusTagRate: null,
-          responseCycles: store.chat.responseCycles,
+          responseCycles: replyKpiEligible ? store.chat.responseCycles : null,
           dataStatus,
           notes: [...store.dataQuality.notes, "tag_history_unavailable"].join("; "),
         });
@@ -833,13 +834,18 @@ export class MonthlyOperationsReportService {
         ["Follower Snapshot - Complete", report.scope.followerComplete, report.period.start + " / " + report.period.focusStart + " / " + report.period.through, ""],
         ["Follower Snapshot - Partial", report.scope.followerPartial, report.period.month, ""],
         ["Follower Snapshot - Missing", report.scope.followerMissing, report.period.month, ""],
+        ["Reply KPI Coverage - Complete Stores", report.scope.replyComplete, report.period.month, "Included in official 24h KPI"],
+        ["Reply KPI Coverage - Partial Stores", report.scope.replyPartial, report.period.month, "Excluded from official 24h KPI"],
+        ["Reply KPI Coverage - Not Covered Stores", report.scope.replyNotCovered, report.period.month, "Excluded from official 24h KPI"],
+        ["Mirror Fallback Replies Used", report.totals.mirrorFallbackReplies, report.period.month, "Read-only fallback rows added after canonical deduplication"],
+        ["Mirror Fallback Replies Unmapped", report.totals.mirrorFallbackUnmapped, report.period.month, "Ambiguous/unmapped rows are not counted"],
         ["Follower Growth - Month", report.totals.monthFollowerGrowth, monthPeriod, ""],
         ["Follower Growth - Since Day 20", report.totals.focusFollowerGrowth, focusPeriod, ""],
         ["Inbound Messages - Month", report.totals.inboundMessages, monthPeriod, "Canonical Message inbound"],
         ["Inbound Messages - Since Day 20", report.totals.focusInboundMessages, focusPeriod, "Canonical Message inbound"],
-        ["Response Cycles - Month", report.totals.responseCycles, monthPeriod, "Consecutive inbound until first delivered human reply"],
-        ["Replies Within 24h - Month", report.totals.repliedWithin24h, monthPeriod, "Delivered human reply <= 24h"],
-        ["24h Reply Rate - Month", report.totals.replyRateWithin24h, monthPeriod, "24h replies / response cycles"],
+        ["Response Cycles - Month", report.totals.responseCycles, monthPeriod, "Complete-coverage stores only"],
+        ["Replies Within 24h - Month", report.totals.repliedWithin24h, monthPeriod, "Complete-coverage stores only; delivered human reply <= 24h"],
+        ["24h Reply Rate - Month", report.totals.replyRateWithin24h, monthPeriod, "Official KPI: complete-coverage stores only"],
         ["Replies Within 24h - Since Day 20", report.totals.focusRepliedWithin24h, focusPeriod, ""],
         ["24h Reply Rate - Since Day 20", report.totals.focusReplyRateWithin24h, focusPeriod, ""],
       ] as const;
@@ -852,6 +858,7 @@ export class MonthlyOperationsReportService {
       regionSummary.columns = [
         { header: "Region", key: "region", width: 18 },
         { header: "Stores", key: "stores", width: 12 },
+        { header: "KPI Covered Stores", key: "coveredStores", width: 18 },
         { header: "Inbound", key: "inbound", width: 14 },
         { header: "Response Cycles", key: "cycles", width: 18 },
         { header: "<=24h Replies", key: "replies", width: 16 },
@@ -859,14 +866,17 @@ export class MonthlyOperationsReportService {
         { header: "Follower Growth", key: "growth", width: 16 },
       ];
       regionSummary.getRow(1).font = { bold: true };
-      const byRegion = new Map<string, { stores: number; inbound: number; cycles: number; replies: number; growth: number }>();
+      const byRegion = new Map<string, { stores: number; coveredStores: number; inbound: number; cycles: number; replies: number; growth: number }>();
       for (const store of report.stores) {
         const key = store.region || "Unspecified";
-        const current = byRegion.get(key) ?? { stores: 0, inbound: 0, cycles: 0, replies: 0, growth: 0 };
+        const current = byRegion.get(key) ?? { stores: 0, coveredStores: 0, inbound: 0, cycles: 0, replies: 0, growth: 0 };
         current.stores += 1;
         current.inbound += store.chat.inboundMessages;
-        current.cycles += store.chat.responseCycles;
-        current.replies += store.chat.repliedWithin24h;
+        if (store.chat.replyCoverage === "complete") {
+          current.coveredStores += 1;
+          current.cycles += store.chat.responseCycles;
+          current.replies += store.chat.repliedWithin24h;
+        }
         current.growth += store.followers.monthGrowth ?? 0;
         byRegion.set(key, current);
       }
@@ -874,6 +884,7 @@ export class MonthlyOperationsReportService {
         const row = regionSummary.addRow({
           region,
           stores: values.stores,
+          coveredStores: values.coveredStores,
           inbound: values.inbound,
           cycles: values.cycles,
           replies: values.replies,
@@ -896,8 +907,10 @@ export class MonthlyOperationsReportService {
         ["Response Cycle", "Consecutive inbound messages in the same conversation form one response cycle until the first delivered human outbound."],
         ["Human Reply", "Human reply is identified by internal senderUserId or canonical LINE Manager metadata (source=LINE_MANAGER_MIRROR / provider=LINE_MANAGER). Automated replies are excluded."],
         ["24h Reply", "The first human reply occurs within 24 hours from the start of the response cycle."],
+        ["Reply KPI Coverage", "Official 24h KPI is shown only for stores with enabled Manager mirror, a successful sync, and FAST_PATH_COMPLETE historical coverage for every relevant chat in the selected period. Partial or not-covered stores show N/A rather than 0%."],
+        ["Mirror Fallback", "Unreconciled LINE Manager human outbound rows are read as a report-only fallback when they can be mapped uniquely to a canonical conversation. Rows already represented in Message are deduplicated; ambiguous rows are excluded."],
         ["Tag Fields", "Reliable historical tag snapshots are not yet available in P0, so columns Y:AF remain blank and Notes contains tag_history_unavailable."],
-        ["Mirror Isolation", "The report reads Message, follower snapshots, and Store Master only. It does not write to Live Mirror or Historical Mirror."],
+        ["Mirror Isolation", "The report reads Message, LineChatMirrorMessage, LineChatMirrorStoreState, LineChatMirrorChat, follower snapshots, and Store Master. All Mirror access is read-only; it does not write to Live Mirror or Historical Mirror."],
         ["Generated At", report.period.generatedAt],
       ] as const;
       for (const [item, definition] of methodologyRows) methodology.addRow({ item, definition });
