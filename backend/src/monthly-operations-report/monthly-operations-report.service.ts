@@ -448,43 +448,43 @@ export class MonthlyOperationsReportService {
       const workbook = new ExcelJS.Workbook();
       workbook.creator = "OPPO LINE OA Monitor";
 
-      const detail = workbook.addWorksheet("运营明细");
+      const detail = workbook.addWorksheet("Operations Detail");
       const detailColumns = [
-        ["序号", "seq", 8],
-        ["来源账号", "sourceAccount", 12],
-        ["标准门店名称", "storeName", 30],
-        ["后台账号名称", "backendAccountName", 28],
-        ["Google表ACCOUNT NAME", "googleAccountName", 28],
+        ["No.", "seq", 8],
+        ["Source Account", "sourceAccount", 14],
+        ["Standard Store Name", "storeName", 30],
+        ["Backend Account Name", "backendAccountName", 28],
+        ["Google Account Name", "googleAccountName", 28],
         ["STORE ID", "externalStoreId", 14],
         ["AM", "amName", 16],
         ["BM NAME", "bmName", 28],
-        ["Line账号ID", "lineBasicId", 18],
-        ["省份 Province", "province", 18],
-        ["区域 Region", "region", 16],
-        ["匹配状态", "matchStatus", 14],
-        ["匹配方式", "matchMethod", 16],
-        ["月初累计好友", "followerStart", 14],
-        ["20日累计好友", "followerFocus", 14],
-        ["期末累计好友", "followerEnd", 14],
-        ["本月累计新增粉丝", "monthGrowth", 16],
-        ["20日后新增粉丝", "focusGrowth", 16],
-        ["本月用户私信数", "inbound", 16],
-        ["20日后用户私信数", "focusInbound", 16],
-        ["本月24小时以内回复数", "replied24h", 18],
-        ["20日后24小时以内回复数", "focusReplied24h", 18],
-        ["本月回复率", "replyRate24h", 14],
-        ["20日后回复率", "focusReplyRate24h", 14],
-        ["本月已打标签人数", "tagged", 16],
-        ["本月未打标签人数", "untagged", 16],
-        ["本月标签统计基数", "tagBase", 16],
-        ["本月标签覆盖率", "tagRate", 16],
-        ["20日后已打标签人数", "focusTagged", 16],
-        ["20日后未打标签人数", "focusUntagged", 16],
-        ["20日后标签统计基数", "focusTagBase", 16],
-        ["20日后标签覆盖率", "focusTagRate", 16],
-        ["聊天列表检查数", "responseCycles", 16],
-        ["数据状态", "dataStatus", 14],
-        ["备注", "notes", 40],
+        ["LINE Account ID", "lineBasicId", 18],
+        ["Province", "province", 18],
+        ["Region", "region", 16],
+        ["Match Status", "matchStatus", 14],
+        ["Match Method", "matchMethod", 16],
+        ["Followers - Month Start", "followerStart", 18],
+        ["Followers - Day 20", "followerFocus", 18],
+        ["Followers - Period End", "followerEnd", 18],
+        ["Follower Growth - Month", "monthGrowth", 20],
+        ["Follower Growth - Since Day 20", "focusGrowth", 22],
+        ["Inbound Messages - Month", "inbound", 20],
+        ["Inbound Messages - Since Day 20", "focusInbound", 24],
+        ["Replies Within 24h - Month", "replied24h", 22],
+        ["Replies Within 24h - Since Day 20", "focusReplied24h", 26],
+        ["24h Reply Rate - Month", "replyRate24h", 20],
+        ["24h Reply Rate - Since Day 20", "focusReplyRate24h", 24],
+        ["Tagged Customers - Month", "tagged", 20],
+        ["Untagged Customers - Month", "untagged", 22],
+        ["Tag Base - Month", "tagBase", 18],
+        ["Tag Coverage - Month", "tagRate", 20],
+        ["Tagged Customers - Since Day 20", "focusTagged", 24],
+        ["Untagged Customers - Since Day 20", "focusUntagged", 26],
+        ["Tag Base - Since Day 20", "focusTagBase", 22],
+        ["Tag Coverage - Since Day 20", "focusTagRate", 24],
+        ["Response Cycles", "responseCycles", 18],
+        ["Data Status", "dataStatus", 14],
+        ["Notes", "notes", 40],
       ] as const;
       detail.columns = detailColumns.map(([header, key, width]) => ({ header, key, width }));
       detail.views = [{ state: "frozen", ySplit: 1 }];
@@ -546,38 +546,38 @@ export class MonthlyOperationsReportService {
         };
       }
 
-      const summary = workbook.addWorksheet("汇总");
+      const summary = workbook.addWorksheet("Summary");
       summary.columns = [
-        { header: "指标", key: "metric", width: 30 },
-        { header: "数值", key: "value", width: 18 },
-        { header: "期间/口径", key: "period", width: 32 },
-        { header: "备注", key: "note", width: 48 },
+        { header: "Metric", key: "metric", width: 30 },
+        { header: "Value", key: "value", width: 18 },
+        { header: "Period / Definition", key: "period", width: 32 },
+        { header: "Notes", key: "note", width: 48 },
       ];
       summary.getRow(1).font = { bold: true };
       const monthPeriod = report.period.start + " → " + report.period.through;
       const focusPeriod = report.period.focusStart + " → " + report.period.through;
       const summaryRows = [
-        ["门店数", report.scope.stores, report.period.month, ""],
-        ["LINE OA数", report.scope.lineAccounts, report.period.month, ""],
-        ["Follower snapshot 完整", report.scope.followerComplete, report.period.start + " / " + report.period.focusStart + " / " + report.period.through, ""],
-        ["Follower snapshot 部分", report.scope.followerPartial, report.period.month, ""],
-        ["Follower snapshot 缺失", report.scope.followerMissing, report.period.month, ""],
-        ["本月新增粉丝", report.totals.monthFollowerGrowth, monthPeriod, ""],
-        ["20日后新增粉丝", report.totals.focusFollowerGrowth, focusPeriod, ""],
-        ["本月用户私信数", report.totals.inboundMessages, monthPeriod, "Canonical Message inbound"],
-        ["20日后用户私信数", report.totals.focusInboundMessages, focusPeriod, "Canonical Message inbound"],
-        ["本月Response Cycles", report.totals.responseCycles, monthPeriod, "Consecutive inbound until first delivered human reply"],
-        ["本月24小时以内回复数", report.totals.repliedWithin24h, monthPeriod, "Delivered human reply <= 24h"],
-        ["本月24小时回复率", report.totals.replyRateWithin24h, monthPeriod, "24h replies / response cycles"],
-        ["20日后24小时以内回复数", report.totals.focusRepliedWithin24h, focusPeriod, ""],
-        ["20日后24小时回复率", report.totals.focusReplyRateWithin24h, focusPeriod, ""],
+        ["Store Count", report.scope.stores, report.period.month, ""],
+        ["LINE OA Count", report.scope.lineAccounts, report.period.month, ""],
+        ["Follower Snapshot - Complete", report.scope.followerComplete, report.period.start + " / " + report.period.focusStart + " / " + report.period.through, ""],
+        ["Follower Snapshot - Partial", report.scope.followerPartial, report.period.month, ""],
+        ["Follower Snapshot - Missing", report.scope.followerMissing, report.period.month, ""],
+        ["Follower Growth - Month", report.totals.monthFollowerGrowth, monthPeriod, ""],
+        ["Follower Growth - Since Day 20", report.totals.focusFollowerGrowth, focusPeriod, ""],
+        ["Inbound Messages - Month", report.totals.inboundMessages, monthPeriod, "Canonical Message inbound"],
+        ["Inbound Messages - Since Day 20", report.totals.focusInboundMessages, focusPeriod, "Canonical Message inbound"],
+        ["Response Cycles - Month", report.totals.responseCycles, monthPeriod, "Consecutive inbound until first delivered human reply"],
+        ["Replies Within 24h - Month", report.totals.repliedWithin24h, monthPeriod, "Delivered human reply <= 24h"],
+        ["24h Reply Rate - Month", report.totals.replyRateWithin24h, monthPeriod, "24h replies / response cycles"],
+        ["Replies Within 24h - Since Day 20", report.totals.focusRepliedWithin24h, focusPeriod, ""],
+        ["24h Reply Rate - Since Day 20", report.totals.focusReplyRateWithin24h, focusPeriod, ""],
       ] as const;
       for (const [metric, value, period, note] of summaryRows) {
         const row = summary.addRow({ metric, value, period, note });
-        if (String(metric).includes("回复率")) row.getCell("value").numFmt = "0.0%";
+        if (String(metric).includes("Reply Rate")) row.getCell("value").numFmt = "0.0%";
       }
 
-      const regionSummary = workbook.addWorksheet("账号分组汇总");
+      const regionSummary = workbook.addWorksheet("Region Summary");
       regionSummary.columns = [
         { header: "Region", key: "region", width: 18 },
         { header: "Stores", key: "stores", width: 12 },
@@ -612,22 +612,22 @@ export class MonthlyOperationsReportService {
         row.getCell("rate").numFmt = "0.0%";
       }
 
-      const methodology = workbook.addWorksheet("口径说明");
+      const methodology = workbook.addWorksheet("Methodology");
       methodology.columns = [
-        { header: "项目", key: "item", width: 24 },
-        { header: "口径", key: "definition", width: 100 },
+        { header: "Item", key: "item", width: 24 },
+        { header: "Definition", key: "definition", width: 100 },
       ];
       methodology.getRow(1).font = { bold: true };
       const methodologyRows = [
-        ["时区", "Asia/Bangkok"],
-        ["Follower", "读取 LineOaFollowerSnapshot。月初、20日、期末按该日期或之前最近可用的当月快照；不会回退到上个月。"],
-        ["本月用户私信数", "Canonical Message timeline 中 direction=INBOUND 的消息数。"],
-        ["Response Cycle", "同一会话连续 inbound 直到首个 delivered human outbound 视为一个 cycle。"],
-        ["Human Reply", "内部 senderUserId 或 canonical LINE Manager metadata(source=LINE_MANAGER_MIRROR/provider=LINE_MANAGER)；自动回复不计。"],
-        ["24小时回复", "Response cycle 首个 human reply 与 cycle 开始时间差 <=24小时。"],
-        ["Tag字段", "当前 P0 尚无可靠 historical tag snapshot，因此 Y:AF 留空，并在备注写 tag_history_unavailable。"],
-        ["Mirror隔离", "报表只读 Message / follower snapshots / Store Master；不写 Live Mirror 或 Historical Mirror。"],
-        ["生成时间", report.period.generatedAt],
+        ["Timezone", "Asia/Bangkok"],
+        ["Follower", "Reads LineOaFollowerSnapshot. Month-start, day-20, and period-end values use the latest available snapshot on or before the requested date within the same month; no fallback to the previous month."],
+        ["Inbound Messages - Month", "Count of direction=INBOUND messages in the canonical Message timeline."],
+        ["Response Cycle", "Consecutive inbound messages in the same conversation form one response cycle until the first delivered human outbound."],
+        ["Human Reply", "Human reply is identified by internal senderUserId or canonical LINE Manager metadata (source=LINE_MANAGER_MIRROR / provider=LINE_MANAGER). Automated replies are excluded."],
+        ["24h Reply", "The first human reply occurs within 24 hours from the start of the response cycle."],
+        ["Tag Fields", "Reliable historical tag snapshots are not yet available in P0, so columns Y:AF remain blank and Notes contains tag_history_unavailable."],
+        ["Mirror Isolation", "The report reads Message, follower snapshots, and Store Master only. It does not write to Live Mirror or Historical Mirror."],
+        ["Generated At", report.period.generatedAt],
       ] as const;
       for (const [item, definition] of methodologyRows) methodology.addRow({ item, definition });
       methodology.getColumn("definition").alignment = { wrapText: true, vertical: "top" };

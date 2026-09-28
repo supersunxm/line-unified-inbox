@@ -5795,3 +5795,17 @@ Current state: local follow-up fix and checks are complete; the follow-up commit
 - Switched Monthly Operations Report exporter and its tests to runtime-safe namespace import: `import * as ExcelJS from "exceljs"`.
 - Normal report endpoint remained healthy (HTTP 200); only XLSX export was affected.
 - No Live Mirror or Historical Mirror implementation files changed.
+
+
+## 2026-09-28 — Monthly report English workbook headings
+
+- Reviewed the generated 146-store September XLSX.
+- Workbook structure is valid: 146 store rows and 35 detail columns.
+- Changed exported workbook presentation to English only:
+  - `Operations Detail`
+  - `Summary`
+  - `Region Summary`
+  - `Methodology`
+- Translated all detail headers, summary metrics, and methodology labels/definitions to English.
+- No KPI calculation, Store Master mapping, Live Mirror, Historical Mirror, or database behavior changed in this presentation-only patch.
+- Separate data-quality finding: fleet-wide 24h reply rate must not yet be treated as complete-fleet performance because reply evidence is currently non-zero for only a small subset of stores; coverage logic will be handled separately.
