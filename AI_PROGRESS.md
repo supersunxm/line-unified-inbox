@@ -5821,3 +5821,50 @@ Current state: local follow-up fix and checks are complete; the follow-up commit
 - Added fleet scope counts for complete/partial/not-covered reply coverage and counts of Manager fallback rows used/unmapped.
 - Updated XLSX and UI to surface coverage and keep incomplete reply KPI cells blank.
 - No Live Mirror/Historical Mirror worker, reconciler, browser/session, lease, backfill, or write path changed.
+
+
+## 2026-09-28 — Isolated Historical final-completion run
+
+- Created a fresh worktree on `codex/historical-final-completion-20260928` from `origin/main` at `df527c7b8f852007ded02a78358c5039fd470163`; the existing dirty checkout and older Historical branches remain untouched.
+- Revalidated the approved archive inventory: 137 VERIFIED stores and 42,587 text candidates. Store 28326 remains unproven because its current event archive does not match its ledger and its ledger-approved prior archive is empty. A prior Store 30606 snapshot matches the seven current ledger file hashes and is being checked for row-level partial proof.
+- Added a pure source-ID classifier and 9 focused tests; all passed. Added a separate repeatable-read, read-only production audit that records source/canonical identity, text hashes, timestamps, matching crosswalk destinations, conflict classifications, and measured drift into ignored mode-0600 local evidence files.
+- No production write, deployment, migration, Live Mirror change, or current-checkout change occurred in this run.
+- Current action at the first checkpoint: execute the H1 audit against the production database through the approved read-only Railway tunnel; continue to H2–H4 afterward.
+
+## 2026-09-28 — Historical final-completion results
+
+- **Isolation:** worktree `/private/tmp/line-unified-inbox-historical-final-completion-20260928`, branch `codex/historical-final-completion-20260928`, based on `origin/main` at `df527c7b8f852007ded02a78358c5039fd470163`. The dirty primary checkout was not modified, stashed, committed, or cleaned.
+- **H1:** recomputed 42,587 source rows from 137 verified archives. The disputed 16,915 comprise 2,314 same-chat source-ID matches with timestamp drift and 14,601 exact persisted `LINK_SAFE` matches. Full inventory accounting: 1,335 canonical exact, 2,314 time-drift, 14,601 crosswalk, 21,047 safe Historical, and 3,290 without a proven canonical destination; ambiguous/payload/scope/archive failures: 0. Two fresh repeatable-read production dry-runs each found 24,337 exact existing Historical rows, 18,250 canonical rows, and zero planned inserts. No write was needed.
+- **H2 / Store 28326:** current changed archive matches 0/7 ledger files and has 431 target text rows; the prior ledger-matched archive has an empty event file. Proven 0, released 0, held 431; status `UNPROVEN`.
+- **H2 / Store 30606:** prior archive matches all seven ledger hashes and contains 738 unique identity-valid target text rows. Read-only production classification: 50 canonical exact, 38 canonical time-drift, 0 canonical crosswalk, 0 already-Historical, 0 safe Historical missing, 438 without a direct or unique `LINK_SAFE` destination, and 212 `CANONICAL_SCOPE_CONFLICT`. Proven 738 at the file/event level; released 0; held 650. Collection validation remains partial (four incomplete conversations, four failed calls). No writes occurred.
+- **H2 independent-source search:** targeted Google Drive searches for both Store IDs, Historical archives, `events.ndjson`, and the fleet ledger found no clearly relevant independent archive/Manager run. GitHub PR searches for the Store IDs returned none; prior Historical PRs #368/#369 document the earlier 0-row blocker and #371 covers fleet crosswalk proof for Store 30282 only. A separate read-only Manager retrieval path was unavailable without using the shared worker runtime.
+- **H3:** 10,852 media events are metadata-only: stickers 4,190, images 6,513, videos 79, files 70. Binary count 0, ambiguous identities 0, archive source-identity duplicates 0. Typed Historical media schema, backfill code, timeline mapping, and unavailable-media placeholders are implemented locally. Railway currently watches `backend/**` for `line-unified-inbox`, `frontend/**` for `frontend`, and explicitly watches `backend/prisma/**` for `line-chat-nickname-worker`. The backend pre-deploy command runs Prisma migrations and Store Master sync. H3 is `READY_BUT_BLOCKED_BY_LIVE_MIRROR_ISOLATION`; no deployment or migration was attempted.
+- **H4:** 7,748 chat identities; time-correct name evidence 0, identities without names 7,748, conflicting snapshots 0. Outbound events: 31,923 total; 19,970 Manager `bizId` responders across 282 distinct values; 6,799 auto-response; 5,154 unknown. No current Customer or User record was changed.
+- **Verification:** focused Historical suite 37/37 passed; frontend suite 606/606 passed; backend build, frontend production build, Prisma validation/generation with a local placeholder URL, Historical script TypeScript, targeted ESLint, and `git diff --check` passed. Full backend lint reports 790 existing violations and the full backend suite has 14 unrelated failures. Frontend `tsc --noEmit` has existing unrelated application and test-fixture errors. Frontend port 3000 belongs to an unrelated Node process; no `.env`/`DATABASE_URL` or running local Compose database is present, so no application server was started.
+- **Production boundary:** production reads only through the existing Railway tunnel; production writes 0, deployments 0, Live Mirror touched NO. H1/H2 private row reports remain under ignored archive data with mode 0600.
+- **Publication gate:** docs-only PR #380 may merge after required CI passes and its eight Markdown paths remain outside Railway watch patterns. H3 draft PR #379 stays unmerged. The migration cannot deploy without restarting the watched worker.
+
+## 2026-09-28 — Historical Final Completion and H3 Isolation Review
+
+- Final accounting: H1 100%, H2 100% as evidence/hold completion, H3 65% blocked, H4 100%; overall 91.25%. Final status: PARTIAL_BLOCKED_BY_LIVE_MIRROR_ISOLATION.
+- H1: all 42,587 approved text candidates have a valid Historical/canonical representation (24,337 Historical, 18,250 canonical). Disputed 16,915 = 2,314 drift + 14,601 LINK_SAFE; conflicts, unexplained rows, and required inserts are zero.
+- H2: Store 28326 has 431 held; Store 30606 has 738 ledger-supported, 88 canonical, 438 without a proven destination, and 212 scope conflicts. Total held 1,081; released 0. No further search without a genuinely new source.
+- H3: no clean no-migration design. The typed additive migration preserves event type, media subtype, identity, ordering, provenance, text semantics, and read-only crosswalk behavior. line-chat-nickname-worker watches backend/prisma/**, so normal deployment restarts Live Mirror. Keep the feature branch unmerged.
+- H4: 7,748 identities, no names. Outbound totals: 19,970 Manager bizId + 6,799 auto + 5,154 unknown = 31,923.
+- Changed-file inventory and final report are in HISTORICAL_FINAL_PROGRAM_STATUS.md and HISTORICAL_MIRROR_FINAL_COMPLETION_REPORT.md. No production writes, deployments, LINE sends, canonical mutations, or Live Mirror changes occurred; dirty primary checkout untouched.
+- Root Markdown is outside Railway watch paths. Docs-only PR #380 and H3 draft PR #379 are open; both target main at 0abac727. GitHub currently reports no Actions runs or combined status checks for PR #380, so it remains unmerged. The H3 draft must not merge. Existing unrelated full lint/test/typecheck failures remain documented.
+- Checks recorded: 37 focused Historical tests, 606 frontend tests, backend/frontend builds, Prisma validation/generation, Historical-script TypeScript, targeted ESLint, H1 dry-runs, H2 read-only classification, and diff check.
+
+## 2026-09-28 — Historical docs PR conflict resolution
+
+- Fetched `origin/main` at `4610df1a3db95afe158b91e576bdf201c23b80fc` and merged it into `codex/historical-final-reports-20260928`, previously at `86545d1d10f8b3beb485a280e4dcf08613f657c4`.
+- Manually resolved the `AI_PROGRESS.md` and `DECISIONS.md` conflicts, retaining the Monthly Operations entries from main and the Historical Final Completion entries from PR #380. No duplicate section headings or conflict markers remain.
+- `git diff --check` passed. The diff against current `origin/main` contains exactly the eight expected root Markdown files; no source, Prisma, frontend, or Live Mirror paths are in the PR diff.
+- Next: push the existing PR branch and inspect GitHub Actions, required statuses, and mergeability.
+
+## 2026-09-28 — Historical docs PR synchronized to latest main
+
+- Fetched and merged latest `origin/main` at `e1a9143b2b21d8f1926facf4e074abf37a34960f` into `codex/historical-final-reports-20260928`.
+- Resolved the repeated `AI_PROGRESS.md` and `DECISIONS.md` conflicts by keeping main's added Monthly Operations coverage entries and all Historical Final Completion entries.
+- `git diff --check` passed. The three-dot diff against current `origin/main` contains exactly the eight expected Markdown files; no backend, frontend, Prisma, Railway, or Live Mirror paths are in the PR diff.
+- Next: commit and push this resolution, then inspect the updated PR checks and mergeability.
