@@ -145,6 +145,7 @@ test("reply analytics merges an exact live duplicate with Historical text and us
   ];
   const prisma = {
     store: { findMany: async () => [{ id: "store-1", name: "Store One" }] },
+    lineOfficialAccount: { findMany: async () => [{ id: "oa-1", storeId: "store-1" }] },
     historicalTimelineMessage: { findMany: async () => history },
     historicalConversationCrosswalk: { findMany: async () => [] },
     conversation: {
@@ -224,6 +225,7 @@ test("reply bucket details include Historical-only chats and ignore automatic re
   ];
   const prisma = {
     store: { findMany: async () => [{ id: "store-1", name: "Store One" }] },
+    lineOfficialAccount: { findMany: async () => [{ id: "oa-1", storeId: "store-1" }] },
     customer: { findMany: async () => [] },
     conversation: { findMany: async () => [] },
     historicalTimelineMessage: { findMany: async () => history },
@@ -271,6 +273,7 @@ test("reply bucket details merge Historical replies into a canonical conversatio
   ];
   const prisma = {
     store: { findMany: async () => [{ id: "store-1", name: "Store One" }] },
+    lineOfficialAccount: { findMany: async () => [{ id: "oa-1", storeId: "store-1" }] },
     customer: { findMany: async () => [] },
     conversation: {
       findMany: async () => [{
@@ -341,6 +344,7 @@ test("reply analytics counts Historical outbound without responder identity as a
   ];
   const prisma = {
     store: { findMany: async () => [{ id: "store-1", name: "Store One" }] },
+    lineOfficialAccount: { findMany: async () => [{ id: "oa-1", storeId: "store-1" }] },
     historicalTimelineMessage: { findMany: async () => history },
     historicalConversationCrosswalk: { findMany: async () => [] },
     conversation: { findMany: async () => [] },
@@ -391,6 +395,7 @@ test("reply analytics still excludes Historical auto-response evidence", async (
   ];
   const prisma = {
     store: { findMany: async () => [{ id: "store-1", name: "Store One" }] },
+    lineOfficialAccount: { findMany: async () => [{ id: "oa-1", storeId: "store-1" }] },
     historicalTimelineMessage: { findMany: async () => history },
     historicalConversationCrosswalk: { findMany: async () => [] },
     conversation: { findMany: async () => [] },
@@ -435,6 +440,7 @@ test("reply analytics RESPONSE_CYCLES mode counts repeated customer-contact epis
   ];
   const prisma = {
     store: { findMany: async () => [{ id: "store-1", name: "Store One" }] },
+    lineOfficialAccount: { findMany: async () => [{ id: "oa-1", storeId: "store-1" }] },
     historicalTimelineMessage: { findMany: async () => history },
     historicalConversationCrosswalk: { findMany: async () => [] },
     conversation: { findMany: async () => [] },
@@ -471,6 +477,7 @@ test("reply analytics merges Historical rows through LINK_SAFE crosswalk when ch
   ];
   const prisma = {
     store: { findMany: async () => [{ id: "store-1", name: "Store One" }] },
+    lineOfficialAccount: { findMany: async () => [{ id: "oa-1", storeId: "store-1" }] },
     historicalTimelineMessage: { findMany: async () => history },
     historicalConversationCrosswalk: {
       findMany: async () => [{
@@ -545,6 +552,7 @@ test("reply analytics uses exact source-event anchor when no crosswalk exists", 
   ];
   const prisma = {
     store: { findMany: async () => [{ id: "store-1", name: "Store One" }] },
+    lineOfficialAccount: { findMany: async () => [{ id: "oa-1", storeId: "store-1" }] },
     historicalTimelineMessage: { findMany: async () => history },
     historicalConversationCrosswalk: { findMany: async () => [] },
     conversation: {
@@ -578,4 +586,60 @@ test("reply analytics uses exact source-event anchor when no crosswalk exists", 
   assert.equal(result.overview.total, 1);
   assert.equal(result.overview.within24h, 1);
   assert.equal(result.sources.sourceAnchoredHistoricalRows, 1);
+});
+
+
+test("reply analytics remaps legacy Historical storeId through current OA identity", async () => {
+  const inboundAt = new Date("2026-09-26T09:06:00.000Z");
+  const history = [{
+    id: "historical-inbound-legacy-store",
+    storeId: "legacy-store-id",
+    lineOfficialAccountId: "oa-1",
+    lineChatUserId: "manager-chat-1",
+    sourceEventId: "event:legacy-inbound",
+    sourceEventType: "messageReceived",
+    direction: MessageDirection.INBOUND,
+    text: "Customer message",
+    sentAt: inboundAt,
+    senderBizId: null,
+  }];
+
+  const prisma = {
+    store: { findMany: async () => [{ id: "store-1", name: "Store One" }] },
+    lineOfficialAccount: { findMany: async () => [{ id: "oa-1", storeId: "store-1" }] },
+    historicalTimelineMessage: { findMany: async () => history },
+    historicalConversationCrosswalk: { findMany: async () => [] },
+    conversation: {
+      findMany: async () => [{
+        id: "conversation-1",
+        storeId: "store-1",
+        lineOfficialAccountId: "oa-1",
+        lineChatUserId: "manager-chat-1",
+        messages: [{
+          id: "canonical-outbound-current-store",
+          externalMessageId: "event:reply",
+          direction: MessageDirection.OUTBOUND,
+          messageType: MessageType.TEXT,
+          deliveryStatus: MessageDeliveryStatus.DELIVERED,
+          originalText: "Human reply",
+          sentAt: new Date(inboundAt.getTime() + 54 * 60_000),
+          senderUserId: "staff-1",
+          senderDisplayName: "Staff One",
+          rawPayload: null,
+        }],
+      }],
+    },
+  } as unknown as PrismaService;
+
+  const storeAccess = { accessibleStoreIds: async () => null } as unknown as StoreAccessService;
+  const service = new HistoricalTimelineService(prisma, storeAccess);
+  const result = await service.replyAnalytics(
+    { id: "admin-1", email: "admin@example.com", displayName: "Admin", role: "ADMIN" } as AuthUser,
+    { dateFrom: "2026-09-26", dateTo: "2026-09-26", mode: "RESPONSE_CYCLES" },
+  );
+
+  assert.equal(result.overview.total, 1);
+  assert.equal(result.overview.responded, 1);
+  assert.equal(result.overview.within24h, 1);
+  assert.equal(result.stores[0]?.storeId, "store-1");
 });
