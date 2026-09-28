@@ -5732,3 +5732,15 @@ Current state: local follow-up fix and checks are complete; the follow-up commit
 - **Post-apply acceptance:** Read-only repeatable-read service-path acceptance passed. Persisted links exactly match fresh discovery; duplicate/ambiguous/conflicting links: 0. Fleet visibility: 24,337 imported Historical rows; 2,554 direct-visible; 18,493 crosslink-visible; 3,290 virtual-visible; 18,250 canonical-held; archive-held 0; duplicate timeline rows 0. Saraburi and Central Pinklao, Central World, The Mall Bangkapi, Profile A, Profile B, high-volume, and sparse representatives all passed with zero missing text, zero duplicate messages, correct order, and no duplicate virtual chat.
 - **Safety:** The crosswalk apply performed 4,052 INSERTs into `HistoricalConversationCrosswalk` only. No Conversation, Customer, canonical Message, owner, BM, follow-up, nickname, queue/job, archive, or LINE-send action was part of the crosswalk scripts. The signed-in browser check remains pending; authenticated conversation HTTP was not run because no signed-in session was available.
 - **Current status:** `DELIVERED_BACKEND_ACCEPTED`. Sunn may perform the separate signed-in visual confirmation; no further production data action is pending for this phase.
+
+
+## 2026-09-28 — Monthly Operations Report P0 (isolated from Mirror)
+
+- Created branch `feature/monthly-operations-report-p0`.
+- Added read-only `GET /monthly-operations-report?month=YYYY-MM`.
+- Reused existing Store Master, `LineOaFollowerSnapshot`, canonical `Message` timeline, and existing response-cycle helper.
+- Added per-store follower start/focus/end snapshots, follower growth, inbound volume, actual <=24h reply cycles/rates, and data-quality flags.
+- Explicitly excluded all writes to Live Mirror and Historical Mirror data paths; no Prisma migration and no worker/scheduler changes.
+- PR: #373.
+- Verification: Application CI started; backend/frontend/android jobs pending at time of this entry.
+- Next: repair any CI findings only inside the report module/app registration, then verify diff still excludes Mirror paths.
