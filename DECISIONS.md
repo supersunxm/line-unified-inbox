@@ -2884,3 +2884,28 @@ The first production target proof confirmed that eligible candidate OAs have no 
 - Virtual Historical discovery excludes direct identities, safe crosslinks, and any identity with a canonical source-event match. Unanchored identities remain virtual and read-only; ambiguous or conflicting identities are not persisted.
 - Store 30282 evidence resolved the screenshot text to source event `631303932702359672` and canonical Conversation `e9f88a82-ffc4-45c0-b755-20a847fa6ef4` with a 3 ms timestamp delta. The canonical Conversation’s null LINE chat ID explains why the previous direct-key timeline read omitted that Historical chat. The nearby sticker and image remain `NON_TEXT_NOT_BACKFILLED` and do not block text visibility acceptance.
 - Production has only the additive table migration applied at this checkpoint. Crosswalk persistence follows code deployment; post-deployment acceptance must call the canonical service read path and prove zero missing text, source duplicates, and virtual copies for the canary and required representatives.
+
+# 2026-09-28 — H1 source identity and archive proof remain fail-closed
+
+- Base the final Historical completion program on a fresh isolated worktree at the fetched `origin/main` commit; preserve the existing dirty checkout and its branch.
+- A raw or `line-chat-manager:` canonical external message ID is source identity evidence. Accept an existing canonical message only after exact Store/OA, direction, compatible type, and complete text checks. Timestamp drift is measured and reported; it does not manufacture a second message. A differing historical chat ID can be reconciled only through its unique persisted `LINK_SAFE` destination, without rewriting either ID.
+- Treat Store 30606 as a row-level partial-proof candidate because a prior local snapshot matches its current seven-file ledger entry. Release only rows that pass fresh production identity checks. Keep Store 28326 held because the current changed archive has no matching ledger proof and the ledger-approved previous snapshot contains no events.
+- Any production deployment is gated by current Railway watch paths. A change under `backend/prisma/**` would restart the shared `line-chat-nickname-worker`; such a deployment remains blocked under the program's Live Mirror isolation requirement.
+
+# 2026-09-28 — Final Historical conflict and archive disposition
+
+- Use raw or `line-chat-manager:` source IDs plus Store/OA/direction/type/full-text proof to deduplicate Historical source rows. Measure timestamp drift without a tolerance rule. For missing canonical representations, query the scoped production Conversation table and persisted `LINK_SAFE` crosswalk; only a unique returned destination permits a Historical insert.
+- Do not insert H1 rows when the production read-only preflight shows all source rows already exist in either HistoricalTimelineMessage or canonical Message. Two full 42,587-row dry-runs returned zero planned inserts.
+- Keep Store 30606's 650 noncanonical rows held: 438 lack a direct/`LINK_SAFE` destination and 212 collide with a canonical message outside the same Store/OA/chat scope. The 88 compatible canonical rows need no Historical duplicate. File hashes prove the 738 rows present, but partial collection validation does not prove missing history.
+- Keep all 431 Store 28326 rows held: current archive content has no ledger match and the only ledger-matched previous events file is empty.
+- Store media metadata as typed Historical read-model fields and render metadata-only placeholders. Do not fabricate customer text or imply that source references still resolve. Production use requires the additive migration; because its `backend/prisma/**` changes restart `line-chat-nickname-worker`, deployment remains gated.
+- Recheck current Railway service watch paths before any deploy: `line-unified-inbox` watches `backend/**` and runs Prisma deploy plus Store Master sync in pre-deploy; `frontend` watches `frontend/**`; `line-chat-nickname-worker` explicitly watches `backend/prisma/**` along with its worker source and image files. Do not merge/deploy the combined change into production while that worker restart would violate Historical/Live isolation.
+- When archive evidence provides no historical chat name or current-user link, keep the name unknown and attribute only the source `bizId`/auto-response marker. Never rewrite current Customer or User identity.
+
+# 2026-09-28 — Historical media requires an additive migration
+
+- Production HistoricalTimelineMessage has sourceEventType and text but no typed media subtype or media metadata. Preserve the established meaning of source event type, text, identity, and archive provenance.
+- Reusing an existing field would lose information or make media behave as ordinary text. Add messageType, mediaMetadata, and fileName through Prisma and a normal additive migration.
+- Keep metadata-only text empty; preserve sourceEventId, timestamp order, and archive evidence; render read-only placeholders; do not fabricate binaries or mutate current Conversation/Customer records.
+- Deployment is blocked because line-chat-nickname-worker watches backend/prisma/**. A normal migration deployment restarts Live Mirror. Do not alter watch rules or evade Prisma migration; keep H3 READY_BUT_BLOCKED_BY_LIVE_MIRROR_ISOLATION.
+- Root Markdown reports are outside Railway watch paths. Hosted publication is unavailable because the configured GitHub CLI token is invalid.
