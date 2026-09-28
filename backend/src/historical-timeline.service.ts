@@ -528,7 +528,7 @@ export class HistoricalTimelineService {
     const [conversations, historicalRows] = await Promise.all([
       this.prisma.conversation.findMany({
         where: {
-          lineOfficialAccountId: { in: activeOaIds },
+          storeId: { in: storeIds },
           isQa: false,
           lineOfficialAccount: { accountType: "STORE", isActive: true, archivedAt: null },
           messages: { some: { sentAt: { gte: startAt, lt: responseWindowEnd } } },
