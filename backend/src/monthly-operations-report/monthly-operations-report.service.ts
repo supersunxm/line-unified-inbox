@@ -28,16 +28,48 @@ const AUTO_REPLY_BOT_DISPLAY_NAME = "Auto Reply Bot";
 export type ReplyKpiCoverage = "complete" | "partial" | "not_covered";
 
 type ReplyCoverageInput = {
-  mirrorEnabled: boolean;
-  lastSuccessfulSyncAt: Date | null;
-  relevantChats: number;
-  completeChats: number;
+  mirrorAvailable: boolean;
+  eligibleCycles: number;
+  coveredCycles: number;
 };
 
 export function classifyReplyKpiCoverage(input: ReplyCoverageInput): ReplyKpiCoverage {
-  if (!input.mirrorEnabled || !input.lastSuccessfulSyncAt) return "not_covered";
-  if (input.relevantChats <= 0) return "partial";
-  return input.completeChats === input.relevantChats ? "complete" : "partial";
+  if (input.eligibleCycles === 0) return input.mirrorAvailable ? "complete" : "not_covered";
+  if (input.coveredCycles === input.eligibleCycles) return "complete";
+  if (input.coveredCycles > 0 || input.mirrorAvailable) return "partial";
+  return "not_covered";
+}
+
+export function isReplyCycleEligible(cycle: ReportResponseCycle, periodEnd: Date): boolean {
+  if (cycle.answeredAt) return true;
+  return cycle.startedAt.getTime() + RESPONSE_WINDOW_MS <= periodEnd.getTime();
+}
+
+export function isReplyCycleCovered(
+  cycle: ReportResponseCycle,
+  periodEnd: Date,
+  input: {
+    mirrorEnabled: boolean;
+    lastSuccessfulSyncAt: Date | null;
+    historicalBackfillOldestAt: Date | null;
+  },
+): boolean {
+  if (!isReplyCycleEligible(cycle, periodEnd)) return false;
+
+  if (
+    cycle.durationSeconds !== null
+    && cycle.durationSeconds <= RESPONSE_WINDOW_MS / 1000
+  ) {
+    return true;
+  }
+
+  if (!input.mirrorEnabled || !input.lastSuccessfulSyncAt || !input.historicalBackfillOldestAt) {
+    return false;
+  }
+
+  const deadline = new Date(cycle.startedAt.getTime() + RESPONSE_WINDOW_MS);
+  return input.historicalBackfillOldestAt.getTime() <= cycle.startedAt.getTime()
+    && input.lastSuccessfulSyncAt.getTime() >= deadline.getTime();
 }
 
 function managerMessageIdFromCanonical(message: {
@@ -169,6 +201,8 @@ export type MonthlyOperationsStoreRow = {
     replyCoverage: ReplyKpiCoverage;
     mirrorFallbackReplies: number;
     mirrorFallbackUnmapped: number;
+    coveredResponseCycles: number;
+    coveredFocusResponseCycles: number;
   };
   dataQuality: {
     followerCoverage: "complete" | "partial" | "missing";
