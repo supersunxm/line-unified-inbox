@@ -661,8 +661,8 @@ export class MonthlyOperationsReportService {
           notes.push("reply_kpi_source=historical_timeline_service");
           notes.push("reply_kpi_through=" + kpiThroughIso);
         }
-        if (mirrorFallbackReplies > 0) notes.push("mirror_fallback_replies=" + mirrorFallbackReplies);
-        if (mirrorFallbackUnmapped > 0) notes.push("mirror_fallback_unmapped=" + mirrorFallbackUnmapped);
+        if (mirrorFallbackReplies > 0) notes.push("live_mirror_diagnostic_replies=" + mirrorFallbackReplies);
+        if (mirrorFallbackUnmapped > 0) notes.push("live_mirror_diagnostic_unmapped=" + mirrorFallbackUnmapped);
 
         return {
           storeId: account.store.id,
@@ -923,8 +923,9 @@ export class MonthlyOperationsReportService {
         ["Reply KPI Coverage - Complete Stores", report.scope.replyComplete, report.period.month, "Included in official 24h KPI"],
         ["Reply KPI Coverage - Partial Stores", report.scope.replyPartial, report.period.month, "Excluded from official 24h KPI"],
         ["Reply KPI Coverage - Not Covered Stores", report.scope.replyNotCovered, report.period.month, "Excluded from official 24h KPI"],
-        ["Mirror Fallback Replies Used", report.totals.mirrorFallbackReplies, report.period.month, "Read-only fallback rows added after canonical deduplication"],
-        ["Mirror Fallback Replies Unmapped", report.totals.mirrorFallbackUnmapped, report.period.month, "Ambiguous/unmapped rows are not counted"],
+        ["Historical KPI Through", report.period.replyKpiThrough ?? "", report.period.month, "Current-month KPI excludes the latest two Bangkok calendar days to guarantee a full 24h response window"],
+        ["Historical Text Messages", historicalMonthAnalytics?.sources.historicalTextMessages ?? 0, report.period.month, "Historical Timeline read model rows used by reply analytics"],
+        ["Canonical Messages in KPI", historicalMonthAnalytics?.sources.currentMessages ?? 0, report.period.month, "Current canonical messages merged into the Historical Timeline analytics"],
         ["Follower Growth - Month", report.totals.monthFollowerGrowth, monthPeriod, ""],
         ["Follower Growth - Since Day 20", report.totals.focusFollowerGrowth, focusPeriod, ""],
         ["Inbound Messages - Month", report.totals.inboundMessages, monthPeriod, "Canonical Message inbound"],
@@ -993,10 +994,10 @@ export class MonthlyOperationsReportService {
         ["Response Cycle", "Consecutive inbound messages in the same conversation form one response cycle until the first delivered human outbound."],
         ["Human Reply", "Human reply is identified by internal senderUserId or canonical LINE Manager metadata (source=LINE_MANAGER_MIRROR / provider=LINE_MANAGER). Automated replies are excluded."],
         ["24h Reply", "The first human reply occurs within 24 hours from the start of the response cycle."],
-        ["Reply KPI Coverage", "Official 24h KPI is shown only for stores with enabled Manager mirror, a successful sync, and FAST_PATH_COMPLETE historical coverage for every relevant chat in the selected period. Partial or not-covered stores show N/A rather than 0%."],
-        ["Mirror Fallback", "Unreconciled LINE Manager human outbound rows are read as a report-only fallback when they can be mapped uniquely to a canonical conversation. Rows already represented in Message are deduplicated; ambiguous rows are excluded."],
+        ["Reply KPI Source", "Uses HistoricalTimelineService, which merges the completed Historical Timeline read model with canonical messages and suppresses exact source duplicates."],
+        ["Current-Month Cutoff", "The official 24h KPI excludes the latest two Bangkok calendar days so every included chat has a fully elapsed 24-hour response window."],
         ["Tag Fields", "Reliable historical tag snapshots are not yet available in P0, so columns Y:AF remain blank and Notes contains tag_history_unavailable."],
-        ["Mirror Isolation", "The report reads Message, LineChatMirrorMessage, LineChatMirrorStoreState, LineChatMirrorChat, follower snapshots, and Store Master. All Mirror access is read-only; it does not write to Live Mirror or Historical Mirror."],
+        ["Mirror Isolation", "The report reads the completed Historical Timeline service, canonical Message data, follower snapshots, and Store Master. It does not write to Live Mirror or Historical Mirror."],
         ["Generated At", report.period.generatedAt],
       ] as const;
       for (const [item, definition] of methodologyRows) methodology.addRow({ item, definition });
