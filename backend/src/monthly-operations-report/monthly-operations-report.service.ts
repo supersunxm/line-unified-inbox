@@ -313,34 +313,99 @@ export class MonthlyOperationsReportService {
       ...(accessibleStoreIds === null ? {} : { storeId: { in: accessibleStoreIds } }),
       store: { isActive: true, archivedAt: null },
     };
-    const messages = accountIds.length === 0
-      ? []
-      : await this.prisma.message.findMany({
-          where: {
-            conversation: conversationScope,
-            sentAt: { gte: bounds.start, lt: responseReadEnd },
-          },
-          select: {
-            id: true,
-            conversationId: true,
-            direction: true,
-            messageType: true,
-            sentAt: true,
-            senderUserId: true,
-            senderDisplayName: true,
-            deliveryStatus: true,
-            rawPayload: true,
-            conversation: {
-              select: {
-                lineOfficialAccountId: true,
+
+    const [messages, conversations, mirrorStates, mirrorChats, mirrorRows] = accountIds.length === 0
+      ? [[], [], [], [], []] as const
+      : await Promise.all([
+          this.prisma.message.findMany({
+            where: {
+              conversation: conversationScope,
+              sentAt: { gte: bounds.start, lt: responseReadEnd },
+            },
+            select: {
+              id: true,
+              conversationId: true,
+              externalMessageId: true,
+              direction: true,
+              messageType: true,
+              sentAt: true,
+              senderUserId: true,
+              senderDisplayName: true,
+              deliveryStatus: true,
+              rawPayload: true,
+              conversation: {
+                select: {
+                  lineOfficialAccountId: true,
+                },
               },
             },
-          },
-          orderBy: [{ sentAt: "asc" }, { id: "asc" }],
-        });
+            orderBy: [{ sentAt: "asc" }, { id: "asc" }],
+          }),
+          this.prisma.conversation.findMany({
+            where: conversationScope,
+            select: {
+              id: true,
+              lineOfficialAccountId: true,
+              lineChatUserId: true,
+            },
+          }),
+          this.prisma.lineChatMirrorStoreState.findMany({
+            where: { lineOfficialAccountId: { in: accountIds } },
+            select: {
+              lineOfficialAccountId: true,
+              enabled: true,
+              lastSuccessfulSyncAt: true,
+            },
+          }),
+          this.prisma.lineChatMirrorChat.findMany({
+            where: {
+              lineOfficialAccountId: { in: accountIds },
+              lastMessageAt: { gte: bounds.start, lt: responseReadEnd },
+            },
+            select: {
+              lineOfficialAccountId: true,
+              lineChatUserId: true,
+              lastMessageAt: true,
+              historicalBackfillStatus: true,
+              historicalBackfillOldestAt: true,
+            },
+          }),
+          this.prisma.lineChatMirrorMessage.findMany({
+            where: {
+              lineOfficialAccountId: { in: accountIds },
+              sentAt: { gte: bounds.start, lt: responseReadEnd },
+            },
+            select: {
+              id: true,
+              lineOfficialAccountId: true,
+              lineChatUserId: true,
+              managerMessageId: true,
+              direction: true,
+              bizId: true,
+              ownerName: true,
+              sentAt: true,
+              canonicalConversationId: true,
+              canonicalMessageId: true,
+            },
+            orderBy: [{ sentAt: "asc" }, { id: "asc" }],
+          }),
+        ]);
 
     const messagesByAccount = new Map<string, ReportAnalyticsMessage[]>();
+    const canonicalMessageIds = new Set<string>();
+    const canonicalExternalIds = new Set<string>();
+    const canonicalManagerMessageIds = new Set<string>();
+    const canonicalExternalConversation = new Map<string, string>();
+
     for (const message of messages) {
+      canonicalMessageIds.add(message.id);
+      if (message.externalMessageId) {
+        canonicalExternalIds.add(message.externalMessageId);
+        canonicalExternalConversation.set(message.externalMessageId, message.conversationId);
+      }
+      const managerMessageId = managerMessageIdFromCanonical(message);
+      if (managerMessageId) canonicalManagerMessageIds.add(managerMessageId);
+
       const lineOaId = message.conversation.lineOfficialAccountId;
       const current = messagesByAccount.get(lineOaId) ?? [];
       current.push({
@@ -355,6 +420,105 @@ export class MonthlyOperationsReportService {
         rawPayload: message.rawPayload,
       });
       messagesByAccount.set(lineOaId, current);
+    }
+
+    const conversationAccountById = new Map(
+      conversations.map((conversation) => [conversation.id, conversation.lineOfficialAccountId] as const),
+    );
+    const directConversationByManagerUser = new Map<string, string | null>();
+    for (const conversation of conversations) {
+      const lineChatUserId = conversation.lineChatUserId?.trim();
+      if (!lineChatUserId) continue;
+      setUniqueConversation(
+        directConversationByManagerUser,
+        mirrorConversationKey(conversation.lineOfficialAccountId, lineChatUserId),
+        conversation.id,
+      );
+    }
+
+    const exactEvidenceConversationByManagerUser = new Map<string, string | null>();
+    for (const row of mirrorRows) {
+      if (row.direction !== LineChatMirrorDirection.INBOUND) continue;
+      const canonicalConversationId = canonicalExternalConversation.get(row.managerMessageId);
+      if (!canonicalConversationId) continue;
+      setUniqueConversation(
+        exactEvidenceConversationByManagerUser,
+        mirrorConversationKey(row.lineOfficialAccountId, row.lineChatUserId),
+        canonicalConversationId,
+      );
+    }
+
+    const mirrorFallbackRepliesByAccount = new Map<string, number>();
+    const mirrorFallbackUnmappedByAccount = new Map<string, number>();
+    for (const row of mirrorRows) {
+      if (row.direction !== LineChatMirrorDirection.OUTBOUND || row.bizId === "__AUTO_RESPONSE") {
+        continue;
+      }
+      const managerMessageId = row.managerMessageId.trim();
+      const prefixedExternalId = "line-chat-manager:" + managerMessageId;
+      if (
+        (row.canonicalMessageId && canonicalMessageIds.has(row.canonicalMessageId))
+        || canonicalManagerMessageIds.has(managerMessageId)
+        || canonicalExternalIds.has(managerMessageId)
+        || canonicalExternalIds.has(prefixedExternalId)
+      ) {
+        continue;
+      }
+
+      const key = mirrorConversationKey(row.lineOfficialAccountId, row.lineChatUserId);
+      let conversationId: string | null = null;
+      if (
+        row.canonicalConversationId
+        && conversationAccountById.get(row.canonicalConversationId) === row.lineOfficialAccountId
+      ) {
+        conversationId = row.canonicalConversationId;
+      } else {
+        conversationId = directConversationByManagerUser.get(key)
+          ?? exactEvidenceConversationByManagerUser.get(key)
+          ?? null;
+      }
+
+      if (!conversationId) {
+        mirrorFallbackUnmappedByAccount.set(
+          row.lineOfficialAccountId,
+          (mirrorFallbackUnmappedByAccount.get(row.lineOfficialAccountId) ?? 0) + 1,
+        );
+        continue;
+      }
+
+      const current = messagesByAccount.get(row.lineOfficialAccountId) ?? [];
+      current.push({
+        id: "mirror-fallback:" + row.id,
+        conversationId,
+        direction: MessageDirection.OUTBOUND,
+        messageType: MessageType.TEXT,
+        sentAt: row.sentAt,
+        senderUserId: null,
+        senderDisplayName: row.ownerName?.trim() || "LINE OA Manager Staff",
+        deliveryStatus: MessageDeliveryStatus.DELIVERED,
+        rawPayload: {
+          provider: "LINE_MANAGER",
+          source: "REPORT_MIRROR_FALLBACK",
+          managerMessageId,
+          managerBizId: row.bizId,
+          reportReadOnlyFallback: true,
+        },
+      });
+      messagesByAccount.set(row.lineOfficialAccountId, current);
+      mirrorFallbackRepliesByAccount.set(
+        row.lineOfficialAccountId,
+        (mirrorFallbackRepliesByAccount.get(row.lineOfficialAccountId) ?? 0) + 1,
+      );
+    }
+
+    const mirrorStateByAccount = new Map(
+      mirrorStates.map((state) => [state.lineOfficialAccountId, state] as const),
+    );
+    const mirrorChatsByAccount = new Map<string, typeof mirrorChats>();
+    for (const chat of mirrorChats) {
+      const current = mirrorChatsByAccount.get(chat.lineOfficialAccountId) ?? [];
+      current.push(chat);
+      mirrorChatsByAccount.set(chat.lineOfficialAccountId, current);
     }
 
     const stores: MonthlyOperationsStoreRow[] = accounts
