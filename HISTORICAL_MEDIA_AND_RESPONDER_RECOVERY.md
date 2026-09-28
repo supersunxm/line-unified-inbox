@@ -23,4 +23,4 @@ Production analytics acceptance is pending a fresh production read-only check. N
 
 ## Final H3 isolation decision
 
-Migration required: YES. Existing production columns cannot encode media subtype/metadata while preserving the meanings of sourceEventType, text, stable identity, and archive provenance. The typed migration is the correct local design. Normal Railway deployment matches line-chat-nickname-worker's backend/prisma/** watch, so production deployment would restart Live Mirror. No migration, backfill, or restart occurred; H3 remains READY_BUT_BLOCKED_BY_LIVE_MIRROR_ISOLATION.
+Migration required: YES. Existing production columns cannot encode media subtype/metadata while preserving the meanings of sourceEventType, text, stable identity, and archive provenance. The typed migration is the correct local design. Normal Railway deployment matches line-chat-nickname-worker's backend/prisma/** watch, so production deployment would restart Live Mirror. No migration, backfill, or H3 deployment occurred; H3 remains READY_BUT_BLOCKED_BY_LIVE_MIRROR_ISOLATION. Draft PR #379 is open and marked DO NOT MERGE.

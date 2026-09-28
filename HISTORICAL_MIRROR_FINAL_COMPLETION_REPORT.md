@@ -73,7 +73,7 @@ Base: `origin/main` at `df527c7b8f852007ded02a78358c5039fd470163`
 - Production writes: 0. Deployments: 0. Live Mirror touched: **NO**.
 - All H1/H2 row-level reports remain in ignored local archive storage with restrictive file permissions. No secrets or raw logs are in tracked reports.
 - The attempted shortcut to classify a missing destination from a caller-provided boolean was rejected by automatic review and was not applied. The final importer uses queried, Store/OA/chat-scoped Conversation IDs and persisted `LINK_SAFE` records.
-- Local implementation commit 0258da2b is on the feature branch. No push, pull request, merge, production migration, or deployment occurred.
+- Implementation commits 0258da2b and 8a3cfad4 were pushed to `codex/historical-final-completion-20260928`; draft PR #379 is open and marked DO NOT MERGE. The docs-only branch was pushed at 86545d1d and PR #380 is open. No production migration or deployment occurred.
 
 ## Remaining Gate
 
@@ -90,7 +90,7 @@ No clean H3 no-migration architecture exists. The deployed model lacks a media s
 
 Migration required: YES. Normal production deployment would restart line-chat-nickname-worker because its Railway watch includes backend/prisma/**. The backend also watches backend/** and runs migrations plus Store Master sync in pre-deploy; frontend watches frontend/**. Root Markdown docs do not match these watch paths and are safe to publish separately. H3 remains READY_BUT_BLOCKED_BY_LIVE_MIRROR_ISOLATION.
 
-The complete changed-file classification is listed in HISTORICAL_FINAL_PROGRAM_STATUS.md. Current hosted GitHub publication is unavailable because gh auth status reports an invalid github.com token. No PR, hosted CI, merge, or deployment was created.
+The complete changed-file classification is listed in HISTORICAL_FINAL_PROGRAM_STATUS.md. PR #380 contains eight root Markdown files, all outside the Railway watch paths. GitHub reports no Actions workflow runs and no combined status checks for its current head, so the approved conditional merge gate is not satisfied; PR #380 remains open and unmerged. PR #379 remains a draft and must not merge because its migration matches the Live Mirror worker watch path. Both PRs target `main` at 0abac727878e06ed153624672ee637f6e3950e75. No Historical production writes, deployment, or Live Mirror restart occurred.
 ## Final H3 isolation decision
 
 Migration required: YES. Existing production columns cannot encode media subtype/metadata while preserving the meanings of sourceEventType, text, stable identity, and archive provenance. The typed migration is the correct local design. Normal Railway deployment matches line-chat-nickname-worker's backend/prisma/** watch, so production deployment would restart Live Mirror. No migration, backfill, or restart occurred; H3 remains READY_BUT_BLOCKED_BY_LIVE_MIRROR_ISOLATION.

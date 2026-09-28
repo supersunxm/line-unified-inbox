@@ -2908,4 +2908,4 @@ The first production target proof confirmed that eligible candidate OAs have no 
 - Reusing an existing field would lose information or make media behave as ordinary text. Add messageType, mediaMetadata, and fileName through Prisma and a normal additive migration.
 - Keep metadata-only text empty; preserve sourceEventId, timestamp order, and archive evidence; render read-only placeholders; do not fabricate binaries or mutate current Conversation/Customer records.
 - Deployment is blocked because line-chat-nickname-worker watches backend/prisma/**. A normal migration deployment restarts Live Mirror. Do not alter watch rules or evade Prisma migration; keep H3 READY_BUT_BLOCKED_BY_LIVE_MIRROR_ISOLATION.
-- Root Markdown reports are outside Railway watch paths. Hosted publication is unavailable because the configured GitHub CLI token is invalid.
+- Root Markdown reports are outside Railway watch paths. Docs-only PR #380 is open with no Actions runs or combined status checks; leave it unmerged until CI passes. H3 draft PR #379 is marked DO NOT MERGE.
