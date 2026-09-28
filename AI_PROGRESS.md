@@ -5776,3 +5776,13 @@ Current state: local follow-up fix and checks are complete; the follow-up commit
 - Historical tag columns Y:AF remain blank until reliable historical tag snapshots exist; rows explicitly note `tag_history_unavailable`.
 - Added `下载 XLSX` action to `/monthly-operations-report`.
 - No Live Mirror or Historical Mirror implementation files or persistence paths changed.
+
+
+## 2026-09-28 — Monthly Operations XLSX export 500 hotfix
+
+- Production confirmed `GET /monthly-operations-report` remains healthy (HTTP 200); only `/monthly-operations-report/export` returned HTTP 500.
+- XLSX generation was rewritten to use the same conservative ExcelJS pattern already used by the production Google Review exporter: define worksheet columns first, then append primitive row objects.
+- Removed unnecessary complex worksheet layout operations from the export path while preserving the 35-column A:AI detail contract.
+- Added structured success/failure logging for XLSX generation.
+- Added a production-scale regression test with 146 stores.
+- No Live Mirror or Historical Mirror implementation files changed.
