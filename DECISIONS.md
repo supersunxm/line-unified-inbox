@@ -2996,3 +2996,14 @@ The first production target proof confirmed that eligible candidate OAs have no 
 **Evidence:** Historical/canonical merge, source-event deduplication, reply-evidence classification, and responder attribution rules remain unchanged.
 
 **Isolation:** Analytics-only change; no Historical rows/crosswalks and no Live Mirror persistence or worker behavior are modified.
+
+
+## 2026-09-28 — Historical reply analytics must use delivery-proven identity links
+
+**Decision:** SLA analytics must not assume Historical Manager chat IDs equal canonical `Conversation.lineChatUserId`.
+
+**Merge priority:** Use persisted `LINK_SAFE` Historical crosswalks first, exact canonical source-event anchors second, direct Store/OA/chat identity third, and only then keep a virtual Historical chat.
+
+**Reason:** The final Historical delivery already established that many visible Historical rows require crosswalk/source-anchor evidence. Ignoring those links splits inbound and outbound evidence into separate timelines and falsely produces pending/0% reply cycles.
+
+**Isolation:** Analytics reads existing proof only. It does not create/update crosswalks, rewrite Historical chat IDs, modify canonical conversations, or affect Live Mirror.
