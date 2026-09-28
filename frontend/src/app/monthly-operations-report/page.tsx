@@ -41,6 +41,8 @@ type ReportStore = {
     replyCoverage: ReplyCoverage;
     mirrorFallbackReplies: number;
     mirrorFallbackUnmapped: number;
+    coveredResponseCycles: number;
+    coveredFocusResponseCycles: number;
   };
   dataQuality: {
     followerCoverage: FollowerCoverage;
@@ -322,7 +324,7 @@ function ReportContent() {
                 <div>
                   <h2 className="text-base font-semibold">Production data check</h2>
                   <p className="mt-1 text-xs text-[var(--app-text-secondary)]">
-                    Official 24h KPI ใช้เฉพาะร้านที่ reply coverage = Complete; Partial / Not covered จะแสดง N/A แทน 0%
+                    Official 24h KPI ใช้เฉพาะ response cycles ที่พ้น SLA 24 ชม. หรือมีคำตอบแล้ว และต้องพิสูจน์ outcome ได้ครบทุก eligible cycle ของร้าน
                   </p>
                 </div>
                 <input
@@ -373,6 +375,9 @@ function ReportContent() {
                         <td className="px-3 py-3 text-right">{store.chat.replyCoverage === "complete" ? formatRate(store.chat.replyRateWithin24h) : "N/A"}</td>
                         <td className="px-3 py-3">
                           <ReplyCoverageBadge value={store.chat.replyCoverage} />
+                          <div className="mt-1 text-[11px] text-[var(--app-text-tertiary)]">
+                            covered {formatNumber(store.chat.coveredResponseCycles)} / {formatNumber(store.chat.responseCycles)} eligible cycles
+                          </div>
                           {store.chat.replyCoverage !== "complete" && store.chat.observedReplyRateWithin24h !== null ? (
                             <div className="mt-1 text-[11px] text-[var(--app-text-tertiary)]">
                               observed {formatRate(store.chat.observedReplyRateWithin24h)} · not official

@@ -28,16 +28,48 @@ const AUTO_REPLY_BOT_DISPLAY_NAME = "Auto Reply Bot";
 export type ReplyKpiCoverage = "complete" | "partial" | "not_covered";
 
 type ReplyCoverageInput = {
-  mirrorEnabled: boolean;
-  lastSuccessfulSyncAt: Date | null;
-  relevantChats: number;
-  completeChats: number;
+  mirrorAvailable: boolean;
+  eligibleCycles: number;
+  coveredCycles: number;
 };
 
 export function classifyReplyKpiCoverage(input: ReplyCoverageInput): ReplyKpiCoverage {
-  if (!input.mirrorEnabled || !input.lastSuccessfulSyncAt) return "not_covered";
-  if (input.relevantChats <= 0) return "partial";
-  return input.completeChats === input.relevantChats ? "complete" : "partial";
+  if (input.eligibleCycles === 0) return input.mirrorAvailable ? "complete" : "not_covered";
+  if (input.coveredCycles === input.eligibleCycles) return "complete";
+  if (input.coveredCycles > 0 || input.mirrorAvailable) return "partial";
+  return "not_covered";
+}
+
+export function isReplyCycleEligible(cycle: ReportResponseCycle, periodEnd: Date): boolean {
+  if (cycle.answeredAt) return true;
+  return cycle.startedAt.getTime() + RESPONSE_WINDOW_MS <= periodEnd.getTime();
+}
+
+export function isReplyCycleCovered(
+  cycle: ReportResponseCycle,
+  periodEnd: Date,
+  input: {
+    mirrorEnabled: boolean;
+    lastSuccessfulSyncAt: Date | null;
+    historicalBackfillOldestAt: Date | null;
+  },
+): boolean {
+  if (!isReplyCycleEligible(cycle, periodEnd)) return false;
+
+  if (
+    cycle.durationSeconds !== null
+    && cycle.durationSeconds <= RESPONSE_WINDOW_MS / 1000
+  ) {
+    return true;
+  }
+
+  if (!input.mirrorEnabled || !input.lastSuccessfulSyncAt || !input.historicalBackfillOldestAt) {
+    return false;
+  }
+
+  const deadline = new Date(cycle.startedAt.getTime() + RESPONSE_WINDOW_MS);
+  return input.historicalBackfillOldestAt.getTime() <= cycle.startedAt.getTime()
+    && input.lastSuccessfulSyncAt.getTime() >= deadline.getTime();
 }
 
 function managerMessageIdFromCanonical(message: {
@@ -169,6 +201,8 @@ export type MonthlyOperationsStoreRow = {
     replyCoverage: ReplyKpiCoverage;
     mirrorFallbackReplies: number;
     mirrorFallbackUnmapped: number;
+    coveredResponseCycles: number;
+    coveredFocusResponseCycles: number;
   };
   dataQuality: {
     followerCoverage: "complete" | "partial" | "missing";
@@ -360,13 +394,10 @@ export class MonthlyOperationsReportService {
           this.prisma.lineChatMirrorChat.findMany({
             where: {
               lineOfficialAccountId: { in: accountIds },
-              lastMessageAt: { gte: bounds.start, lt: responseReadEnd },
             },
             select: {
               lineOfficialAccountId: true,
               lineChatUserId: true,
-              lastMessageAt: true,
-              historicalBackfillStatus: true,
               historicalBackfillOldestAt: true,
             },
           }),
@@ -424,6 +455,9 @@ export class MonthlyOperationsReportService {
 
     const conversationAccountById = new Map(
       conversations.map((conversation) => [conversation.id, conversation.lineOfficialAccountId] as const),
+    );
+    const conversationManagerUserById = new Map(
+      conversations.map((conversation) => [conversation.id, conversation.lineChatUserId?.trim() || null] as const),
     );
     const directConversationByManagerUser = new Map<string, string | null>();
     for (const conversation of conversations) {
@@ -514,24 +548,12 @@ export class MonthlyOperationsReportService {
     const mirrorStateByAccount = new Map(
       mirrorStates.map((state) => [state.lineOfficialAccountId, state] as const),
     );
-    const mirrorRelevantChatCountByAccount = new Map<string, number>();
-    const mirrorCompleteChatCountByAccount = new Map<string, number>();
-    for (const chat of mirrorChats) {
-      mirrorRelevantChatCountByAccount.set(
-        chat.lineOfficialAccountId,
-        (mirrorRelevantChatCountByAccount.get(chat.lineOfficialAccountId) ?? 0) + 1,
-      );
-      if (
-        chat.historicalBackfillStatus === "FAST_PATH_COMPLETE"
-        && Boolean(chat.historicalBackfillOldestAt)
-        && chat.historicalBackfillOldestAt!.getTime() <= bounds.start.getTime()
-      ) {
-        mirrorCompleteChatCountByAccount.set(
-          chat.lineOfficialAccountId,
-          (mirrorCompleteChatCountByAccount.get(chat.lineOfficialAccountId) ?? 0) + 1,
-        );
-      }
-    }
+    const mirrorChatByManagerUser = new Map(
+      mirrorChats.map((chat) => [
+        mirrorConversationKey(chat.lineOfficialAccountId, chat.lineChatUserId),
+        chat,
+      ] as const),
+    );
 
     const stores: MonthlyOperationsStoreRow[] = accounts
       .filter((account): account is typeof account & { storeId: string; store: NonNullable<typeof account.store> } =>
@@ -542,18 +564,37 @@ export class MonthlyOperationsReportService {
         const cycles = calculateReportResponseCycles(accountMessages);
         const periodCycles = cycles.filter((cycle) => intervalContains(cycle.startedAt, bounds.start, periodEnd));
         const focusCycles = cycles.filter((cycle) => intervalContains(cycle.startedAt, effectiveFocusStart, periodEnd));
-        const repliedWithin24h = periodCycles.filter(
-          (cycle) => cycle.durationSeconds !== null && cycle.durationSeconds <= 24 * 60 * 60,
+        const eligiblePeriodCycles = periodCycles.filter((cycle) => isReplyCycleEligible(cycle, periodEnd));
+        const eligibleFocusCycles = focusCycles.filter((cycle) => isReplyCycleEligible(cycle, periodEnd));
+
+        const state = mirrorStateByAccount.get(account.id);
+        const mirrorAvailable = state?.enabled === true && Boolean(state.lastSuccessfulSyncAt);
+        const cycleCovered = (cycle: ReportResponseCycle) => {
+          const lineChatUserId = conversationManagerUserById.get(cycle.conversationId);
+          const mirrorChat = lineChatUserId
+            ? mirrorChatByManagerUser.get(mirrorConversationKey(account.id, lineChatUserId))
+            : undefined;
+          return isReplyCycleCovered(cycle, periodEnd, {
+            mirrorEnabled: state?.enabled === true,
+            lastSuccessfulSyncAt: state?.lastSuccessfulSyncAt ?? null,
+            historicalBackfillOldestAt: mirrorChat?.historicalBackfillOldestAt ?? null,
+          });
+        };
+
+        const coveredPeriodCycles = eligiblePeriodCycles.filter(cycleCovered);
+        const coveredFocusCycles = eligibleFocusCycles.filter(cycleCovered);
+        const repliedWithin24h = eligiblePeriodCycles.filter(
+          (cycle) => cycle.durationSeconds !== null && cycle.durationSeconds <= RESPONSE_WINDOW_MS / 1000,
         ).length;
-        const focusRepliedWithin24h = focusCycles.filter(
-          (cycle) => cycle.durationSeconds !== null && cycle.durationSeconds <= 24 * 60 * 60,
+        const focusRepliedWithin24h = eligibleFocusCycles.filter(
+          (cycle) => cycle.durationSeconds !== null && cycle.durationSeconds <= RESPONSE_WINDOW_MS / 1000,
         ).length;
-        const observedReplyRateWithin24h = periodCycles.length === 0
+        const observedReplyRateWithin24h = eligiblePeriodCycles.length === 0
           ? null
-          : repliedWithin24h / periodCycles.length;
-        const observedFocusReplyRateWithin24h = focusCycles.length === 0
+          : repliedWithin24h / eligiblePeriodCycles.length;
+        const observedFocusReplyRateWithin24h = eligibleFocusCycles.length === 0
           ? null
-          : focusRepliedWithin24h / focusCycles.length;
+          : focusRepliedWithin24h / eligibleFocusCycles.length;
         const inboundMessages = accountMessages.filter(
           (message) => message.direction === MessageDirection.INBOUND && intervalContains(message.sentAt, bounds.start, periodEnd),
         ).length;
@@ -561,14 +602,10 @@ export class MonthlyOperationsReportService {
           (message) => message.direction === MessageDirection.INBOUND && intervalContains(message.sentAt, effectiveFocusStart, periodEnd),
         ).length;
 
-        const state = mirrorStateByAccount.get(account.id);
-        const relevantChats = mirrorRelevantChatCountByAccount.get(account.id) ?? 0;
-        const completeChats = mirrorCompleteChatCountByAccount.get(account.id) ?? 0;
         const replyCoverage = classifyReplyKpiCoverage({
-          mirrorEnabled: state?.enabled === true,
-          lastSuccessfulSyncAt: state?.lastSuccessfulSyncAt ?? null,
-          relevantChats,
-          completeChats,
+          mirrorAvailable,
+          eligibleCycles: eligiblePeriodCycles.length,
+          coveredCycles: coveredPeriodCycles.length,
         });
         const mirrorFallbackReplies = mirrorFallbackRepliesByAccount.get(account.id) ?? 0;
         const mirrorFallbackUnmapped = mirrorFallbackUnmappedByAccount.get(account.id) ?? 0;
@@ -586,6 +623,9 @@ export class MonthlyOperationsReportService {
         if (!focusSnapshot) notes.push("follower_focus_start_missing");
         if (!endSnapshot) notes.push("follower_period_end_missing");
         if (replyCoverage !== "complete") notes.push("reply_coverage_" + replyCoverage);
+        if (eligiblePeriodCycles.length > 0) {
+          notes.push("reply_cycle_coverage=" + coveredPeriodCycles.length + "/" + eligiblePeriodCycles.length);
+        }
         if (mirrorFallbackReplies > 0) notes.push("mirror_fallback_replies=" + mirrorFallbackReplies);
         if (mirrorFallbackUnmapped > 0) notes.push("mirror_fallback_unmapped=" + mirrorFallbackUnmapped);
 
@@ -613,9 +653,9 @@ export class MonthlyOperationsReportService {
           chat: {
             inboundMessages,
             focusInboundMessages,
-            responseCycles: periodCycles.length,
+            responseCycles: eligiblePeriodCycles.length,
             repliedWithin24h,
-            focusResponseCycles: focusCycles.length,
+            focusResponseCycles: eligibleFocusCycles.length,
             focusRepliedWithin24h,
             replyRateWithin24h: replyCoverage === "complete" ? observedReplyRateWithin24h : null,
             focusReplyRateWithin24h: replyCoverage === "complete" ? observedFocusReplyRateWithin24h : null,
@@ -624,6 +664,8 @@ export class MonthlyOperationsReportService {
             replyCoverage,
             mirrorFallbackReplies,
             mirrorFallbackUnmapped,
+            coveredResponseCycles: coveredPeriodCycles.length,
+            coveredFocusResponseCycles: coveredFocusCycles.length,
           },
           dataQuality: {
             followerCoverage: followerPoints === 3 ? "complete" : followerPoints === 0 ? "missing" : "partial",
@@ -707,7 +749,7 @@ export class MonthlyOperationsReportService {
         followerSource: "LineOaFollowerSnapshot",
         chatSource: "Message + LineChatMirrorMessage read-only fallback",
         responseDefinition: "first delivered human staff outbound after an inbound response cycle, including deduplicated LINE Manager mirror fallback, within 24 hours",
-        replyCoverageDefinition: "official KPI includes only stores whose enabled Manager mirror has a successful sync and FAST_PATH_COMPLETE historical coverage for every relevant chat in the selected month",
+        replyCoverageDefinition: "official KPI includes only stores whose eligible response cycles all have outcome proof; successful replies within 24h are definitive, while failures require Manager history covering the cycle start and a successful sync past the 24h deadline",
         lineChatMirrorRead: true,
         historicalTimelineRead: false,
         liveMirrorWrite: false,

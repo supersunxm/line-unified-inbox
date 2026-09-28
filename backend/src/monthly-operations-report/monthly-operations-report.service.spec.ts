@@ -3,6 +3,8 @@ import { MessageDeliveryStatus, MessageDirection } from "@prisma/client";
 import {
   calculateReportResponseCycles,
   classifyReplyKpiCoverage,
+  isReplyCycleCovered,
+  isReplyCycleEligible,
   isReportHumanReply,
   pickLatestSnapshotOnOrBefore,
 } from "./monthly-operations-report.service";
@@ -108,25 +110,97 @@ describe("MonthlyOperationsReportService helpers", () => {
     expect(cycles[0].durationSeconds).toBe(1800);
   });
 
-  it("classifies reply KPI coverage conservatively", () => {
+  it("classifies reply KPI coverage from eligible response-cycle proof", () => {
     expect(classifyReplyKpiCoverage({
-      mirrorEnabled: false,
-      lastSuccessfulSyncAt: null,
-      relevantChats: 0,
-      completeChats: 0,
+      mirrorAvailable: false,
+      eligibleCycles: 3,
+      coveredCycles: 0,
     })).toBe("not_covered");
     expect(classifyReplyKpiCoverage({
-      mirrorEnabled: true,
-      lastSuccessfulSyncAt: new Date("2026-09-28T00:00:00.000Z"),
-      relevantChats: 10,
-      completeChats: 6,
+      mirrorAvailable: true,
+      eligibleCycles: 10,
+      coveredCycles: 6,
     })).toBe("partial");
     expect(classifyReplyKpiCoverage({
+      mirrorAvailable: true,
+      eligibleCycles: 10,
+      coveredCycles: 10,
+    })).toBe("complete");
+    expect(classifyReplyKpiCoverage({
+      mirrorAvailable: true,
+      eligibleCycles: 0,
+      coveredCycles: 0,
+    })).toBe("complete");
+  });
+
+  it("does not make an unanswered cycle KPI-eligible until its 24h deadline passes", () => {
+    const cycles = calculateReportResponseCycles([
+      message({
+        id: "in-open",
+        direction: MessageDirection.INBOUND,
+        sentAt: new Date("2026-09-27T10:00:00.000Z"),
+      }),
+    ]);
+    expect(isReplyCycleEligible(cycles[0], new Date("2026-09-28T09:59:59.000Z"))).toBe(false);
+    expect(isReplyCycleEligible(cycles[0], new Date("2026-09-28T10:00:00.000Z"))).toBe(true);
+  });
+
+  it("treats a <=24h human reply as proven even without Manager history", () => {
+    const cycles = calculateReportResponseCycles([
+      message({
+        id: "in-fast",
+        direction: MessageDirection.INBOUND,
+        sentAt: new Date("2026-09-05T00:00:00.000Z"),
+      }),
+      message({
+        id: "out-fast",
+        direction: MessageDirection.OUTBOUND,
+        sentAt: new Date("2026-09-05T01:00:00.000Z"),
+        senderUserId: "staff-1",
+      }),
+    ]);
+    expect(isReplyCycleCovered(
+      cycles[0],
+      new Date("2026-09-28T00:00:00.000Z"),
+      {
+        mirrorEnabled: false,
+        lastSuccessfulSyncAt: null,
+        historicalBackfillOldestAt: null,
+      },
+    )).toBe(true);
+  });
+
+  it("requires Manager history before cycle start and sync past deadline to prove a failure", () => {
+    const cycles = calculateReportResponseCycles([
+      message({
+        id: "in-late",
+        direction: MessageDirection.INBOUND,
+        sentAt: new Date("2026-09-05T00:00:00.000Z"),
+      }),
+      message({
+        id: "out-late",
+        direction: MessageDirection.OUTBOUND,
+        sentAt: new Date("2026-09-06T02:00:00.000Z"),
+        senderDisplayName: "Manager Staff",
+        rawPayload: { provider: "LINE_MANAGER", source: "LINE_MANAGER_MIRROR" },
+      }),
+    ]);
+    const periodEnd = new Date("2026-09-28T00:00:00.000Z");
+    expect(isReplyCycleCovered(cycles[0], periodEnd, {
       mirrorEnabled: true,
       lastSuccessfulSyncAt: new Date("2026-09-28T00:00:00.000Z"),
-      relevantChats: 10,
-      completeChats: 10,
-    })).toBe("complete");
+      historicalBackfillOldestAt: new Date("2026-09-04T00:00:00.000Z"),
+    })).toBe(true);
+    expect(isReplyCycleCovered(cycles[0], periodEnd, {
+      mirrorEnabled: true,
+      lastSuccessfulSyncAt: new Date("2026-09-05T12:00:00.000Z"),
+      historicalBackfillOldestAt: new Date("2026-09-04T00:00:00.000Z"),
+    })).toBe(false);
+    expect(isReplyCycleCovered(cycles[0], periodEnd, {
+      mirrorEnabled: true,
+      lastSuccessfulSyncAt: new Date("2026-09-28T00:00:00.000Z"),
+      historicalBackfillOldestAt: new Date("2026-09-05T00:30:00.000Z"),
+    })).toBe(false);
   });
 
   it("does not let an auto reply close a response cycle", () => {
@@ -230,6 +304,8 @@ describe("MonthlyOperationsReportService XLSX export", () => {
           replyCoverage: "complete",
           mirrorFallbackReplies: 1,
           mirrorFallbackUnmapped: 0,
+          coveredResponseCycles: 4,
+          coveredFocusResponseCycles: 2,
         },
         dataQuality: {
           followerCoverage: "complete",
@@ -313,6 +389,8 @@ describe("MonthlyOperationsReportService XLSX production-scale export", () => {
         replyCoverage: "complete",
         mirrorFallbackReplies: 0,
         mirrorFallbackUnmapped: 0,
+        coveredResponseCycles: 50,
+        coveredFocusResponseCycles: 20,
       },
       dataQuality: {
         followerCoverage: "complete",
@@ -360,6 +438,8 @@ describe("MonthlyOperationsReportService XLSX production-scale export", () => {
         observedFocusReplyRateWithin24h: 0.8,
         mirrorFallbackReplies: 0,
         mirrorFallbackUnmapped: 0,
+        coveredResponseCycles: 50,
+        coveredFocusResponseCycles: 20,
       },
       stores,
       dataContract: {
@@ -465,6 +545,8 @@ describe("MonthlyOperationsReportService XLSX reply coverage", () => {
           replyCoverage: "partial",
           mirrorFallbackReplies: 2,
           mirrorFallbackUnmapped: 1,
+          coveredResponseCycles: 3,
+          coveredFocusResponseCycles: 2,
         },
         dataQuality: {
           followerCoverage: "complete",
