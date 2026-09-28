@@ -289,6 +289,10 @@ function ReportContent() {
   const runAudit = useCallback(async () => {
     setAuditing(true);
     setAuditError(null);
+    setAudit(null);
+    requestAnimationFrame(() => {
+      document.getElementById("kpi-audit")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
     try {
       const response = await fetch(
         `/api-backend/monthly-operations-report/audit?month=${encodeURIComponent(month)}&sample=20`,
@@ -306,7 +310,11 @@ function ReportContent() {
         } catch {}
         throw new Error(message);
       }
-      setAudit(await response.json() as ReplyKpiAudit);
+      const result = await response.json() as ReplyKpiAudit;
+      setAudit(result);
+      requestAnimationFrame(() => {
+        document.getElementById("kpi-audit")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
     } catch (reason) {
       setAudit(null);
       setAuditError(reason instanceof Error ? reason.message : "ไม่สามารถรัน KPI audit ได้");
@@ -368,7 +376,7 @@ function ReportContent() {
               disabled={auditing || loading || !report}
               className="h-10 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] px-4 text-sm font-semibold text-[var(--app-text-primary)] disabled:opacity-60"
             >
-              {auditing ? "กำลัง Audit…" : "Run KPI Audit"}
+              {auditing ? "กำลัง Audit…" : audit ? `Audit ${audit.checks.status}` : "Run KPI Audit"}
             </button>
             <button
               type="button"
@@ -494,7 +502,7 @@ function ReportContent() {
             </section>
 
 
-            <section className="mt-5 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4 shadow-[var(--app-shadow-sm)]">
+            <section id="kpi-audit" className="mt-5 scroll-mt-6 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4 shadow-[var(--app-shadow-sm)]">
               <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                 <div>
                   <h2 className="text-base font-semibold">24h KPI Audit</h2>
