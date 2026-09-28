@@ -3031,3 +3031,14 @@ The first production target proof confirmed that eligible candidate OAs have no 
 **Sampling:** The forensic endpoint examines up to 10 highest-volume 0% stores per run.
 
 **Isolation:** Read-only diagnostics only. It does not alter KPI calculations, Historical rows/crosswalks, canonical messages, or Live/Historical Mirror workers.
+
+
+## 2026-09-28 — Historical reply analytics uses current OA identity, not historical Store.id
+
+**Decision:** Historical SLA reads are scoped by the active LineOfficialAccount.id and normalized to that OA's current Store.id.
+
+**Reason:** Historical imports may retain a legacy Store.id while the LINE OA remains the same. Hard-filtering HistoricalTimelineMessage and HistoricalConversationCrosswalk by the current Store.id can exclude valid replies and create false 0% stores.
+
+**Aggregation:** Current Store.id remains the reporting dimension. Historical Store.id is treated as archival metadata for SLA reads when the same active OA proves identity.
+
+**Isolation:** Read-path only. No Historical rows/crosswalks, current Store/OA assignments, canonical messages, or Mirror workers are changed.
