@@ -15,6 +15,15 @@ export class MonthlyOperationsReportController {
     response.send(file.buffer);
   }
 
+  @Get("zero-rate-forensics")
+  async zeroRateForensics(
+    @Req() request: AuthRequest,
+    @Query("month") month?: string,
+    @Query("sample") sample = "10",
+  ) {
+    return this.report.zeroRateForensics(request.user!, month, Number(sample));
+  }
+
   @Get("audit")
   async audit(
     @Req() request: AuthRequest,

@@ -105,6 +105,48 @@ type ReplyKpiAudit = {
   }>;
 };
 
+type ZeroRateForensics = {
+  month: string;
+  kpiThrough: string;
+  zeroRateStoresInFleet: number;
+  storesAudited: number;
+  classificationCounts: Record<string, number>;
+  privacy: {
+    rawCustomerTextReturned: boolean;
+    customerIdentifiersReturned: boolean;
+  };
+  stores: Array<{
+    storeId: string;
+    storeName: string;
+    lineBasicId: string | null;
+    responseCycles: number;
+    classification:
+      | "NO_ELIGIBLE_CYCLE"
+      | "REPLY_OVER_24H"
+      | "AUTO_ONLY"
+      | "NO_REPLY"
+      | "OUTBOUND_OUTSIDE_CYCLE"
+      | "UNMAPPED_OR_VIRTUAL"
+      | "UNEXPECTED_WITHIN_24H";
+    analytics: {
+      total: number;
+      responded: number;
+      within24h: number;
+      over24h: number;
+      pending: number;
+      knownResponderReplies: number;
+      unknownResponderReplies: number;
+    };
+    historicalEvidence: {
+      inbound: number;
+      autoOutbound: number;
+      nonAutoOutbound: number;
+      unknownResponderOutbound: number;
+    };
+    mergeDiagnostics: Record<string, number>;
+  }>;
+};
+
 type MonthlyOperationsReport = {
   period: {
     month: string;
@@ -217,6 +259,9 @@ function ReportContent() {
   const [audit, setAudit] = useState<ReplyKpiAudit | null>(null);
   const [auditing, setAuditing] = useState(false);
   const [auditError, setAuditError] = useState<string | null>(null);
+  const [zeroForensics, setZeroForensics] = useState<ZeroRateForensics | null>(null);
+  const [zeroForensicsLoading, setZeroForensicsLoading] = useState(false);
+  const [zeroForensicsError, setZeroForensicsError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -320,6 +365,43 @@ function ReportContent() {
       setAuditError(reason instanceof Error ? reason.message : "ไม่สามารถรัน KPI audit ได้");
     } finally {
       setAuditing(false);
+    }
+  }, [month]);
+
+  const runZeroRateForensics = useCallback(async () => {
+    setZeroForensicsLoading(true);
+    setZeroForensicsError(null);
+    setZeroForensics(null);
+    requestAnimationFrame(() => {
+      document.getElementById("zero-rate-forensics")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+    try {
+      const response = await fetch(
+        `/api-backend/monthly-operations-report/zero-rate-forensics?month=${encodeURIComponent(month)}&sample=10`,
+        { credentials: "include", cache: "no-store" },
+      );
+      if (response.status === 401) {
+        window.location.replace("/login");
+        return;
+      }
+      if (!response.ok) {
+        let message = `Zero-rate forensics ไม่สำเร็จ (${response.status})`;
+        try {
+          const body = await response.json() as { message?: string | string[] };
+          if (body.message) message = Array.isArray(body.message) ? body.message.join(", ") : body.message;
+        } catch {}
+        throw new Error(message);
+      }
+      const result = await response.json() as ZeroRateForensics;
+      setZeroForensics(result);
+      requestAnimationFrame(() => {
+        document.getElementById("zero-rate-forensics")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    } catch (reason) {
+      setZeroForensics(null);
+      setZeroForensicsError(reason instanceof Error ? reason.message : "ไม่สามารถรัน zero-rate forensics ได้");
+    } finally {
+      setZeroForensicsLoading(false);
     }
   }, [month]);
 
@@ -563,6 +645,86 @@ function ReportContent() {
                                 <div key={path}>{path}: {count}</div>
                               ))}
                             </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              ) : null}
+            </section>
+
+            <section id="zero-rate-forensics" className="mt-5 scroll-mt-6 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4 shadow-[var(--app-shadow-sm)]">
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <h2 className="text-base font-semibold">Zero-Rate Forensics</h2>
+                  <p className="mt-1 text-xs text-[var(--app-text-secondary)]">
+                    ตรวจร้าน 0% สูงสุด 10 ร้านแบบ read-only เพื่อแยก late reply / auto-only / no reply / mapping issue
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void runZeroRateForensics()}
+                  disabled={zeroForensicsLoading || loading || !report}
+                  className="h-10 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] px-4 text-sm font-semibold text-[var(--app-text-primary)] disabled:opacity-60"
+                >
+                  {zeroForensicsLoading ? "กำลังตรวจ…" : "Run Zero-Rate Forensics"}
+                </button>
+              </div>
+
+              {zeroForensicsError ? <div className="mt-3 rounded-xl bg-rose-50 p-3 text-sm text-rose-700">{zeroForensicsError}</div> : null}
+              {!zeroForensics && !zeroForensicsLoading ? (
+                <div className="mt-3 text-sm text-[var(--app-text-secondary)]">ยังไม่ได้รัน zero-rate forensics</div>
+              ) : null}
+              {zeroForensicsLoading ? (
+                <div className="mt-3 text-sm text-[var(--app-text-secondary)]">กำลังอ่าน Historical evidence ของร้าน 0%…</div>
+              ) : null}
+
+              {zeroForensics ? (
+                <>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    <MetricCard label="Zero-Rate Stores" value={formatNumber(zeroForensics.zeroRateStoresInFleet)} />
+                    <MetricCard label="Stores Audited" value={formatNumber(zeroForensics.storesAudited)} />
+                    <MetricCard label="KPI Through" value={zeroForensics.kpiThrough} />
+                    <MetricCard
+                      label="Top Causes"
+                      value={Object.entries(zeroForensics.classificationCounts)
+                        .sort((a, b) => b[1] - a[1])
+                        .slice(0, 2)
+                        .map(([key, value]) => `${key} ${value}`)
+                        .join(" · ") || "—"}
+                    />
+                  </div>
+                  <div className="mt-4 overflow-x-auto">
+                    <table className="min-w-[1200px] w-full text-left text-xs">
+                      <thead className="border-b border-[var(--app-border)] text-[var(--app-text-tertiary)]">
+                        <tr>
+                          <th className="px-3 py-2">Store</th>
+                          <th className="px-3 py-2">Cause</th>
+                          <th className="px-3 py-2">Cycles</th>
+                          <th className="px-3 py-2">Responded</th>
+                          <th className="px-3 py-2">&gt;24h</th>
+                          <th className="px-3 py-2">Pending</th>
+                          <th className="px-3 py-2">Hist Outbound</th>
+                          <th className="px-3 py-2">Auto</th>
+                          <th className="px-3 py-2">Virtual Rows</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {zeroForensics.stores.map((item) => (
+                          <tr key={item.storeId} className="border-b border-[var(--app-border-subtle)]">
+                            <td className="px-3 py-2">
+                              <div className="font-medium">{item.storeName}</div>
+                              <div className="text-[11px] text-[var(--app-text-tertiary)]">{item.lineBasicId ?? "—"}</div>
+                            </td>
+                            <td className="px-3 py-2 font-medium">{item.classification}</td>
+                            <td className="px-3 py-2">{item.analytics.total}</td>
+                            <td className="px-3 py-2">{item.analytics.responded}</td>
+                            <td className="px-3 py-2">{item.analytics.over24h}</td>
+                            <td className="px-3 py-2">{item.analytics.pending}</td>
+                            <td className="px-3 py-2">{item.historicalEvidence.nonAutoOutbound}</td>
+                            <td className="px-3 py-2">{item.historicalEvidence.autoOutbound}</td>
+                            <td className="px-3 py-2">{item.mergeDiagnostics.virtualHistoricalRows ?? 0}</td>
                           </tr>
                         ))}
                       </tbody>

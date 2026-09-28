@@ -3020,3 +3020,14 @@ The first production target proof confirmed that eligible candidate OAs have no 
 **Checks:** The audit compares report aggregates with a recomputation through Historical response-cycle analytics and verifies structural consistency of sampled cycles.
 
 **Isolation:** Audit is read-only and manual. It does not alter Historical data/crosswalks, canonical messages, or Live Mirror/Historical Mirror workers.
+
+
+## 2026-09-28 — Zero-rate stores require explicit forensic classification before KPI v1 closure
+
+**Decision:** A 0% store is not assumed to be correct merely because aggregate/cycle audit passes. Zero-rate stores are separately inspected using Historical evidence within the matured KPI window.
+
+**Classification:** REPLY_OVER_24H when reply cycles exist but all replies exceed 24h; AUTO_ONLY when only explicit automated outbound exists; NO_REPLY when eligible cycles have no non-auto reply evidence; OUTBOUND_OUTSIDE_CYCLE when non-auto outbound exists but does not close an eligible cycle; UNMAPPED_OR_VIRTUAL when such evidence remains on virtual Historical timelines; NO_ELIGIBLE_CYCLE when no SLA cycle exists.
+
+**Sampling:** The forensic endpoint examines up to 10 highest-volume 0% stores per run.
+
+**Isolation:** Read-only diagnostics only. It does not alter KPI calculations, Historical rows/crosswalks, canonical messages, or Live/Historical Mirror workers.

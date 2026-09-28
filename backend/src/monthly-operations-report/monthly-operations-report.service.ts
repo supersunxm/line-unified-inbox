@@ -2,7 +2,7 @@ import { BadRequestException, Injectable, Logger } from "@nestjs/common";
 import { LineChatMirrorDirection, MessageDeliveryStatus, MessageDirection, MessageType, Prisma } from "@prisma/client";
 import type { AuthUser } from "../auth/auth.guard";
 import { StoreAccessService } from "../auth/store-access.service";
-import { formatDbDateToIso, getTodayBangkokDateString, toUtcDateForDb } from "../follower-insights/date-utils";
+import { bangkokDateRangeToUtcBounds, formatDbDateToIso, getTodayBangkokDateString, toUtcDateForDb } from "../follower-insights/date-utils";
 import { type AnalyticsMessage, bangkokMonthBounds } from "../mobile/monthly-summary.service";
 import { HistoricalTimelineService } from "../historical-timeline.service";
 import { PrismaService } from "../prisma.service";
@@ -27,6 +27,33 @@ type ReportResponseCycle = {
 const AUTO_REPLY_BOT_DISPLAY_NAME = "Auto Reply Bot";
 
 export type ReplyKpiCoverage = "complete" | "partial" | "not_covered";
+export type ZeroRateForensicClassification =
+  | "NO_ELIGIBLE_CYCLE"
+  | "REPLY_OVER_24H"
+  | "AUTO_ONLY"
+  | "NO_REPLY"
+  | "OUTBOUND_OUTSIDE_CYCLE"
+  | "UNMAPPED_OR_VIRTUAL"
+  | "UNEXPECTED_WITHIN_24H";
+
+export function classifyZeroRateForensic(input: {
+  total: number;
+  within24h: number;
+  over24h: number;
+  responded: number;
+  historicalAutoOutbound: number;
+  historicalNonAutoOutbound: number;
+  virtualHistoricalRows: number;
+}): ZeroRateForensicClassification {
+  if (input.total === 0) return "NO_ELIGIBLE_CYCLE";
+  if (input.within24h > 0) return "UNEXPECTED_WITHIN_24H";
+  if (input.over24h > 0) return "REPLY_OVER_24H";
+  if (input.historicalAutoOutbound > 0 && input.historicalNonAutoOutbound === 0) return "AUTO_ONLY";
+  if (input.historicalNonAutoOutbound > 0 && input.responded === 0) {
+    return input.virtualHistoricalRows > 0 ? "UNMAPPED_OR_VIRTUAL" : "OUTBOUND_OUTSIDE_CYCLE";
+  }
+  return "NO_REPLY";
+}
 
 type ReplyCoverageInput = {
   mirrorAvailable: boolean;
@@ -929,6 +956,122 @@ export class MonthlyOperationsReportService {
         customerIdentifiersReturned: false,
       },
       stores: auditedStores,
+    };
+  }
+
+  async zeroRateForensics(user: AuthUser, requestedMonth?: string, requestedSample = 10) {
+    const report = await this.get(user, requestedMonth);
+    if (!report.period.replyKpiThrough) {
+      throw new BadRequestException("Zero-rate forensics is unavailable until a matured 24-hour window exists");
+    }
+
+    const sampleSize = Math.min(10, Math.max(1, Math.floor(requestedSample || 10)));
+    const zeroStores = report.stores
+      .filter((store) =>
+        store.chat.replyCoverage === "complete"
+        && store.chat.responseCycles > 0
+        && store.chat.repliedWithin24h === 0,
+      )
+      .sort((left, right) =>
+        right.chat.responseCycles - left.chat.responseCycles
+        || left.storeName.localeCompare(right.storeName),
+      )
+      .slice(0, sampleSize);
+
+    const bounds = bangkokDateRangeToUtcBounds(report.period.start, report.period.replyKpiThrough);
+    const stores = [];
+    for (const store of zeroStores) {
+      const [analytics, historicalCounts] = await Promise.all([
+        this.historicalTimeline.replyAnalytics(user, {
+          dateFrom: report.period.start,
+          dateTo: report.period.replyKpiThrough,
+          storeId: store.storeId,
+          mode: "RESPONSE_CYCLES",
+          auditLimit: 12,
+        }),
+        this.prisma.historicalTimelineMessage.groupBy({
+          by: ["direction", "senderBizId"],
+          where: {
+            storeId: store.storeId,
+            sentAt: { gte: bounds.startUtc, lt: bounds.endExclusiveUtc },
+          },
+          _count: { _all: true },
+        }),
+      ]);
+
+      let historicalInbound = 0;
+      let historicalAutoOutbound = 0;
+      let historicalNonAutoOutbound = 0;
+      let historicalUnknownResponderOutbound = 0;
+      for (const row of historicalCounts) {
+        const count = row._count._all;
+        if (row.direction === MessageDirection.INBOUND) historicalInbound += count;
+        if (row.direction === MessageDirection.OUTBOUND && row.senderBizId === "__AUTO_RESPONSE") {
+          historicalAutoOutbound += count;
+        }
+        if (row.direction === MessageDirection.OUTBOUND && row.senderBizId !== "__AUTO_RESPONSE") {
+          historicalNonAutoOutbound += count;
+          if (!row.senderBizId?.trim()) historicalUnknownResponderOutbound += count;
+        }
+      }
+
+      const overview = analytics.overview;
+      const classification = classifyZeroRateForensic({
+        total: overview.total,
+        within24h: overview.within24h,
+        over24h: overview.over24h,
+        responded: overview.responded,
+        historicalAutoOutbound,
+        historicalNonAutoOutbound,
+        virtualHistoricalRows: analytics.sources.virtualHistoricalRows ?? 0,
+      });
+
+      stores.push({
+        storeId: store.storeId,
+        storeName: store.storeName,
+        lineBasicId: store.lineBasicId,
+        responseCycles: store.chat.responseCycles,
+        classification,
+        analytics: {
+          total: overview.total,
+          responded: overview.responded,
+          within24h: overview.within24h,
+          over24h: overview.over24h,
+          pending: overview.pending,
+          knownResponderReplies: overview.knownResponderReplies,
+          unknownResponderReplies: overview.unknownResponderReplies,
+        },
+        historicalEvidence: {
+          inbound: historicalInbound,
+          autoOutbound: historicalAutoOutbound,
+          nonAutoOutbound: historicalNonAutoOutbound,
+          unknownResponderOutbound: historicalUnknownResponderOutbound,
+        },
+        mergeDiagnostics: analytics.sources,
+        sampledCycles: analytics.audit?.cycles ?? [],
+      });
+    }
+
+    const classificationCounts = stores.reduce<Record<string, number>>((counts, store) => {
+      counts[store.classification] = (counts[store.classification] ?? 0) + 1;
+      return counts;
+    }, {});
+
+    return {
+      month: report.period.month,
+      kpiThrough: report.period.replyKpiThrough,
+      zeroRateStoresInFleet: report.stores.filter((store) =>
+        store.chat.replyCoverage === "complete"
+        && store.chat.responseCycles > 0
+        && store.chat.repliedWithin24h === 0,
+      ).length,
+      storesAudited: stores.length,
+      classificationCounts,
+      privacy: {
+        rawCustomerTextReturned: false,
+        customerIdentifiersReturned: false,
+      },
+      stores,
     };
   }
 
