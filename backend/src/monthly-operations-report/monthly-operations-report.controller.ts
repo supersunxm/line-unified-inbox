@@ -15,6 +15,15 @@ export class MonthlyOperationsReportController {
     response.send(file.buffer);
   }
 
+  @Get("audit")
+  async audit(
+    @Req() request: AuthRequest,
+    @Query("month") month?: string,
+    @Query("sample") sample = "20",
+  ) {
+    return this.report.auditReplyKpi(request.user!, month, Number(sample));
+  }
+
   @Get()
   async get(@Req() request: AuthRequest, @Query("month") month?: string) {
     return this.report.get(request.user!, month);
