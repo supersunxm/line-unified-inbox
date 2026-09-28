@@ -5765,3 +5765,14 @@ Current state: local follow-up fix and checks are complete; the follow-up commit
 - Report-only fix now applies the same human-reply evidence without changing Mirror collectors/reconciliation.
 - Report cycles additionally require `deliveryStatus = DELIVERED` and continue excluding Auto Reply Bot / AUTO_RESPONSE messages.
 - Added regression coverage for internal-user replies, Manager replies without user mapping, auto replies, failed outbound, consecutive inbound cycles, and unresolved cycles.
+
+
+## 2026-09-28 — Monthly Operations Report XLSX exporter
+
+- Added authenticated `GET /monthly-operations-report/export?month=YYYY-MM`.
+- Export reuses the same report service as the production UI so XLSX and on-screen totals share one source of truth.
+- Workbook includes `运营明细`, `汇总`, `账号分组汇总`, and `口径说明`.
+- `运营明细` preserves the August report's 35-column A:AI layout.
+- Historical tag columns Y:AF remain blank until reliable historical tag snapshots exist; rows explicitly note `tag_history_unavailable`.
+- Added `下载 XLSX` action to `/monthly-operations-report`.
+- No Live Mirror or Historical Mirror implementation files or persistence paths changed.
