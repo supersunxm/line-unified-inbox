@@ -3007,3 +3007,16 @@ The first production target proof confirmed that eligible candidate OAs have no 
 **Reason:** The final Historical delivery already established that many visible Historical rows require crosswalk/source-anchor evidence. Ignoring those links splits inbound and outbound evidence into separate timelines and falsely produces pending/0% reply cycles.
 
 **Isolation:** Analytics reads existing proof only. It does not create/update crosswalks, rewrite Historical chat IDs, modify canonical conversations, or affect Live Mirror.
+
+
+## 2026-09-28 — KPI validation uses bounded, privacy-preserving production audit samples
+
+**Decision:** Monthly 24h KPI validation is performed through an explicit, on-demand audit endpoint rather than background sampling or raw customer-message export.
+
+**Sampling:** Up to 20 stores are selected across high, mid, low, and zero-rate buckets. Each store returns at most eight response-cycle evidence rows.
+
+**Evidence returned:** Timestamps, response duration/outcome, Historical/current source, responder-known state, hashed conversation key, and merge path. Raw customer text and customer identifiers are not returned.
+
+**Checks:** The audit compares report aggregates with a recomputation through Historical response-cycle analytics and verifies structural consistency of sampled cycles.
+
+**Isolation:** Audit is read-only and manual. It does not alter Historical data/crosswalks, canonical messages, or Live Mirror/Historical Mirror workers.
