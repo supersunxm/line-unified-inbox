@@ -6,6 +6,7 @@ import { StoreAccessService } from "./auth/store-access.service";
 import { PrismaService } from "./prisma.service";
 import {
   buildHistoricalVirtualConversationId,
+  calculateUnifiedReplyCycles,
   classifyResponseDuration,
   HistoricalTimelineService,
   isHistoricalReplyEvidence,
@@ -83,6 +84,37 @@ test("24-hour reply classification includes the exact 24-hour boundary", () => {
   assert.equal(classifyResponseDuration(inbound, new Date(inbound.getTime() + 24 * 60 * 60 * 1000 + 1)), "OVER_24H");
 });
 
+test("response-cycle helper creates multiple SLA cases inside one chat", () => {
+  const base = {
+    messageType: MessageType.TEXT,
+    source: "HISTORICAL" as const,
+    sourceEventId: null,
+    externalMessageId: null,
+    senderUserId: null,
+    senderDisplayName: null,
+    deliveryStatus: MessageDeliveryStatus.DELIVERED,
+    rawPayload: null,
+    text: "text",
+  };
+  const messages = [
+    { ...base, id: "in-1", direction: MessageDirection.INBOUND, sentAt: new Date("2026-09-01T00:00:00.000Z"), senderBizId: null },
+    { ...base, id: "in-2", direction: MessageDirection.INBOUND, sentAt: new Date("2026-09-01T00:05:00.000Z"), senderBizId: null },
+    { ...base, id: "out-1", direction: MessageDirection.OUTBOUND, sentAt: new Date("2026-09-01T00:30:00.000Z"), senderBizId: "biz-1" },
+    { ...base, id: "in-3", direction: MessageDirection.INBOUND, sentAt: new Date("2026-09-01T03:00:00.000Z"), senderBizId: null },
+    { ...base, id: "auto", direction: MessageDirection.OUTBOUND, sentAt: new Date("2026-09-01T03:05:00.000Z"), senderBizId: "__AUTO_RESPONSE" },
+    { ...base, id: "out-2", direction: MessageDirection.OUTBOUND, sentAt: new Date("2026-09-01T03:20:00.000Z"), senderBizId: null },
+  ];
+  const cycles = calculateUnifiedReplyCycles(
+    messages,
+    new Date("2026-09-01T00:00:00.000Z"),
+    new Date("2026-09-02T00:00:00.000Z"),
+  );
+  assert.equal(cycles.length, 2);
+  assert.equal(cycles[0]?.firstInbound.id, "in-1");
+  assert.equal(cycles[0]?.humanReply?.id, "out-1");
+  assert.equal(cycles[1]?.firstInbound.id, "in-3");
+  assert.equal(cycles[1]?.humanReply?.id, "out-2");
+});
 test("reply analytics merges an exact live duplicate with Historical text and uses a proven Manager responder key", async () => {
   const inboundAt = new Date("2026-09-01T02:00:00.000Z");
   const history = [
@@ -373,4 +405,46 @@ test("reply analytics still excludes Historical auto-response evidence", async (
   assert.equal(result.overview.pending, 1);
   assert.equal(result.overview.knownResponderReplies, 0);
   assert.equal(result.overview.unknownResponderReplies, 0);
+});
+
+test("reply analytics RESPONSE_CYCLES mode counts repeated customer-contact episodes", async () => {
+  const history = [
+    {
+      id: "in-1", storeId: "store-1", lineOfficialAccountId: "oa-1", lineChatUserId: "chat-1",
+      sourceEventId: "event:in-1", sourceEventType: "messageReceived", direction: MessageDirection.INBOUND,
+      text: "First question", sentAt: new Date("2026-09-01T01:00:00.000Z"), senderBizId: null,
+    },
+    {
+      id: "out-1", storeId: "store-1", lineOfficialAccountId: "oa-1", lineChatUserId: "chat-1",
+      sourceEventId: "event:out-1", sourceEventType: "messageSent", direction: MessageDirection.OUTBOUND,
+      text: "First answer", sentAt: new Date("2026-09-01T01:30:00.000Z"), senderBizId: "biz-1",
+    },
+    {
+      id: "in-2", storeId: "store-1", lineOfficialAccountId: "oa-1", lineChatUserId: "chat-1",
+      sourceEventId: "event:in-2", sourceEventType: "messageReceived", direction: MessageDirection.INBOUND,
+      text: "Second question", sentAt: new Date("2026-09-01T05:00:00.000Z"), senderBizId: null,
+    },
+    {
+      id: "out-2", storeId: "store-1", lineOfficialAccountId: "oa-1", lineChatUserId: "chat-1",
+      sourceEventId: "event:out-2", sourceEventType: "messageSent", direction: MessageDirection.OUTBOUND,
+      text: "Second answer", sentAt: new Date("2026-09-01T06:00:00.000Z"), senderBizId: null,
+    },
+  ];
+  const prisma = {
+    store: { findMany: async () => [{ id: "store-1", name: "Store One" }] },
+    historicalTimelineMessage: { findMany: async () => history },
+    conversation: { findMany: async () => [] },
+  } as unknown as PrismaService;
+  const storeAccess = { accessibleStoreIds: async () => null } as unknown as StoreAccessService;
+  const service = new HistoricalTimelineService(prisma, storeAccess);
+  const result = await service.replyAnalytics(
+    { id: "admin-1", email: "admin@example.com", displayName: "Admin", role: "ADMIN" } as AuthUser,
+    { dateFrom: "2026-09-01", dateTo: "2026-09-01", mode: "RESPONSE_CYCLES" },
+  );
+  assert.equal(result.mode, "RESPONSE_CYCLES");
+  assert.equal(result.overview.total, 2);
+  assert.equal(result.overview.responded, 2);
+  assert.equal(result.overview.within24h, 2);
+  assert.equal(result.overview.knownResponderReplies, 1);
+  assert.equal(result.overview.unknownResponderReplies, 1);
 });

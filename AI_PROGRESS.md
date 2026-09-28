@@ -5901,3 +5901,14 @@ Current state: local follow-up fix and checks are complete; the follow-up commit
 - Canonical/current delivered outbound is reply evidence when delivered and non-automated, even if the internal sender mapping is absent.
 - Added regression coverage for unknown-responder Historical replies and explicit auto-response exclusion.
 - No Historical rows, crosswalks, Live Mirror state, or worker behavior changed.
+
+
+## 2026-09-28 — Monthly 24h KPI moved to Historical response-cycle analytics
+
+- Production validation after responder-evidence correction improved 24h KPI from 14.4% to 21.4%, but many stores still showed 0% because Historical reply analytics used one first-inbound/first-reply case per chat for the entire period.
+- Added opt-in `RESPONSE_CYCLES` mode to `HistoricalTimelineService.replyAnalytics()`; the existing default remains `CHAT_FIRST_REPLY` for backward compatibility.
+- Response-cycle mode treats consecutive inbound messages as one open cycle and closes it on the first non-auto reply. A later inbound burst in the same chat opens a new SLA cycle.
+- Monthly Operations Report now explicitly requests `RESPONSE_CYCLES` for month and focus-period KPI.
+- Historical/canonical merge and exact source deduplication are unchanged.
+- Added regression coverage for multiple cycles in one chat, consecutive inbound collapse, auto-response exclusion, and unknown-responder reply evidence.
+- No Historical data, crosswalks, Live Mirror worker, or write path changed.

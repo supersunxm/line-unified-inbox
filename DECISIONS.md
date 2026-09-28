@@ -2983,3 +2983,16 @@ The first production target proof confirmed that eligible candidate OAs have no 
 **Rationale:** SLA asks whether the store replied within the time window; responder analytics asks who replied. Conflating the two caused legitimate unattributed outbound replies to be treated as pending/non-responses.
 
 **Isolation:** Read-only analytics classification only. No Historical data, crosswalks, Live Mirror collection, or persistence semantics are changed.
+
+
+## 2026-09-28 — Monthly SLA uses response cycles, Historical dashboard default remains chat-first
+
+**Decision:** Monthly Operations Report must measure each customer-contact episode, not one case per chat per month.
+
+**Cycle rule:** The first inbound opens a cycle. Consecutive inbound messages before a reply remain one cycle. The first non-auto reply closes that cycle. A later inbound burst opens a new cycle.
+
+**Compatibility:** `HistoricalTimelineService.replyAnalytics()` keeps `CHAT_FIRST_REPLY` as its default mode so existing Historical dashboard consumers do not change semantics. Monthly Operations Report opts into `RESPONSE_CYCLES`.
+
+**Evidence:** Historical/canonical merge, source-event deduplication, reply-evidence classification, and responder attribution rules remain unchanged.
+
+**Isolation:** Analytics-only change; no Historical rows/crosswalks and no Live Mirror persistence or worker behavior are modified.

@@ -297,12 +297,14 @@ export class MonthlyOperationsReportService {
       ? await this.historicalTimeline.replyAnalytics(user, {
           dateFrom: monthStartIso,
           dateTo: kpiThroughIso,
+          mode: "RESPONSE_CYCLES",
         })
       : null;
     const historicalFocusAnalytics = hasMaturedKpiWindow && kpiThroughDate.getTime() >= effectiveFocusStart.getTime()
       ? await this.historicalTimeline.replyAnalytics(user, {
           dateFrom: focusStartIso,
           dateTo: kpiThroughIso,
+          mode: "RESPONSE_CYCLES",
         })
       : null;
     const historicalMonthByStore = new Map(
@@ -790,8 +792,8 @@ export class MonthlyOperationsReportService {
       dataContract: {
         followerSource: "LineOaFollowerSnapshot",
         chatSource: "HistoricalTimelineService merged historical + canonical timeline",
-        responseDefinition: "first human reply after the first inbound in each chat, using the completed Historical Timeline read model merged with canonical messages; current-month KPI is cut off at a fully matured date",
-        replyCoverageDefinition: "Historical project completion is the reply-KPI source of truth. Current-month KPI excludes the latest two Bangkok calendar days so every included chat has a full 24-hour response window.",
+        responseDefinition: "response-cycle SLA over the completed Historical Timeline read model merged with canonical messages: consecutive inbound messages open one cycle and the first non-auto outbound closes it; current-month KPI is cut off at a fully matured date",
+        replyCoverageDefinition: "Historical project completion is the reply-KPI source of truth. Current-month KPI excludes the latest two Bangkok calendar days so every included response cycle has a full 24-hour window.",
         lineChatMirrorRead: true,
         historicalTimelineRead: true,
         liveMirrorWrite: false,
