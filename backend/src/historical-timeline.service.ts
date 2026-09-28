@@ -722,6 +722,7 @@ export class HistoricalTimelineService {
     dateTo?: string;
     storeId?: string;
     mode?: HistoricalReplyAnalyticsMode;
+    auditLimit?: number;
   }) {
     if (!input.dateFrom || !input.dateTo) throw new BadRequestException("dateFrom and dateTo are required");
     const startAt = parseBangkokDate(input.dateFrom, "dateFrom");
@@ -868,6 +869,15 @@ export class HistoricalTimelineService {
     let sourceAnchoredHistoricalRows = 0;
     let directLinkedHistoricalRows = 0;
     let virtualHistoricalRows = 0;
+    const chatMergePath = new Map<string, "CANONICAL" | "CROSSWALK" | "SOURCE_ANCHOR" | "DIRECT" | "VIRTUAL">();
+    const setMergePath = (
+      key: string,
+      path: "CANONICAL" | "CROSSWALK" | "SOURCE_ANCHOR" | "DIRECT" | "VIRTUAL",
+    ) => {
+      const rank = { CANONICAL: 0, VIRTUAL: 1, DIRECT: 2, SOURCE_ANCHOR: 3, CROSSWALK: 4 } as const;
+      const current = chatMergePath.get(key);
+      if (!current || rank[path] > rank[current]) chatMergePath.set(key, path);
+    };
     for (const conversation of conversations) {
       if (!conversation.storeId) continue;
       const identity = conversation.lineChatUserId
@@ -877,6 +887,7 @@ export class HistoricalTimelineService {
         ? canonicalChatKey(conversation.id)
         : directChatKey(conversation.storeId, conversation.lineOfficialAccountId, conversation.lineChatUserId, conversation.id);
       if (identity) setUniqueKey(directConversationKeyByIdentity, identity, key);
+      setMergePath(key, "CANONICAL");
       chatScopes.set(key, { storeId: conversation.storeId, lineOfficialAccountId: conversation.lineOfficialAccountId, lineChatUserId: conversation.lineChatUserId });
       const messages = chatMessages.get(key) ?? [];
       for (const message of conversation.messages) {
@@ -913,10 +924,19 @@ export class HistoricalTimelineService {
         ?? directKey
         ?? directChatKey(message.storeId, message.lineOfficialAccountId, message.lineChatUserId, "");
 
-      if (crosswalkKey) crosswalkLinkedHistoricalRows += 1;
-      else if (sourceAnchorKey) sourceAnchoredHistoricalRows += 1;
-      else if (directKey) directLinkedHistoricalRows += 1;
-      else virtualHistoricalRows += 1;
+      if (crosswalkKey) {
+        crosswalkLinkedHistoricalRows += 1;
+        setMergePath(key, "CROSSWALK");
+      } else if (sourceAnchorKey) {
+        sourceAnchoredHistoricalRows += 1;
+        setMergePath(key, "SOURCE_ANCHOR");
+      } else if (directKey) {
+        directLinkedHistoricalRows += 1;
+        setMergePath(key, "DIRECT");
+      } else {
+        virtualHistoricalRows += 1;
+        setMergePath(key, "VIRTUAL");
+      }
 
       chatScopes.set(key, { storeId: message.storeId, lineOfficialAccountId: message.lineOfficialAccountId, lineChatUserId: message.lineChatUserId });
       const messages = chatMessages.get(key) ?? [];
@@ -961,6 +981,19 @@ export class HistoricalTimelineService {
     let historicalChatCount = 0;
 
     const analyticsMode = input.mode ?? "CHAT_FIRST_REPLY";
+    const auditLimit = Math.min(100, Math.max(0, Math.floor(input.auditLimit ?? 0)));
+    const auditCycles: Array<{
+      storeId: string;
+      conversationKey: string;
+      mergePath: "CANONICAL" | "CROSSWALK" | "SOURCE_ANCHOR" | "DIRECT" | "VIRTUAL";
+      firstInboundAt: string;
+      firstInboundSource: "CURRENT" | "HISTORICAL";
+      replyAt: string | null;
+      replySource: "CURRENT" | "HISTORICAL" | null;
+      responderKnown: boolean | null;
+      responseMinutes: number | null;
+      outcome: "WITHIN_24H" | "OVER_24H" | "PENDING";
+    }> = [];
     for (const [key, messages] of chatMessages) {
       const scope = chatScopes.get(key);
       if (!scope) continue;
@@ -992,6 +1025,30 @@ export class HistoricalTimelineService {
         const monthCount = monthCounts.get(monthKey) ?? emptyReplyCounts();
         const responseCounts = [storeCountsForStore, dateCount, monthCount];
         for (const count of responseCounts) count.total += 1;
+
+        if (auditCycles.length < auditLimit) {
+          const responseMinutes = humanReply
+            ? Math.max(0, Math.round((humanReply.sentAt.getTime() - firstInbound.sentAt.getTime()) / 60_000))
+            : null;
+          const outcome = humanReply
+            ? responseMinutes !== null && responseMinutes <= 24 * 60 ? "WITHIN_24H" as const : "OVER_24H" as const
+            : "PENDING" as const;
+          const responderId = humanReply
+            ? humanReply.source === "HISTORICAL" ? humanReply.senderBizId : humanReply.senderUserId
+            : null;
+          auditCycles.push({
+            storeId: scope.storeId,
+            conversationKey: createHash("sha256").update(key).digest("hex").slice(0, 12),
+            mergePath: chatMergePath.get(key) ?? "VIRTUAL",
+            firstInboundAt: firstInbound.sentAt.toISOString(),
+            firstInboundSource: firstInbound.source,
+            replyAt: humanReply?.sentAt.toISOString() ?? null,
+            replySource: humanReply?.source ?? null,
+            responderKnown: humanReply ? Boolean(responderId?.trim()) : null,
+            responseMinutes,
+            outcome,
+          });
+        }
 
         if (!humanReply) {
           for (const count of responseCounts) count.pending += 1;
@@ -1080,6 +1137,11 @@ export class HistoricalTimelineService {
         unknownResponderReplies,
         distinctKnownResponders: distinctHistoricalResponderCount,
       },
+      audit: auditLimit > 0 ? {
+        requestedLimit: auditLimit,
+        returned: auditCycles.length,
+        cycles: auditCycles,
+      } : undefined,
       sources: {
         historicalTextMessages: historicalRows.length - duplicateHistoricalRows,
         currentMessages: currentMessageCount,

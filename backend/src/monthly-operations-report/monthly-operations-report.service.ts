@@ -802,6 +802,136 @@ export class MonthlyOperationsReportService {
     };
   }
 
+  async auditReplyKpi(user: AuthUser, requestedMonth?: string, requestedSample = 20) {
+    const report = await this.get(user, requestedMonth);
+    if (!report.period.replyKpiThrough) {
+      throw new BadRequestException("Reply KPI audit is unavailable until a matured 24-hour window exists");
+    }
+
+    const sampleSize = Math.min(20, Math.max(4, Math.floor(requestedSample || 20)));
+    const withRate = report.stores.map((store) => ({
+      store,
+      rate: store.chat.replyRateWithin24h,
+    }));
+    const groups = {
+      high: withRate.filter(({ rate }) => rate !== null && rate >= 0.8),
+      mid: withRate.filter(({ rate }) => rate !== null && rate >= 0.4 && rate < 0.8),
+      low: withRate.filter(({ rate }) => rate !== null && rate > 0 && rate < 0.4),
+      zero: withRate.filter(({ rate }) => rate === 0 || rate === null),
+    };
+    for (const values of Object.values(groups)) {
+      values.sort((left, right) =>
+        (right.store.chat.responseCycles - left.store.chat.responseCycles)
+        || left.store.storeName.localeCompare(right.store.storeName),
+      );
+    }
+
+    const selected: typeof report.stores = [];
+    const seen = new Set<string>();
+    const take = (values: typeof groups.high, count: number) => {
+      for (const { store } of values) {
+        if (selected.length >= sampleSize || count <= 0 || seen.has(store.storeId)) continue;
+        selected.push(store);
+        seen.add(store.storeId);
+        count -= 1;
+      }
+    };
+    const perGroup = Math.floor(sampleSize / 4);
+    take(groups.high, perGroup);
+    take(groups.mid, perGroup);
+    take(groups.low, perGroup);
+    take(groups.zero, perGroup);
+
+    const remaining = withRate
+      .filter(({ store }) => !seen.has(store.storeId))
+      .sort((left, right) =>
+        (right.store.chat.responseCycles - left.store.chat.responseCycles)
+        || left.store.storeName.localeCompare(right.store.storeName),
+      );
+    take(remaining, sampleSize - selected.length);
+
+    const auditedStores = [];
+    for (const store of selected) {
+      const analytics = await this.historicalTimeline.replyAnalytics(user, {
+        dateFrom: report.period.start,
+        dateTo: report.period.replyKpiThrough,
+        storeId: store.storeId,
+        mode: "RESPONSE_CYCLES",
+        auditLimit: 8,
+      });
+      const cycles = analytics.audit?.cycles ?? [];
+      const cycleChecks = cycles.map((cycle) => {
+        const structurallyValid = cycle.outcome === "PENDING"
+          ? cycle.replyAt === null && cycle.responseMinutes === null
+          : cycle.replyAt !== null
+            && cycle.responseMinutes !== null
+            && (cycle.outcome === "WITHIN_24H" ? cycle.responseMinutes <= 1440 : cycle.responseMinutes > 1440);
+        return { ...cycle, structurallyValid };
+      });
+      const mergePathCounts = cycleChecks.reduce<Record<string, number>>((counts, cycle) => {
+        counts[cycle.mergePath] = (counts[cycle.mergePath] ?? 0) + 1;
+        return counts;
+      }, {});
+      auditedStores.push({
+        storeId: store.storeId,
+        storeName: store.storeName,
+        lineBasicId: store.lineBasicId,
+        report: {
+          responseCycles: store.chat.responseCycles,
+          repliedWithin24h: store.chat.repliedWithin24h,
+          replyRateWithin24h: store.chat.replyRateWithin24h,
+        },
+        recomputed: {
+          responseCycles: analytics.overview.total,
+          repliedWithin24h: analytics.overview.within24h,
+          replyRateWithin24h: analytics.overview.responseRate24h === null
+            ? null
+            : analytics.overview.responseRate24h / 100,
+        },
+        checks: {
+          aggregateMatches:
+            store.chat.responseCycles === analytics.overview.total
+            && store.chat.repliedWithin24h === analytics.overview.within24h,
+          sampledCyclesValid: cycleChecks.every((cycle) => cycle.structurallyValid),
+          sampledCycleCount: cycleChecks.length,
+        },
+        mergePathCounts,
+        sourceDiagnostics: analytics.sources,
+        cycles: cycleChecks,
+      });
+    }
+
+    const aggregateMatches = auditedStores.filter((store) => store.checks.aggregateMatches).length;
+    const sampledCyclesValid = auditedStores.filter((store) => store.checks.sampledCyclesValid).length;
+    const status = aggregateMatches === auditedStores.length && sampledCyclesValid === auditedStores.length
+      ? "PASS"
+      : "REVIEW";
+
+    return {
+      month: report.period.month,
+      kpiThrough: report.period.replyKpiThrough,
+      sampleRequested: sampleSize,
+      storesAudited: auditedStores.length,
+      selection: {
+        high: auditedStores.filter((item) => (item.report.replyRateWithin24h ?? -1) >= 0.8).length,
+        mid: auditedStores.filter((item) => (item.report.replyRateWithin24h ?? -1) >= 0.4 && (item.report.replyRateWithin24h ?? 0) < 0.8).length,
+        low: auditedStores.filter((item) => (item.report.replyRateWithin24h ?? 0) > 0 && (item.report.replyRateWithin24h ?? 0) < 0.4).length,
+        zero: auditedStores.filter((item) => item.report.replyRateWithin24h === 0 || item.report.replyRateWithin24h === null).length,
+      },
+      checks: {
+        status,
+        aggregateMatches,
+        sampledCyclesValid,
+        total: auditedStores.length,
+      },
+      privacy: {
+        rawCustomerTextReturned: false,
+        customerIdentifiersReturned: false,
+      },
+      stores: auditedStores,
+    };
+  }
+
   async exportXlsx(user: AuthUser, requestedMonth?: string): Promise<{
     buffer: Buffer;
     filename: string;

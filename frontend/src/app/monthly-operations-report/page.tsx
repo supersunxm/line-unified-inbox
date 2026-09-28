@@ -51,6 +51,60 @@ type ReportStore = {
   };
 };
 
+type ReplyKpiAuditCycle = {
+  storeId: string;
+  conversationKey: string;
+  mergePath: "CANONICAL" | "CROSSWALK" | "SOURCE_ANCHOR" | "DIRECT" | "VIRTUAL";
+  firstInboundAt: string;
+  firstInboundSource: "CURRENT" | "HISTORICAL";
+  replyAt: string | null;
+  replySource: "CURRENT" | "HISTORICAL" | null;
+  responderKnown: boolean | null;
+  responseMinutes: number | null;
+  outcome: "WITHIN_24H" | "OVER_24H" | "PENDING";
+  structurallyValid: boolean;
+};
+
+type ReplyKpiAudit = {
+  month: string;
+  kpiThrough: string;
+  sampleRequested: number;
+  storesAudited: number;
+  selection: { high: number; mid: number; low: number; zero: number };
+  checks: {
+    status: "PASS" | "REVIEW";
+    aggregateMatches: number;
+    sampledCyclesValid: number;
+    total: number;
+  };
+  privacy: {
+    rawCustomerTextReturned: boolean;
+    customerIdentifiersReturned: boolean;
+  };
+  stores: Array<{
+    storeId: string;
+    storeName: string;
+    lineBasicId: string | null;
+    report: {
+      responseCycles: number;
+      repliedWithin24h: number;
+      replyRateWithin24h: number | null;
+    };
+    recomputed: {
+      responseCycles: number;
+      repliedWithin24h: number;
+      replyRateWithin24h: number | null;
+    };
+    checks: {
+      aggregateMatches: boolean;
+      sampledCyclesValid: boolean;
+      sampledCycleCount: number;
+    };
+    mergePathCounts: Record<string, number>;
+    cycles: ReplyKpiAuditCycle[];
+  }>;
+};
+
 type MonthlyOperationsReport = {
   period: {
     month: string;
@@ -160,6 +214,9 @@ function ReportContent() {
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [downloading, setDownloading] = useState(false);
+  const [audit, setAudit] = useState<ReplyKpiAudit | null>(null);
+  const [auditing, setAuditing] = useState(false);
+  const [auditError, setAuditError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -229,6 +286,35 @@ function ReportContent() {
     }
   }, [month]);
 
+  const runAudit = useCallback(async () => {
+    setAuditing(true);
+    setAuditError(null);
+    try {
+      const response = await fetch(
+        `/api-backend/monthly-operations-report/audit?month=${encodeURIComponent(month)}&sample=20`,
+        { credentials: "include", cache: "no-store" },
+      );
+      if (response.status === 401) {
+        window.location.replace("/login");
+        return;
+      }
+      if (!response.ok) {
+        let message = `Audit ไม่สำเร็จ (${response.status})`;
+        try {
+          const body = await response.json() as { message?: string | string[] };
+          if (body.message) message = Array.isArray(body.message) ? body.message.join(", ") : body.message;
+        } catch {}
+        throw new Error(message);
+      }
+      setAudit(await response.json() as ReplyKpiAudit);
+    } catch (reason) {
+      setAudit(null);
+      setAuditError(reason instanceof Error ? reason.message : "ไม่สามารถรัน KPI audit ได้");
+    } finally {
+      setAuditing(false);
+    }
+  }, [month]);
+
   const rows = useMemo(() => {
     if (!report) return [];
     const query = search.trim().toLocaleLowerCase("th-TH");
@@ -275,6 +361,14 @@ function ReportContent() {
               className="h-10 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] px-4 text-sm font-semibold text-[var(--app-text-primary)] disabled:opacity-60"
             >
               {loading ? "กำลังโหลด…" : "รีเฟรช"}
+            </button>
+            <button
+              type="button"
+              onClick={() => void runAudit()}
+              disabled={auditing || loading || !report}
+              className="h-10 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] px-4 text-sm font-semibold text-[var(--app-text-primary)] disabled:opacity-60"
+            >
+              {auditing ? "กำลัง Audit…" : "Run KPI Audit"}
             </button>
             <button
               type="button"
@@ -397,6 +491,77 @@ function ReportContent() {
                 </table>
                 {rows.length === 0 ? <div className="py-8 text-center text-sm text-[var(--app-text-secondary)]">ไม่พบร้านที่ตรงกับคำค้นหา</div> : null}
               </div>
+            </section>
+
+
+            <section className="mt-5 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4 shadow-[var(--app-shadow-sm)]">
+              <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <h2 className="text-base font-semibold">24h KPI Audit</h2>
+                  <p className="mt-1 text-xs text-[var(--app-text-secondary)]">
+                    Read-only stratified sample 20 stores · no raw customer text or customer identifiers returned
+                  </p>
+                </div>
+                {audit ? (
+                  <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
+                    audit.checks.status === "PASS" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"
+                  }`}>
+                    {audit.checks.status}
+                  </span>
+                ) : null}
+              </div>
+
+              {auditError ? <div className="mt-3 rounded-xl bg-rose-50 p-3 text-sm text-rose-700">{auditError}</div> : null}
+              {!audit && !auditing ? (
+                <div className="mt-3 text-sm text-[var(--app-text-secondary)]">กด Run KPI Audit เพื่อสุ่มตรวจ 20 ร้าน</div>
+              ) : null}
+              {auditing ? <div className="mt-3 text-sm text-[var(--app-text-secondary)]">กำลังตรวจ response-cycle evidence…</div> : null}
+
+              {audit ? (
+                <>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    <MetricCard label="Stores Audited" value={formatNumber(audit.storesAudited)} detail={`high ${audit.selection.high} · mid ${audit.selection.mid} · low ${audit.selection.low} · zero ${audit.selection.zero}`} />
+                    <MetricCard label="Aggregate Match" value={`${audit.checks.aggregateMatches}/${audit.checks.total}`} />
+                    <MetricCard label="Cycle Structure Valid" value={`${audit.checks.sampledCyclesValid}/${audit.checks.total}`} />
+                    <MetricCard label="KPI Through" value={audit.kpiThrough} />
+                  </div>
+                  <div className="mt-4 overflow-x-auto">
+                    <table className="min-w-[1100px] w-full text-left text-xs">
+                      <thead className="border-b border-[var(--app-border)] text-[var(--app-text-tertiary)]">
+                        <tr>
+                          <th className="px-3 py-2">Store</th>
+                          <th className="px-3 py-2">Rate</th>
+                          <th className="px-3 py-2">Report</th>
+                          <th className="px-3 py-2">Recomputed</th>
+                          <th className="px-3 py-2">Aggregate</th>
+                          <th className="px-3 py-2">Sample Cycles</th>
+                          <th className="px-3 py-2">Merge Paths</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {audit.stores.map((item) => (
+                          <tr key={item.storeId} className="border-b border-[var(--app-border-subtle)] align-top">
+                            <td className="px-3 py-2">
+                              <div className="font-medium">{item.storeName}</div>
+                              <div className="text-[11px] text-[var(--app-text-tertiary)]">{item.lineBasicId ?? "—"}</div>
+                            </td>
+                            <td className="px-3 py-2">{formatRate(item.report.replyRateWithin24h)}</td>
+                            <td className="px-3 py-2">{item.report.repliedWithin24h}/{item.report.responseCycles}</td>
+                            <td className="px-3 py-2">{item.recomputed.repliedWithin24h}/{item.recomputed.responseCycles}</td>
+                            <td className="px-3 py-2">{item.checks.aggregateMatches ? "PASS" : "REVIEW"}</td>
+                            <td className="px-3 py-2">{item.checks.sampledCyclesValid ? "PASS" : "REVIEW"} ({item.checks.sampledCycleCount})</td>
+                            <td className="px-3 py-2">
+                              {Object.entries(item.mergePathCounts).map(([path, count]) => (
+                                <div key={path}>{path}: {count}</div>
+                              ))}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              ) : null}
             </section>
 
             <section className="mt-4 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface-subtle)] p-4 text-xs text-[var(--app-text-secondary)]">

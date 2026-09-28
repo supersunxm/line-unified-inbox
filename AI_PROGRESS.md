@@ -5923,3 +5923,14 @@ Current state: local follow-up fix and checks are complete; the follow-up commit
 - Added diagnostics for crosswalk-linked, source-anchored, direct-linked, and virtual Historical rows.
 - Added regression tests for differing Historical/canonical chat IDs joined by LINK_SAFE and for exact source-event anchor merging.
 - No crosswalks, Historical rows, canonical messages, or Mirror state are modified.
+
+
+## 2026-09-28 — Monthly 24h KPI audit harness
+
+- Added a manual, read-only KPI audit flow for Monthly Operations Report.
+- The audit uses a stratified sample of up to 20 stores across high/mid/low/zero reply-rate buckets.
+- HistoricalTimelineService can now return a bounded cycle-evidence sample (max 100) without raw customer text or customer identifiers.
+- Each sampled cycle records timestamps, outcome, source, responder-known state, and merge path (canonical/crosswalk/source-anchor/direct/virtual).
+- Monthly audit recomputes each sampled store through the same Historical response-cycle engine and checks aggregate parity with the report plus structural validity of sampled cycles.
+- Added a Run KPI Audit button/panel to the Monthly Operations Report UI. The endpoint is on-demand only and does not add work to normal report loads.
+- No Live Mirror/Historical Mirror collection, persistence, crosswalk writes, or worker behavior changed.
