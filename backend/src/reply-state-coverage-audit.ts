@@ -102,6 +102,8 @@ async function main() {
       AMBIGUOUS: 0,
       NO_MESSAGE_EVIDENCE: 0,
       HISTORICAL_LINKED_CONVERSATIONS: 0,
+      HISTORICAL_CROSSWALK_LINKED_CONVERSATIONS: 0,
+      HISTORICAL_DIRECT_LINKED_CONVERSATIONS: 0,
       CANONICAL_ONLY_CONVERSATIONS: 0,
       UNKNOWN_OUTBOUND_ACTOR_EVENT_COUNT: 0,
       DATABASE_WRITES: 0,
@@ -115,6 +117,8 @@ async function main() {
       historicalLinked: number;
     }>();
 
+    const ambiguousDirectIdentities = new Set<string>();
+    const linkageConflictIdentities = new Set<string>();
     let cursor: string | undefined;
 
     while (totals.TOTAL_CANONICAL_CONVERSATIONS < limit) {
@@ -126,6 +130,8 @@ async function main() {
         select: {
           id: true,
           storeId: true,
+          lineOfficialAccountId: true,
+          lineChatUserId: true,
           bmReplyStatus: true,
           messages: {
             orderBy: [{ sentAt: "asc" }, { id: "asc" }],
@@ -166,12 +172,72 @@ async function main() {
         }
       }
 
+      const directIdentityInputs = conversations.flatMap((conversation) =>
+        conversation.storeId && conversation.lineChatUserId
+          ? [{
+              storeId: conversation.storeId,
+              lineOfficialAccountId: conversation.lineOfficialAccountId,
+              historicalLineChatUserId: conversation.lineChatUserId,
+            }]
+          : [],
+      );
+      const uniqueDirectIdentityInputs = [...new Map(
+        directIdentityInputs.map((identity) => [crosswalkKey(identity), identity]),
+      ).values()];
+      const directConversationRows = uniqueDirectIdentityInputs.length === 0
+        ? []
+        : await prisma.conversation.findMany({
+            where: {
+              OR: uniqueDirectIdentityInputs.map((identity) => ({
+                storeId: identity.storeId,
+                lineOfficialAccountId: identity.lineOfficialAccountId,
+                lineChatUserId: identity.historicalLineChatUserId,
+              })),
+            },
+            select: {
+              id: true,
+              storeId: true,
+              lineOfficialAccountId: true,
+              lineChatUserId: true,
+            },
+          });
+      const directConversationIdsByIdentity = new Map<string, string[]>();
+      for (const row of directConversationRows) {
+        if (!row.storeId || !row.lineChatUserId) continue;
+        const identityKey = crosswalkKey({
+          storeId: row.storeId,
+          lineOfficialAccountId: row.lineOfficialAccountId,
+          historicalLineChatUserId: row.lineChatUserId,
+        });
+        directConversationIdsByIdentity.set(identityKey, [
+          ...(directConversationIdsByIdentity.get(identityKey) ?? []),
+          row.id,
+        ]);
+      }
+      const directToConversation = new Map<string, string>();
+      for (const identity of uniqueDirectIdentityInputs) {
+        const identityKey = crosswalkKey(identity);
+        const ids = [...new Set(directConversationIdsByIdentity.get(identityKey) ?? [])];
+        if (ids.length === 1) directToConversation.set(identityKey, ids[0]);
+        else if (ids.length > 1) ambiguousDirectIdentities.add(identityKey);
+      }
+
       const historicalByConversation = new Map<string, HistoricalReplyMessage[]>();
       const links = conversations.flatMap((conversation) => conversation.historicalConversationCrosswalks);
-      if (links.length > 0) {
+      const historicalIdentityInputs = [...new Map(
+        [
+          ...links.map((link) => ({
+            storeId: link.storeId,
+            lineOfficialAccountId: link.lineOfficialAccountId,
+            historicalLineChatUserId: link.historicalLineChatUserId,
+          })),
+          ...uniqueDirectIdentityInputs.filter((identity) => directToConversation.has(crosswalkKey(identity))),
+        ].map((identity) => [crosswalkKey(identity), identity]),
+      ).values()];
+      if (historicalIdentityInputs.length > 0) {
         const historicalRows = await prisma.historicalTimelineMessage.findMany({
           where: {
-            OR: links.map((link) => ({
+            OR: historicalIdentityInputs.map((link) => ({
               storeId: link.storeId,
               lineOfficialAccountId: link.lineOfficialAccountId,
               lineChatUserId: link.historicalLineChatUserId,
@@ -193,11 +259,18 @@ async function main() {
         });
 
         for (const row of historicalRows) {
-          const conversationId = crosswalkToConversation.get(crosswalkKey({
+          const identityKey = crosswalkKey({
             storeId: row.storeId,
             lineOfficialAccountId: row.lineOfficialAccountId,
             historicalLineChatUserId: row.lineChatUserId,
-          }));
+          });
+          const crosswalkConversationId = crosswalkToConversation.get(identityKey);
+          const directConversationId = directToConversation.get(identityKey);
+          if (crosswalkConversationId && directConversationId && crosswalkConversationId !== directConversationId) {
+            linkageConflictIdentities.add(identityKey);
+            continue;
+          }
+          const conversationId = crosswalkConversationId ?? directConversationId;
           if (!conversationId) continue;
           const item: HistoricalReplyMessage = {
             id: row.id,
@@ -218,9 +291,24 @@ async function main() {
       for (const conversation of conversations) {
         totals.TOTAL_CANONICAL_CONVERSATIONS += 1;
         const historical = historicalByConversation.get(conversation.id) ?? [];
-        const linked = conversation.historicalConversationCrosswalks.length > 0;
+        const crosswalkLinked = conversation.historicalConversationCrosswalks.length > 0 && historical.length > 0;
+        const directIdentityKey = conversation.storeId && conversation.lineChatUserId
+          ? crosswalkKey({
+              storeId: conversation.storeId,
+              lineOfficialAccountId: conversation.lineOfficialAccountId,
+              historicalLineChatUserId: conversation.lineChatUserId,
+            })
+          : null;
+        const directLinked = Boolean(
+          directIdentityKey &&
+          directToConversation.get(directIdentityKey) === conversation.id &&
+          historical.length > 0,
+        );
+        const linked = historical.length > 0;
         if (linked) totals.HISTORICAL_LINKED_CONVERSATIONS += 1;
         else totals.CANONICAL_ONLY_CONVERSATIONS += 1;
+        if (crosswalkLinked) totals.HISTORICAL_CROSSWALK_LINKED_CONVERSATIONS += 1;
+        if (directLinked) totals.HISTORICAL_DIRECT_LINKED_CONVERSATIONS += 1;
 
         const events = [
           ...conversation.messages.map((message) => normalizeCanonicalReplyMessage({
@@ -285,6 +373,8 @@ async function main() {
     process.stdout.write(JSON.stringify({
       ...totals,
       ...matrix,
+      DIRECT_LINK_AMBIGUOUS_IDENTITIES: ambiguousDirectIdentities.size,
+      LINKAGE_CONFLICT_IDENTITIES: linkageConflictIdentities.size,
       AMBIGUITY_REASONS: ambiguityReasons,
       BY_STORE: [...byStore.entries()]
         .map(([storeId, counts]) => ({ storeId, ...counts }))
