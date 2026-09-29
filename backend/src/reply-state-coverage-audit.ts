@@ -15,6 +15,57 @@ type SchemaPreflightRow = {
 
 type StoredStatus = "REPLIED" | "NOT_REPLIED" | "NOTIFIED_BM";
 
+type AuditDirection = "INBOUND" | "OUTBOUND" | "SYSTEM";
+type AuditDeliveryStatus = "PENDING" | "DELIVERED" | "FAILED";
+
+type AuditCanonicalMessage = {
+  id: string;
+  externalMessageId: string | null;
+  direction: AuditDirection;
+  deliveryStatus: AuditDeliveryStatus;
+  originalText: string;
+  sentAt: Date;
+  senderUserId: string | null;
+  senderDisplayName: string | null;
+  rawPayload: unknown;
+};
+
+type AuditCrosswalk = {
+  storeId: string;
+  lineOfficialAccountId: string;
+  historicalLineChatUserId: string;
+};
+
+type AuditConversationRow = {
+  id: string;
+  storeId: string | null;
+  lineOfficialAccountId: string;
+  lineChatUserId: string | null;
+  bmReplyStatus: StoredStatus;
+  messages: AuditCanonicalMessage[];
+  historicalConversationCrosswalks: AuditCrosswalk[];
+};
+
+type AuditDirectConversationRow = {
+  id: string;
+  storeId: string | null;
+  lineOfficialAccountId: string;
+  lineChatUserId: string | null;
+};
+
+type AuditHistoricalTimelineRow = {
+  id: string;
+  storeId: string;
+  lineOfficialAccountId: string;
+  lineChatUserId: string;
+  sourceEventId: string;
+  sourceEventType: string;
+  direction: AuditDirection;
+  text: string;
+  sentAt: Date;
+  senderBizId: string | null;
+};
+
 type MatrixKey =
   | "STORED_REPLIED__RESOLVED_REPLIED"
   | "STORED_REPLIED__RESOLVED_NOT_REPLIED"
@@ -161,7 +212,7 @@ async function main() {
             },
           },
         },
-      });
+      }) as AuditConversationRow[];
 
       if (conversations.length === 0) break;
 
@@ -200,7 +251,7 @@ async function main() {
               lineOfficialAccountId: true,
               lineChatUserId: true,
             },
-          });
+          }) as AuditDirectConversationRow[];
       const directConversationIdsByIdentity = new Map<string, string[]>();
       for (const row of directConversationRows) {
         if (!row.storeId || !row.lineChatUserId) continue;
@@ -258,7 +309,7 @@ async function main() {
             sentAt: true,
             senderBizId: true,
           },
-        });
+        }) as AuditHistoricalTimelineRow[];
 
         for (const row of historicalRows) {
           const identityKey = crosswalkKey({
