@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { BmReplyStatus } from "@prisma/client";
-import { resolveEffectiveReplyState } from "./reply-state-effective";
+import { effectiveReplyStateWhere, resolveEffectiveReplyState } from "./reply-state-effective";
 
 void test("projection REPLIED overrides legacy NOT_REPLIED", () => {
   assert.deepEqual(
@@ -50,5 +50,40 @@ void test("legacy NOTIFIED_BM collapses to NOT_REPLIED for two-state read path",
       projectionState: null,
     }),
     { state: "NOT_REPLIED", source: "LEGACY_FALLBACK" },
+  );
+});
+
+
+void test("effective REPLIED query uses projection first and legacy only when projection is absent", () => {
+  assert.deepEqual(
+    effectiveReplyStateWhere("REPLIED"),
+    {
+      OR: [
+        { replyStateProjection: { is: { state: "REPLIED" } } },
+        {
+          AND: [
+            { replyStateProjection: { is: null } },
+            { bmReplyStatus: "REPLIED" },
+          ],
+        },
+      ],
+    },
+  );
+});
+
+void test("effective NOT_REPLIED query folds legacy NOTIFIED_BM into fallback only", () => {
+  assert.deepEqual(
+    effectiveReplyStateWhere("NOT_REPLIED"),
+    {
+      OR: [
+        { replyStateProjection: { is: { state: "NOT_REPLIED" } } },
+        {
+          AND: [
+            { replyStateProjection: { is: null } },
+            { bmReplyStatus: { in: ["NOT_REPLIED", "NOTIFIED_BM"] } },
+          ],
+        },
+      ],
+    },
   );
 });
