@@ -1,9 +1,16 @@
 import { BadRequestException, Injectable } from "@nestjs/common";
-import { MessageDirection, Prisma } from "@prisma/client";
+import { MessageDeliveryStatus, MessageDirection, Prisma } from "@prisma/client";
 import type { AuthUser } from "../auth/auth.guard";
 import { StoreAccessService } from "../auth/store-access.service";
 import { PrismaService } from "../prisma.service";
 import { OWNER_TRACKING_STARTED_AT_ISO, ownerTrackingInboundFilter } from "../owner-tracking";
+import {
+  buildDeterministicResponseCycles,
+  normalizeCanonicalReplyMessage,
+  type CanonicalReplyMessage,
+  type ReplyEventDirection,
+  type ReplyStateAmbiguityReason,
+} from "../reply-state-resolver";
 
 export const REPORTING_TIMEZONE = "Asia/Bangkok";
 export const RESPONSE_SAMPLE_THRESHOLD = 10;
@@ -12,11 +19,14 @@ const BANGKOK_OFFSET_MS = 7 * 60 * 60 * 1000;
 export type AnalyticsMessage = {
   id: string;
   conversationId: string;
+  externalMessageId?: string | null;
   direction: string;
   messageType: string;
+  deliveryStatus?: string | null;
   sentAt: Date;
   senderUserId: string | null;
   senderDisplayName?: string | null;
+  rawPayload?: unknown;
   bmReplyStatus?: string | null;
 };
 
@@ -96,33 +106,83 @@ function intervalContains(date: Date, start: Date, end: Date): boolean {
   return date >= start && date < end;
 }
 
-export function calculateResponseCycles(messages: AnalyticsMessage[]): ResponseCycle[] {
-  const sorted = [...messages].sort((a, b) => {
-    const timestamp = a.sentAt.getTime() - b.sentAt.getTime();
-    return timestamp || a.conversationId.localeCompare(b.conversationId) || a.id.localeCompare(b.id);
-  });
-  const open = new Map<string, { startedAt: Date }>();
+export type ResponseCycleDiagnostics = {
+  cycles: ResponseCycle[];
+  ambiguousConversations: number;
+  ambiguityReasons: Record<Exclude<ReplyStateAmbiguityReason, "NO_MESSAGE_EVIDENCE">, number>;
+};
+
+function replyDirection(value: string): ReplyEventDirection {
+  if (value === "INBOUND" || value === "OUTBOUND" || value === "SYSTEM") return value;
+  return "SYSTEM";
+}
+
+function replyDeliveryStatus(value: string | null | undefined): CanonicalReplyMessage["deliveryStatus"] {
+  if (value === "DELIVERED" || value === "FAILED" || value === "PENDING") return value;
+  return null;
+}
+
+function toCanonicalReplyMessage(message: AnalyticsMessage): CanonicalReplyMessage {
+  return {
+    id: message.id,
+    externalMessageId: message.externalMessageId ?? null,
+    direction: replyDirection(message.direction),
+    deliveryStatus: replyDeliveryStatus(message.deliveryStatus),
+    originalText: null,
+    sentAt: message.sentAt,
+    senderUserId: message.senderUserId,
+    senderDisplayName: message.senderDisplayName ?? null,
+    rawPayload: message.rawPayload,
+  };
+}
+
+export function isHumanStaffReply(message: AnalyticsMessage): boolean {
+  return normalizeCanonicalReplyMessage(toCanonicalReplyMessage(message)).actor === "HUMAN_STAFF";
+}
+
+export function calculateResponseCyclesWithDiagnostics(messages: AnalyticsMessage[]): ResponseCycleDiagnostics {
+  const byConversation = new Map<string, AnalyticsMessage[]>();
+  for (const message of messages) {
+    byConversation.set(message.conversationId, [
+      ...(byConversation.get(message.conversationId) ?? []),
+      message,
+    ]);
+  }
+
   const cycles: ResponseCycle[] = [];
-  for (const message of sorted) {
-    if (message.direction === MessageDirection.INBOUND) {
-      if (!open.has(message.conversationId)) open.set(message.conversationId, { startedAt: message.sentAt });
+  const ambiguityReasons: ResponseCycleDiagnostics["ambiguityReasons"] = {
+    ORDERING_CONFLICT: 0,
+    UNKNOWN_OUTBOUND_ACTOR: 0,
+    UNKNOWN_EVENT_CLASSIFICATION: 0,
+  };
+  let ambiguousConversations = 0;
+
+  for (const [conversationId, conversationMessages] of byConversation) {
+    const events = conversationMessages.map((message) =>
+      normalizeCanonicalReplyMessage(toCanonicalReplyMessage(message)),
+    );
+    const result = buildDeterministicResponseCycles(events);
+    if (result.status === "AMBIGUOUS") {
+      ambiguousConversations += 1;
+      ambiguityReasons[result.reason] += 1;
       continue;
     }
-    if (message.direction !== MessageDirection.OUTBOUND || !message.senderUserId) continue;
-    const current = open.get(message.conversationId);
-    if (!current) continue;
-    cycles.push({
-      conversationId: message.conversationId,
-      startedAt: current.startedAt,
-      answeredAt: message.sentAt,
-      durationSeconds: Math.max(0, (message.sentAt.getTime() - current.startedAt.getTime()) / 1000),
-    });
-    open.delete(message.conversationId);
+    for (const cycle of result.cycles) {
+      cycles.push({ conversationId, ...cycle });
+    }
   }
-  for (const [conversationId, current] of open) {
-    cycles.push({ conversationId, startedAt: current.startedAt, answeredAt: null, durationSeconds: null });
-  }
-  return cycles.sort((a, b) => a.startedAt.getTime() - b.startedAt.getTime() || a.conversationId.localeCompare(b.conversationId));
+
+  cycles.sort(
+    (left, right) =>
+      left.startedAt.getTime() - right.startedAt.getTime()
+      || left.conversationId.localeCompare(right.conversationId),
+  );
+
+  return { cycles, ambiguousConversations, ambiguityReasons };
+}
+
+export function calculateResponseCycles(messages: AnalyticsMessage[]): ResponseCycle[] {
+  return calculateResponseCyclesWithDiagnostics(messages).cycles;
 }
 
 export function responseMetrics(cycles: ResponseCycle[], start: Date, end: Date) {
@@ -152,7 +212,7 @@ export function responseMetrics(cycles: ResponseCycle[], start: Date, end: Date)
 
 export function monthlyVolume(messages: AnalyticsMessage[], start: Date, end: Date) {
   const inbound = messages.filter((message) => message.direction === MessageDirection.INBOUND && intervalContains(message.sentAt, start, end));
-  const replies = messages.filter((message) => message.direction === MessageDirection.OUTBOUND && Boolean(message.senderUserId) && intervalContains(message.sentAt, start, end));
+  const replies = messages.filter((message) => isHumanStaffReply(message) && intervalContains(message.sentAt, start, end));
   return {
     incomingMessages: inbound.length,
     incomingConversations: new Set(inbound.map((message) => message.conversationId)).size,
@@ -188,7 +248,9 @@ export function monthlyOverview(messages: AnalyticsMessage[], start: Date, end: 
 const AUTO_REPLY_BOT_DISPLAY_NAME = "Auto Reply Bot";
 
 function isBotReply(message: AnalyticsMessage) {
-  return message.direction === MessageDirection.OUTBOUND && message.senderDisplayName?.trim() === AUTO_REPLY_BOT_DISPLAY_NAME;
+  if (message.direction !== MessageDirection.OUTBOUND) return false;
+  if (message.senderDisplayName?.trim() === AUTO_REPLY_BOT_DISPLAY_NAME) return true;
+  return normalizeCanonicalReplyMessage(toCanonicalReplyMessage(message)).actor === "AUTOMATED";
 }
 
 export function teamAnalytics(messages: AnalyticsMessage[], start: Date, end: Date): TeamAnalytics {
@@ -359,14 +421,15 @@ export class MonthlySummaryService {
     const messages = await this.prisma.message.findMany({
       where: { conversation: conversationScope, sentAt: { lte: asOf } },
       orderBy: [{ sentAt: "asc" }, { id: "asc" }],
-      select: { id: true, conversationId: true, direction: true, messageType: true, sentAt: true, senderUserId: true, senderDisplayName: true, sender: { select: { displayName: true } }, conversation: { select: { bmReplyStatus: true } } },
+      select: { id: true, conversationId: true, externalMessageId: true, direction: true, messageType: true, deliveryStatus: true, rawPayload: true, sentAt: true, senderUserId: true, senderDisplayName: true, sender: { select: { displayName: true } }, conversation: { select: { bmReplyStatus: true } } },
     });
     const analyticsMessages = messages.map((message) => ({
       ...message,
       senderDisplayName: message.sender?.displayName ?? message.senderDisplayName,
       bmReplyStatus: message.conversation?.bmReplyStatus ?? null,
     })) as AnalyticsMessage[];
-    const cycles = calculateResponseCycles(analyticsMessages);
+    const cycleDiagnostics = calculateResponseCyclesWithDiagnostics(analyticsMessages);
+    const cycles = cycleDiagnostics.cycles;
     const periodVolume = monthlyVolume(analyticsMessages, bounds.start, periodEnd);
     const periodResponse = responseMetrics(cycles, bounds.start, periodEnd);
     const overview = monthlyOverview(analyticsMessages, bounds.start, periodEnd);
@@ -398,7 +461,11 @@ export class MonthlySummaryService {
     const ownership = await this.ownershipSnapshot(conversationScope);
     const earliestInbound = analyticsMessages.filter((message) => message.direction === MessageDirection.INBOUND).map((message) => message.sentAt).sort((a, b) => a.getTime() - b.getTime())[0];
     const comparisonAvailable = Boolean(earliestInbound && earliestInbound <= previous.start && previousVolume.incomingMessages > 0);
-    const ambiguousOutboundExcluded = analyticsMessages.filter((message) => message.direction === MessageDirection.OUTBOUND && !message.senderUserId && intervalContains(message.sentAt, bounds.start, periodEnd)).length;
+    const ambiguousOutboundExcluded = analyticsMessages.filter((message) =>
+      message.direction === MessageDirection.OUTBOUND
+      && normalizeCanonicalReplyMessage(toCanonicalReplyMessage(message)).actor === "UNKNOWN"
+      && intervalContains(message.sentAt, bounds.start, periodEnd),
+    ).length;
     const periodOutbounds = analyticsMessages.filter((message) => message.direction === MessageDirection.OUTBOUND && intervalContains(message.sentAt, bounds.start, periodEnd));
     const attributedOutbounds = periodOutbounds.filter((message) => Boolean(message.senderUserId) || isBotReply(message)).length;
     return {
@@ -440,6 +507,8 @@ export class MonthlySummaryService {
       dataQuality: {
         qaExcluded: true,
         ambiguousOutboundExcluded,
+        ambiguousResponseCycleConversations: cycleDiagnostics.ambiguousConversations,
+        responseCycleAmbiguityReasons: cycleDiagnostics.ambiguityReasons,
         responseMetricsAvailable: periodResponse.available,
         replyAttributionCoverageRate: periodOutbounds.length === 0 ? 1 : attributedOutbounds / periodOutbounds.length,
         unattributedOutboundMessages: periodOutbounds.length - attributedOutbounds,
