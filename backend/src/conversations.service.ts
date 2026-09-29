@@ -25,6 +25,7 @@ import { PDF_MIME_TYPE, readPdfMaxBytes, validatePdfBuffer, PdfValidationError }
 import { LineChatMessageSendQueueService } from "./line-chat/line-chat-message-send-queue.service";
 import { isLineChatMirrorOnlyStore } from "./line-chat/line-chat-pilot.constants";
 import { HISTORICAL_TIMELINE_START, mapHistoricalTimelineMessage } from "./historical-timeline.service";
+import { resolveEffectiveReplyState } from "./reply-state-effective";
 
 const conversationBaseInclude = {
   customer: true,
@@ -36,6 +37,17 @@ const conversationBaseInclude = {
   salesProducts: { include: { productModel: { include: { productSeries: true } }, productVariant: true } },
   products: { include: { productModel: { include: { productSeries: true } }, productVariant: true } },
   topics: { include: { topic: true } },
+  replyStateProjection: {
+    select: {
+      state: true,
+      decidingEventKind: true,
+      decidingEventAt: true,
+      evidenceBoundary: true,
+      resolverVersion: true,
+      computedAt: true,
+      updatedAt: true,
+    },
+  },
   _count: { select: { messages: { where: ownerTrackingInboundFilter() } } },
 } satisfies Prisma.ConversationInclude;
 export const conversationListInclude = {
@@ -215,7 +227,7 @@ export class ConversationsService {
 
   private safe(item: IncludedConversation, latestManagerUrls: ReadonlyMap<string, string | null>) {
     const value = item.customer.lineUserId;
-    const { store: rawStore, lineOfficialAccount: rawLineOfficialAccount, purchaseRecordedBy, salesRecordedBy, owner: rawOwner, _count: ownerTrackingCount, purchaseRecordedById: _purchaseRecordedById, purchaseRecordedAt: _purchaseRecordedAt, salesRecordedById: _salesRecordedById, salesRecordedAt: _salesRecordedAt, ...conversation } = item;
+    const { store: rawStore, lineOfficialAccount: rawLineOfficialAccount, purchaseRecordedBy, salesRecordedBy, owner: rawOwner, replyStateProjection: rawReplyStateProjection, _count: ownerTrackingCount, purchaseRecordedById: _purchaseRecordedById, purchaseRecordedAt: _purchaseRecordedAt, salesRecordedById: _salesRecordedById, salesRecordedAt: _salesRecordedAt, ...conversation } = item;
     void _purchaseRecordedById;
     void _purchaseRecordedAt;
     void _salesRecordedById;
@@ -224,6 +236,10 @@ export class ConversationsService {
     const store = rawStore ? ((value) => { const { storeMaster: omittedStoreMaster, ...safeStore } = value; void omittedStoreMaster; return safeStore; })(rawStore) : { id: "", name: "Main OA", code: null, region: null, area: null, isActive: true, archivedAt: null, createdAt: item.createdAt, updatedAt: item.updatedAt, storeMasterId: null, provinceSource: null, regionSource: null };
     const resolvedLineOaManagerUrl = rawStore ? resolveLineOaManagerUrl(rawStore, latestManagerUrls) : null;
     const lineOfficialAccount = { id: rawLineOfficialAccount.id, name: rawLineOfficialAccount.name, basicId: rawLineOfficialAccount.basicId, connectionStatus: rawLineOfficialAccount.connectionStatus, isActive: rawLineOfficialAccount.isActive, lastWebhookReceivedAt: rawLineOfficialAccount.lastWebhookReceivedAt };
+    const effectiveReplyState = resolveEffectiveReplyState({
+      bmReplyStatus: item.bmReplyStatus,
+      projectionState: rawReplyStateProjection?.state ?? null,
+    });
     return {
       ...conversation,
       resolvedLineOaManagerUrl,
@@ -236,6 +252,19 @@ export class ConversationsService {
       customerSalesInformation: buildCustomerSalesInformation({ ...item, purchaseRecordedBy, salesRecordedBy }),
       purchaseInformation: buildPurchaseInformation({ ...item, purchaseRecordedBy, salesRecordedBy }),
       aiInsight: buildAiInsight(item),
+      effectiveReplyState: effectiveReplyState.state,
+      effectiveReplyStateSource: effectiveReplyState.source,
+      replyStateProjection: rawReplyStateProjection
+        ? {
+            state: rawReplyStateProjection.state,
+            decidingEventKind: rawReplyStateProjection.decidingEventKind,
+            decidingEventAt: rawReplyStateProjection.decidingEventAt,
+            evidenceBoundary: rawReplyStateProjection.evidenceBoundary,
+            resolverVersion: rawReplyStateProjection.resolverVersion,
+            computedAt: rawReplyStateProjection.computedAt,
+            updatedAt: rawReplyStateProjection.updatedAt,
+          }
+        : null,
       operationalState: buildOperationalState({ replyStatus: item.bmReplyStatus, priority: item.priority }),
     };
   }
