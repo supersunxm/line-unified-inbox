@@ -25,6 +25,7 @@ import { PDF_MIME_TYPE, readPdfMaxBytes, validatePdfBuffer, PdfValidationError }
 import { LineChatMessageSendQueueService } from "./line-chat/line-chat-message-send-queue.service";
 import { isLineChatMirrorOnlyStore } from "./line-chat/line-chat-pilot.constants";
 import { HISTORICAL_TIMELINE_START, mapHistoricalTimelineMessage } from "./historical-timeline.service";
+import { CHAT_MONTH_TIMEZONE, parseChatMonth, type ChatMonthRange } from "./chat-month";
 
 const conversationBaseInclude = {
   customer: true,
@@ -213,6 +214,95 @@ export class ConversationsService {
     return candidates.filter(isFocusStoreReference).map(({ id }) => id);
   }
 
+  private async historicalConversationIdsForMonth(range: ChatMonthRange): Promise<string[]> {
+    const rows = await this.prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+      WITH direct_identity AS (
+        SELECT c."storeId", c."lineOfficialAccountId", c."lineChatUserId",
+          MIN(c."id")::text AS "canonicalConversationId"
+        FROM public."Conversation" c
+        WHERE c."storeId" IS NOT NULL
+          AND c."lineChatUserId" IS NOT NULL
+        GROUP BY c."storeId", c."lineOfficialAccountId", c."lineChatUserId"
+        HAVING COUNT(*) = 1
+      )
+      SELECT DISTINCT COALESCE(x."canonicalConversationId", d."canonicalConversationId")::text AS id
+      FROM public."HistoricalTimelineMessage" h
+      LEFT JOIN public."HistoricalConversationCrosswalk" x
+        ON x."storeId" = h."storeId"
+        AND x."lineOfficialAccountId" = h."lineOfficialAccountId"
+        AND x."historicalLineChatUserId" = h."lineChatUserId"
+        AND x."classification" = 'LINK_SAFE'
+        AND x."evidenceType" = 'SOURCE_EVENT_ID'
+        AND x."anchorCount" > 0
+        AND x."canonicalConversationId" IS NOT NULL
+      LEFT JOIN direct_identity d
+        ON d."storeId" = h."storeId"
+        AND d."lineOfficialAccountId" = h."lineOfficialAccountId"
+        AND d."lineChatUserId" = h."lineChatUserId"
+      WHERE h."sentAt" >= ${range.start}
+        AND h."sentAt" < ${range.end}
+        AND COALESCE(x."canonicalConversationId", d."canonicalConversationId") IS NOT NULL
+    `);
+    return rows.map((row) => row.id);
+  }
+
+  private monthActivityFilter(
+    range: ChatMonthRange,
+    historicalConversationIds: string[],
+  ): Prisma.ConversationWhereInput {
+    return {
+      OR: [
+        { messages: { some: { sentAt: { gte: range.start, lt: range.end } } } },
+        ...(historicalConversationIds.length > 0
+          ? [{ id: { in: historicalConversationIds } }]
+          : []),
+      ],
+    };
+  }
+
+  async getChatMonthOptions(accessibleStoreIds: string[] | null | undefined) {
+    if (accessibleStoreIds === undefined) throw new ForbiddenException("Store scope is required");
+    if (accessibleStoreIds !== null && accessibleStoreIds.length === 0) {
+      return { months: [], latestMonth: null, timezone: CHAT_MONTH_TIMEZONE };
+    }
+
+    const storeFilter = accessibleStoreIds === null
+      ? Prisma.empty
+      : Prisma.sql`AND s."id" IN (${Prisma.join(accessibleStoreIds)})`;
+
+    const rows = await this.prisma.$queryRaw<Array<{ month: string }>>(Prisma.sql`
+      SELECT DISTINCT activity.month
+      FROM (
+        SELECT to_char(m."sentAt" AT TIME ZONE 'Asia/Bangkok', 'YYYY-MM') AS month
+        FROM public."Message" m
+        JOIN public."Conversation" c ON c."id" = m."conversationId"
+        JOIN public."Store" s ON s."id" = c."storeId"
+        JOIN public."LineOfficialAccount" oa ON oa."id" = c."lineOfficialAccountId"
+        WHERE s."isActive" = true
+          AND s."archivedAt" IS NULL
+          AND oa."accountType" = 'STORE'
+          ${storeFilter}
+        UNION
+        SELECT to_char(h."sentAt" AT TIME ZONE 'Asia/Bangkok', 'YYYY-MM') AS month
+        FROM public."HistoricalTimelineMessage" h
+        JOIN public."Store" s ON s."id" = h."storeId"
+        JOIN public."LineOfficialAccount" oa ON oa."id" = h."lineOfficialAccountId"
+        WHERE s."isActive" = true
+          AND s."archivedAt" IS NULL
+          AND oa."accountType" = 'STORE'
+          ${storeFilter}
+      ) activity
+      WHERE activity.month IS NOT NULL
+      ORDER BY activity.month DESC
+    `);
+    const months = rows.map((row) => row.month);
+    return {
+      months,
+      latestMonth: months[0] ?? null,
+      timezone: CHAT_MONTH_TIMEZONE,
+    };
+  }
+
   private safe(item: IncludedConversation, latestManagerUrls: ReadonlyMap<string, string | null>) {
     const value = item.customer.lineUserId;
     const { store: rawStore, lineOfficialAccount: rawLineOfficialAccount, purchaseRecordedBy, salesRecordedBy, owner: rawOwner, _count: ownerTrackingCount, purchaseRecordedById: _purchaseRecordedById, purchaseRecordedAt: _purchaseRecordedAt, salesRecordedById: _salesRecordedById, salesRecordedAt: _salesRecordedAt, ...conversation } = item;
@@ -284,6 +374,10 @@ export class ConversationsService {
 
   async list(query: ConversationQueryDto, accessibleStoreIds: string[] | null = null, accountType: "STORE" | "HEAD_OFFICE" = "STORE") {
     const search = query.search?.trim();
+    const monthRange = parseChatMonth(query.month);
+    const historicalMonthConversationIds = monthRange
+      ? await this.historicalConversationIdsForMonth(monthRange)
+      : [];
     const focusStoreIds = query.storeId === FOCUS_STORE_GROUP_ID
       ? await this.resolveFocusStoreIds(accessibleStoreIds)
       : null;
@@ -302,6 +396,9 @@ export class ConversationsService {
       followUpStatus: query.followUpStatus,
       bmReplyStatus: query.bmReplyStatus,
       priority: query.priority,
+      AND: monthRange
+        ? [this.monthActivityFilter(monthRange, historicalMonthConversationIds)]
+        : undefined,
       products: query.productModelId
         ? { some: { productModelId: query.productModelId } }
         : query.productSeriesId
