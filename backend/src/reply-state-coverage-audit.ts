@@ -452,7 +452,8 @@ async function main() {
         } else {
           totals.AMBIGUOUS += 1;
           store.ambiguous += 1;
-          const reason = resolution.reason;
+          if (!("reason" in resolution)) throw new Error("Unexpected deterministic reply-state resolution");
+          const reason: ReplyStateAmbiguityReason = resolution.reason;
           if (reason === "UNKNOWN_OUTBOUND_ACTOR") ambiguityReasons.UNKNOWN_OUTBOUND_ACTOR += 1;
           else if (reason === "ORDERING_CONFLICT") ambiguityReasons.ORDERING_CONFLICT += 1;
           else if (reason === "UNKNOWN_EVENT_CLASSIFICATION") ambiguityReasons.UNKNOWN_EVENT_CLASSIFICATION += 1;
