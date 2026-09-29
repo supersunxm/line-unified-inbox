@@ -31,6 +31,6 @@ export function readChatRouteFilters(search: string): ChatRouteFilters {
     topic: query.get("topic") ?? undefined,
     lineOaId: query.get("lineOaId") ?? undefined,
     conversationId: query.get("conversationId") ?? undefined,
-    month: query.get("month") ?? undefined,
+    ...(query.get("month") ? { month: query.get("month") ?? undefined } : {}),
   };
 }
