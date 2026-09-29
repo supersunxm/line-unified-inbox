@@ -4,6 +4,14 @@ import type { AuthUser } from "../auth/auth.guard";
 import { StoreAccessService } from "../auth/store-access.service";
 import { PrismaService } from "../prisma.service";
 import { OWNER_TRACKING_STARTED_AT_ISO, ownerTrackingInboundFilter } from "../owner-tracking";
+import {
+  buildReplyCycleAnalytics,
+  type ReplyCycleAnalyticsResult,
+} from "../reply-cycle-analytics";
+import type {
+  CanonicalReplyMessage,
+  ReplyEventDirection,
+} from "../reply-state-resolver";
 
 export const REPORTING_TIMEZONE = "Asia/Bangkok";
 export const RESPONSE_SAMPLE_THRESHOLD = 10;
@@ -12,11 +20,15 @@ const BANGKOK_OFFSET_MS = 7 * 60 * 60 * 1000;
 export type AnalyticsMessage = {
   id: string;
   conversationId: string;
+  externalMessageId?: string | null;
   direction: string;
+  deliveryStatus?: "DELIVERED" | "FAILED" | "PENDING" | null;
   messageType: string;
+  originalText?: string | null;
   sentAt: Date;
   senderUserId: string | null;
   senderDisplayName?: string | null;
+  rawPayload?: unknown;
   bmReplyStatus?: string | null;
 };
 
@@ -96,33 +108,48 @@ function intervalContains(date: Date, start: Date, end: Date): boolean {
   return date >= start && date < end;
 }
 
+function replyDirection(value: string): ReplyEventDirection {
+  if (value === "INBOUND" || value === "OUTBOUND" || value === "SYSTEM") return value;
+  throw new Error("Unexpected message direction: " + value);
+}
+
+function canonicalReplyMessage(message: AnalyticsMessage): CanonicalReplyMessage {
+  return {
+    id: message.id,
+    externalMessageId: message.externalMessageId ?? null,
+    direction: replyDirection(message.direction),
+    deliveryStatus:
+      message.deliveryStatus ??
+      (message.direction === MessageDirection.OUTBOUND ? "DELIVERED" : null),
+    originalText: message.originalText ?? null,
+    sentAt: message.sentAt,
+    senderUserId: message.senderUserId,
+    senderDisplayName: message.senderDisplayName ?? null,
+    rawPayload: message.rawPayload,
+  };
+}
+
+export function calculateResponseCycleAudit(
+  messages: AnalyticsMessage[],
+): ReplyCycleAnalyticsResult {
+  const grouped = new Map<string, CanonicalReplyMessage[]>();
+  for (const message of messages) {
+    grouped.set(message.conversationId, [
+      ...(grouped.get(message.conversationId) ?? []),
+      canonicalReplyMessage(message),
+    ]);
+  }
+
+  return buildReplyCycleAnalytics(
+    [...grouped.entries()].map(([conversationId, canonical]) => ({
+      conversationId,
+      canonical,
+    })),
+  );
+}
+
 export function calculateResponseCycles(messages: AnalyticsMessage[]): ResponseCycle[] {
-  const sorted = [...messages].sort((a, b) => {
-    const timestamp = a.sentAt.getTime() - b.sentAt.getTime();
-    return timestamp || a.conversationId.localeCompare(b.conversationId) || a.id.localeCompare(b.id);
-  });
-  const open = new Map<string, { startedAt: Date }>();
-  const cycles: ResponseCycle[] = [];
-  for (const message of sorted) {
-    if (message.direction === MessageDirection.INBOUND) {
-      if (!open.has(message.conversationId)) open.set(message.conversationId, { startedAt: message.sentAt });
-      continue;
-    }
-    if (message.direction !== MessageDirection.OUTBOUND || !message.senderUserId) continue;
-    const current = open.get(message.conversationId);
-    if (!current) continue;
-    cycles.push({
-      conversationId: message.conversationId,
-      startedAt: current.startedAt,
-      answeredAt: message.sentAt,
-      durationSeconds: Math.max(0, (message.sentAt.getTime() - current.startedAt.getTime()) / 1000),
-    });
-    open.delete(message.conversationId);
-  }
-  for (const [conversationId, current] of open) {
-    cycles.push({ conversationId, startedAt: current.startedAt, answeredAt: null, durationSeconds: null });
-  }
-  return cycles.sort((a, b) => a.startedAt.getTime() - b.startedAt.getTime() || a.conversationId.localeCompare(b.conversationId));
+  return calculateResponseCycleAudit(messages).cycles;
 }
 
 export function responseMetrics(cycles: ResponseCycle[], start: Date, end: Date) {
@@ -359,14 +386,15 @@ export class MonthlySummaryService {
     const messages = await this.prisma.message.findMany({
       where: { conversation: conversationScope, sentAt: { lte: asOf } },
       orderBy: [{ sentAt: "asc" }, { id: "asc" }],
-      select: { id: true, conversationId: true, direction: true, messageType: true, sentAt: true, senderUserId: true, senderDisplayName: true, sender: { select: { displayName: true } }, conversation: { select: { bmReplyStatus: true } } },
+      select: { id: true, conversationId: true, externalMessageId: true, direction: true, deliveryStatus: true, messageType: true, originalText: true, sentAt: true, senderUserId: true, senderDisplayName: true, rawPayload: true, sender: { select: { displayName: true } }, conversation: { select: { bmReplyStatus: true } } },
     });
     const analyticsMessages = messages.map((message) => ({
       ...message,
       senderDisplayName: message.sender?.displayName ?? message.senderDisplayName,
       bmReplyStatus: message.conversation?.bmReplyStatus ?? null,
     })) as AnalyticsMessage[];
-    const cycles = calculateResponseCycles(analyticsMessages);
+    const responseCycleAudit = calculateResponseCycleAudit(analyticsMessages);
+    const cycles = responseCycleAudit.cycles;
     const periodVolume = monthlyVolume(analyticsMessages, bounds.start, periodEnd);
     const periodResponse = responseMetrics(cycles, bounds.start, periodEnd);
     const overview = monthlyOverview(analyticsMessages, bounds.start, periodEnd);
@@ -440,6 +468,8 @@ export class MonthlySummaryService {
       dataQuality: {
         qaExcluded: true,
         ambiguousOutboundExcluded,
+        responseCycleAmbiguousConversations: responseCycleAudit.ambiguousConversationCount,
+        responseCycleAmbiguityReasons: responseCycleAudit.ambiguityReasons,
         responseMetricsAvailable: periodResponse.available,
         replyAttributionCoverageRate: periodOutbounds.length === 0 ? 1 : attributedOutbounds / periodOutbounds.length,
         unattributedOutboundMessages: periodOutbounds.length - attributedOutbounds,
