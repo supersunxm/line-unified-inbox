@@ -2421,10 +2421,11 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
   const storeBmCounts = useMemo(() => {
     const countsMap: Record<string, { notReplied: number; notifiedBm: number; replied: number; oldestWaitingMinutes?: number }> = {};
     for (const s of bmSummaryData.stores) {
+      const effectiveCounts = effectiveSummaryCounts(s);
       countsMap[s.storeId] = {
-        notReplied: s.notReplied,
-        notifiedBm: s.notifiedBm,
-        replied: s.replied,
+        notReplied: effectiveCounts.notReplied,
+        notifiedBm: 0,
+        replied: effectiveCounts.replied,
         oldestWaitingMinutes: s.oldestWaitingMinutes ?? 0,
       };
     }
@@ -3195,7 +3196,11 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
             <ContextSidebar
               sidebarView={sidebarView}
               selectSidebarView={selectSidebarView}
-              overview={bmSummaryData.overview}
+              overview={{
+                notReplied: effectiveSummaryCounts(bmSummaryData.overview).notReplied,
+                notifiedBm: 0,
+                replied: effectiveSummaryCounts(bmSummaryData.overview).replied,
+              }}
               storeBmCounts={storeBmCounts}
               selectedStore={selectedStore}
               setSelectedStore={setSelectedStore}
@@ -3205,7 +3210,6 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
               stores={stores}
               text={text}
               getStoreDisplayName={getStoreDisplayName}
-              onRequestBulkUpdate={(req) => setBulkConfirmState(req)}
             />
           )}
 
