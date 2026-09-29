@@ -137,20 +137,6 @@ export function ContextSidebar({
 
           <button
             type="button"
-            onClick={() => selectSidebarView("notifiedBm")}
-            className={`${sidebarButtonClass("notifiedBm")} flex items-center justify-between`}
-          >
-            <span className="flex items-center gap-2 truncate">
-              <span className="h-1.5 w-1.5 rounded-full bg-[#8e44ec] shrink-0" />
-              <span>{text.notifiedBm || "แจ้ง BM แล้ว"}</span>
-            </span>
-            <span className="font-tabular ml-2 rounded-[var(--app-radius-sm)] bg-[#f3e8ff] dark:bg-[#2b1c40] text-[#8e44ec] dark:text-[#d8b4fe] border border-[#8e44ec]/20 px-1.5 py-0.5 text-[11px] font-semibold">
-              {overview.notifiedBm}
-            </span>
-          </button>
-
-          <button
-            type="button"
             onClick={() => selectSidebarView("replied")}
             className={`${sidebarButtonClass("replied")} flex items-center justify-between`}
           >
@@ -245,9 +231,6 @@ export function ContextSidebar({
                 <span className="rounded-[var(--app-radius-xs)] bg-[var(--app-danger-soft)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--app-danger)]" title="Not Replied">
                   {focusGroupCounts.notReplied}
                 </span>
-                <span className="rounded-[var(--app-radius-xs)] bg-[#f3e8ff] px-1.5 py-0.5 text-[10px] font-semibold text-[#8e44ec] dark:bg-[#2b1c40] dark:text-[#d8b4fe]" title="Notified BM">
-                  {focusGroupCounts.notifiedBm}
-                </span>
                 <span className="rounded-[var(--app-radius-xs)] bg-[var(--app-success-soft)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--app-success)]" title="Replied">
                   {focusGroupCounts.replied}
                 </span>
@@ -268,9 +251,6 @@ export function ContextSidebar({
             <div className="ml-2 flex items-center gap-1 shrink-0 font-tabular">
               <span className="rounded-[var(--app-radius-xs)] bg-[var(--app-danger-soft)] text-[var(--app-danger)] px-1.5 py-0.5 text-[10px] font-medium" title="Not Replied">
                 {overview.notReplied}
-              </span>
-              <span className="rounded-[var(--app-radius-xs)] bg-[#f3e8ff] dark:bg-[#2b1c40] text-[#8e44ec] dark:text-[#d8b4fe] px-1.5 py-0.5 text-[10px] font-medium" title="Notified BM">
-                {overview.notifiedBm}
               </span>
               <span className="rounded-[var(--app-radius-xs)] bg-[var(--app-success-soft)] text-[var(--app-success)] px-1.5 py-0.5 text-[10px] font-medium" title="Replied">
                 {overview.replied}
@@ -308,9 +288,6 @@ export function ContextSidebar({
                     <div className="ml-2 flex items-center gap-1 shrink-0 font-tabular">
                       <span className="rounded-[var(--app-radius-xs)] bg-[var(--app-danger-soft)] text-[var(--app-danger)] px-1.5 py-0.5 text-[10px] font-medium" title="Not Replied">
                         {counts.notReplied}
-                      </span>
-                      <span className="rounded-[var(--app-radius-xs)] bg-[#f3e8ff] dark:bg-[#2b1c40] text-[#8e44ec] dark:text-[#d8b4fe] px-1.5 py-0.5 text-[10px] font-medium" title="Notified BM">
-                        {counts.notifiedBm}
                       </span>
                       <span className="rounded-[var(--app-radius-xs)] bg-[var(--app-success-soft)] text-[var(--app-success)] px-1.5 py-0.5 text-[10px] font-medium" title="Replied">
                         {counts.replied}
