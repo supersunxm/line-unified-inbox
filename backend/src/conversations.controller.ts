@@ -9,6 +9,7 @@ import { StoreAccessService } from "./auth/store-access.service";
 import { FOCUS_STORE_GROUP_ID } from "./focus-store-group";
 import { loadLatestManagerUrls, resolveLineOaManagerUrl } from "./store-master/line-oa-manager-url";
 import { LineChatRecentResolverService } from "./line-chat/line-chat-recent-resolver.service";
+import { ReplyStateShadowService } from "./reply-state-shadow.service";
 import type { LineChatDiscoveredChat } from "./line-chat/line-chat.types";
 
 const LINE_CHAT_USER_ID_PATTERN = /^U[0-9a-f]{32}$/iu;
@@ -57,6 +58,7 @@ export class ConversationsController {
     private readonly profiles: LineProfileService,
     private readonly storeAccess: StoreAccessService,
     private readonly lineChatRecentResolver: LineChatRecentResolverService,
+    private readonly replyStateShadow: ReplyStateShadowService,
   ) { }
 
   private async fetchWorkerCandidateSnapshot(
@@ -268,6 +270,12 @@ export class ConversationsController {
 
     return { url: LINE_MANAGER_HOME, statusCode: 302 };
   }
+  @Get(":id/reply-state-shadow")
+  async replyStateShadowView(@Param("id") id: string, @Req() req: AuthRequest) {
+    await this.storeAccess.assertConversationAccess(req.user!, id);
+    return this.replyStateShadow.resolveConversation(id);
+  }
+
   @Get(":id") async get(@Param("id") id: string, @Req() req: AuthRequest) { await this.storeAccess.assertConversationAccess(req.user!, id); return this.service.get(id); }
   @Patch(":id/status") async status(@Param("id") id: string, @Body() dto: UpdateStatusDto, @Req() req: AuthRequest) {
     await this.storeAccess.assertConversationAccess(req.user!, id);
