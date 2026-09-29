@@ -535,6 +535,13 @@ export class ConversationsService {
 
   async bulkUpdateBmReplyStatus(dto: BulkUpdateBmReplyStatusDto, actingAdmin?: string) {
     const { storeId, status, fromStatuses } = dto;
+    const monthRange = parseChatMonth(dto.month);
+    const historicalMonthConversationIds = monthRange
+      ? await this.historicalConversationIdsForMonth(monthRange)
+      : [];
+    const monthFilter = monthRange
+      ? this.monthActivityFilter(monthRange, historicalMonthConversationIds)
+      : undefined;
     const store = await this.prisma.store.findUnique({ where: { id: storeId } });
     if (!store) throw new NotFoundException("Store not found");
 
@@ -547,6 +554,7 @@ export class ConversationsService {
       ...(fromStatuses && fromStatuses.length > 0
         ? { bmReplyStatus: { in: fromStatuses } }
         : {}),
+      AND: monthFilter ? [monthFilter] : undefined,
     };
 
     const completesFollowUp = status === BmReplyStatus.REPLIED;
@@ -565,6 +573,7 @@ export class ConversationsService {
       storeName: store.name,
       previousStatusScope: fromStatuses && fromStatuses.length > 0 ? fromStatuses : ["ALL"],
       targetStatus: status,
+      month: monthRange?.month ?? null,
       affectedCount: result.count,
       timestamp: new Date().toISOString(),
     };
@@ -691,6 +700,13 @@ export class ConversationsService {
   async bulkMarkRepliedByFilter(dto: BulkMarkRepliedByFilterDto, user: AuthUser) {
     const targetStatus = dto.bmReplyStatus || BmReplyStatus.NOT_REPLIED;
     const requestedStoreId = dto.storeId;
+    const monthRange = parseChatMonth(dto.month);
+    const historicalMonthConversationIds = monthRange
+      ? await this.historicalConversationIdsForMonth(monthRange)
+      : [];
+    const monthFilter = monthRange
+      ? this.monthActivityFilter(monthRange, historicalMonthConversationIds)
+      : undefined;
 
     let effectiveStoreFilter: string | undefined;
     let storeScopeName = "all";
@@ -724,6 +740,7 @@ export class ConversationsService {
       ...operationalWhere,
       bmReplyStatus: targetStatus,
       ...(effectiveStoreFilter ? { storeId: effectiveStoreFilter } : {}),
+      AND: monthFilter ? [monthFilter] : undefined,
     };
 
     const matchingConversations = await this.prisma.conversation.findMany({
