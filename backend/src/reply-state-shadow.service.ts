@@ -15,6 +15,19 @@ const shadowConversationSelect = {
   lineOfficialAccountId: true,
   lineChatUserId: true,
   bmReplyStatus: true,
+  replyStateProjection: {
+    select: {
+      state: true,
+      decidingEventKind: true,
+      decidingEventAt: true,
+      evidenceBoundary: true,
+      resolverVersion: true,
+      canonicalMessageCount: true,
+      historicalMessageCount: true,
+      computedAt: true,
+      updatedAt: true,
+    },
+  },
   messages: {
     orderBy: [{ sentAt: "asc" as const }, { id: "asc" as const }],
     select: {
@@ -59,6 +72,18 @@ export type ReplyStateShadowResult = {
     answeredAt: Date | null;
     durationSeconds: number | null;
   } | null;
+  persistedProjection: {
+    state: "REPLIED" | "NOT_REPLIED";
+    decidingEventKind: "CUSTOMER_INBOUND" | "HUMAN_STAFF_REPLY";
+    decidingEventAt: Date;
+    evidenceBoundary: Date;
+    resolverVersion: string;
+    canonicalMessageCount: number;
+    historicalMessageCount: number;
+    computedAt: Date;
+    updatedAt: Date;
+  } | null;
+  projectionMatchesDynamic: boolean | null;
   evidence: {
     canonicalMessageCount: number;
     historicalMessageCount: number;
@@ -258,6 +283,11 @@ export class ReplyStateShadowService {
         resolution.state === "AMBIGUOUS" ? resolution.reason : null,
       latestCycle:
         resolution.state === "AMBIGUOUS" ? null : resolution.latestCycle,
+      persistedProjection: conversation.replyStateProjection,
+      projectionMatchesDynamic:
+        conversation.replyStateProjection === null || resolution.state === "AMBIGUOUS"
+          ? null
+          : conversation.replyStateProjection.state === resolution.state,
       evidence: {
         canonicalMessageCount: canonical.length,
         historicalMessageCount: historical.length,
