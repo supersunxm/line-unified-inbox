@@ -241,6 +241,9 @@ export class ConversationsService {
         AND d."lineChatUserId" = h."lineChatUserId"
       WHERE h."sentAt" >= ${range.start}
         AND h."sentAt" < ${range.end}
+        AND h."direction" IN ('INBOUND', 'OUTBOUND')
+        AND regexp_replace(lower(h."sourceEventType"), '[[:space:]_-]+', '', 'g')
+          IN ('message', 'messagereceived', 'messagesent', 'text', 'textmessage', 'messagetext')
         AND COALESCE(x."canonicalConversationId", d."canonicalConversationId") IS NOT NULL
     `);
     return rows.map((row) => row.id);
@@ -252,7 +255,14 @@ export class ConversationsService {
   ): Prisma.ConversationWhereInput {
     return {
       OR: [
-        { messages: { some: { sentAt: { gte: range.start, lt: range.end } } } },
+        {
+          messages: {
+            some: {
+              sentAt: { gte: range.start, lt: range.end },
+              direction: { in: [MessageDirection.INBOUND, MessageDirection.OUTBOUND] },
+            },
+          },
+        },
         ...(historicalConversationIds.length > 0
           ? [{ id: { in: historicalConversationIds } }]
           : []),
@@ -281,6 +291,7 @@ export class ConversationsService {
         WHERE s."isActive" = true
           AND s."archivedAt" IS NULL
           AND oa."accountType" = 'STORE'
+          AND m."direction" IN ('INBOUND', 'OUTBOUND')
           ${storeFilter}
         UNION
         SELECT to_char(h."sentAt" + interval '7 hours', 'YYYY-MM') AS month
@@ -290,6 +301,9 @@ export class ConversationsService {
         WHERE s."isActive" = true
           AND s."archivedAt" IS NULL
           AND oa."accountType" = 'STORE'
+          AND h."direction" IN ('INBOUND', 'OUTBOUND')
+          AND regexp_replace(lower(h."sourceEventType"), '[[:space:]_-]+', '', 'g')
+            IN ('message', 'messagereceived', 'messagesent', 'text', 'textmessage', 'messagetext')
           ${storeFilter}
       ) activity
       WHERE activity.month IS NOT NULL
