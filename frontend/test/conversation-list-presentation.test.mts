@@ -317,7 +317,7 @@ test("bmReplyStatus badge is rendered per row separately from tag truncation", (
   const activeRows = pageCode.slice(rowStart, rowEnd);
 
   assert.match(activeRows, /data-conversation-bm-reply-status=\{currentBmReplyStatus\}/);
-  assert.match(activeRows, /bmReplyStatusLabels\[language\]\[currentBmReplyStatus\]/);
+  assert.match(activeRows, /bmReplyStatusLabels\[language\]\[currentBmReplyStatus === "REPLIED" \? "REPLIED" : "NOT_REPLIED"\]/);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
