@@ -7,6 +7,7 @@ export type ChatRouteFilters = {
   topic?: string;
   lineOaId?: string;
   conversationId?: string;
+  month?: string;
 };
 
 export function buildChatsHref(filters: ChatRouteFilters = {}): string {
@@ -30,5 +31,6 @@ export function readChatRouteFilters(search: string): ChatRouteFilters {
     topic: query.get("topic") ?? undefined,
     lineOaId: query.get("lineOaId") ?? undefined,
     conversationId: query.get("conversationId") ?? undefined,
+    month: query.get("month") ?? undefined,
   };
 }
