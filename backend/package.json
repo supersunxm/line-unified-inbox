@@ -66,7 +66,9 @@
     "conversation-reply-state:dry-run": "tsx --env-file=.env scripts/reconcile-conversation-reply-state.ts",
     "conversation-reply-state:apply": "tsx --env-file=.env scripts/reconcile-conversation-reply-state.ts --apply",
     "historical:crosswalk": "tsx --tsconfig tsconfig.json scripts/historical-conversation-crosswalk.ts",
-    "historical:crosswalk:acceptance": "tsx --tsconfig tsconfig.json scripts/historical-crosswalk-acceptance.ts"
+    "historical:crosswalk:acceptance": "tsx --tsconfig tsconfig.json scripts/historical-crosswalk-acceptance.ts",
+    "reply-state:projection:dry-run": "tsx --env-file=.env src/reply-state-projection-sync.ts --summary-only",
+    "reply-state:projection:apply": "tsx --env-file=.env src/reply-state-projection-sync.ts --summary-only --apply"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1090.0",
