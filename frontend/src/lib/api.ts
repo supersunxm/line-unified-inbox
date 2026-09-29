@@ -514,7 +514,7 @@ export const api = {
   customerIntelligence: (customerId: string, options?: ApiRequestOptions) => request<ApiCustomerIntelligence>(`/customers/${encodeURIComponent(customerId)}/intelligence`, options),
   updateStatus: (id: string, status: ApiFollowUpStatus) => request<{ changed: boolean; conversation: ApiConversation }>(`/conversations/${id}/status`, { method: "PATCH", body: JSON.stringify({ status }) }),
   updateBmReplyStatus: (id: string, status: ApiBmReplyStatus) => request<{ changed: boolean; conversation: ApiConversation }>(`/conversations/${id}/bm-reply-status`, { method: "PATCH", body: JSON.stringify({ status, bmReplyStatus: status }) }),
-  bulkUpdateBmReplyStatus: (input: { storeId: string; status: ApiBmReplyStatus; fromStatuses?: ApiBmReplyStatus[] }) =>
+  bulkUpdateBmReplyStatus: (input: { storeId: string; status: ApiBmReplyStatus; fromStatuses?: ApiBmReplyStatus[]; month?: string }) =>
     request<{ updated: number; status: ApiBmReplyStatus }>("/conversations/bm-reply-status/bulk", {
       method: "PATCH",
       body: JSON.stringify(input),
@@ -524,7 +524,7 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ conversationIds }),
     }),
-  bulkMarkRepliedByFilter: (input: { bmReplyStatus?: ApiBmReplyStatus; storeId?: string }) =>
+  bulkMarkRepliedByFilter: (input: { bmReplyStatus?: ApiBmReplyStatus; storeId?: string; month?: string }) =>
     request<{ success: boolean; updatedCount: number; affectedCount: number; storeId: string; status: ApiBmReplyStatus }>("/conversations/bulk-mark-replied-by-filter", {
       method: "POST",
       body: JSON.stringify(input),
