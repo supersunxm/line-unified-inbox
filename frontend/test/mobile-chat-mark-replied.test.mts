@@ -17,12 +17,9 @@ test("mobile Store Chats displays the effective two-state reply status", () => {
 });
 
 test("mobile reply filters expose only all, not replied, and replied", () => {
-  const filterStart = mobileCode.indexOf('[["all", "ทั้งหมด"]');
-  const filterEnd = mobileCode.indexOf("as Array<[StatusFilter, string]>", filterStart);
-  const filterBlock = mobileCode.slice(filterStart, filterEnd);
-  assert.match(filterBlock, /"NOT_REPLIED", "ยังไม่ตอบ"/);
-  assert.match(filterBlock, /"REPLIED", "ตอบแล้ว"/);
-  assert.doesNotMatch(filterBlock, /"NOTIFIED_BM", "แจ้ง BM"/);
+  assert.match(chatsPageCode, /\["NOT_REPLIED", labels\.notReplied\]/);
+  assert.match(chatsPageCode, /\["REPLIED", labels\.replied\]/);
+  assert.doesNotMatch(chatsPageCode, /\["NOTIFIED_BM", labels\.notifiedBm\]/);
 
   assert.match(chatsPageCode, /\[data-mobile-mark-replied\]/);
   assert.match(chatsPageCode, /display: none !important/);
