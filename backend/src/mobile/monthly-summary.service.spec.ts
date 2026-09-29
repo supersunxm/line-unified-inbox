@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { MonthlySummaryService, bangkokMonthBounds, calculateResponseCycles, monthlyOverview, monthlyVolume, responseMetrics, tagAnalytics, tagQuality, teamAnalytics, type AnalyticsMessage } from "./monthly-summary.service";
+import { MonthlySummaryService, bangkokMonthBounds, calculateResponseCycles, calculateResponseCyclesWithDiagnostics, isHumanStaffReply, monthlyOverview, monthlyVolume, responseMetrics, tagAnalytics, tagQuality, teamAnalytics, type AnalyticsMessage } from "./monthly-summary.service";
 import { OWNER_TRACKING_STARTED_AT, OWNER_TRACKING_STARTED_AT_ISO, isOwnerTrackingInbound } from "../owner-tracking";
 
-const inbound = (id: string, conversationId: string, sentAt: string, messageType = "TEXT"): AnalyticsMessage => ({ id, conversationId, sentAt: new Date(sentAt), direction: "INBOUND", messageType, senderUserId: null });
-const outbound = (id: string, conversationId: string, sentAt: string, senderUserId: string | null = "bm-1"): AnalyticsMessage => ({ id, conversationId, sentAt: new Date(sentAt), direction: "OUTBOUND", messageType: "TEXT", senderUserId });
-const system = (id: string, conversationId: string, sentAt: string): AnalyticsMessage => ({ id, conversationId, sentAt: new Date(sentAt), direction: "SYSTEM", messageType: "TEXT", senderUserId: null });
+const inbound = (id: string, conversationId: string, sentAt: string, messageType = "TEXT"): AnalyticsMessage => ({ id, conversationId, sentAt: new Date(sentAt), direction: "INBOUND", messageType, deliveryStatus: "DELIVERED", senderUserId: null });
+const outbound = (id: string, conversationId: string, sentAt: string, senderUserId: string | null = "bm-1", overrides: Partial<AnalyticsMessage> = {}): AnalyticsMessage => ({ id, conversationId, sentAt: new Date(sentAt), direction: "OUTBOUND", messageType: "TEXT", deliveryStatus: "DELIVERED", senderUserId, ...overrides });
+const system = (id: string, conversationId: string, sentAt: string): AnalyticsMessage => ({ id, conversationId, sentAt: new Date(sentAt), direction: "SYSTEM", messageType: "TEXT", deliveryStatus: "DELIVERED", senderUserId: null });
 
 void test("monthly overview uses current operational status for selected inbound conversations", () => {
   const start = new Date("2026-08-01T00:00:00Z");
@@ -70,13 +70,53 @@ void test("unanswered cycle remains open", () => {
   assert.equal(cycles[0]?.durationSeconds, null);
 });
 
-void test("outbound without senderUserId does not answer a monthly cycle", () => {
-  const cycles = calculateResponseCycles([
+void test("unknown outbound actor makes the monthly cycle ambiguous instead of guessing", () => {
+  const result = calculateResponseCyclesWithDiagnostics([
     inbound("1", "c1", "2026-08-01T00:00:00Z"),
     outbound("2", "c1", "2026-08-01T01:00:00Z", null),
   ]);
+  assert.equal(result.cycles.length, 0);
+  assert.equal(result.ambiguousConversations, 1);
+  assert.equal(result.ambiguityReasons.UNKNOWN_OUTBOUND_ACTOR, 1);
+});
+
+void test("LINE Manager mirror outbound counts as a human reply without senderUserId", () => {
+  const messages = [
+    inbound("1", "c1", "2026-09-05T01:00:00Z"),
+    outbound("2", "c1", "2026-09-05T01:30:00Z", null, {
+      rawPayload: { provider: "LINE_MANAGER", source: "LINE_MANAGER_MIRROR" },
+    }),
+  ];
+  const cycles = calculateResponseCycles(messages);
   assert.equal(cycles.length, 1);
-  assert.equal(cycles[0]?.answeredAt, null);
+  assert.equal(cycles[0]?.durationSeconds, 1800);
+  assert.equal(isHumanStaffReply(messages[1]), true);
+});
+
+void test("failed, pending, and automated outbound do not close a response cycle", () => {
+  for (const reply of [
+    outbound("failed", "c1", "2026-09-05T01:30:00Z", "bm-1", { deliveryStatus: "FAILED" }),
+    outbound("pending", "c1", "2026-09-05T01:30:00Z", "bm-1", { deliveryStatus: "PENDING" }),
+    outbound("auto", "c1", "2026-09-05T01:30:00Z", "bot", { senderDisplayName: "Auto Reply Bot", rawPayload: { source: "AUTO_RESPONSE" } }),
+  ]) {
+    const cycles = calculateResponseCycles([
+      inbound("1", "c1", "2026-09-05T01:00:00Z"),
+      reply,
+    ]);
+    assert.equal(cycles.length, 1);
+    assert.equal(cycles[0]?.answeredAt, null);
+  }
+});
+
+void test("monthly reply volume counts LINE Manager staff replies and excludes failed or automated outbound", () => {
+  const start = new Date("2026-09-01T00:00:00Z");
+  const end = new Date("2026-10-01T00:00:00Z");
+  const result = monthlyVolume([
+    outbound("manager", "c1", "2026-09-05T01:30:00Z", null, { rawPayload: { provider: "LINE_MANAGER", source: "LINE_MANAGER_MIRROR" } }),
+    outbound("failed", "c2", "2026-09-05T02:00:00Z", "bm-1", { deliveryStatus: "FAILED" }),
+    outbound("auto", "c3", "2026-09-05T03:00:00Z", "bot", { senderDisplayName: "Auto Reply Bot", rawPayload: { source: "AUTO_RESPONSE" } }),
+  ], start, end);
+  assert.equal(result.bmReplies, 1);
 });
 
 void test("image and sticker inbound messages start cycles", () => {
@@ -113,6 +153,19 @@ void test("cross-month reply is attributed to inbound month", () => {
   assert.equal(cycles[0]?.durationSeconds, 5400);
 });
 
+void test("30 Sep 23:55 Bangkok inbound and 1 Oct 00:10 reply stays a September 15-minute cycle", () => {
+  const cycles = calculateResponseCycles([
+    inbound("1", "c1", "2026-09-30T16:55:00Z"),
+    outbound("2", "c1", "2026-09-30T17:10:00Z"),
+  ]);
+  const september = bangkokMonthBounds("2026-09");
+  const metrics = responseMetrics(cycles, september.start, september.end);
+  assert.equal(cycles[0]?.startedAt.toISOString(), "2026-09-30T16:55:00.000Z");
+  assert.equal(cycles[0]?.durationSeconds, 900);
+  assert.equal(metrics.cyclesStarted, 1);
+  assert.equal(metrics.cyclesAnswered, 1);
+});
+
 void test("below threshold keeps response values unavailable", () => {
   const cycles = Array.from({ length: 9 }, (_, index) => ({ conversationId: String(index), startedAt: new Date(`2026-08-${String(index + 1).padStart(2, "0")}T00:00:00Z`), answeredAt: new Date(`2026-08-${String(index + 1).padStart(2, "0")}T01:00:00Z`), durationSeconds: 3600 }));
   const result = responseMetrics(cycles, new Date("2026-08-01T00:00:00Z"), new Date("2026-09-01T00:00:00Z"));
@@ -138,9 +191,13 @@ void test("messages are ordered chronologically before cycle calculation", () =>
   assert.equal(cycles[0]?.durationSeconds, 3600);
 });
 
-void test("equal timestamps use stable IDs", () => {
-  const cycles = calculateResponseCycles([inbound("a", "c1", "2026-08-01T00:00:00Z"), outbound("b", "c1", "2026-08-01T00:00:00Z")]);
-  assert.equal(cycles.length, 1);
+void test("equal inbound and human reply timestamps are excluded as ordering ambiguity", () => {
+  const result = calculateResponseCyclesWithDiagnostics([
+    inbound("a", "c1", "2026-08-01T00:00:00Z"),
+    outbound("b", "c1", "2026-08-01T00:00:00Z"),
+  ]);
+  assert.equal(result.cycles.length, 0);
+  assert.equal(result.ambiguityReasons.ORDERING_CONFLICT, 1);
 });
 
 void test("a second outbound after a reply does not create another cycle", () => {
