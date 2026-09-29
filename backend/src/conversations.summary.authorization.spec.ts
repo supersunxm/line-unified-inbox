@@ -59,9 +59,22 @@ void test("conversation summary queries retain an explicit store scope, includin
       },
     },
     conversation: {
-      groupBy: async ({ where, _min }: { where: unknown; _min?: unknown }) => {
+      findMany: async ({ where }: { where: unknown }) => {
         conversationWheres.push(where);
-        return _min ? [] : [{ storeId: "store-a", bmReplyStatus: "NOT_REPLIED", _count: { _all: 2 } }];
+        return [
+          {
+            storeId: "store-a",
+            latestMessageAt: new Date("2026-09-29T00:00:00.000Z"),
+            bmReplyStatus: "NOT_REPLIED",
+            replyStateProjection: null,
+          },
+          {
+            storeId: "store-a",
+            latestMessageAt: new Date("2026-09-29T00:05:00.000Z"),
+            bmReplyStatus: "NOTIFIED_BM",
+            replyStateProjection: { state: "REPLIED" },
+          },
+        ];
       },
     },
   };
@@ -75,5 +88,5 @@ void test("conversation summary queries retain an explicit store scope, includin
   assert.deepEqual((storeWheres[0] as { id: { in: string[] } }).id.in, ["store-a"]);
   assert.deepEqual((conversationWheres[0] as { store: { id: { in: string[] } } }).store.id.in, ["store-a"]);
   assert.deepEqual((storeWheres[1] as { id: { in: string[] } }).id.in, []);
-  assert.deepEqual((conversationWheres[2] as { store: { id: { in: string[] } } }).store.id.in, []);
+  assert.deepEqual((conversationWheres[1] as { store: { id: { in: string[] } } }).store.id.in, []);
 });
