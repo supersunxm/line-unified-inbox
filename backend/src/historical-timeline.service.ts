@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { parseChatMonth } from "./chat-month";
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { MessageDirection, MessageDeliveryStatus, MessageType, Prisma } from "@prisma/client";
 import type { AuthUser } from "./auth/auth.guard";
@@ -257,9 +258,11 @@ export class HistoricalTimelineService {
   async listVirtualChats(user: AuthUser, input: {
     storeId?: string;
     search?: string;
+    month?: string;
     page?: number;
     pageSize?: number;
   }) {
+    const monthRange = parseChatMonth(input.month);
     const safePage = pageNumber(input.page ?? 1, 1);
     const safePageSize = Math.min(100, Math.max(1, pageNumber(input.pageSize ?? 30, 30)));
     const search = input.search?.trim().slice(0, 120) ?? "";
@@ -268,8 +271,12 @@ export class HistoricalTimelineService {
       throw new ForbiddenException("Historical conversation is outside the user store scope");
     }
 
+    const historicalStart = monthRange && monthRange.start > HISTORICAL_TIMELINE_START
+      ? monthRange.start
+      : HISTORICAL_TIMELINE_START;
     const filters: Prisma.Sql[] = [
-      Prisma.sql`h."sentAt" >= ${HISTORICAL_TIMELINE_START}`,
+      Prisma.sql`h."sentAt" >= ${historicalStart}`,
+      ...(monthRange ? [Prisma.sql`h."sentAt" < ${monthRange.end}`] : []),
       Prisma.sql`NOT EXISTS (
         SELECT 1 FROM public."Conversation" c
         WHERE c."storeId" = h."storeId"
@@ -356,6 +363,8 @@ export class HistoricalTimelineService {
         WHERE h."storeId" = c."storeId"
           AND h."lineOfficialAccountId" = c."lineOfficialAccountId"
           AND h."lineChatUserId" = c."lineChatUserId"
+          AND h."sentAt" >= ${historicalStart}
+          ${monthRange ? Prisma.sql`AND h."sentAt" < ${monthRange.end}` : Prisma.empty}
         ORDER BY h."sentAt" DESC, h."id" DESC
         LIMIT 1
       ) latest ON true
@@ -474,12 +483,23 @@ export class HistoricalTimelineService {
     return this.toVirtualConversation(row);
   }
 
-  async virtualMessages(user: AuthUser, id: string, page: number, pageSize: number) {
+  async virtualMessages(user: AuthUser, id: string, page: number, pageSize: number, month?: string) {
     await this.getVirtualChat(user, id);
     const [lineOfficialAccountId, lineChatUserId] = decodeHistoricalVirtualConversationId(id);
+    const monthRange = parseChatMonth(month);
     const safePage = pageNumber(page, 1);
     const safeSize = Math.min(100, Math.max(1, pageNumber(pageSize, 30)));
-    const where = { lineOfficialAccountId, lineChatUserId, sentAt: { gte: HISTORICAL_TIMELINE_START } };
+    const historicalStart = monthRange && monthRange.start > HISTORICAL_TIMELINE_START
+      ? monthRange.start
+      : HISTORICAL_TIMELINE_START;
+    const where = {
+      lineOfficialAccountId,
+      lineChatUserId,
+      sentAt: {
+        gte: historicalStart,
+        ...(monthRange ? { lt: monthRange.end } : {}),
+      },
+    };
     const [total, records] = await Promise.all([
       this.prisma.historicalTimelineMessage.count({ where }),
       this.prisma.historicalTimelineMessage.findMany({
