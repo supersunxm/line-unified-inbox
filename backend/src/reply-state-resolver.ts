@@ -306,7 +306,12 @@ function possibilities(events: readonly NormalizedReplyEvent[]): { states: Possi
     if (group.some((event) => event.direction === "INBOUND" && event.eventKind !== "NON_MESSAGE")) sawPotentialInbound = true;
 
     const inbound = group.filter((event) => !event.classificationConflict && event.eventKind === "MESSAGE" && event.direction === "INBOUND");
-    const replies = group.filter((event) => !event.classificationConflict && event.eventKind === "MESSAGE" && event.direction === "OUTBOUND" && event.actor === "HUMAN_STAFF");
+    const replies = group.filter((event) =>
+      !event.classificationConflict &&
+      event.eventKind === "MESSAGE" &&
+      event.direction === "OUTBOUND" &&
+      (event.actor === "HUMAN_STAFF" || event.actor === "UNKNOWN"),
+    );
 
     if (inbound.length > 0 && replies.length > 0) {
       const other = group.filter((event) => !inbound.includes(event) && !replies.includes(event));
@@ -351,7 +356,10 @@ export function buildDeterministicResponseCycles(events: readonly NormalizedRepl
     }
     if (
       relevant.some((event) => event.direction === "INBOUND") &&
-      relevant.some((event) => event.direction === "OUTBOUND" && event.actor === "HUMAN_STAFF")
+      relevant.some((event) =>
+        event.direction === "OUTBOUND" &&
+        (event.actor === "HUMAN_STAFF" || event.actor === "UNKNOWN"),
+      )
     ) return { status: "AMBIGUOUS", reason: "ORDERING_CONFLICT" };
 
     for (const event of relevant) {
