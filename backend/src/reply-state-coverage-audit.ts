@@ -4,7 +4,10 @@ import {
   type HistoricalReplyStateEffect,
   type ReplyStateMismatchPrimaryCause,
 } from "./reply-state-mismatch-cause";
-import { analyzeReplyEvidenceWindow } from "./reply-state-evidence-window";
+import {
+  analyzeReplyEvidenceWindow,
+  classifyReplyProjectionEligibility,
+} from "./reply-state-evidence-window";
 import {
   normalizeReplyTimeline,
   resolveReplyState,
@@ -332,6 +335,17 @@ async function main() {
       STORED_NOT_REPLIED_RESOLVED_REPLIED__LATEST_STAFF_REPLY_ON_OR_AFTER_BOUNDARY: 0,
     };
 
+    const projectionReadiness = {
+      TRUSTED_PROJECTION_TOTAL: 0,
+      TRUSTED_PROJECTION_REPLIED: 0,
+      TRUSTED_PROJECTION_NOT_REPLIED: 0,
+      TRUSTED_PROJECTION_STORED_MATCH: 0,
+      TRUSTED_PROJECTION_STORED_MISMATCH: 0,
+      UNPROJECTED_AMBIGUOUS: 0,
+      UNPROJECTED_PRE_BOUNDARY_DECIDING_EVENT: 0,
+      UNPROJECTED_NO_DECIDING_EVENT: 0,
+    };
+
     const totals = {
       COVERAGE_RUN_STATUS: "COMPLETE",
       TOTAL_CANONICAL_CONVERSATIONS: 0,
@@ -486,6 +500,31 @@ async function main() {
         const stored = storedStatus(conversation.bmReplyStatus);
         matrix[matrixKey(stored, resolution.state)] += 1;
 
+        const projectionEligibility = classifyReplyProjectionEligibility(
+          resolution.state,
+          evidenceWindow,
+        );
+        if (projectionEligibility.eligible) {
+          projectionReadiness.TRUSTED_PROJECTION_TOTAL += 1;
+          if (projectionEligibility.state === "REPLIED") {
+            projectionReadiness.TRUSTED_PROJECTION_REPLIED += 1;
+          } else {
+            projectionReadiness.TRUSTED_PROJECTION_NOT_REPLIED += 1;
+          }
+
+          if (stored === projectionEligibility.state) {
+            projectionReadiness.TRUSTED_PROJECTION_STORED_MATCH += 1;
+          } else {
+            projectionReadiness.TRUSTED_PROJECTION_STORED_MISMATCH += 1;
+          }
+        } else if (projectionEligibility.reason === "AMBIGUOUS") {
+          projectionReadiness.UNPROJECTED_AMBIGUOUS += 1;
+        } else if (projectionEligibility.reason === "PRE_BOUNDARY_DECIDING_EVENT") {
+          projectionReadiness.UNPROJECTED_PRE_BOUNDARY_DECIDING_EVENT += 1;
+        } else {
+          projectionReadiness.UNPROJECTED_NO_DECIDING_EVENT += 1;
+        }
+
         const mismatch = analyzeReplyStateMismatch({
           storedStatus: stored,
           canonical,
@@ -596,6 +635,7 @@ async function main() {
       ...mismatchSignals,
       EVIDENCE_CONFIDENCE_BOUNDARY: evidenceBoundary.toISOString(),
       ...evidenceBoundaryCounts,
+      ...projectionReadiness,
       DIRECT_LINK_AMBIGUOUS_IDENTITIES: ambiguousDirectIdentities.size,
       LINKAGE_CONFLICT_IDENTITIES: linkageConflictIdentities.size,
       AMBIGUITY_REASONS: ambiguityReasons,
