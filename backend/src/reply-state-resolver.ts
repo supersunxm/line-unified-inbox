@@ -97,7 +97,7 @@ function hasAutoResponsePayload(rawPayload: unknown): boolean {
 function historicalEventKind(sourceEventType: string): ReplyEventKind {
   const normalized = sourceEventType.trim().toLowerCase().replace(/[\s_-]+/g, "");
   if (!normalized) return "UNKNOWN";
-  if (["message", "text", "textmessage", "messagetext"].includes(normalized)) return "MESSAGE";
+  if (["message", "messagereceived", "messagesent", "text", "textmessage", "messagetext"].includes(normalized)) return "MESSAGE";
   if (["chatread", "read", "follow", "unfollow", "postback", "unsend", "activity"].includes(normalized)) return "NON_MESSAGE";
   return "UNKNOWN";
 }
