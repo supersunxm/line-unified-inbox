@@ -194,6 +194,9 @@ jobs:
       - name: Store Chats media parity regression tests
         run: node --test --experimental-strip-types test/store-chats-media-parity.test.mts
 
+      - name: Store Chats month selector regression tests
+        run: node --test --experimental-strip-types test/chat-month-selector.test.mts
+
       - name: Canonical Store ID export regression tests
         run: node --test --experimental-strip-types test/canonical-store-id-export.test.mts
 
