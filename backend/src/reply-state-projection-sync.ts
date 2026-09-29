@@ -12,7 +12,7 @@ import {
 } from "./reply-state-resolver";
 
 const DEFAULT_EVIDENCE_START = "2026-09-01T00:00:00+07:00";
-const RESOLVER_VERSION = "reply-state-v1"; // projection verify trigger 2026-09-29
+const RESOLVER_VERSION = "reply-state-v1"; // projection helper idle trigger 2026-09-29
 
 type DeliveryStatus = "DELIVERED" | "FAILED" | "PENDING";
 
