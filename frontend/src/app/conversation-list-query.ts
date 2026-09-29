@@ -1,4 +1,4 @@
-import type { ApiBmReplyStatus, ApiFollowUpStatus, ApiPriority } from "@/types/api";
+import type { ApiBmReplyStatus, ApiEffectiveReplyState, ApiFollowUpStatus, ApiPriority } from "@/types/api";
 
 export type ConversationListQuery = {
   page: number;
@@ -8,6 +8,7 @@ export type ConversationListQuery = {
   lineOaId?: string;
   followUpStatus?: ApiFollowUpStatus;
   bmReplyStatus?: ApiBmReplyStatus;
+  replyState?: ApiEffectiveReplyState;
   priority?: ApiPriority;
   productSeriesId?: string;
   productModelId?: string;
@@ -22,6 +23,7 @@ export type ConversationListQueryInput = {
   lineOaId: string;
   followUpStatus?: ApiFollowUpStatus;
   bmReplyStatus?: ApiBmReplyStatus;
+  replyState?: ApiEffectiveReplyState;
   priority?: ApiPriority;
   productSeriesId?: string;
   productModelId?: string;
@@ -36,6 +38,7 @@ export function buildConversationListQuery(input: ConversationListQueryInput): C
     storeId: input.storeId === "all" ? undefined : input.storeId,
     lineOaId: input.lineOaId === "all" ? undefined : input.lineOaId,
     followUpStatus: input.followUpStatus,
+    ...(input.replyState ? { replyState: input.replyState } : {}),
     ...(input.bmReplyStatus ? { bmReplyStatus: input.bmReplyStatus } : {}),
     priority: input.priority,
     productSeriesId: input.productSeriesId,
