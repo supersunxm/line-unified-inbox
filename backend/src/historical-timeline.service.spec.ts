@@ -6,6 +6,7 @@ import { StoreAccessService } from "./auth/store-access.service";
 import { PrismaService } from "./prisma.service";
 import {
   buildHistoricalVirtualConversationId,
+  calculateUnifiedReplyCycleAudit,
   calculateUnifiedReplyCycles,
   classifyResponseDuration,
   HistoricalTimelineService,
@@ -97,12 +98,12 @@ test("response-cycle helper creates multiple SLA cases inside one chat", () => {
     text: "text",
   };
   const messages = [
-    { ...base, id: "in-1", direction: MessageDirection.INBOUND, sentAt: new Date("2026-09-01T00:00:00.000Z"), senderBizId: null },
-    { ...base, id: "in-2", direction: MessageDirection.INBOUND, sentAt: new Date("2026-09-01T00:05:00.000Z"), senderBizId: null },
-    { ...base, id: "out-1", direction: MessageDirection.OUTBOUND, sentAt: new Date("2026-09-01T00:30:00.000Z"), senderBizId: "biz-1" },
-    { ...base, id: "in-3", direction: MessageDirection.INBOUND, sentAt: new Date("2026-09-01T03:00:00.000Z"), senderBizId: null },
-    { ...base, id: "auto", direction: MessageDirection.OUTBOUND, sentAt: new Date("2026-09-01T03:05:00.000Z"), senderBizId: "__AUTO_RESPONSE" },
-    { ...base, id: "out-2", direction: MessageDirection.OUTBOUND, sentAt: new Date("2026-09-01T03:20:00.000Z"), senderBizId: null },
+    { ...base, id: "in-1", sourceEventType: "messageReceived", direction: MessageDirection.INBOUND, sentAt: new Date("2026-09-01T00:00:00.000Z"), senderBizId: null },
+    { ...base, id: "in-2", sourceEventType: "messageReceived", direction: MessageDirection.INBOUND, sentAt: new Date("2026-09-01T00:05:00.000Z"), senderBizId: null },
+    { ...base, id: "out-1", sourceEventType: "messageSent", direction: MessageDirection.OUTBOUND, sentAt: new Date("2026-09-01T00:30:00.000Z"), senderBizId: "biz-1" },
+    { ...base, id: "in-3", sourceEventType: "messageReceived", direction: MessageDirection.INBOUND, sentAt: new Date("2026-09-01T03:00:00.000Z"), senderBizId: null },
+    { ...base, id: "auto", sourceEventType: "messageSent", direction: MessageDirection.OUTBOUND, sentAt: new Date("2026-09-01T03:05:00.000Z"), senderBizId: "__AUTO_RESPONSE" },
+    { ...base, id: "out-2", sourceEventType: "messageSent", direction: MessageDirection.OUTBOUND, sentAt: new Date("2026-09-01T03:20:00.000Z"), senderBizId: null },
   ];
   const cycles = calculateUnifiedReplyCycles(
     messages,
@@ -115,6 +116,128 @@ test("response-cycle helper creates multiple SLA cases inside one chat", () => {
   assert.equal(cycles[1]?.firstInbound.id, "in-3");
   assert.equal(cycles[1]?.humanReply?.id, "out-2");
 });
+test("historical messageSent without responder identity still closes the official KPI cycle", () => {
+  const base = {
+    messageType: MessageType.TEXT,
+    source: "HISTORICAL" as const,
+    sourceEventId: null,
+    externalMessageId: null,
+    senderUserId: null,
+    senderDisplayName: null,
+    deliveryStatus: MessageDeliveryStatus.DELIVERED,
+    rawPayload: null,
+    text: "text",
+  };
+  const audit = calculateUnifiedReplyCycleAudit(
+    [
+      {
+        ...base,
+        id: "in",
+        sourceEventType: "messageReceived",
+        direction: MessageDirection.INBOUND,
+        sentAt: new Date("2026-09-01T00:00:00.000Z"),
+        senderBizId: null,
+      },
+      {
+        ...base,
+        id: "out",
+        sourceEventType: "messageSent",
+        direction: MessageDirection.OUTBOUND,
+        sentAt: new Date("2026-09-01T00:10:00.000Z"),
+        senderBizId: null,
+      },
+    ],
+    new Date("2026-09-01T00:00:00.000Z"),
+    new Date("2026-09-02T00:00:00.000Z"),
+  );
+
+  assert.equal(audit.status, "DETERMINISTIC");
+  assert.equal(audit.cycles.length, 1);
+  assert.equal(audit.cycles[0]?.humanReply?.id, "out");
+});
+
+test("generic historical outbound with unknown actor is excluded as ambiguous", () => {
+  const base = {
+    messageType: MessageType.TEXT,
+    source: "HISTORICAL" as const,
+    sourceEventId: null,
+    externalMessageId: null,
+    senderUserId: null,
+    senderDisplayName: null,
+    deliveryStatus: MessageDeliveryStatus.DELIVERED,
+    rawPayload: null,
+    text: "text",
+  };
+  const audit = calculateUnifiedReplyCycleAudit(
+    [
+      {
+        ...base,
+        id: "in",
+        sourceEventType: "messageReceived",
+        direction: MessageDirection.INBOUND,
+        sentAt: new Date("2026-09-01T00:00:00.000Z"),
+        senderBizId: null,
+      },
+      {
+        ...base,
+        id: "out",
+        sourceEventType: "message",
+        direction: MessageDirection.OUTBOUND,
+        sentAt: new Date("2026-09-01T00:10:00.000Z"),
+        senderBizId: null,
+      },
+    ],
+    new Date("2026-09-01T00:00:00.000Z"),
+    new Date("2026-09-02T00:00:00.000Z"),
+  );
+
+  assert.equal(audit.status, "AMBIGUOUS");
+  if (audit.status === "AMBIGUOUS") {
+    assert.equal(audit.reason, "UNKNOWN_OUTBOUND_ACTOR");
+  }
+});
+
+test("same-timestamp inbound and staff reply is excluded as ordering conflict", () => {
+  const base = {
+    messageType: MessageType.TEXT,
+    source: "HISTORICAL" as const,
+    sourceEventId: null,
+    externalMessageId: null,
+    senderUserId: null,
+    senderDisplayName: null,
+    deliveryStatus: MessageDeliveryStatus.DELIVERED,
+    rawPayload: null,
+    text: "text",
+  };
+  const audit = calculateUnifiedReplyCycleAudit(
+    [
+      {
+        ...base,
+        id: "in",
+        sourceEventType: "messageReceived",
+        direction: MessageDirection.INBOUND,
+        sentAt: new Date("2026-09-01T00:00:00.000Z"),
+        senderBizId: null,
+      },
+      {
+        ...base,
+        id: "out",
+        sourceEventType: "messageSent",
+        direction: MessageDirection.OUTBOUND,
+        sentAt: new Date("2026-09-01T00:00:00.000Z"),
+        senderBizId: "biz-1",
+      },
+    ],
+    new Date("2026-09-01T00:00:00.000Z"),
+    new Date("2026-09-02T00:00:00.000Z"),
+  );
+
+  assert.equal(audit.status, "AMBIGUOUS");
+  if (audit.status === "AMBIGUOUS") {
+    assert.equal(audit.reason, "ORDERING_CONFLICT");
+  }
+});
+
 test("reply analytics merges an exact live duplicate with Historical text and uses a proven Manager responder key", async () => {
   const inboundAt = new Date("2026-09-01T02:00:00.000Z");
   const history = [
