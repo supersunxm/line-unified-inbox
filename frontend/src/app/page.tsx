@@ -4717,19 +4717,16 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                             <select
                               data-bm-reply-status-select
                               aria-label={text.bmReplyStatus}
-                              disabled={isMutating || authUser?.role === "VIEWER"}
-                              value={selectedConversationState.bmReplyStatus}
+                              disabled
+                              value={selectedConversationState.bmReplyStatus === "REPLIED" ? "REPLIED" : "NOT_REPLIED"}
                               onChange={(e) => void updateBmReplyStatus(e.target.value as ApiBmReplyStatus)}
-                              className={`rounded-[var(--app-radius-sm)] border border-[var(--app-border)] px-1.5 py-0.5 text-[10px] font-medium cursor-pointer focus:outline-none focus:ring-1 focus:ring-[var(--app-accent)] disabled:cursor-not-allowed disabled:opacity-60 ${
+                              className={`rounded-[var(--app-radius-sm)] border border-[var(--app-border)] px-1.5 py-0.5 text-[10px] font-medium disabled:cursor-default disabled:opacity-100 ${
                                 selectedConversationState.bmReplyStatus === "REPLIED"
                                   ? "bg-emerald-50 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-200"
-                                  : selectedConversationState.bmReplyStatus === "NOTIFIED_BM"
-                                    ? "bg-purple-50 text-purple-800 dark:bg-purple-950/60 dark:text-purple-200"
-                                    : "bg-[var(--app-surface)] text-[var(--app-text-primary)]"
+                                  : "bg-[var(--app-surface)] text-[var(--app-text-primary)]"
                               }`}
                             >
                               <option value="NOT_REPLIED">{bmReplyStatusLabels[language].NOT_REPLIED}</option>
-                              <option value="NOTIFIED_BM">{bmReplyStatusLabels[language].NOTIFIED_BM}</option>
                               <option value="REPLIED">{bmReplyStatusLabels[language].REPLIED}</option>
                             </select>
                             <span className="app-muted text-[10px] text-[var(--app-text-tertiary)] font-mono">{formatRelativeTime(selectedConversation.time, language)}</span>
