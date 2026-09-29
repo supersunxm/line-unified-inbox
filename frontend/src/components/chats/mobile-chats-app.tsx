@@ -227,7 +227,7 @@ export function MobileChatsApp() {
         ? await api.bmReplyStatusSummaryForMonth(month)
         : await api.bmReplyStatusSummary();
       setSummary(result.overview);
-      window.dispatchEvent(new CustomEvent("bm-reply-status-summary-refresh", { detail: { month } }));
+      window.dispatchEvent(new Event("bm-reply-status-summary-refresh"));
     } catch { /* list remains usable without summary */ }
   }, [month, monthReady]);
 
