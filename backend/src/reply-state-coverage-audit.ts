@@ -6,8 +6,6 @@ import {
 } from "./reply-state-mismatch-cause";
 import { analyzeReplyEvidenceWindow } from "./reply-state-evidence-window";
 import {
-  normalizeCanonicalReplyMessage,
-  normalizeHistoricalReplyMessage,
   normalizeReplyTimeline,
   resolveReplyState,
   type CanonicalReplyMessage,
