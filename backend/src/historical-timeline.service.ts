@@ -276,7 +276,14 @@ export class HistoricalTimelineService {
       : HISTORICAL_TIMELINE_START;
     const filters: Prisma.Sql[] = [
       Prisma.sql`h."sentAt" >= ${historicalStart}`,
-      ...(monthRange ? [Prisma.sql`h."sentAt" < ${monthRange.end}`] : []),
+      ...(monthRange
+        ? [
+            Prisma.sql`h."sentAt" < ${monthRange.end}`,
+            Prisma.sql`h."direction" IN ('INBOUND', 'OUTBOUND')`,
+            Prisma.sql`regexp_replace(lower(h."sourceEventType"), '[[:space:]_-]+', '', 'g')
+              IN ('message', 'messagereceived', 'messagesent', 'text', 'textmessage', 'messagetext')`,
+          ]
+        : []),
       Prisma.sql`NOT EXISTS (
         SELECT 1 FROM public."Conversation" c
         WHERE c."storeId" = h."storeId"
@@ -364,7 +371,12 @@ export class HistoricalTimelineService {
           AND h."lineOfficialAccountId" = c."lineOfficialAccountId"
           AND h."lineChatUserId" = c."lineChatUserId"
           AND h."sentAt" >= ${historicalStart}
-          ${monthRange ? Prisma.sql`AND h."sentAt" < ${monthRange.end}` : Prisma.empty}
+          ${monthRange ? Prisma.sql`
+            AND h."sentAt" < ${monthRange.end}
+            AND h."direction" IN ('INBOUND', 'OUTBOUND')
+            AND regexp_replace(lower(h."sourceEventType"), '[[:space:]_-]+', '', 'g')
+              IN ('message', 'messagereceived', 'messagesent', 'text', 'textmessage', 'messagetext')
+          ` : Prisma.empty}
         ORDER BY h."sentAt" DESC, h."id" DESC
         LIMIT 1
       ) latest ON true
