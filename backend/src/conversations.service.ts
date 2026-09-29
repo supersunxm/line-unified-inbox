@@ -455,8 +455,20 @@ export class ConversationsService {
           ? [{ priority: "desc" }, { latestMessageAt: "desc" }, { id: "desc" }]
           : [{ latestMessageAt: "desc" }, { id: "desc" }];
     const pageSize = Math.min(100, Math.max(1, Math.floor(query.pageSize)));
+    const listInclude = monthRange
+      ? {
+          ...conversationListInclude,
+          messages: {
+            ...conversationListInclude.messages,
+            where: {
+              sentAt: { gte: monthRange.start, lt: monthRange.end },
+              direction: { in: [MessageDirection.INBOUND, MessageDirection.OUTBOUND] },
+            },
+          },
+        } satisfies Prisma.ConversationInclude
+      : conversationListInclude;
     const [items, total] = await this.prisma.$transaction([
-      this.prisma.conversation.findMany({ where, include: conversationListInclude, orderBy, skip: (query.page - 1) * pageSize, take: pageSize }),
+      this.prisma.conversation.findMany({ where, include: listInclude, orderBy, skip: (query.page - 1) * pageSize, take: pageSize }),
       this.prisma.conversation.count({ where }),
     ]);
     const latestManagerUrls = await loadLatestManagerUrls(this.prisma, items.flatMap(({ store }) => store ? [store.code] : []));
