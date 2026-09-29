@@ -28,6 +28,16 @@ enum BmReplyStatus {
   REPLIED
 }
 
+enum ReplyStateProjectionState {
+  REPLIED
+  NOT_REPLIED
+}
+
+enum ReplyStateProjectionDecidingEvent {
+  CUSTOMER_INBOUND
+  HUMAN_STAFF_REPLY
+}
+
 enum ConversationSourceChannel {
   STORE
   ONLINE
@@ -923,6 +933,7 @@ model Conversation {
   messageSendJobs       LineChatMessageSendJob[]
   historicalCrosswalks HistoricalConversationCrosswalk[] @relation("HistoricalCrosswalkCanonicalConversation")
 
+  replyStateProjection ConversationReplyStateProjection?
   @@index([latestMessageAt])
   @@index([followUpStatus])
   @@index([priority])
@@ -941,6 +952,24 @@ model Conversation {
   @@index([lineOfficialAccountId, customerId])
   @@index([customerId, latestMessageAt(sort: Desc)])
   @@index([ownerUserId])
+}
+
+model ConversationReplyStateProjection {
+  conversationId     String                            @id
+  state              ReplyStateProjectionState
+  decidingEventKind  ReplyStateProjectionDecidingEvent
+  decidingEventAt    DateTime
+  evidenceBoundary   DateTime
+  resolverVersion    String
+  canonicalMessageCount Int                            @default(0)
+  historicalMessageCount Int                           @default(0)
+  computedAt         DateTime                          @default(now())
+  updatedAt          DateTime                          @updatedAt
+  conversation       Conversation                      @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([state, decidingEventAt(sort: Desc)])
+  @@index([evidenceBoundary])
+  @@index([updatedAt])
 }
 
 model Message {
