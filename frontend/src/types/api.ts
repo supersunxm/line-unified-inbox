@@ -160,6 +160,11 @@ export type ApiCustomerEvent = {
 };
 
 export type ConversationListResponse = { items: ApiConversation[]; total: number; page: number; pageSize: number };
+export type ConversationMonthOptionsResponse = {
+  months: string[];
+  latestMonth: string | null;
+  timezone: "Asia/Bangkok";
+};
 export type HistoricalVirtualChatListResponse = { items: ApiConversation[]; total: number; page: number; pageSize: number; hasNextPage: boolean };
 export type SendConversationMessageResponse = {
   message: ApiConversation["messages"][number];

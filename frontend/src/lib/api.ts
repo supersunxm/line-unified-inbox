@@ -1,4 +1,4 @@
-import type { ApiBmReplyStatus, ApiConversation, ApiCustomerEvent, ApiCustomerIntelligence, ApiFollowUpStatus, ApiPriority, ApiStore, ApiTopic, BackfillJobResponseDto, BmReplyStatusSummaryResponse, ProductCorrectionInsightResponse, NetworkAccuracyReport, ProductReviewQueueResponse, ApproveAliasResponse, RejectAliasResponse, TargetedReanalysisResponse, ConversationListResponse, ConversationMessagesResponse, HistoricalVirtualChatListResponse, CreateLineOaInput, DashboardAnalyticsResponse, FriendAttributionConfigDto, FriendAttributionSessionStatusResult, FriendSourceLink, FriendSourceLinksFilters, FriendSourceLinksGenerateResult, FriendSourceLinksSummaryItem, IdentifyFriendAttributionInput, IdentifyFriendAttributionResult, LineOfficialAccountResponse, LineOaCredentialHealth, LineOaTestResult, LineOaWebhookInfo, ProductMetadataResponse, ProductVariantMetadata, PurchaseAnalyticsResponse, SendConversationMessageResponse, StoreDeletionPreview, StoreMasterSuggestion, StorePrioritySummaryResponse, StoreRemovalResult, StoreInsightsSummary, StoreInsightsResponsePerformance, StoreInsightsResponder, StoreInsightsSales, StoreInsightsConversationResponse, StoreInsightsCustomerVoice, StoreInsightsCustomerVoiceDimension, StoreInsightsCustomerVoiceDrilldownResponse, StoreInsightsResponseCasesResponse, StoreInsightsResponseSegment, StoreInsightsResponseSort, SummaryDailyRow, ByStoreAccountRow, SyncBatchResult, UpdateCustomerSalesInfoInput, UpdateFriendshipStatusInput, UpdateFriendshipStatusResult, UpsertFriendAttributionConfigInput } from "@/types/api";
+import type { ApiBmReplyStatus, ApiConversation, ApiCustomerEvent, ApiCustomerIntelligence, ApiFollowUpStatus, ApiPriority, ApiStore, ApiTopic, BackfillJobResponseDto, BmReplyStatusSummaryResponse, ProductCorrectionInsightResponse, NetworkAccuracyReport, ProductReviewQueueResponse, ApproveAliasResponse, RejectAliasResponse, TargetedReanalysisResponse, ConversationListResponse, ConversationMonthOptionsResponse, ConversationMessagesResponse, HistoricalVirtualChatListResponse, CreateLineOaInput, DashboardAnalyticsResponse, FriendAttributionConfigDto, FriendAttributionSessionStatusResult, FriendSourceLink, FriendSourceLinksFilters, FriendSourceLinksGenerateResult, FriendSourceLinksSummaryItem, IdentifyFriendAttributionInput, IdentifyFriendAttributionResult, LineOfficialAccountResponse, LineOaCredentialHealth, LineOaTestResult, LineOaWebhookInfo, ProductMetadataResponse, ProductVariantMetadata, PurchaseAnalyticsResponse, SendConversationMessageResponse, StoreDeletionPreview, StoreMasterSuggestion, StorePrioritySummaryResponse, StoreRemovalResult, StoreInsightsSummary, StoreInsightsResponsePerformance, StoreInsightsResponder, StoreInsightsSales, StoreInsightsConversationResponse, StoreInsightsCustomerVoice, StoreInsightsCustomerVoiceDimension, StoreInsightsCustomerVoiceDrilldownResponse, StoreInsightsResponseCasesResponse, StoreInsightsResponseSegment, StoreInsightsResponseSort, SummaryDailyRow, ByStoreAccountRow, SyncBatchResult, UpdateCustomerSalesInfoInput, UpdateFriendshipStatusInput, UpdateFriendshipStatusResult, UpsertFriendAttributionConfigInput } from "@/types/api";
 import { AUTH_UNAUTHORIZED_EVENT } from "@/lib/auth-session";
 import { API_BASE_URL } from "@/lib/runtime-config";
 
@@ -456,10 +456,17 @@ export const api = {
   },
   mainOaConversation: (id: string) => request<ApiConversation>(`/main-oa/conversations/${encodeURIComponent(id)}`),
   sendMainOaMessage: (id: string, text: string, idempotencyKey: string) => request<SendConversationMessageResponse>(`/main-oa/conversations/${encodeURIComponent(id)}/messages`, { method: "POST", body: JSON.stringify({ text, idempotencyKey }) }),
+  conversationMonthOptions: (options?: ApiRequestOptions) => request<ConversationMonthOptionsResponse>("/conversations/month-options", options),
   bmReplyStatusSummary: (options?: ApiRequestOptions) => request<BmReplyStatusSummaryResponse>("/conversations/bm-reply-status-summary", options),
+  bmReplyStatusSummaryForMonth: (month: string, options?: ApiRequestOptions) =>
+    request<BmReplyStatusSummaryResponse>(`/conversations/bm-reply-status-summary?month=${encodeURIComponent(month)}`, options),
   storePrioritySummary: () => request<StorePrioritySummaryResponse>("/conversations/store-priority-summary"),
   conversation: (id: string, options?: ApiRequestOptions) => request<ApiConversation>(`/conversations/${id}`, options),
-  conversationMessages: (id: string, page = 1, options?: ApiRequestOptions) => request<ConversationMessagesResponse>(`/conversations/${id}/messages?page=${page}&pageSize=30`, options),
+  conversationMessages: (id: string, page = 1, options?: ApiRequestOptions, month?: string) => {
+    const query = new URLSearchParams({ page: String(page), pageSize: "30" });
+    if (month) query.set("month", month);
+    return request<ConversationMessagesResponse>(`/conversations/${id}/messages?${query.toString()}`, options);
+  },
   historicalChats: (params?: Record<string, string | number | boolean | undefined>, options?: ApiRequestOptions) => {
     const query = new URLSearchParams();
     for (const [key, value] of Object.entries(params ?? {})) {
@@ -468,7 +475,11 @@ export const api = {
     return request<HistoricalVirtualChatListResponse>(`/historical-timeline/chats?${query.toString()}`, options);
   },
   historicalChat: (id: string, options?: ApiRequestOptions) => request<ApiConversation>(`/historical-timeline/chats/${encodeURIComponent(id)}`, options),
-  historicalChatMessages: (id: string, page = 1, options?: ApiRequestOptions) => request<ConversationMessagesResponse>(`/historical-timeline/chats/${encodeURIComponent(id)}/messages?page=${page}&pageSize=30`, options),
+  historicalChatMessages: (id: string, page = 1, options?: ApiRequestOptions, month?: string) => {
+    const query = new URLSearchParams({ page: String(page), pageSize: "30" });
+    if (month) query.set("month", month);
+    return request<ConversationMessagesResponse>(`/historical-timeline/chats/${encodeURIComponent(id)}/messages?${query.toString()}`, options);
+  },
   sendConversationMessage: (id: string, text: string, idempotencyKey: string) =>
     request<SendConversationMessageResponse>(`/conversations/${encodeURIComponent(id)}/messages`, {
       method: "POST",
@@ -503,20 +514,20 @@ export const api = {
   customerIntelligence: (customerId: string, options?: ApiRequestOptions) => request<ApiCustomerIntelligence>(`/customers/${encodeURIComponent(customerId)}/intelligence`, options),
   updateStatus: (id: string, status: ApiFollowUpStatus) => request<{ changed: boolean; conversation: ApiConversation }>(`/conversations/${id}/status`, { method: "PATCH", body: JSON.stringify({ status }) }),
   updateBmReplyStatus: (id: string, status: ApiBmReplyStatus) => request<{ changed: boolean; conversation: ApiConversation }>(`/conversations/${id}/bm-reply-status`, { method: "PATCH", body: JSON.stringify({ status, bmReplyStatus: status }) }),
-  bulkUpdateBmReplyStatus: (input: { storeId: string; status: ApiBmReplyStatus; fromStatuses?: ApiBmReplyStatus[] }) =>
+  bulkUpdateBmReplyStatus: (input: { storeId: string; status: ApiBmReplyStatus; fromStatuses?: ApiBmReplyStatus[] }, month?: string) =>
     request<{ updated: number; status: ApiBmReplyStatus }>("/conversations/bm-reply-status/bulk", {
       method: "PATCH",
-      body: JSON.stringify(input),
+      body: JSON.stringify({ ...input, ...(month ? { month } : {}) }),
     }),
   bulkMarkReplied: (conversationIds: string[]) =>
     request<{ success: boolean; updatedCount: number; affectedCount: number; storeId: string; status: ApiBmReplyStatus }>("/conversations/bulk-mark-replied", {
       method: "POST",
       body: JSON.stringify({ conversationIds }),
     }),
-  bulkMarkRepliedByFilter: (input: { bmReplyStatus?: ApiBmReplyStatus; storeId?: string }) =>
+  bulkMarkRepliedByFilter: (input: { bmReplyStatus?: ApiBmReplyStatus; storeId?: string }, month?: string) =>
     request<{ success: boolean; updatedCount: number; affectedCount: number; storeId: string; status: ApiBmReplyStatus }>("/conversations/bulk-mark-replied-by-filter", {
       method: "POST",
-      body: JSON.stringify(input),
+      body: JSON.stringify({ ...input, ...(month ? { month } : {}) }),
     }),
   updatePriority: (id: string, priority: ApiPriority) => request<ApiConversation>(`/conversations/${id}/priority`, { method: "PATCH", body: JSON.stringify({ priority }) }),
   notes: (id: string) => request<ApiConversation["notes"]>(`/conversations/${id}/notes`),

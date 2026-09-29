@@ -63,6 +63,21 @@ function thaiTime(value: string) {
   return new Intl.DateTimeFormat("th-TH", { hour: "2-digit", minute: "2-digit" }).format(new Date(value));
 }
 
+function mobileMonthLabel(month: string) {
+  const [year, monthNumber] = month.split("-").map(Number);
+  if (!year || !monthNumber) return month;
+  return new Intl.DateTimeFormat("th-TH-u-ca-gregory", {
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(Date.UTC(year, monthNumber - 1, 1)));
+}
+
+function bangkokMonth(value: string) {
+  const shifted = new Date(new Date(value).getTime() + 7 * 60 * 60 * 1000);
+  return `${shifted.getUTCFullYear()}-${String(shifted.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
 function Avatar({ conversation, size = "md" }: { conversation: ApiConversation; size?: "sm" | "md" }) {
   const classes = size === "sm" ? "h-9 w-9 text-xs" : "h-11 w-11 text-sm";
   if (conversation.customer.pictureUrl) {
@@ -154,6 +169,9 @@ export function MobileChatsApp() {
     return value === "NOT_REPLIED" || value === "NOTIFIED_BM" || value === "REPLIED" ? value : "all";
   });
   const [storeId] = useState(() => typeof window === "undefined" ? "" : new URLSearchParams(window.location.search).get("store") || "");
+  const [month, setMonth] = useState(() => typeof window === "undefined" ? "" : new URLSearchParams(window.location.search).get("month") || "");
+  const [monthOptions, setMonthOptions] = useState<string[]>([]);
+  const [monthReady, setMonthReady] = useState(false);
   const [summary, setSummary] = useState({ notReplied: 0, notifiedBm: 0, replied: 0 });
   const [listLoading, setListLoading] = useState(false);
   const [listError, setListError] = useState<string | null>(null);
@@ -177,6 +195,8 @@ export function MobileChatsApp() {
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const historicalTotalPages = Math.max(1, Math.ceil(historicalTotal / HISTORICAL_PAGE_SIZE));
+  const latestMonth = monthOptions[0] ?? "";
+  const viewingLatestMonth = !month || !latestMonth || month === latestMonth;
   const statusCounts = useMemo(() => ({
     all: summary.notReplied + summary.notifiedBm + summary.replied,
     NOT_REPLIED: summary.notReplied,
@@ -201,12 +221,15 @@ export function MobileChatsApp() {
   }, []);
 
   const refreshSummary = useCallback(async () => {
+    if (!monthReady) return;
     try {
-      const result = await api.bmReplyStatusSummary();
+      const result = month
+        ? await api.bmReplyStatusSummaryForMonth(month)
+        : await api.bmReplyStatusSummary();
       setSummary(result.overview);
       window.dispatchEvent(new Event("bm-reply-status-summary-refresh"));
     } catch { /* list remains usable without summary */ }
-  }, []);
+  }, [month, monthReady]);
 
   useEffect(() => {
     let active = true;
@@ -222,6 +245,36 @@ export function MobileChatsApp() {
   }, []);
 
   useEffect(() => {
+    if (!user) return;
+    let active = true;
+    const controller = new AbortController();
+    void api.conversationMonthOptions({ signal: controller.signal })
+      .then((result) => {
+        if (!active) return;
+        const requested = new URLSearchParams(window.location.search).get("month");
+        const selectedMonth = requested && result.months.includes(requested)
+          ? requested
+          : result.latestMonth ?? "";
+        setMonthOptions(result.months);
+        setMonth(selectedMonth);
+        if (selectedMonth) {
+          const url = new URL(window.location.href);
+          url.searchParams.set("month", selectedMonth);
+          window.history.replaceState({}, "", `${url.pathname}${url.search}`);
+          window.dispatchEvent(new CustomEvent("chat-month-change", { detail: { month: selectedMonth } }));
+        }
+        setMonthReady(true);
+      })
+      .catch(() => {
+        if (active) setMonthReady(true);
+      });
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [user]);
+
+  useEffect(() => {
     if (!user || !selected?.id) return;
     return subscribeToRealtimeEvents((event) => {
       if (event.conversationId !== selected.id) return;
@@ -235,6 +288,7 @@ export function MobileChatsApp() {
       if (!event.message) return;
       const incoming = mapRealtimeMessage(event.message);
       if (event.type === "message.created") {
+        if (month && bangkokMonth(incoming.sentAt) !== month) return;
         setMessages((current) => current.items.some((item) => item.id === incoming.id)
           ? current
           : { ...current, items: [...current.items, incoming], total: current.total + 1 });
@@ -246,7 +300,7 @@ export function MobileChatsApp() {
       setMessages((current) => ({ ...current, items: current.items.map((item) => item.id === incoming.id ? { ...item, media: incoming.media } : item) }));
       setSelected((current) => current ? { ...current, messages: current.messages.map((item) => item.id === incoming.id ? { ...item, media: incoming.media } : item) } : current);
     });
-  }, [selected?.id, user]);
+  }, [month, selected?.id, user]);
 
   useEffect(() => {
     if (!user || !selected?.id || selected.historicalOnly || messages.page !== 1) return;
@@ -258,7 +312,7 @@ export function MobileChatsApp() {
       try {
         const [conversation, history] = await Promise.all([
           api.conversation(conversationId),
-          api.conversationMessages(conversationId, 1),
+          api.conversationMessages(conversationId, 1, undefined, month || undefined),
         ]);
         if (!active) return;
         setMessages(history);
@@ -278,10 +332,10 @@ export function MobileChatsApp() {
       active = false;
       window.clearInterval(timer);
     };
-  }, [messages.page, selected?.historicalOnly, selected?.id, user]);
+  }, [messages.page, month, selected?.historicalOnly, selected?.id, user]);
 
   const loadList = useCallback(async () => {
-    if (!user) return;
+    if (!user || !monthReady) return;
     const requestId = ++listRequestId.current;
     setListLoading(true);
     setListError(null);
@@ -292,9 +346,10 @@ export function MobileChatsApp() {
         search: search.trim() || undefined,
         bmReplyStatus: status === "all" ? undefined : status,
         storeId: storeId || undefined,
+        month: month || undefined,
       });
       const historicalRequest = status === "all"
-        ? api.historicalChats({ page: historicalPage, pageSize: HISTORICAL_PAGE_SIZE, search: search.trim() || undefined, storeId: storeId || undefined })
+        ? api.historicalChats({ page: historicalPage, pageSize: HISTORICAL_PAGE_SIZE, search: search.trim() || undefined, storeId: storeId || undefined, month: month || undefined })
           .catch(() => ({ items: [], total: 0, page: historicalPage, pageSize: HISTORICAL_PAGE_SIZE, hasNextPage: false }))
         : Promise.resolve({ items: [], total: 0, page: historicalPage, pageSize: HISTORICAL_PAGE_SIZE, hasNextPage: false });
       const [response, historicalResponse] = await Promise.all([canonicalRequest, historicalRequest]);
@@ -308,7 +363,7 @@ export function MobileChatsApp() {
     } finally {
       if (requestId === listRequestId.current) setListLoading(false);
     }
-  }, [historicalPage, page, search, status, storeId, user]);
+  }, [historicalPage, month, monthReady, page, search, status, storeId, user]);
 
   useEffect(() => {
     if (!user) return;
@@ -348,8 +403,8 @@ export function MobileChatsApp() {
     try {
       const historical = seed?.historicalOnly === true || id.startsWith("historical:");
       const [conversation, history] = historical
-        ? await Promise.all([api.historicalChat(id), api.historicalChatMessages(id)])
-        : await Promise.all([api.conversation(id), api.conversationMessages(id)]);
+        ? await Promise.all([api.historicalChat(id), api.historicalChatMessages(id, 1, undefined, month || undefined)])
+        : await Promise.all([api.conversation(id), api.conversationMessages(id, 1, undefined, month || undefined)]);
       setSelected(conversation);
       setMessages(history);
       scrollMessagesToBottom();
@@ -360,10 +415,10 @@ export function MobileChatsApp() {
     } finally {
       setChatLoading(false);
     }
-  }, [scrollMessagesToBottom, updateUrlConversation]);
+  }, [month, scrollMessagesToBottom, updateUrlConversation]);
 
   useEffect(() => {
-    if (!user || routingReady) return;
+    if (!user || routingReady || !monthReady) return;
     const timer = window.setTimeout(() => {
       const id = new URLSearchParams(window.location.search).get("conversationId");
       if (!id) {
@@ -375,7 +430,7 @@ export function MobileChatsApp() {
       void loadConversation(id, undefined, false).finally(() => setRoutingReady(true));
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [loadConversation, routingReady, user]);
+  }, [loadConversation, monthReady, routingReady, user]);
 
   useEffect(() => {
     if (!routingReady) return;
@@ -404,7 +459,7 @@ export function MobileChatsApp() {
   }, [updateUrlConversation]);
 
   const sendReply = useCallback(async () => {
-    if (!selected || selected.historicalOnly || !user || user.role === "VIEWER" || !replyText.trim() || replySending) return;
+    if (!selected || selected.historicalOnly || !user || user.role === "VIEWER" || !viewingLatestMonth || !replyText.trim() || replySending) return;
     const text = replyText.trim();
     setReplySending(true);
     setReplyError(null);
@@ -420,14 +475,14 @@ export function MobileChatsApp() {
       scrollMessagesToBottom();
     } catch (error) {
       setReplyError(error instanceof Error ? error.message : "ส่งข้อความไม่สำเร็จ");
-      void api.conversationMessages(selected.id, 1).then((res) => {
+      void api.conversationMessages(selected.id, 1, undefined, month || undefined).then((res) => {
         setMessages(res);
         scrollMessagesToBottom();
       }).catch(() => {});
     } finally {
       setReplySending(false);
     }
-  }, [refreshSummary, replySending, replyText, scrollMessagesToBottom, selected, user]);
+  }, [month, refreshSummary, replySending, replyText, scrollMessagesToBottom, selected, user, viewingLatestMonth]);
 
   const [retryingMessageId, setRetryingMessageId] = useState<string | null>(null);
 
@@ -459,13 +514,13 @@ export function MobileChatsApp() {
     setChatLoading(true);
     try {
       const earlier = selected.historicalOnly
-        ? await api.historicalChatMessages(selected.id, messages.page + 1)
-        : await api.conversationMessages(selected.id, messages.page + 1);
+        ? await api.historicalChatMessages(selected.id, messages.page + 1, undefined, month || undefined)
+        : await api.conversationMessages(selected.id, messages.page + 1, undefined, month || undefined);
       setMessages((current) => ({ ...earlier, items: [...earlier.items, ...current.items] }));
     } finally {
       setChatLoading(false);
     }
-  }, [chatLoading, messages.hasEarlier, messages.page, selected]);
+  }, [chatLoading, messages.hasEarlier, messages.page, month, selected]);
 
   const updateBmStatus = useCallback(async (next: ApiBmReplyStatus) => {
     if (!selected || selected.historicalOnly || !user || user.role === "VIEWER") return;
@@ -540,6 +595,34 @@ export function MobileChatsApp() {
                 <p className="mt-0.5 text-xs text-[var(--app-text-tertiary)]">{total.toLocaleString()} บทสนทนา{storeId ? " · กรองตามสาขา" : ""}</p>
               </div>
               <button type="button" onClick={() => { void loadList(); void refreshSummary(); }} className="flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-subtle)] text-lg" aria-label="รีเฟรช">↻</button>
+            </div>
+            <div className="mt-3 flex items-center gap-2">
+              <span className="shrink-0 text-xs font-semibold text-[var(--app-text-tertiary)]">เดือน</span>
+              <select
+                data-mobile-chat-month-selector
+                value={month}
+                disabled={!monthReady || monthOptions.length === 0}
+                onChange={(event) => {
+                  const nextMonth = event.target.value;
+                  setMonth(nextMonth);
+                  setPage(1);
+                  setHistoricalPage(1);
+                  setSelected(null);
+                  setMessages({ items: [], total: 0, page: 1, pageSize: 30, hasEarlier: false });
+                  const url = new URL(window.location.href);
+                  if (nextMonth) url.searchParams.set("month", nextMonth);
+                  else url.searchParams.delete("month");
+                  url.searchParams.delete("conversationId");
+                  window.history.replaceState({}, "", `${url.pathname}${url.search}`);
+                  window.dispatchEvent(new CustomEvent("chat-month-change", { detail: { month: nextMonth } }));
+                }}
+                className="h-10 min-w-0 flex-1 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-subtle)] px-3 text-sm font-semibold text-[var(--app-text-primary)] outline-none focus:border-[var(--app-accent)] disabled:opacity-50"
+                aria-label="เลือกเดือนแชท"
+              >
+                {monthOptions.map((value) => (
+                  <option key={value} value={value}>{mobileMonthLabel(value)}</option>
+                ))}
+              </select>
             </div>
             <label className="relative mt-3 block">
               <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-[var(--app-text-tertiary)]">⌕</span>
@@ -820,12 +903,18 @@ export function MobileChatsApp() {
                   <textarea
                     rows={1}
                     value={replyText}
-                    disabled={replySending || user.role === "VIEWER"}
+                    disabled={replySending || user.role === "VIEWER" || !viewingLatestMonth}
                     onChange={(event) => { setReplyText(event.target.value); setReplyError(null); }}
-                    placeholder={user.role === "VIEWER" ? "บัญชี Viewer อ่านได้อย่างเดียว" : "พิมพ์ข้อความ..."}
-                    className="max-h-28 min-h-11 flex-1 resize-none rounded-[1.35rem] border border-[var(--app-border)] bg-[var(--app-surface-subtle)] px-3 py-2.5 text-base leading-5 outline-none focus:border-[var(--app-accent)]"
+                    placeholder={
+                      !viewingLatestMonth
+                        ? "ดูเดือนย้อนหลัง · เปลี่ยนเป็นเดือนล่าสุดเพื่อส่งข้อความ"
+                        : user.role === "VIEWER"
+                          ? "บัญชี Viewer อ่านได้อย่างเดียว"
+                          : "พิมพ์ข้อความ..."
+                    }
+                    className="max-h-28 min-h-11 flex-1 resize-none rounded-[1.35rem] border border-[var(--app-border)] bg-[var(--app-surface-subtle)] px-3 py-2.5 text-base leading-5 outline-none focus:border-[var(--app-accent)] disabled:opacity-60"
                   />
-                  <button type="button" onClick={() => void sendReply()} disabled={!replyText.trim() || replySending || user.role === "VIEWER"} className="h-11 shrink-0 rounded-[1.35rem] bg-[var(--app-accent)] px-4 text-sm font-bold text-white disabled:opacity-40">{replySending ? "..." : "ส่ง"}</button>
+                  <button type="button" onClick={() => void sendReply()} disabled={!replyText.trim() || replySending || user.role === "VIEWER" || !viewingLatestMonth} className="h-11 shrink-0 rounded-[1.35rem] bg-[var(--app-accent)] px-4 text-sm font-bold text-white disabled:opacity-40">{replySending ? "..." : "ส่ง"}</button>
                 </div>
                 {replyError && <p className="mt-1.5 px-1 text-xs text-[var(--app-danger)]">{replyError}</p>}
               </div>}

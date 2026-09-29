@@ -25,6 +25,7 @@ import { PDF_MIME_TYPE, readPdfMaxBytes, validatePdfBuffer, PdfValidationError }
 import { LineChatMessageSendQueueService } from "./line-chat/line-chat-message-send-queue.service";
 import { isLineChatMirrorOnlyStore } from "./line-chat/line-chat-pilot.constants";
 import { HISTORICAL_TIMELINE_START, mapHistoricalTimelineMessage } from "./historical-timeline.service";
+import { CHAT_MONTH_TIMEZONE, parseChatMonth, type ChatMonthRange } from "./chat-month";
 
 const conversationBaseInclude = {
   customer: true,
@@ -213,6 +214,109 @@ export class ConversationsService {
     return candidates.filter(isFocusStoreReference).map(({ id }) => id);
   }
 
+  private async historicalConversationIdsForMonth(range: ChatMonthRange): Promise<string[]> {
+    const rows = await this.prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+      WITH direct_identity AS (
+        SELECT c."storeId", c."lineOfficialAccountId", c."lineChatUserId",
+          MIN(c."id")::text AS "canonicalConversationId"
+        FROM public."Conversation" c
+        WHERE c."storeId" IS NOT NULL
+          AND c."lineChatUserId" IS NOT NULL
+        GROUP BY c."storeId", c."lineOfficialAccountId", c."lineChatUserId"
+        HAVING COUNT(*) = 1
+      )
+      SELECT DISTINCT COALESCE(x."canonicalConversationId", d."canonicalConversationId")::text AS id
+      FROM public."HistoricalTimelineMessage" h
+      LEFT JOIN public."HistoricalConversationCrosswalk" x
+        ON x."storeId" = h."storeId"
+        AND x."lineOfficialAccountId" = h."lineOfficialAccountId"
+        AND x."historicalLineChatUserId" = h."lineChatUserId"
+        AND x."classification" = 'LINK_SAFE'
+        AND x."evidenceType" = 'SOURCE_EVENT_ID'
+        AND x."anchorCount" > 0
+        AND x."canonicalConversationId" IS NOT NULL
+      LEFT JOIN direct_identity d
+        ON d."storeId" = h."storeId"
+        AND d."lineOfficialAccountId" = h."lineOfficialAccountId"
+        AND d."lineChatUserId" = h."lineChatUserId"
+      WHERE h."sentAt" >= ${range.start}
+        AND h."sentAt" < ${range.end}
+        AND h."direction" IN ('INBOUND', 'OUTBOUND')
+        AND regexp_replace(lower(h."sourceEventType"), '[[:space:]_-]+', '', 'g')
+          IN ('message', 'messagereceived', 'messagesent', 'text', 'textmessage', 'messagetext')
+        AND COALESCE(x."canonicalConversationId", d."canonicalConversationId") IS NOT NULL
+    `);
+    return rows.map((row) => row.id);
+  }
+
+  private monthActivityFilter(
+    range: ChatMonthRange,
+    historicalConversationIds: string[],
+  ): Prisma.ConversationWhereInput {
+    return {
+      OR: [
+        {
+          messages: {
+            some: {
+              sentAt: { gte: range.start, lt: range.end },
+              direction: { in: [MessageDirection.INBOUND, MessageDirection.OUTBOUND] },
+            },
+          },
+        },
+        ...(historicalConversationIds.length > 0
+          ? [{ id: { in: historicalConversationIds } }]
+          : []),
+      ],
+    };
+  }
+
+  async getChatMonthOptions(accessibleStoreIds: string[] | null | undefined) {
+    if (accessibleStoreIds === undefined) throw new ForbiddenException("Store scope is required");
+    if (accessibleStoreIds !== null && accessibleStoreIds.length === 0) {
+      return { months: [], latestMonth: null, timezone: CHAT_MONTH_TIMEZONE };
+    }
+
+    const storeFilter = accessibleStoreIds === null
+      ? Prisma.empty
+      : Prisma.sql`AND s."id" IN (${Prisma.join(accessibleStoreIds)})`;
+
+    const rows = await this.prisma.$queryRaw<Array<{ month: string }>>(Prisma.sql`
+      SELECT DISTINCT activity.month
+      FROM (
+        SELECT to_char(m."sentAt" + interval '7 hours', 'YYYY-MM') AS month
+        FROM public."Message" m
+        JOIN public."Conversation" c ON c."id" = m."conversationId"
+        JOIN public."Store" s ON s."id" = c."storeId"
+        JOIN public."LineOfficialAccount" oa ON oa."id" = c."lineOfficialAccountId"
+        WHERE s."isActive" = true
+          AND s."archivedAt" IS NULL
+          AND oa."accountType" = 'STORE'
+          AND m."direction" IN ('INBOUND', 'OUTBOUND')
+          ${storeFilter}
+        UNION
+        SELECT to_char(h."sentAt" + interval '7 hours', 'YYYY-MM') AS month
+        FROM public."HistoricalTimelineMessage" h
+        JOIN public."Store" s ON s."id" = h."storeId"
+        JOIN public."LineOfficialAccount" oa ON oa."id" = h."lineOfficialAccountId"
+        WHERE s."isActive" = true
+          AND s."archivedAt" IS NULL
+          AND oa."accountType" = 'STORE'
+          AND h."direction" IN ('INBOUND', 'OUTBOUND')
+          AND regexp_replace(lower(h."sourceEventType"), '[[:space:]_-]+', '', 'g')
+            IN ('message', 'messagereceived', 'messagesent', 'text', 'textmessage', 'messagetext')
+          ${storeFilter}
+      ) activity
+      WHERE activity.month IS NOT NULL
+      ORDER BY activity.month DESC
+    `);
+    const months = rows.map((row) => row.month);
+    return {
+      months,
+      latestMonth: months[0] ?? null,
+      timezone: CHAT_MONTH_TIMEZONE,
+    };
+  }
+
   private safe(item: IncludedConversation, latestManagerUrls: ReadonlyMap<string, string | null>) {
     const value = item.customer.lineUserId;
     const { store: rawStore, lineOfficialAccount: rawLineOfficialAccount, purchaseRecordedBy, salesRecordedBy, owner: rawOwner, _count: ownerTrackingCount, purchaseRecordedById: _purchaseRecordedById, purchaseRecordedAt: _purchaseRecordedAt, salesRecordedById: _salesRecordedById, salesRecordedAt: _salesRecordedAt, ...conversation } = item;
@@ -284,6 +388,10 @@ export class ConversationsService {
 
   async list(query: ConversationQueryDto, accessibleStoreIds: string[] | null = null, accountType: "STORE" | "HEAD_OFFICE" = "STORE") {
     const search = query.search?.trim();
+    const monthRange = parseChatMonth(query.month);
+    const historicalMonthConversationIds = monthRange
+      ? await this.historicalConversationIdsForMonth(monthRange)
+      : [];
     const focusStoreIds = query.storeId === FOCUS_STORE_GROUP_ID
       ? await this.resolveFocusStoreIds(accessibleStoreIds)
       : null;
@@ -302,6 +410,9 @@ export class ConversationsService {
       followUpStatus: query.followUpStatus,
       bmReplyStatus: query.bmReplyStatus,
       priority: query.priority,
+      AND: monthRange
+        ? [this.monthActivityFilter(monthRange, historicalMonthConversationIds)]
+        : undefined,
       products: query.productModelId
         ? { some: { productModelId: query.productModelId } }
         : query.productSeriesId
@@ -344,8 +455,20 @@ export class ConversationsService {
           ? [{ priority: "desc" }, { latestMessageAt: "desc" }, { id: "desc" }]
           : [{ latestMessageAt: "desc" }, { id: "desc" }];
     const pageSize = Math.min(100, Math.max(1, Math.floor(query.pageSize)));
+    const listInclude = monthRange
+      ? {
+          ...conversationListInclude,
+          messages: {
+            ...conversationListInclude.messages,
+            where: {
+              sentAt: { gte: monthRange.start, lt: monthRange.end },
+              direction: { in: [MessageDirection.INBOUND, MessageDirection.OUTBOUND] },
+            },
+          },
+        } satisfies Prisma.ConversationInclude
+      : conversationListInclude;
     const [items, total] = await this.prisma.$transaction([
-      this.prisma.conversation.findMany({ where, include: conversationListInclude, orderBy, skip: (query.page - 1) * pageSize, take: pageSize }),
+      this.prisma.conversation.findMany({ where, include: listInclude, orderBy, skip: (query.page - 1) * pageSize, take: pageSize }),
       this.prisma.conversation.count({ where }),
     ]);
     const latestManagerUrls = await loadLatestManagerUrls(this.prisma, items.flatMap(({ store }) => store ? [store.code] : []));
@@ -438,6 +561,13 @@ export class ConversationsService {
 
   async bulkUpdateBmReplyStatus(dto: BulkUpdateBmReplyStatusDto, actingAdmin?: string) {
     const { storeId, status, fromStatuses } = dto;
+    const monthRange = parseChatMonth(dto.month);
+    const historicalMonthConversationIds = monthRange
+      ? await this.historicalConversationIdsForMonth(monthRange)
+      : [];
+    const monthFilter = monthRange
+      ? this.monthActivityFilter(monthRange, historicalMonthConversationIds)
+      : undefined;
     const store = await this.prisma.store.findUnique({ where: { id: storeId } });
     if (!store) throw new NotFoundException("Store not found");
 
@@ -450,6 +580,7 @@ export class ConversationsService {
       ...(fromStatuses && fromStatuses.length > 0
         ? { bmReplyStatus: { in: fromStatuses } }
         : {}),
+      AND: monthFilter ? [monthFilter] : undefined,
     };
 
     const completesFollowUp = status === BmReplyStatus.REPLIED;
@@ -468,6 +599,7 @@ export class ConversationsService {
       storeName: store.name,
       previousStatusScope: fromStatuses && fromStatuses.length > 0 ? fromStatuses : ["ALL"],
       targetStatus: status,
+      month: monthRange?.month ?? null,
       affectedCount: result.count,
       timestamp: new Date().toISOString(),
     };
@@ -594,6 +726,13 @@ export class ConversationsService {
   async bulkMarkRepliedByFilter(dto: BulkMarkRepliedByFilterDto, user: AuthUser) {
     const targetStatus = dto.bmReplyStatus || BmReplyStatus.NOT_REPLIED;
     const requestedStoreId = dto.storeId;
+    const monthRange = parseChatMonth(dto.month);
+    const historicalMonthConversationIds = monthRange
+      ? await this.historicalConversationIdsForMonth(monthRange)
+      : [];
+    const monthFilter = monthRange
+      ? this.monthActivityFilter(monthRange, historicalMonthConversationIds)
+      : undefined;
 
     let effectiveStoreFilter: string | undefined;
     let storeScopeName = "all";
@@ -627,6 +766,7 @@ export class ConversationsService {
       ...operationalWhere,
       bmReplyStatus: targetStatus,
       ...(effectiveStoreFilter ? { storeId: effectiveStoreFilter } : {}),
+      AND: monthFilter ? [monthFilter] : undefined,
     };
 
     const matchingConversations = await this.prisma.conversation.findMany({
@@ -734,11 +874,15 @@ export class ConversationsService {
     return note;
   }
 
-  async messages(id: string, page: number, pageSize: number) {
+  async messages(id: string, page: number, pageSize: number, month?: string) {
     const conversation = await this.get(id);
+    const monthRange = parseChatMonth(month);
     const safePage = Number.isFinite(page) && page > 0 ? Math.min(5000, Math.floor(page)) : 1;
     const safeSize = Number.isFinite(pageSize) ? Math.min(100, Math.max(1, Math.floor(pageSize))) : 30;
-    const where = { conversationId: id };
+    const where = {
+      conversationId: id,
+      ...(monthRange ? { sentAt: { gte: monthRange.start, lt: monthRange.end } } : {}),
+    };
     const canonicalTotal = await this.prisma.message.count({ where });
     const historicalModel = this.prisma.historicalTimelineMessage;
     if (!conversation.storeId || typeof historicalModel?.count !== "function" || typeof historicalModel.findMany !== "function") {
@@ -766,11 +910,17 @@ export class ConversationsService {
       return { items: items.reverse().map((message) => this.safeMessage(message)), total: canonicalTotal, page: safePage, pageSize: safeSize, hasEarlier: safePage * safeSize < canonicalTotal };
     }
 
+    const historicalStart = monthRange && monthRange.start > HISTORICAL_TIMELINE_START
+      ? monthRange.start
+      : HISTORICAL_TIMELINE_START;
     const historicalWhere = {
       storeId: conversation.storeId,
       lineOfficialAccountId: conversation.lineOfficialAccountId,
       lineChatUserId: { in: [...historicalLineChatUserIds] },
-      sentAt: { gte: HISTORICAL_TIMELINE_START },
+      sentAt: {
+        gte: historicalStart,
+        ...(monthRange ? { lt: monthRange.end } : {}),
+      },
     };
     const historicalTotal = await historicalModel.count({ where: historicalWhere });
     const historicalRows = await historicalModel.findMany({
@@ -795,7 +945,8 @@ export class ConversationsService {
         WHERE h."lineOfficialAccountId" = ${conversation.lineOfficialAccountId}
           AND h."storeId" = ${conversation.storeId}
           AND h."lineChatUserId" IN (${Prisma.join([...historicalLineChatUserIds])})
-          AND h."sentAt" >= ${HISTORICAL_TIMELINE_START}
+          AND h."sentAt" >= ${historicalStart}
+          ${monthRange ? Prisma.sql`AND h."sentAt" < ${monthRange.end}` : Prisma.empty}
       `);
       exactDuplicateIds = new Set(duplicateRows.map((row) => row.sourceEventId));
     }
@@ -1499,8 +1650,15 @@ export class ConversationsService {
     return this.get(id);
   }
 
-  async getBmReplyStatusSummary(accessibleStoreIds: string[] | null | undefined) {
+  async getBmReplyStatusSummary(accessibleStoreIds: string[] | null | undefined, month?: string) {
     if (accessibleStoreIds === undefined) throw new ForbiddenException("Store scope is required");
+    const monthRange = parseChatMonth(month);
+    const historicalMonthConversationIds = monthRange
+      ? await this.historicalConversationIdsForMonth(monthRange)
+      : [];
+    const monthFilter = monthRange
+      ? this.monthActivityFilter(monthRange, historicalMonthConversationIds)
+      : undefined;
     const storeScope: Prisma.StoreWhereInput = {
       isActive: true,
       archivedAt: null,
@@ -1521,7 +1679,12 @@ export class ConversationsService {
 
     const grouped = await this.prisma.conversation.groupBy({
       by: ["storeId", "bmReplyStatus"],
-      where: { store: storeScope, lineOfficialAccount: { accountType: "STORE" }, ...(resetFilter as Prisma.ConversationWhereInput) },
+      where: {
+        store: storeScope,
+        lineOfficialAccount: { accountType: "STORE" },
+        ...(resetFilter as Prisma.ConversationWhereInput),
+        AND: monthFilter ? [monthFilter] : undefined,
+      },
       _count: { _all: true },
     });
 
@@ -1565,6 +1728,7 @@ export class ConversationsService {
         lineOfficialAccount: { accountType: "STORE" },
         bmReplyStatus: BmReplyStatus.NOT_REPLIED,
         ...(resetFilter as Prisma.ConversationWhereInput),
+        AND: monthFilter ? [monthFilter] : undefined,
       },
       _min: { latestMessageAt: true },
     });
@@ -1626,6 +1790,8 @@ export class ConversationsService {
     return {
       overview,
       stores: storesList,
+      month: monthRange?.month ?? null,
+      timezone: CHAT_MONTH_TIMEZONE,
     };
   }
 }

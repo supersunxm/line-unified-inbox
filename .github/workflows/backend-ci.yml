@@ -82,6 +82,12 @@ jobs:
       - name: Reply state resolver tests
         run: npx tsx --test src/reply-state-resolver.spec.ts src/reply-state-mismatch-cause.spec.ts src/reply-state-evidence-window.spec.ts src/reply-state-shadow.service.spec.ts
 
+      - name: Chat month selector backend lint
+        run: npx eslint "src/chat-month.ts" "src/chat-month.spec.ts" "src/dto.ts" "src/conversations.controller.ts" "src/conversations.service.ts" "src/historical-timeline.controller.ts" "src/historical-timeline.service.ts"
+
+      - name: Chat month selector backend tests
+        run: npx tsx --test src/chat-month.spec.ts
+
       - name: Mobile sales audit regression tests
         run: npx tsx --test src/mobile/mobile-customer-sales-activity.spec.ts
 
@@ -187,6 +193,9 @@ jobs:
 
       - name: Store Chats media parity regression tests
         run: node --test --experimental-strip-types test/store-chats-media-parity.test.mts
+
+      - name: Store Chats month selector regression tests
+        run: node --test --experimental-strip-types test/chat-month-selector.test.mts
 
       - name: Canonical Store ID export regression tests
         run: node --test --experimental-strip-types test/canonical-store-id-export.test.mts

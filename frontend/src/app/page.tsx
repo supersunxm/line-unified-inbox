@@ -104,6 +104,21 @@ export const bmReplyStatusLabels: Record<Language, Record<ApiBmReplyStatus, stri
 
 export const CONVERSATION_PAGE_SIZE = 40;
 
+function chatMonthLabel(month: string, language: Language): string {
+  const [year, monthNumber] = month.split("-").map(Number);
+  if (!year || !monthNumber) return month;
+  return new Intl.DateTimeFormat(
+    language === "th" ? "th-TH-u-ca-gregory" : language === "zh" ? "zh-CN" : "en-US",
+    { month: "long", year: "numeric", timeZone: "UTC" },
+  ).format(new Date(Date.UTC(year, monthNumber - 1, 1)));
+}
+
+function bangkokMonthFromDate(value: string | Date): string {
+  const date = value instanceof Date ? value : new Date(value);
+  const shifted = new Date(date.getTime() + 7 * 60 * 60 * 1000);
+  return `${shifted.getUTCFullYear()}-${String(shifted.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
 type UiPreferences = {
   language: Language;
   searchText: string;
@@ -1601,6 +1616,12 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
   const [uiPreferencesLoaded, setUiPreferencesLoaded] = useState(false);
   const [chatPage, setChatPage] = useState(1);
   const [chatPageSize, setChatPageSize] = useState(CONVERSATION_PAGE_SIZE);
+  const [chatMonth, setChatMonth] = useState("");
+  const [chatMonthOptions, setChatMonthOptions] = useState<string[]>([]);
+  const [chatMonthReady, setChatMonthReady] = useState(initialSection !== "chats");
+  const chatMonthRef = useRef("");
+  const latestChatMonth = chatMonthOptions[0] ?? "";
+  const viewingLatestChatMonth = !chatMonth || !latestChatMonth || chatMonth === latestChatMonth;
   const [chatTotalCount, setChatTotalCount] = useState(0);
   const [isChatPageLoading, setIsChatPageLoading] = useState(false);
   const [chatPageError, setChatPageError] = useState<string | null>(null);
@@ -1767,8 +1788,9 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
       productSeriesId: initialSection === "chats" ? productSeriesId : undefined,
       productModelId: initialSection === "chats" ? productModelId : undefined,
       topicId: initialSection === "chats" ? topicId : undefined,
+      month: initialSection === "chats" && chatMonth ? chatMonth : undefined,
     }),
-    [activeConversationBmReplyStatus, activeConversationStatus, chatPage, chatPageSize, initialSection, lineOaFilter, priorityFilter, productModelId, productSeriesId, searchText, selectedStore, topicId],
+    [activeConversationBmReplyStatus, activeConversationStatus, chatMonth, chatPage, chatPageSize, initialSection, lineOaFilter, priorityFilter, productModelId, productSeriesId, searchText, selectedStore, topicId],
   );
   const activeConversationQueryKey = conversationListQueryKey(activeConversationQuery);
   const conversationQueryRef = useRef(activeConversationQuery);
@@ -1785,6 +1807,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
     productSeriesId: activeConversationQuery.productSeriesId,
     productModelId: activeConversationQuery.productModelId,
     topicId: activeConversationQuery.topicId,
+    month: activeConversationQuery.month,
     pageSize: activeConversationQuery.pageSize,
   });
   const previousConversationFilterShape = useRef(conversationFilterShapeKey);
@@ -1834,7 +1857,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
   }, [text.connectionError]);
 
   useEffect(() => {
-    if (!authUser || initialSection !== "chats") return;
+    if (!authUser || initialSection !== "chats" || !chatMonthReady) return;
     if (previousConversationFilterShape.current !== conversationFilterShapeKey) {
       previousConversationFilterShape.current = conversationFilterShapeKey;
       if (chatPage !== 1) {
@@ -1843,7 +1866,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
       }
     }
     void loadConversations(activeConversationQuery);
-  }, [activeConversationQuery, activeConversationQueryKey, authUser, chatPage, conversationFilterShapeKey, initialSection, loadConversations]);
+  }, [activeConversationQuery, activeConversationQueryKey, authUser, chatMonthReady, chatPage, conversationFilterShapeKey, initialSection, loadConversations]);
 
   const loadSupportingData = useCallback(async (silent = false, includeWebhookInfo = !silent, mode: SupportingDataMode = "full") => {
     const isChatsSection = initialSection === "chats";
@@ -1866,12 +1889,17 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
     if (!silent) setIsLoading(true);
     setApiError(null);
     try {
+      const activeMonth = chatMonthRef.current;
       const [storeResponse, productResponse, topicResponse, lineOaResponse, bmSummaryResponse] = await Promise.all([
         loadStores ? api.stores(showArchivedStores, { signal: controller.signal }) : Promise.resolve(null),
         loadChatMetadata ? api.products({ signal: controller.signal }) : Promise.resolve(null),
         loadChatMetadata ? api.topics({ signal: controller.signal }) : Promise.resolve(null),
         loadLineOas ? api.lineOfficialAccounts(showArchivedLineOas, { signal: controller.signal }) : Promise.resolve(null),
-        loadBmSummary ? api.bmReplyStatusSummary({ signal: controller.signal }) : Promise.resolve(null),
+        loadBmSummary
+          ? activeMonth
+            ? api.bmReplyStatusSummaryForMonth(activeMonth, { signal: controller.signal })
+            : api.bmReplyStatusSummary({ signal: controller.signal })
+          : Promise.resolve(null),
       ]);
       if (storeResponse) {
         setStores(
@@ -2068,6 +2096,48 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
   }, [authUser, initialSection, loadPolledApplicationData]);
 
   useEffect(() => {
+    if (!authUser || initialSection !== "chats") return;
+    let active = true;
+    const controller = new AbortController();
+    void api.conversationMonthOptions({ signal: controller.signal })
+      .then((result) => {
+        if (!active) return;
+        const requested = new URLSearchParams(window.location.search).get("month");
+        const selected = requested && result.months.includes(requested)
+          ? requested
+          : result.latestMonth ?? "";
+        setChatMonthOptions(result.months);
+        setChatMonth(selected);
+        setChatMonthReady(true);
+      })
+      .catch(() => {
+        if (active) setChatMonthReady(true);
+      });
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [authUser, initialSection]);
+
+  useEffect(() => {
+    chatMonthRef.current = chatMonth;
+    if (!authUser || initialSection !== "chats" || !chatMonthReady) return;
+    const controller = new AbortController();
+    void (chatMonth
+      ? api.bmReplyStatusSummaryForMonth(chatMonth, { signal: controller.signal })
+      : api.bmReplyStatusSummary({ signal: controller.signal }))
+      .then((value) => {
+        if (!controller.signal.aborted) setBmSummaryData(value);
+      })
+      .catch((error) => {
+        if (!controller.signal.aborted && !isAbortError(error)) {
+          setApiError(error instanceof Error ? error.message : "Unable to load reply summary");
+        }
+      });
+    return () => controller.abort();
+  }, [authUser, chatMonth, chatMonthReady, initialSection]);
+
+  useEffect(() => {
     const loadSavedPreferences = window.setTimeout(() => {
       const saved = loadUiPreferences();
       setLanguage(saved.language);
@@ -2133,6 +2203,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
       model: modelFilter,
       topic: topicFilter,
       lineOaId: lineOaFilter,
+      month: chatMonth || undefined,
       conversationId: selectedConversationId || undefined,
     });
     const routeUrl = new URL(href, window.location.origin);
@@ -2140,7 +2211,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
       routeUrl.searchParams.set(FOCUS_STORE_GROUP_ROUTE_PARAM, FOCUS_STORE_GROUP_ROUTE_VALUE);
     }
     window.history.replaceState(null, "", `${routeUrl.pathname}${routeUrl.search}${routeUrl.hash}`);
-  }, [initialSection, lineOaFilter, modelFilter, priorityFilter, selectedConversationId, selectedStore, sidebarView, statusFilter, topicFilter, uiPreferencesLoaded]);
+  }, [chatMonth, initialSection, lineOaFilter, modelFilter, priorityFilter, selectedConversationId, selectedStore, sidebarView, statusFilter, topicFilter, uiPreferencesLoaded]);
 
   useEffect(() => {
     if (!uiPreferencesLoaded) return;
@@ -2247,7 +2318,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
       try {
         const [conversation, messages] = await Promise.all([
           api.conversation(selectedConversationId, { signal: controller.signal }),
-          api.conversationMessages(selectedConversationId, 1, { signal: controller.signal }),
+          api.conversationMessages(selectedConversationId, 1, { signal: controller.signal }, chatMonth || undefined),
         ]);
         if (active && !controller.signal.aborted) {
           setSelectedApiConversation(conversation); setChatHistory(messages);
@@ -2267,7 +2338,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
       window.clearInterval(poll);
       conversationDetailRequestController.current?.abort();
     };
-  }, [selectedConversationId]);
+  }, [chatMonth, selectedConversationId]);
 
   useEffect(() => {
     if (!authUser || !selectedConversationId) return;
@@ -2286,6 +2357,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
       if (!event.message) return;
       const incoming = mapRealtimeMessage(event.message);
       if (event.type === "message.created") {
+        if (chatMonth && bangkokMonthFromDate(incoming.sentAt) !== chatMonth) return;
         setChatHistory((current) => current.items.some((item) => item.id === incoming.id)
           ? current
           : { ...current, items: [...current.items, incoming], total: current.total + 1 });
@@ -2302,7 +2374,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
         ? { ...current, messages: current.messages.map((item) => item.id === incoming.id ? { ...item, media: incoming.media } : item) }
         : current);
     });
-  }, [authUser, selectedConversationId]);
+  }, [authUser, chatMonth, selectedConversationId]);
 
   useEffect(() => {
     let active = true;
@@ -2526,7 +2598,9 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
       }));
       const [dashboardRes, bmSummaryRes] = await Promise.all([
         api.dashboard(),
-        api.bmReplyStatusSummary(),
+        chatMonth
+          ? api.bmReplyStatusSummaryForMonth(chatMonth)
+          : api.bmReplyStatusSummary(),
       ]);
       setDashboardSummary(dashboardRes);
       setBmSummaryData(bmSummaryRes);
@@ -2588,7 +2662,9 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
       }));
       const [dashboardRes, bmSummaryRes] = await Promise.all([
         api.dashboard(),
-        api.bmReplyStatusSummary(),
+        chatMonth
+          ? api.bmReplyStatusSummaryForMonth(chatMonth)
+          : api.bmReplyStatusSummary(),
       ]);
       setDashboardSummary(dashboardRes);
       setBmSummaryData(bmSummaryRes);
@@ -2627,7 +2703,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
         const res = await api.bulkMarkRepliedByFilter({
           bmReplyStatus: "NOT_REPLIED",
           storeId: bulkConfirmState.storeId === "all" ? undefined : bulkConfirmState.storeId,
-        });
+        }, chatMonth || undefined);
         updatedCount = res.updatedCount;
       } else if (bulkConfirmState.conversationIds && bulkConfirmState.conversationIds.length > 0) {
         const res = await api.bulkMarkReplied(bulkConfirmState.conversationIds);
@@ -2637,7 +2713,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
           storeId: bulkConfirmState.storeId,
           status: bulkConfirmState.targetStatus,
           fromStatuses: bulkConfirmState.fromStatuses,
-        });
+        }, chatMonth || undefined);
         updatedCount = res.updated;
       }
       const count = updatedCount || bulkConfirmState.affectedCount;
@@ -2653,7 +2729,9 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
 
       // Reconcile in place without full page reload
       const [bmSummaryRes, storeRes] = await Promise.all([
-        api.bmReplyStatusSummary(),
+        chatMonth
+          ? api.bmReplyStatusSummaryForMonth(chatMonth)
+          : api.bmReplyStatusSummary(),
         api.stores(showArchivedStores),
         loadConversations(conversationQueryRef.current, true),
       ]);
@@ -2672,7 +2750,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
     } finally {
       setIsBulkUpdating(false);
     }
-  }, [bulkConfirmState, language, loadConversations, showArchivedStores]);
+  }, [bulkConfirmState, chatMonth, language, loadConversations, showArchivedStores]);
 
   function updateInternalNote(note: string) {
     if (!selectedConversation) return;
@@ -3012,14 +3090,14 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
   async function loadEarlierMessages() {
     if (!selectedConversationId || !chatHistory.hasEarlier) return;
     setChatLoading(true);
-    try { const earlier = await api.conversationMessages(selectedConversationId, chatHistory.page + 1); setChatHistory((current) => ({ ...earlier, items: [...earlier.items, ...current.items] })); }
+    try { const earlier = await api.conversationMessages(selectedConversationId, chatHistory.page + 1, undefined, chatMonth || undefined); setChatHistory((current) => ({ ...earlier, items: [...earlier.items, ...current.items] })); }
     finally { setChatLoading(false); }
   }
 
   async function sendReply() {
     const conversationId = selectedConversationId;
     const textToSend = replyText.trim();
-    if (!conversationId || !textToSend || replySending || authUser?.role !== "ADMIN") return;
+    if (!conversationId || !textToSend || replySending || authUser?.role !== "ADMIN" || !viewingLatestChatMonth) return;
     const idempotencyKey = replyIdempotencyKeyRef.current ?? crypto.randomUUID();
     replyIdempotencyKeyRef.current = idempotencyKey;
     setReplySending(true);
@@ -3039,7 +3117,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
     } catch (error) {
       setReplyError(error instanceof Error ? error.message : "ส่งข้อความไม่สำเร็จ กรุณาลองอีกครั้ง");
       if (conversationId) {
-        void api.conversationMessages(conversationId, 1).then((res) => {
+        void api.conversationMessages(conversationId, 1, undefined, chatMonth || undefined).then((res) => {
           setChatHistory(res);
           window.requestAnimationFrame(() => chatEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" }));
         }).catch(() => {});
@@ -3053,7 +3131,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
 
   async function retryFailedMessage(messageId: string) {
     const conversationId = selectedConversationId;
-    if (!conversationId || retryingMessageId || authUser?.role !== "ADMIN") return;
+    if (!conversationId || retryingMessageId || authUser?.role !== "ADMIN" || !viewingLatestChatMonth) return;
     setRetryingMessageId(messageId);
     setReplyError(null);
     try {
@@ -4332,6 +4410,24 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                     </div>
 
                     <div className="flex items-center gap-2">
+                      <label className="flex items-center gap-1.5 text-[11px] font-medium text-[var(--app-text-secondary)]">
+                        <span>{language === "th" ? "เดือน" : language === "zh" ? "月份" : "Month"}</span>
+                        <select
+                          data-chat-month-selector
+                          value={chatMonth}
+                          disabled={!chatMonthReady || chatMonthOptions.length === 0}
+                          onChange={(event) => {
+                            setChatMonth(event.target.value);
+                            setSelectedConversationId("");
+                          }}
+                          className="rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface)] px-2 py-1 text-xs font-semibold text-[var(--app-text-primary)] focus:border-[var(--app-accent)] focus:outline-none disabled:opacity-50"
+                          aria-label={language === "th" ? "เลือกเดือนแชท" : language === "zh" ? "选择聊天月份" : "Select chat month"}
+                        >
+                          {chatMonthOptions.map((month) => (
+                            <option key={month} value={month}>{chatMonthLabel(month, language)}</option>
+                          ))}
+                        </select>
+                      </label>
                       {sidebarView === "notReplied" && selectedStore !== FOCUS_STORE_GROUP_ID && authUser?.role !== "VIEWER" && (chatTotalCount > 0 || conversations.length > 0) && (
                         <button
                           type="button"
@@ -4861,11 +4957,17 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                           <div className="flex items-end gap-2">
                             <textarea
                               value={replyText}
-                              disabled={replySending || authUser.role === "VIEWER"}
+                              disabled={replySending || authUser.role === "VIEWER" || !viewingLatestChatMonth}
                               maxLength={5000}
                               rows={2}
                               aria-label="พิมพ์ข้อความตอบกลับลูกค้า"
-                              placeholder={authUser.role === "VIEWER" ? "บัญชี Viewer อ่านได้อย่างเดียว" : "พิมพ์ข้อความตอบกลับลูกค้า..."}
+                              placeholder={
+                                !viewingLatestChatMonth
+                                  ? "ดูเดือนย้อนหลัง · เปลี่ยนเป็นเดือนล่าสุดเพื่อส่งข้อความ"
+                                  : authUser.role === "VIEWER"
+                                    ? "บัญชี Viewer อ่านได้อย่างเดียว"
+                                    : "พิมพ์ข้อความตอบกลับลูกค้า..."
+                              }
                               onChange={(event) => {
                                 setReplyText(event.target.value);
                                 setReplyError(null);
@@ -4881,7 +4983,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                             />
                             <button
                               type="button"
-                              disabled={!replyText.trim() || replySending || authUser.role === "VIEWER"}
+                              disabled={!replyText.trim() || replySending || authUser.role === "VIEWER" || !viewingLatestChatMonth}
                               onClick={() => void sendReply()}
                               className="h-11 shrink-0 rounded-[var(--app-radius-md)] bg-[var(--app-accent)] hover:bg-[var(--app-accent-hover)] text-white px-4 text-xs font-semibold shadow-[var(--app-shadow-card)] transition-colors disabled:cursor-not-allowed disabled:opacity-50"
                             >

@@ -67,6 +67,7 @@ function MobileChatFiltersBridge() {
   const [summary, setSummary] = useState<BmReplyStatusSummaryResponse | null>(null);
   const [storeId, setStoreId] = useState("");
   const [status, setStatus] = useState<MobileStatusFilter>("all");
+  const [month, setMonth] = useState("");
 
   const labels = pickLanguageText(language, {
     th: { store: "ร้านค้า", selectStore: "เลือกร้านค้า", allStores: "ร้านค้าทั้งหมด", all: "ทั้งหมด", notReplied: "ยังไม่ตอบ", notifiedBm: "แจ้ง BM", replied: "ตอบแล้ว" },
@@ -78,7 +79,8 @@ function MobileChatFiltersBridge() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const urlStatus = params.get("bmReplyStatus");
-    setStoreId(params.get("store") || "");
+    setStoreId(params.get("store") || params.get("storeId") || "");
+    setMonth(params.get("month") || "");
     setStatus(
       urlStatus === "NOT_REPLIED" || urlStatus === "NOTIFIED_BM" || urlStatus === "REPLIED"
         ? urlStatus
@@ -89,20 +91,29 @@ function MobileChatFiltersBridge() {
   useEffect(() => {
     let active = true;
     const refresh = () => {
-      void api
-        .bmReplyStatusSummary()
+      const activeMonth = new URLSearchParams(window.location.search).get("month") || month;
+      void (activeMonth
+        ? api.bmReplyStatusSummaryForMonth(activeMonth)
+        : api.bmReplyStatusSummary())
         .then((value) => {
           if (active) setSummary(value);
         })
         .catch(() => undefined);
     };
+    const handleMonthChange = (event: Event) => {
+      const detail = (event as CustomEvent<{ month?: string }>).detail;
+      setMonth(detail?.month ?? new URLSearchParams(window.location.search).get("month") ?? "");
+      refresh();
+    };
     refresh();
     window.addEventListener("bm-reply-status-summary-refresh", refresh);
+    window.addEventListener("chat-month-change", handleMonthChange);
     return () => {
       active = false;
       window.removeEventListener("bm-reply-status-summary-refresh", refresh);
+      window.removeEventListener("chat-month-change", handleMonthChange);
     };
-  }, []);
+  }, [month]);
 
   useEffect(() => {
     const syncTarget = () => {
@@ -137,8 +148,13 @@ function MobileChatFiltersBridge() {
 
   const applyFilters = (nextStoreId: string, nextStatus: MobileStatusFilter) => {
     const url = new URL(window.location.href);
-    if (nextStoreId) url.searchParams.set("store", nextStoreId);
-    else url.searchParams.delete("store");
+    if (nextStoreId) {
+      url.searchParams.set("store", nextStoreId);
+      url.searchParams.set("storeId", nextStoreId);
+    } else {
+      url.searchParams.delete("store");
+      url.searchParams.delete("storeId");
+    }
     if (nextStatus === "all") url.searchParams.delete("bmReplyStatus");
     else url.searchParams.set("bmReplyStatus", nextStatus);
     url.searchParams.delete("conversationId");

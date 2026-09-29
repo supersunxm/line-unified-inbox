@@ -12,6 +12,7 @@ export type ConversationListQuery = {
   productSeriesId?: string;
   productModelId?: string;
   topicId?: string;
+  month?: string;
 };
 
 export type ConversationListQueryInput = {
@@ -26,6 +27,7 @@ export type ConversationListQueryInput = {
   productSeriesId?: string;
   productModelId?: string;
   topicId?: string;
+  month?: string;
 };
 
 export function buildConversationListQuery(input: ConversationListQueryInput): ConversationListQuery {
@@ -41,6 +43,7 @@ export function buildConversationListQuery(input: ConversationListQueryInput): C
     productSeriesId: input.productSeriesId,
     productModelId: input.productModelId,
     topicId: input.topicId,
+    ...(input.month ? { month: input.month } : {}),
   };
 }
 

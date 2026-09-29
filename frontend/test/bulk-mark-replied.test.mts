@@ -8,7 +8,7 @@ const apiCode = readFileSync(new URL("../src/lib/api.ts", import.meta.url), "utf
 test("API client provides bulkMarkReplied and bulkMarkRepliedByFilter endpoints", () => {
   assert.match(apiCode, /bulkMarkReplied: \(conversationIds: string\[\]\)/);
   assert.match(apiCode, /request<\{ success: boolean; updatedCount: number; affectedCount: number; storeId: string; status: ApiBmReplyStatus \}>\("\/conversations\/bulk-mark-replied", \{/);
-  assert.match(apiCode, /bulkMarkRepliedByFilter: \(input: \{ bmReplyStatus\?: ApiBmReplyStatus; storeId\?: string \}\)/);
+  assert.match(apiCode, /bulkMarkRepliedByFilter: \(input: \{ bmReplyStatus\?: ApiBmReplyStatus; storeId\?: string \}, month\?: string\)/);
   assert.match(apiCode, /request<\{ success: boolean; updatedCount: number; affectedCount: number; storeId: string; status: ApiBmReplyStatus \}>\("\/conversations\/bulk-mark-replied-by-filter", \{/);
 });
 
@@ -38,6 +38,7 @@ test("Bulk mark as replied displays required confirmation modal with exact title
 test("Executing bulk update triggers reconciliation: calls bulkMarkRepliedByFilter, refreshes conversation list, and updates counters", () => {
   assert.match(pageCode, /const handleExecuteBulkUpdate = useCallback\(async \(\) =>/);
   assert.match(pageCode, /api\.bulkMarkRepliedByFilter\(\{/);
+  assert.match(pageCode, /\}, chatMonth \|\| undefined\);/);
   assert.match(pageCode, /api\.bmReplyStatusSummary\(\)/);
   assert.match(pageCode, /api\.stores\(showArchivedStores\)/);
   assert.match(pageCode, /loadConversations\(conversationQueryRef\.current, true\)/);
