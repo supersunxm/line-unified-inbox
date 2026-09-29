@@ -1,57 +1,83 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
+import IconButton from "@mui/material/IconButton";
+import Menu from "@mui/material/Menu";
+import MenuItem from "@mui/material/MenuItem";
 
 export function StoreChatsOverflowMenu({ language, resetPaneSizes }: { language: "th" | "en" | "zh"; resetPaneSizes: () => void }) {
-  const [isOpen, setIsOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
+  const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
+  const isOpen = Boolean(anchorEl);
   const label = language === "th" ? "ตัวเลือกแชทร้านค้า" : language === "zh" ? "门店聊天选项" : "Store Chats options";
   const resetLabel = language === "th" ? "รีเซ็ตขนาดหน้าต่าง" : language === "zh" ? "重置面板大小" : "Reset pane sizes";
 
-  useEffect(() => {
-    if (!isOpen) return;
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setIsOpen(false);
-    };
-    const closeOnOutsideClick = (event: PointerEvent) => {
-      if (!menuRef.current?.contains(event.target as Node)) setIsOpen(false);
-    };
-    document.addEventListener("keydown", closeOnEscape);
-    document.addEventListener("pointerdown", closeOnOutsideClick);
-    return () => {
-      document.removeEventListener("keydown", closeOnEscape);
-      document.removeEventListener("pointerdown", closeOnOutsideClick);
-    };
-  }, [isOpen]);
+  const closeMenu = () => setAnchorEl(null);
 
   return (
-    <div ref={menuRef} className="relative">
-      <button
+    <>
+      <IconButton
         type="button"
         aria-label={label}
         title={label}
         aria-haspopup="menu"
         aria-expanded={isOpen}
-        onClick={() => setIsOpen((open) => !open)}
-        className="app-button-secondary flex h-9 w-9 items-center justify-center rounded-lg border text-lg focus-visible:ring-2 focus-visible:ring-blue-500"
+        onClick={(event) => setAnchorEl(event.currentTarget)}
+        size="small"
+        sx={{
+          width: 36,
+          height: 36,
+          border: "1px solid var(--app-border)",
+          borderRadius: "var(--app-radius-md)",
+          color: "var(--app-text-secondary)",
+          backgroundColor: "var(--app-surface)",
+          "&:hover": {
+            color: "var(--app-text-primary)",
+            backgroundColor: "var(--app-surface-hover)",
+          },
+        }}
       >
-        <span aria-hidden="true">⋯</span>
-      </button>
-      {isOpen && (
-        <div role="menu" aria-label={label} className="app-surface absolute right-0 top-[calc(100%+0.4rem)] z-40 min-w-48 rounded-xl border p-2 shadow-xl">
-          <button
-            role="menuitem"
-            type="button"
-            onClick={() => {
-              resetPaneSizes();
-              setIsOpen(false);
-            }}
-            className="w-full rounded-lg px-3 py-2 text-left text-sm font-semibold hover:bg-slate-100 focus-visible:ring-2 focus-visible:ring-blue-500 dark:hover:bg-slate-800"
-          >
-            {resetLabel}
-          </button>
-        </div>
-      )}
-    </div>
+        <span aria-hidden="true" style={{ fontSize: "1.1rem", lineHeight: 1 }}>⋯</span>
+      </IconButton>
+
+      <Menu
+        anchorEl={anchorEl}
+        open={isOpen}
+        onClose={closeMenu}
+        MenuListProps={{ "aria-label": label, dense: true }}
+        slotProps={{
+          paper: {
+            sx: {
+              mt: 0.5,
+              minWidth: 192,
+              border: "1px solid var(--app-border)",
+              borderRadius: "var(--app-radius-lg)",
+              color: "var(--app-text-primary)",
+              backgroundColor: "var(--app-surface)",
+              boxShadow: "var(--app-shadow-elevated)",
+            },
+          },
+        }}
+      >
+        <MenuItem
+          onClick={() => {
+            resetPaneSizes();
+            closeMenu();
+          }}
+          sx={{
+            mx: 0.5,
+            my: 0.25,
+            minHeight: 36,
+            borderRadius: "var(--app-radius-md)",
+            fontSize: "0.8125rem",
+            fontWeight: 600,
+            "&:hover": {
+              backgroundColor: "var(--app-surface-hover)",
+            },
+          }}
+        >
+          {resetLabel}
+        </MenuItem>
+      </Menu>
+    </>
   );
 }

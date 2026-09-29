@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent, KeyboardEvent } from "react";
 import Link from "next/link";
+import MuiButton from "@mui/material/Button";
+import MuiPaper from "@mui/material/Paper";
 import type { ApiCustomerEvent } from "@/types/api";
 import { ApiError, api, isAbortError } from "@/lib/api";
 import { FOCUS_STORE_GROUP_ID, FOCUS_STORE_GROUP_ROUTE_PARAM, FOCUS_STORE_GROUP_ROUTE_VALUE, getFocusStoreGroupCopy } from "@/lib/focus-store-group";
@@ -4333,7 +4335,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
 
                     <div className="flex items-center gap-2">
                       {sidebarView === "notReplied" && selectedStore !== FOCUS_STORE_GROUP_ID && authUser?.role !== "VIEWER" && (chatTotalCount > 0 || conversations.length > 0) && (
-                        <button
+                        <MuiButton
                           type="button"
                           data-bulk-mark-all-replied-button
                           onClick={() => {
@@ -4356,8 +4358,23 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                               conversationIds: targetIds.length > 0 ? targetIds : undefined,
                             });
                           }}
-                          className="rounded-[var(--app-radius-sm)] bg-[var(--app-accent)] hover:bg-[var(--app-accent-hover)] text-white px-2.5 py-1 text-xs font-semibold flex items-center gap-1.5 shadow-[var(--app-shadow-card)] transition-colors cursor-pointer"
+                          size="small"
+                          variant="contained"
                           title={language === "th" ? "เปลี่ยนสถานะเป็นตอบแล้วทั้งหมด" : language === "zh" ? "全部标记为已回复" : "Mark all as replied"}
+                          sx={{
+                            minWidth: 0,
+                            px: 1.25,
+                            py: 0.625,
+                            gap: 0.75,
+                            borderRadius: "var(--app-radius-sm)",
+                            fontSize: "0.75rem",
+                            fontWeight: 700,
+                            lineHeight: 1.25,
+                            color: "var(--app-accent-contrast)",
+                            backgroundColor: "var(--app-accent)",
+                            boxShadow: "var(--app-shadow-card)",
+                            "&:hover": { backgroundColor: "var(--app-accent-hover)" },
+                          }}
                         >
                           <span>✓</span>
                           <span>
@@ -4367,22 +4384,50 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                                 ? "全部标记为已回复"
                                 : "Mark All Replied"}
                           </span>
-                        </button>
+                        </MuiButton>
                       )}
-                      <button
+                      <MuiButton
                         data-chat-filter-button
                         onClick={() => setShowFilterPanel((isOpen) => !isOpen)}
                         aria-expanded={showFilterPanel}
-                        className="rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface)] hover:bg-[var(--app-surface-subtle)] text-[var(--app-text-secondary)] hover:text-[var(--app-text-primary)] px-2.5 py-1 text-xs font-medium transition-colors"
+                        size="small"
+                        variant={showFilterPanel ? "contained" : "outlined"}
+                        sx={{
+                          minWidth: 0,
+                          px: 1.25,
+                          py: 0.625,
+                          borderRadius: "var(--app-radius-sm)",
+                          fontSize: "0.75rem",
+                          lineHeight: 1.25,
+                          borderColor: showFilterPanel ? "var(--app-accent)" : "var(--app-border)",
+                          color: showFilterPanel ? "var(--app-accent)" : "var(--app-text-secondary)",
+                          backgroundColor: showFilterPanel ? "var(--app-accent-soft)" : "var(--app-surface)",
+                          boxShadow: "none",
+                          "&:hover": {
+                            borderColor: "var(--app-accent)",
+                            color: "var(--app-text-primary)",
+                            backgroundColor: "var(--app-surface-hover)",
+                            boxShadow: "none",
+                          },
+                        }}
                       >
                         {text.moreFilters}
-                      </button>
+                      </MuiButton>
                       <StoreChatsOverflowMenu language={language} resetPaneSizes={resetChatPanes} />
                     </div>
                   </div>
 
                   {showFilterPanel && (
-                    <div className="app-filter-panel mt-3 grid grid-cols-2 gap-2 rounded-[var(--app-radius-md)] border border-[var(--app-border)] bg-[var(--app-surface-subtle)] p-2.5 shadow-[var(--app-shadow-card)]">
+                    <MuiPaper
+                      elevation={0}
+                      className="app-filter-panel mt-3 grid grid-cols-2 gap-2"
+                      sx={{
+                        borderRadius: "var(--app-radius-md)",
+                        p: 1.25,
+                        backgroundColor: "var(--app-surface-subtle)",
+                        boxShadow: "var(--app-shadow-card)",
+                      }}
+                    >
                       <label className="text-[var(--app-text-secondary)] text-xs font-medium">
                         {text.storeFilter}
                         <select value={selectedStore} onChange={(event) => setSelectedStore(event.target.value)} className="mt-1 w-full rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface)] px-2 py-1 text-xs text-[var(--app-text-primary)] focus:border-[var(--app-accent)] focus:outline-none">
@@ -4433,7 +4478,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                           {lineOas.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
                         </select>
                       </label>
-                    </div>
+                    </MuiPaper>
                   )}
 
                   {hasActiveFilters && (
