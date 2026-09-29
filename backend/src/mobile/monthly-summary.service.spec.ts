@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { MonthlySummaryService, bangkokMonthBounds, calculateResponseCycles, monthlyOverview, monthlyVolume, responseMetrics, tagAnalytics, tagQuality, teamAnalytics, type AnalyticsMessage } from "./monthly-summary.service";
+import { MonthlySummaryService, bangkokMonthBounds, calculateResponseCycleAudit, calculateResponseCycles, monthlyOverview, monthlyVolume, responseMetrics, tagAnalytics, tagQuality, teamAnalytics, type AnalyticsMessage } from "./monthly-summary.service";
 import { OWNER_TRACKING_STARTED_AT, OWNER_TRACKING_STARTED_AT_ISO, isOwnerTrackingInbound } from "../owner-tracking";
 
 const inbound = (id: string, conversationId: string, sentAt: string, messageType = "TEXT"): AnalyticsMessage => ({ id, conversationId, sentAt: new Date(sentAt), direction: "INBOUND", messageType, senderUserId: null });
-const outbound = (id: string, conversationId: string, sentAt: string, senderUserId: string | null = "bm-1"): AnalyticsMessage => ({ id, conversationId, sentAt: new Date(sentAt), direction: "OUTBOUND", messageType: "TEXT", senderUserId });
+const outbound = (id: string, conversationId: string, sentAt: string, senderUserId: string | null = "bm-1"): AnalyticsMessage => ({ id, conversationId, sentAt: new Date(sentAt), direction: "OUTBOUND", deliveryStatus: "DELIVERED", messageType: "TEXT", originalText: id, senderUserId });
 const system = (id: string, conversationId: string, sentAt: string): AnalyticsMessage => ({ id, conversationId, sentAt: new Date(sentAt), direction: "SYSTEM", messageType: "TEXT", senderUserId: null });
 
 void test("monthly overview uses current operational status for selected inbound conversations", () => {
@@ -70,10 +70,40 @@ void test("unanswered cycle remains open", () => {
   assert.equal(cycles[0]?.durationSeconds, null);
 });
 
-void test("outbound without senderUserId does not answer a monthly cycle", () => {
-  const cycles = calculateResponseCycles([
+void test("unknown delivered outbound actor excludes an ambiguous monthly cycle", () => {
+  const audit = calculateResponseCycleAudit([
     inbound("1", "c1", "2026-08-01T00:00:00Z"),
     outbound("2", "c1", "2026-08-01T01:00:00Z", null),
+  ]);
+  assert.equal(audit.cycles.length, 0);
+  assert.equal(audit.ambiguousConversationCount, 1);
+  assert.equal(audit.ambiguityReasons.UNKNOWN_OUTBOUND_ACTOR, 1);
+});
+
+void test("LINE Manager mirrored outbound closes a monthly cycle without senderUserId", () => {
+  const cycles = calculateResponseCycles([
+    inbound("1", "c1", "2026-09-01T00:00:00Z"),
+    {
+      ...outbound("2", "c1", "2026-09-01T00:05:00Z", null),
+      rawPayload: { source: "LINE_MANAGER_MIRROR", provider: "LINE_MANAGER" },
+    },
+  ]);
+  assert.equal(cycles.length, 1);
+  assert.equal(cycles[0]?.durationSeconds, 300);
+});
+
+void test("auto response and failed outbound do not close monthly cycles", () => {
+  const cycles = calculateResponseCycles([
+    inbound("1", "c1", "2026-09-01T00:00:00Z"),
+    {
+      ...outbound("2", "c1", "2026-09-01T00:01:00Z", "bot"),
+      senderDisplayName: "Auto Reply Bot",
+      rawPayload: { source: "AUTO_RESPONSE" },
+    },
+    {
+      ...outbound("3", "c1", "2026-09-01T00:02:00Z"),
+      deliveryStatus: "FAILED",
+    },
   ]);
   assert.equal(cycles.length, 1);
   assert.equal(cycles[0]?.answeredAt, null);
@@ -138,9 +168,13 @@ void test("messages are ordered chronologically before cycle calculation", () =>
   assert.equal(cycles[0]?.durationSeconds, 3600);
 });
 
-void test("equal timestamps use stable IDs", () => {
-  const cycles = calculateResponseCycles([inbound("a", "c1", "2026-08-01T00:00:00Z"), outbound("b", "c1", "2026-08-01T00:00:00Z")]);
-  assert.equal(cycles.length, 1);
+void test("equal timestamp inbound and staff reply is excluded as ordering-conflict ambiguity", () => {
+  const audit = calculateResponseCycleAudit([
+    inbound("a", "c1", "2026-08-01T00:00:00Z"),
+    outbound("b", "c1", "2026-08-01T00:00:00Z"),
+  ]);
+  assert.equal(audit.cycles.length, 0);
+  assert.equal(audit.ambiguityReasons.ORDERING_CONFLICT, 1);
 });
 
 void test("a second outbound after a reply does not create another cycle", () => {
