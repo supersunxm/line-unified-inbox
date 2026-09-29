@@ -108,6 +108,8 @@ void test("NOT_REPLIED projects only when the latest customer inbound is on or a
     {
       eligible: true,
       state: "NOT_REPLIED",
+      decidingEventKind: "CUSTOMER_INBOUND",
+      decidingEventAt: new Date("2026-09-01T10:00:00Z"),
       reason: "DECIDING_EVENT_ON_OR_AFTER_BOUNDARY",
     },
   );
@@ -130,7 +132,16 @@ void test("REPLIED projects only when the latest human reply is on or after the 
     canonical("4", "OUTBOUND", "2026-08-31T10:00:00Z"),
   ].map(normalizeCanonicalReplyMessage), boundary);
 
-  assert.equal(classifyReplyProjectionEligibility("REPLIED", trusted).eligible, true);
+  assert.deepEqual(
+    classifyReplyProjectionEligibility("REPLIED", trusted),
+    {
+      eligible: true,
+      state: "REPLIED",
+      decidingEventKind: "HUMAN_STAFF_REPLY",
+      decidingEventAt: new Date("2026-09-01T10:00:00Z"),
+      reason: "DECIDING_EVENT_ON_OR_AFTER_BOUNDARY",
+    },
+  );
   assert.deepEqual(
     classifyReplyProjectionEligibility("REPLIED", legacy),
     {
