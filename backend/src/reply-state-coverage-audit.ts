@@ -1,5 +1,10 @@
 import { Prisma, PrismaClient } from "@prisma/client";
 import {
+  analyzeReplyStateMismatch,
+  type HistoricalReplyStateEffect,
+  type ReplyStateMismatchPrimaryCause,
+} from "./reply-state-mismatch-cause";
+import {
   normalizeCanonicalReplyMessage,
   normalizeHistoricalReplyMessage,
   resolveReplyState,
@@ -244,6 +249,7 @@ async function fetchHistoricalRows(
 async function main() {
   const batchSize = numberArg("batch-size", 200);
   const limit = numberArg("limit", Number.MAX_SAFE_INTEGER);
+  const summaryOnly = process.argv.includes("--summary-only");
   const prisma = new PrismaClient();
 
   try {
@@ -275,6 +281,31 @@ async function main() {
       ORDERING_CONFLICT: 0,
       UNKNOWN_EVENT_CLASSIFICATION: 0,
       NO_MESSAGE_EVIDENCE: 0,
+    };
+
+    const mismatchCauses: Record<ReplyStateMismatchPrimaryCause, number> = {
+      MATCH: 0,
+      AMBIGUOUS: 0,
+      STORED_REPLIED_REOPENED_AFTER_VALID_REPLY: 0,
+      STORED_REPLIED_NEVER_VALIDLY_REPLIED: 0,
+      STORED_NOT_REPLIED_VALID_REPLY_EXISTS: 0,
+      STORED_NOTIFIED_BM_RESOLVED_REPLIED: 0,
+      STORED_NOTIFIED_BM_RESOLVED_NOT_REPLIED: 0,
+    };
+
+    const mismatchHistoricalEffects: Record<HistoricalReplyStateEffect, number> = {
+      NO_HISTORICAL_EVIDENCE: 0,
+      NO_STATE_CHANGE: 0,
+      RESOLVED_CANONICAL_AMBIGUITY: 0,
+      CHANGED_FINAL_STATE: 0,
+      COMBINED_BECAME_AMBIGUOUS: 0,
+    };
+
+    const mismatchSignals = {
+      MISMATCH_TOTAL: 0,
+      MISMATCH_WITH_AUTOMATED_OUTBOUND_AFTER_OPEN: 0,
+      MISMATCH_WITH_FAILED_OR_PENDING_OUTBOUND_AFTER_OPEN: 0,
+      MISMATCH_WITH_UNKNOWN_OUTBOUND_AFTER_OPEN: 0,
     };
 
     const totals = {
@@ -430,7 +461,28 @@ async function main() {
         ).length;
 
         const resolution = resolveReplyState(events);
-        matrix[matrixKey(storedStatus(conversation.bmReplyStatus), resolution.state)] += 1;
+        const stored = storedStatus(conversation.bmReplyStatus);
+        matrix[matrixKey(stored, resolution.state)] += 1;
+
+        const mismatch = analyzeReplyStateMismatch({
+          storedStatus: stored,
+          canonical,
+          historical,
+        });
+        mismatchCauses[mismatch.primaryCause] += 1;
+        if (mismatch.mismatch) {
+          mismatchSignals.MISMATCH_TOTAL += 1;
+          mismatchHistoricalEffects[mismatch.historicalEffect] += 1;
+          if (mismatch.automatedOutboundAfterOpen) {
+            mismatchSignals.MISMATCH_WITH_AUTOMATED_OUTBOUND_AFTER_OPEN += 1;
+          }
+          if (mismatch.failedOrPendingCanonicalOutboundAfterOpen) {
+            mismatchSignals.MISMATCH_WITH_FAILED_OR_PENDING_OUTBOUND_AFTER_OPEN += 1;
+          }
+          if (mismatch.unknownOutboundAfterOpen) {
+            mismatchSignals.MISMATCH_WITH_UNKNOWN_OUTBOUND_AFTER_OPEN += 1;
+          }
+        }
 
         const storeId = conversation.storeId ?? "__NO_STORE__";
         const store = byStore.get(storeId) ?? {
@@ -469,16 +521,24 @@ async function main() {
       if (conversations.length < take) break;
     }
 
-    process.stdout.write(JSON.stringify({
+    const output = {
       ...totals,
       ...matrix,
+      ...mismatchSignals,
       DIRECT_LINK_AMBIGUOUS_IDENTITIES: ambiguousDirectIdentities.size,
       LINKAGE_CONFLICT_IDENTITIES: linkageConflictIdentities.size,
       AMBIGUITY_REASONS: ambiguityReasons,
-      BY_STORE: [...byStore.entries()]
-        .map(([storeId, counts]) => ({ storeId, ...counts }))
-        .sort((left, right) => right.total - left.total || left.storeId.localeCompare(right.storeId)),
-    }, null, 2) + "\n");
+      MISMATCH_CAUSES: mismatchCauses,
+      MISMATCH_HISTORICAL_EFFECTS: mismatchHistoricalEffects,
+      ...(summaryOnly
+        ? {}
+        : {
+            BY_STORE: [...byStore.entries()]
+              .map(([storeId, counts]) => ({ storeId, ...counts }))
+              .sort((left, right) => right.total - left.total || left.storeId.localeCompare(right.storeId)),
+          }),
+    };
+    process.stdout.write(JSON.stringify(output, null, 2) + "\n");
   } finally {
     await prisma.$disconnect();
   }
