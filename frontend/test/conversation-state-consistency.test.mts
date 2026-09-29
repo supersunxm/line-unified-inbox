@@ -119,7 +119,7 @@ test("classification filters are resolved to IDs and sent server-side", () => {
 });
 
 test("all query-shaping fields reset page and selected conversation stays in returned rows", () => {
-  for (const field of ["storeId", "lineOaId", "followUpStatus", "search", "priority", "productSeriesId", "productModelId", "topicId", "pageSize"]) {
+  for (const field of ["storeId", "lineOaId", "followUpStatus", "replyState", "search", "priority", "productSeriesId", "productModelId", "topicId", "pageSize"]) {
     assert.match(pageCode, new RegExp(`${field}: activeConversationQuery\\.${field}`));
   }
   assert.match(pageCode, /previousConversationFilterShape\.current !== conversationFilterShapeKey/);
