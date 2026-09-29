@@ -76,6 +76,15 @@ jobs:
       - name: Conversation data contract regression tests
         run: npx tsx --test src/conversation-data-contract.spec.ts
 
+      - name: Reply state resolver lint
+        run: npx prisma generate && npx eslint "src/reply-state-resolver.ts" "src/reply-state-resolver.spec.ts" "src/reply-state-coverage-audit.ts"
+
+      - name: Reply state resolver tests
+        run: npx tsx --test src/reply-state-resolver.spec.ts
+
+      - name: Reply state coverage audit smoke
+        run: npx tsx src/reply-state-coverage-audit.ts --limit=1
+
       - name: Mobile sales audit regression tests
         run: npx tsx --test src/mobile/mobile-customer-sales-activity.spec.ts
 
