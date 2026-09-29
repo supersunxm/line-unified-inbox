@@ -14,6 +14,16 @@ test("chat filter URLs are shareable and restorable", () => {
   });
 });
 
+test("chat routes use effective two-state reply filters and normalize legacy notified links", () => {
+  assert.equal(
+    buildChatsHref({ store: "store-1", replyState: "NOT_REPLIED" }),
+    "/chats?storeId=store-1&replyState=NOT_REPLIED",
+  );
+  assert.equal(readChatRouteFilters("?replyState=REPLIED").replyState, "REPLIED");
+  assert.equal(readChatRouteFilters("?bmReplyStatus=NOTIFIED_BM").replyState, "NOT_REPLIED");
+  assert.equal(readChatRouteFilters("?bmReplyStatus=REPLIED").replyState, "REPLIED");
+});
+
 const topNavCode = readFileSync(new URL("../src/components/shell/top-navigation.tsx", import.meta.url), "utf8");
 
 test("application exposes primary routes with active navigation", () => {
