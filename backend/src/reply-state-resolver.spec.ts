@@ -286,6 +286,17 @@ void test("historical attributed human outbound can close a canonical customer c
   assert.equal(result.state, "REPLIED");
 });
 
+void test("persisted Manager messageReceived and messageSent event types are treated as messages", () => {
+  const result = resolve(
+    [],
+    [
+      historical("1", "INBOUND", "2026-09-01T10:00:00Z", { sourceEventType: "messageReceived", senderBizId: null }),
+      historical("2", "OUTBOUND", "2026-09-01T10:05:00Z", { sourceEventType: "messageSent", senderBizId: "biz-staff-9" }),
+    ],
+  );
+  assert.equal(result.state, "REPLIED");
+});
+
 void test("historical auto response does not close a customer cycle", () => {
   const result = resolve(
     [canonical("1", "INBOUND", "2026-09-01T10:00:00Z")],
