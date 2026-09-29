@@ -36,10 +36,10 @@ test("PageContainer supports readable, wide, and full layout variants", () => {
   assert.match(pageContainerCode, /variant === "full"/);
 });
 
-test("ContextSidebar renders bmReplyStatus filters and store selection filter list", () => {
+test("ContextSidebar renders effective two-state reply filters and store selection filter list", () => {
   assert.match(contextSidebarCode, /selectSidebarView\("all"\)/);
   assert.match(contextSidebarCode, /selectSidebarView\("notReplied"\)/);
-  assert.match(contextSidebarCode, /selectSidebarView\("notifiedBm"\)/);
+  assert.doesNotMatch(contextSidebarCode, /selectSidebarView\("notifiedBm"\)/);
   assert.match(contextSidebarCode, /selectSidebarView\("replied"\)/);
   assert.match(contextSidebarCode, /setSelectedStore/);
 });
