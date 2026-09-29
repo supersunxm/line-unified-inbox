@@ -4,9 +4,9 @@ import {
   type HistoricalReplyStateEffect,
   type ReplyStateMismatchPrimaryCause,
 } from "./reply-state-mismatch-cause";
+import { analyzeReplyEvidenceWindow } from "./reply-state-evidence-window";
 import {
-  normalizeCanonicalReplyMessage,
-  normalizeHistoricalReplyMessage,
+  normalizeReplyTimeline,
   resolveReplyState,
   type CanonicalReplyMessage,
   type HistoricalReplyMessage,
@@ -95,6 +95,14 @@ function numberArg(name: string, fallback: number): number {
   const value = Number(raw);
   if (!Number.isFinite(value) || value < 1) throw new Error("Invalid " + prefix + "<number>");
   return Math.floor(value);
+}
+
+function dateArg(name: string, fallback: string): Date {
+  const prefix = "--" + name + "=";
+  const raw = process.argv.find((item) => item.startsWith(prefix))?.slice(prefix.length) ?? fallback;
+  const value = new Date(raw);
+  if (Number.isNaN(value.getTime())) throw new Error("Invalid " + prefix + "<ISO date>");
+  return value;
 }
 
 function matrixKey(stored: StoredStatus, resolved: ReplyState): MatrixKey {
@@ -250,6 +258,7 @@ async function main() {
   const batchSize = numberArg("batch-size", 200);
   const limit = numberArg("limit", Number.MAX_SAFE_INTEGER);
   const summaryOnly = process.argv.includes("--summary-only");
+  const evidenceBoundary = dateArg("evidence-start", "2026-09-01T00:00:00+07:00");
   const prisma = new PrismaClient();
 
   try {
@@ -306,6 +315,21 @@ async function main() {
       MISMATCH_WITH_AUTOMATED_OUTBOUND_AFTER_OPEN: 0,
       MISMATCH_WITH_FAILED_OR_PENDING_OUTBOUND_AFTER_OPEN: 0,
       MISMATCH_WITH_UNKNOWN_OUTBOUND_AFTER_OPEN: 0,
+    };
+
+    const evidenceBoundaryCounts = {
+      STORED_REPLIED_RESOLVED_NOT_REPLIED__LATEST_CUSTOMER_BEFORE_BOUNDARY: 0,
+      STORED_REPLIED_RESOLVED_NOT_REPLIED__LATEST_CUSTOMER_ON_OR_AFTER_BOUNDARY: 0,
+      STORED_REPLIED_RESOLVED_NOT_REPLIED__OPEN_CYCLE_STARTED_BEFORE_BOUNDARY: 0,
+      STORED_REPLIED_RESOLVED_NOT_REPLIED__OPEN_CYCLE_STARTED_ON_OR_AFTER_BOUNDARY: 0,
+      STORED_REPLIED_RESOLVED_NOT_REPLIED__HAS_RELEVANT_MESSAGE_ON_OR_AFTER_BOUNDARY: 0,
+      STORED_REPLIED_RESOLVED_NOT_REPLIED__PRE_BOUNDARY_ONLY: 0,
+      STORED_REPLIED_REOPENED__LATEST_CUSTOMER_BEFORE_BOUNDARY: 0,
+      STORED_REPLIED_REOPENED__LATEST_CUSTOMER_ON_OR_AFTER_BOUNDARY: 0,
+      STORED_REPLIED_NEVER_VALID_REPLY__LATEST_CUSTOMER_BEFORE_BOUNDARY: 0,
+      STORED_REPLIED_NEVER_VALID_REPLY__LATEST_CUSTOMER_ON_OR_AFTER_BOUNDARY: 0,
+      STORED_NOT_REPLIED_RESOLVED_REPLIED__LATEST_STAFF_REPLY_BEFORE_BOUNDARY: 0,
+      STORED_NOT_REPLIED_RESOLVED_REPLIED__LATEST_STAFF_REPLY_ON_OR_AFTER_BOUNDARY: 0,
     };
 
     const totals = {
@@ -451,10 +475,8 @@ async function main() {
           senderDisplayName: message.senderDisplayName,
           rawPayload: message.rawPayload,
         }));
-        const events = [
-          ...canonical.map(normalizeCanonicalReplyMessage),
-          ...historical.map(normalizeHistoricalReplyMessage),
-        ];
+        const events = normalizeReplyTimeline({ canonical, historical });
+        const evidenceWindow = analyzeReplyEvidenceWindow(events, evidenceBoundary);
 
         totals.UNKNOWN_OUTBOUND_ACTOR_EVENT_COUNT += events.filter(
           (event) => event.direction === "OUTBOUND" && event.actor === "UNKNOWN",
@@ -481,6 +503,53 @@ async function main() {
           }
           if (mismatch.unknownOutboundAfterOpen) {
             mismatchSignals.MISMATCH_WITH_UNKNOWN_OUTBOUND_AFTER_OPEN += 1;
+          }
+        }
+
+        if (stored === "REPLIED" && resolution.state === "NOT_REPLIED") {
+          if (evidenceWindow.latestCustomerInboundOnOrAfterBoundary) {
+            evidenceBoundaryCounts.STORED_REPLIED_RESOLVED_NOT_REPLIED__LATEST_CUSTOMER_ON_OR_AFTER_BOUNDARY += 1;
+          } else {
+            evidenceBoundaryCounts.STORED_REPLIED_RESOLVED_NOT_REPLIED__LATEST_CUSTOMER_BEFORE_BOUNDARY += 1;
+          }
+
+          if (
+            mismatch.openCycleStartedAt &&
+            mismatch.openCycleStartedAt.getTime() >= evidenceBoundary.getTime()
+          ) {
+            evidenceBoundaryCounts.STORED_REPLIED_RESOLVED_NOT_REPLIED__OPEN_CYCLE_STARTED_ON_OR_AFTER_BOUNDARY += 1;
+          } else {
+            evidenceBoundaryCounts.STORED_REPLIED_RESOLVED_NOT_REPLIED__OPEN_CYCLE_STARTED_BEFORE_BOUNDARY += 1;
+          }
+
+          if (evidenceWindow.hasRelevantMessageOnOrAfterBoundary) {
+            evidenceBoundaryCounts.STORED_REPLIED_RESOLVED_NOT_REPLIED__HAS_RELEVANT_MESSAGE_ON_OR_AFTER_BOUNDARY += 1;
+          } else {
+            evidenceBoundaryCounts.STORED_REPLIED_RESOLVED_NOT_REPLIED__PRE_BOUNDARY_ONLY += 1;
+          }
+
+          if (mismatch.primaryCause === "STORED_REPLIED_REOPENED_AFTER_VALID_REPLY") {
+            if (evidenceWindow.latestCustomerInboundOnOrAfterBoundary) {
+              evidenceBoundaryCounts.STORED_REPLIED_REOPENED__LATEST_CUSTOMER_ON_OR_AFTER_BOUNDARY += 1;
+            } else {
+              evidenceBoundaryCounts.STORED_REPLIED_REOPENED__LATEST_CUSTOMER_BEFORE_BOUNDARY += 1;
+            }
+          }
+
+          if (mismatch.primaryCause === "STORED_REPLIED_NEVER_VALIDLY_REPLIED") {
+            if (evidenceWindow.latestCustomerInboundOnOrAfterBoundary) {
+              evidenceBoundaryCounts.STORED_REPLIED_NEVER_VALID_REPLY__LATEST_CUSTOMER_ON_OR_AFTER_BOUNDARY += 1;
+            } else {
+              evidenceBoundaryCounts.STORED_REPLIED_NEVER_VALID_REPLY__LATEST_CUSTOMER_BEFORE_BOUNDARY += 1;
+            }
+          }
+        }
+
+        if (stored === "NOT_REPLIED" && resolution.state === "REPLIED") {
+          if (evidenceWindow.latestHumanStaffReplyOnOrAfterBoundary) {
+            evidenceBoundaryCounts.STORED_NOT_REPLIED_RESOLVED_REPLIED__LATEST_STAFF_REPLY_ON_OR_AFTER_BOUNDARY += 1;
+          } else {
+            evidenceBoundaryCounts.STORED_NOT_REPLIED_RESOLVED_REPLIED__LATEST_STAFF_REPLY_BEFORE_BOUNDARY += 1;
           }
         }
 
@@ -525,6 +594,8 @@ async function main() {
       ...totals,
       ...matrix,
       ...mismatchSignals,
+      EVIDENCE_CONFIDENCE_BOUNDARY: evidenceBoundary.toISOString(),
+      ...evidenceBoundaryCounts,
       DIRECT_LINK_AMBIGUOUS_IDENTITIES: ambiguousDirectIdentities.size,
       LINKAGE_CONFLICT_IDENTITIES: linkageConflictIdentities.size,
       AMBIGUITY_REASONS: ambiguityReasons,
