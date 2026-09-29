@@ -273,7 +273,7 @@ export class ConversationsService {
     const rows = await this.prisma.$queryRaw<Array<{ month: string }>>(Prisma.sql`
       SELECT DISTINCT activity.month
       FROM (
-        SELECT to_char(m."sentAt" AT TIME ZONE 'Asia/Bangkok', 'YYYY-MM') AS month
+        SELECT to_char(m."sentAt" + interval '7 hours', 'YYYY-MM') AS month
         FROM public."Message" m
         JOIN public."Conversation" c ON c."id" = m."conversationId"
         JOIN public."Store" s ON s."id" = c."storeId"
@@ -283,7 +283,7 @@ export class ConversationsService {
           AND oa."accountType" = 'STORE'
           ${storeFilter}
         UNION
-        SELECT to_char(h."sentAt" AT TIME ZONE 'Asia/Bangkok', 'YYYY-MM') AS month
+        SELECT to_char(h."sentAt" + interval '7 hours', 'YYYY-MM') AS month
         FROM public."HistoricalTimelineMessage" h
         JOIN public."Store" s ON s."id" = h."storeId"
         JOIN public."LineOfficialAccount" oa ON oa."id" = h."lineOfficialAccountId"
