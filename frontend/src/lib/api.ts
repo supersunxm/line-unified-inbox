@@ -514,20 +514,20 @@ export const api = {
   customerIntelligence: (customerId: string, options?: ApiRequestOptions) => request<ApiCustomerIntelligence>(`/customers/${encodeURIComponent(customerId)}/intelligence`, options),
   updateStatus: (id: string, status: ApiFollowUpStatus) => request<{ changed: boolean; conversation: ApiConversation }>(`/conversations/${id}/status`, { method: "PATCH", body: JSON.stringify({ status }) }),
   updateBmReplyStatus: (id: string, status: ApiBmReplyStatus) => request<{ changed: boolean; conversation: ApiConversation }>(`/conversations/${id}/bm-reply-status`, { method: "PATCH", body: JSON.stringify({ status, bmReplyStatus: status }) }),
-  bulkUpdateBmReplyStatus: (input: { storeId: string; status: ApiBmReplyStatus; fromStatuses?: ApiBmReplyStatus[]; month?: string }) =>
+  bulkUpdateBmReplyStatus: (input: { storeId: string; status: ApiBmReplyStatus; fromStatuses?: ApiBmReplyStatus[] }, month?: string) =>
     request<{ updated: number; status: ApiBmReplyStatus }>("/conversations/bm-reply-status/bulk", {
       method: "PATCH",
-      body: JSON.stringify(input),
+      body: JSON.stringify({ ...input, ...(month ? { month } : {}) }),
     }),
   bulkMarkReplied: (conversationIds: string[]) =>
     request<{ success: boolean; updatedCount: number; affectedCount: number; storeId: string; status: ApiBmReplyStatus }>("/conversations/bulk-mark-replied", {
       method: "POST",
       body: JSON.stringify({ conversationIds }),
     }),
-  bulkMarkRepliedByFilter: (input: { bmReplyStatus?: ApiBmReplyStatus; storeId?: string; month?: string }) =>
+  bulkMarkRepliedByFilter: (input: { bmReplyStatus?: ApiBmReplyStatus; storeId?: string }, month?: string) =>
     request<{ success: boolean; updatedCount: number; affectedCount: number; storeId: string; status: ApiBmReplyStatus }>("/conversations/bulk-mark-replied-by-filter", {
       method: "POST",
-      body: JSON.stringify(input),
+      body: JSON.stringify({ ...input, ...(month ? { month } : {}) }),
     }),
   updatePriority: (id: string, priority: ApiPriority) => request<ApiConversation>(`/conversations/${id}/priority`, { method: "PATCH", body: JSON.stringify({ priority }) }),
   notes: (id: string) => request<ApiConversation["notes"]>(`/conversations/${id}/notes`),
