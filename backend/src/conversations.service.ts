@@ -1555,10 +1555,18 @@ export class ConversationsService {
 
     const resetFilter = await this.operations.getOperationalConversationFilter();
 
-    const grouped = await this.prisma.conversation.groupBy({
-      by: ["storeId", "bmReplyStatus"],
-      where: { store: storeScope, lineOfficialAccount: { accountType: "STORE" }, ...(resetFilter as Prisma.ConversationWhereInput) },
-      _count: { _all: true },
+    const summaryRows = await this.prisma.conversation.findMany({
+      where: {
+        store: storeScope,
+        lineOfficialAccount: { accountType: "STORE" },
+        ...(resetFilter as Prisma.ConversationWhereInput),
+      },
+      select: {
+        storeId: true,
+        latestMessageAt: true,
+        bmReplyStatus: true,
+        replyStateProjection: { select: { state: true } },
+      },
     });
 
     const overview = {
@@ -1572,45 +1580,34 @@ export class ConversationsService {
       storeMap.set(store.id, { notReplied: 0, notifiedBm: 0, replied: 0 });
     }
 
-    for (const item of grouped) {
-      const count = item._count._all;
-      if (item.bmReplyStatus === BmReplyStatus.NOT_REPLIED) {
-        overview.notReplied += count;
-      } else if (item.bmReplyStatus === BmReplyStatus.NOTIFIED_BM) {
-        overview.notifiedBm += count;
-      } else if (item.bmReplyStatus === BmReplyStatus.REPLIED) {
-        overview.replied += count;
-      }
-
-      const storeCounts = item.storeId ? storeMap.get(item.storeId) : undefined;
-      if (storeCounts) {
-        if (item.bmReplyStatus === BmReplyStatus.NOT_REPLIED) {
-          storeCounts.notReplied += count;
-        } else if (item.bmReplyStatus === BmReplyStatus.NOTIFIED_BM) {
-          storeCounts.notifiedBm += count;
-        } else if (item.bmReplyStatus === BmReplyStatus.REPLIED) {
-          storeCounts.replied += count;
-        }
-      }
-    }
-
-    const oldestUnanswered = await this.prisma.conversation.groupBy({
-      by: ["storeId"],
-      where: {
-        store: storeScope,
-        lineOfficialAccount: { accountType: "STORE" },
-        bmReplyStatus: BmReplyStatus.NOT_REPLIED,
-        ...(resetFilter as Prisma.ConversationWhereInput),
-      },
-      _min: { latestMessageAt: true },
-    });
-
     const now = Date.now();
     const oldestMap = new Map<string, number>();
-    for (const item of oldestUnanswered) {
-      if (item._min && item._min.latestMessageAt) {
-        const elapsedMinutes = Math.max(0, Math.floor((now - new Date(item._min.latestMessageAt).getTime()) / 60000));
-        if (item.storeId) oldestMap.set(item.storeId, elapsedMinutes);
+
+    for (const item of summaryRows) {
+      const effectiveState = resolveEffectiveReplyState({
+        bmReplyStatus: item.bmReplyStatus,
+        projectionState: item.replyStateProjection?.state ?? null,
+      }).state;
+      const storeCounts = item.storeId ? storeMap.get(item.storeId) : undefined;
+
+      if (effectiveState === "REPLIED") {
+        overview.replied += 1;
+        if (storeCounts) storeCounts.replied += 1;
+        continue;
+      }
+
+      overview.notReplied += 1;
+      if (storeCounts) storeCounts.notReplied += 1;
+
+      if (item.storeId && item.latestMessageAt) {
+        const elapsedMinutes = Math.max(
+          0,
+          Math.floor((now - item.latestMessageAt.getTime()) / 60000),
+        );
+        oldestMap.set(
+          item.storeId,
+          Math.max(oldestMap.get(item.storeId) ?? 0, elapsedMinutes),
+        );
       }
     }
 
