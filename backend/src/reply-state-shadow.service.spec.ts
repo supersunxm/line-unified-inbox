@@ -35,6 +35,7 @@ const baseConversation = {
   lineOfficialAccountId: "oa-1",
   lineChatUserId: "chat-1",
   bmReplyStatus: "REPLIED",
+  replyStateProjection: null,
   messages: [
     {
       id: "message-1",
@@ -66,6 +67,59 @@ void test("shadow resolver exposes stored and resolved state without write behav
   assert.equal(result.evidence.historicalMessageCount, 0);
   assert.equal(result.evidence.historicalLinkMode, "NONE");
   assert.equal(result.databaseWrites, 0);
+});
+
+void test("shadow endpoint compares persisted projection with dynamic resolver", async () => {
+  const service = new ReplyStateShadowService(createPrisma({
+    conversation: {
+      ...baseConversation,
+      bmReplyStatus: "NOT_REPLIED",
+      replyStateProjection: {
+        state: "NOT_REPLIED",
+        decidingEventKind: "CUSTOMER_INBOUND",
+        decidingEventAt: new Date("2026-09-01T10:00:00Z"),
+        evidenceBoundary: new Date("2026-08-31T17:00:00Z"),
+        resolverVersion: "reply-state-v1",
+        canonicalMessageCount: 1,
+        historicalMessageCount: 0,
+        computedAt: new Date("2026-09-29T10:00:00Z"),
+        updatedAt: new Date("2026-09-29T10:00:00Z"),
+      },
+    },
+    directCandidates: [{ id: "conversation-1" }],
+  }));
+
+  const result = await service.resolveConversation("conversation-1");
+
+  assert.equal(result.resolvedReplyState, "NOT_REPLIED");
+  assert.equal(result.persistedProjection?.state, "NOT_REPLIED");
+  assert.equal(result.projectionMatchesDynamic, true);
+});
+
+void test("shadow endpoint surfaces a stale persisted projection mismatch", async () => {
+  const service = new ReplyStateShadowService(createPrisma({
+    conversation: {
+      ...baseConversation,
+      replyStateProjection: {
+        state: "REPLIED",
+        decidingEventKind: "HUMAN_STAFF_REPLY",
+        decidingEventAt: new Date("2026-09-01T09:00:00Z"),
+        evidenceBoundary: new Date("2026-08-31T17:00:00Z"),
+        resolverVersion: "reply-state-v1",
+        canonicalMessageCount: 1,
+        historicalMessageCount: 0,
+        computedAt: new Date("2026-09-29T10:00:00Z"),
+        updatedAt: new Date("2026-09-29T10:00:00Z"),
+      },
+    },
+    directCandidates: [{ id: "conversation-1" }],
+  }));
+
+  const result = await service.resolveConversation("conversation-1");
+
+  assert.equal(result.resolvedReplyState, "NOT_REPLIED");
+  assert.equal(result.persistedProjection?.state, "REPLIED");
+  assert.equal(result.projectionMatchesDynamic, false);
 });
 
 void test("safe historical crosswalk can supply staff reply evidence", async () => {
