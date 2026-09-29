@@ -4445,7 +4445,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                       {modelFilter !== "all" && <button onClick={() => setModelFilter("all")} className="rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface-subtle)] text-[var(--app-text-primary)] px-2 py-0.5 text-[11px] font-medium">{text.modelFilter}: {modelFilter} ×</button>}
                       {topicFilter !== "all" && <button onClick={() => setTopicFilter("all")} className="rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface-subtle)] text-[var(--app-text-primary)] px-2 py-0.5 text-[11px] font-medium">{text.topicFilter}: {topicFilter} ×</button>}
                       {lineOaFilter !== "all" && <button onClick={() => setLineOaFilter("all")} className="rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface-subtle)] text-[var(--app-text-primary)] px-2 py-0.5 text-[11px] font-medium">{text.lineOaManagement}: {lineOas.find(({ id }) => id === lineOaFilter)?.name ?? lineOaFilter} ×</button>}
-                      {(sidebarView === "notifiedBm" || sidebarView === "replied" || sidebarView === "notReplied") && <button onClick={() => setSidebarView("all")} className="rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface-subtle)] text-[var(--app-text-primary)] px-2 py-0.5 text-[11px] font-medium">{text.bmReplyStatus}: {bmReplyStatusLabels[language][sidebarView === "notifiedBm" ? "NOTIFIED_BM" : sidebarView === "replied" ? "REPLIED" : "NOT_REPLIED"]} ×</button>}
+                      {(sidebarView === "replied" || sidebarView === "notReplied") && <button onClick={() => setSidebarView("all")} className="rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface-subtle)] text-[var(--app-text-primary)] px-2 py-0.5 text-[11px] font-medium">{text.bmReplyStatus}: {bmReplyStatusLabels[language][sidebarView === "replied" ? "REPLIED" : "NOT_REPLIED"]} ×</button>}
                       <button onClick={clearAllFilters} className="text-[11px] font-medium text-[var(--app-danger)] hover:underline">{text.clearAll}</button>
                     </div>
                   )}
@@ -4639,12 +4639,10 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                               className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
                                 currentBmReplyStatus === "REPLIED"
                                   ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-200"
-                                  : currentBmReplyStatus === "NOTIFIED_BM"
-                                    ? "bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-200"
-                                    : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                                  : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
                               }`}
                             >
-                              {bmReplyStatusLabels[language][currentBmReplyStatus]}
+                              {bmReplyStatusLabels[language][currentBmReplyStatus === "REPLIED" ? "REPLIED" : "NOT_REPLIED"]}
                             </span>
                             {tags.visible.map((tag, index) => (
                               <span
