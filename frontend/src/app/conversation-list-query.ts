@@ -43,7 +43,7 @@ export function buildConversationListQuery(input: ConversationListQueryInput): C
     productSeriesId: input.productSeriesId,
     productModelId: input.productModelId,
     topicId: input.topicId,
-    month: input.month,
+    ...(input.month ? { month: input.month } : {}),
   };
 }
 
