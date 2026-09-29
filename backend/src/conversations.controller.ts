@@ -168,9 +168,13 @@ export class ConversationsController {
     if (query.storeId && query.storeId !== FOCUS_STORE_GROUP_ID) await this.storeAccess.assertStoreAccess(req.user!, query.storeId);
     return this.service.list(query, storeIds);
   }
-  @Get("bm-reply-status-summary") async bmReplyStatusSummary(@Req() req: AuthRequest) {
+  @Get("month-options") async monthOptions(@Req() req: AuthRequest) {
     const accessibleStoreIds = await this.storeAccess.accessibleStoreIds(req.user!);
-    return this.service.getBmReplyStatusSummary(accessibleStoreIds);
+    return this.service.getChatMonthOptions(accessibleStoreIds);
+  }
+  @Get("bm-reply-status-summary") async bmReplyStatusSummary(@Req() req: AuthRequest, @Query("month") month?: string) {
+    const accessibleStoreIds = await this.storeAccess.accessibleStoreIds(req.user!);
+    return this.service.getBmReplyStatusSummary(accessibleStoreIds, month);
   }
   @Get("store-priority-summary") async storePrioritySummary(@Req() req: AuthRequest) {
     const accessibleStoreIds = await this.storeAccess.accessibleStoreIds(req.user!);
@@ -291,7 +295,7 @@ export class ConversationsController {
     return this.service.updateOwner(id, body.userId ?? null, req.user!);
   }
   @Patch(":id/priority") async priority(@Param("id") id: string, @Body() dto: UpdatePriorityDto, @Req() req: AuthRequest) { await this.storeAccess.assertConversationAccess(req.user!, id); return this.prisma.conversation.update({ where: { id }, data: { priority: dto.priority, prioritySource: "MANUAL" } }); }
-  @Get(":id/messages") async messages(@Param("id") id: string, @Query("page") page = "1", @Query("pageSize") pageSize = "30", @Req() req: AuthRequest) { await this.storeAccess.assertConversationAccess(req.user!, id); return this.service.messages(id, Number(page), Number(pageSize)); }
+  @Get(":id/messages") async messages(@Param("id") id: string, @Query("page") page = "1", @Query("pageSize") pageSize = "30", @Query("month") month = "", @Req() req: AuthRequest) { await this.storeAccess.assertConversationAccess(req.user!, id); return this.service.messages(id, Number(page), Number(pageSize), month || undefined); }
   @Post(":id/messages") async sendMessage(@Param("id") id: string, @Body() dto: SendConversationMessageDto, @Req() req: AuthRequest) {
     await this.storeAccess.assertConversationAccess(req.user!, id);
     return this.service.sendMessage(id, dto, req.user!);
