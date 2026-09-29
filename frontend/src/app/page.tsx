@@ -1619,6 +1619,8 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
   const [chatMonth, setChatMonth] = useState("");
   const [chatMonthOptions, setChatMonthOptions] = useState<string[]>([]);
   const [chatMonthReady, setChatMonthReady] = useState(initialSection !== "chats");
+  const latestChatMonth = chatMonthOptions[0] ?? "";
+  const viewingLatestChatMonth = !chatMonth || !latestChatMonth || chatMonth === latestChatMonth;
   const [chatTotalCount, setChatTotalCount] = useState(0);
   const [isChatPageLoading, setIsChatPageLoading] = useState(false);
   const [chatPageError, setChatPageError] = useState<string | null>(null);
@@ -3078,7 +3080,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
   async function sendReply() {
     const conversationId = selectedConversationId;
     const textToSend = replyText.trim();
-    if (!conversationId || !textToSend || replySending || authUser?.role !== "ADMIN") return;
+    if (!conversationId || !textToSend || replySending || authUser?.role !== "ADMIN" || !viewingLatestChatMonth) return;
     const idempotencyKey = replyIdempotencyKeyRef.current ?? crypto.randomUUID();
     replyIdempotencyKeyRef.current = idempotencyKey;
     setReplySending(true);
@@ -3112,7 +3114,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
 
   async function retryFailedMessage(messageId: string) {
     const conversationId = selectedConversationId;
-    if (!conversationId || retryingMessageId || authUser?.role !== "ADMIN") return;
+    if (!conversationId || retryingMessageId || authUser?.role !== "ADMIN" || !viewingLatestChatMonth) return;
     setRetryingMessageId(messageId);
     setReplyError(null);
     try {
@@ -4938,11 +4940,17 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                           <div className="flex items-end gap-2">
                             <textarea
                               value={replyText}
-                              disabled={replySending || authUser.role === "VIEWER"}
+                              disabled={replySending || authUser.role === "VIEWER" || !viewingLatestChatMonth}
                               maxLength={5000}
                               rows={2}
                               aria-label="พิมพ์ข้อความตอบกลับลูกค้า"
-                              placeholder={authUser.role === "VIEWER" ? "บัญชี Viewer อ่านได้อย่างเดียว" : "พิมพ์ข้อความตอบกลับลูกค้า..."}
+                              placeholder={
+                                !viewingLatestChatMonth
+                                  ? "ดูเดือนย้อนหลัง · เปลี่ยนเป็นเดือนล่าสุดเพื่อส่งข้อความ"
+                                  : authUser.role === "VIEWER"
+                                    ? "บัญชี Viewer อ่านได้อย่างเดียว"
+                                    : "พิมพ์ข้อความตอบกลับลูกค้า..."
+                              }
                               onChange={(event) => {
                                 setReplyText(event.target.value);
                                 setReplyError(null);
@@ -4958,7 +4966,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                             />
                             <button
                               type="button"
-                              disabled={!replyText.trim() || replySending || authUser.role === "VIEWER"}
+                              disabled={!replyText.trim() || replySending || authUser.role === "VIEWER" || !viewingLatestChatMonth}
                               onClick={() => void sendReply()}
                               className="h-11 shrink-0 rounded-[var(--app-radius-md)] bg-[var(--app-accent)] hover:bg-[var(--app-accent-hover)] text-white px-4 text-xs font-semibold shadow-[var(--app-shadow-card)] transition-colors disabled:cursor-not-allowed disabled:opacity-50"
                             >
