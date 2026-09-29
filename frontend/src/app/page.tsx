@@ -2683,8 +2683,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
         const res = await api.bulkMarkRepliedByFilter({
           bmReplyStatus: "NOT_REPLIED",
           storeId: bulkConfirmState.storeId === "all" ? undefined : bulkConfirmState.storeId,
-          month: chatMonth || undefined,
-        });
+        }, chatMonth || undefined);
         updatedCount = res.updatedCount;
       } else if (bulkConfirmState.conversationIds && bulkConfirmState.conversationIds.length > 0) {
         const res = await api.bulkMarkReplied(bulkConfirmState.conversationIds);
@@ -2694,8 +2693,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
           storeId: bulkConfirmState.storeId,
           status: bulkConfirmState.targetStatus,
           fromStatuses: bulkConfirmState.fromStatuses,
-          month: chatMonth || undefined,
-        });
+        }, chatMonth || undefined);
         updatedCount = res.updated;
       }
       const count = updatedCount || bulkConfirmState.affectedCount;
