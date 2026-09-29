@@ -6,18 +6,19 @@ const mobileChats = readFileSync(new URL("../src/components/chats/mobile-chats-a
 
 void test("opening a canonical conversation uses the merged canonical messages endpoint regardless of list filter", () => {
   const start = mobileChats.indexOf("const loadConversation = useCallback(async");
-  const end = mobileChats.indexOf("}, [scrollMessagesToBottom, updateUrlConversation]);", start);
+  const end = mobileChats.indexOf("}, [month, scrollMessagesToBottom, updateUrlConversation]);", start);
   assert.ok(start >= 0 && end > start);
   const loader = mobileChats.slice(start, end);
   assert.match(loader, /const historical = seed\?\.historicalOnly === true \|\| id\.startsWith\("historical:"\)/);
-  assert.match(loader, /api\.conversationMessages\(id\)/);
+  assert.match(loader, /api\.conversationMessages\(id, 1, undefined, month \|\| undefined\)/);
   assert.doesNotMatch(loader, /\bstatus\b|api\.historicalChats\(/);
 });
 
 void test("virtual Historical chats remain a separate read-only list limited to the all filter", () => {
   const loadListStart = mobileChats.indexOf("const loadList = useCallback(async");
-  const loadListEnd = mobileChats.indexOf("}, [historicalPage, page, search, status, storeId, user]);", loadListStart);
+  const loadListEnd = mobileChats.indexOf("}, [historicalPage, month, monthReady, page, search, status, storeId, user]);", loadListStart);
   assert.ok(loadListStart >= 0 && loadListEnd > loadListStart);
   const loader = mobileChats.slice(loadListStart, loadListEnd);
   assert.match(loader, /status === "all"\s*\? api\.historicalChats/);
+  assert.match(loader, /month: month \|\| undefined/);
 });
