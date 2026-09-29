@@ -1865,7 +1865,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
       }
     }
     void loadConversations(activeConversationQuery);
-  }, [activeConversationQuery, activeConversationQueryKey, authUser, chatPage, conversationFilterShapeKey, initialSection, loadConversations]);
+  }, [activeConversationQuery, activeConversationQueryKey, authUser, chatMonthReady, chatPage, conversationFilterShapeKey, initialSection, loadConversations]);
 
   const loadSupportingData = useCallback(async (silent = false, includeWebhookInfo = !silent, mode: SupportingDataMode = "full") => {
     const isChatsSection = initialSection === "chats";
@@ -2157,7 +2157,6 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
       setModelFilter(route.model ?? "all");
       setTopicFilter(route.topic ?? "all");
       setLineOaFilter(route.lineOaId ?? "all");
-      if (route.month) setChatMonth(route.month);
       setSelectedConversationId(route.conversationId ?? "");
       chatRouteHydrated.current = true;
     };
