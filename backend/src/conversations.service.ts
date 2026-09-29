@@ -1596,8 +1596,15 @@ export class ConversationsService {
     return this.get(id);
   }
 
-  async getBmReplyStatusSummary(accessibleStoreIds: string[] | null | undefined) {
+  async getBmReplyStatusSummary(accessibleStoreIds: string[] | null | undefined, month?: string) {
     if (accessibleStoreIds === undefined) throw new ForbiddenException("Store scope is required");
+    const monthRange = parseChatMonth(month);
+    const historicalMonthConversationIds = monthRange
+      ? await this.historicalConversationIdsForMonth(monthRange)
+      : [];
+    const monthFilter = monthRange
+      ? this.monthActivityFilter(monthRange, historicalMonthConversationIds)
+      : undefined;
     const storeScope: Prisma.StoreWhereInput = {
       isActive: true,
       archivedAt: null,
@@ -1618,7 +1625,12 @@ export class ConversationsService {
 
     const grouped = await this.prisma.conversation.groupBy({
       by: ["storeId", "bmReplyStatus"],
-      where: { store: storeScope, lineOfficialAccount: { accountType: "STORE" }, ...(resetFilter as Prisma.ConversationWhereInput) },
+      where: {
+        store: storeScope,
+        lineOfficialAccount: { accountType: "STORE" },
+        ...(resetFilter as Prisma.ConversationWhereInput),
+        AND: monthFilter ? [monthFilter] : undefined,
+      },
       _count: { _all: true },
     });
 
@@ -1662,6 +1674,7 @@ export class ConversationsService {
         lineOfficialAccount: { accountType: "STORE" },
         bmReplyStatus: BmReplyStatus.NOT_REPLIED,
         ...(resetFilter as Prisma.ConversationWhereInput),
+        AND: monthFilter ? [monthFilter] : undefined,
       },
       _min: { latestMessageAt: true },
     });
@@ -1723,6 +1736,8 @@ export class ConversationsService {
     return {
       overview,
       stores: storesList,
+      month: monthRange?.month ?? null,
+      timezone: CHAT_MONTH_TIMEZONE,
     };
   }
 }
