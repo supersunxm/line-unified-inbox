@@ -1619,6 +1619,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
   const [chatMonth, setChatMonth] = useState("");
   const [chatMonthOptions, setChatMonthOptions] = useState<string[]>([]);
   const [chatMonthReady, setChatMonthReady] = useState(initialSection !== "chats");
+  const chatMonthRef = useRef("");
   const latestChatMonth = chatMonthOptions[0] ?? "";
   const viewingLatestChatMonth = !chatMonth || !latestChatMonth || chatMonth === latestChatMonth;
   const [chatTotalCount, setChatTotalCount] = useState(0);
@@ -1888,14 +1889,15 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
     if (!silent) setIsLoading(true);
     setApiError(null);
     try {
+      const activeMonth = chatMonthRef.current;
       const [storeResponse, productResponse, topicResponse, lineOaResponse, bmSummaryResponse] = await Promise.all([
         loadStores ? api.stores(showArchivedStores, { signal: controller.signal }) : Promise.resolve(null),
         loadChatMetadata ? api.products({ signal: controller.signal }) : Promise.resolve(null),
         loadChatMetadata ? api.topics({ signal: controller.signal }) : Promise.resolve(null),
         loadLineOas ? api.lineOfficialAccounts(showArchivedLineOas, { signal: controller.signal }) : Promise.resolve(null),
         loadBmSummary
-          ? chatMonth
-            ? api.bmReplyStatusSummaryForMonth(chatMonth, { signal: controller.signal })
+          ? activeMonth
+            ? api.bmReplyStatusSummaryForMonth(activeMonth, { signal: controller.signal })
             : api.bmReplyStatusSummary({ signal: controller.signal })
           : Promise.resolve(null),
       ]);
@@ -1943,7 +1945,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
       }
       if (!controller.signal.aborted && !silent) setIsLoading(false);
     }
-  }, [chatMonth, initialSection, showArchivedLineOas, showArchivedStores]);
+  }, [initialSection, showArchivedLineOas, showArchivedStores]);
 
   const loadApplicationData = useCallback(async (silent = false, includeWebhookInfo = !silent) => {
     await Promise.all([
@@ -2116,6 +2118,24 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
       controller.abort();
     };
   }, [authUser, initialSection]);
+
+  useEffect(() => {
+    chatMonthRef.current = chatMonth;
+    if (!authUser || initialSection !== "chats" || !chatMonthReady) return;
+    const controller = new AbortController();
+    void (chatMonth
+      ? api.bmReplyStatusSummaryForMonth(chatMonth, { signal: controller.signal })
+      : api.bmReplyStatusSummary({ signal: controller.signal }))
+      .then((value) => {
+        if (!controller.signal.aborted) setBmSummaryData(value);
+      })
+      .catch((error) => {
+        if (!controller.signal.aborted && !isAbortError(error)) {
+          setApiError(error instanceof Error ? error.message : "Unable to load reply summary");
+        }
+      });
+    return () => controller.abort();
+  }, [authUser, chatMonth, chatMonthReady, initialSection]);
 
   useEffect(() => {
     const loadSavedPreferences = window.setTimeout(() => {
