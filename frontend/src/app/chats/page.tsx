@@ -4,14 +4,14 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { MobileChatsApp } from "@/components/chats/mobile-chats-app";
 import { api } from "@/lib/api";
-import type { ApiBmReplyStatus, BmReplyStatusSummaryResponse } from "@/types/api";
+import type { ApiEffectiveReplyState, BmReplyStatusSummaryResponse } from "@/types/api";
 import { AuthorizedSection, AuthorizedWorkspace } from "../authorized-workspace";
 import { LegacyI18nBoundary } from "../legacy-i18n-boundary";
 import { pickLanguageText, useAppLanguage } from "../language";
 import { mobileChatsPhrases, mobileChatsTemplates } from "../mobile-route-i18n";
 
 type ViewportMode = "loading" | "mobile" | "desktop";
-type MobileStatusFilter = "all" | ApiBmReplyStatus;
+type MobileStatusFilter = "all" | ApiEffectiveReplyState;
 
 function MobileViewportBridge() {
   useEffect(() => {
@@ -69,20 +69,22 @@ function MobileChatFiltersBridge() {
   const [status, setStatus] = useState<MobileStatusFilter>("all");
 
   const labels = pickLanguageText(language, {
-    th: { store: "ร้านค้า", selectStore: "เลือกร้านค้า", allStores: "ร้านค้าทั้งหมด", all: "ทั้งหมด", notReplied: "ยังไม่ตอบ", notifiedBm: "แจ้ง BM", replied: "ตอบแล้ว" },
-    en: { store: "Store", selectStore: "Select store", allStores: "All stores", all: "All", notReplied: "Not replied", notifiedBm: "BM notified", replied: "Replied" },
-    zh: { store: "门店", selectStore: "选择门店", allStores: "全部门店", all: "全部", notReplied: "尚未回复", notifiedBm: "已通知 BM", replied: "已回复" },
+    th: { store: "ร้านค้า", selectStore: "เลือกร้านค้า", allStores: "ร้านค้าทั้งหมด", all: "ทั้งหมด", notReplied: "ยังไม่ตอบ", replied: "ตอบแล้ว" },
+    en: { store: "Store", selectStore: "Select store", allStores: "All stores", all: "All", notReplied: "Not replied", replied: "Replied" },
+    zh: { store: "门店", selectStore: "选择门店", allStores: "全部门店", all: "全部", notReplied: "尚未回复", replied: "已回复" },
   });
   const locale = language === "th" ? "th-TH" : language === "zh" ? "zh-CN" : "en-US";
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const urlStatus = params.get("bmReplyStatus");
-    setStoreId(params.get("store") || "");
+    const urlStatus = params.get("replyState") ?? params.get("bmReplyStatus");
+    setStoreId(params.get("store") || params.get("storeId") || "");
     setStatus(
-      urlStatus === "NOT_REPLIED" || urlStatus === "NOTIFIED_BM" || urlStatus === "REPLIED"
-        ? urlStatus
-        : "all",
+      urlStatus === "REPLIED"
+        ? "REPLIED"
+        : urlStatus === "NOT_REPLIED" || urlStatus === "NOTIFIED_BM"
+          ? "NOT_REPLIED"
+          : "all",
     );
   }, []);
 
@@ -129,8 +131,7 @@ function MobileChatFiltersBridge() {
   const counts = selectedStore ?? summary?.overview ?? { notReplied: 0, notifiedBm: 0, replied: 0 };
   const statusCounts: Record<MobileStatusFilter, number> = {
     all: counts.notReplied + counts.notifiedBm + counts.replied,
-    NOT_REPLIED: counts.notReplied,
-    NOTIFIED_BM: counts.notifiedBm,
+    NOT_REPLIED: counts.notReplied + counts.notifiedBm,
     REPLIED: counts.replied,
   };
   const stores = [...(summary?.stores ?? [])].sort((a, b) => a.storeName.localeCompare(b.storeName, locale));
@@ -139,8 +140,9 @@ function MobileChatFiltersBridge() {
     const url = new URL(window.location.href);
     if (nextStoreId) url.searchParams.set("store", nextStoreId);
     else url.searchParams.delete("store");
-    if (nextStatus === "all") url.searchParams.delete("bmReplyStatus");
-    else url.searchParams.set("bmReplyStatus", nextStatus);
+    url.searchParams.delete("bmReplyStatus");
+    if (nextStatus === "all") url.searchParams.delete("replyState");
+    else url.searchParams.set("replyState", nextStatus);
     url.searchParams.delete("conversationId");
     window.location.assign(`${url.pathname}${url.search}`);
   };
@@ -176,7 +178,6 @@ function MobileChatFiltersBridge() {
           [
             ["all", labels.all],
             ["NOT_REPLIED", labels.notReplied],
-            ["NOTIFIED_BM", labels.notifiedBm],
             ["REPLIED", labels.replied],
           ] as Array<[MobileStatusFilter, string]>
         ).map(([value, label]) => (
@@ -206,6 +207,11 @@ function ChatsUiOverrides() {
   return (
     <style>{`
       [data-product-intent-card] {
+        display: none !important;
+      }
+
+      [data-conversation-action-menu],
+      [data-mobile-mark-replied] {
         display: none !important;
       }
 

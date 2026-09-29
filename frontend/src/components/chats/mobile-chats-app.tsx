@@ -6,6 +6,7 @@ import { ApiError, api } from "@/lib/api";
 import type {
   ApiBmReplyStatus,
   ApiConversation,
+  ApiEffectiveReplyState,
   ApiCustomerIntelligence,
   ConversationMessagesResponse,
 } from "@/types/api";
@@ -16,6 +17,7 @@ import { mapRealtimeMessage, subscribeToRealtimeEvents } from "@/app/realtime";
 import { formatRelativeTime } from "@/app/relative-time";
 import { openLineOaManager } from "@/app/line-oa-manager";
 import { lineStickerLabel, MessageSticker } from "@/app/message-sticker";
+import { getEffectiveReplyState } from "@/app/reply-state";
 
 type AuthUser = {
   id: string;
@@ -25,20 +27,18 @@ type AuthUser = {
 };
 
 type MobileView = "list" | "chat" | "info";
-type StatusFilter = "all" | ApiBmReplyStatus;
+type StatusFilter = "all" | ApiEffectiveReplyState;
 
 const PAGE_SIZE = 40;
 const HISTORICAL_PAGE_SIZE = 20;
 const STORE_CHATS_PARITY_REFRESH_MS = 30_000;
-const statusLabels: Record<ApiBmReplyStatus, string> = {
+const statusLabels: Record<ApiEffectiveReplyState, string> = {
   NOT_REPLIED: "ยังไม่ตอบ",
-  NOTIFIED_BM: "แจ้ง BM แล้ว",
   REPLIED: "ตอบแล้ว",
 };
 
-function statusClass(status: ApiBmReplyStatus) {
+function statusClass(status: ApiEffectiveReplyState) {
   if (status === "REPLIED") return "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-200";
-  if (status === "NOTIFIED_BM") return "bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-200";
   return "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300";
 }
 
@@ -150,8 +150,13 @@ export function MobileChatsApp() {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<StatusFilter>(() => {
     if (typeof window === "undefined") return "all";
-    const value = new URLSearchParams(window.location.search).get("bmReplyStatus");
-    return value === "NOT_REPLIED" || value === "NOTIFIED_BM" || value === "REPLIED" ? value : "all";
+    const params = new URLSearchParams(window.location.search);
+    const value = params.get("replyState") ?? params.get("bmReplyStatus");
+    return value === "REPLIED"
+      ? "REPLIED"
+      : value === "NOT_REPLIED" || value === "NOTIFIED_BM"
+        ? "NOT_REPLIED"
+        : "all";
   });
   const [storeId] = useState(() => typeof window === "undefined" ? "" : new URLSearchParams(window.location.search).get("store") || "");
   const [summary, setSummary] = useState({ notReplied: 0, notifiedBm: 0, replied: 0 });
@@ -179,8 +184,7 @@ export function MobileChatsApp() {
   const historicalTotalPages = Math.max(1, Math.ceil(historicalTotal / HISTORICAL_PAGE_SIZE));
   const statusCounts = useMemo(() => ({
     all: summary.notReplied + summary.notifiedBm + summary.replied,
-    NOT_REPLIED: summary.notReplied,
-    NOTIFIED_BM: summary.notifiedBm,
+    NOT_REPLIED: summary.notReplied + summary.notifiedBm,
     REPLIED: summary.replied,
   }), [summary]);
 
@@ -290,7 +294,7 @@ export function MobileChatsApp() {
         page,
         pageSize: PAGE_SIZE,
         search: search.trim() || undefined,
-        bmReplyStatus: status === "all" ? undefined : status,
+        replyState: status === "all" ? undefined : status,
         storeId: storeId || undefined,
       });
       const historicalRequest = status === "all"
@@ -413,8 +417,8 @@ export function MobileChatsApp() {
       setMessages((current) => current.items.some((item) => item.id === response.message.id)
         ? current
         : { ...current, items: [...current.items, response.message], total: current.total + 1 });
-      setSelected((current) => current ? { ...current, bmReplyStatus: "REPLIED" } : current);
-      setConversations((current) => current.map((item) => item.id === selected.id ? { ...item, bmReplyStatus: "REPLIED" } : item));
+      setSelected((current) => current ? { ...current, bmReplyStatus: "REPLIED", effectiveReplyState: "REPLIED" } : current);
+      setConversations((current) => current.map((item) => item.id === selected.id ? { ...item, bmReplyStatus: "REPLIED", effectiveReplyState: "REPLIED" } : item));
       setReplyText("");
       void refreshSummary();
       scrollMessagesToBottom();
@@ -441,9 +445,9 @@ export function MobileChatsApp() {
         ...current,
         items: current.items.map((item) => (item.id === messageId ? response.message : item)),
       }));
-      setSelected((current) => (current ? { ...current, bmReplyStatus: "REPLIED" } : current));
+      setSelected((current) => (current ? { ...current, bmReplyStatus: "REPLIED", effectiveReplyState: "REPLIED" } : current));
       setConversations((current) =>
-        current.map((item) => (item.id === selected.id ? { ...item, bmReplyStatus: "REPLIED" } : item)),
+        current.map((item) => (item.id === selected.id ? { ...item, bmReplyStatus: "REPLIED", effectiveReplyState: "REPLIED" } : item)),
       );
       void refreshSummary();
       scrollMessagesToBottom();
@@ -493,7 +497,7 @@ export function MobileChatsApp() {
       setConversations((current) => current.map((item) => item.id === conversation.id ? response.conversation : item));
       setSelected((current) => current?.id === conversation.id ? response.conversation : current);
       await refreshSummary();
-      if (status === "NOT_REPLIED" || status === "NOTIFIED_BM") await loadList();
+      if (status === "NOT_REPLIED") await loadList();
     } catch (error) {
       setConversations((current) => current.map((item) => item.id === conversation.id ? { ...item, bmReplyStatus: previous } : item));
       setSelected((current) => current?.id === conversation.id ? { ...current, bmReplyStatus: previous } : current);
@@ -555,7 +559,6 @@ export function MobileChatsApp() {
               {([
                 ["all", "ทั้งหมด"],
                 ["NOT_REPLIED", "ยังไม่ตอบ"],
-                ["NOTIFIED_BM", "แจ้ง BM"],
                 ["REPLIED", "ตอบแล้ว"],
               ] as Array<[StatusFilter, string]>).map(([value, label]) => (
                 <button
@@ -603,11 +606,11 @@ export function MobileChatsApp() {
                         <div className="mt-2 flex min-w-0 items-center gap-1.5">
                           <span className="min-w-0 flex-1 truncate text-[11px] text-[var(--app-text-tertiary)]">{conversation.store.name}</span>
                           {conversation.priority === "HIGH" || conversation.priority === "CRITICAL" ? <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold text-red-700 dark:bg-red-950/60 dark:text-red-200">สำคัญ</span> : null}
-                          <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${statusClass(conversation.bmReplyStatus)}`}>{statusLabels[conversation.bmReplyStatus]}</span>
+                          <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${statusClass(getEffectiveReplyState(conversation))}`}>{statusLabels[getEffectiveReplyState(conversation)]}</span>
                         </div>
                       </div>
                     </button>
-                    {conversation.bmReplyStatus !== "REPLIED" && user.role !== "VIEWER" ? (
+                    {getEffectiveReplyState(conversation) !== "REPLIED" && user.role !== "VIEWER" ? (
                       <button
                         data-mobile-mark-replied
                         type="button"
@@ -838,7 +841,8 @@ export function MobileChatsApp() {
                     <p className="text-xs font-semibold uppercase tracking-wide text-[var(--app-text-tertiary)]">{selected.historicalOnly ? "ประวัติแชท" : "สถานะการตอบ"}</p>
                     <div className="mt-3 flex items-center justify-between gap-3">
                       <div><p className="text-sm font-bold">{selected.customer.displayName}</p><p className="mt-0.5 text-xs text-[var(--app-text-tertiary)]">{selected.store.name}</p></div>
-                      {selected.historicalOnly ? <span className="rounded-full bg-[var(--app-accent-soft)] px-2 py-1 text-[10px] font-semibold text-[var(--app-accent)]">อ่านอย่างเดียว</span> : <select value={selected.bmReplyStatus} disabled={user.role === "VIEWER"} onChange={(event) => void updateBmStatus(event.target.value as ApiBmReplyStatus)} className="h-10 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-subtle)] px-2 text-sm font-semibold">
+                      {selected.historicalOnly ? <span className="rounded-full bg-[var(--app-accent-soft)] px-2 py-1 text-[10px] font-semibold text-[var(--app-accent)]">อ่านอย่างเดียว</span> : <span className={`rounded-full px-3 py-1.5 text-xs font-bold ${statusClass(getEffectiveReplyState(selected))}`}>{statusLabels[getEffectiveReplyState(selected)]}</span>}
+                      {!selected.historicalOnly && <select aria-hidden="true" tabIndex={-1} value={selected.bmReplyStatus} disabled className="hidden" onChange={(event) => void updateBmStatus(event.target.value as ApiBmReplyStatus)}>
                         <option value="NOT_REPLIED">ยังไม่ตอบ</option><option value="NOTIFIED_BM">แจ้ง BM แล้ว</option><option value="REPLIED">ตอบแล้ว</option>
                       </select>}
                     </div>

@@ -12,27 +12,16 @@ test("API client provides bulkMarkReplied and bulkMarkRepliedByFilter endpoints"
   assert.match(apiCode, /request<\{ success: boolean; updatedCount: number; affectedCount: number; storeId: string; status: ApiBmReplyStatus \}>\("\/conversations\/bulk-mark-replied-by-filter", \{/);
 });
 
-test("Store Chats header conditionally renders '✓ ตอบแล้วทั้งหมด' ONLY for NOT_REPLIED queue and non-VIEWER roles", () => {
-  assert.match(pageCode, /data-bulk-mark-all-replied-button/);
-  assert.match(pageCode, /sidebarView === "notReplied".*authUser\?\.role !== "VIEWER"/);
-  assert.match(pageCode, /language === "th"\s*\?\s*"ตอบแล้วทั้งหมด"/);
-  assert.match(pageCode, /"Mark All Replied"/);
-  assert.match(pageCode, /"全部标记为已回复"/);
+test("Store Chats no longer exposes manual bulk reply-state mutation controls", () => {
+  assert.doesNotMatch(pageCode, /data-bulk-mark-all-replied-button/);
+  assert.doesNotMatch(pageCode, /"Mark All Replied"/);
+  assert.doesNotMatch(pageCode, /"全部标记为已回复"/);
 });
 
-test("Bulk mark as replied displays required confirmation modal with exact title, message, and action buttons", () => {
-  // Title
-  assert.match(pageCode, /ยืนยันเปลี่ยนสถานะ/);
-  assert.match(pageCode, /Confirm Status Change/);
-  assert.match(pageCode, /确认更改状态/);
-
-  // Message
-  assert.match(pageCode, /คุณกำลังเปลี่ยน <strong>\{bulkConfirmState\.affectedCount\}<\/strong> บทสนทนาเป็น/);
-  assert.match(pageCode, /ตอบแล้ว/);
-
-  // Buttons
-  assert.match(pageCode, /language === "th" \? "ยกเลิก"/);
-  assert.match(pageCode, /language === "th" \? "ยืนยัน"/);
+test("legacy bulk mutation plumbing remains backend-compatible but is not a reply-state source of truth", () => {
+  assert.match(apiCode, /bulkMarkRepliedByFilter/);
+  assert.match(pageCode, /const handleExecuteBulkUpdate = useCallback/);
+  assert.doesNotMatch(pageCode, /onRequestBulkUpdate=\{/);
 });
 
 test("Executing bulk update triggers reconciliation: calls bulkMarkRepliedByFilter, refreshes conversation list, and updates counters", () => {

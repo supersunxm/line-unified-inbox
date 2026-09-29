@@ -20,12 +20,16 @@ test("bmReplyStatusLabels provides exact required Thai, English, and Chinese tra
   assert.equal(zhBadge.label, "已回复");
 });
 
-test("detail view contains 3-state bmReplyStatus control disabled for VIEWER role", () => {
+test("detail view exposes a read-only two-state reply status", () => {
   assert.match(pageCode, /data-bm-reply-status-select/);
-  assert.match(pageCode, /disabled=\{isMutating \|\| authUser\?\.role === "VIEWER"\}/);
-  assert.match(pageCode, /onChange=\{\(e\) => void updateBmReplyStatus\(e\.target\.value as ApiBmReplyStatus\)\}/);
+  assert.match(pageCode, /disabled/);
+  assert.match(pageCode, /value=\{selectedConversationState\.bmReplyStatus === "REPLIED" \? "REPLIED" : "NOT_REPLIED"\}/);
+  assert.match(pageCode, /<option value="NOT_REPLIED">/);
+  assert.match(pageCode, /<option value="REPLIED">/);
+  const selectStart = pageCode.indexOf("data-bm-reply-status-select");
+  const selectEnd = pageCode.indexOf("</select>", selectStart);
+  assert.doesNotMatch(pageCode.slice(selectStart, selectEnd), /option value="NOTIFIED_BM"/);
   assert.match(apiCode, /updateBmReplyStatus: \(id: string, status: ApiBmReplyStatus\)/);
-  assert.match(pageCode, /const response = await api\.updateBmReplyStatus\(selectedConversation\.id, status\)/);
 });
 
 test("updateBmReplyStatus follows optimistic update + rollback pattern", () => {
@@ -48,21 +52,18 @@ test("activity history mapping and rendering recognizes BM_REPLY_STATUS_CHANGED"
   assert.match(pageCode, /bmReplyStatusChangedTo/);
 });
 
-test("sidebar OVERVIEW section renders global bmReplyStatus categories and per-store 3-badge breakdown", () => {
+test("sidebar OVERVIEW exposes only effective Not Replied and Replied filters", () => {
   const contextSidebarCode = readFileSync(new URL("../src/components/shell/context-sidebar.tsx", import.meta.url), "utf8");
   assert.match(contextSidebarCode, /selectSidebarView\("notReplied"\)/);
-  assert.match(contextSidebarCode, /selectSidebarView\("notifiedBm"\)/);
   assert.match(contextSidebarCode, /selectSidebarView\("replied"\)/);
+  assert.doesNotMatch(contextSidebarCode, /selectSidebarView\("notifiedBm"\)/);
   assert.match(contextSidebarCode, /overview\.notReplied/);
-  assert.match(contextSidebarCode, /overview\.notifiedBm/);
   assert.match(contextSidebarCode, /overview\.replied/);
   assert.match(contextSidebarCode, /storeBmCounts\[store\.id\]/);
 
   assert.match(pageCode, /api\.bmReplyStatusSummary/);
-  assert.match(pageCode, /bmReplyStatus: initialSection === "chats" \? activeConversationBmReplyStatus : undefined/);
-  assert.match(pageCode, /NOT_REPLIED/);
-  assert.match(pageCode, /NOTIFIED_BM/);
-  assert.match(pageCode, /REPLIED/);
+  assert.match(pageCode, /replyState: initialSection === "chats" \? activeConversationReplyState : undefined/);
+  assert.match(pageCode, /getEffectiveReplyState\(item\)/);
 });
 
 test("sortStoresByPriority prioritizes stores by operational urgency (notReplied -> notifiedBm -> replied -> alphabetical)", async () => {

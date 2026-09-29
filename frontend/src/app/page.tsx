@@ -63,8 +63,9 @@ import { ConversationRowSkeleton } from "./conversation-row-skeleton";
 import { getChatsPaginationText } from "./chats-pagination-utils";
 import { buildConversationListQuery, conversationListQueryKey, LatestConversationRequestGuard, reconcileConversationPage, type ConversationListQuery } from "./conversation-list-query";
 import { getBmCustomerSalesTags, getBmTagChipClass, getConversationListTags, getConversationListTitle } from "./conversation-list-presentation";
+import { effectiveSummaryCounts, getEffectiveReplyState } from "./reply-state";
 import { CustomerSalesTagEditor } from "./customer-sales-tag-editor";
-import type { ApiBmReplyStatus, ApiConversation, ApiCustomerIntelligence, ApiCustomerSalesInformation, ApiFollowUpStatus, ApiStore, BackfillJobResponseDto, BmReplyStatusSummaryResponse, ConversationMessagesResponse, CreateLineOaInput, DashboardAnalyticsResponse, LineOfficialAccountResponse, LineOaTestResult, LineOaWebhookInfo, StoreDeletionPreview, StoreMasterSuggestion, StoreMasterSyncResult, SyncBatchResult } from "@/types/api";
+import type { ApiBmReplyStatus, ApiConversation, ApiEffectiveReplyState, ApiCustomerIntelligence, ApiCustomerSalesInformation, ApiFollowUpStatus, ApiStore, BackfillJobResponseDto, BmReplyStatusSummaryResponse, ConversationMessagesResponse, CreateLineOaInput, DashboardAnalyticsResponse, LineOfficialAccountResponse, LineOaTestResult, LineOaWebhookInfo, StoreDeletionPreview, StoreMasterSuggestion, StoreMasterSyncResult, SyncBatchResult } from "@/types/api";
 
 type Language = "th" | "en" | "zh";
 type FollowUpStatus =
@@ -1368,7 +1369,7 @@ function mapApiConversation(item: ApiConversation): Conversation {
       item.priority === "HIGH" || item.priority === "CRITICAL"
         ? "High"
         : "Normal",
-    bmReplyStatus: item.bmReplyStatus,
+    bmReplyStatus: getEffectiveReplyState(item),
     relationship: item.productRelationship ?? "Unknown",
     purchaseIntent: item.purchaseIntent ?? "Unknown",
     lineOaId: item.lineOfficialAccount?.id ?? "",
@@ -1381,7 +1382,7 @@ function mapApiConversation(item: ApiConversation): Conversation {
 function mapApiConversationState(item: ApiConversation): ConversationState {
   return {
     status: apiToUiStatus[item.followUpStatus],
-    bmReplyStatus: item.bmReplyStatus,
+    bmReplyStatus: getEffectiveReplyState(item),
     note: item.notes?.[0]?.content ?? "",
     activityHistory: (item.activityHistory ?? []).flatMap((activity): ActivityHistoryItem[] => {
       if (activity.actionType === "BM_REPLY_STATUS_CHANGED" && activity.newBmReplyStatus) {
@@ -1735,14 +1736,12 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
   }, [editingLineOaId, masterRetryNonce, searchQuery, selectedMaster, showLineOaForm, text.storeMasterSearchFailed]);
 
   const activeConversationStatus = statusFilter !== "all" ? uiToApiStatus[statusFilter] : undefined;
-  const activeConversationBmReplyStatus: ApiBmReplyStatus | undefined =
+  const activeConversationReplyState: ApiEffectiveReplyState | undefined =
     sidebarView === "notReplied"
       ? "NOT_REPLIED"
-      : sidebarView === "notifiedBm"
-        ? "NOTIFIED_BM"
-        : sidebarView === "replied"
-          ? "REPLIED"
-          : undefined;
+      : sidebarView === "replied"
+        ? "REPLIED"
+        : undefined;
   const productSeriesId = seriesFilter === "all"
     ? undefined
     : availableProductSeries.find(({ name }) => name === seriesFilter)?.id;
@@ -1760,7 +1759,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
       storeId: initialSection === "chats" ? selectedStore : "all",
       lineOaId: initialSection === "chats" ? lineOaFilter : "all",
       followUpStatus: initialSection === "chats" ? activeConversationStatus : undefined,
-      bmReplyStatus: initialSection === "chats" ? activeConversationBmReplyStatus : undefined,
+      replyState: initialSection === "chats" ? activeConversationReplyState : undefined,
       priority: initialSection === "chats" && priorityFilter !== "all"
         ? priorityFilter === "High" ? "HIGH" : "NORMAL"
         : undefined,
@@ -1768,7 +1767,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
       productModelId: initialSection === "chats" ? productModelId : undefined,
       topicId: initialSection === "chats" ? topicId : undefined,
     }),
-    [activeConversationBmReplyStatus, activeConversationStatus, chatPage, chatPageSize, initialSection, lineOaFilter, priorityFilter, productModelId, productSeriesId, searchText, selectedStore, topicId],
+    [activeConversationReplyState, activeConversationStatus, chatPage, chatPageSize, initialSection, lineOaFilter, priorityFilter, productModelId, productSeriesId, searchText, selectedStore, topicId],
   );
   const activeConversationQueryKey = conversationListQueryKey(activeConversationQuery);
   const conversationQueryRef = useRef(activeConversationQuery);
@@ -1779,7 +1778,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
     storeId: activeConversationQuery.storeId,
     lineOaId: activeConversationQuery.lineOaId,
     followUpStatus: activeConversationQuery.followUpStatus,
-    bmReplyStatus: activeConversationQuery.bmReplyStatus,
+    replyState: activeConversationQuery.replyState,
     search: activeConversationQuery.search,
     priority: activeConversationQuery.priority,
     productSeriesId: activeConversationQuery.productSeriesId,
@@ -2094,13 +2093,11 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
       const focusGroupSelected = routeParams.get(FOCUS_STORE_GROUP_ROUTE_PARAM) === FOCUS_STORE_GROUP_ROUTE_VALUE;
       setSelectedStore(focusGroupSelected ? FOCUS_STORE_GROUP_ID : (route.store ?? "all"));
       setSidebarView(
-        route.bmReplyStatus === "NOTIFIED_BM"
-          ? "notifiedBm"
-          : route.bmReplyStatus === "REPLIED"
-            ? "replied"
-            : route.bmReplyStatus === "NOT_REPLIED"
-              ? "notReplied"
-              : "all",
+        route.replyState === "REPLIED"
+          ? "replied"
+          : route.replyState === "NOT_REPLIED"
+            ? "notReplied"
+            : "all",
       );
       setStatusFilter("all");
       setPriorityFilter(route.priority?.toLowerCase() === "high" ? "High" : "all");
@@ -2117,17 +2114,15 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
 
   useEffect(() => {
     if (initialSection !== "chats" || !uiPreferencesLoaded || !chatRouteHydrated.current) return;
-    const bmReplyStatus =
-      sidebarView === "notifiedBm"
-        ? "NOTIFIED_BM"
-        : sidebarView === "replied"
-          ? "REPLIED"
-          : sidebarView === "notReplied"
-            ? "NOT_REPLIED"
-            : undefined;
+    const replyState =
+      sidebarView === "replied"
+        ? "REPLIED"
+        : sidebarView === "notReplied"
+          ? "NOT_REPLIED"
+          : undefined;
     const href = buildChatsHref({
       store: selectedStore === FOCUS_STORE_GROUP_ID ? "all" : selectedStore,
-      bmReplyStatus,
+      replyState,
       status: statusFilter !== "all" ? statusFilter : undefined,
       priority: priorityFilter === "High" ? "high" : undefined,
       model: modelFilter,
@@ -2426,10 +2421,11 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
   const storeBmCounts = useMemo(() => {
     const countsMap: Record<string, { notReplied: number; notifiedBm: number; replied: number; oldestWaitingMinutes?: number }> = {};
     for (const s of bmSummaryData.stores) {
+      const effectiveCounts = effectiveSummaryCounts(s);
       countsMap[s.storeId] = {
-        notReplied: s.notReplied,
-        notifiedBm: s.notifiedBm,
-        replied: s.replied,
+        notReplied: effectiveCounts.notReplied,
+        notifiedBm: 0,
+        replied: effectiveCounts.replied,
         oldestWaitingMinutes: s.oldestWaitingMinutes ?? 0,
       };
     }
@@ -2441,7 +2437,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
     seriesFilter !== "all" || modelFilter !== "all" ||
     topicFilter !== "all" ||
     lineOaFilter !== "all" ||
-    (sidebarView === "notifiedBm" || sidebarView === "replied" || sidebarView === "notReplied");
+    (sidebarView === "replied" || sidebarView === "notReplied");
   const conversationListTitle = getConversationListTitle(sidebarView, statusFilter, {
     conversations: text.conversationsToFollow,
     notReplied: text.notReplied,
@@ -3200,7 +3196,11 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
             <ContextSidebar
               sidebarView={sidebarView}
               selectSidebarView={selectSidebarView}
-              overview={bmSummaryData.overview}
+              overview={{
+                notReplied: effectiveSummaryCounts(bmSummaryData.overview).notReplied,
+                notifiedBm: 0,
+                replied: effectiveSummaryCounts(bmSummaryData.overview).replied,
+              }}
               storeBmCounts={storeBmCounts}
               selectedStore={selectedStore}
               setSelectedStore={setSelectedStore}
@@ -3210,7 +3210,6 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
               stores={stores}
               text={text}
               getStoreDisplayName={getStoreDisplayName}
-              onRequestBulkUpdate={(req) => setBulkConfirmState(req)}
             />
           )}
 
@@ -4332,43 +4331,6 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                     </div>
 
                     <div className="flex items-center gap-2">
-                      {sidebarView === "notReplied" && selectedStore !== FOCUS_STORE_GROUP_ID && authUser?.role !== "VIEWER" && (chatTotalCount > 0 || conversations.length > 0) && (
-                        <button
-                          type="button"
-                          data-bulk-mark-all-replied-button
-                          onClick={() => {
-                            const storeObj = selectedStore !== "all" ? availableStores.find((s) => s.id === selectedStore) : undefined;
-                            const sName = storeObj
-                              ? getStoreDisplayName(storeObj.name)
-                              : (language === "th" ? "ทุกสาขา" : language === "zh" ? "所有门店" : "All Stores");
-                            const unrepliedCount = selectedStore !== "all"
-                              ? (storeBmCounts[selectedStore]?.notReplied ?? chatTotalCount)
-                              : (bmSummaryData?.overview?.notReplied ?? chatTotalCount);
-                            const targetCount = unrepliedCount > 0 ? unrepliedCount : (chatTotalCount || conversations.length);
-                            const targetIds = conversations.map((c) => c.id);
-
-                            setBulkConfirmState({
-                              storeId: selectedStore,
-                              storeName: sName,
-                              targetStatus: "REPLIED",
-                              fromStatuses: ["NOT_REPLIED"],
-                              affectedCount: targetCount,
-                              conversationIds: targetIds.length > 0 ? targetIds : undefined,
-                            });
-                          }}
-                          className="rounded-[var(--app-radius-sm)] bg-[var(--app-accent)] hover:bg-[var(--app-accent-hover)] text-white px-2.5 py-1 text-xs font-semibold flex items-center gap-1.5 shadow-[var(--app-shadow-card)] transition-colors cursor-pointer"
-                          title={language === "th" ? "เปลี่ยนสถานะเป็นตอบแล้วทั้งหมด" : language === "zh" ? "全部标记为已回复" : "Mark all as replied"}
-                        >
-                          <span>✓</span>
-                          <span>
-                            {language === "th"
-                              ? "ตอบแล้วทั้งหมด"
-                              : language === "zh"
-                                ? "全部标记为已回复"
-                                : "Mark All Replied"}
-                          </span>
-                        </button>
-                      )}
                       <button
                         data-chat-filter-button
                         onClick={() => setShowFilterPanel((isOpen) => !isOpen)}
@@ -4446,7 +4408,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                       {modelFilter !== "all" && <button onClick={() => setModelFilter("all")} className="rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface-subtle)] text-[var(--app-text-primary)] px-2 py-0.5 text-[11px] font-medium">{text.modelFilter}: {modelFilter} ×</button>}
                       {topicFilter !== "all" && <button onClick={() => setTopicFilter("all")} className="rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface-subtle)] text-[var(--app-text-primary)] px-2 py-0.5 text-[11px] font-medium">{text.topicFilter}: {topicFilter} ×</button>}
                       {lineOaFilter !== "all" && <button onClick={() => setLineOaFilter("all")} className="rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface-subtle)] text-[var(--app-text-primary)] px-2 py-0.5 text-[11px] font-medium">{text.lineOaManagement}: {lineOas.find(({ id }) => id === lineOaFilter)?.name ?? lineOaFilter} ×</button>}
-                      {(sidebarView === "notifiedBm" || sidebarView === "replied" || sidebarView === "notReplied") && <button onClick={() => setSidebarView("all")} className="rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface-subtle)] text-[var(--app-text-primary)] px-2 py-0.5 text-[11px] font-medium">{text.bmReplyStatus}: {bmReplyStatusLabels[language][sidebarView === "notifiedBm" ? "NOTIFIED_BM" : sidebarView === "replied" ? "REPLIED" : "NOT_REPLIED"]} ×</button>}
+                      {(sidebarView === "replied" || sidebarView === "notReplied") && <button onClick={() => setSidebarView("all")} className="rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface-subtle)] text-[var(--app-text-primary)] px-2 py-0.5 text-[11px] font-medium">{text.bmReplyStatus}: {bmReplyStatusLabels[language][sidebarView === "replied" ? "REPLIED" : "NOT_REPLIED"]} ×</button>}
                       <button onClick={clearAllFilters} className="text-[11px] font-medium text-[var(--app-danger)] hover:underline">{text.clearAll}</button>
                     </div>
                   )}
@@ -4640,12 +4602,10 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                               className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
                                 currentBmReplyStatus === "REPLIED"
                                   ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-200"
-                                  : currentBmReplyStatus === "NOTIFIED_BM"
-                                    ? "bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-200"
-                                    : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                                  : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
                               }`}
                             >
-                              {bmReplyStatusLabels[language][currentBmReplyStatus]}
+                              {bmReplyStatusLabels[language][currentBmReplyStatus === "REPLIED" ? "REPLIED" : "NOT_REPLIED"]}
                             </span>
                             {tags.visible.map((tag, index) => (
                               <span
@@ -4718,19 +4678,16 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                             <select
                               data-bm-reply-status-select
                               aria-label={text.bmReplyStatus}
-                              disabled={isMutating || authUser?.role === "VIEWER"}
-                              value={selectedConversationState.bmReplyStatus}
+                              disabled
+                              value={selectedConversationState.bmReplyStatus === "REPLIED" ? "REPLIED" : "NOT_REPLIED"}
                               onChange={(e) => void updateBmReplyStatus(e.target.value as ApiBmReplyStatus)}
-                              className={`rounded-[var(--app-radius-sm)] border border-[var(--app-border)] px-1.5 py-0.5 text-[10px] font-medium cursor-pointer focus:outline-none focus:ring-1 focus:ring-[var(--app-accent)] disabled:cursor-not-allowed disabled:opacity-60 ${
+                              className={`rounded-[var(--app-radius-sm)] border border-[var(--app-border)] px-1.5 py-0.5 text-[10px] font-medium disabled:cursor-default disabled:opacity-100 ${
                                 selectedConversationState.bmReplyStatus === "REPLIED"
                                   ? "bg-emerald-50 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-200"
-                                  : selectedConversationState.bmReplyStatus === "NOTIFIED_BM"
-                                    ? "bg-purple-50 text-purple-800 dark:bg-purple-950/60 dark:text-purple-200"
-                                    : "bg-[var(--app-surface)] text-[var(--app-text-primary)]"
+                                  : "bg-[var(--app-surface)] text-[var(--app-text-primary)]"
                               }`}
                             >
                               <option value="NOT_REPLIED">{bmReplyStatusLabels[language].NOT_REPLIED}</option>
-                              <option value="NOTIFIED_BM">{bmReplyStatusLabels[language].NOTIFIED_BM}</option>
                               <option value="REPLIED">{bmReplyStatusLabels[language].REPLIED}</option>
                             </select>
                             <span className="app-muted text-[10px] text-[var(--app-text-tertiary)] font-mono">{formatRelativeTime(selectedConversation.time, language)}</span>

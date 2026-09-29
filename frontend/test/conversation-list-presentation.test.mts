@@ -317,7 +317,7 @@ test("bmReplyStatus badge is rendered per row separately from tag truncation", (
   const activeRows = pageCode.slice(rowStart, rowEnd);
 
   assert.match(activeRows, /data-conversation-bm-reply-status=\{currentBmReplyStatus\}/);
-  assert.match(activeRows, /bmReplyStatusLabels\[language\]\[currentBmReplyStatus\]/);
+  assert.match(activeRows, /bmReplyStatusLabels\[language\]\[currentBmReplyStatus === "REPLIED" \? "REPLIED" : "NOT_REPLIED"\]/);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -472,10 +472,12 @@ test("9. BM Reply Status remains visible", () => {
   assert.match(pageCode, /data-bm-reply-status-select/);
 });
 
-test("10. BM Reply Status remains editable", () => {
+test("10. User-facing Reply Status is read-only and timeline-derived", () => {
   const pageCode = readFileSync(new URL("../src/app/page.tsx", import.meta.url), "utf8");
-  assert.match(pageCode, /updateBmReplyStatus\(e\.target\.value as ApiBmReplyStatus\)/);
-  assert.match(pageCode, /updateConversationBmReplyStatus\(conversation\.id,\s*"REPLIED"\)/);
+  const selectStart = pageCode.indexOf("data-bm-reply-status-select");
+  const selectEnd = pageCode.indexOf("</select>", selectStart);
+  assert.match(pageCode.slice(selectStart, selectEnd), /disabled/);
+  assert.doesNotMatch(pageCode, /data-bulk-mark-all-replied-button/);
 });
 
 test("11. Follow Up tag no longer appears in the list tag area", () => {
