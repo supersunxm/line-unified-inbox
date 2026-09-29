@@ -358,6 +358,8 @@ async function main() {
       return;
     }
 
+    const ambiguousDirectIdentityKeys = new Set<string>();
+    const linkageConflictIdentityKeys = new Set<string>();
     let cursor: string | undefined;
 
     while (summary.TOTAL_SCANNED < limit) {
@@ -420,7 +422,7 @@ async function main() {
         const key = identityKey(identity);
         const ids = [...new Set(directIdsByIdentity.get(key) ?? [])];
         if (ids.length === 1) directToConversation.set(key, ids[0]);
-        else if (ids.length > 1) summary.DIRECT_LINK_AMBIGUOUS_IDENTITIES += 1;
+        else if (ids.length > 1) ambiguousDirectIdentityKeys.add(key);
       }
 
       const historicalIdentities = uniqueIdentities([
@@ -449,7 +451,7 @@ async function main() {
           directConversationId &&
           crosswalkConversationId !== directConversationId
         ) {
-          summary.LINKAGE_CONFLICT_IDENTITIES += 1;
+          linkageConflictIdentityKeys.add(key);
           continue;
         }
 
@@ -471,7 +473,7 @@ async function main() {
         ]);
       }
 
-      const desired: ProjectionRow[] = [];
+      const desiredWrites: ProjectionRow[] = [];
       const staleConversationIds: string[] = [];
 
       for (const conversation of conversations) {
@@ -528,23 +530,29 @@ async function main() {
           canonicalMessageCount: canonical.length,
           historicalMessageCount: historical.length,
         };
-        desired.push(row);
-
         const existing = existingByConversation.get(conversation.id);
-        if (!existing) summary.WOULD_CREATE += 1;
-        else if (sameProjection(existing, row)) summary.UNCHANGED += 1;
-        else summary.WOULD_UPDATE += 1;
+        if (!existing) {
+          summary.WOULD_CREATE += 1;
+          desiredWrites.push(row);
+        } else if (sameProjection(existing, row)) {
+          summary.UNCHANGED += 1;
+        } else {
+          summary.WOULD_UPDATE += 1;
+          desiredWrites.push(row);
+        }
       }
 
       if (apply) {
-        await applyBatch(prisma, desired, staleConversationIds);
-        summary.DATABASE_WRITES += desired.length + staleConversationIds.length;
+        await applyBatch(prisma, desiredWrites, staleConversationIds);
+        summary.DATABASE_WRITES += desiredWrites.length + staleConversationIds.length;
       }
 
       cursor = conversations.at(-1)?.id;
       if (conversations.length < take) break;
     }
 
+    summary.DIRECT_LINK_AMBIGUOUS_IDENTITIES = ambiguousDirectIdentityKeys.size;
+    summary.LINKAGE_CONFLICT_IDENTITIES = linkageConflictIdentityKeys.size;
     process.stdout.write(JSON.stringify(summary, null, 2) + "\n");
   } finally {
     await prisma.$disconnect();
