@@ -1086,6 +1086,7 @@ export class HistoricalTimelineService {
           sentAt: message.sentAt,
           source: "CURRENT",
           sourceEventId: null,
+          sourceEventType: null,
           externalMessageId: message.externalMessageId,
           senderUserId: message.senderUserId,
           senderDisplayName: message.senderDisplayName,
@@ -1162,6 +1163,7 @@ export class HistoricalTimelineService {
         sentAt: message.sentAt,
         source: "HISTORICAL",
         sourceEventId: message.sourceEventId,
+        sourceEventType: message.sourceEventType,
         externalMessageId: null,
         senderUserId: null,
         senderDisplayName: null,
@@ -1181,6 +1183,8 @@ export class HistoricalTimelineService {
     let exactHistoricalResponders = 0;
     let unknownResponderReplies = 0;
     let historicalChatCount = 0;
+    let ambiguousReplyCycleChats = 0;
+    const replyCycleAmbiguityReasons: Partial<Record<Exclude<ReplyStateAmbiguityReason, "NO_MESSAGE_EVIDENCE">, number>> = {};
 
     const analyticsMode = input.mode ?? "CHAT_FIRST_REPLY";
     const auditLimit = Math.min(100, Math.max(0, Math.floor(input.auditLimit ?? 0)));
@@ -1205,18 +1209,34 @@ export class HistoricalTimelineService {
       const historicalInChat = messages.some((message) => message.source === "HISTORICAL");
       if (historicalInChat) historicalChatCount += 1;
 
-      const cycles: UnifiedReplyCycle[] = analyticsMode === "RESPONSE_CYCLES"
-        ? calculateUnifiedReplyCycles(messages, startAt, endDateExclusive)
-        : (() => {
-            const firstInbound = messages.find((message) =>
-              message.direction === MessageDirection.INBOUND
-              && message.sentAt >= startAt
-              && message.sentAt < endDateExclusive);
-            if (!firstInbound) return [];
-            const humanReply = messages.find((message) =>
-              message.sentAt >= firstInbound.sentAt && isUnifiedReplyEvidence(message));
-            return [{ firstInbound, humanReply: humanReply ?? null }];
-          })();
+      let cycles: UnifiedReplyCycle[];
+      if (analyticsMode === "RESPONSE_CYCLES") {
+        const cycleAudit = calculateUnifiedReplyCycleAudit(
+          messages,
+          startAt,
+          endDateExclusive,
+        );
+        if (cycleAudit.status === "AMBIGUOUS") {
+          ambiguousReplyCycleChats += 1;
+          replyCycleAmbiguityReasons[cycleAudit.reason] =
+            (replyCycleAmbiguityReasons[cycleAudit.reason] ?? 0) + 1;
+          cycles = [];
+        } else {
+          cycles = cycleAudit.cycles;
+        }
+      } else {
+        const firstInbound = messages.find((message) =>
+          message.direction === MessageDirection.INBOUND
+          && message.sentAt >= startAt
+          && message.sentAt < endDateExclusive);
+        if (!firstInbound) {
+          cycles = [];
+        } else {
+          const humanReply = messages.find((message) =>
+            message.sentAt >= firstInbound.sentAt && isUnifiedReplyEvidence(message));
+          cycles = [{ firstInbound, humanReply: humanReply ?? null }];
+        }
+      }
 
       for (const cycle of cycles) {
         const firstInbound = cycle.firstInbound;
@@ -1357,6 +1377,8 @@ export class HistoricalTimelineService {
         historicalAutoOutboundMessages,
         historicalNonAutoOutboundMessages,
         historicalUnknownResponderOutboundMessages,
+        ambiguousReplyCycleChats,
+        replyCycleAmbiguityReasons,
         oaFamilySize: oaFamilyIds.length,
       },
     };
