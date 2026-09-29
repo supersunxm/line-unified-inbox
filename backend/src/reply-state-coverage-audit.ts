@@ -265,9 +265,11 @@ async function main() {
         } else {
           totals.AMBIGUOUS += 1;
           store.ambiguous += 1;
-          if (resolution.reason === "UNKNOWN_OUTBOUND_ACTOR") ambiguityReasons.UNKNOWN_OUTBOUND_ACTOR += 1;
-          else if (resolution.reason === "ORDERING_CONFLICT") ambiguityReasons.ORDERING_CONFLICT += 1;
-          else if (resolution.reason === "UNKNOWN_EVENT_CLASSIFICATION") ambiguityReasons.UNKNOWN_EVENT_CLASSIFICATION += 1;
+          if (!("reason" in resolution)) throw new Error("Unexpected deterministic reply-state resolution");
+          const reason = resolution.reason;
+          if (reason === "UNKNOWN_OUTBOUND_ACTOR") ambiguityReasons.UNKNOWN_OUTBOUND_ACTOR += 1;
+          else if (reason === "ORDERING_CONFLICT") ambiguityReasons.ORDERING_CONFLICT += 1;
+          else if (reason === "UNKNOWN_EVENT_CLASSIFICATION") ambiguityReasons.UNKNOWN_EVENT_CLASSIFICATION += 1;
           else {
             ambiguityReasons.NO_MESSAGE_EVIDENCE += 1;
             totals.NO_MESSAGE_EVIDENCE += 1;
