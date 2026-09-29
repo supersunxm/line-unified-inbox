@@ -223,11 +223,12 @@ export function deduplicateReplyEvents(events: readonly NormalizedReplyEvent[]):
 type PossibleState = {
   open: boolean;
   startedAt: Date | null;
+  hasInbound: boolean;
   reasons: Set<Exclude<ReplyStateAmbiguityReason, "NO_MESSAGE_EVIDENCE">>;
 };
 
 function stateKey(state: PossibleState): string {
-  return (state.open ? "1:" : "0:") + (state.startedAt?.toISOString() ?? "");
+  return (state.hasInbound ? "1:" : "0:") + (state.open ? "1:" : "0:") + (state.startedAt?.toISOString() ?? "");
 }
 
 function mergeStates(states: PossibleState[]): PossibleState[] {
@@ -245,12 +246,18 @@ function applyInbound(states: PossibleState[], sentAt: Date): PossibleState[] {
   return mergeStates(states.map((state) => ({
     open: true,
     startedAt: state.open ? state.startedAt : sentAt,
+    hasInbound: true,
     reasons: new Set(state.reasons),
   })));
 }
 
 function applyHumanReply(states: PossibleState[]): PossibleState[] {
-  return mergeStates(states.map((state) => ({ open: false, startedAt: null, reasons: new Set(state.reasons) })));
+  return mergeStates(states.map((state) => ({
+    open: false,
+    startedAt: null,
+    hasInbound: state.hasInbound,
+    reasons: new Set(state.reasons),
+  })));
 }
 
 function branchUnknownOutbound(states: PossibleState[]): PossibleState[] {
@@ -258,7 +265,12 @@ function branchUnknownOutbound(states: PossibleState[]): PossibleState[] {
   for (const state of states) {
     const reasons = new Set([...state.reasons, "UNKNOWN_OUTBOUND_ACTOR" as const]);
     result.push({ ...state, reasons });
-    if (state.open) result.push({ open: false, startedAt: null, reasons: new Set(reasons) });
+    if (state.open) result.push({
+      open: false,
+      startedAt: null,
+      hasInbound: state.hasInbound,
+      reasons: new Set(reasons),
+    });
   }
   return mergeStates(result);
 }
@@ -293,17 +305,14 @@ function sorted(events: readonly NormalizedReplyEvent[]): NormalizedReplyEvent[]
   return [...events].sort((a, b) => a.sentAt.getTime() - b.sentAt.getTime() || a.stableId.localeCompare(b.stableId));
 }
 
-function possibilities(events: readonly NormalizedReplyEvent[]): { states: PossibleState[]; sawPotentialInbound: boolean } {
+function possibilities(events: readonly NormalizedReplyEvent[]): PossibleState[] {
   const ordered = sorted(events);
-  let states: PossibleState[] = [{ open: false, startedAt: null, reasons: new Set() }];
-  let sawPotentialInbound = false;
+  let states: PossibleState[] = [{ open: false, startedAt: null, hasInbound: false, reasons: new Set() }];
 
   for (let index = 0; index < ordered.length;) {
     const time = ordered[index].sentAt.getTime();
     const group: NormalizedReplyEvent[] = [];
     while (index < ordered.length && ordered[index].sentAt.getTime() === time) group.push(ordered[index++]);
-
-    if (group.some((event) => event.direction === "INBOUND" && event.eventKind !== "NON_MESSAGE")) sawPotentialInbound = true;
 
     const inbound = group.filter((event) => !event.classificationConflict && event.eventKind === "MESSAGE" && event.direction === "INBOUND");
     const replies = group.filter((event) =>
@@ -325,7 +334,7 @@ function possibilities(events: readonly NormalizedReplyEvent[]): { states: Possi
       ]);
     } else states = applyEvents(states, group);
   }
-  return { states: mergeStates(states), sawPotentialInbound };
+  return mergeStates(states);
 }
 
 function ambiguity(states: PossibleState[]) {
@@ -385,8 +394,9 @@ export function buildDeterministicResponseCycles(events: readonly NormalizedRepl
 
 export function resolveReplyState(events: readonly NormalizedReplyEvent[]): ReplyStateResolution {
   const deduped = deduplicateReplyEvents(events);
-  const evaluation = possibilities(deduped);
-  if (!evaluation.sawPotentialInbound) {
+  const states = possibilities(deduped);
+  const inboundEvidence = new Set(states.map((state) => state.hasInbound));
+  if (!inboundEvidence.has(true)) {
     return {
       state: "AMBIGUOUS",
       confidence: "AMBIGUOUS",
@@ -395,10 +405,20 @@ export function resolveReplyState(events: readonly NormalizedReplyEvent[]): Repl
       eventCount: deduped.length,
     };
   }
+  if (inboundEvidence.size > 1) {
+    const detail = ambiguity(states);
+    return {
+      state: "AMBIGUOUS",
+      confidence: "AMBIGUOUS",
+      reason: detail.reason,
+      reasons: detail.reasons,
+      eventCount: deduped.length,
+    };
+  }
 
-  const openValues = new Set(evaluation.states.map((state) => state.open));
+  const openValues = new Set(states.map((state) => state.open));
   if (openValues.size > 1) {
-    const detail = ambiguity(evaluation.states);
+    const detail = ambiguity(states);
     return {
       state: "AMBIGUOUS",
       confidence: "AMBIGUOUS",
