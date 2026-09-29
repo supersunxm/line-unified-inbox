@@ -242,7 +242,7 @@ async function main() {
         ).length;
 
         const resolution = resolveReplyState(events);
-        const stored = conversation.bmReplyStatus as StoredStatus;
+        const stored: StoredStatus = conversation.bmReplyStatus;
         matrix[matrixKey(stored, resolution.state)] += 1;
 
         const storeId = conversation.storeId ?? "__NO_STORE__";
@@ -265,8 +265,13 @@ async function main() {
         } else {
           totals.AMBIGUOUS += 1;
           store.ambiguous += 1;
-          ambiguityReasons[resolution.reason] += 1;
-          if (resolution.reason === "NO_MESSAGE_EVIDENCE") totals.NO_MESSAGE_EVIDENCE += 1;
+          if (resolution.reason === "UNKNOWN_OUTBOUND_ACTOR") ambiguityReasons.UNKNOWN_OUTBOUND_ACTOR += 1;
+          else if (resolution.reason === "ORDERING_CONFLICT") ambiguityReasons.ORDERING_CONFLICT += 1;
+          else if (resolution.reason === "UNKNOWN_EVENT_CLASSIFICATION") ambiguityReasons.UNKNOWN_EVENT_CLASSIFICATION += 1;
+          else {
+            ambiguityReasons.NO_MESSAGE_EVIDENCE += 1;
+            totals.NO_MESSAGE_EVIDENCE += 1;
+          }
         }
         byStore.set(storeId, store);
       }
