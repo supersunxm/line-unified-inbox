@@ -22,6 +22,7 @@ export class HistoricalTimelineController {
     @Req() request: AuthRequest,
     @Query("storeId") storeId?: string,
     @Query("search") search?: string,
+    @Query("month") month?: string,
     @Query("page") page = "1",
     @Query("pageSize") pageSize = "30",
   ) {
@@ -29,6 +30,7 @@ export class HistoricalTimelineController {
     return this.timeline.listVirtualChats(request.user, {
       storeId,
       search,
+      month,
       page: Number(page),
       pageSize: Number(pageSize),
     });
@@ -40,9 +42,10 @@ export class HistoricalTimelineController {
     @Req() request: AuthRequest,
     @Query("page") page = "1",
     @Query("pageSize") pageSize = "30",
+    @Query("month") month?: string,
   ) {
     if (!request.user) throw new ForbiddenException("Authentication required");
-    return this.timeline.virtualMessages(request.user, id, Number(page), Number(pageSize));
+    return this.timeline.virtualMessages(request.user, id, Number(page), Number(pageSize), month);
   }
 
   @Get("chats/:id")
