@@ -104,6 +104,21 @@ export const bmReplyStatusLabels: Record<Language, Record<ApiBmReplyStatus, stri
 
 export const CONVERSATION_PAGE_SIZE = 40;
 
+function chatMonthLabel(month: string, language: Language): string {
+  const [year, monthNumber] = month.split("-").map(Number);
+  if (!year || !monthNumber) return month;
+  return new Intl.DateTimeFormat(
+    language === "th" ? "th-TH-u-ca-gregory" : language === "zh" ? "zh-CN" : "en-US",
+    { month: "long", year: "numeric", timeZone: "UTC" },
+  ).format(new Date(Date.UTC(year, monthNumber - 1, 1)));
+}
+
+function bangkokMonthFromDate(value: string | Date): string {
+  const date = value instanceof Date ? value : new Date(value);
+  const shifted = new Date(date.getTime() + 7 * 60 * 60 * 1000);
+  return `${shifted.getUTCFullYear()}-${String(shifted.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
 type UiPreferences = {
   language: Language;
   searchText: string;
@@ -1601,6 +1616,9 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
   const [uiPreferencesLoaded, setUiPreferencesLoaded] = useState(false);
   const [chatPage, setChatPage] = useState(1);
   const [chatPageSize, setChatPageSize] = useState(CONVERSATION_PAGE_SIZE);
+  const [chatMonth, setChatMonth] = useState("");
+  const [chatMonthOptions, setChatMonthOptions] = useState<string[]>([]);
+  const [chatMonthReady, setChatMonthReady] = useState(initialSection !== "chats");
   const [chatTotalCount, setChatTotalCount] = useState(0);
   const [isChatPageLoading, setIsChatPageLoading] = useState(false);
   const [chatPageError, setChatPageError] = useState<string | null>(null);
@@ -1767,8 +1785,9 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
       productSeriesId: initialSection === "chats" ? productSeriesId : undefined,
       productModelId: initialSection === "chats" ? productModelId : undefined,
       topicId: initialSection === "chats" ? topicId : undefined,
+      month: initialSection === "chats" && chatMonth ? chatMonth : undefined,
     }),
-    [activeConversationBmReplyStatus, activeConversationStatus, chatPage, chatPageSize, initialSection, lineOaFilter, priorityFilter, productModelId, productSeriesId, searchText, selectedStore, topicId],
+    [activeConversationBmReplyStatus, activeConversationStatus, chatMonth, chatPage, chatPageSize, initialSection, lineOaFilter, priorityFilter, productModelId, productSeriesId, searchText, selectedStore, topicId],
   );
   const activeConversationQueryKey = conversationListQueryKey(activeConversationQuery);
   const conversationQueryRef = useRef(activeConversationQuery);
@@ -1785,6 +1804,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
     productSeriesId: activeConversationQuery.productSeriesId,
     productModelId: activeConversationQuery.productModelId,
     topicId: activeConversationQuery.topicId,
+    month: activeConversationQuery.month,
     pageSize: activeConversationQuery.pageSize,
   });
   const previousConversationFilterShape = useRef(conversationFilterShapeKey);
@@ -1834,7 +1854,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
   }, [text.connectionError]);
 
   useEffect(() => {
-    if (!authUser || initialSection !== "chats") return;
+    if (!authUser || initialSection !== "chats" || !chatMonthReady) return;
     if (previousConversationFilterShape.current !== conversationFilterShapeKey) {
       previousConversationFilterShape.current = conversationFilterShapeKey;
       if (chatPage !== 1) {
@@ -1871,7 +1891,11 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
         loadChatMetadata ? api.products({ signal: controller.signal }) : Promise.resolve(null),
         loadChatMetadata ? api.topics({ signal: controller.signal }) : Promise.resolve(null),
         loadLineOas ? api.lineOfficialAccounts(showArchivedLineOas, { signal: controller.signal }) : Promise.resolve(null),
-        loadBmSummary ? api.bmReplyStatusSummary({ signal: controller.signal }) : Promise.resolve(null),
+        loadBmSummary
+          ? chatMonth
+            ? api.bmReplyStatusSummaryForMonth(chatMonth, { signal: controller.signal })
+            : api.bmReplyStatusSummary({ signal: controller.signal })
+          : Promise.resolve(null),
       ]);
       if (storeResponse) {
         setStores(
@@ -1917,7 +1941,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
       }
       if (!controller.signal.aborted && !silent) setIsLoading(false);
     }
-  }, [initialSection, showArchivedLineOas, showArchivedStores]);
+  }, [chatMonth, initialSection, showArchivedLineOas, showArchivedStores]);
 
   const loadApplicationData = useCallback(async (silent = false, includeWebhookInfo = !silent) => {
     await Promise.all([
@@ -2068,6 +2092,30 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
   }, [authUser, initialSection, loadPolledApplicationData]);
 
   useEffect(() => {
+    if (!authUser || initialSection !== "chats") return;
+    let active = true;
+    const controller = new AbortController();
+    void api.conversationMonthOptions({ signal: controller.signal })
+      .then((result) => {
+        if (!active) return;
+        const requested = new URLSearchParams(window.location.search).get("month");
+        const selected = requested && result.months.includes(requested)
+          ? requested
+          : result.latestMonth ?? "";
+        setChatMonthOptions(result.months);
+        setChatMonth(selected);
+        setChatMonthReady(true);
+      })
+      .catch(() => {
+        if (active) setChatMonthReady(true);
+      });
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [authUser, initialSection]);
+
+  useEffect(() => {
     const loadSavedPreferences = window.setTimeout(() => {
       const saved = loadUiPreferences();
       setLanguage(saved.language);
@@ -2107,6 +2155,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
       setModelFilter(route.model ?? "all");
       setTopicFilter(route.topic ?? "all");
       setLineOaFilter(route.lineOaId ?? "all");
+      if (route.month) setChatMonth(route.month);
       setSelectedConversationId(route.conversationId ?? "");
       chatRouteHydrated.current = true;
     };
@@ -2133,6 +2182,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
       model: modelFilter,
       topic: topicFilter,
       lineOaId: lineOaFilter,
+      month: chatMonth || undefined,
       conversationId: selectedConversationId || undefined,
     });
     const routeUrl = new URL(href, window.location.origin);
@@ -2140,7 +2190,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
       routeUrl.searchParams.set(FOCUS_STORE_GROUP_ROUTE_PARAM, FOCUS_STORE_GROUP_ROUTE_VALUE);
     }
     window.history.replaceState(null, "", `${routeUrl.pathname}${routeUrl.search}${routeUrl.hash}`);
-  }, [initialSection, lineOaFilter, modelFilter, priorityFilter, selectedConversationId, selectedStore, sidebarView, statusFilter, topicFilter, uiPreferencesLoaded]);
+  }, [chatMonth, initialSection, lineOaFilter, modelFilter, priorityFilter, selectedConversationId, selectedStore, sidebarView, statusFilter, topicFilter, uiPreferencesLoaded]);
 
   useEffect(() => {
     if (!uiPreferencesLoaded) return;
@@ -2247,7 +2297,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
       try {
         const [conversation, messages] = await Promise.all([
           api.conversation(selectedConversationId, { signal: controller.signal }),
-          api.conversationMessages(selectedConversationId, 1, { signal: controller.signal }),
+          api.conversationMessages(selectedConversationId, 1, { signal: controller.signal }, chatMonth || undefined),
         ]);
         if (active && !controller.signal.aborted) {
           setSelectedApiConversation(conversation); setChatHistory(messages);
@@ -2267,7 +2317,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
       window.clearInterval(poll);
       conversationDetailRequestController.current?.abort();
     };
-  }, [selectedConversationId]);
+  }, [chatMonth, selectedConversationId]);
 
   useEffect(() => {
     if (!authUser || !selectedConversationId) return;
@@ -2286,6 +2336,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
       if (!event.message) return;
       const incoming = mapRealtimeMessage(event.message);
       if (event.type === "message.created") {
+        if (chatMonth && bangkokMonthFromDate(incoming.sentAt) !== chatMonth) return;
         setChatHistory((current) => current.items.some((item) => item.id === incoming.id)
           ? current
           : { ...current, items: [...current.items, incoming], total: current.total + 1 });
@@ -2302,7 +2353,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
         ? { ...current, messages: current.messages.map((item) => item.id === incoming.id ? { ...item, media: incoming.media } : item) }
         : current);
     });
-  }, [authUser, selectedConversationId]);
+  }, [authUser, chatMonth, selectedConversationId]);
 
   useEffect(() => {
     let active = true;
@@ -3012,7 +3063,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
   async function loadEarlierMessages() {
     if (!selectedConversationId || !chatHistory.hasEarlier) return;
     setChatLoading(true);
-    try { const earlier = await api.conversationMessages(selectedConversationId, chatHistory.page + 1); setChatHistory((current) => ({ ...earlier, items: [...earlier.items, ...current.items] })); }
+    try { const earlier = await api.conversationMessages(selectedConversationId, chatHistory.page + 1, undefined, chatMonth || undefined); setChatHistory((current) => ({ ...earlier, items: [...earlier.items, ...current.items] })); }
     finally { setChatLoading(false); }
   }
 
@@ -3039,7 +3090,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
     } catch (error) {
       setReplyError(error instanceof Error ? error.message : "ส่งข้อความไม่สำเร็จ กรุณาลองอีกครั้ง");
       if (conversationId) {
-        void api.conversationMessages(conversationId, 1).then((res) => {
+        void api.conversationMessages(conversationId, 1, undefined, chatMonth || undefined).then((res) => {
           setChatHistory(res);
           window.requestAnimationFrame(() => chatEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" }));
         }).catch(() => {});
@@ -4332,6 +4383,24 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                     </div>
 
                     <div className="flex items-center gap-2">
+                      <label className="flex items-center gap-1.5 text-[11px] font-medium text-[var(--app-text-secondary)]">
+                        <span>{language === "th" ? "เดือน" : language === "zh" ? "月份" : "Month"}</span>
+                        <select
+                          data-chat-month-selector
+                          value={chatMonth}
+                          disabled={!chatMonthReady || chatMonthOptions.length === 0}
+                          onChange={(event) => {
+                            setChatMonth(event.target.value);
+                            setSelectedConversationId("");
+                          }}
+                          className="rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface)] px-2 py-1 text-xs font-semibold text-[var(--app-text-primary)] focus:border-[var(--app-accent)] focus:outline-none disabled:opacity-50"
+                          aria-label={language === "th" ? "เลือกเดือนแชท" : language === "zh" ? "选择聊天月份" : "Select chat month"}
+                        >
+                          {chatMonthOptions.map((month) => (
+                            <option key={month} value={month}>{chatMonthLabel(month, language)}</option>
+                          ))}
+                        </select>
+                      </label>
                       {sidebarView === "notReplied" && selectedStore !== FOCUS_STORE_GROUP_ID && authUser?.role !== "VIEWER" && (chatTotalCount > 0 || conversations.length > 0) && (
                         <button
                           type="button"
