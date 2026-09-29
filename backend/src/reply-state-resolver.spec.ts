@@ -169,6 +169,17 @@ void test("unknown delivered outbound actor is AMBIGUOUS when it changes the pos
   if (result.state === "AMBIGUOUS") assert.equal(result.reason, "UNKNOWN_OUTBOUND_ACTOR");
 });
 
+void test("canonical LINE Manager mirror outbound counts as staff reply without internal user attribution", () => {
+  const result = resolve([
+    canonical("1", "INBOUND", "2026-09-01T10:00:00Z"),
+    canonical("2", "OUTBOUND", "2026-09-01T10:05:00Z", {
+      senderUserId: null,
+      rawPayload: { provider: "LINE_MANAGER", source: "LINE_MANAGER_MIRROR" },
+    }),
+  ]);
+  assert.equal(result.state, "REPLIED");
+});
+
 void test("later inbound converges an earlier unknown outbound to deterministic NOT_REPLIED", () => {
   const result = resolve([
     canonical("1", "INBOUND", "2026-09-01T10:00:00Z"),
@@ -295,6 +306,29 @@ void test("persisted Manager messageReceived and messageSent event types are tre
     ],
   );
   assert.equal(result.state, "REPLIED");
+});
+
+void test("historical messageSent is reply evidence even when responder identity is missing", () => {
+  const result = resolve(
+    [],
+    [
+      historical("1", "INBOUND", "2026-09-01T10:00:00Z", { sourceEventType: "messageReceived", senderBizId: null }),
+      historical("2", "OUTBOUND", "2026-09-01T10:05:00Z", { sourceEventType: "messageSent", senderBizId: null }),
+    ],
+  );
+  assert.equal(result.state, "REPLIED");
+});
+
+void test("historical generic outbound with no sender evidence stays AMBIGUOUS", () => {
+  const result = resolve(
+    [],
+    [
+      historical("1", "INBOUND", "2026-09-01T10:00:00Z", { sourceEventType: "message", senderBizId: null }),
+      historical("2", "OUTBOUND", "2026-09-01T10:05:00Z", { sourceEventType: "message", senderBizId: null }),
+    ],
+  );
+  assert.equal(result.state, "AMBIGUOUS");
+  if (result.state === "AMBIGUOUS") assert.equal(result.reason, "UNKNOWN_OUTBOUND_ACTOR");
 });
 
 void test("historical auto response does not close a customer cycle", () => {
