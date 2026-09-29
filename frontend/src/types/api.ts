@@ -1,6 +1,8 @@
 export type ApiFollowUpStatus = "FOLLOW_UP" | "REMINDED" | "ACKNOWLEDGED" | "COMPLETED" | "ESCALATED";
 export type ApiPriority = "LOW" | "NORMAL" | "HIGH" | "CRITICAL";
 export type ApiBmReplyStatus = "NOT_REPLIED" | "NOTIFIED_BM" | "REPLIED";
+export type ApiEffectiveReplyState = "NOT_REPLIED" | "REPLIED";
+export type ApiEffectiveReplyStateSource = "PROJECTION" | "LEGACY_FALLBACK";
 
 export type ApiCustomerSalesInformation = {
   status: "ONLINE" | "INTERESTED" | "PURCHASED" | "FILM" | null;
@@ -96,6 +98,17 @@ export type ApiConversation = {
   priority: ApiPriority;
   followUpStatus: ApiFollowUpStatus;
   bmReplyStatus: ApiBmReplyStatus;
+  effectiveReplyState?: ApiEffectiveReplyState;
+  effectiveReplyStateSource?: ApiEffectiveReplyStateSource;
+  replyStateProjection?: {
+    state: ApiEffectiveReplyState;
+    decidingEventKind: "CUSTOMER_INBOUND" | "HUMAN_STAFF_REPLY";
+    decidingEventAt: string;
+    evidenceBoundary: string;
+    resolverVersion: string;
+    computedAt: string;
+    updatedAt: string;
+  } | null;
   owner: { id: string; displayName: string } | null;
   productRelationship: string | null;
   purchaseIntent: string | null;
