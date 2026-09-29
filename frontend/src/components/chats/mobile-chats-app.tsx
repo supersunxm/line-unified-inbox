@@ -497,7 +497,7 @@ export function MobileChatsApp() {
       setConversations((current) => current.map((item) => item.id === conversation.id ? response.conversation : item));
       setSelected((current) => current?.id === conversation.id ? response.conversation : current);
       await refreshSummary();
-      if (status === "NOT_REPLIED" || status === "NOTIFIED_BM") await loadList();
+      if (status === "NOT_REPLIED") await loadList();
     } catch (error) {
       setConversations((current) => current.map((item) => item.id === conversation.id ? { ...item, bmReplyStatus: previous } : item));
       setSelected((current) => current?.id === conversation.id ? { ...current, bmReplyStatus: previous } : current);
@@ -559,7 +559,6 @@ export function MobileChatsApp() {
               {([
                 ["all", "ทั้งหมด"],
                 ["NOT_REPLIED", "ยังไม่ตอบ"],
-                ["NOTIFIED_BM", "แจ้ง BM"],
                 ["REPLIED", "ตอบแล้ว"],
               ] as Array<[StatusFilter, string]>).map(([value, label]) => (
                 <button
