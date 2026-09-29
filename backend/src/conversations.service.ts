@@ -25,7 +25,7 @@ import { PDF_MIME_TYPE, readPdfMaxBytes, validatePdfBuffer, PdfValidationError }
 import { LineChatMessageSendQueueService } from "./line-chat/line-chat-message-send-queue.service";
 import { isLineChatMirrorOnlyStore } from "./line-chat/line-chat-pilot.constants";
 import { HISTORICAL_TIMELINE_START, mapHistoricalTimelineMessage } from "./historical-timeline.service";
-import { resolveEffectiveReplyState } from "./reply-state-effective";
+import { effectiveReplyStateWhere, resolveEffectiveReplyState } from "./reply-state-effective";
 
 const conversationBaseInclude = {
   customer: true,
@@ -322,6 +322,40 @@ export class ConversationsService {
         ? query.storeId
         : { in: query.storeId ? [query.storeId] : accessibleStoreIds };
     const resetFilter = await this.operations.getOperationalConversationFilter();
+    const andFilters: Prisma.ConversationWhereInput[] = [];
+    if (query.replyState) andFilters.push(effectiveReplyStateWhere(query.replyState));
+    if (search) {
+      andFilters.push({
+        OR: [
+          { customer: { displayName: { contains: search, mode: "insensitive" } } },
+          { store: { name: { contains: search, mode: "insensitive" } } },
+          { messages: { some: { originalText: { contains: search, mode: "insensitive" } } } },
+          {
+            products: {
+              some: {
+                productModel: { name: { contains: search, mode: "insensitive" } },
+              },
+            },
+          },
+          {
+            products: {
+              some: {
+                productModel: {
+                  productSeries: {
+                    name: { contains: search, mode: "insensitive" },
+                  },
+                },
+              },
+            },
+          },
+          {
+            topics: {
+              some: { topic: { name: { contains: search, mode: "insensitive" } } },
+            },
+          },
+        ],
+      });
+    }
     const where: Prisma.ConversationWhereInput = {
       store: accountType === "STORE" ? { archivedAt: null } : undefined,
       lineOfficialAccount: { accountType },
@@ -329,7 +363,7 @@ export class ConversationsService {
       storeId: storeFilter,
       lineOfficialAccountId: query.lineOaId,
       followUpStatus: query.followUpStatus,
-      bmReplyStatus: query.bmReplyStatus,
+      bmReplyStatus: query.replyState ? undefined : query.bmReplyStatus,
       priority: query.priority,
       products: query.productModelId
         ? { some: { productModelId: query.productModelId } }
@@ -337,34 +371,7 @@ export class ConversationsService {
           ? { some: { productModel: { productSeriesId: query.productSeriesId } } }
           : undefined,
       topics: query.topicId ? { some: { topicId: query.topicId } } : undefined,
-      OR: search ? [
-        { customer: { displayName: { contains: search, mode: "insensitive" } } },
-        { store: { name: { contains: search, mode: "insensitive" } } },
-        { messages: { some: { originalText: { contains: search, mode: "insensitive" } } } },
-        {
-          products: {
-            some: {
-              productModel: { name: { contains: search, mode: "insensitive" } },
-            },
-          },
-        },
-        {
-          products: {
-            some: {
-              productModel: {
-                productSeries: {
-                  name: { contains: search, mode: "insensitive" },
-                },
-              },
-            },
-          },
-        },
-        {
-          topics: {
-            some: { topic: { name: { contains: search, mode: "insensitive" } } },
-          },
-        },
-      ] : undefined,
+      AND: andFilters.length > 0 ? andFilters : undefined,
     };
     const orderBy: Prisma.ConversationOrderByWithRelationInput[] =
       query.sort === "latest-asc"
