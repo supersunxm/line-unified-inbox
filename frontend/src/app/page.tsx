@@ -4331,43 +4331,6 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                     </div>
 
                     <div className="flex items-center gap-2">
-                      {sidebarView === "notReplied" && selectedStore !== FOCUS_STORE_GROUP_ID && authUser?.role !== "VIEWER" && (chatTotalCount > 0 || conversations.length > 0) && (
-                        <button
-                          type="button"
-                          data-bulk-mark-all-replied-button
-                          onClick={() => {
-                            const storeObj = selectedStore !== "all" ? availableStores.find((s) => s.id === selectedStore) : undefined;
-                            const sName = storeObj
-                              ? getStoreDisplayName(storeObj.name)
-                              : (language === "th" ? "ทุกสาขา" : language === "zh" ? "所有门店" : "All Stores");
-                            const unrepliedCount = selectedStore !== "all"
-                              ? (storeBmCounts[selectedStore]?.notReplied ?? chatTotalCount)
-                              : (bmSummaryData?.overview?.notReplied ?? chatTotalCount);
-                            const targetCount = unrepliedCount > 0 ? unrepliedCount : (chatTotalCount || conversations.length);
-                            const targetIds = conversations.map((c) => c.id);
-
-                            setBulkConfirmState({
-                              storeId: selectedStore,
-                              storeName: sName,
-                              targetStatus: "REPLIED",
-                              fromStatuses: ["NOT_REPLIED"],
-                              affectedCount: targetCount,
-                              conversationIds: targetIds.length > 0 ? targetIds : undefined,
-                            });
-                          }}
-                          className="rounded-[var(--app-radius-sm)] bg-[var(--app-accent)] hover:bg-[var(--app-accent-hover)] text-white px-2.5 py-1 text-xs font-semibold flex items-center gap-1.5 shadow-[var(--app-shadow-card)] transition-colors cursor-pointer"
-                          title={language === "th" ? "เปลี่ยนสถานะเป็นตอบแล้วทั้งหมด" : language === "zh" ? "全部标记为已回复" : "Mark all as replied"}
-                        >
-                          <span>✓</span>
-                          <span>
-                            {language === "th"
-                              ? "ตอบแล้วทั้งหมด"
-                              : language === "zh"
-                                ? "全部标记为已回复"
-                                : "Mark All Replied"}
-                          </span>
-                        </button>
-                      )}
                       <button
                         data-chat-filter-button
                         onClick={() => setShowFilterPanel((isOpen) => !isOpen)}
