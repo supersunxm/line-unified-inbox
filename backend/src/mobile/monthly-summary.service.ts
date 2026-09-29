@@ -8,8 +8,14 @@ import {
   buildReplyCycleAnalytics,
   type ReplyCycleAnalyticsResult,
 } from "../reply-cycle-analytics";
+import {
+  loadSafeHistoricalReplyEvidence,
+  type LinkedHistoricalReplyMessage,
+  type SafeHistoricalReplyEvidence,
+} from "../reply-cycle-historical-evidence";
 import type {
   CanonicalReplyMessage,
+  HistoricalReplyMessage,
   ReplyEventDirection,
 } from "../reply-state-resolver";
 
@@ -131,19 +137,35 @@ function canonicalReplyMessage(message: AnalyticsMessage): CanonicalReplyMessage
 
 export function calculateResponseCycleAudit(
   messages: AnalyticsMessage[],
+  historicalMessages: readonly LinkedHistoricalReplyMessage[] = [],
 ): ReplyCycleAnalyticsResult {
-  const grouped = new Map<string, CanonicalReplyMessage[]>();
+  const canonicalByConversation = new Map<string, CanonicalReplyMessage[]>();
   for (const message of messages) {
-    grouped.set(message.conversationId, [
-      ...(grouped.get(message.conversationId) ?? []),
+    canonicalByConversation.set(message.conversationId, [
+      ...(canonicalByConversation.get(message.conversationId) ?? []),
       canonicalReplyMessage(message),
     ]);
   }
 
+  const historicalByConversation = new Map<string, HistoricalReplyMessage[]>();
+  for (const message of historicalMessages) {
+    const { conversationId, ...historical } = message;
+    historicalByConversation.set(conversationId, [
+      ...(historicalByConversation.get(conversationId) ?? []),
+      historical,
+    ]);
+  }
+
+  const conversationIds = new Set([
+    ...canonicalByConversation.keys(),
+    ...historicalByConversation.keys(),
+  ]);
+
   return buildReplyCycleAnalytics(
-    [...grouped.entries()].map(([conversationId, canonical]) => ({
+    [...conversationIds].map((conversationId) => ({
       conversationId,
-      canonical,
+      canonical: canonicalByConversation.get(conversationId) ?? [],
+      historical: historicalByConversation.get(conversationId) ?? [],
     })),
   );
 }
@@ -383,6 +405,25 @@ export class MonthlySummaryService {
       store: { isActive: true, archivedAt: null },
       ...(accessibleStoreIds === null ? {} : { storeId: { in: accessibleStoreIds } }),
     };
+    const scopedConversationRows = await this.prisma.conversation.findMany({
+      where: conversationScope,
+      select: { id: true },
+    });
+    const emptyHistoricalEvidence: SafeHistoricalReplyEvidence = {
+      messages: [],
+      safeCrosswalkCount: 0,
+      linkedConversationCount: 0,
+      linkageConflictIdentityCount: 0,
+    };
+    const historicalEvidence =
+      typeof this.prisma.historicalConversationCrosswalk?.findMany === "function" &&
+      typeof this.prisma.historicalTimelineMessage?.findMany === "function"
+        ? await loadSafeHistoricalReplyEvidence(
+            this.prisma,
+            scopedConversationRows.map((conversation) => conversation.id),
+            asOf,
+          )
+        : emptyHistoricalEvidence;
     const messages = await this.prisma.message.findMany({
       where: { conversation: conversationScope, sentAt: { lte: asOf } },
       orderBy: [{ sentAt: "asc" }, { id: "asc" }],
@@ -393,7 +434,10 @@ export class MonthlySummaryService {
       senderDisplayName: message.sender?.displayName ?? message.senderDisplayName,
       bmReplyStatus: message.conversation?.bmReplyStatus ?? null,
     })) as AnalyticsMessage[];
-    const responseCycleAudit = calculateResponseCycleAudit(analyticsMessages);
+    const responseCycleAudit = calculateResponseCycleAudit(
+      analyticsMessages,
+      historicalEvidence.messages,
+    );
     const cycles = responseCycleAudit.cycles;
     const periodVolume = monthlyVolume(analyticsMessages, bounds.start, periodEnd);
     const periodResponse = responseMetrics(cycles, bounds.start, periodEnd);
@@ -470,6 +514,10 @@ export class MonthlySummaryService {
         ambiguousOutboundExcluded,
         responseCycleAmbiguousConversations: responseCycleAudit.ambiguousConversationCount,
         responseCycleAmbiguityReasons: responseCycleAudit.ambiguityReasons,
+        historicalReplyEvidenceMessages: historicalEvidence.messages.length,
+        historicalReplyEvidenceConversations: historicalEvidence.linkedConversationCount,
+        historicalSafeCrosswalkCount: historicalEvidence.safeCrosswalkCount,
+        historicalLinkageConflictIdentities: historicalEvidence.linkageConflictIdentityCount,
         responseMetricsAvailable: periodResponse.available,
         replyAttributionCoverageRate: periodOutbounds.length === 0 ? 1 : attributedOutbounds / periodOutbounds.length,
         unattributedOutboundMessages: periodOutbounds.length - attributedOutbounds,

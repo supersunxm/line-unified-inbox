@@ -236,6 +236,116 @@ void test("historical monthly reply counts are unaffected by current bmReplyStat
   assert.deepEqual(after.operational, { needReply: 0, completed: 1, asOf: after.period.asOf });
 });
 
+void test("monthly response cycles include safely linked historical staff replies", async () => {
+  const canonicalInbound = {
+    ...inbound("in", "c1", "2026-09-10T10:00:00Z"),
+    externalMessageId: "source-in",
+    originalText: "hello",
+  };
+  const prisma = {
+    message: { findMany: async () => [canonicalInbound] },
+    conversation: {
+      findMany: async (args: { select?: Record<string, unknown> }) =>
+        args.select && "id" in args.select ? [{ id: "c1" }] : [],
+    },
+    historicalConversationCrosswalk: {
+      findMany: async () => [{
+        storeId: "store-1",
+        lineOfficialAccountId: "oa-1",
+        historicalLineChatUserId: "chat-1",
+        canonicalConversationId: "c1",
+      }],
+    },
+    historicalTimelineMessage: {
+      findMany: async () => [{
+        id: "h-reply",
+        storeId: "store-1",
+        lineOfficialAccountId: "oa-1",
+        lineChatUserId: "chat-1",
+        sourceEventId: "source-reply",
+        sourceEventType: "messageSent",
+        direction: "OUTBOUND",
+        text: "reply",
+        sentAt: new Date("2026-09-10T10:15:00Z"),
+        senderBizId: null,
+      }],
+    },
+  };
+  const service = new MonthlySummaryService(
+    prisma as never,
+    { accessibleStoreIds: async () => null } as never,
+  );
+  const result = await service.get(
+    { id: "u", role: "ADMIN", isActive: true, email: "a", displayName: "A" },
+    "2026-09",
+  );
+
+  assert.equal(result.response.cyclesStarted, 1);
+  assert.equal(result.response.cyclesAnswered, 1);
+  assert.equal(result.operational.completed, 1);
+  assert.equal(result.dataQuality.historicalReplyEvidenceMessages, 1);
+  assert.equal(result.dataQuality.historicalReplyEvidenceConversations, 1);
+});
+
+void test("monthly response cycles can be built entirely from safely linked historical messages", async () => {
+  const prisma = {
+    message: { findMany: async () => [] },
+    conversation: {
+      findMany: async (args: { select?: Record<string, unknown> }) =>
+        args.select && "id" in args.select ? [{ id: "c1" }] : [],
+    },
+    historicalConversationCrosswalk: {
+      findMany: async () => [{
+        storeId: "store-1",
+        lineOfficialAccountId: "oa-1",
+        historicalLineChatUserId: "chat-1",
+        canonicalConversationId: "c1",
+      }],
+    },
+    historicalTimelineMessage: {
+      findMany: async () => [
+        {
+          id: "h-in",
+          storeId: "store-1",
+          lineOfficialAccountId: "oa-1",
+          lineChatUserId: "chat-1",
+          sourceEventId: "source-in",
+          sourceEventType: "messageReceived",
+          direction: "INBOUND",
+          text: "hello",
+          sentAt: new Date("2026-09-10T10:00:00Z"),
+          senderBizId: null,
+        },
+        {
+          id: "h-out",
+          storeId: "store-1",
+          lineOfficialAccountId: "oa-1",
+          lineChatUserId: "chat-1",
+          sourceEventId: "source-out",
+          sourceEventType: "messageSent",
+          direction: "OUTBOUND",
+          text: "reply",
+          sentAt: new Date("2026-09-10T10:10:00Z"),
+          senderBizId: null,
+        },
+      ],
+    },
+  };
+  const service = new MonthlySummaryService(
+    prisma as never,
+    { accessibleStoreIds: async () => null } as never,
+  );
+  const result = await service.get(
+    { id: "u", role: "ADMIN", isActive: true, email: "a", displayName: "A" },
+    "2026-09",
+  );
+
+  assert.equal(result.response.cyclesStarted, 1);
+  assert.equal(result.response.cyclesAnswered, 1);
+  assert.equal(result.operational.needReply, 0);
+  assert.equal(result.dataQuality.historicalReplyEvidenceMessages, 2);
+});
+
 void test("current month comparison uses same elapsed range", () => {
   const current = bangkokMonthBounds("2026-08");
   const previous = bangkokMonthBounds("2026-07");
