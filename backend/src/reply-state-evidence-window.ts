@@ -1,4 +1,4 @@
-import type { NormalizedReplyEvent } from "./reply-state-resolver";
+import type { NormalizedReplyEvent, ReplyState } from "./reply-state-resolver";
 
 export type ReplyEvidenceWindow = {
   boundary: Date;
@@ -67,5 +67,52 @@ export function analyzeReplyEvidenceWindow(
       latestHumanStaffReplyAt &&
       latestHumanStaffReplyAt.getTime() >= boundary.getTime(),
     ),
+  };
+}
+
+
+export type ReplyProjectionEligibility =
+  | {
+      eligible: true;
+      state: "REPLIED" | "NOT_REPLIED";
+      reason: "DECIDING_EVENT_ON_OR_AFTER_BOUNDARY";
+    }
+  | {
+      eligible: false;
+      reason: "AMBIGUOUS" | "PRE_BOUNDARY_DECIDING_EVENT" | "NO_DECIDING_EVENT";
+    };
+
+export function classifyReplyProjectionEligibility(
+  resolvedState: ReplyState,
+  window: ReplyEvidenceWindow,
+): ReplyProjectionEligibility {
+  if (resolvedState === "AMBIGUOUS") {
+    return { eligible: false, reason: "AMBIGUOUS" };
+  }
+
+  if (resolvedState === "NOT_REPLIED") {
+    if (!window.latestCustomerInboundAt) {
+      return { eligible: false, reason: "NO_DECIDING_EVENT" };
+    }
+    if (!window.latestCustomerInboundOnOrAfterBoundary) {
+      return { eligible: false, reason: "PRE_BOUNDARY_DECIDING_EVENT" };
+    }
+    return {
+      eligible: true,
+      state: "NOT_REPLIED",
+      reason: "DECIDING_EVENT_ON_OR_AFTER_BOUNDARY",
+    };
+  }
+
+  if (!window.latestHumanStaffReplyAt) {
+    return { eligible: false, reason: "NO_DECIDING_EVENT" };
+  }
+  if (!window.latestHumanStaffReplyOnOrAfterBoundary) {
+    return { eligible: false, reason: "PRE_BOUNDARY_DECIDING_EVENT" };
+  }
+  return {
+    eligible: true,
+    state: "REPLIED",
+    reason: "DECIDING_EVENT_ON_OR_AFTER_BOUNDARY",
   };
 }
