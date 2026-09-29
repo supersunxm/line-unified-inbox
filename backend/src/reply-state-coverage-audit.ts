@@ -127,47 +127,61 @@ async function main() {
           id: true,
           storeId: true,
           bmReplyStatus: true,
-          messages: {
-            orderBy: [{ sentAt: "asc" }, { id: "asc" }],
-            select: {
-              id: true,
-              externalMessageId: true,
-              direction: true,
-              deliveryStatus: true,
-              originalText: true,
-              sentAt: true,
-              senderUserId: true,
-              senderDisplayName: true,
-              rawPayload: true,
-            },
-          },
-          historicalConversationCrosswalks: {
-            where: {
-              classification: "LINK_SAFE",
-              evidenceType: "SOURCE_EVENT_ID",
-              anchorCount: { gt: 0 },
-              canonicalConversationId: { not: null },
-            },
-            select: {
-              storeId: true,
-              lineOfficialAccountId: true,
-              historicalLineChatUserId: true,
-            },
-          },
         },
       });
 
       if (conversations.length === 0) break;
 
+      const conversationIds = conversations.map((conversation) => conversation.id);
+      const canonicalRows = await prisma.message.findMany({
+        where: { conversationId: { in: conversationIds } },
+        orderBy: [{ conversationId: "asc" }, { sentAt: "asc" }, { id: "asc" }],
+        select: {
+          id: true,
+          conversationId: true,
+          externalMessageId: true,
+          direction: true,
+          deliveryStatus: true,
+          originalText: true,
+          sentAt: true,
+          senderUserId: true,
+          senderDisplayName: true,
+          rawPayload: true,
+        },
+      });
+
+      const canonicalByConversation = new Map<string, typeof canonicalRows>();
+      for (const message of canonicalRows) {
+        canonicalByConversation.set(message.conversationId, [
+          ...(canonicalByConversation.get(message.conversationId) ?? []),
+          message,
+        ]);
+      }
+
+      const links = await prisma.historicalConversationCrosswalk.findMany({
+        where: {
+          canonicalConversationId: { in: conversationIds },
+          classification: "LINK_SAFE",
+          evidenceType: "SOURCE_EVENT_ID",
+          anchorCount: { gt: 0 },
+        },
+        select: {
+          canonicalConversationId: true,
+          storeId: true,
+          lineOfficialAccountId: true,
+          historicalLineChatUserId: true,
+        },
+      });
+
       const crosswalkToConversation = new Map<string, string>();
-      for (const conversation of conversations) {
-        for (const link of conversation.historicalConversationCrosswalks) {
-          crosswalkToConversation.set(crosswalkKey(link), conversation.id);
-        }
+      const linkedConversationIds = new Set<string>();
+      for (const link of links) {
+        if (!link.canonicalConversationId) continue;
+        crosswalkToConversation.set(crosswalkKey(link), link.canonicalConversationId);
+        linkedConversationIds.add(link.canonicalConversationId);
       }
 
       const historicalByConversation = new Map<string, HistoricalReplyMessage[]>();
-      const links = conversations.flatMap((conversation) => conversation.historicalConversationCrosswalks);
       if (links.length > 0) {
         const historicalRows = await prisma.historicalTimelineMessage.findMany({
           where: {
@@ -218,12 +232,13 @@ async function main() {
       for (const conversation of conversations) {
         totals.TOTAL_CANONICAL_CONVERSATIONS += 1;
         const historical = historicalByConversation.get(conversation.id) ?? [];
-        const linked = conversation.historicalConversationCrosswalks.length > 0;
+        const canonical = canonicalByConversation.get(conversation.id) ?? [];
+        const linked = linkedConversationIds.has(conversation.id);
         if (linked) totals.HISTORICAL_LINKED_CONVERSATIONS += 1;
         else totals.CANONICAL_ONLY_CONVERSATIONS += 1;
 
         const events = [
-          ...conversation.messages.map((message) => normalizeCanonicalReplyMessage({
+          ...canonical.map((message) => normalizeCanonicalReplyMessage({
             id: message.id,
             externalMessageId: message.externalMessageId,
             direction: message.direction,
