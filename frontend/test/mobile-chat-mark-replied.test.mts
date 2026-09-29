@@ -8,17 +8,36 @@ const mobileCode = readFileSync(
 );
 const chatsPageCode = readFileSync(new URL("../src/app/chats/page.tsx", import.meta.url), "utf8");
 
-test("mobile Store Chats exposes a one-tap mark replied action for writable non-replied rows", () => {
-  assert.match(mobileCode, /data-mobile-mark-replied/);
-  assert.match(mobileCode, /conversation\.bmReplyStatus !== "REPLIED" && user\.role !== "VIEWER"/);
-  assert.match(mobileCode, /"✓ ตอบแล้ว"/);
-  assert.match(mobileCode, /api\.updateBmReplyStatus\(conversation\.id, "REPLIED"\)/);
+test("mobile Store Chats displays the effective two-state reply status", () => {
+  assert.match(mobileCode, /getEffectiveReplyState\(conversation\)/);
+  assert.match(mobileCode, /type StatusFilter = "all" \| ApiEffectiveReplyState/);
+  assert.match(mobileCode, /replyState: status === "all" \? undefined : status/);
+  assert.match(mobileCode, /NOT_REPLIED: "ยังไม่ตอบ"/);
+  assert.match(mobileCode, /REPLIED: "ตอบแล้ว"/);
 });
 
-test("mark replied reconciles filtered list and visible status summary", () => {
-  assert.match(mobileCode, /status === "NOT_REPLIED" \|\| status === "NOTIFIED_BM"/);
-  assert.match(mobileCode, /await loadList\(\)/);
+test("mobile reply filters expose only all, not replied, and replied", () => {
+  const filterStart = mobileCode.indexOf('[["all", "ทั้งหมด"]');
+  const filterEnd = mobileCode.indexOf("as Array<[StatusFilter, string]>", filterStart);
+  const filterBlock = mobileCode.slice(filterStart, filterEnd);
+  assert.match(filterBlock, /"NOT_REPLIED", "ยังไม่ตอบ"/);
+  assert.match(filterBlock, /"REPLIED", "ตอบแล้ว"/);
+  assert.doesNotMatch(filterBlock, /"NOTIFIED_BM", "แจ้ง BM"/);
+
+  assert.match(chatsPageCode, /\[data-mobile-mark-replied\]/);
+  assert.match(chatsPageCode, /display: none !important/);
+});
+
+test("legacy notified URLs normalize into the effective NOT_REPLIED state", () => {
+  assert.match(mobileCode, /value === "NOT_REPLIED" \|\| value === "NOTIFIED_BM"/);
+  assert.match(chatsPageCode, /urlStatus === "NOT_REPLIED" \|\| urlStatus === "NOTIFIED_BM"/);
+  assert.match(chatsPageCode, /url\.searchParams\.delete\("bmReplyStatus"\)/);
+  assert.match(chatsPageCode, /url\.searchParams\.set\("replyState", nextStatus\)/);
+});
+
+test("sending or retrying a staff reply updates the visible effective state optimistically", () => {
+  assert.match(mobileCode, /effectiveReplyState: "REPLIED"/);
+  assert.match(mobileCode, /api\.sendConversationMessage/);
+  assert.match(mobileCode, /api\.retryConversationMessage/);
   assert.match(mobileCode, /window\.dispatchEvent\(new Event\("bm-reply-status-summary-refresh"\)\)/);
-  assert.match(chatsPageCode, /window\.addEventListener\("bm-reply-status-summary-refresh", refresh\)/);
-  assert.match(chatsPageCode, /window\.removeEventListener\("bm-reply-status-summary-refresh", refresh\)/);
 });
