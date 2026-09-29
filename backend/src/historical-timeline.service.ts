@@ -6,6 +6,16 @@ import { StoreAccessService } from "./auth/store-access.service";
 import { PrismaService } from "./prisma.service";
 import { isValidManagerUrl } from "./store-master/store-master.utils";
 import { isAutomatedOutboundMessage } from "./conversation-reply-state";
+import {
+  buildDeterministicResponseCycles,
+  normalizeCanonicalReplyMessage,
+  normalizeHistoricalReplyMessage,
+  normalizeReplyTimeline,
+  type CanonicalReplyMessage,
+  type HistoricalReplyMessage,
+  type NormalizedReplyEvent,
+  type ReplyStateAmbiguityReason,
+} from "./reply-state-resolver";
 
 export const HISTORICAL_TIMELINE_START = new Date("2026-08-31T17:00:00.000Z");
 export const HISTORICAL_VIRTUAL_ID_PREFIX = "historical:";
@@ -50,6 +60,7 @@ type UnifiedReplyMessage = {
   sentAt: Date;
   source: "CURRENT" | "HISTORICAL";
   sourceEventId: string | null;
+  sourceEventType?: string | null;
   externalMessageId: string | null;
   senderUserId: string | null;
   senderDisplayName: string | null;
@@ -104,17 +115,43 @@ function rate(count: number, total: number): number | null {
   return total === 0 ? null : Math.round((count / total) * 1000) / 10;
 }
 
-function isUnifiedReplyEvidence(message: UnifiedReplyMessage): boolean {
-  if (message.direction !== MessageDirection.OUTBOUND) return false;
-  if (message.source === "HISTORICAL") return isHistoricalReplyEvidence(message.senderBizId);
-  return isCurrentReplyEvidence({
+function canonicalReplyInput(message: UnifiedReplyMessage): CanonicalReplyMessage {
+  return {
+    id: message.id,
+    externalMessageId: message.externalMessageId,
     direction: message.direction,
     deliveryStatus: message.deliveryStatus,
+    originalText: message.text,
     sentAt: message.sentAt,
     senderUserId: message.senderUserId,
     senderDisplayName: message.senderDisplayName,
     rawPayload: message.rawPayload,
-  });
+  };
+}
+
+function historicalReplyInput(message: UnifiedReplyMessage): HistoricalReplyMessage {
+  return {
+    id: message.id,
+    sourceEventId: message.sourceEventId ?? message.id,
+    sourceEventType: message.sourceEventType ?? "message",
+    direction: message.direction,
+    text: message.text,
+    sentAt: message.sentAt,
+    senderBizId: message.senderBizId,
+  };
+}
+
+function normalizeUnifiedReplyEvidence(message: UnifiedReplyMessage): NormalizedReplyEvent {
+  return message.source === "HISTORICAL"
+    ? normalizeHistoricalReplyMessage(historicalReplyInput(message))
+    : normalizeCanonicalReplyMessage(canonicalReplyInput(message));
+}
+
+function isUnifiedReplyEvidence(message: UnifiedReplyMessage): boolean {
+  const normalized = normalizeUnifiedReplyEvidence(message);
+  return normalized.eventKind === "MESSAGE"
+    && normalized.direction === "OUTBOUND"
+    && normalized.actor === "HUMAN_STAFF";
 }
 
 type UnifiedReplyCycle = {
@@ -122,33 +159,101 @@ type UnifiedReplyCycle = {
   humanReply: UnifiedReplyMessage | null;
 };
 
+export type UnifiedReplyCycleAudit =
+  | {
+      status: "DETERMINISTIC";
+      cycles: UnifiedReplyCycle[];
+    }
+  | {
+      status: "AMBIGUOUS";
+      reason: Exclude<ReplyStateAmbiguityReason, "NO_MESSAGE_EVIDENCE">;
+      cycles: [];
+    };
+
+export function calculateUnifiedReplyCycleAudit(
+  messages: readonly UnifiedReplyMessage[],
+  startAt: Date,
+  endDateExclusive: Date,
+): UnifiedReplyCycleAudit {
+  const eligibleMessages = messages.filter(
+    (message) =>
+      message.sentAt >= startAt
+      && !(
+        message.direction === MessageDirection.INBOUND
+        && message.sentAt >= endDateExclusive
+      ),
+  );
+  const canonical = eligibleMessages
+    .filter((message) => message.source === "CURRENT")
+    .map(canonicalReplyInput);
+  const historical = eligibleMessages
+    .filter((message) => message.source === "HISTORICAL")
+    .map(historicalReplyInput);
+  const timeline = normalizeReplyTimeline({ canonical, historical });
+  const result = buildDeterministicResponseCycles(timeline);
+  if (result.status === "AMBIGUOUS") {
+    return { status: "AMBIGUOUS", reason: result.reason, cycles: [] };
+  }
+
+  const originalByStableId = new Map<string, UnifiedReplyMessage>();
+  for (const message of eligibleMessages) {
+    originalByStableId.set(
+      message.source === "HISTORICAL"
+        ? "historical:" + message.id
+        : "canonical:" + message.id,
+      message,
+    );
+  }
+
+  const normalizedByTimestamp = new Map<number, NormalizedReplyEvent[]>();
+  for (const event of timeline) {
+    normalizedByTimestamp.set(event.sentAt.getTime(), [
+      ...(normalizedByTimestamp.get(event.sentAt.getTime()) ?? []),
+      event,
+    ]);
+  }
+
+  const cycles: UnifiedReplyCycle[] = [];
+  for (const cycle of result.cycles) {
+    const inboundEvent = (normalizedByTimestamp.get(cycle.startedAt.getTime()) ?? [])
+      .find((event) =>
+        event.eventKind === "MESSAGE"
+        && event.direction === "INBOUND"
+        && event.actor === "CUSTOMER",
+      );
+    const firstInbound = inboundEvent
+      ? originalByStableId.get(inboundEvent.stableId)
+      : undefined;
+    if (!firstInbound) continue;
+
+    if (!cycle.answeredAt) {
+      cycles.push({ firstInbound, humanReply: null });
+      continue;
+    }
+
+    const replyEvent = (normalizedByTimestamp.get(cycle.answeredAt.getTime()) ?? [])
+      .find((event) =>
+        event.eventKind === "MESSAGE"
+        && event.direction === "OUTBOUND"
+        && event.actor === "HUMAN_STAFF",
+      );
+    const humanReply = replyEvent
+      ? originalByStableId.get(replyEvent.stableId)
+      : undefined;
+    if (!humanReply) continue;
+
+    cycles.push({ firstInbound, humanReply });
+  }
+
+  return { status: "DETERMINISTIC", cycles };
+}
+
 export function calculateUnifiedReplyCycles(
   messages: readonly UnifiedReplyMessage[],
   startAt: Date,
   endDateExclusive: Date,
 ): UnifiedReplyCycle[] {
-  const sorted = [...messages].sort((left, right) =>
-    left.sentAt.getTime() - right.sentAt.getTime() || left.id.localeCompare(right.id),
-  );
-  const cycles: UnifiedReplyCycle[] = [];
-  let firstInbound: UnifiedReplyMessage | null = null;
-
-  for (const message of sorted) {
-    if (
-      message.direction === MessageDirection.INBOUND
-      && message.sentAt >= startAt
-      && message.sentAt < endDateExclusive
-    ) {
-      if (!firstInbound) firstInbound = message;
-      continue;
-    }
-    if (!firstInbound || message.sentAt < firstInbound.sentAt || !isUnifiedReplyEvidence(message)) continue;
-    cycles.push({ firstInbound, humanReply: message });
-    firstInbound = null;
-  }
-
-  if (firstInbound) cycles.push({ firstInbound, humanReply: null });
-  return cycles;
+  return calculateUnifiedReplyCycleAudit(messages, startAt, endDateExclusive).cycles;
 }
 function deterministicVirtualCustomerId(lineOfficialAccountId: string, lineChatUserId: string): string {
   const hash = createHash("sha256").update(`${lineOfficialAccountId}\u0000${lineChatUserId}`).digest("hex");
@@ -983,6 +1088,7 @@ export class HistoricalTimelineService {
           sentAt: message.sentAt,
           source: "CURRENT",
           sourceEventId: null,
+          sourceEventType: null,
           externalMessageId: message.externalMessageId,
           senderUserId: message.senderUserId,
           senderDisplayName: message.senderDisplayName,
@@ -1059,6 +1165,7 @@ export class HistoricalTimelineService {
         sentAt: message.sentAt,
         source: "HISTORICAL",
         sourceEventId: message.sourceEventId,
+        sourceEventType: message.sourceEventType,
         externalMessageId: null,
         senderUserId: null,
         senderDisplayName: null,
@@ -1078,6 +1185,8 @@ export class HistoricalTimelineService {
     let exactHistoricalResponders = 0;
     let unknownResponderReplies = 0;
     let historicalChatCount = 0;
+    let ambiguousReplyCycleChats = 0;
+    const replyCycleAmbiguityReasons: Partial<Record<Exclude<ReplyStateAmbiguityReason, "NO_MESSAGE_EVIDENCE">, number>> = {};
 
     const analyticsMode = input.mode ?? "CHAT_FIRST_REPLY";
     const auditLimit = Math.min(100, Math.max(0, Math.floor(input.auditLimit ?? 0)));
@@ -1102,18 +1211,34 @@ export class HistoricalTimelineService {
       const historicalInChat = messages.some((message) => message.source === "HISTORICAL");
       if (historicalInChat) historicalChatCount += 1;
 
-      const cycles: UnifiedReplyCycle[] = analyticsMode === "RESPONSE_CYCLES"
-        ? calculateUnifiedReplyCycles(messages, startAt, endDateExclusive)
-        : (() => {
-            const firstInbound = messages.find((message) =>
-              message.direction === MessageDirection.INBOUND
-              && message.sentAt >= startAt
-              && message.sentAt < endDateExclusive);
-            if (!firstInbound) return [];
-            const humanReply = messages.find((message) =>
-              message.sentAt >= firstInbound.sentAt && isUnifiedReplyEvidence(message));
-            return [{ firstInbound, humanReply: humanReply ?? null }];
-          })();
+      let cycles: UnifiedReplyCycle[];
+      if (analyticsMode === "RESPONSE_CYCLES") {
+        const cycleAudit = calculateUnifiedReplyCycleAudit(
+          messages,
+          startAt,
+          endDateExclusive,
+        );
+        if (cycleAudit.status === "AMBIGUOUS") {
+          ambiguousReplyCycleChats += 1;
+          replyCycleAmbiguityReasons[cycleAudit.reason] =
+            (replyCycleAmbiguityReasons[cycleAudit.reason] ?? 0) + 1;
+          cycles = [];
+        } else {
+          cycles = cycleAudit.cycles;
+        }
+      } else {
+        const firstInbound = messages.find((message) =>
+          message.direction === MessageDirection.INBOUND
+          && message.sentAt >= startAt
+          && message.sentAt < endDateExclusive);
+        if (!firstInbound) {
+          cycles = [];
+        } else {
+          const humanReply = messages.find((message) =>
+            message.sentAt >= firstInbound.sentAt && isUnifiedReplyEvidence(message));
+          cycles = [{ firstInbound, humanReply: humanReply ?? null }];
+        }
+      }
 
       for (const cycle of cycles) {
         const firstInbound = cycle.firstInbound;
@@ -1254,6 +1379,8 @@ export class HistoricalTimelineService {
         historicalAutoOutboundMessages,
         historicalNonAutoOutboundMessages,
         historicalUnknownResponderOutboundMessages,
+        ambiguousReplyCycleChats,
+        replyCycleAmbiguityReasons,
         oaFamilySize: oaFamilyIds.length,
       },
     };
