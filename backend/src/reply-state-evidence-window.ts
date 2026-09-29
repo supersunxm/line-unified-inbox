@@ -75,6 +75,8 @@ export type ReplyProjectionEligibility =
   | {
       eligible: true;
       state: "REPLIED" | "NOT_REPLIED";
+      decidingEventKind: "CUSTOMER_INBOUND" | "HUMAN_STAFF_REPLY";
+      decidingEventAt: Date;
       reason: "DECIDING_EVENT_ON_OR_AFTER_BOUNDARY";
     }
   | {
@@ -100,6 +102,8 @@ export function classifyReplyProjectionEligibility(
     return {
       eligible: true,
       state: "NOT_REPLIED",
+      decidingEventKind: "CUSTOMER_INBOUND",
+      decidingEventAt: window.latestCustomerInboundAt,
       reason: "DECIDING_EVENT_ON_OR_AFTER_BOUNDARY",
     };
   }
@@ -113,6 +117,8 @@ export function classifyReplyProjectionEligibility(
   return {
     eligible: true,
     state: "REPLIED",
+    decidingEventKind: "HUMAN_STAFF_REPLY",
+    decidingEventAt: window.latestHumanStaffReplyAt,
     reason: "DECIDING_EVENT_ON_OR_AFTER_BOUNDARY",
   };
 }
