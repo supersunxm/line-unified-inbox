@@ -452,8 +452,14 @@ async function main() {
         } else {
           totals.AMBIGUOUS += 1;
           store.ambiguous += 1;
-          ambiguityReasons[resolution.reason] += 1;
-          if (resolution.reason === "NO_MESSAGE_EVIDENCE") totals.NO_MESSAGE_EVIDENCE += 1;
+          const reason = resolution.reason;
+          if (reason === "UNKNOWN_OUTBOUND_ACTOR") ambiguityReasons.UNKNOWN_OUTBOUND_ACTOR += 1;
+          else if (reason === "ORDERING_CONFLICT") ambiguityReasons.ORDERING_CONFLICT += 1;
+          else if (reason === "UNKNOWN_EVENT_CLASSIFICATION") ambiguityReasons.UNKNOWN_EVENT_CLASSIFICATION += 1;
+          else {
+            ambiguityReasons.NO_MESSAGE_EVIDENCE += 1;
+            totals.NO_MESSAGE_EVIDENCE += 1;
+          }
         }
         byStore.set(storeId, store);
       }
