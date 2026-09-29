@@ -213,7 +213,8 @@ export function calculateUnifiedReplyCycleAudit(
     ]);
   }
 
-  const cycles: UnifiedReplyCycle[] = result.cycles.flatMap((cycle) => {
+  const cycles: UnifiedReplyCycle[] = [];
+  for (const cycle of result.cycles) {
     const inboundEvent = (normalizedByTimestamp.get(cycle.startedAt.getTime()) ?? [])
       .find((event) =>
         event.eventKind === "MESSAGE"
@@ -223,10 +224,11 @@ export function calculateUnifiedReplyCycleAudit(
     const firstInbound = inboundEvent
       ? originalByStableId.get(inboundEvent.stableId)
       : undefined;
-    if (!firstInbound) return [];
+    if (!firstInbound) continue;
 
     if (!cycle.answeredAt) {
-      return [{ firstInbound, humanReply: null }];
+      cycles.push({ firstInbound, humanReply: null });
+      continue;
     }
 
     const replyEvent = (normalizedByTimestamp.get(cycle.answeredAt.getTime()) ?? [])
@@ -238,10 +240,10 @@ export function calculateUnifiedReplyCycleAudit(
     const humanReply = replyEvent
       ? originalByStableId.get(replyEvent.stableId)
       : undefined;
-    if (!humanReply) return [];
+    if (!humanReply) continue;
 
-    return [{ firstInbound, humanReply }];
-  });
+    cycles.push({ firstInbound, humanReply });
+  }
 
   return { status: "DETERMINISTIC", cycles };
 }
