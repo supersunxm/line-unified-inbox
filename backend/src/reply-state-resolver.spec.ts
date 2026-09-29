@@ -260,6 +260,15 @@ void test("equal timestamp inbound and human reply are AMBIGUOUS when ordering c
   if (result.state === "AMBIGUOUS") assert.equal(result.reason, "ORDERING_CONFLICT");
 });
 
+void test("equal timestamp inbound and unknown outbound are AMBIGUOUS because order can change the result", () => {
+  const result = resolve([
+    canonical("1", "INBOUND", "2026-09-01T10:00:00Z"),
+    canonical("2", "OUTBOUND", "2026-09-01T10:00:00Z", { senderUserId: null }),
+  ]);
+  assert.equal(result.state, "AMBIGUOUS");
+  if (result.state === "AMBIGUOUS") assert.equal(result.reason, "ORDERING_CONFLICT");
+});
+
 void test("historical unknown event classification is AMBIGUOUS when it could open a cycle", () => {
   const event = normalizeHistoricalReplyMessage(
     historical("1", "INBOUND", "2026-09-01T10:00:00Z", { sourceEventType: "mystery" }),
