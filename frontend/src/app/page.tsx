@@ -2577,7 +2577,9 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
       }));
       const [dashboardRes, bmSummaryRes] = await Promise.all([
         api.dashboard(),
-        api.bmReplyStatusSummary(),
+        chatMonth
+          ? api.bmReplyStatusSummaryForMonth(chatMonth)
+          : api.bmReplyStatusSummary(),
       ]);
       setDashboardSummary(dashboardRes);
       setBmSummaryData(bmSummaryRes);
@@ -2639,7 +2641,9 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
       }));
       const [dashboardRes, bmSummaryRes] = await Promise.all([
         api.dashboard(),
-        api.bmReplyStatusSummary(),
+        chatMonth
+          ? api.bmReplyStatusSummaryForMonth(chatMonth)
+          : api.bmReplyStatusSummary(),
       ]);
       setDashboardSummary(dashboardRes);
       setBmSummaryData(bmSummaryRes);
@@ -2678,6 +2682,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
         const res = await api.bulkMarkRepliedByFilter({
           bmReplyStatus: "NOT_REPLIED",
           storeId: bulkConfirmState.storeId === "all" ? undefined : bulkConfirmState.storeId,
+          month: chatMonth || undefined,
         });
         updatedCount = res.updatedCount;
       } else if (bulkConfirmState.conversationIds && bulkConfirmState.conversationIds.length > 0) {
@@ -2688,6 +2693,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
           storeId: bulkConfirmState.storeId,
           status: bulkConfirmState.targetStatus,
           fromStatuses: bulkConfirmState.fromStatuses,
+          month: chatMonth || undefined,
         });
         updatedCount = res.updated;
       }
@@ -2704,7 +2710,9 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
 
       // Reconcile in place without full page reload
       const [bmSummaryRes, storeRes] = await Promise.all([
-        api.bmReplyStatusSummary(),
+        chatMonth
+          ? api.bmReplyStatusSummaryForMonth(chatMonth)
+          : api.bmReplyStatusSummary(),
         api.stores(showArchivedStores),
         loadConversations(conversationQueryRef.current, true),
       ]);
@@ -2723,7 +2731,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
     } finally {
       setIsBulkUpdating(false);
     }
-  }, [bulkConfirmState, language, loadConversations, showArchivedStores]);
+  }, [bulkConfirmState, chatMonth, language, loadConversations, showArchivedStores]);
 
   function updateInternalNote(note: string) {
     if (!selectedConversation) return;
