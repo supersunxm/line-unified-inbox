@@ -223,6 +223,8 @@ async function main() {
       }
 
       const historicalByConversation = new Map<string, HistoricalReplyMessage[]>();
+      const crosswalkEvidenceConversationIds = new Set<string>();
+      const directEvidenceConversationIds = new Set<string>();
       const links = conversations.flatMap((conversation) => conversation.historicalConversationCrosswalks);
       const historicalIdentityInputs = [...new Map(
         [
@@ -272,6 +274,8 @@ async function main() {
           }
           const conversationId = crosswalkConversationId ?? directConversationId;
           if (!conversationId) continue;
+          if (crosswalkConversationId) crosswalkEvidenceConversationIds.add(conversationId);
+          if (directConversationId) directEvidenceConversationIds.add(conversationId);
           const item: HistoricalReplyMessage = {
             id: row.id,
             sourceEventId: row.sourceEventId,
@@ -291,19 +295,8 @@ async function main() {
       for (const conversation of conversations) {
         totals.TOTAL_CANONICAL_CONVERSATIONS += 1;
         const historical = historicalByConversation.get(conversation.id) ?? [];
-        const crosswalkLinked = conversation.historicalConversationCrosswalks.length > 0 && historical.length > 0;
-        const directIdentityKey = conversation.storeId && conversation.lineChatUserId
-          ? crosswalkKey({
-              storeId: conversation.storeId,
-              lineOfficialAccountId: conversation.lineOfficialAccountId,
-              historicalLineChatUserId: conversation.lineChatUserId,
-            })
-          : null;
-        const directLinked = Boolean(
-          directIdentityKey &&
-          directToConversation.get(directIdentityKey) === conversation.id &&
-          historical.length > 0,
-        );
+        const crosswalkLinked = crosswalkEvidenceConversationIds.has(conversation.id);
+        const directLinked = directEvidenceConversationIds.has(conversation.id);
         const linked = historical.length > 0;
         if (linked) totals.HISTORICAL_LINKED_CONVERSATIONS += 1;
         else totals.CANONICAL_ONLY_CONVERSATIONS += 1;
