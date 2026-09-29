@@ -278,6 +278,18 @@ void test("historical unknown event classification is AMBIGUOUS when it could op
   if (result.state === "AMBIGUOUS") assert.equal(result.reason, "UNKNOWN_EVENT_CLASSIFICATION");
 });
 
+void test("unknown inbound classification followed by staff reply remains AMBIGUOUS without proven customer evidence", () => {
+  const result = resolve(
+    [],
+    [
+      historical("1", "INBOUND", "2026-09-01T10:00:00Z", { sourceEventType: "mystery" }),
+      historical("2", "OUTBOUND", "2026-09-01T10:05:00Z", { sourceEventType: "messageSent", senderBizId: "biz-staff-9" }),
+    ],
+  );
+  assert.equal(result.state, "AMBIGUOUS");
+  if (result.state === "AMBIGUOUS") assert.equal(result.reason, "UNKNOWN_EVENT_CLASSIFICATION");
+});
+
 void test("historical messageReceived and messageSent event types are treated as real messages", () => {
   const result = resolve(
     [],
