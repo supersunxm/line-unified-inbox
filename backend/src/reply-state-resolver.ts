@@ -89,9 +89,18 @@ function sourceIdKeys(value: string | null | undefined): string[] {
   return [trimmed, MANAGER_ID_PREFIX + trimmed];
 }
 
+function payloadRecord(rawPayload: unknown): Record<string, unknown> {
+  if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) return {};
+  return rawPayload as Record<string, unknown>;
+}
+
 function hasAutoResponsePayload(rawPayload: unknown): boolean {
-  if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) return false;
-  return (rawPayload as { source?: unknown }).source === "AUTO_RESPONSE";
+  return payloadRecord(rawPayload).source === "AUTO_RESPONSE";
+}
+
+function hasManagerReplyEvidence(rawPayload: unknown): boolean {
+  const raw = payloadRecord(rawPayload);
+  return raw.source === "LINE_MANAGER_MIRROR" || raw.provider === "LINE_MANAGER";
 }
 
 function historicalEventKind(sourceEventType: string): ReplyEventKind {
@@ -110,7 +119,11 @@ export function normalizeCanonicalReplyMessage(message: CanonicalReplyMessage): 
   let actor: ReplyEventActor = "NONE";
   if (message.direction === "INBOUND") actor = "CUSTOMER";
   else if (message.direction === "OUTBOUND" && automated) actor = "AUTOMATED";
-  else if (message.direction === "OUTBOUND" && message.deliveryStatus === "DELIVERED" && message.senderUserId) actor = "HUMAN_STAFF";
+  else if (
+    message.direction === "OUTBOUND" &&
+    message.deliveryStatus === "DELIVERED" &&
+    (message.senderUserId || hasManagerReplyEvidence(message.rawPayload))
+  ) actor = "HUMAN_STAFF";
   else if (message.direction === "OUTBOUND" && message.deliveryStatus === "DELIVERED") actor = "UNKNOWN";
 
   return {
@@ -132,7 +145,10 @@ export function normalizeHistoricalReplyMessage(message: HistoricalReplyMessage)
   if (eventKind !== "NON_MESSAGE") {
     if (message.direction === "INBOUND") actor = "CUSTOMER";
     else if (message.direction === "OUTBOUND" && message.senderBizId?.trim() === AUTO_REPLY_BIZ_ID) actor = "AUTOMATED";
-    else if (message.direction === "OUTBOUND" && message.senderBizId?.trim()) actor = "HUMAN_STAFF";
+    else if (
+      message.direction === "OUTBOUND" &&
+      (message.senderBizId?.trim() || message.sourceEventType.trim().toLowerCase() === "messagesent")
+    ) actor = "HUMAN_STAFF";
     else if (message.direction === "OUTBOUND") actor = "UNKNOWN";
   }
 
