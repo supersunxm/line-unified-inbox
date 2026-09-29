@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   analyzeReplyEvidenceWindow,
+  classifyReplyProjectionEligibility,
 } from "./reply-state-evidence-window";
 import {
   normalizeCanonicalReplyMessage,
@@ -91,4 +92,64 @@ void test("system events do not count as relevant reply evidence", () => {
   assert.equal(result.firstRelevantMessageAt, null);
   assert.equal(result.latestRelevantMessageAt, null);
   assert.equal(result.hasRelevantMessageOnOrAfterBoundary, false);
+});
+
+
+void test("NOT_REPLIED projects only when the latest customer inbound is on or after the boundary", () => {
+  const trusted = analyzeReplyEvidenceWindow([
+    canonical("1", "INBOUND", "2026-09-01T10:00:00Z"),
+  ].map(normalizeCanonicalReplyMessage), boundary);
+  const legacy = analyzeReplyEvidenceWindow([
+    canonical("2", "INBOUND", "2026-08-31T10:00:00Z"),
+  ].map(normalizeCanonicalReplyMessage), boundary);
+
+  assert.deepEqual(
+    classifyReplyProjectionEligibility("NOT_REPLIED", trusted),
+    {
+      eligible: true,
+      state: "NOT_REPLIED",
+      reason: "DECIDING_EVENT_ON_OR_AFTER_BOUNDARY",
+    },
+  );
+  assert.deepEqual(
+    classifyReplyProjectionEligibility("NOT_REPLIED", legacy),
+    {
+      eligible: false,
+      reason: "PRE_BOUNDARY_DECIDING_EVENT",
+    },
+  );
+});
+
+void test("REPLIED projects only when the latest human reply is on or after the boundary", () => {
+  const trusted = analyzeReplyEvidenceWindow([
+    canonical("1", "INBOUND", "2026-08-31T10:00:00Z"),
+    canonical("2", "OUTBOUND", "2026-09-01T10:00:00Z"),
+  ].map(normalizeCanonicalReplyMessage), boundary);
+  const legacy = analyzeReplyEvidenceWindow([
+    canonical("3", "INBOUND", "2026-08-31T09:00:00Z"),
+    canonical("4", "OUTBOUND", "2026-08-31T10:00:00Z"),
+  ].map(normalizeCanonicalReplyMessage), boundary);
+
+  assert.equal(classifyReplyProjectionEligibility("REPLIED", trusted).eligible, true);
+  assert.deepEqual(
+    classifyReplyProjectionEligibility("REPLIED", legacy),
+    {
+      eligible: false,
+      reason: "PRE_BOUNDARY_DECIDING_EVENT",
+    },
+  );
+});
+
+void test("AMBIGUOUS is never eligible for projection", () => {
+  const window = analyzeReplyEvidenceWindow([
+    canonical("1", "INBOUND", "2026-09-01T10:00:00Z"),
+  ].map(normalizeCanonicalReplyMessage), boundary);
+
+  assert.deepEqual(
+    classifyReplyProjectionEligibility("AMBIGUOUS", window),
+    {
+      eligible: false,
+      reason: "AMBIGUOUS",
+    },
+  );
 });
