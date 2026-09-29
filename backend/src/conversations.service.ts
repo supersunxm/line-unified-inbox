@@ -831,11 +831,15 @@ export class ConversationsService {
     return note;
   }
 
-  async messages(id: string, page: number, pageSize: number) {
+  async messages(id: string, page: number, pageSize: number, month?: string) {
     const conversation = await this.get(id);
+    const monthRange = parseChatMonth(month);
     const safePage = Number.isFinite(page) && page > 0 ? Math.min(5000, Math.floor(page)) : 1;
     const safeSize = Number.isFinite(pageSize) ? Math.min(100, Math.max(1, Math.floor(pageSize))) : 30;
-    const where = { conversationId: id };
+    const where = {
+      conversationId: id,
+      ...(monthRange ? { sentAt: { gte: monthRange.start, lt: monthRange.end } } : {}),
+    };
     const canonicalTotal = await this.prisma.message.count({ where });
     const historicalModel = this.prisma.historicalTimelineMessage;
     if (!conversation.storeId || typeof historicalModel?.count !== "function" || typeof historicalModel.findMany !== "function") {
@@ -863,11 +867,17 @@ export class ConversationsService {
       return { items: items.reverse().map((message) => this.safeMessage(message)), total: canonicalTotal, page: safePage, pageSize: safeSize, hasEarlier: safePage * safeSize < canonicalTotal };
     }
 
+    const historicalStart = monthRange && monthRange.start > HISTORICAL_TIMELINE_START
+      ? monthRange.start
+      : HISTORICAL_TIMELINE_START;
     const historicalWhere = {
       storeId: conversation.storeId,
       lineOfficialAccountId: conversation.lineOfficialAccountId,
       lineChatUserId: { in: [...historicalLineChatUserIds] },
-      sentAt: { gte: HISTORICAL_TIMELINE_START },
+      sentAt: {
+        gte: historicalStart,
+        ...(monthRange ? { lt: monthRange.end } : {}),
+      },
     };
     const historicalTotal = await historicalModel.count({ where: historicalWhere });
     const historicalRows = await historicalModel.findMany({
@@ -892,7 +902,8 @@ export class ConversationsService {
         WHERE h."lineOfficialAccountId" = ${conversation.lineOfficialAccountId}
           AND h."storeId" = ${conversation.storeId}
           AND h."lineChatUserId" IN (${Prisma.join([...historicalLineChatUserIds])})
-          AND h."sentAt" >= ${HISTORICAL_TIMELINE_START}
+          AND h."sentAt" >= ${historicalStart}
+          ${monthRange ? Prisma.sql`AND h."sentAt" < ${monthRange.end}` : Prisma.empty}
       `);
       exactDuplicateIds = new Set(duplicateRows.map((row) => row.sourceEventId));
     }
