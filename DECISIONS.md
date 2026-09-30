@@ -1,3 +1,10 @@
+# UI kit foundation: page-level components (2026-09-30)
+
+- New pages build their header, KPI row and section cards from `PageHeader` (shell), `KpiStrip` and `SectionCard` (ui) instead of hand-written markup. `MetricCard`, `Card` and `Badge` stay as they are for existing pages; they are migrated page by page.
+- KpiStrip draws its dividers with a 1px grid gap over `--app-border-subtle`. So the gap colour never shows as a block, the last item spans the empty cells of the final row at every breakpoint; `kpi-strip-model.ts` holds this rule and is unit-tested for 1–12 items at 2–5 columns. All class names are complete literals so Tailwind can find them.
+- KPI sub-text, period pills and card meta use `--app-text-secondary`, because `--app-text-tertiary` is below 4.5:1 in both themes. Changing the global tertiary token, adding `--app-*-text` status tokens, StatusBadge and PageHeader `meta` are deferred to the pages that need them.
+- Component tests stay dependency-free: pure `.ts` model tests, source-regex tests, and token contrast tests parsed from `globals.css`.
+
 # UI accent cleanup: which greens become the brand accent (2026-09-30)
 
 - Only brand-accent uses move to `--app-accent*`: interactive affordances (focus rings, checkbox/radio accents, primary buttons, selected tabs/pages, action links), brand logo tiles, primary chart series, and theme color. Greens that carry meaning (replied, success, connected, ready, passed, positive delta) stay status colors, and the LINE-styled greeting module keeps its LINE green. The public store-locator keeps its `#00a651` page palette because that palette colours its LINE chat button; `/stores` already uses literal LINE green `#06C755`.
