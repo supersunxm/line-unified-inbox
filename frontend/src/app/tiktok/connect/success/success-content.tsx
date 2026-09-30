@@ -101,7 +101,7 @@ export function TikTokConnectSuccessContent({
       <div className="w-full max-w-lg space-y-6">
         {/* Brand Header */}
         <div className="flex items-center justify-center gap-2">
-          <span className="flex h-7 w-7 items-center justify-center rounded-md bg-emerald-600 text-xs font-bold text-white shadow-xs dark:bg-emerald-500">
+          <span className="flex h-7 w-7 items-center justify-center rounded-md bg-[var(--app-accent)] text-xs font-bold text-white shadow-xs">
             O
           </span>
           <span className="text-sm font-semibold tracking-tight text-slate-900 dark:text-slate-100">
@@ -243,7 +243,7 @@ export function TikTokConnectSuccessContent({
           <div className="mt-6 flex flex-col sm:flex-row items-center gap-3">
             <Link
               href="/stores"
-              className="w-full sm:w-auto flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-semibold text-white hover:bg-slate-800 dark:bg-emerald-600 dark:hover:bg-emerald-500 transition"
+              className="w-full sm:w-auto flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-semibold text-white hover:bg-slate-800 dark:bg-[var(--app-accent)] dark:hover:bg-[var(--app-accent-hover)] transition"
             >
               <span>{t.viewStores}</span>
             </Link>

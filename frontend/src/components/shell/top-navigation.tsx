@@ -37,7 +37,7 @@ export interface TopNavigationProps {
   logout: () => Promise<void> | void;
 }
 
-const focusRing = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 focus-visible:ring-offset-1";
+const focusRing = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--app-accent)]/40 focus-visible:ring-offset-1";
 
 function sectionLabel(section: PrimarySection, language: Language) {
   const labels: Record<PrimarySection, [string, string, string]> = {

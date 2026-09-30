@@ -232,7 +232,7 @@ export function StoreQuickViewDrawer({
           <button
             type="button"
             onClick={() => onOpenInbox(storeData.storeId)}
-            className="w-full py-2.5 text-xs font-bold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white transition-colors"
+            className="w-full py-2.5 text-xs font-bold rounded-lg bg-[var(--app-accent)] hover:bg-[var(--app-accent-hover)] text-white transition-colors"
           >
             {t.openInbox}
           </button>

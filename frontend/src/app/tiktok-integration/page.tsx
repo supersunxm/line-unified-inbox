@@ -10,12 +10,12 @@ export const metadata: Metadata = {
 
 export default function TikTokIntegrationPage() {
   return (
-    <div className="min-h-screen bg-[var(--app-bg,#0b0d11)] text-[var(--app-text-primary,#f8fafc)] flex flex-col justify-between antialiased selection:bg-[var(--app-accent-soft,rgba(0,186,124,0.15))] selection:text-[var(--app-accent,#00ba7c)]">
+    <div className="min-h-screen bg-[var(--app-bg,#0b0d11)] text-[var(--app-text-primary,#f8fafc)] flex flex-col justify-between antialiased selection:bg-[var(--app-accent-soft,rgba(31,107,74,0.15))] selection:text-[var(--app-accent,#1f6b4a)]">
       {/* Navigation Header */}
       <header className="sticky top-0 z-30 border-b border-[var(--app-border,#1e2430)] bg-[var(--app-surface,#12151c)]/90 backdrop-blur-md">
         <div className="mx-auto flex h-16 max-w-5xl items-center justify-between px-4 sm:px-6 lg:px-8">
           <Link href="/" className="flex items-center gap-2.5 group">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--app-accent,#00ba7c)] text-white font-bold text-lg shadow-sm group-hover:scale-105 transition">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--app-accent,#1f6b4a)] text-white font-bold text-lg shadow-sm group-hover:scale-105 transition">
               O
             </div>
             <div className="flex flex-col">
@@ -26,13 +26,13 @@ export default function TikTokIntegrationPage() {
           <nav className="flex items-center gap-4 text-xs">
             <Link
               href="/stores"
-              className="text-[var(--app-text-secondary,#cbd5e1)] hover:text-[var(--app-accent,#00ba7c)] transition"
+              className="text-[var(--app-text-secondary,#cbd5e1)] hover:text-[var(--app-accent,#1f6b4a)] transition"
             >
               ค้นหาสาขา
             </Link>
             <Link
               href="/connect/tiktok"
-              className="rounded-lg bg-[var(--app-accent,#00ba7c)] px-3 py-1.5 font-semibold text-white hover:bg-emerald-500 transition"
+              className="rounded-lg bg-[var(--app-accent,#1f6b4a)] px-3 py-1.5 font-semibold text-white hover:bg-[var(--app-accent-hover)] transition"
             >
               เชื่อมต่อ TikTok
             </Link>
@@ -196,7 +196,7 @@ export default function TikTokIntegrationPage() {
                 <strong>การเข้ารหัสข้อมูล (Encryption at Rest):</strong> Access Token และ Refresh Token จะถูกเข้ารหัสด้วยมาตรฐานความปลอดภัยระดับสูง (AES-256-GCM) ก่อนบันทึกลงในฐานข้อมูล และไม่มีการส่งต่อ token ไปยังเบราว์เซอร์ของผู้ใช้
               </p>
               <p>
-                <strong>การเพิกถอนสิทธิ์ (Revocation):</strong> ผู้ใช้สามารถยกเลิกการเชื่อมต่อหรือเพิกถอนสิทธิ์ได้ตลอดเวลาผ่านแอปพลิเคชัน TikTok ในเมนู <em>การตั้งค่าและความเป็นส่วนตัว &gt; ความปลอดภัยและสิทธิ์ &gt; แอปและบริการของบุคคลที่สาม</em> หรือส่งคำขอลบข้อมูลมายัง <a href="mailto:obsthailand@gmail.com" className="text-[var(--app-accent,#00ba7c)] underline">obsthailand@gmail.com</a>
+                <strong>การเพิกถอนสิทธิ์ (Revocation):</strong> ผู้ใช้สามารถยกเลิกการเชื่อมต่อหรือเพิกถอนสิทธิ์ได้ตลอดเวลาผ่านแอปพลิเคชัน TikTok ในเมนู <em>การตั้งค่าและความเป็นส่วนตัว &gt; ความปลอดภัยและสิทธิ์ &gt; แอปและบริการของบุคคลที่สาม</em> หรือส่งคำขอลบข้อมูลมายัง <a href="mailto:obsthailand@gmail.com" className="text-[var(--app-accent,#1f6b4a)] underline">obsthailand@gmail.com</a>
               </p>
             </div>
           </section>
@@ -214,7 +214,7 @@ export default function TikTokIntegrationPage() {
             <div className="flex items-center gap-3 w-full sm:w-auto">
               <Link
                 href="/connect/tiktok"
-                className="w-full sm:w-auto text-center rounded-xl bg-[var(--app-accent,#00ba7c)] px-5 py-2.5 text-xs font-semibold text-white shadow-md hover:bg-emerald-500 transition"
+                className="w-full sm:w-auto text-center rounded-xl bg-[var(--app-accent,#1f6b4a)] px-5 py-2.5 text-xs font-semibold text-white shadow-md hover:bg-[var(--app-accent-hover)] transition"
               >
                 ไปที่หน้าเชื่อมต่อ TikTok
               </Link>
@@ -231,10 +231,10 @@ export default function TikTokIntegrationPage() {
           <div className="pt-4 border-t border-[var(--app-border,#1e2430)] flex flex-wrap items-center justify-between gap-4 text-xs text-[var(--app-text-tertiary,#94a3b8)]">
             <span>เอกสารและข้อตกลงที่เกี่ยวข้อง:</span>
             <div className="flex items-center gap-4">
-              <Link href="/privacy" className="hover:text-[var(--app-accent,#00ba7c)] transition">
+              <Link href="/privacy" className="hover:text-[var(--app-accent,#1f6b4a)] transition">
                 นโยบายความเป็นส่วนตัว (Privacy Policy)
               </Link>
-              <Link href="/terms" className="hover:text-[var(--app-accent,#00ba7c)] transition">
+              <Link href="/terms" className="hover:text-[var(--app-accent,#1f6b4a)] transition">
                 ข้อกำหนดการให้บริการ (Terms of Service)
               </Link>
             </div>

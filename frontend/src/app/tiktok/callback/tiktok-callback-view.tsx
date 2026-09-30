@@ -15,7 +15,7 @@ export function TikTokCallbackView({ status, errorMessage }: TikTokCallbackViewP
       <header className="border-b border-slate-200 bg-white/90 backdrop-blur-md dark:border-slate-800 dark:bg-[#12151c]/90">
         <div className="mx-auto flex max-w-3xl items-center justify-between px-4 py-3 sm:px-6">
           <div className="flex items-center gap-2.5">
-            <span className="flex h-7 w-7 items-center justify-center rounded-md bg-emerald-600 font-bold text-xs text-white shadow-xs dark:bg-emerald-500">
+            <span className="flex h-7 w-7 items-center justify-center rounded-md bg-[var(--app-accent)] font-bold text-xs text-white shadow-xs">
               O
             </span>
             <div>
@@ -76,7 +76,7 @@ export function TikTokCallbackView({ status, errorMessage }: TikTokCallbackViewP
               <div className="pt-2">
                 <Link
                   href="/dashboard"
-                  className="inline-flex items-center justify-center rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white shadow-xs transition-colors hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 focus-visible:ring-offset-2 dark:bg-emerald-500 dark:hover:bg-emerald-600"
+                  className="inline-flex items-center justify-center rounded-xl bg-[var(--app-accent)] px-5 py-2.5 text-sm font-semibold text-white shadow-xs transition-colors hover:bg-[var(--app-accent-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--app-accent)]/40 focus-visible:ring-offset-2"
                 >
                   Return to Dashboard
                 </Link>
@@ -127,7 +127,7 @@ export function TikTokCallbackView({ status, errorMessage }: TikTokCallbackViewP
               <div className="flex items-center justify-center gap-3 pt-2">
                 <Link
                   href="/tiktok/connect"
-                  className="inline-flex items-center justify-center rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white shadow-xs transition-colors hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 focus-visible:ring-offset-2 dark:bg-emerald-500 dark:hover:bg-emerald-600"
+                  className="inline-flex items-center justify-center rounded-xl bg-[var(--app-accent)] px-5 py-2.5 text-sm font-semibold text-white shadow-xs transition-colors hover:bg-[var(--app-accent-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--app-accent)]/40 focus-visible:ring-offset-2"
                 >
                   Start Connection Again
                 </Link>

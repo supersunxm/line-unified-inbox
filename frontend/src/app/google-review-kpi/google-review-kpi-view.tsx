@@ -1327,7 +1327,7 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
           onClick={() => setActiveTab("monthly")}
           className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl transition-all ${
             activeTab === "monthly"
-              ? "bg-emerald-600 text-white shadow-sm"
+              ? "bg-[var(--app-accent)] text-white shadow-sm"
               : "border border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-text-secondary)] hover:text-[var(--app-text-primary)] hover:bg-[var(--app-surface-hover)]"
           }`}
         >
@@ -1347,7 +1347,7 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
           }}
           className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl transition-all ${
             activeTab === "weekly"
-              ? "bg-emerald-600 text-white shadow-sm"
+              ? "bg-[var(--app-accent)] text-white shadow-sm"
               : "border border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-text-secondary)] hover:text-[var(--app-text-primary)] hover:bg-[var(--app-surface-hover)]"
           }`}
         >
@@ -1413,7 +1413,7 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
                 type="button"
                 onClick={handleSyncWeeklyStores}
                 disabled={syncingStores}
-                className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3.5 py-2 text-xs font-semibold text-white shadow-sm hover:bg-emerald-500 transition-colors disabled:opacity-50"
+                className="flex items-center gap-1.5 rounded-xl bg-[var(--app-accent)] px-3.5 py-2 text-xs font-semibold text-white shadow-sm hover:bg-[var(--app-accent-hover)] transition-colors disabled:opacity-50"
               >
                 <svg className={`h-4 w-4 ${syncingStores ? "animate-spin" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -1666,7 +1666,7 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
                   if (e.key === "Enter") loadWeeklyData(selectedWeekNumber);
                 }}
                 placeholder={t.searchPlaceholder}
-                className="h-9 w-full rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-subtle)] pl-9 pr-4 text-xs text-[var(--app-text-primary)] placeholder-[var(--app-text-tertiary)] focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+                className="h-9 w-full rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-subtle)] pl-9 pr-4 text-xs text-[var(--app-text-primary)] placeholder-[var(--app-text-tertiary)] focus:outline-none focus:ring-2 focus:ring-[var(--app-accent)]/30"
               />
             </div>
 
@@ -1792,7 +1792,7 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
                               <button
                                 type="button"
                                 onClick={() => setSelectedDailyStore(store)}
-                                className="text-[10px] text-[var(--app-text-secondary)] hover:text-emerald-600 underline ml-1"
+                                className="text-[10px] text-[var(--app-text-secondary)] hover:text-[var(--app-accent)] underline ml-1"
                               >
                                 {t.dailyBreakdown}
                               </button>
@@ -1935,7 +1935,7 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
               <button
                 type="button"
                 onClick={() => handleOpenModal()}
-                className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3.5 py-2 text-xs font-semibold text-white shadow-sm hover:bg-emerald-500 transition-colors"
+                className="flex items-center gap-1.5 rounded-xl bg-[var(--app-accent)] px-3.5 py-2 text-xs font-semibold text-white shadow-sm hover:bg-[var(--app-accent-hover)] transition-colors"
               >
                 <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
@@ -2024,7 +2024,7 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
                     value="SELECTED"
                     checked={auditScope === "SELECTED"}
                     onChange={() => setAuditScope("SELECTED")}
-                    className="text-emerald-600 focus:ring-emerald-500"
+                    className="text-[var(--app-accent)] focus:ring-[var(--app-accent)]"
                   />
                   <span>
                     Pilot ({selectedStoreIds.length} ร้านที่เลือก)
@@ -2037,7 +2037,7 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
                     value="ALL_ELIGIBLE"
                     checked={auditScope === "ALL_ELIGIBLE"}
                     onChange={() => setAuditScope("ALL_ELIGIBLE")}
-                    className="text-emerald-600 focus:ring-emerald-500"
+                    className="text-[var(--app-accent)] focus:ring-[var(--app-accent)]"
                   />
                   <span>ทั้งหมด ({summary?.storesWithGoogleMaps || 0})</span>
                 </label>
@@ -2053,7 +2053,7 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
                   (auditScope === "SELECTED" && selectedStoreIds.length === 0) ||
                   (auditScope === "ALL_ELIGIBLE" && !summary?.storesWithGoogleMaps)
                 }
-                className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-emerald-500 transition-colors disabled:opacity-50"
+                className="flex items-center gap-1.5 rounded-xl bg-[var(--app-accent)] px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-[var(--app-accent-hover)] transition-colors disabled:opacity-50"
               >
                 <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
@@ -2097,7 +2097,7 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
                   type="button"
                   onClick={handleResumeBatchAudit}
                   disabled={batchLoading}
-                  className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-emerald-500 transition-colors disabled:opacity-50"
+                  className="flex items-center gap-1.5 rounded-xl bg-[var(--app-accent)] px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-[var(--app-accent-hover)] transition-colors disabled:opacity-50"
                 >
                   <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
@@ -2132,7 +2132,7 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
             </div>
             <div className="h-2 w-full overflow-hidden rounded-full bg-[var(--app-surface-subtle)]">
               <div
-                className="h-full bg-emerald-500 transition-all duration-300"
+                className="h-full bg-[var(--app-accent)] transition-all duration-300"
                 style={{
                   width: `${batchSession.totalStores > 0 ? (batchSession.completedStores / batchSession.totalStores) * 100 : 0}%`,
                 }}
@@ -2254,7 +2254,7 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder={t.searchPlaceholder}
-            className="h-10 w-full rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-subtle)] pl-9 pr-3 text-xs text-[var(--app-text-primary)] placeholder-[var(--app-text-tertiary)] focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+            className="h-10 w-full rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-subtle)] pl-9 pr-3 text-xs text-[var(--app-text-primary)] placeholder-[var(--app-text-tertiary)] focus:outline-none focus:ring-2 focus:ring-[var(--app-accent)]/30"
           />
         </div>
 
@@ -2296,7 +2296,7 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
       <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] shadow-sm overflow-hidden">
         {loading ? (
           <div className="py-20 flex flex-col items-center justify-center space-y-3 text-center text-[var(--app-text-tertiary)]">
-            <div className="h-8 w-8 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
+            <div className="h-8 w-8 animate-spin rounded-full border-2 border-[var(--app-accent)] border-t-transparent" />
             <p className="text-xs">กำลังโหลดข้อมูล KPI ร้านค้า...</p>
           </div>
         ) : error ? (
@@ -2347,7 +2347,7 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
                             checked={isSelected}
                             onChange={() => toggleStoreSelected(store.id)}
                             disabled={batchSession?.status === "RUNNING"}
-                            className="rounded border-[var(--app-border)] text-emerald-600 focus:ring-emerald-500 h-4 w-4 cursor-pointer"
+                            className="rounded border-[var(--app-border)] text-[var(--app-accent)] focus:ring-[var(--app-accent)] h-4 w-4 cursor-pointer"
                             title="เลือกสำหรับ Pilot Audit"
                           />
                         ) : (
@@ -2399,7 +2399,7 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
                                 // Ignore storage errors
                               }
                             }}
-                            className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 hover:text-emerald-500 hover:underline"
+                            className="inline-flex items-center gap-1 text-[11px] font-semibold text-[var(--app-accent)] hover:text-[var(--app-accent-hover)] hover:underline"
                           >
                             <span>{t.openMaps}</span>
                           </a>
@@ -2682,7 +2682,7 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
                 onChange={(e) => setRawJsonInput(e.target.value)}
                 placeholder='{"storeId":"BKK001","reviewsChecked":37,"reviewsWithPhoto":20,"reviewsOver15ThaiWords":18,"qualifiedReviews":14}'
                 rows={3}
-                className="w-full rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-subtle)] p-2.5 font-mono text-xs text-[var(--app-text-primary)] placeholder-[var(--app-text-tertiary)] focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+                className="w-full rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-subtle)] p-2.5 font-mono text-xs text-[var(--app-text-primary)] placeholder-[var(--app-text-tertiary)] focus:outline-none focus:ring-2 focus:ring-[var(--app-accent)]/30"
               />
               {rawJsonInput.trim() && (
                 <button
@@ -2708,7 +2708,7 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
                     value={formStoreId}
                     onChange={(e) => setFormStoreId(e.target.value)}
                     placeholder="เช่น BKK001 หรือ UUID"
-                    className="h-10 w-full rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-subtle)] px-3 text-xs text-[var(--app-text-primary)] focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+                    className="h-10 w-full rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-subtle)] px-3 text-xs text-[var(--app-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--app-accent)]/30"
                   />
                   {activeStore && (
                     <div className="mt-1 text-[11px] text-emerald-600 font-medium">ร้าน: {activeStore.name}</div>
@@ -2799,7 +2799,7 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="rounded-xl bg-emerald-600 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
+                  className="rounded-xl bg-[var(--app-accent)] px-4 py-2 text-xs font-semibold text-white hover:bg-[var(--app-accent-hover)] disabled:opacity-50"
                 >
                   {submitting ? t.saving : t.submitResult}
                 </button>

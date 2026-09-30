@@ -4,15 +4,15 @@
 
 /* Replace the last generic blue remnants inside the follower trend chart. */
 .scope :global(.app-content-section svg path[stroke='#3b82f6']) {
-  stroke: #00a651 !important;
+  stroke: var(--app-accent) !important;
 }
 
 .scope :global(.app-content-section svg circle[fill='#3b82f6']) {
-  fill: #00a651 !important;
+  fill: var(--app-accent) !important;
 }
 
 .scope :global(.app-content-section [style*='#3b82f6']) {
-  background-color: #00a651 !important;
+  background-color: var(--app-accent) !important;
 }
 
 /* The legacy KPI row is superseded by the richer store-level KPI set. */
@@ -80,7 +80,7 @@
 
 /* Make selected segmented-control states feel like a native control. */
 .scope :global(.app-content-section [class*='bg-blue-600'].rounded-lg) {
-  background: #00a651 !important;
+  background: var(--app-accent) !important;
   box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.02) !important;
 }
 
@@ -88,7 +88,7 @@
 .scope :global(.app-content-section button:focus-visible),
 .scope :global(.app-content-section input:focus-visible),
 .scope :global(.app-content-section select:focus-visible) {
-  outline: 2px solid rgba(0, 166, 81, 0.55) !important;
+  outline: 2px solid color-mix(in srgb, var(--app-accent) 55%, transparent) !important;
   outline-offset: 2px;
 }
 

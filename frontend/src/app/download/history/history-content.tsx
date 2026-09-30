@@ -32,7 +32,7 @@ export function DownloadHistoryContent({ releases }: { releases: AndroidRelease[
               <article key={`${release.version}-${release.build}`} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-[#12151c]">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div><div className="flex flex-wrap items-center gap-2"><h2 className="text-lg font-bold">{text.version} {release.version}+{release.build}</h2>{index === 0 && <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">{text.latest}</span>}</div><p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{text.released}: <time dateTime={release.releasedAt}>{releasedAt}</time> · {release.size}</p></div>
-                  <a href={downloadUrl} download={release.fileName} className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500">{text.download}</a>
+                  <a href={downloadUrl} download={release.fileName} className="rounded-lg bg-[var(--app-accent)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--app-accent-hover)]">{text.download}</a>
                 </div>
                 <ul className="mt-4 space-y-2 text-sm text-slate-600 dark:text-slate-300">{translatedNotes(release, language).map((note) => <li key={note} className="flex gap-2"><span className="font-bold text-emerald-500">•</span><span>{note}</span></li>)}</ul>
               </article>

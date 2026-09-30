@@ -149,7 +149,7 @@ export function StorePerformanceTable({
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder={t.searchPlaceholder}
-          className="px-3 py-1.5 text-xs rounded-lg border border-[var(--border)] bg-[var(--accent)] text-[var(--foreground)] outline-none focus:ring-1 focus:ring-emerald-500 w-full sm:w-64"
+          className="px-3 py-1.5 text-xs rounded-lg border border-[var(--border)] bg-[var(--accent)] text-[var(--foreground)] outline-none focus:ring-1 focus:ring-[var(--app-accent)] w-full sm:w-64"
         />
       </div>
 
@@ -164,7 +164,7 @@ export function StorePerformanceTable({
               onClick={() => setFilterStatus(st)}
               className={`px-3 py-1 rounded-md font-semibold transition-colors ${
                 filterStatus === st
-                  ? "bg-emerald-600 text-white shadow-xs"
+                  ? "bg-[var(--app-accent)] text-white shadow-xs"
                   : "bg-[var(--accent)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
               }`}
             >
@@ -246,7 +246,7 @@ export function StorePerformanceTable({
                       <button
                         type="button"
                         onClick={() => onOpenStore(s.storeId)}
-                        className="px-2.5 py-1 text-[11px] font-semibold rounded bg-emerald-600 text-white hover:bg-emerald-700 transition-colors"
+                        className="px-2.5 py-1 text-[11px] font-semibold rounded bg-[var(--app-accent)] text-white hover:bg-[var(--app-accent-hover)] transition-colors"
                       >
                         {t.viewChats}
                       </button>

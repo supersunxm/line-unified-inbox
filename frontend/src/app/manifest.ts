@@ -7,7 +7,7 @@ export default function manifest(): MetadataRoute.Manifest {
     start_url: "/",
     display: "standalone",
     background_color: "#211b1d",
-    theme_color: "#00a651",
+    theme_color: "#1f6b4a",
     icons: [
       {
         src: "/images/LOGO_OBS.png",

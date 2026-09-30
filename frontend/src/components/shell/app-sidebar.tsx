@@ -12,7 +12,7 @@ const SIDEBAR_STORAGE_KEY = "oppo-app-sidebar-collapsed";
 const SIDEBAR_STORAGE_EVENT = "oppo-app-sidebar-storage";
 const EXPANDED_SIDEBAR_WIDTH = "16rem";
 const COMPACT_SIDEBAR_WIDTH = "4.25rem";
-const focusRing = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 focus-visible:ring-offset-1";
+const focusRing = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--app-accent)]/40 focus-visible:ring-offset-1";
 
 type SidebarProps = Pick<TopNavigationProps, "authUser" | "changeLanguage" | "currentSection" | "language" | "logout" | "pilotMode" | "text">;
 type AccountPanel = "profile" | "settings" | null;

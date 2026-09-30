@@ -311,7 +311,7 @@ export function StoreBindingSuccess({
                   <StoreCard store={context.currentStore} />
                 </div>
                 <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                  <Link href="/connect/tiktok/analytics" className="inline-flex items-center justify-center rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-semibold text-white hover:bg-slate-800 dark:bg-emerald-600 dark:hover:bg-emerald-500">{t.viewAnalytics}</Link>
+                  <Link href="/connect/tiktok/analytics" className="inline-flex items-center justify-center rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-semibold text-white hover:bg-slate-800 dark:bg-[var(--app-accent)] dark:hover:bg-[var(--app-accent-hover)]">{t.viewAnalytics}</Link>
                   <button type="button" onClick={() => setChooserOpen(true)} className="rounded-xl border border-slate-300 px-4 py-2.5 text-xs font-semibold hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800">{t.changeStore}</button>
                 </div>
               </div>
@@ -320,19 +320,19 @@ export function StoreBindingSuccess({
                 <p className="mb-2 text-xs text-slate-500 dark:text-slate-400">{t.found}</p>
                 <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-900/50 dark:bg-emerald-950/20"><StoreCard store={context.suggestedStore} /></div>
                 <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                  <button type="button" disabled={Boolean(savingStoreId)} onClick={() => void confirmStore(context.suggestedStore!)} className="rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-semibold text-white hover:bg-emerald-500 disabled:opacity-50">{savingStoreId ? t.saving : t.confirm}</button>
+                  <button type="button" disabled={Boolean(savingStoreId)} onClick={() => void confirmStore(context.suggestedStore!)} className="rounded-xl bg-[var(--app-accent)] px-4 py-2.5 text-xs font-semibold text-white hover:bg-[var(--app-accent-hover)] disabled:opacity-50">{savingStoreId ? t.saving : t.confirm}</button>
                   <button type="button" onClick={() => setChooserOpen(true)} className="rounded-xl border border-slate-300 px-4 py-2.5 text-xs font-semibold hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800">{t.chooseOther}</button>
                 </div>
               </div>
             ) : (
               <div className="mt-3">
                 <p className="mb-2 text-xs text-slate-500 dark:text-slate-400">{t.choose}</p>
-                <input value={query} onChange={(event) => setQuery(event.target.value)} onFocus={() => setChooserOpen(true)} placeholder={t.searchPlaceholder} className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none ring-emerald-500 focus:ring-2 dark:border-slate-700 dark:bg-slate-900" />
+                <input value={query} onChange={(event) => setQuery(event.target.value)} onFocus={() => setChooserOpen(true)} placeholder={t.searchPlaceholder} className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none ring-[var(--app-accent)] focus:ring-2 dark:border-slate-700 dark:bg-slate-900" />
                 <div className="mt-2 max-h-72 space-y-2 overflow-y-auto">
                   {(context?.options || []).map((store) => (
                     <div key={store.id} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 p-3 dark:border-slate-800">
                       <StoreCard store={store} />
-                      <button type="button" disabled={Boolean(savingStoreId)} onClick={() => void requestStore(store)} className="shrink-0 rounded-lg bg-slate-900 px-3 py-2 text-[11px] font-semibold text-white disabled:opacity-50 dark:bg-emerald-600">{savingStoreId === store.id ? t.saving : t.request}</button>
+                      <button type="button" disabled={Boolean(savingStoreId)} onClick={() => void requestStore(store)} className="shrink-0 rounded-lg bg-slate-900 px-3 py-2 text-[11px] font-semibold text-white disabled:opacity-50 dark:bg-[var(--app-accent)]">{savingStoreId === store.id ? t.saving : t.request}</button>
                     </div>
                   ))}
                   {context && context.options.length === 0 && <p className="py-4 text-center text-xs text-slate-500">{t.noResults}</p>}

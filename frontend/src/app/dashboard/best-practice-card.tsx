@@ -83,7 +83,7 @@ export function BestPracticeCard({ store, getStoreDisplayName, onOpenStore, lang
       <button
         type="button"
         onClick={() => onOpenStore(store.storeId)}
-        className="mt-4 w-full py-2 text-xs font-bold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white transition-colors"
+        className="mt-4 w-full py-2 text-xs font-bold rounded-lg bg-[var(--app-accent)] hover:bg-[var(--app-accent-hover)] text-white transition-colors"
       >
         {t.action}
       </button>

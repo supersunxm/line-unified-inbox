@@ -14,7 +14,7 @@
   --badge-background: var(--app-neutral-soft);
   --badge-foreground: var(--app-text-secondary);
   background:
-    radial-gradient(circle at top right, rgba(0, 166, 81, 0.055), transparent 30rem),
+    radial-gradient(circle at top right, color-mix(in srgb, var(--app-accent) 5.5%, transparent), transparent 30rem),
     var(--app-bg) !important;
   color: var(--app-text-primary) !important;
   font-family: var(--app-font-sans);
@@ -57,28 +57,28 @@
 
 /* OPPO green replaces generic dashboard blue */
 .scope :global(.app-content-section [class*='bg-blue-600']) {
-  background-color: #00a651 !important;
+  background-color: var(--app-accent) !important;
   box-shadow: none !important;
 }
 
 .scope :global(.app-content-section [class*='hover:bg-blue-500']:hover) {
-  background-color: #008f46 !important;
+  background-color: var(--app-accent-hover) !important;
 }
 
 .scope :global(.app-content-section [class*='text-blue-600']) {
-  color: #008f46 !important;
+  color: var(--app-accent-hover) !important;
 }
 
 .scope :global(.app-content-section [class*='text-blue-500']) {
-  color: #00a651 !important;
+  color: var(--app-accent) !important;
 }
 
 .scope :global(.app-content-section [class*='bg-blue-500\/10']) {
-  background-color: rgba(0, 166, 81, 0.09) !important;
+  background-color: color-mix(in srgb, var(--app-accent) 9%, transparent) !important;
 }
 
 .scope :global(.app-content-section [class*='focus:ring-blue-500']:focus) {
-  --tw-ring-color: rgba(0, 166, 81, 0.35) !important;
+  --tw-ring-color: color-mix(in srgb, var(--app-accent) 35%, transparent) !important;
 }
 
 /* Segmented controls */
@@ -207,9 +207,9 @@
 
 .scope :global(.app-content-section input:focus),
 .scope :global(.app-content-section select:focus) {
-  border-color: #00a651 !important;
+  border-color: var(--app-accent) !important;
   outline: none !important;
-  box-shadow: 0 0 0 3px rgba(0, 166, 81, 0.1) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--app-accent) 10%, transparent) !important;
 }
 
 /* Pagination */

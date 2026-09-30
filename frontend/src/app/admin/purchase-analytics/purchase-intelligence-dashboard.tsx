@@ -179,11 +179,11 @@ function TrendChart({ data, metric }: { data: Array<{ date: string; purchases: n
   return (
     <div className="w-full overflow-hidden px-2 pb-2">
       <svg viewBox={`0 0 ${width} ${height}`} className="h-[190px] w-full" role="img" aria-label={`${metric} trend`}>
-        <defs><linearGradient id={`purchaseArea-${metric}`} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#10b981" stopOpacity="0.24"/><stop offset="100%" stopColor="#10b981" stopOpacity="0.02"/></linearGradient></defs>
+        <defs><linearGradient id={`purchaseArea-${metric}`} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="var(--app-accent)" stopOpacity="0.24"/><stop offset="100%" stopColor="var(--app-accent)" stopOpacity="0.02"/></linearGradient></defs>
         {[0, 0.33, 0.66, 1].map((ratio) => <line key={ratio} x1={padX} x2={width - padX} y1={padTop + chartHeight * ratio} y2={padTop + chartHeight * ratio} stroke="currentColor" className="text-slate-100" strokeWidth="1" />)}
         <path d={area} fill={`url(#purchaseArea-${metric})`} />
-        <path d={line} fill="none" stroke="#059669" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-        {points.map((point, index) => <circle key={`${point.item.date}-${index}`} cx={point.x} cy={point.y} r="3.5" fill="#059669" stroke="white" strokeWidth="2" />)}
+        <path d={line} fill="none" stroke="var(--app-accent)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+        {points.map((point, index) => <circle key={`${point.item.date}-${index}`} cx={point.x} cy={point.y} r="3.5" fill="var(--app-accent)" stroke="white" strokeWidth="2" />)}
         {points.map((point, index) => labelIndexes.has(index) ? <text key={`label-${point.item.date}`} x={point.x} y={height - 8} textAnchor={index === 0 ? "start" : index === data.length - 1 ? "end" : "middle"} fontSize="10" fill="#94a3b8">{shortDate.format(new Date(`${point.item.date}T00:00:00`))}</text> : null)}
       </svg>
     </div>
@@ -374,7 +374,7 @@ export default function PurchaseIntelligenceDashboard() {
             </section>
 
             <DashboardCard>
-              <SectionHeader title="Purchase Trend" description="Recorded customer purchase activity over time" action={<div className="flex rounded-lg bg-[var(--app-surface-subtle)] p-1">{(["purchases", "products", "customers"] as TrendMetric[]).map((metric) => <button key={metric} type="button" onClick={() => setTrendMetric(metric)} className={`rounded-md px-3 py-1.5 text-[10px] font-semibold capitalize transition ${trendMetric === metric ? "bg-emerald-600 text-white shadow-sm" : "text-[var(--app-text-secondary)] hover:bg-white"}`}>{metric}</button>)}</div>} />
+              <SectionHeader title="Purchase Trend" description="Recorded customer purchase activity over time" action={<div className="flex rounded-lg bg-[var(--app-surface-subtle)] p-1">{(["purchases", "products", "customers"] as TrendMetric[]).map((metric) => <button key={metric} type="button" onClick={() => setTrendMetric(metric)} className={`rounded-md px-3 py-1.5 text-[10px] font-semibold capitalize transition ${trendMetric === metric ? "bg-[var(--app-accent)] text-white shadow-sm" : "text-[var(--app-text-secondary)] hover:bg-white"}`}>{metric}</button>)}</div>} />
               <TrendChart data={trendData} metric={trendMetric} />
             </DashboardCard>
 

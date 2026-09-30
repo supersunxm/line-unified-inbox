@@ -107,7 +107,7 @@ export function DailyFollowerGrowthExportControl({ language = "en" }: { language
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="fixed bottom-6 right-6 z-40 flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg hover:bg-emerald-500"
+        className="fixed bottom-6 right-6 z-40 flex items-center gap-2 rounded-xl bg-[var(--app-accent)] px-4 py-2.5 text-sm font-semibold text-white shadow-lg hover:bg-[var(--app-accent-hover)]"
       >
         <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" />
@@ -136,7 +136,7 @@ export function DailyFollowerGrowthExportControl({ language = "en" }: { language
                   <span className="text-sm font-medium text-[var(--foreground)]">{text.stores}</span>
                   <span className="ml-2 text-xs text-[var(--muted)]">{text.selected(selectedIds.length)}</span>
                 </div>
-                {selectedIds.length > 0 && <button type="button" onClick={() => setSelectedIds([])} className="text-xs font-medium text-emerald-600 hover:underline">{text.all}</button>}
+                {selectedIds.length > 0 && <button type="button" onClick={() => setSelectedIds([])} className="text-xs font-medium text-[var(--app-accent)] hover:underline">{text.all}</button>}
               </div>
               <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={text.search} className="mb-2 w-full rounded-xl border border-[var(--border)] bg-[var(--input-background)] px-3 py-2 text-sm" />
               <div className="max-h-64 overflow-y-auto rounded-xl border border-[var(--border)] p-2">
@@ -161,7 +161,7 @@ export function DailyFollowerGrowthExportControl({ language = "en" }: { language
 
             <div className="mt-5 flex justify-end gap-2">
               <button type="button" onClick={() => setOpen(false)} disabled={downloading} className="rounded-xl border border-[var(--border)] px-4 py-2 text-sm font-medium text-[var(--foreground)] hover:bg-[var(--hover)] disabled:opacity-50">{text.cancel}</button>
-              <button type="button" onClick={() => void handleDownload()} disabled={downloading || !dateFrom || !dateTo || dateTo < dateFrom} className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50">{downloading ? text.downloading : text.download}</button>
+              <button type="button" onClick={() => void handleDownload()} disabled={downloading || !dateFrom || !dateTo || dateTo < dateFrom} className="rounded-xl bg-[var(--app-accent)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--app-accent-hover)] disabled:opacity-50">{downloading ? text.downloading : text.download}</button>
             </div>
           </div>
         </div>

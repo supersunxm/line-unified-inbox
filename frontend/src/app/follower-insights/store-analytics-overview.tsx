@@ -179,7 +179,7 @@ export function StoreAnalyticsOverview({ storeData, endpointsUsable, language = 
           <h3 className="text-[15px] font-semibold text-[var(--app-text-primary)]">{th ? "Performance Analytics" : "Performance analytics"}</h3>
           <p className="mt-0.5 text-xs text-[var(--app-text-secondary)]">{th ? "ดูสาขาที่เติบโตดี การกระจาย Reach และความเสี่ยงจาก Block" : "Growth leaders, reach distribution and block-rate risk"}</p>
         </div>
-        <button type="button" onClick={() => setShowAllCharts((value) => !value)} className="shrink-0 rounded-lg border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-1.5 text-xs font-semibold text-[var(--app-text-secondary)] hover:border-emerald-500 hover:text-emerald-600">
+        <button type="button" onClick={() => setShowAllCharts((value) => !value)} className="shrink-0 rounded-lg border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-1.5 text-xs font-semibold text-[var(--app-text-secondary)] hover:border-[var(--app-accent)] hover:text-[var(--app-accent)]">
           {showAllCharts ? (th ? "ย่อกราฟ" : "Collapse") : (th ? "แสดงกราฟ" : "Show charts")}
         </button>
       </div>

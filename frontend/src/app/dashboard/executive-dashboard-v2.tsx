@@ -9,7 +9,7 @@ export { calcBucketPercent } from "./executive-dashboard-base";
 
 // The follower trend SVG lives in executive-dashboard-base.tsx after the dashboard split.
 // Keep the wrapper-level design contract explicit for static regression coverage:
-// stroke="var(--app-accent, #00A651)"
+// stroke="var(--app-accent, #1f6b4a)"
 
 type Language = "th" | "en" | "zh";
 

@@ -6,7 +6,7 @@ import { getFollowerInsightsText, type Language } from "./follower-insights-tran
 import { formatDateDisplay } from "./follower-insights-utils";
 
 export const STORE_PALETTE = [
-  "#00A651", // OPPO Green
+  "var(--app-accent)", // Brand accent
   "#2563eb", // Royal Blue
   "#f59e0b", // Amber
   "#8b5cf6", // Purple
@@ -90,7 +90,7 @@ export function TrendChart({
 
   // Metric color for aggregate/single metric view
   const defaultMetricColor =
-    metric === "followers" ? "#00A651" : metric === "targetedReaches" ? "#10b981" : "#f43f5e";
+    metric === "followers" ? "var(--app-accent)" : metric === "targetedReaches" ? "#10b981" : "#f43f5e";
   const metricLabel =
     metric === "followers" ? t.followers : metric === "targetedReaches" ? t.targetedReach : t.blocks;
 

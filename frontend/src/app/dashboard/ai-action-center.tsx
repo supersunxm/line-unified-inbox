@@ -285,7 +285,7 @@ export function AiActionCenterPanel({ initialTasks, onOpenStore, language }: AiA
                     <button
                       type="button"
                       onClick={() => void handleComplete(task.id)}
-                      className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs transition-all shadow-xs cursor-pointer"
+                      className="px-4 py-2 rounded-xl bg-[var(--app-accent)] hover:bg-[var(--app-accent-hover)] text-white font-black text-xs transition-all shadow-xs cursor-pointer"
                     >
                       {t.completeBtn}
                     </button>

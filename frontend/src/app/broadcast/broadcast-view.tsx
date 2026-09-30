@@ -724,7 +724,7 @@ export function BroadcastView({ language, userRole }: Props) {
                       <div className="space-y-1">
                         {PERIODS.map((item) => (
                           <label key={item.key} className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-[var(--app-surface-hover)]">
-                            <input type="checkbox" checked={periods.has(item.key)} onChange={() => togglePeriod(item.key)} className="h-4 w-4 accent-emerald-500" />
+                            <input type="checkbox" checked={periods.has(item.key)} onChange={() => togglePeriod(item.key)} className="h-4 w-4 accent-[var(--app-accent)]" />
                             <span>{item.label}</span>
                           </label>
                         ))}
@@ -749,9 +749,9 @@ export function BroadcastView({ language, userRole }: Props) {
                 <div><h2 className="font-bold">Broadcast time</h2><p className="text-xs text-[var(--app-text-tertiary)]">กำหนดเวลาในการส่ง</p></div>
               </div>
               <div className="space-y-3 pl-10">
-                <label className="flex items-center gap-2 text-sm"><input type="radio" checked={scheduleMode === "NOW"} onChange={() => setScheduleMode("NOW")} className="accent-emerald-500" /> Send now</label>
+                <label className="flex items-center gap-2 text-sm"><input type="radio" checked={scheduleMode === "NOW"} onChange={() => setScheduleMode("NOW")} className="accent-[var(--app-accent)]" /> Send now</label>
                 <div className="flex flex-wrap items-center gap-2">
-                  <label className="flex items-center gap-2 text-sm"><input type="radio" checked={scheduleMode === "SCHEDULED"} onChange={() => setScheduleMode("SCHEDULED")} className="accent-emerald-500" /> Schedule for later</label>
+                  <label className="flex items-center gap-2 text-sm"><input type="radio" checked={scheduleMode === "SCHEDULED"} onChange={() => setScheduleMode("SCHEDULED")} className="accent-[var(--app-accent)]" /> Schedule for later</label>
                   <input type="date" disabled={scheduleMode !== "SCHEDULED"} value={scheduleDate} onChange={(event) => setScheduleDate(event.target.value)} className="app-input h-9 rounded-lg border border-[var(--app-border)] px-3 text-sm disabled:opacity-50" />
                   <input type="time" disabled={scheduleMode !== "SCHEDULED"} value={scheduleTime} onChange={(event) => setScheduleTime(event.target.value)} className="app-input h-9 rounded-lg border border-[var(--app-border)] px-3 text-sm disabled:opacity-50" />
                   <span className="rounded-full bg-[var(--app-surface-subtle)] px-2 py-1 text-[10px] font-semibold text-[var(--app-text-tertiary)]">Local time</span>
@@ -766,10 +766,10 @@ export function BroadcastView({ language, userRole }: Props) {
               </div>
               <div className="space-y-3 pl-10">
                 <label className="flex items-start gap-2 text-sm">
-                  <input type="checkbox" checked={allowPartial} onChange={(event) => setAllowPartial(event.target.checked)} className="mt-0.5 h-4 w-4 accent-emerald-500" />
+                  <input type="checkbox" checked={allowPartial} onChange={(event) => setAllowPartial(event.target.checked)} className="mt-0.5 h-4 w-4 accent-[var(--app-accent)]" />
                   <span><span className="font-medium">Allow partial broadcast to a subset of targets</span><span className="mt-0.5 block text-xs text-[var(--app-text-tertiary)]">ใช้ remaining quota ที่เหลือได้เมื่อ Narrowcast มีผู้รับมากกว่าโควต้า</span></span>
                 </label>
-                <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={maxVolumeEnabled} onChange={(event) => setMaxVolumeEnabled(event.target.checked)} className="h-4 w-4 accent-emerald-500" /> Set maximum broadcast volume</label>
+                <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={maxVolumeEnabled} onChange={(event) => setMaxVolumeEnabled(event.target.checked)} className="h-4 w-4 accent-[var(--app-accent)]" /> Set maximum broadcast volume</label>
                 {maxVolumeEnabled && <input inputMode="numeric" value={maxVolume} onChange={(event) => setMaxVolume(event.target.value.replace(/\D/g, ""))} placeholder="Maximum recipients per store" className="app-input ml-6 h-9 w-64 rounded-lg border border-[var(--app-border)] px-3 text-sm" />}
               </div>
             </section>
@@ -872,8 +872,8 @@ export function BroadcastView({ language, userRole }: Props) {
                     const storePreview = previewByStore.get(store.id);
                     const selected = effectiveSelected.has(store.id);
                     return (
-                      <label key={store.id} className={"flex cursor-pointer items-start gap-3 rounded-xl border p-3 transition " + (selected ? "border-emerald-200 bg-emerald-50/50" : "border-[var(--app-border)] bg-[var(--app-surface)]")}>
-                        <input type="checkbox" checked={selected} onChange={() => toggleStore(store.id)} className="mt-0.5 h-4 w-4 accent-emerald-500" />
+                      <label key={store.id} className={"flex cursor-pointer items-start gap-3 rounded-xl border p-3 transition " + (selected ? "border-[var(--app-accent)]/30 bg-[var(--app-accent-soft)]" : "border-[var(--app-border)] bg-[var(--app-surface)]")}>
+                        <input type="checkbox" checked={selected} onChange={() => toggleStore(store.id)} className="mt-0.5 h-4 w-4 accent-[var(--app-accent)]" />
                         <span className="min-w-0 flex-1">
                           <span className="block truncate text-sm font-medium text-[var(--app-text-primary)]">{store.name}</span>
                           <span className="mt-0.5 block text-[10px] text-[var(--app-text-tertiary)]">{store.code || store.storeId || ""}</span>
