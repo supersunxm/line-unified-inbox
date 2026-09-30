@@ -120,10 +120,13 @@ does not prove production safety.
 
 Run from `frontend/`:
 
-- `npm run lint`
+- `npm run lint` — Baseline: 70 errors / 88 warnings on 2ba2a8a1.
 - `npm run test`
-- `npm run build` (this is also the type check — there is no separate
-  typecheck script)
+- `npm run build` — note: next.config.ts sets typescript.ignoreBuildErrors, so
+  the build does NOT type-check.
+- `npx tsc --noEmit` — run manually as the type check (no repo script exists).
+  Baseline: 50 pre-existing errors on 2ba2a8a1. Report a regression only if the
+  count rises or a changed file has new errors.
 
 **Do not run** root `npm run verify`, `dev:up`, `dev:restart`, `deploy:check`,
 or other root scripts. They touch backend Prisma, start the full dev stack,
