@@ -177,3 +177,9 @@ test("Download Center uses PageHeader, SectionCard and the kit Button", () => {
   assert.doesNotMatch(source, /<button/);
   assert.doesNotMatch(source, /text-tertiary/);
 });
+
+test("Download Center links the LINE OA Account Master card to Store Management, not the public directory", () => {
+  const source = read("../src/app/download-center/page.tsx");
+  assert.match(source, /<DatasetCard title=\{t\.storeTitle\}[^>]*href="\/storemanagement"/);
+  assert.doesNotMatch(source, /href="\/stores"/);
+});
