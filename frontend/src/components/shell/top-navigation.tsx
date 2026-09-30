@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
 import { ThemeControl } from "@/app/theme";
 import type { PrimarySection } from "@/app/primary-navigation";
 import { canAccessPrimarySection, canAccessWebTool, defaultRouteForUser, type AuthUser } from "@/lib/authorization";
-import { AppSidebar } from "./app-sidebar";
+import { AppSidebar, sidebarLabels } from "./app-sidebar";
 
 export type Language = "th" | "en" | "zh";
 
@@ -61,6 +62,15 @@ function sectionLabel(section: PrimarySection, language: Language) {
   };
   const index = language === "th" ? 0 : language === "zh" ? 2 : 1;
   return labels[section][index];
+}
+
+// Some routes reuse another section for access control and navigation state,
+// so their title comes from the route instead of the section.
+function pageLabel(pathname: string, section: PrimarySection, language: Language) {
+  const navigationLabels = sidebarLabels(language);
+  if (pathname.startsWith("/download-center")) return navigationLabels.downloadCenter;
+  if (pathname.startsWith("/dashboard/message-traffic")) return navigationLabels.traffic;
+  return sectionLabel(section, language);
 }
 
 function ResponsiveSearch({ searchText, setSearchText, text }: Pick<TopNavigationProps, "searchText" | "setSearchText" | "text">) {
@@ -196,6 +206,7 @@ export function TopNavigation(props: TopNavigationProps) {
     ? `${text.lastUpdated || "Last updated"} ${new Intl.DateTimeFormat(language, { dateStyle: "medium", timeStyle: "short" }).format(lastUpdatedAt)}`
     : (text.lastUpdated || "Last updated");
   const defaultRoute = authUser ? defaultRouteForUser(authUser) : "/login";
+  const pathname = usePathname() || "/";
 
   return (
     <>
@@ -223,7 +234,7 @@ export function TopNavigation(props: TopNavigationProps) {
             <span className="truncate text-[15px] font-bold">{text.appName || "OPPO LINE OA Monitor"}</span>
           </Link>
           <div className="hidden min-w-0 md:block">
-            <div className="truncate text-sm font-semibold text-[var(--app-text-primary)]">{sectionLabel(currentSection, language)}</div>
+            <div className="truncate text-sm font-semibold text-[var(--app-text-primary)]">{pageLabel(pathname, currentSection, language)}</div>
             <div className="text-[10px] text-[var(--app-text-tertiary)]">OPPO LINE OA Monitor</div>
           </div>
         </div>

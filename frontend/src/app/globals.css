@@ -16,9 +16,9 @@
   --app-text-secondary: #6e6e73;
   --app-text-tertiary: #a1a1a6;
   --app-text-disabled: #c7c7cc;
-  --app-accent: #00a651;
-  --app-accent-hover: #008f46;
-  --app-accent-soft: #e8f9ec;
+  --app-accent: #1f6b4a;
+  --app-accent-hover: #17563b;
+  --app-accent-soft: #e8f1ec;
   --app-accent-contrast: #ffffff;
   --app-success: #34c759;
   --app-success-soft: #e8f9ec;
@@ -67,9 +67,10 @@
   --hover: var(--app-surface-hover);
   --selected: var(--app-surface-active);
   --selected-navigation: #edf2f7;
-  --button-primary-bg: #007345;
+  /* Primary buttons mirror --app-accent / --app-accent-hover (literal hex keeps the contrast test checkable). */
+  --button-primary-bg: #1f6b4a;
   --button-primary-text: #ffffff;
-  --button-primary-hover-bg: #006039;
+  --button-primary-hover-bg: #17563b;
   --button-primary-disabled-bg: #e2e8f0;
   --button-primary-disabled-text: #475569;
   --button-secondary-background: #ffffff;
@@ -78,12 +79,12 @@
   --disabled-foreground: #94a3b8;
   --badge-background: var(--app-neutral-soft);
   --badge-foreground: var(--app-text-secondary);
-  --focus: #00a651;
+  --focus: var(--app-accent);
   --synced-card-background: #f0fdf4;
   --synced-card-border: #bbf7d0;
   --synced-link: #166534;
-  --font-geist-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  --font-geist-mono: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+  --app-font-sans: var(--font-ibm-plex-sans-thai), "IBM Plex Sans Thai", -apple-system, "Segoe UI", sans-serif;
+  --app-font-mono: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
 
   --color-white: #ffffff;
   --color-slate-50: #f8fafc;
@@ -112,9 +113,9 @@ html[data-theme="dark"] {
   --app-text-secondary: #94a3b8;
   --app-text-tertiary: #64748b;
   --app-text-disabled: #475569;
-  --app-accent: #00a651;
-  --app-accent-hover: #00bf5c;
-  --app-accent-soft: #0d281a;
+  --app-accent: #26805a;
+  --app-accent-hover: #23794f;
+  --app-accent-soft: #0f1f17;
   --app-accent-contrast: #ffffff;
   --app-success: #34c759;
   --app-success-soft: #0f2916;
@@ -163,9 +164,10 @@ html[data-theme="dark"] {
   --hover: var(--app-surface-hover);
   --selected: var(--app-surface-active);
   --selected-navigation: #16202f;
-  --button-primary-bg: #007345;
+  /* Primary buttons mirror --app-accent / --app-accent-hover (literal hex keeps the contrast test checkable). */
+  --button-primary-bg: #26805a;
   --button-primary-text: #ffffff;
-  --button-primary-hover-bg: #059669;
+  --button-primary-hover-bg: #23794f;
   --button-primary-disabled-bg: #1e293b;
   --button-primary-disabled-text: #94a3b8;
   --button-secondary-background: #181c26;
@@ -174,7 +176,7 @@ html[data-theme="dark"] {
   --disabled-foreground: #64748b;
   --badge-background: var(--app-neutral-soft);
   --badge-foreground: var(--app-text-secondary);
-  --focus: #00a651;
+  --focus: var(--app-accent);
   --synced-card-background: #11281d;
   --synced-card-border: #1e4a34;
   --synced-link: #86efac;
@@ -226,14 +228,14 @@ html[data-theme="dark"] {
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--app-font-sans);
+  --font-mono: var(--app-font-mono);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-geist-sans), "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-family: var(--app-font-sans);
   transition: background-color 140ms ease, color 140ms ease;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -497,6 +499,15 @@ button.bg-slate-900.text-white:disabled {
   background: var(--button-primary-disabled-bg);
   color: var(--button-primary-disabled-text);
   opacity: 1;
+}
+
+/* The unlayered `button { color: inherit; }` above outranks Tailwind's text-white
+   utility, so accent-filled buttons would render body text on the brand green. */
+button.text-white[class~="bg-[var(--app-accent)]"],
+button.text-white[class~="bg-[var(--app-accent-hover)]"],
+button.text-white[class~="bg-[var(--app-accent,#00ba7c)]"],
+button.text-white[class~="bg-[var(--app-accent,#111827)]"] {
+  color: var(--app-accent-contrast);
 }
 
 .app-button-secondary {

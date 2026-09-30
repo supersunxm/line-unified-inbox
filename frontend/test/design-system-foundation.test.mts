@@ -329,16 +329,20 @@ test("Follower Insights Dark Mode: CSS module aliases and store analytics overvi
   assert.match(storeAnalytics, /text-\[var\(--app-text-primary\)\]/);
 });
 
-test("Brand Accent: Global --app-accent uses OPPO green and separates warning states", () => {
-  // :root accent must be OPPO green (#00a651) and NOT orange (#ff6900)
-  assert.match(css, /:root[\s\S]*--app-accent:\s*#00a651;/);
-  assert.match(css, /:root[\s\S]*--app-accent-hover:\s*#008f46;/);
-  assert.match(css, /:root[\s\S]*--app-accent-soft:\s*#e8f9ec;/);
+test("Brand Accent: Global --app-accent uses the brand green and separates warning states", () => {
+  // :root accent must be the brand green (#1f6b4a, ui-style.md) and NOT orange (#ff6900)
+  assert.match(css, /:root[\s\S]*--app-accent:\s*#1f6b4a;/);
+  assert.match(css, /:root[\s\S]*--app-accent-hover:\s*#17563b;/);
+  assert.match(css, /:root[\s\S]*--app-accent-soft:\s*#e8f1ec;/);
+  assert.match(css, /:root[\s\S]*--app-accent-contrast:\s*#ffffff;/);
   assert.doesNotMatch(css, /:root[\s\S]*--app-accent:\s*#ff6900;/);
 
-  // Dark mode accent must be OPPO green (#00a651)
-  assert.match(css, /html\[data-theme="dark"\][\s\S]*--app-accent:\s*#00a651;/);
-  assert.match(css, /html\[data-theme="dark"\][\s\S]*--app-accent-soft:\s*#0d281a;/);
+  // Dark mode accent is a lighter step of the brand green so white button text keeps >= 4.5:1
+  assert.match(css, /html\[data-theme="dark"\][\s\S]*--app-accent:\s*#26805a;/);
+  assert.match(css, /html\[data-theme="dark"\][\s\S]*--app-accent-soft:\s*#0f1f17;/);
+
+  // Status colors stay separate from the brand accent
+  assert.match(css, /:root[\s\S]*--app-success:\s*#34c759;/);
 
   // Semantic warning tokens must remain distinct (#ff9500)
   assert.match(css, /:root[\s\S]*--app-warning:\s*#ff9500;/);
