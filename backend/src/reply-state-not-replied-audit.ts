@@ -29,6 +29,7 @@ type MessageRow = {
   senderUserId: string | null;
   senderDisplayName: string | null;
   rawPayload: unknown;
+  createdAt: Date;
 };
 
 type CrosswalkRow = {
@@ -118,6 +119,32 @@ function bangkokDate(date: Date): string {
   }).format(date);
 }
 
+function externalIdLabel(value: string | null | undefined): string {
+  const id = value?.trim();
+  if (!id) return "NO_EXTERNAL_ID";
+  if (id.startsWith("line-chat-manager:")) return "line-chat-manager";
+  const colon = id.indexOf(":");
+  if (colon > 0 && colon <= 40) return id.slice(0, colon);
+  return "NO_PREFIX";
+}
+
+function payloadKeyset(rawPayload: unknown): string {
+  if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
+    return "NO_PAYLOAD";
+  }
+  const keys = Object.keys(rawPayload as Record<string, unknown>).sort();
+  return keys.length > 0 ? keys.join(",") : "EMPTY_OBJECT";
+}
+
+function insertLagBucket(message: MessageRow): string {
+  const lagMs = Math.max(0, message.createdAt.getTime() - message.sentAt.getTime());
+  if (lagMs <= 5 * 60_000) return "<=5m";
+  if (lagMs <= 60 * 60_000) return "5m-1h";
+  if (lagMs <= 24 * 60 * 60_000) return "1h-1d";
+  if (lagMs <= 7 * 24 * 60 * 60_000) return "1d-7d";
+  return ">7d";
+}
+
 function payloadLabel(rawPayload: unknown): string {
   if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
     return "NO_PAYLOAD";
@@ -173,7 +200,8 @@ async function fetchMessages(
       m."sentAt",
       m."senderUserId",
       m."senderDisplayName",
-      m."rawPayload"
+      m."rawPayload",
+      m."createdAt"
     FROM public."Message" m
     WHERE m."conversationId" IN (${Prisma.join(conversationIds)})
     ORDER BY m."sentAt" ASC, m."id" ASC
@@ -324,6 +352,9 @@ async function main() {
     failedOrPendingOutboundAfterOpen: 0,
     unknownOutboundAfterOpen: 0,
     humanReplyAfterOpenUnexpected: 0,
+    openCycleStartedBeforeBoundary: 0,
+    openCycleStartedOnOrAfterBoundary: 0,
+    openCycleSpansBoundary: 0,
     directLinkAmbiguousIdentities: 0,
     linkageConflictIdentities: 0,
   };
@@ -335,6 +366,10 @@ async function main() {
   const canonicalOpenPayloadSources: Record<string, number> = {};
   const historicalOpenEventTypes: Record<string, number> = {};
   const latestCustomerBurstSizes: Record<string, number> = {};
+  const decidingInboundExternalIdPrefixes: Record<string, number> = {};
+  const decidingInboundInsertLagBuckets: Record<string, number> = {};
+  const decidingInboundPayloadKeysets: Record<string, number> = {};
+  const decidingHistoricalEventTypes: Record<string, number> = {};
 
   const directAmbiguous = new Set<string>();
   const linkageConflicts = new Set<string>();
@@ -488,6 +523,16 @@ async function main() {
       }
 
       const openAt = latestCycle.startedAt;
+      const boundary = new Date("2026-08-31T17:00:00.000Z");
+      if (openAt.getTime() < boundary.getTime()) {
+        summary.openCycleStartedBeforeBoundary += 1;
+        if (conversation.decidingEventAt.getTime() >= boundary.getTime()) {
+          summary.openCycleSpansBoundary += 1;
+        }
+      } else {
+        summary.openCycleStartedOnOrAfterBoundary += 1;
+      }
+
       const answeredCycles = cycles.filter((cycle) => cycle.answeredAt !== null).length;
       if (answeredCycles > 0) summary.reopenedAfterEarlierValidReply += 1;
       else summary.neverValidlyReplied += 1;
@@ -524,6 +569,26 @@ async function main() {
           message.sentAt.getTime() === openTimestamp
         ) {
           increment(canonicalOpenPayloadSources, payloadLabel(message.rawPayload));
+        }
+      }
+
+      const decidingTimestamp = conversation.decidingEventAt.getTime();
+      for (const message of messagesByConversation.get(conversation.conversationId) ?? []) {
+        if (
+          message.direction === "INBOUND" &&
+          message.sentAt.getTime() === decidingTimestamp
+        ) {
+          increment(decidingInboundExternalIdPrefixes, externalIdLabel(message.externalMessageId));
+          increment(decidingInboundInsertLagBuckets, insertLagBucket(message));
+          increment(decidingInboundPayloadKeysets, payloadKeyset(message.rawPayload));
+        }
+      }
+      for (const message of historical) {
+        if (
+          message.direction === "INBOUND" &&
+          message.sentAt.getTime() === decidingTimestamp
+        ) {
+          increment(decidingHistoricalEventTypes, message.sourceEventType || "__EMPTY__");
         }
       }
       for (const message of historical) {
@@ -563,6 +628,10 @@ async function main() {
     topStores: topEntries(storeCounts, 25),
     canonicalOpenInboundPayloadSources: topEntries(canonicalOpenPayloadSources, 20),
     historicalOpenInboundEventTypes: topEntries(historicalOpenEventTypes, 20),
+    decidingInboundExternalIdPrefixes: topEntries(decidingInboundExternalIdPrefixes, 20),
+    decidingInboundInsertLagBuckets,
+    decidingInboundPayloadKeysets: topEntries(decidingInboundPayloadKeysets, 20),
+    decidingHistoricalEventTypes: topEntries(decidingHistoricalEventTypes, 20),
     customerMessagesInCurrentOpenCycle: latestCustomerBurstSizes,
   }, null, 2) + "\n");
 
