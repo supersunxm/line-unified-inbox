@@ -1578,7 +1578,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
   const [dashboardSummary, setDashboardSummary] =
     useState<DashboardAnalyticsResponse | null>(null);
   const [bmSummaryData, setBmSummaryData] = useState<BmReplyStatusSummaryResponse>({
-    overview: { notReplied: 0, notifiedBm: 0, replied: 0 },
+    overview: { total: 0, outOfScope: 0, notReplied: 0, notifiedBm: 0, replied: 0 },
     stores: [],
   });
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
@@ -2419,10 +2419,12 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
 
 
   const storeBmCounts = useMemo(() => {
-    const countsMap: Record<string, { notReplied: number; notifiedBm: number; replied: number; oldestWaitingMinutes?: number }> = {};
+    const countsMap: Record<string, { total?: number; outOfScope?: number; notReplied: number; notifiedBm: number; replied: number; oldestWaitingMinutes?: number }> = {};
     for (const s of bmSummaryData.stores) {
       const effectiveCounts = effectiveSummaryCounts(s);
       countsMap[s.storeId] = {
+        total: effectiveCounts.total,
+        outOfScope: effectiveCounts.outOfScope,
         notReplied: effectiveCounts.notReplied,
         notifiedBm: 0,
         replied: effectiveCounts.replied,
@@ -3197,6 +3199,8 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
               sidebarView={sidebarView}
               selectSidebarView={selectSidebarView}
               overview={{
+                total: effectiveSummaryCounts(bmSummaryData.overview).total,
+                outOfScope: effectiveSummaryCounts(bmSummaryData.overview).outOfScope,
                 notReplied: effectiveSummaryCounts(bmSummaryData.overview).notReplied,
                 notifiedBm: 0,
                 replied: effectiveSummaryCounts(bmSummaryData.overview).replied,
