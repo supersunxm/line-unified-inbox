@@ -3070,3 +3070,11 @@ The first production target proof confirmed that eligible candidate OAs have no 
 **Forensics:** Zero-rate Historical evidence must come from the same OA-family-aware analytics source as the KPI; it must not use a separate Store.id-only query.
 
 **Isolation:** Read-path only. No OA aliases, Store assignments, Historical rows/crosswalks, canonical messages, or Mirror workers are mutated.
+
+# Full-fleet Live Mirror parity review (2026-09-30)
+
+- Continue PR #416 and its existing branch. Keep active Mirror scope authoritative for canonical apply; explicit reconcile codes are additive recovery scope. Dry-run cannot overlap that union.
+- Bound large-fleet reconciliation to 100 rows per store and explicitly log configured and effective batches. Process new outbound first, other pending second, and retry states oldest updatedAt first. Preserve mapping ambiguity, exact-ID/content-time duplicate safeguards, existing canonical import metadata, and reply-state rules.
+- Discover Manager-only replies through stale refresh of the bounded recent list, within the existing history budget. Changed chats win; recent 24-hour activity precedes older background probes; oldest successful history reads rotate first. The 2-minute default only determines eligibility and does not promise a two-minute full-fleet cycle.
+- Use the existing canonical Message path for Store Chats parity; add no UI workaround or schema migration. Preserve Historical/backfill behavior. Stop after publication/check inspection, before merge/deployment.
+- Compare broader test/typecheck failures against the unchanged base rather than weakening tests or expanding this PR into unrelated repairs. GitHub billing prevents CI execution and must be reported as an unresolved external gate.

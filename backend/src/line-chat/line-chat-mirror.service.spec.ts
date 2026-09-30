@@ -15,9 +15,11 @@ import {
   isMirrorOperationSchemaUnavailable,
   lineChatMirrorIntervalMs,
   lineChatMirrorMaxChangedChatsPerCycle,
+  lineChatMirrorOutboundRefreshIntervalMs,
   managerAccountKeyFromInputs,
   managerBotIdFromRedirect,
   mirrorDirectionForManagerEvent,
+  selectLiveMirrorHistoryCandidates,
   selectMirrorResolvedCandidate,
 } from "./line-chat-mirror.service";
 
@@ -248,17 +250,88 @@ test("Project B mirror remains opt-in", () => {
   });
 });
 
-test("Project B mirror cadence and per-cycle history work are bounded", () => {
+test("Project B mirror cadence, per-cycle history work, and outbound refresh are bounded", () => {
   withEnv(
     {
       LINE_CHAT_MIRROR_INTERVAL_MS: "1000",
       LINE_CHAT_MIRROR_MAX_CHANGED_CHATS_PER_CYCLE: "500",
+      LINE_CHAT_MIRROR_OUTBOUND_REFRESH_INTERVAL_MS: "1000",
     },
     () => {
       assert.equal(lineChatMirrorIntervalMs(), 30_000);
       assert.equal(lineChatMirrorMaxChangedChatsPerCycle(), 50);
+      assert.equal(lineChatMirrorOutboundRefreshIntervalMs(), 60_000);
     },
   );
+});
+
+test("Live Mirror rechecks stale recent chats even when chat-list activity did not advance", () => {
+  const now = new Date("2026-09-30T05:30:00.000Z");
+  const selected = selectLiveMirrorHistoryCandidates({
+    chats: [
+      {
+        lineChatUserId: "changed",
+        lastMessageAt: new Date("2026-09-30T05:20:00.000Z"),
+        historySyncedThroughAt: new Date("2026-09-30T05:10:00.000Z"),
+        lastHistorySyncedAt: new Date("2026-09-30T05:29:00.000Z"),
+      },
+      {
+        lineChatUserId: "manager-only-reply",
+        lastMessageAt: new Date("2026-09-30T05:15:00.000Z"),
+        historySyncedThroughAt: new Date("2026-09-30T05:15:00.000Z"),
+        lastHistorySyncedAt: new Date("2026-09-30T05:00:00.000Z"),
+      },
+      {
+        lineChatUserId: "fresh",
+        lastMessageAt: new Date("2026-09-30T05:14:00.000Z"),
+        historySyncedThroughAt: new Date("2026-09-30T05:14:00.000Z"),
+        lastHistorySyncedAt: new Date("2026-09-30T05:29:30.000Z"),
+      },
+      {
+        lineChatUserId: "background",
+        lastMessageAt: new Date("2026-09-27T05:00:00.000Z"),
+        historySyncedThroughAt: new Date("2026-09-27T05:00:00.000Z"),
+        lastHistorySyncedAt: new Date("2026-09-29T04:00:00.000Z"),
+      },
+    ],
+    recentChatUserIds: ["changed", "manager-only-reply", "fresh", "background"],
+    catchUpStartAt: null,
+    now,
+    maxCandidates: 3,
+    outboundRefreshIntervalMs: 2 * 60_000,
+  });
+
+  assert.deepEqual(
+    selected.map((chat) => chat.lineChatUserId),
+    ["changed", "manager-only-reply", "background"],
+  );
+});
+
+test("Live Mirror outbound probes rotate by oldest successful history read", () => {
+  const now = new Date("2026-09-30T05:30:00.000Z");
+  const selected = selectLiveMirrorHistoryCandidates({
+    chats: [
+      {
+        lineChatUserId: "older-sync",
+        lastMessageAt: new Date("2026-09-30T05:10:00.000Z"),
+        historySyncedThroughAt: new Date("2026-09-30T05:10:00.000Z"),
+        lastHistorySyncedAt: new Date("2026-09-30T04:00:00.000Z"),
+      },
+      {
+        lineChatUserId: "newer-sync",
+        lastMessageAt: new Date("2026-09-30T05:20:00.000Z"),
+        historySyncedThroughAt: new Date("2026-09-30T05:20:00.000Z"),
+        lastHistorySyncedAt: new Date("2026-09-30T04:30:00.000Z"),
+      },
+    ],
+    recentChatUserIds: ["older-sync", "newer-sync"],
+    catchUpStartAt: null,
+    now,
+    maxCandidates: 1,
+    outboundRefreshIntervalMs: 2 * 60_000,
+  });
+
+  assert.deepEqual(selected.map((chat) => chat.lineChatUserId), ["older-sync"]);
 });
 
 test("Manager history direction classification is fail-closed", () => {
@@ -1137,4 +1210,99 @@ test("Project B mirror fails closed when Manager sessions resolve different bots
     ]),
     "AMBIGUOUS",
   );
+});
+
+
+test("outbound refresh defaults to two minutes and rejects out-of-range configuration", () => {
+  for (const [value, expected] of [[undefined, 120_000], ["invalid", 120_000], ["999999999", 3_600_000], ["0", 60_000]] as const) {
+    withEnv({ LINE_CHAT_MIRROR_OUTBOUND_REFRESH_INTERVAL_MS: value }, () => {
+      assert.equal(lineChatMirrorOutboundRefreshIntervalMs(), expected);
+    });
+  }
+});
+
+test("stale probes stay inside recent discovery and prioritize 24-hour activity within the total budget", () => {
+  const now = new Date("2026-09-30T05:30:00Z");
+  const makeChat = (id: string, activity: string, sync: string) => ({
+    lineChatUserId: id, lastMessageAt: new Date(activity),
+    historySyncedThroughAt: new Date(activity), lastHistorySyncedAt: new Date(sync),
+  });
+  const chats = [
+    makeChat("not-discovered", "2026-09-30T04:00:00Z", "2026-09-01T00:00:00Z"),
+    makeChat("background", "2026-09-27T04:00:00Z", "2026-09-01T00:00:00Z"),
+    makeChat("active", "2026-09-30T04:00:00Z", "2026-09-30T05:00:00Z"),
+  ];
+  const selected = selectLiveMirrorHistoryCandidates({
+    chats, recentChatUserIds: ["background", "active"], catchUpStartAt: null,
+    now, maxCandidates: 1, outboundRefreshIntervalMs: 120_000,
+  });
+  assert.deepEqual(selected.map((chat) => chat.lineChatUserId), ["active"]);
+  chats[2].lastHistorySyncedAt = now;
+  const next = selectLiveMirrorHistoryCandidates({
+    chats, recentChatUserIds: ["background", "active"], catchUpStartAt: null,
+    now, maxCandidates: 1, outboundRefreshIntervalMs: 120_000,
+  });
+  assert.deepEqual(next.map((chat) => chat.lineChatUserId), ["background"]);
+});
+
+test("a stale equal-timestamp candidate fetches and persists new messageSent without repeating fresh history", async () => {
+  const lastMessageAt = new Date("2026-09-30T04:00:00Z");
+  const candidate = {
+    lineChatUserId: "synthetic-chat", lastMessageAt,
+    historySyncedThroughAt: lastMessageAt,
+    lastHistorySyncedAt: new Date("2026-09-30T04:01:00Z"),
+  };
+  const persisted: Array<Record<string, unknown>> = [];
+  let historyReads = 0;
+  let closures = 0;
+  const page = {
+    goto: async () => {}, waitForLoadState: async () => {}, waitForTimeout: async () => {},
+    evaluate: async (_fn: unknown, url: string) => {
+      if (url.endsWith("/owners")) return [{ bizId: "synthetic-owner", name: "Synthetic Staff" }];
+      historyReads += 1;
+      return { ok: true, status: 200, list: [{ type: "messageSent", timestamp: new Date("2026-09-30T05:00:00Z").getTime(),
+        bizId: "synthetic-owner", message: { id: "synthetic-reply", type: "text", text: "synthetic reply" } }] };
+    },
+  };
+  const sessionService = {
+    launchManagedPersistentContext: async () => ({ pages: () => [page] }),
+    closeManagedPersistentContext: async () => { closures += 1; },
+    buildChatRefererUrl: () => "https://chat.line.biz/synthetic",
+    probeApiAuthentication: async () => ({ authenticated: "YES" }),
+  } as unknown as LineChatSessionService;
+  const prisma = {
+    lineChatMirrorMessage: { upsert: async (input: { create: Record<string, unknown> }) => {
+      persisted.push(input.create);
+      return { id: "synthetic-mirror" };
+    } },
+    lineChatMirrorChat: { count: async () => 1, update: async (input: { data: { lastHistorySyncedAt: Date; historySyncedThroughAt: Date } }) => {
+      candidate.lastHistorySyncedAt = input.data.lastHistorySyncedAt;
+      candidate.historySyncedThroughAt = input.data.historySyncedThroughAt;
+    } },
+  } as unknown as PrismaService;
+  const service = new LineChatMirrorService(prisma, sessionService, {} as LineChatProfileOperationCoordinator);
+  Object.defineProperty(service, "logger", { value: { log() {}, warn() {} } });
+  const pending = selectLiveMirrorHistoryCandidates({
+    chats: [candidate], recentChatUserIds: [candidate.lineChatUserId], catchUpStartAt: null,
+    now: new Date("2026-09-30T05:01:00Z"), maxCandidates: 20, outboundRefreshIntervalMs: 120_000,
+  });
+  const result = await (service as unknown as {
+    fetchAndPersistHistories: (input: { lineOfficialAccountId: string; botId: string; profilePath: string;
+      sessionId: string; pending: typeof pending; assertOwnership: () => void }) => Promise<{ historiesFetched: number; historyFailures: number }>;
+  }).fetchAndPersistHistories({
+    lineOfficialAccountId: "synthetic-oa", botId: "synthetic-bot", profilePath: "/tmp",
+    sessionId: "synthetic-session", pending, assertOwnership() {},
+  });
+  assert.equal(result.historyFailures, 0);
+  assert.equal(result.historiesFetched, 1);
+  assert.equal(historyReads, 1);
+  assert.equal(closures, 1);
+  assert.equal(persisted[0].direction, LineChatMirrorDirection.OUTBOUND);
+  assert.equal(persisted[0].ownerName, "Synthetic Staff");
+  assert.equal(persisted[0].managerMessageId, "synthetic-reply");
+  assert.equal(candidate.historySyncedThroughAt, lastMessageAt);
+  assert.deepEqual(selectLiveMirrorHistoryCandidates({
+    chats: [candidate], recentChatUserIds: [candidate.lineChatUserId], catchUpStartAt: null,
+    now: new Date(candidate.lastHistorySyncedAt.getTime() + 1_000), maxCandidates: 20, outboundRefreshIntervalMs: 120_000,
+  }), []);
 });

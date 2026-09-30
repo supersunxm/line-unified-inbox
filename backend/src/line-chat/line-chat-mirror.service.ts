@@ -33,6 +33,10 @@ const MIN_INTERVAL_MS = 30_000;
 const START_DELAY_MS = 10_000;
 const DEFAULT_MAX_CHANGED_CHATS_PER_CYCLE = 20;
 const MAX_CHANGED_CHATS_PER_CYCLE = 50;
+const DEFAULT_OUTBOUND_REFRESH_INTERVAL_MS = 2 * 60_000;
+const MIN_OUTBOUND_REFRESH_INTERVAL_MS = 60_000;
+const MAX_OUTBOUND_REFRESH_INTERVAL_MS = 60 * 60_000;
+const OUTBOUND_REFRESH_PRIORITY_WINDOW_MS = 24 * 60 * 60_000;
 const RECENT_MAX_PAGES = 5;
 const RECENT_MAX_CHATS = 125;
 const HISTORICAL_MAX_CONVERSATIONS_PER_STORE_CYCLE = 1;
@@ -64,6 +68,13 @@ interface MirrorHistoryEvent {
 interface PendingMirrorChat {
   lineChatUserId: string;
   lastMessageAt: Date;
+}
+
+export interface LiveMirrorHistoryCandidate {
+  lineChatUserId: string;
+  lastMessageAt: Date | null;
+  historySyncedThroughAt: Date | null;
+  lastHistorySyncedAt: Date | null;
 }
 
 interface PendingHistoricalMirrorChat extends PendingMirrorChat {
@@ -249,6 +260,84 @@ export function lineChatMirrorMaxChangedChatsPerCycle(): number {
   );
 }
 
+export function lineChatMirrorOutboundRefreshIntervalMs(): number {
+  const parsed = Number(
+    process.env.LINE_CHAT_MIRROR_OUTBOUND_REFRESH_INTERVAL_MS
+      ?? DEFAULT_OUTBOUND_REFRESH_INTERVAL_MS,
+  );
+  if (!Number.isFinite(parsed)) return DEFAULT_OUTBOUND_REFRESH_INTERVAL_MS;
+  return Math.min(
+    MAX_OUTBOUND_REFRESH_INTERVAL_MS,
+    Math.max(MIN_OUTBOUND_REFRESH_INTERVAL_MS, Math.floor(parsed)),
+  );
+}
+
+function historySyncTime(candidate: LiveMirrorHistoryCandidate): number {
+  return candidate.lastHistorySyncedAt?.getTime() ?? 0;
+}
+
+export function selectLiveMirrorHistoryCandidates(input: {
+  chats: readonly LiveMirrorHistoryCandidate[];
+  recentChatUserIds: readonly string[];
+  catchUpStartAt: Date | null;
+  now: Date;
+  maxCandidates: number;
+  outboundRefreshIntervalMs: number;
+}): PendingMirrorChat[] {
+  const maxCandidates = Math.max(0, Math.floor(input.maxCandidates));
+  if (maxCandidates === 0) return [];
+
+  const recentIds = new Set(input.recentChatUserIds);
+  const valid = input.chats.filter(
+    (chat): chat is LiveMirrorHistoryCandidate & { lastMessageAt: Date } =>
+      chat.lastMessageAt instanceof Date
+      && Number.isFinite(chat.lastMessageAt.getTime()),
+  );
+  const changed = valid
+    .filter((chat) =>
+      !chat.historySyncedThroughAt
+      || chat.historySyncedThroughAt.getTime() < chat.lastMessageAt.getTime()
+      || (
+        input.catchUpStartAt !== null
+        && chat.historySyncedThroughAt.getTime() < input.catchUpStartAt.getTime()
+      ),
+    )
+    .sort((left, right) =>
+      right.lastMessageAt.getTime() - left.lastMessageAt.getTime(),
+    );
+
+  const changedIds = new Set(changed.map((chat) => chat.lineChatUserId));
+  const refreshCutoff = input.now.getTime() - Math.max(0, input.outboundRefreshIntervalMs);
+  const priorityCutoff = input.now.getTime() - OUTBOUND_REFRESH_PRIORITY_WINDOW_MS;
+  const probes = valid.filter((chat) =>
+    recentIds.has(chat.lineChatUserId)
+    && !changedIds.has(chat.lineChatUserId)
+    && historySyncTime(chat) <= refreshCutoff,
+  );
+  const byOldestHistorySync = (
+    left: LiveMirrorHistoryCandidate & { lastMessageAt: Date },
+    right: LiveMirrorHistoryCandidate & { lastMessageAt: Date },
+  ): number => {
+    const historyDelta = historySyncTime(left) - historySyncTime(right);
+    return historyDelta !== 0
+      ? historyDelta
+      : right.lastMessageAt.getTime() - left.lastMessageAt.getTime();
+  };
+  const priorityProbes = probes
+    .filter((chat) => chat.lastMessageAt.getTime() >= priorityCutoff)
+    .sort(byOldestHistorySync);
+  const backgroundProbes = probes
+    .filter((chat) => chat.lastMessageAt.getTime() < priorityCutoff)
+    .sort(byOldestHistorySync);
+
+  return [...changed, ...priorityProbes, ...backgroundProbes]
+    .slice(0, maxCandidates)
+    .map((chat) => ({
+      lineChatUserId: chat.lineChatUserId,
+      lastMessageAt: chat.lastMessageAt,
+    }));
+}
+
 export function mirrorDirectionForManagerEvent(
   eventType: string | null | undefined,
 ): LineChatMirrorDirection {
@@ -332,6 +421,7 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
       storeCount: configuredLineChatMirrorStoreCodes().length,
       intervalMs,
       maxChangedChatsPerCycle: lineChatMirrorMaxChangedChatsPerCycle(),
+      outboundRefreshIntervalMs: lineChatMirrorOutboundRefreshIntervalMs(),
       operationModeControlled: true,
       mode: "READ_ONLY_MANAGER_SOURCE",
     }));
@@ -828,24 +918,17 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
             lineChatUserId: true,
             lastMessageAt: true,
             historySyncedThroughAt: true,
+            lastHistorySyncedAt: true,
           },
         });
-        const pending = mirrorChats
-          .filter((chat): chat is typeof chat & { lastMessageAt: Date } =>
-            chat.lastMessageAt instanceof Date
-            && (
-              !chat.historySyncedThroughAt
-              || chat.historySyncedThroughAt.getTime() < chat.lastMessageAt.getTime()
-              || (catchUpStartAt !== null
-                && chat.historySyncedThroughAt !== null
-                && chat.historySyncedThroughAt.getTime() < catchUpStartAt.getTime())
-            ),
-          )
-          .slice(0, lineChatMirrorMaxChangedChatsPerCycle())
-          .map((chat): PendingMirrorChat => ({
-            lineChatUserId: chat.lineChatUserId,
-            lastMessageAt: chat.lastMessageAt,
-          }));
+        const pending = selectLiveMirrorHistoryCandidates({
+          chats: mirrorChats,
+          recentChatUserIds: recent.chats.map((chat) => chat.chatUserId),
+          catchUpStartAt,
+          now: new Date(),
+          maxCandidates: lineChatMirrorMaxChangedChatsPerCycle(),
+          outboundRefreshIntervalMs: lineChatMirrorOutboundRefreshIntervalMs(),
+        });
 
         if (pending.length === 0) {
           return {
