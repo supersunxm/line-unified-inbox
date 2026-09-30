@@ -1,3 +1,11 @@
+# UI foundation: accent, button contrast, and page titles (2026-09-30)
+
+- The brand accent is `#1f6b4a` in light mode (white text 6.44:1). Dark mode uses `#26805a` so white button text keeps 4.86:1; the light value would sit at 2.79:1 against dark surfaces. Accent used as small text on dark surfaces is 3.69:1 (AA large/UI only), a known tradeoff because many accent buttons hardcode `text-white`.
+- `--button-primary-*` mirrors the accent as literal hex (not `var()`), so the existing theme contrast test can still compute ratios.
+- An unlayered `button { color: inherit; }` outranks Tailwind's `text-white`, so accent-filled buttons were rendering body text. Instead of moving that base rule into a layer, which would change every button with a text utility, a targeted rule gives accent-filled `text-white` buttons `--app-accent-contrast`. This follows the existing `button.bg-slate-900.text-white` pattern. The rule skips `:disabled` and `[aria-disabled="true"]`; disabled accent buttons use the primary-button disabled background and text tokens (opacity 1), so they look disabled rather than keeping white text.
+- Internal document titles use the Next Metadata API via `internalPageTitle()` with `absolute`, so the root `"%s | OPPO Brand Shop"` template stays reserved for public pages. Page names reuse the existing Thai sidebar labels and are static; they do not follow the language toggle.
+- The top-bar title is derived from the pathname for routes that borrow another section for access control (Download Center → follower-insights, Message Traffic → dashboard). The `PrimarySection` values used for authorization are unchanged.
+
 # OPPO Historical crosswalk publication and acceptance (2026-09-27)
 
 - Keep production crosswalk writes sequenced after the consuming backend is deployed and healthy. The additive migration was applied first; after deployment, a fresh production preflight confirmed Store 30282 `LINK_SAFE`, 4,052 safe fleet identities, and zero ambiguity/conflict before the insert-only apply.

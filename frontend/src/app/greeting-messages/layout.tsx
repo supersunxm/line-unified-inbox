@@ -1,5 +1,9 @@
+import type { Metadata } from "next";
 import type { ReactNode } from "react";
+import { internalPageTitle } from "@/lib/page-title";
 import { GreetingModeNav } from "./greeting-mode-nav";
+
+export const metadata: Metadata = { title: internalPageTitle("ข้อความต้อนรับ") };
 
 export default function GreetingMessagesLayout({ children }: { children: ReactNode }) {
   return (

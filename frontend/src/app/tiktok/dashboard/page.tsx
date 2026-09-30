@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { internalPageTitle } from "@/lib/page-title";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { fetchTikTokAccountsListFromBackend } from "../tiktok-api-client";
@@ -7,7 +8,7 @@ import { TikTokDashboardResponsive } from "./tiktok-dashboard-responsive";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "TikTok Performance Dashboard | OPPO Retail TikTok Monitor",
+  title: internalPageTitle("TikTok Performance Dashboard"),
   description:
     "Real-time retail TikTok store performance analytics, audience growth metrics, and video engagement insights.",
   robots: {

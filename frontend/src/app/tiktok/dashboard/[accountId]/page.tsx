@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { internalPageTitle } from "@/lib/page-title";
 import { cookies } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import {
@@ -16,7 +17,7 @@ import {
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "TikTok Store Performance Dashboard | OPPO Retail TikTok Monitor",
+  title: internalPageTitle("TikTok Store Performance Dashboard"),
   description:
     "Store-level TikTok retail performance analytics, audience growth metrics, and video engagement insights.",
   robots: {

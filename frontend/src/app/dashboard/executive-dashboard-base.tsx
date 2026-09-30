@@ -319,7 +319,7 @@ export function ExecutiveDashboardV2({
   const replyRate = messagesTotal > 0 ? Math.round((replied / messagesTotal) * 100) : 0;
 
   return (
-    <div className="min-h-screen bg-[var(--dash-bg)] pb-14 text-[var(--dash-text)] [font-family:'IBM_Plex_Sans_Thai',-apple-system,BlinkMacSystemFont,sans-serif]">
+    <div className="min-h-screen bg-[var(--dash-bg)] pb-14 text-[var(--dash-text)] font-sans">
       <div className="mx-auto max-w-[1280px] px-4 py-7 sm:px-6">
         <header className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <div>

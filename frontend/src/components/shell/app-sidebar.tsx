@@ -59,7 +59,7 @@ function SidebarIcon({ name, className = "" }: { name: IconName; className?: str
   );
 }
 
-function labels(language: Language) {
+export function sidebarLabels(language: Language) {
   if (language === "th") return { workspace: "พื้นที่ทำงาน", mainOa: "Main OA", operations: "เครื่องมือ", home: "หน้าหลัก", dashboard: "แดชบอร์ด", replySla: "อัตราตอบกลับ 24 ชม.", chats: "แชทร้านค้า", followers: "ข้อมูลผู้ติดตาม", traffic: "Message Traffic", coupons: "คูปอง", storeDirectory: "ค้นหาสาขา", stores: "จัดการร้านค้า", store360: "Store 360", purchase: "ข้อมูลการซื้อ", friendLinks: "ลิงก์เพิ่มเพื่อน", mass: "ส่งข้อความ", broadcast: "Broadcast", approval: "อนุมัติ BM", richMenus: "จัดการ Rich Menu", autoResponses: "ข้อความตอบกลับอัตโนมัติ", greetingMessages: "ข้อความต้อนรับ", googleReviewKpi: "Google Review KPI", monthlyOperationsReport: "รายงาน LINE รายเดือน", downloadCenter: "Download Center", profile: "โปรไฟล์", settings: "ตั้งค่า", logout: "ออกจากระบบ", language: "ภาษา", appearance: "รูปแบบการแสดงผล", role: "สิทธิ์การใช้งาน", environment: "สภาพแวดล้อม", standard: "Production", pilot: "Pilot", collapse: "ย่อแถบเมนู", expand: "ขยายแถบเมนู" };
   if (language === "zh") return { workspace: "工作区", mainOa: "Main OA", operations: "工具", home: "主页", dashboard: "仪表盘", replySla: "24小时回复率", chats: "门店聊天", followers: "关注者洞察", traffic: "消息流量", coupons: "优惠券", storeDirectory: "门店目录", stores: "门店管理", store360: "Store 360", purchase: "购买洞察", friendLinks: "加好友来源链接", mass: "群发消息", broadcast: "Broadcast", approval: "BM 审批", richMenus: "Rich Menu 管理", autoResponses: "自动回复", greetingMessages: "欢迎消息", googleReviewKpi: "Google Review KPI", monthlyOperationsReport: "LINE 月度运营报告", downloadCenter: "下载中心", profile: "个人资料", settings: "设置", logout: "退出", language: "语言", appearance: "外观", role: "角色", environment: "环境", standard: "Production", pilot: "Pilot", collapse: "收起侧栏", expand: "展开侧栏" };
   return { workspace: "Workspace", mainOa: "Main OA", operations: "Tools", home: "Main", dashboard: "Dashboard", replySla: "24H Response Rate", chats: "Store Chats", followers: "Follower Insights", traffic: "Message Traffic", coupons: "Coupons", storeDirectory: "Store Directory", stores: "Store Management", store360: "Store 360", purchase: "Purchase Intelligence", friendLinks: "Friend Source Links", mass: "Mass Message", broadcast: "Broadcast", approval: "BM Approval", health: "LINE Chat Health", richMenus: "Rich Menu Manager", autoResponses: "Auto-response", greetingMessages: "Greeting Messages", googleReviewKpi: "Google Review KPI", monthlyOperationsReport: "Monthly Operations Report", downloadCenter: "Download Center", profile: "Profile", settings: "Settings", logout: "Logout", language: "Language", appearance: "Appearance", role: "Role", environment: "Environment", standard: "Production", pilot: "Pilot", collapse: "Collapse sidebar", expand: "Expand sidebar" };
@@ -67,7 +67,7 @@ function labels(language: Language) {
 
 export function AppSidebar({ authUser, changeLanguage, currentSection, language, logout, pilotMode, text }: SidebarProps) {
   const pathname = usePathname() || "/";
-  const t = labels(language);
+  const t = sidebarLabels(language);
   const collapsed = useSyncExternalStore(
     (onStoreChange) => {
       const handleChange = () => onStoreChange();

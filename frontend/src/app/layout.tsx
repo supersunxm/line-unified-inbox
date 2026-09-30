@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { IBM_Plex_Sans_Thai } from "next/font/google";
 import "./globals.css";
 import "./public-branding.css";
 import { ThemeProvider } from "./theme";
@@ -15,6 +16,13 @@ export const metadata: Metadata = {
     apple: [{ url: "/images/LOGO_OBS.png", type: "image/png", sizes: "1024x1024" }],
   },
 };
+
+const ibmPlexSansThai = IBM_Plex_Sans_Thai({
+  weight: ["400", "500", "600", "700"],
+  subsets: ["thai", "latin"],
+  display: "swap",
+  variable: "--font-ibm-plex-sans-thai",
+});
 
 const themeInitializationScript = `
 (() => {
@@ -45,7 +53,7 @@ export default function RootLayout({
   return (
     <html
       lang="th"
-      className="h-full antialiased"
+      className={`${ibmPlexSansThai.variable} h-full antialiased`}
       suppressHydrationWarning
     >
       <head>

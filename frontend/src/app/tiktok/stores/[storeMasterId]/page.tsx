@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { internalPageTitle } from "@/lib/page-title";
 import { cookies } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import { fetchTikTokAccountsListFromBackend } from "../../tiktok-api-client";
@@ -8,7 +9,7 @@ import { fetchTikTokPublicHistory, fetchTikTokPublicStore } from "../../tiktok-p
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "TikTok Store Analytics | OPPO Retail Operations",
+  title: internalPageTitle("TikTok Store Analytics"),
   robots: { index: false, follow: false },
 };
 
