@@ -38,7 +38,7 @@ export function ConversationPaginationFooter({
   return (
     <div className="border-t border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-2 text-xs flex flex-wrap items-center justify-between gap-2">
       {/* Left side: Range text & Page Size Selector */}
-      <div className="flex items-center gap-2 text-[var(--app-text-secondary)] font-tabular font-mono text-[11px] min-w-0">
+      <div className="flex items-center gap-2 text-[var(--app-text-secondary)] font-tabular text-[11px] min-w-0">
         <label className="flex items-center gap-1 font-medium shrink-0">
           <span className="text-[10px] text-[var(--app-text-tertiary)]">{t.itemsPerPage}</span>
           <select
@@ -61,7 +61,7 @@ export function ConversationPaginationFooter({
       </div>
 
       {/* Right side: Page Navigation Buttons */}
-      <div className="flex items-center gap-1 shrink-0 font-tabular font-mono">
+      <div className="flex items-center gap-1 shrink-0 font-tabular">
         {/* Previous Button */}
         <button
           type="button"
