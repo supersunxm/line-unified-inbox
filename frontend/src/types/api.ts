@@ -181,6 +181,8 @@ export type SendConversationMessageResponse = {
 };
 export type BmReplyStatusSummaryResponse = {
   overview: {
+    total: number;
+    outOfScope: number;
     notReplied: number;
     notifiedBm: number;
     replied: number;
@@ -188,6 +190,8 @@ export type BmReplyStatusSummaryResponse = {
   stores: Array<{
     storeId: string;
     storeName: string;
+    total: number;
+    outOfScope: number;
     notReplied: number;
     notifiedBm: number;
     replied: number;
