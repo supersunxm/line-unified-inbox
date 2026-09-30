@@ -1,5 +1,31 @@
 import type { ConversationMessagesResponse } from "../types/api.ts";
 
+export interface ScopedConversationMessagePage {
+  scopeKey: string;
+  response: ConversationMessagesResponse;
+}
+
+export function emptyConversationMessagePage(pageSize = 30): ConversationMessagesResponse {
+  return { items: [], total: 0, page: 1, pageSize, hasEarlier: false };
+}
+
+export function resetScopedConversationMessagePage(
+  scopeKey: string,
+  pageSize = 30,
+): ScopedConversationMessagePage {
+  return { scopeKey, response: emptyConversationMessagePage(pageSize) };
+}
+
+export function conversationMessagePageForScope(
+  current: ScopedConversationMessagePage,
+  activeScopeKey: string,
+  pageSize = 30,
+): ConversationMessagesResponse {
+  return current.scopeKey === activeScopeKey
+    ? current.response
+    : emptyConversationMessagePage(pageSize);
+}
+
 /** Merge a newly fetched message page without dropping pages already shown. */
 export function mergeConversationMessagePages(
   current: ConversationMessagesResponse | null,
@@ -23,4 +49,35 @@ export function mergeConversationMessagePages(
     page: Math.max(current?.page ?? 0, incoming.page),
     hasEarlier: total > items.length,
   };
+}
+
+/** Ignore responses from a conversation/store/OA scope that is no longer active. */
+export function mergeScopedConversationMessagePage(
+  current: ScopedConversationMessagePage,
+  scopeKey: string,
+  incoming: ConversationMessagesResponse,
+  activeScopeKey = scopeKey,
+): ScopedConversationMessagePage {
+  if (current.scopeKey !== scopeKey || activeScopeKey !== scopeKey) return current;
+  return { scopeKey, response: mergeConversationMessagePages(current.response, incoming) };
+}
+
+export function replaceScopedConversationMessagePage(
+  current: ScopedConversationMessagePage,
+  scopeKey: string,
+  incoming: ConversationMessagesResponse,
+  activeScopeKey = scopeKey,
+): ScopedConversationMessagePage {
+  if (activeScopeKey !== scopeKey) return current;
+  return { scopeKey, response: incoming };
+}
+
+export function updateScopedConversationMessagePage(
+  current: ScopedConversationMessagePage,
+  scopeKey: string,
+  update: (response: ConversationMessagesResponse) => ConversationMessagesResponse,
+  activeScopeKey = scopeKey,
+): ScopedConversationMessagePage {
+  if (current.scopeKey !== scopeKey || activeScopeKey !== scopeKey) return current;
+  return { scopeKey, response: update(current.response) };
 }
