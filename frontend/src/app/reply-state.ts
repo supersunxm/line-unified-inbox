@@ -10,6 +10,8 @@ export function getEffectiveReplyState(
 }
 
 export function effectiveSummaryCounts(summary: {
+  total?: number;
+  outOfScope?: number;
   notReplied: number;
   notifiedBm: number;
   replied: number;
@@ -17,6 +19,7 @@ export function effectiveSummaryCounts(summary: {
   return {
     notReplied: summary.notReplied + summary.notifiedBm,
     replied: summary.replied,
-    total: summary.notReplied + summary.notifiedBm + summary.replied,
+    total: summary.total ?? summary.notReplied + summary.notifiedBm + summary.replied,
+    outOfScope: summary.outOfScope ?? 0,
   };
 }
