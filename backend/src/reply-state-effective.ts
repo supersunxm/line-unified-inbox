@@ -30,6 +30,21 @@ export function resolveEffectiveReplyState(input: {
 }
 
 
+export function operationalReplyStateWhere(
+  state: EffectiveReplyState,
+): Prisma.ConversationWhereInput {
+  return {
+    replyStateProjection: {
+      is: {
+        state:
+          state === "REPLIED"
+            ? ReplyStateProjectionState.REPLIED
+            : ReplyStateProjectionState.NOT_REPLIED,
+      },
+    },
+  };
+}
+
 export function effectiveReplyStateWhere(
   state: EffectiveReplyState,
 ): Prisma.ConversationWhereInput {
