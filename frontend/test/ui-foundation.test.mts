@@ -40,10 +40,20 @@ test("primary buttons and focus rings use the brand accent in both themes", () =
   // `button { color: inherit; }` is unlayered and outranks text-white, so accent-filled
   // buttons need an explicit contrast color to stay readable on the darker brand green.
   assert.match(css, /button, input, select, textarea \{\n  color: inherit;\n\}/);
-  for (const background of ["bg-[var(--app-accent)]", "bg-[var(--app-accent-hover)]", "bg-[var(--app-accent,#00ba7c)]", "bg-[var(--app-accent,#111827)]"]) {
-    assert.ok(css.includes(`button.text-white[class~="${background}"]`), `missing contrast rule for ${background}`);
+  const backgrounds = ["bg-[var(--app-accent)]", "bg-[var(--app-accent-hover)]", "bg-[var(--app-accent,#00ba7c)]", "bg-[var(--app-accent,#111827)]"];
+  const enabledSelectors = backgrounds.map((background) => `button.text-white[class~="${background}"]:not(:disabled, [aria-disabled="true"])`);
+  const disabledSelectors = backgrounds.map((background) => `button.text-white[class~="${background}"]:is(:disabled, [aria-disabled="true"])`);
+  assert.ok(css.includes(`${enabledSelectors.join(",\n")} {\n  color: var(--app-accent-contrast);\n}`), "enabled accent buttons use the accent contrast color");
+
+  // Disabled accent buttons must look disabled: no contrast-white text, and the
+  // existing primary-button disabled styling (already contrast-checked above).
+  assert.ok(css.includes(`${disabledSelectors.join(",\n")} {\n  background: var(--button-primary-disabled-bg);\n  color: var(--button-primary-disabled-text);\n  opacity: 1;\n}`), "disabled accent buttons use the primary disabled styling");
+  const accentContrastRules = [...css.matchAll(/([^{}]+)\{\s*color: var\(--app-accent-contrast\);\s*\}/g)].map(([, selectors]) => selectors);
+  for (const selectors of accentContrastRules.filter((value) => value.includes("button.text-white[class~="))) {
+    for (const selector of selectors.split(",\n").map((value) => value.trim())) {
+      assert.ok(selector.endsWith(':not(:disabled, [aria-disabled="true"])'), `${selector} must exclude disabled buttons`);
+    }
   }
-  assert.match(css, /button\.text-white\[class~="bg-\[var\(--app-accent,#111827\)\]"\] \{\n  color: var\(--app-accent-contrast\);\n\}/);
 });
 
 test("internal page titles use the '<Page name> · OPPO LINE OA Monitor' format", () => {

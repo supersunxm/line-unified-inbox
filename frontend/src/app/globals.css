@@ -502,12 +502,22 @@ button.bg-slate-900.text-white:disabled {
 }
 
 /* The unlayered `button { color: inherit; }` above outranks Tailwind's text-white
-   utility, so accent-filled buttons would render body text on the brand green. */
-button.text-white[class~="bg-[var(--app-accent)]"],
-button.text-white[class~="bg-[var(--app-accent-hover)]"],
-button.text-white[class~="bg-[var(--app-accent,#00ba7c)]"],
-button.text-white[class~="bg-[var(--app-accent,#111827)]"] {
+   utility, so accent-filled buttons would render body text on the brand green.
+   Disabled ones take the primary-button disabled styling instead. */
+button.text-white[class~="bg-[var(--app-accent)]"]:not(:disabled, [aria-disabled="true"]),
+button.text-white[class~="bg-[var(--app-accent-hover)]"]:not(:disabled, [aria-disabled="true"]),
+button.text-white[class~="bg-[var(--app-accent,#00ba7c)]"]:not(:disabled, [aria-disabled="true"]),
+button.text-white[class~="bg-[var(--app-accent,#111827)]"]:not(:disabled, [aria-disabled="true"]) {
   color: var(--app-accent-contrast);
+}
+
+button.text-white[class~="bg-[var(--app-accent)]"]:is(:disabled, [aria-disabled="true"]),
+button.text-white[class~="bg-[var(--app-accent-hover)]"]:is(:disabled, [aria-disabled="true"]),
+button.text-white[class~="bg-[var(--app-accent,#00ba7c)]"]:is(:disabled, [aria-disabled="true"]),
+button.text-white[class~="bg-[var(--app-accent,#111827)]"]:is(:disabled, [aria-disabled="true"]) {
+  background: var(--button-primary-disabled-bg);
+  color: var(--button-primary-disabled-text);
+  opacity: 1;
 }
 
 .app-button-secondary {
