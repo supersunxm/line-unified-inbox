@@ -3085,3 +3085,15 @@ The first production target proof confirmed that eligible candidate OAs have no 
 - Discover Manager-only replies through stale refresh of the bounded recent list, within the existing history budget. Changed chats win; recent 24-hour activity precedes older background probes; oldest successful history reads rotate first. The 2-minute default only determines eligibility and does not promise a two-minute full-fleet cycle.
 - Use the existing canonical Message path for Store Chats parity; add no UI workaround or schema migration. Preserve Historical/backfill behavior. Stop after publication/check inspection, before merge/deployment.
 - Compare broader test/typecheck failures against the unchanged base rather than weakening tests or expanding this PR into unrelated repairs. GitHub billing prevents CI execution and must be reported as an unresolved external gate.
+
+## Full-fleet Live Mirror completion follow-up
+- Keep unresolved identities and inbound webhook gaps observational until exact evidence exists; do not infer Manager/webhook ID equality, fabricate inbound messages, or reuse Historical OA-family mapping for writes.
+- Keep fleet collection serial under the profile coordinator because most active fleet stores lack a persisted profile assignment and production stage measurements do not yet establish safe parallel ownership.
+- Bulk-upsert only the Live Mirror event table in bounded 100-row batches. Preserve reconciliation fields and firstSeenAt; refresh lastSeenAt, and only advance updatedAt when the source event payload changes so retry backoff remains effective.
+- Retry old unresolved reconcile rows at six-hour intervals after their recent-event/first-three-attempt window; do not terminally clear WAITING_CANONICAL or UNMAPPED.
+- Hash OA/chat identity for outbound observation and later canonicalization correlation; logs carry timestamps and reply/follow-up states only, never message content or identifiers.
+- Model full-fleet completion as two populations: pre-watermark unresolved rows stay legacy evidence debt; only Manager events with `sentAt >= deploymentStart` count toward live parity. Do not rewrite legacy statuses to create this boundary.
+- Require an authenticated GET request with the explicit timezone-bearing deployment/start timestamp. Scope the audit to each configured store's latest enabled Mirror OA attachment; aggregate in PostgreSQL and return counts only. Audit reads do not write Mirror or canonical rows.
+- Count a post-watermark store as traversed only when its latest enabled attachment has `lastSuccessfulSyncAt >= watermark`. Report the configured, attached, completed, and pending store counts separately.
+- Define Store Chats visibility as a canonical outbound Message attached to a conversation with a store scope. Treat that as data-path eligibility; production acceptance still observes the actual Store Chats surface.
+- Cap detailed observation/canonicalization correlation logs at ten per store cycle. The database audit remains the complete aggregate source when details are suppressed.

@@ -6,6 +6,7 @@ import {
   LineChatSessionStatus,
 } from "@prisma/client";
 import * as fs from "node:fs";
+import { createHash } from "node:crypto";
 import type { BrowserContext } from "playwright";
 import { PrismaService } from "../prisma.service";
 import { confirmLineManagerAuthentication } from "./line-chat-manager-auth-confirmation";
@@ -27,6 +28,7 @@ import { LineChatProfileOperationCoordinator } from "./line-chat-profile-operati
 import { LineChatSessionService } from "./line-chat-session.service";
 import { selectLineChatStoreOa, type LineChatStoreOaSelection } from "./line-chat-store-oa-selector";
 import { MirrorOperationModeService, type MirrorOperationModeValue } from "./mirror-operation-mode.service";
+import { persistLineChatMirrorHistoryBatch } from "./line-chat-mirror-persistence";
 
 const DEFAULT_INTERVAL_MS = 60_000;
 const MIN_INTERVAL_MS = 30_000;
@@ -39,10 +41,14 @@ const MAX_OUTBOUND_REFRESH_INTERVAL_MS = 60 * 60_000;
 const OUTBOUND_REFRESH_PRIORITY_WINDOW_MS = 24 * 60 * 60_000;
 const RECENT_MAX_PAGES = 5;
 const RECENT_MAX_CHATS = 125;
+const MAX_MANAGER_ONLY_OUTBOUND_LOGS_PER_STORE_CYCLE = 10;
 const HISTORICAL_MAX_CONVERSATIONS_PER_STORE_CYCLE = 1;
 
 export interface LineChatMirrorCycleResult {
   storeCode: string;
+  profileKey?: "A" | "B";
+  targetInputDurationMs?: number;
+  targetResolutionDurationMs?: number;
   status: LineChatMirrorSyncStatus;
   recentChatsObserved: number;
   historiesFetched: number;
@@ -68,6 +74,9 @@ interface MirrorHistoryEvent {
 interface PendingMirrorChat {
   lineChatUserId: string;
   lastMessageAt: Date;
+  previousLastMessageAt?: Date | null;
+  previousHistorySyncedThroughAt?: Date | null;
+  previousLastHistorySyncedAt?: Date | null;
 }
 
 export interface LiveMirrorHistoryCandidate {
@@ -338,6 +347,27 @@ export function selectLiveMirrorHistoryCandidates(input: {
     }));
 }
 
+export function isManagerOnlyOutboundRefresh(input: {
+  previousLastMessageAt: Date | null | undefined;
+  previousHistorySyncedThroughAt: Date | null | undefined;
+  previousLastHistorySyncedAt?: Date | null;
+  currentLastMessageAt: Date | null;
+  managerOutboundAt: Date;
+  managerInboundAt: Date | null;
+}): boolean {
+  const previousLastMessageAt = input.previousLastMessageAt?.getTime();
+  return previousLastMessageAt !== undefined
+    && input.previousHistorySyncedThroughAt?.getTime() === previousLastMessageAt
+    && input.currentLastMessageAt !== null
+    && input.currentLastMessageAt.getTime() <= previousLastMessageAt
+    && input.managerOutboundAt.getTime() > previousLastMessageAt
+    && input.managerOutboundAt.getTime() > (
+      input.previousLastHistorySyncedAt?.getTime() ?? previousLastMessageAt
+    )
+    && (input.managerInboundAt === null
+      || input.managerInboundAt.getTime() <= previousLastMessageAt);
+}
+
 export function mirrorDirectionForManagerEvent(
   eventType: string | null | undefined,
 ): LineChatMirrorDirection {
@@ -441,8 +471,11 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
 
   public async runCycle(): Promise<LineChatMirrorCycleResult[]> {
     if (this.running) return [];
+    const cycleStartedAt = Date.now();
     this.running = true;
     const results: LineChatMirrorCycleResult[] = [];
+    let storesAttempted = 0;
+    let storeExceptions = 0;
     try {
       let operationState: Awaited<ReturnType<MirrorOperationModeService["getState"]>> | {
         mode: "NORMAL";
@@ -524,12 +557,14 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
       }
 
       for (const storeCode of configuredLineChatMirrorStoreCodes()) {
+        storesAttempted += 1;
         try {
           results.push(await this.syncStore(
             storeCode,
             operationState.mode === "CATCH_UP" ? operationState.catchUpStartAt : null,
           ));
         } catch (error) {
+          storeExceptions += 1;
           this.logger.warn(JSON.stringify({
             event: "line_chat_mirror_store_cycle_failed",
             storeCode,
@@ -552,6 +587,37 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
           coverageStatus: "UNPROVEN",
         }));
       }
+      let oldestSuccessfulStoreAgeMs: number | null = null;
+      try {
+        const storeStates = await this.prisma.lineChatMirrorStoreState.findMany({
+          where: { storeCode: { in: configuredLineChatMirrorStoreCodes() } },
+          select: { lastSuccessfulSyncAt: true },
+        });
+        const oldest = storeStates
+          .map((state) => state.lastSuccessfulSyncAt?.getTime())
+          .filter((value): value is number => typeof value === "number")
+          .sort((left, right) => left - right)[0];
+        if (oldest !== undefined) oldestSuccessfulStoreAgeMs = Math.max(0, Date.now() - oldest);
+      } catch {
+        // Summary telemetry must not fail an otherwise completed collection cycle.
+      }
+      const profileDistribution = results.reduce<Record<string, number>>((counts, result) => {
+        const profileKey = result.profileKey ?? "UNRESOLVED";
+        counts[profileKey] = (counts[profileKey] ?? 0) + 1;
+        return counts;
+      }, {});
+      this.logger.log(JSON.stringify({
+        event: "line_chat_mirror_fleet_cycle_completed",
+        mode: operationState.mode,
+        storesConfigured: configuredLineChatMirrorStoreCodes().length,
+        storesAttempted,
+        storesSucceeded: results.filter((result) => result.status === LineChatMirrorSyncStatus.SUCCESS).length,
+        storesPartial: results.filter((result) => result.status === LineChatMirrorSyncStatus.PARTIAL).length,
+        storesFailed: results.filter((result) => result.status === LineChatMirrorSyncStatus.FAILED).length + storeExceptions,
+        profileDistribution,
+        durationMs: Date.now() - cycleStartedAt,
+        oldestSuccessfulStoreAgeMs,
+      }));
       return results;
     } finally {
       this.running = false;
@@ -725,7 +791,9 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
     catchUpStartAt: Date | null = null,
   ): Promise<LineChatMirrorCycleResult> {
     const startedAtMs = Date.now();
+    const targetInputsStartedAt = Date.now();
     const storeTarget = await this.getStoreMirrorTargetInputs(storeCode);
+    const targetInputsDurationMs = Date.now() - targetInputsStartedAt;
     const effectiveStoreCode = storeTarget.effectiveStoreCode;
     const oa = storeTarget.oa;
     this.logger.log(JSON.stringify({
@@ -776,6 +844,7 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
       }));
     }
 
+    const targetResolutionStartedAt = Date.now();
     const target = await this.resolveMirrorTarget({
       storeCode: effectiveStoreCode,
       lineOfficialAccountId: oa.id,
@@ -785,6 +854,7 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
       storeManagerUrl: storeTarget.storeManagerUrl,
       lineChatSession: oa.lineChatSession,
     });
+    const targetResolutionDurationMs = Date.now() - targetResolutionStartedAt;
     if (!target.ok) {
       const durationMs = Date.now() - startedAtMs;
       if (target.errorCode === "MIRROR_MANAGER_TARGET_BUSY") {
@@ -794,6 +864,8 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
         });
         return {
           storeCode: effectiveStoreCode,
+          targetInputDurationMs: targetInputsDurationMs,
+          targetResolutionDurationMs,
           status: LineChatMirrorSyncStatus.PARTIAL,
           recentChatsObserved: 0,
           historiesFetched: 0,
@@ -813,6 +885,8 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
       });
       return {
         storeCode: effectiveStoreCode,
+        targetInputDurationMs: targetInputsDurationMs,
+        targetResolutionDurationMs,
         status: LineChatMirrorSyncStatus.FAILED,
         recentChatsObserved: 0,
         historiesFetched: 0,
@@ -876,6 +950,40 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
           );
         }
 
+        const recentChatUserIds = [...new Set(recent.chats.map((chat) => chat.chatUserId))];
+        let previousMirrorChats: Array<{
+          lineChatUserId: string;
+          lastMessageAt: Date | null;
+          historySyncedThroughAt: Date | null;
+          lastHistorySyncedAt: Date | null;
+        }> = [];
+        if (recentChatUserIds.length > 0) {
+          try {
+            previousMirrorChats = await this.prisma.lineChatMirrorChat.findMany({
+              where: {
+                lineOfficialAccountId: oa.id,
+                lineChatUserId: { in: recentChatUserIds },
+                lastMessageAt: { not: null },
+              },
+              select: {
+                lineChatUserId: true,
+                lastMessageAt: true,
+                historySyncedThroughAt: true,
+                lastHistorySyncedAt: true,
+              },
+            });
+          } catch (error) {
+            this.logger.warn(JSON.stringify({
+              event: "line_chat_mirror_manager_only_observation_lookup_failed",
+              storeCode: effectiveStoreCode,
+              errorType: error instanceof Error ? error.name : "UNKNOWN",
+            }));
+          }
+        }
+        const previousChatByUserId = new Map(
+          previousMirrorChats.map((chat) => [chat.lineChatUserId, chat]),
+        );
+        const chatListWriteStartedAt = Date.now();
         for (const chat of recent.chats) {
           const parsedLastMessageAt = chat.lastMessageAt
             ? new Date(chat.lastMessageAt)
@@ -907,6 +1015,12 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
             },
           });
         }
+        this.logger.log(JSON.stringify({
+          event: "line_chat_mirror_chat_list_persist_timing",
+          storeCode: effectiveStoreCode,
+          chats: recent.chats.length,
+          durationMs: Date.now() - chatListWriteStartedAt,
+        }));
 
         const mirrorChats = await this.prisma.lineChatMirrorChat.findMany({
           where: {
@@ -928,6 +1042,14 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
           now: new Date(),
           maxCandidates: lineChatMirrorMaxChangedChatsPerCycle(),
           outboundRefreshIntervalMs: lineChatMirrorOutboundRefreshIntervalMs(),
+        }).map((candidate) => {
+          const previous = previousChatByUserId.get(candidate.lineChatUserId);
+          return {
+            ...candidate,
+            previousLastMessageAt: previous?.lastMessageAt ?? null,
+            previousHistorySyncedThroughAt: previous?.historySyncedThroughAt ?? null,
+            previousLastHistorySyncedAt: previous?.lastHistorySyncedAt ?? null,
+          };
         });
 
         if (pending.length === 0) {
@@ -943,6 +1065,7 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
 
         return this.fetchAndPersistHistories({
           lineOfficialAccountId: oa.id,
+          storeCode: effectiveStoreCode,
           botId,
           profilePath,
           sessionId: session.id,
@@ -1054,8 +1177,14 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
         .sort(([left], [right]) => left.localeCompare(right)),
     );
 
+    const profileKey = session.sessionKey === "account-1"
+      ? "A"
+      : session.sessionKey === "profile-b" ? "B" : undefined;
     const result: LineChatMirrorCycleResult = {
       storeCode: effectiveStoreCode,
+      ...(profileKey ? { profileKey } : {}),
+      targetInputDurationMs: targetInputsDurationMs,
+      targetResolutionDurationMs,
       status,
       recentChatsObserved: operation.value.recentChatsObserved,
       historiesFetched: operation.value.historiesFetched,
@@ -1086,6 +1215,7 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
     lineChatSession: MirrorSessionTarget | null;
     bypassCache?: boolean;
   }): Promise<MirrorTargetResolution> {
+    const resolutionStartedAt = Date.now();
     const diagnostics = {
       sessionsConsidered: 0,
       sessionsWithProfile: 0,
@@ -1103,6 +1233,7 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
         event: "line_chat_mirror_target_resolution_summary",
         ...(input.storeCode ? { storeCode: input.storeCode } : {}),
         ...diagnostics,
+        durationMs: Date.now() - resolutionStartedAt,
         outcome,
       }));
     };
@@ -1362,6 +1493,7 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
 
   private async fetchAndPersistHistories(input: {
     lineOfficialAccountId: string;
+    storeCode: string;
     botId: string;
     profilePath: string;
     sessionId: string;
@@ -1381,11 +1513,29 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
     let messagesInsertedOrUpdated = 0;
     let unknownDirectionEvents = 0;
     let historyFailures = 0;
+    let browserLaunchDurationMs = 0;
+    let navigationDurationMs = 0;
+    let authenticationDurationMs = 0;
+    let historyRequestDurationMs = 0;
+    let databaseWriteDurationMs = 0;
+    let browserCloseDurationMs = 0;
+    const observedOutboundRefreshes: Array<{
+      storeCode: string;
+      conversationKey: string;
+      managerMessageAt: string;
+      previousLastMessageAt: string;
+      previousHistorySyncedThroughAt: string;
+      previousLastHistorySyncedAt: string | null;
+      historyRefreshAt: string;
+      mirrorPersistAt: string;
+    }> = [];
     const eventTypeCounts = new Map<string, number>();
     const messageTypeCounts = new Map<string, number>();
 
     try {
-      context = await this.sessionService.launchManagedPersistentContext(
+      const browserLaunchStartedAt = Date.now();
+      try {
+        context = await this.sessionService.launchManagedPersistentContext(
         input.profilePath,
         {
           profilePath: input.profilePath,
@@ -1398,22 +1548,29 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
           ],
         },
         { sessionId: input.sessionId, operationKind: "MIRROR_SYNC" },
-      );
+        );
+      } finally {
+        browserLaunchDurationMs += Date.now() - browserLaunchStartedAt;
+      }
       const page = context.pages()[0] || await context.newPage();
       const targetUrl = this.sessionService.buildChatRefererUrl(
         input.botId,
         input.pending[0].lineChatUserId,
       );
+      const navigationStartedAt = Date.now();
       await page.goto(targetUrl, {
         waitUntil: "domcontentloaded",
         timeout: 15_000,
       }).catch(() => {});
       await page.waitForLoadState("networkidle", { timeout: 5_000 }).catch(() => {});
+      navigationDurationMs += Date.now() - navigationStartedAt;
 
+      const authenticationStartedAt = Date.now();
       const auth = await confirmLineManagerAuthentication(
         () => this.sessionService.probeApiAuthentication(context!),
         (ms) => page.waitForTimeout(ms),
       );
+      authenticationDurationMs += Date.now() - authenticationStartedAt;
       if (auth.outcome !== "AUTHENTICATED") {
         throw new Error(`MIRROR_MANAGER_AUTH_${auth.outcome}`);
       }
@@ -1440,6 +1597,7 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
         input.assertOwnership();
         try {
           const historyUrl = `https://chat.line.biz/api/v3/bots/${encodeURIComponent(input.botId)}/chats/${encodeURIComponent(chat.lineChatUserId)}/messages`;
+          const historyRequestStartedAt = Date.now();
           const history = await page.evaluate(async (url) => {
             const response = await fetch(url, { credentials: "include" });
             if (!response.ok) {
@@ -1476,6 +1634,7 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
             };
             return { ok: true, status: response.status, list: body.list ?? [] };
           }, historyUrl);
+          historyRequestDurationMs += Date.now() - historyRequestStartedAt;
 
           if (!history.ok) {
             historyFailures += 1;
@@ -1535,47 +1694,54 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
           }
 
           messagesObserved += events.length;
-          for (const event of events) {
-            if (!Number.isFinite(event.sentAt.getTime())) continue;
-            await this.prisma.lineChatMirrorMessage.upsert({
-              where: {
-                lineOfficialAccountId_managerMessageId: {
-                  lineOfficialAccountId: input.lineOfficialAccountId,
-                  managerMessageId: event.managerMessageId,
-                },
-              },
-              update: {
-                lineChatUserId: chat.lineChatUserId,
-                eventType: event.eventType,
-                direction: event.direction,
-                messageType: event.messageType,
-                text: event.text,
-                fileName: event.fileName,
-                bizId: event.bizId,
-                ownerName: event.ownerName,
-                sentAt: event.sentAt,
-              },
-              create: {
-                lineOfficialAccountId: input.lineOfficialAccountId,
-                lineChatUserId: chat.lineChatUserId,
-                managerMessageId: event.managerMessageId,
-                eventType: event.eventType,
-                direction: event.direction,
-                messageType: event.messageType,
-                text: event.text,
-                fileName: event.fileName,
-                bizId: event.bizId,
-                ownerName: event.ownerName,
-                sentAt: event.sentAt,
-              },
-              // Keep the existing read-only mirror safe during staggered
-              // backend/worker rollouts: this query only returns a legacy
-              // column, so a worker can start before the additive
-              // reconciliation migration is visible without selecting the
-              // new columns.
-              select: { id: true },
-            });
-            messagesInsertedOrUpdated += 1;
+          const persistStartedAt = Date.now();
+          const uniqueEvents = [...new Map(events
+            .filter((event) => Number.isFinite(event.sentAt.getTime()))
+            .map((event) => [event.managerMessageId, event])).values()];
+          messagesInsertedOrUpdated += await persistLineChatMirrorHistoryBatch(
+            (query) => this.prisma.$executeRaw(query),
+            {
+              lineOfficialAccountId: input.lineOfficialAccountId,
+              lineChatUserId: chat.lineChatUserId,
+              events: uniqueEvents,
+            },
+          );
+          databaseWriteDurationMs += Date.now() - persistStartedAt;
+          const persistedAt = new Date();
+          const previous = input.pending.find((item) => item.lineChatUserId === chat.lineChatUserId);
+          if (previous?.previousLastMessageAt && chat.lastMessageAt) {
+            const newerInbound = uniqueEvents
+              .filter((event) => event.direction === LineChatMirrorDirection.INBOUND)
+              .reduce<Date | null>((latest, event) =>
+                !latest || event.sentAt > latest ? event.sentAt : latest, null);
+            for (const event of uniqueEvents) {
+              if (
+                event.direction !== LineChatMirrorDirection.OUTBOUND
+                || !isManagerOnlyOutboundRefresh({
+                  previousLastMessageAt: previous.previousLastMessageAt,
+                  previousHistorySyncedThroughAt: previous.previousHistorySyncedThroughAt,
+                  previousLastHistorySyncedAt: previous.previousLastHistorySyncedAt,
+                  currentLastMessageAt: chat.lastMessageAt,
+                  managerOutboundAt: event.sentAt,
+                  managerInboundAt: newerInbound,
+                })
+              ) continue;
+              if (observedOutboundRefreshes.length >= MAX_MANAGER_ONLY_OUTBOUND_LOGS_PER_STORE_CYCLE) {
+                continue;
+              }
+              observedOutboundRefreshes.push({
+                storeCode: input.storeCode,
+                conversationKey: createHash("sha256")
+                  .update(`${input.lineOfficialAccountId}:${chat.lineChatUserId}`)
+                  .digest("hex"),
+                managerMessageAt: event.sentAt.toISOString(),
+                previousLastMessageAt: previous.previousLastMessageAt.toISOString(),
+                previousHistorySyncedThroughAt: previous.previousHistorySyncedThroughAt?.toISOString() ?? "",
+                previousLastHistorySyncedAt: previous.previousLastHistorySyncedAt?.toISOString() ?? null,
+                historyRefreshAt: new Date().toISOString(),
+                mirrorPersistAt: persistedAt.toISOString(),
+              });
+            }
           }
 
           await this.prisma.lineChatMirrorChat.update({
@@ -1605,11 +1771,26 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
       }
     } finally {
       if (context) {
+        const browserCloseStartedAt = Date.now();
         await this.sessionService
           .closeManagedPersistentContext(context, input.profilePath)
           .catch(() => {});
+        browserCloseDurationMs += Date.now() - browserCloseStartedAt;
       }
     }
+
+    this.logger.log(JSON.stringify({
+      event: "line_chat_mirror_history_stage_timing",
+      storeCode: input.storeCode,
+      historiesFetched,
+      messagesObserved,
+      browserLaunchDurationMs,
+      navigationDurationMs,
+      authenticationDurationMs,
+      historyRequestDurationMs,
+      databaseWriteDurationMs,
+      browserCloseDurationMs,
+    }));
 
     const eventTypeBreakdown = Object.fromEntries(
       [...eventTypeCounts.entries()].sort(([left], [right]) => left.localeCompare(right)),
@@ -1619,13 +1800,18 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
     );
     this.logger.log(JSON.stringify({
       event: "line_chat_mirror_history_shape_observed",
-      lineOfficialAccountId: input.lineOfficialAccountId,
       historiesFetched,
       messagesObserved,
       unknownDirectionEvents,
       eventTypeBreakdown,
       messageTypeBreakdown,
     }));
+    for (const observation of observedOutboundRefreshes) {
+      this.logger.log(JSON.stringify({
+        event: "line_chat_mirror_manager_only_outbound_observed",
+        ...observation,
+      }));
+    }
 
     return {
       recentChatsObserved: await this.prisma.lineChatMirrorChat.count({

@@ -12,6 +12,8 @@ import { LineChatRecentResolverService } from "./line-chat-recent-resolver.servi
 import { LineChatSessionService } from "./line-chat-session.service";
 import { LineChatSeptemberInventoryService } from "./line-chat-september-inventory.service";
 import { LineChatMirrorService } from "./line-chat-mirror.service";
+import { LineChatMirrorLiveParityAuditService } from "./line-chat-mirror-live-parity-audit.service";
+import { handleLineChatMirrorLiveParityAuditRoute } from "./line-chat-mirror-live-parity-audit-route";
 import { LineChatTargetProofService } from "./line-chat-target-proof.service";
 import { handleLineChatTargetProofRoute } from "./line-chat-target-proof-route";
 import { matchesLineChatWorkerSecret } from "./line-chat-worker-auth";
@@ -149,6 +151,7 @@ async function bootstrap() {
   const sessionService = app.get(LineChatSessionService);
   const septemberInventory = app.get(LineChatSeptemberInventoryService);
   const mirrorService = app.get(LineChatMirrorService);
+  const liveParityAuditService = app.get(LineChatMirrorLiveParityAuditService);
   const targetProofService = app.get(LineChatTargetProofService);
   const relayContexts = new Map<string, ManagerRelayConversationSnapshot>();
   installRelayContextLoader(textRelay, relayContexts);
@@ -188,6 +191,23 @@ async function bootstrap() {
       });
       if (targetProofResponse) {
         writeJson(response, targetProofResponse.statusCode, targetProofResponse.body);
+        return;
+      }
+
+      const liveParityAuditResponse = await handleLineChatMirrorLiveParityAuditRoute({
+        method: request.method,
+        pathname: requestUrl.pathname,
+        watermarkValue: requestUrl.searchParams.get("watermark"),
+        receivedSecret: request.headers["x-line-chat-internal-secret"],
+        expectedSecret: internalSecret,
+        service: liveParityAuditService,
+        onError: (error) => logger.warn(JSON.stringify({
+          event: "line_chat_mirror_live_parity_audit_failed",
+          errorType: error instanceof Error ? error.name : "UNKNOWN",
+        })),
+      });
+      if (liveParityAuditResponse) {
+        writeJson(response, liveParityAuditResponse.statusCode, liveParityAuditResponse.body);
         return;
       }
 
