@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { BmReplyStatus } from "@prisma/client";
-import { effectiveReplyStateWhere, resolveEffectiveReplyState } from "./reply-state-effective";
+import { effectiveReplyStateWhere, operationalReplyStateWhere, resolveEffectiveReplyState } from "./reply-state-effective";
 
 void test("projection REPLIED overrides legacy NOT_REPLIED", () => {
   assert.deepEqual(
@@ -53,6 +53,30 @@ void test("legacy NOTIFIED_BM collapses to NOT_REPLIED for two-state read path",
   );
 });
 
+
+
+void test("operational reply-state queries use only trusted projection rows", () => {
+  assert.deepEqual(
+    operationalReplyStateWhere("NOT_REPLIED"),
+    {
+      replyStateProjection: {
+        is: {
+          state: "NOT_REPLIED",
+        },
+      },
+    },
+  );
+  assert.deepEqual(
+    operationalReplyStateWhere("REPLIED"),
+    {
+      replyStateProjection: {
+        is: {
+          state: "REPLIED",
+        },
+      },
+    },
+  );
+});
 
 void test("effective REPLIED query uses projection first and legacy only when projection is absent", () => {
   assert.deepEqual(
