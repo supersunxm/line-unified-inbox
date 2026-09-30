@@ -218,7 +218,7 @@ export function ContextSidebar({
                 <span aria-hidden="true" className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-purple-600 text-[12px] text-white shadow-sm">★</span>
                 <span className="min-w-0 flex-1">
                   <span className="flex items-center gap-1.5">
-                    <span className="truncate text-xs font-bold">{focusGroupLabel}</span>
+                    <span className="truncate text-xs font-bold" title={focusGroupLabel}>{focusGroupLabel}</span>
                     <span className="shrink-0 rounded-full bg-red-500 px-1.5 py-0.5 text-[8px] font-bold leading-none text-white">NEW</span>
                   </span>
                   <span className="mt-0.5 block truncate text-[10px] font-medium text-purple-700/80 dark:text-purple-300/80">{focusGroupSubtitle}</span>
@@ -277,7 +277,7 @@ export function ContextSidebar({
                   }`}
                 >
                   <div className="flex w-full items-center justify-between min-w-0">
-                    <span className="min-w-0 flex-1 truncate pr-1 font-medium">
+                    <span className="min-w-0 flex-1 truncate pr-1 font-medium" title={getStoreDisplayName(store.name)}>
                       {(store.masterStoreId || store.externalStoreId) && (
                         <span className="font-mono text-[10px] text-[var(--app-text-tertiary)] mr-1 opacity-80">
                           [{store.masterStoreId ?? store.externalStoreId}]
@@ -333,7 +333,7 @@ export function ContextSidebar({
                         className="absolute right-0 top-full mt-1 z-30 w-52 rounded-[var(--app-radius-xl)] border border-[var(--app-border)] bg-[var(--app-surface)] py-1 shadow-[var(--app-shadow-elevated)] text-xs backdrop-blur-md"
                         onClick={(e) => e.stopPropagation()}
                       >
-                        <div className="px-3 py-1.5 border-b border-[var(--app-border-subtle)] font-semibold text-[var(--app-text-primary)] truncate text-[11px]">
+                        <div className="px-3 py-1.5 border-b border-[var(--app-border-subtle)] font-semibold text-[var(--app-text-primary)] truncate text-[11px]" title={getStoreDisplayName(store.name)}>
                           {getStoreDisplayName(store.name)}
                         </div>
 

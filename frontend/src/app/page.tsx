@@ -4325,7 +4325,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                       <h2 data-chat-list-title className="text-sm font-bold text-[var(--app-text-primary)]">
                         {selectedStore === FOCUS_STORE_GROUP_ID ? `${focusStoreGroupCopy.label}${sidebarView === "all" ? "" : ` · ${conversationListTitle}`}` : conversationListTitle}
                       </h2>
-                      <p className="app-muted mt-0.5 text-xs text-[var(--app-text-tertiary)] font-tabular font-mono">
+                      <p className="app-muted mt-0.5 text-xs text-[var(--app-text-tertiary)] font-tabular">
                         {chatTotalCount} {text.searchResults}
                       </p>
                     </div>
@@ -4454,7 +4454,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                       <p>{chatsPaginationText.failedToLoadConversations}: {chatPageError}</p>
                       <button
                         type="button"
-                        onClick={() => setIsChatPageLoading((v) => !v)}
+                        onClick={() => void loadConversations(conversationQueryRef.current)}
                         className="mt-3 rounded-lg border border-red-300 px-3 py-1.5 font-medium hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500"
                       >
                         {text.retry}
@@ -4590,8 +4590,8 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                             {conversation.translations[language]}
                           </p>
 
-                          <div data-conversation-metadata className="app-muted mt-2 flex items-center gap-1.5 text-[11px] font-tabular text-[var(--app-text-tertiary)] font-mono">
-                            <span className="min-w-0 truncate font-medium text-[var(--app-text-secondary)]">{conversation.store}</span>
+                          <div data-conversation-metadata className="app-muted mt-2 flex items-center gap-1.5 text-[11px] font-tabular text-[var(--app-text-tertiary)]">
+                            <span className="min-w-0 truncate font-medium text-[var(--app-text-secondary)]" title={conversation.store}>{conversation.store}</span>
                             <span aria-hidden="true" className="opacity-50">·</span>
                             <span className="shrink-0 whitespace-nowrap">{formatRelativeTime(conversation.time, language)}</span>
                           </div>
@@ -4617,7 +4617,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                               </span>
                             ))}
                             {tags.hidden.length > 0 && (
-                              <span className="app-chip rounded-full px-1.5 py-0.5 text-[10px] bg-[var(--app-surface-subtle)] text-[var(--app-text-tertiary)] border border-[var(--app-border)] font-mono" aria-label={tags.hidden.map(({ label }) => label).join(", ")}>
+                              <span className="app-chip rounded-full px-1.5 py-0.5 text-[10px] bg-[var(--app-surface-subtle)] text-[var(--app-text-tertiary)] border border-[var(--app-border)] font-tabular" aria-label={tags.hidden.map(({ label }) => label).join(", ")}>
                                 +{tags.hidden.length}
                               </span>
                             )}
@@ -4658,10 +4658,10 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                         }
                         <div className="min-w-0 flex-1">
                           <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                            <h2 data-chat-detail-customer className="truncate text-base font-bold tracking-tight text-[var(--app-text-primary)]">
+                            <h2 data-chat-detail-customer className="truncate text-base font-bold tracking-tight text-[var(--app-text-primary)] min-w-0 max-w-full" title={selectedApiConversation?.customer?.displayName ?? selectedConversation.customer}>
                               {selectedApiConversation?.customer?.displayName ?? selectedConversation.customer}
                             </h2>
-                            <span className="shrink-0 text-xs font-medium text-[var(--app-text-secondary)]">{selectedConversation.store}</span>
+                            <span data-chat-detail-store className="min-w-0 max-w-full truncate text-xs font-medium text-[var(--app-text-secondary)]" title={selectedConversation.store}>{selectedConversation.store}</span>
                             {selectedApiConversation?.customer?.profileFetchStatus !== "SUCCESS" && <span className="shrink-0 text-xs text-[var(--app-warning)]">{text.profileUnavailable}</span>}
                           </div>
                           {selectedApiConversation?.owner && <p data-chat-detail-owner className="mt-0.5 truncate text-[11px] font-medium text-[var(--app-text-tertiary)]">👤 {selectedApiConversation.owner.displayName}</p>}
@@ -4690,7 +4690,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                               <option value="NOT_REPLIED">{bmReplyStatusLabels[language].NOT_REPLIED}</option>
                               <option value="REPLIED">{bmReplyStatusLabels[language].REPLIED}</option>
                             </select>
-                            <span className="app-muted text-[10px] text-[var(--app-text-tertiary)] font-mono">{formatRelativeTime(selectedConversation.time, language)}</span>
+                            <span className="app-muted text-[10px] text-[var(--app-text-tertiary)] font-tabular">{formatRelativeTime(selectedConversation.time, language)}</span>
                           </div>
                         </div>
                       </div>
@@ -4735,7 +4735,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                       {/* ── PRIMARY CHAT COLUMN ── */}
                       <div className="flex flex-1 min-h-0 min-w-0 flex-col bg-[var(--app-surface)]">
                         <div className="flex shrink-0 items-center justify-between border-b border-[var(--app-border)] bg-[var(--app-surface)] px-4 py-1.5">
-                          <p className="app-muted text-xs font-tabular text-[var(--app-text-tertiary)] font-mono">{chatHistory.total} {text.messagesToday}</p>
+                          <p className="app-muted text-xs font-tabular text-[var(--app-text-tertiary)]">{chatHistory.total} {text.messagesToday}</p>
                           <button
                             data-chat-detail-secondary-action
                             onClick={() => setShowTranslation(!showTranslation)}
@@ -4758,7 +4758,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                             return (
                               <div key={message.id}>
                                 {showDate && (
-                                  <div data-chat-date-separator className="my-3 text-center text-xs text-[var(--app-text-tertiary)] font-tabular font-mono">
+                                  <div data-chat-date-separator className="my-3 text-center text-xs text-[var(--app-text-tertiary)] font-tabular">
                                     {new Intl.DateTimeFormat(language, { dateStyle: "medium" }).format(date)}
                                   </div>
                                 )}
@@ -4788,7 +4788,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                                     )}
                                     {message.fileName && <p className="mt-1 text-xs font-medium">📎 {message.fileName}</p>}
                                     <MessageTranslationAction message={message} userRole={authUser.role} onTranslated={(translatedText) => updateMessageEnglishTranslation(message.id, translatedText)} />
-                                    <p className={`mt-1 text-[10px] font-tabular font-mono ${isFailed ? "text-red-300" : "text-[var(--app-text-tertiary)]"} ${inbound ? "" : "text-right"}`}>
+                                    <p className={`mt-1 text-[10px] font-tabular ${isFailed ? "text-red-300" : "text-[var(--app-text-tertiary)]"} ${inbound ? "" : "text-right"}`}>
                                       {new Intl.DateTimeFormat(language, { timeStyle: "short" }).format(date)}
                                     </p>
                                     {isFailed && (
@@ -4846,7 +4846,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                             </button>
                           </div>
                           {replyError && <p role="alert" className="mt-2 text-xs text-[var(--app-danger)]">{replyError}</p>}
-                          <p className="app-muted mt-1 text-right text-[10px] font-tabular text-[var(--app-text-tertiary)] font-mono">{replyText.length.toLocaleString()}/5,000 · Enter เพื่อส่ง · Shift+Enter ขึ้นบรรทัดใหม่</p>
+                          <p className="app-muted mt-1 text-right text-[10px] font-tabular text-[var(--app-text-tertiary)]">{replyText.length.toLocaleString()}/5,000 · Enter เพื่อส่ง · Shift+Enter ขึ้นบรรทัดใหม่</p>
                         </div>
                         <p data-line-oa-manager-notice className="shrink-0 flex items-start gap-2 border-t border-[var(--app-border-subtle)] bg-[var(--app-surface-subtle)]/50 px-4 py-1.5 text-xs text-[var(--app-text-tertiary)]"><span aria-hidden="true">ⓘ</span><span>{text.repliesMayNotAppear}</span></p>
                       </div>
@@ -4925,7 +4925,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                               <section data-topics-note-card data-internal-note-section className="rounded-[var(--app-radius-lg)] border border-[var(--app-border)] bg-[var(--app-surface)] p-3.5 shadow-[var(--app-shadow-card)] chat-detail-note">
                                 <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-[var(--app-text-primary)]">{text.internalNote}</label>
                                 <textarea value={selectedConversationState.note} onChange={(event) => updateInternalNote(event.target.value)} onBlur={() => void saveInternalNote()} disabled={isMutating} placeholder={text.notePlaceholder} className="max-h-32 min-h-20 w-full resize-y rounded-[var(--app-radius-md)] border border-[var(--app-border)] bg-[var(--app-surface)] p-2.5 text-xs text-[var(--app-text-primary)] placeholder:text-[var(--app-text-tertiary)] outline-none focus:border-[var(--app-accent)] focus:ring-1 focus:ring-[var(--app-accent)]" />
-                                <p className="app-muted mt-1.5 text-[11px] text-[var(--app-text-tertiary)] font-mono">{isMutating ? text.loadingData : text.noteSaveHint}</p>
+                                <p className="app-muted mt-1.5 text-[11px] text-[var(--app-text-tertiary)]">{isMutating ? text.loadingData : text.noteSaveHint}</p>
                               </section>
 
                               <section data-activity-history className="rounded-[var(--app-radius-lg)] border border-[var(--app-border)] bg-[var(--app-surface)] p-3.5 shadow-[var(--app-shadow-card)] chat-detail-activity">
@@ -4954,7 +4954,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
                                               </>
                                             ) : null}
                                           </p>
-                                          <time className="text-[10px] text-[var(--app-text-tertiary)] font-mono" dateTime={activity.timestamp}>
+                                          <time className="text-[10px] text-[var(--app-text-tertiary)] font-tabular" dateTime={activity.timestamp}>
                                             {formatRelativeTime(activity.timestamp, language)}
                                           </time>
                                         </div>
