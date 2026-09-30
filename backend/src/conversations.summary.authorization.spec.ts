@@ -81,9 +81,21 @@ void test("conversation summary queries retain an explicit store scope, includin
   const operations = { getOperationalConversationFilter: async () => ({}) };
   const service = new ConversationsService(prisma as never, operations as never);
 
-  await service.getBmReplyStatusSummary(["store-a"]);
+  const scopedSummary = await service.getBmReplyStatusSummary(["store-a"]);
   await service.getBmReplyStatusSummary([]);
   await assert.rejects(() => service.getBmReplyStatusSummary(undefined), ForbiddenException);
+
+  assert.deepEqual(scopedSummary.overview, {
+    total: 2,
+    outOfScope: 1,
+    notReplied: 0,
+    notifiedBm: 0,
+    replied: 1,
+  });
+  assert.equal(scopedSummary.stores[0]?.total, 2);
+  assert.equal(scopedSummary.stores[0]?.outOfScope, 1);
+  assert.equal(scopedSummary.stores[0]?.notReplied, 0);
+  assert.equal(scopedSummary.stores[0]?.replied, 1);
 
   assert.deepEqual((storeWheres[0] as { id: { in: string[] } }).id.in, ["store-a"]);
   assert.deepEqual((conversationWheres[0] as { store: { id: { in: string[] } } }).store.id.in, ["store-a"]);
