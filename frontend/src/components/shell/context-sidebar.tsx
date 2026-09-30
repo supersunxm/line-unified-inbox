@@ -27,7 +27,7 @@ export interface BulkUpdateRequest {
 export interface ContextSidebarProps {
   sidebarView: SidebarView;
   selectSidebarView: (view: SidebarView) => void;
-  overview: { notReplied: number; notifiedBm: number; replied: number };
+  overview: { total?: number; outOfScope?: number; notReplied: number; notifiedBm: number; replied: number };
   storeBmCounts: Record<string, StoreBmCountsItem>;
   selectedStore: string;
   setSelectedStore: (storeId: string) => void;
@@ -92,10 +92,10 @@ export function ContextSidebar({
     clearAllFilters();
   };
 
-  const totalOverviewCount = (overview.notReplied ?? 0) + (overview.notifiedBm ?? 0) + (overview.replied ?? 0);
+  const totalOverviewCount = overview.total ?? ((overview.notReplied ?? 0) + (overview.notifiedBm ?? 0) + (overview.replied ?? 0));
   const focusGroupCounts = storeBmCounts[FOCUS_STORE_GROUP_ID];
   const focusGroupTotalCount = focusGroupCounts
-    ? focusGroupCounts.notReplied + focusGroupCounts.notifiedBm + focusGroupCounts.replied
+    ? focusGroupCounts.total ?? (focusGroupCounts.notReplied + focusGroupCounts.notifiedBm + focusGroupCounts.replied)
     : 0;
 
   return (
