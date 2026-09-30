@@ -26,6 +26,8 @@ const DEFAULT_INTERVAL_MS = 60_000;
 const MIN_INTERVAL_MS = 30_000;
 const DEFAULT_BATCH_SIZE = 250;
 const MAX_BATCH_SIZE = 1_000;
+const FULL_FLEET_BATCH_THRESHOLD = 32;
+const FULL_FLEET_MAX_BATCH_PER_STORE = 100;
 const START_DELAY_MS = 15_000;
 const IDENTITY_EVIDENCE_LIMIT = 100;
 const MIN_IDENTITY_MATCHES = 3;
@@ -118,8 +120,14 @@ function parseStoreCodeList(raw: string | null | undefined): string[] {
 }
 
 export function configuredLineChatMirrorReconcileStoreCodes(): string[] {
-  const configured = parseStoreCodeList(process.env.LINE_CHAT_MIRROR_RECONCILE_STORE_CODES);
-  return configured.length > 0 ? configured : configuredLineChatMirrorStoreCodes();
+  // Canonical parity is part of Live Mirror, not a separate pilot scope.
+  // Never allow the reconciler apply scope to be narrower than the active
+  // Live Mirror fleet. Explicit reconcile codes remain additive for
+  // operator recovery, but every configured Mirror store is always included.
+  return [...new Set([
+    ...configuredLineChatMirrorStoreCodes(),
+    ...parseStoreCodeList(process.env.LINE_CHAT_MIRROR_RECONCILE_STORE_CODES),
+  ])];
 }
 
 // Keep Wave 2 observation read-only while Wave 1 remains the canonical apply scope.
@@ -140,6 +148,13 @@ export function lineChatMirrorReconcileBatchSize(): number {
   const raw = Number(process.env.LINE_CHAT_MIRROR_RECONCILE_BATCH_SIZE ?? DEFAULT_BATCH_SIZE);
   if (!Number.isFinite(raw)) return DEFAULT_BATCH_SIZE;
   return Math.min(MAX_BATCH_SIZE, Math.max(1, Math.floor(raw)));
+}
+
+export function lineChatMirrorReconcileEffectiveBatchSize(storeCount: number): number {
+  const configured = lineChatMirrorReconcileBatchSize();
+  return storeCount > FULL_FLEET_BATCH_THRESHOLD
+    ? Math.min(configured, FULL_FLEET_MAX_BATCH_PER_STORE)
+    : configured;
 }
 
 export function lineChatMirrorReconcileIntervalMs(): number {
@@ -230,16 +245,19 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
     const intervalMs = lineChatMirrorReconcileIntervalMs();
     const primaryStoreCodes = configuredLineChatMirrorReconcileStoreCodes();
     const dryRunStoreCodes = configuredLineChatMirrorReconcileDryRunStoreCodes();
+    const effectiveBatchSize = lineChatMirrorReconcileEffectiveBatchSize(primaryStoreCodes.length);
     this.logger.log(JSON.stringify({
       event: "line_chat_mirror_reconciler_started",
       storeCount: primaryStoreCodes.length,
       apply: isLineChatMirrorReconcileApplyEnabled(),
       dryRunStoreCount: dryRunStoreCodes.length,
       since: since.toISOString(),
-      batchSize: lineChatMirrorReconcileBatchSize(),
+      configuredBatchSize: lineChatMirrorReconcileBatchSize(),
+      batchSize: effectiveBatchSize,
       intervalMs,
       inboundPolicy: "WAIT_FOR_CANONICAL_WEBHOOK",
       outboundPolicy: "IMPORT_FROM_MANAGER_MIRROR",
+      scopePolicy: "LIVE_MIRROR_FLEET_PLUS_EXPLICIT",
     }));
     this.startupTimer = setTimeout(() => void this.runCycle(), START_DELAY_MS);
     this.startupTimer.unref?.();
@@ -262,8 +280,10 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
     this.running = true;
     try {
       const results: LineChatMirrorReconcileCycleResult[] = [];
+      const primaryStoreCodes = configuredLineChatMirrorReconcileStoreCodes();
+      const effectiveBatchSize = lineChatMirrorReconcileEffectiveBatchSize(primaryStoreCodes.length);
       const scopes = [
-        ...configuredLineChatMirrorReconcileStoreCodes().map((storeCode) => ({
+        ...primaryStoreCodes.map((storeCode) => ({
           storeCode,
           apply: isLineChatMirrorReconcileApplyEnabled(),
         })),
@@ -274,7 +294,12 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
       ];
       for (const scope of scopes) {
         try {
-          results.push(await this.reconcileStore(scope.storeCode, since, scope.apply));
+          results.push(await this.reconcileStore(
+            scope.storeCode,
+            since,
+            scope.apply,
+            effectiveBatchSize,
+          ));
         } catch (error) {
           this.logger.error(JSON.stringify({
             event: "line_chat_mirror_reconcile_store_failed",
@@ -294,6 +319,7 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
     storeCode: string,
     since: Date,
     apply: boolean,
+    batchSize: number = lineChatMirrorReconcileBatchSize(),
   ): Promise<LineChatMirrorReconcileCycleResult> {
     const startedAt = Date.now();
     const store = await this.prisma.store.findFirst({
@@ -355,37 +381,76 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
       lineOfficialAccountName: oa.name,
       selectionSource: oaSelection.source,
     }));
-    const rows = await this.prisma.lineChatMirrorMessage.findMany({
+    const rowSelect = {
+      id: true,
+      lineOfficialAccountId: true,
+      lineChatUserId: true,
+      managerMessageId: true,
+      eventType: true,
+      direction: true,
+      messageType: true,
+      text: true,
+      fileName: true,
+      bizId: true,
+      ownerName: true,
+      sentAt: true,
+    } as const;
+
+    // Drain new Manager replies first. This prevents inbound rows waiting for
+    // webhook canonicalization from repeatedly occupying the whole batch and
+    // starving outbound replies that Store Chats must surface.
+    const pendingOutbound = await this.prisma.lineChatMirrorMessage.findMany({
       where: {
         lineOfficialAccountId: oa.id,
         sentAt: { gte: since },
-        reconcileStatus: {
-          in: [
-            LineChatMirrorReconcileStatus.PENDING,
-            LineChatMirrorReconcileStatus.WAITING_CANONICAL,
-            LineChatMirrorReconcileStatus.UNMAPPED,
-            LineChatMirrorReconcileStatus.AMBIGUOUS,
-            LineChatMirrorReconcileStatus.FAILED,
-          ],
-        },
+        reconcileStatus: LineChatMirrorReconcileStatus.PENDING,
+        direction: LineChatMirrorDirection.OUTBOUND,
       },
       orderBy: [{ sentAt: "desc" }, { id: "desc" }],
-      take: lineChatMirrorReconcileBatchSize(),
-      select: {
-        id: true,
-        lineOfficialAccountId: true,
-        lineChatUserId: true,
-        managerMessageId: true,
-        eventType: true,
-        direction: true,
-        messageType: true,
-        text: true,
-        fileName: true,
-        bizId: true,
-        ownerName: true,
-        sentAt: true,
-      },
+      take: batchSize,
+      select: rowSelect,
     }) as MirrorRow[];
+
+    const remainingAfterOutbound = Math.max(0, batchSize - pendingOutbound.length);
+    const pendingOther = remainingAfterOutbound > 0
+      ? await this.prisma.lineChatMirrorMessage.findMany({
+          where: {
+            lineOfficialAccountId: oa.id,
+            sentAt: { gte: since },
+            reconcileStatus: LineChatMirrorReconcileStatus.PENDING,
+            direction: { not: LineChatMirrorDirection.OUTBOUND },
+          },
+          orderBy: [{ sentAt: "desc" }, { id: "desc" }],
+          take: remainingAfterOutbound,
+          select: rowSelect,
+        }) as MirrorRow[]
+      : [];
+
+    const remainingAfterPending = Math.max(
+      0,
+      batchSize - pendingOutbound.length - pendingOther.length,
+    );
+    const retryRows = remainingAfterPending > 0
+      ? await this.prisma.lineChatMirrorMessage.findMany({
+          where: {
+            lineOfficialAccountId: oa.id,
+            sentAt: { gte: since },
+            reconcileStatus: {
+              in: [
+                LineChatMirrorReconcileStatus.WAITING_CANONICAL,
+                LineChatMirrorReconcileStatus.UNMAPPED,
+                LineChatMirrorReconcileStatus.AMBIGUOUS,
+                LineChatMirrorReconcileStatus.FAILED,
+              ],
+            },
+          },
+          orderBy: [{ updatedAt: "asc" }, { sentAt: "desc" }, { id: "desc" }],
+          take: remainingAfterPending,
+          select: rowSelect,
+        }) as MirrorRow[]
+      : [];
+
+    const rows = [...pendingOutbound, ...pendingOther, ...retryRows];
 
     const result: LineChatMirrorReconcileCycleResult = {
       storeCode: effectiveStoreCode,
