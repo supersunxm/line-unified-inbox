@@ -28,14 +28,14 @@ export function SectionCard({
   const Title = titleAs;
   return (
     <section
-      className={`overflow-hidden rounded-[var(--app-radius-md)] border border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-text-primary)] ${className}`}
+      className={`overflow-hidden rounded-[var(--app-radius-md)] border border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-text-primary)] flex flex-col ${className}`}
       {...rest}
     >
       <header className="flex min-h-12 items-center justify-between gap-3 border-b border-[var(--app-border-subtle)] px-4">
         <Title className="min-w-0 text-[15px] font-semibold leading-snug text-[var(--app-text-primary)]">{title}</Title>
         {meta && <div className="shrink-0 text-xs text-[var(--app-text-secondary)]">{meta}</div>}
       </header>
-      <div className={bodyPadding === "none" ? "" : "p-4"}>{children}</div>
+      <div className={bodyPadding === "none" ? "flex-1" : "flex-1 p-4"}>{children}</div>
       {footer && (
         <div className="flex min-h-11 items-center border-t border-[var(--app-border-subtle)] px-4 text-[13px]">
           {footer}
