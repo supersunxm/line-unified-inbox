@@ -25,7 +25,7 @@ import { PDF_MIME_TYPE, readPdfMaxBytes, validatePdfBuffer, PdfValidationError }
 import { LineChatMessageSendQueueService } from "./line-chat/line-chat-message-send-queue.service";
 import { isLineChatMirrorOnlyStore } from "./line-chat/line-chat-pilot.constants";
 import { HISTORICAL_TIMELINE_START, mapHistoricalTimelineMessage } from "./historical-timeline.service";
-import { effectiveReplyStateWhere, resolveEffectiveReplyState } from "./reply-state-effective";
+import { operationalReplyStateWhere, resolveEffectiveReplyState } from "./reply-state-effective";
 
 const conversationBaseInclude = {
   customer: true,
@@ -323,7 +323,7 @@ export class ConversationsService {
         : { in: query.storeId ? [query.storeId] : accessibleStoreIds };
     const resetFilter = await this.operations.getOperationalConversationFilter();
     const andFilters: Prisma.ConversationWhereInput[] = [];
-    if (query.replyState) andFilters.push(effectiveReplyStateWhere(query.replyState));
+    if (query.replyState) andFilters.push(operationalReplyStateWhere(query.replyState));
     if (search) {
       andFilters.push({
         OR: [
@@ -1570,27 +1570,34 @@ export class ConversationsService {
     });
 
     const overview = {
+      total: 0,
+      outOfScope: 0,
       notReplied: 0,
       notifiedBm: 0,
       replied: 0,
     };
 
-    const storeMap = new Map<string, { notReplied: number; notifiedBm: number; replied: number }>();
+    const storeMap = new Map<string, { total: number; outOfScope: number; notReplied: number; notifiedBm: number; replied: number }>();
     for (const store of stores) {
-      storeMap.set(store.id, { notReplied: 0, notifiedBm: 0, replied: 0 });
+      storeMap.set(store.id, { total: 0, outOfScope: 0, notReplied: 0, notifiedBm: 0, replied: 0 });
     }
 
     const now = Date.now();
     const oldestMap = new Map<string, number>();
 
     for (const item of summaryRows) {
-      const effectiveState = resolveEffectiveReplyState({
-        bmReplyStatus: item.bmReplyStatus,
-        projectionState: item.replyStateProjection?.state ?? null,
-      }).state;
       const storeCounts = item.storeId ? storeMap.get(item.storeId) : undefined;
+      overview.total += 1;
+      if (storeCounts) storeCounts.total += 1;
 
-      if (effectiveState === "REPLIED") {
+      const projectedState = item.replyStateProjection?.state ?? null;
+      if (!projectedState) {
+        overview.outOfScope += 1;
+        if (storeCounts) storeCounts.outOfScope += 1;
+        continue;
+      }
+
+      if (projectedState === "REPLIED") {
         overview.replied += 1;
         if (storeCounts) storeCounts.replied += 1;
         continue;
@@ -1612,13 +1619,15 @@ export class ConversationsService {
     }
 
     const storesList = stores.map((store) => {
-      const counts = storeMap.get(store.id) ?? { notReplied: 0, notifiedBm: 0, replied: 0 };
+      const counts = storeMap.get(store.id) ?? { total: 0, outOfScope: 0, notReplied: 0, notifiedBm: 0, replied: 0 };
       return {
         id: store.id,
         storeId: store.id,
         masterStoreId: store.storeMaster?.externalStoreId ?? null,
         externalStoreId: store.storeMaster?.externalStoreId ?? null,
         storeName: store.name,
+        total: counts.total,
+        outOfScope: counts.outOfScope,
         notReplied: counts.notReplied,
         notifiedBm: counts.notifiedBm,
         replied: counts.replied,
@@ -1632,12 +1641,14 @@ export class ConversationsService {
         (result, store) => {
           const counts = storeMap.get(store.id);
           if (!counts) return result;
+          result.total += counts.total;
+          result.outOfScope += counts.outOfScope;
           result.notReplied += counts.notReplied;
           result.notifiedBm += counts.notifiedBm;
           result.replied += counts.replied;
           return result;
         },
-        { notReplied: 0, notifiedBm: 0, replied: 0 },
+        { total: 0, outOfScope: 0, notReplied: 0, notifiedBm: 0, replied: 0 },
       );
       const focusOldestWaitingMinutes = focusStores.reduce(
         (oldest, store) => Math.max(oldest, oldestMap.get(store.id) ?? 0),
@@ -1649,6 +1660,8 @@ export class ConversationsService {
         masterStoreId: null,
         externalStoreId: null,
         storeName: "Focus group · 7 stores",
+        total: focusCounts.total,
+        outOfScope: focusCounts.outOfScope,
         notReplied: focusCounts.notReplied,
         notifiedBm: focusCounts.notifiedBm,
         replied: focusCounts.replied,
