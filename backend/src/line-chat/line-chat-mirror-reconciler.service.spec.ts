@@ -223,6 +223,7 @@ function createReconcileHarness() {
   const activities: unknown[] = [];
   let directMatches = 1;
   let contentMatches = 0;
+  let failReplyStateObservation = false;
   const prisma = {
     store: { findFirst: async () => ({
       id: "store-test", code: "28220", storeMaster: null,
@@ -251,8 +252,17 @@ function createReconcileHarness() {
       },
     },
     conversation: {
-      findMany: async (query: Prisma.ConversationFindManyArgs) => typeof query.where?.lineChatUserId === "string"
-        ? Array.from({ length: directMatches }, (_, index) => ({ id: index === 0 ? conversation.id : "other-conversation" })) : [],
+      findMany: async (query: Prisma.ConversationFindManyArgs) => {
+        if (query.where?.id && typeof query.where.id === "object" && "in" in query.where.id) {
+          if (failReplyStateObservation) throw new Error("synthetic telemetry query failure");
+          return (query.where.id.in as string[]).includes(conversation.id)
+            ? [{ ...conversation }]
+            : [];
+        }
+        return typeof query.where?.lineChatUserId === "string"
+          ? Array.from({ length: directMatches }, (_, index) => ({ id: index === 0 ? conversation.id : "other-conversation" }))
+          : [];
+      },
       findUnique: async () => ({ ...conversation }),
       update: async (input: { data: Partial<typeof conversation> }) => Object.assign(conversation, input.data),
     },
@@ -274,13 +284,20 @@ function createReconcileHarness() {
   };
   const client = { ...prisma, $transaction: async (callback: (tx: typeof prisma) => Promise<void>) => callback(prisma) };
   const service = new LineChatMirrorReconcilerService(client as unknown as PrismaService);
-  Object.defineProperty(service, "logger", { value: { log(message: string) { logs.push(message); }, error() {} } });
+  Object.defineProperty(service, "logger", {
+    value: {
+      log(message: string) { logs.push(message); },
+      warn(message: string) { logs.push(message); },
+      error() {},
+    },
+  });
   const reconcile = (batch: number, apply = true) => (service as unknown as {
     reconcileStore: (code: string, since: Date, apply: boolean, batch: number) => Promise<LineChatMirrorReconcileCycleResult>;
   }).reconcileStore("28220", new Date("2026-09-01"), apply, batch);
   return { service, reconcile, rows, canonical, conversation, queries, processed, activities, logs,
     setContentMatches: (count: number) => { contentMatches = count; },
-    setDirectMatches: (count: number) => { directMatches = count; } };
+    setDirectMatches: (count: number) => { directMatches = count; },
+    failReplyStateObservation: () => { failReplyStateObservation = true; } };
 }
 
 test("reconciler imports Manager outbound first, updates canonical reply state, and remains idempotent", async () => {
@@ -318,6 +335,18 @@ test("reconciler imports Manager outbound first, updates canonical reply state, 
   assert.equal(h.canonical.length, 2);
   assert.equal(h.activities.length, 1);
   assert.equal(h.queries.at(-1)?.take, 1); // A full outbound batch skips lower priority queries.
+});
+
+test("outbound reply-state telemetry failure cannot fail a successful reconcile cycle", async () => {
+  const h = createReconcileHarness();
+  h.failReplyStateObservation();
+
+  const result = await h.reconcile(3);
+
+  assert.equal(result.importedOutbound, 1);
+  assert.equal(result.conversationsRecomputed, 1);
+  assert.equal(h.conversation.bmReplyStatus, BmReplyStatus.REPLIED);
+  assert.equal(h.logs.some((message) => message.includes("line_chat_mirror_manager_outbound_reply_state_observation_failed")), true);
 });
 
 test("reconciler leaves ambiguous Manager mappings closed without canonical writes", async () => {

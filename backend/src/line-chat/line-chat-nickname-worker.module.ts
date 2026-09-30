@@ -19,6 +19,7 @@ import { LineChatHistoricalMappingBackfillService } from "./line-chat-historical
 import { LineChatMessageSendWorkerService } from "./line-chat-message-send-worker.service";
 import { LineChatMirrorService } from "./line-chat-mirror.service";
 import { LineChatMirrorReconcilerService } from "./line-chat-mirror-reconciler.service";
+import { LineChatMirrorLiveParityAuditService } from "./line-chat-mirror-live-parity-audit.service";
 import { LineChatManagerMediaMaterializerService } from "./line-chat-manager-media-materializer.service";
 import { LineChatMirrorSalesTagSyncService } from "./line-chat-mirror-sales-tag-sync.service";
 import { LineChatSeptemberInventoryService } from "./line-chat-september-inventory.service";
@@ -52,6 +53,7 @@ import { LineChatTargetProofService } from "./line-chat-target-proof.service";
     LineChatMessageSendWorkerService,
     LineChatMirrorService,
     LineChatMirrorReconcilerService,
+    LineChatMirrorLiveParityAuditService,
     MediaStorageService,
     LineChatManagerMediaMaterializerService,
     LineChatMirrorSalesTagSyncService,

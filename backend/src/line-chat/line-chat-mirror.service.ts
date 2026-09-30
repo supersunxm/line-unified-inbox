@@ -41,11 +41,12 @@ const MAX_OUTBOUND_REFRESH_INTERVAL_MS = 60 * 60_000;
 const OUTBOUND_REFRESH_PRIORITY_WINDOW_MS = 24 * 60 * 60_000;
 const RECENT_MAX_PAGES = 5;
 const RECENT_MAX_CHATS = 125;
+const MAX_MANAGER_ONLY_OUTBOUND_LOGS_PER_STORE_CYCLE = 10;
 const HISTORICAL_MAX_CONVERSATIONS_PER_STORE_CYCLE = 1;
 
 export interface LineChatMirrorCycleResult {
   storeCode: string;
-  profileKey?: string;
+  profileKey?: "A" | "B";
   targetInputDurationMs?: number;
   targetResolutionDurationMs?: number;
   status: LineChatMirrorSyncStatus;
@@ -349,6 +350,7 @@ export function selectLiveMirrorHistoryCandidates(input: {
 export function isManagerOnlyOutboundRefresh(input: {
   previousLastMessageAt: Date | null | undefined;
   previousHistorySyncedThroughAt: Date | null | undefined;
+  previousLastHistorySyncedAt?: Date | null;
   currentLastMessageAt: Date | null;
   managerOutboundAt: Date;
   managerInboundAt: Date | null;
@@ -359,6 +361,9 @@ export function isManagerOnlyOutboundRefresh(input: {
     && input.currentLastMessageAt !== null
     && input.currentLastMessageAt.getTime() <= previousLastMessageAt
     && input.managerOutboundAt.getTime() > previousLastMessageAt
+    && input.managerOutboundAt.getTime() > (
+      input.previousLastHistorySyncedAt?.getTime() ?? previousLastMessageAt
+    )
     && (input.managerInboundAt === null
       || input.managerInboundAt.getTime() <= previousLastMessageAt);
 }
@@ -945,19 +950,36 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
           );
         }
 
-        const previousMirrorChats = await this.prisma.lineChatMirrorChat.findMany({
-          where: {
-            lineOfficialAccountId: oa.id,
-            lastMessageAt: { not: null },
-          },
-          orderBy: { lastMessageAt: "desc" },
-          select: {
-            lineChatUserId: true,
-            lastMessageAt: true,
-            historySyncedThroughAt: true,
-            lastHistorySyncedAt: true,
-          },
-        });
+        const recentChatUserIds = [...new Set(recent.chats.map((chat) => chat.chatUserId))];
+        let previousMirrorChats: Array<{
+          lineChatUserId: string;
+          lastMessageAt: Date | null;
+          historySyncedThroughAt: Date | null;
+          lastHistorySyncedAt: Date | null;
+        }> = [];
+        if (recentChatUserIds.length > 0) {
+          try {
+            previousMirrorChats = await this.prisma.lineChatMirrorChat.findMany({
+              where: {
+                lineOfficialAccountId: oa.id,
+                lineChatUserId: { in: recentChatUserIds },
+                lastMessageAt: { not: null },
+              },
+              select: {
+                lineChatUserId: true,
+                lastMessageAt: true,
+                historySyncedThroughAt: true,
+                lastHistorySyncedAt: true,
+              },
+            });
+          } catch (error) {
+            this.logger.warn(JSON.stringify({
+              event: "line_chat_mirror_manager_only_observation_lookup_failed",
+              storeCode: effectiveStoreCode,
+              errorType: error instanceof Error ? error.name : "UNKNOWN",
+            }));
+          }
+        }
         const previousChatByUserId = new Map(
           previousMirrorChats.map((chat) => [chat.lineChatUserId, chat]),
         );
@@ -1155,9 +1177,12 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
         .sort(([left], [right]) => left.localeCompare(right)),
     );
 
+    const profileKey = session.sessionKey === "account-1"
+      ? "A"
+      : session.sessionKey === "profile-b" ? "B" : undefined;
     const result: LineChatMirrorCycleResult = {
       storeCode: effectiveStoreCode,
-      profileKey: session.sessionKey,
+      ...(profileKey ? { profileKey } : {}),
       targetInputDurationMs: targetInputsDurationMs,
       targetResolutionDurationMs,
       status,
@@ -1695,11 +1720,15 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
                 || !isManagerOnlyOutboundRefresh({
                   previousLastMessageAt: previous.previousLastMessageAt,
                   previousHistorySyncedThroughAt: previous.previousHistorySyncedThroughAt,
+                  previousLastHistorySyncedAt: previous.previousLastHistorySyncedAt,
                   currentLastMessageAt: chat.lastMessageAt,
                   managerOutboundAt: event.sentAt,
                   managerInboundAt: newerInbound,
                 })
               ) continue;
+              if (observedOutboundRefreshes.length >= MAX_MANAGER_ONLY_OUTBOUND_LOGS_PER_STORE_CYCLE) {
+                continue;
+              }
               observedOutboundRefreshes.push({
                 storeCode: input.storeCode,
                 conversationKey: createHash("sha256")
@@ -1771,7 +1800,6 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
     );
     this.logger.log(JSON.stringify({
       event: "line_chat_mirror_history_shape_observed",
-      lineOfficialAccountId: input.lineOfficialAccountId,
       historiesFetched,
       messagesObserved,
       unknownDirectionEvents,

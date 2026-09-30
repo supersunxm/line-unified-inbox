@@ -37,6 +37,7 @@ const CONTENT_TIME_TOLERANCE_MS = 2_000;
 const RETRY_ACTIVE_WINDOW_MS = 24 * 60 * 60_000;
 const RETRY_MIN_ATTEMPTS = 3;
 const RETRY_BACKOFF_MS = 6 * 60 * 60_000;
+const MAX_OUTBOUND_CANONICALIZATION_DETAIL_LOGS_PER_STORE_CYCLE = 10;
 
 type MirrorRow = {
   id: string;
@@ -688,11 +689,38 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
       }
     }
 
-    for (const evidence of importedOutboundEvidence) {
-      const state = await this.prisma.conversation.findUnique({
-        where: { id: evidence.conversationId },
-        select: { bmReplyStatus: true, followUpStatus: true },
-      });
+    const loggedOutboundEvidence = importedOutboundEvidence.slice(
+      0,
+      MAX_OUTBOUND_CANONICALIZATION_DETAIL_LOGS_PER_STORE_CYCLE,
+    );
+    const replyStateByConversationId = new Map<string, {
+      bmReplyStatus: BmReplyStatus;
+      followUpStatus: FollowUpStatus;
+    }>();
+    if (loggedOutboundEvidence.length > 0) {
+      try {
+        const replyStates = await this.prisma.conversation.findMany({
+          where: {
+            id: { in: [...new Set(loggedOutboundEvidence.map((evidence) => evidence.conversationId))] },
+          },
+          select: { id: true, bmReplyStatus: true, followUpStatus: true },
+        });
+        for (const state of replyStates) {
+          replyStateByConversationId.set(state.id, {
+            bmReplyStatus: state.bmReplyStatus,
+            followUpStatus: state.followUpStatus,
+          });
+        }
+      } catch (error) {
+        this.logger.warn(JSON.stringify({
+          event: "line_chat_mirror_manager_outbound_reply_state_observation_failed",
+          storeCode: effectiveStoreCode,
+          errorType: error instanceof Error ? error.name : "UNKNOWN",
+        }));
+      }
+    }
+    for (const evidence of loggedOutboundEvidence) {
+      const state = replyStateByConversationId.get(evidence.conversationId);
       this.logger.log(JSON.stringify({
         event: "line_chat_mirror_manager_outbound_canonicalized",
         storeCode: effectiveStoreCode,
@@ -701,6 +729,14 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
         canonicalImportAt: evidence.canonicalImportAt,
         resultingReplyState: state?.bmReplyStatus ?? null,
         resultingFollowUpState: state?.followUpStatus ?? null,
+      }));
+    }
+    if (importedOutboundEvidence.length > loggedOutboundEvidence.length) {
+      this.logger.log(JSON.stringify({
+        event: "line_chat_mirror_manager_outbound_canonicalized_details_capped",
+        storeCode: effectiveStoreCode,
+        eventsWithDetailsSuppressed: importedOutboundEvidence.length - loggedOutboundEvidence.length,
+        maximumDetailsPerStoreCycle: MAX_OUTBOUND_CANONICALIZATION_DETAIL_LOGS_PER_STORE_CYCLE,
       }));
     }
 

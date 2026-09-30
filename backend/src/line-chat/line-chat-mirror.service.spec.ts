@@ -314,6 +314,7 @@ test("Manager-only outbound observation requires equal prior watermark and no ne
   const base = {
     previousLastMessageAt: previous,
     previousHistorySyncedThroughAt: previous,
+    previousLastHistorySyncedAt: new Date("2026-09-30T04:59:00.000Z"),
     currentLastMessageAt: previous,
     managerOutboundAt: outbound,
     managerInboundAt: null,
@@ -331,6 +332,10 @@ test("Manager-only outbound observation requires equal prior watermark and no ne
   assert.equal(isManagerOnlyOutboundRefresh({
     ...base,
     currentLastMessageAt: outbound,
+  }), false);
+  assert.equal(isManagerOnlyOutboundRefresh({
+    ...base,
+    previousLastHistorySyncedAt: outbound,
   }), false);
 });
 
