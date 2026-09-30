@@ -13,6 +13,7 @@ import {
   configuredLineChatMirrorStoreCodes,
   isLineChatMirrorEnabled,
   isMirrorOperationSchemaUnavailable,
+  isManagerOnlyOutboundRefresh,
   lineChatMirrorIntervalMs,
   lineChatMirrorMaxChangedChatsPerCycle,
   lineChatMirrorOutboundRefreshIntervalMs,
@@ -305,6 +306,32 @@ test("Live Mirror rechecks stale recent chats even when chat-list activity did n
     selected.map((chat) => chat.lineChatUserId),
     ["changed", "manager-only-reply", "background"],
   );
+});
+
+test("Manager-only outbound observation requires equal prior watermark and no newer inbound", () => {
+  const previous = new Date("2026-09-30T05:00:00.000Z");
+  const outbound = new Date("2026-09-30T05:01:00.000Z");
+  const base = {
+    previousLastMessageAt: previous,
+    previousHistorySyncedThroughAt: previous,
+    currentLastMessageAt: previous,
+    managerOutboundAt: outbound,
+    managerInboundAt: null,
+  };
+
+  assert.equal(isManagerOnlyOutboundRefresh(base), true);
+  assert.equal(isManagerOnlyOutboundRefresh({
+    ...base,
+    previousHistorySyncedThroughAt: new Date(previous.getTime() - 1),
+  }), false);
+  assert.equal(isManagerOnlyOutboundRefresh({
+    ...base,
+    managerInboundAt: outbound,
+  }), false);
+  assert.equal(isManagerOnlyOutboundRefresh({
+    ...base,
+    currentLastMessageAt: outbound,
+  }), false);
 });
 
 test("Live Mirror outbound probes rotate by oldest successful history read", () => {
@@ -1255,6 +1282,7 @@ test("a stale equal-timestamp candidate fetches and persists new messageSent wit
   const persisted: Array<Record<string, unknown>> = [];
   let historyReads = 0;
   let closures = 0;
+  const logs: string[] = [];
   const page = {
     goto: async () => {}, waitForLoadState: async () => {}, waitForTimeout: async () => {},
     evaluate: async (_fn: unknown, url: string) => {
@@ -1271,26 +1299,36 @@ test("a stale equal-timestamp candidate fetches and persists new messageSent wit
     probeApiAuthentication: async () => ({ authenticated: "YES" }),
   } as unknown as LineChatSessionService;
   const prisma = {
-    lineChatMirrorMessage: { upsert: async (input: { create: Record<string, unknown> }) => {
-      persisted.push(input.create);
-      return { id: "synthetic-mirror" };
-    } },
+    $executeRaw: async (query: { values: unknown[] }) => {
+      persisted.push({
+        managerMessageId: query.values[3],
+        direction: query.values[5],
+        ownerName: query.values[10],
+      });
+      return 1;
+    },
     lineChatMirrorChat: { count: async () => 1, update: async (input: { data: { lastHistorySyncedAt: Date; historySyncedThroughAt: Date } }) => {
       candidate.lastHistorySyncedAt = input.data.lastHistorySyncedAt;
       candidate.historySyncedThroughAt = input.data.historySyncedThroughAt;
     } },
   } as unknown as PrismaService;
   const service = new LineChatMirrorService(prisma, sessionService, {} as LineChatProfileOperationCoordinator);
-  Object.defineProperty(service, "logger", { value: { log() {}, warn() {} } });
-  const pending = selectLiveMirrorHistoryCandidates({
+  Object.defineProperty(service, "logger", { value: { log(message: string) { logs.push(message); }, warn() {} } });
+  const selectedPending = selectLiveMirrorHistoryCandidates({
     chats: [candidate], recentChatUserIds: [candidate.lineChatUserId], catchUpStartAt: null,
     now: new Date("2026-09-30T05:01:00Z"), maxCandidates: 20, outboundRefreshIntervalMs: 120_000,
   });
+  const pending = selectedPending.map((chat) => ({
+    ...chat,
+    previousLastMessageAt: lastMessageAt,
+    previousHistorySyncedThroughAt: lastMessageAt,
+    previousLastHistorySyncedAt: candidate.lastHistorySyncedAt,
+  }));
   const result = await (service as unknown as {
-    fetchAndPersistHistories: (input: { lineOfficialAccountId: string; botId: string; profilePath: string;
+    fetchAndPersistHistories: (input: { lineOfficialAccountId: string; storeCode: string; botId: string; profilePath: string;
       sessionId: string; pending: typeof pending; assertOwnership: () => void }) => Promise<{ historiesFetched: number; historyFailures: number }>;
   }).fetchAndPersistHistories({
-    lineOfficialAccountId: "synthetic-oa", botId: "synthetic-bot", profilePath: "/tmp",
+    lineOfficialAccountId: "synthetic-oa", storeCode: "synthetic-store", botId: "synthetic-bot", profilePath: "/tmp",
     sessionId: "synthetic-session", pending, assertOwnership() {},
   });
   assert.equal(result.historyFailures, 0);
@@ -1300,6 +1338,12 @@ test("a stale equal-timestamp candidate fetches and persists new messageSent wit
   assert.equal(persisted[0].direction, LineChatMirrorDirection.OUTBOUND);
   assert.equal(persisted[0].ownerName, "Synthetic Staff");
   assert.equal(persisted[0].managerMessageId, "synthetic-reply");
+  const observation = logs.map((message) => JSON.parse(message) as Record<string, unknown>)
+    .find((message) => message.event === "line_chat_mirror_manager_only_outbound_observed");
+  assert.equal(typeof observation?.conversationKey, "string");
+  assert.equal(observation?.previousLastMessageAt, lastMessageAt.toISOString());
+  assert.equal(observation?.managerMessageAt, "2026-09-30T05:00:00.000Z");
+  assert.equal(JSON.stringify(observation).includes("synthetic reply"), false);
   assert.equal(candidate.historySyncedThroughAt, lastMessageAt);
   assert.deepEqual(selectLiveMirrorHistoryCandidates({
     chats: [candidate], recentChatUserIds: [candidate.lineChatUserId], catchUpStartAt: null,

@@ -219,6 +219,7 @@ function createReconcileHarness() {
   };
   const queries: Prisma.LineChatMirrorMessageFindManyArgs[] = [];
   const processed: string[] = [];
+  const logs: string[] = [];
   const activities: unknown[] = [];
   let directMatches = 1;
   let contentMatches = 0;
@@ -273,11 +274,11 @@ function createReconcileHarness() {
   };
   const client = { ...prisma, $transaction: async (callback: (tx: typeof prisma) => Promise<void>) => callback(prisma) };
   const service = new LineChatMirrorReconcilerService(client as unknown as PrismaService);
-  Object.defineProperty(service, "logger", { value: { log() {}, error() {} } });
+  Object.defineProperty(service, "logger", { value: { log(message: string) { logs.push(message); }, error() {} } });
   const reconcile = (batch: number, apply = true) => (service as unknown as {
     reconcileStore: (code: string, since: Date, apply: boolean, batch: number) => Promise<LineChatMirrorReconcileCycleResult>;
   }).reconcileStore("28220", new Date("2026-09-01"), apply, batch);
-  return { service, reconcile, rows, canonical, conversation, queries, processed, activities,
+  return { service, reconcile, rows, canonical, conversation, queries, processed, activities, logs,
     setContentMatches: (count: number) => { contentMatches = count; },
     setDirectMatches: (count: number) => { directMatches = count; } };
 }
@@ -288,6 +289,9 @@ test("reconciler imports Manager outbound first, updates canonical reply state, 
   assert.deepEqual(h.processed, ["reply-test", "inbound-test", "retry-old"]);
   assert.deepEqual(h.queries.map((query) => query.take), [3, 2, 1]);
   assert.deepEqual(h.queries[2].orderBy, [{ updatedAt: "asc" }, { sentAt: "desc" }, { id: "desc" }]);
+  const retryEligibility = h.queries[2].where?.OR ?? [];
+  assert.equal(retryEligibility.some((filter) => filter.reconcileAttempts?.lt === 3), true);
+  assert.equal(retryEligibility.some((filter) => filter.updatedAt?.lte instanceof Date), true);
   assert.equal(first.importedOutbound, 1);
   assert.equal(first.conversationsRecomputed, 1);
   const reply = h.canonical.find((message) => message.direction === "OUTBOUND")!;
@@ -295,6 +299,12 @@ test("reconciler imports Manager outbound first, updates canonical reply state, 
   assert.equal(reply.deliveryStatus, MessageDeliveryStatus.DELIVERED);
   assert.equal(reply.senderDisplayName, "Manager Test Staff");
   assert.deepEqual(JSON.parse(JSON.stringify(reply.rawPayload)).provider, "LINE_MANAGER");
+  const canonicalized = h.logs.map((message) => JSON.parse(message) as Record<string, unknown>)
+    .find((message) => message.event === "line_chat_mirror_manager_outbound_canonicalized");
+  assert.equal(typeof canonicalized?.conversationKey, "string");
+  assert.equal(canonicalized?.canonicalImportAt !== undefined, true);
+  assert.equal(canonicalized?.resultingReplyState, BmReplyStatus.REPLIED);
+  assert.equal(JSON.stringify(canonicalized).includes("synthetic question"), false);
   assert.deepEqual(JSON.parse(JSON.stringify(reply.rawPayload)).source, "LINE_MANAGER_MIRROR");
   assert.equal(h.conversation.bmReplyStatus, BmReplyStatus.REPLIED);
   assert.equal(h.conversation.followUpStatus, FollowUpStatus.COMPLETED);

@@ -3078,3 +3078,10 @@ The first production target proof confirmed that eligible candidate OAs have no 
 - Discover Manager-only replies through stale refresh of the bounded recent list, within the existing history budget. Changed chats win; recent 24-hour activity precedes older background probes; oldest successful history reads rotate first. The 2-minute default only determines eligibility and does not promise a two-minute full-fleet cycle.
 - Use the existing canonical Message path for Store Chats parity; add no UI workaround or schema migration. Preserve Historical/backfill behavior. Stop after publication/check inspection, before merge/deployment.
 - Compare broader test/typecheck failures against the unchanged base rather than weakening tests or expanding this PR into unrelated repairs. GitHub billing prevents CI execution and must be reported as an unresolved external gate.
+
+## Full-fleet Live Mirror completion follow-up
+- Keep unresolved identities and inbound webhook gaps observational until exact evidence exists; do not infer Manager/webhook ID equality, fabricate inbound messages, or reuse Historical OA-family mapping for writes.
+- Keep fleet collection serial under the profile coordinator because most active fleet stores lack a persisted profile assignment and production stage measurements do not yet establish safe parallel ownership.
+- Bulk-upsert only the Live Mirror event table in bounded 100-row batches. Preserve reconciliation fields and firstSeenAt; refresh lastSeenAt, and only advance updatedAt when the source event payload changes so retry backoff remains effective.
+- Retry old unresolved reconcile rows at six-hour intervals after their recent-event/first-three-attempt window; do not terminally clear WAITING_CANONICAL or UNMAPPED.
+- Hash OA/chat identity for outbound observation and later canonicalization correlation; logs carry timestamps and reply/follow-up states only, never message content or identifiers.

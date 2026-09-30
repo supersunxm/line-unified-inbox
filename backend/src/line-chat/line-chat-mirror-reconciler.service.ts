@@ -1,4 +1,5 @@
 import { Inject, Injectable, Logger, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
+import { createHash } from "node:crypto";
 import {
   ActivityActionType,
   BmReplyStatus,
@@ -33,6 +34,9 @@ const IDENTITY_EVIDENCE_LIMIT = 100;
 const MIN_IDENTITY_MATCHES = 3;
 const INBOUND_MAPPING_EVIDENCE_LIMIT = 25;
 const CONTENT_TIME_TOLERANCE_MS = 2_000;
+const RETRY_ACTIVE_WINDOW_MS = 24 * 60 * 60_000;
+const RETRY_MIN_ATTEMPTS = 3;
+const RETRY_BACKOFF_MS = 6 * 60 * 60_000;
 
 type MirrorRow = {
   id: string;
@@ -431,11 +435,17 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
       0,
       batchSize - pendingOutbound.length - pendingOther.length,
     );
+    const retryNow = Date.now();
     const retryRows = remainingAfterPending > 0
       ? await this.prisma.lineChatMirrorMessage.findMany({
           where: {
             lineOfficialAccountId: oa.id,
             sentAt: { gte: since },
+            OR: [
+              { sentAt: { gte: new Date(retryNow - RETRY_ACTIVE_WINDOW_MS) } },
+              { reconcileAttempts: { lt: RETRY_MIN_ATTEMPTS } },
+              { updatedAt: { lte: new Date(retryNow - RETRY_BACKOFF_MS) } },
+            ],
             reconcileStatus: {
               in: [
                 LineChatMirrorReconcileStatus.WAITING_CANONICAL,
@@ -497,6 +507,12 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
     const mappingCache = new Map<string, MappingResult>();
     const ownerCache = new Map<string, { id: string; displayName: string } | null>();
     const touchedConversationIds = new Set<string>();
+    const importedOutboundEvidence: Array<{
+      conversationId: string;
+      conversationKey: string;
+      managerMessageAt: string;
+      canonicalImportAt: string;
+    }> = [];
 
     for (const row of rows) {
       try {
@@ -637,6 +653,16 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
         result.importedOutbound += imported.created ? 1 : 0;
         if (!imported.created) result.exactDuplicates += 1;
         touchedConversationIds.add(mapping.conversationId);
+        if (imported.created) {
+          importedOutboundEvidence.push({
+            conversationId: mapping.conversationId,
+            conversationKey: createHash("sha256")
+              .update(`${oa.id}:${row.lineChatUserId}`)
+              .digest("hex"),
+            managerMessageAt: row.sentAt.toISOString(),
+            canonicalImportAt: new Date().toISOString(),
+          });
+        }
         await this.markMirror(row.id, {
           status: imported.created
             ? LineChatMirrorReconcileStatus.IMPORTED
@@ -660,6 +686,22 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
           result.conversationsRecomputed += 1;
         }
       }
+    }
+
+    for (const evidence of importedOutboundEvidence) {
+      const state = await this.prisma.conversation.findUnique({
+        where: { id: evidence.conversationId },
+        select: { bmReplyStatus: true, followUpStatus: true },
+      });
+      this.logger.log(JSON.stringify({
+        event: "line_chat_mirror_manager_outbound_canonicalized",
+        storeCode: effectiveStoreCode,
+        conversationKey: evidence.conversationKey,
+        managerMessageAt: evidence.managerMessageAt,
+        canonicalImportAt: evidence.canonicalImportAt,
+        resultingReplyState: state?.bmReplyStatus ?? null,
+        resultingFollowUpState: state?.followUpStatus ?? null,
+      }));
     }
 
     result.durationMs = Date.now() - startedAt;
