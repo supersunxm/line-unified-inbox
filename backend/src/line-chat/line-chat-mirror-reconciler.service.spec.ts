@@ -8,6 +8,7 @@ import {
   isLineChatMirrorReconcileApplyEnabled,
   isLineChatMirrorReconcileEnabled,
   lineChatMirrorReconcileBatchSize,
+  lineChatMirrorReconcileEffectiveBatchSize,
   lineChatMirrorReconcileIntervalMs,
   lineChatMirrorReconcileSince,
   managerResponderDisplayName,
@@ -59,16 +60,17 @@ test("Project B canonical reconciler stays opt-in and apply is independently gat
   );
 });
 
-test("Project B canonical reconciler parses store scope and requires a valid since timestamp", () => {
+test("Project B canonical reconciler always includes the full Live Mirror fleet", () => {
   withEnv(
     {
-      LINE_CHAT_MIRROR_RECONCILE_STORE_CODES: "28375, 25610;28375 3791",
+      LINE_CHAT_MIRROR_STORE_CODES: "28220, 28375;28220 3050",
+      LINE_CHAT_MIRROR_RECONCILE_STORE_CODES: "25610,28375",
       LINE_CHAT_MIRROR_RECONCILE_SINCE: "2026-09-21T04:00:00.000Z",
     },
     () => {
       assert.deepEqual(
         configuredLineChatMirrorReconcileStoreCodes(),
-        ["28375", "25610", "3791"],
+        ["28220", "28375", "3050", "25610"],
       );
       assert.equal(
         lineChatMirrorReconcileSince()?.toISOString(),
@@ -81,26 +83,27 @@ test("Project B canonical reconciler parses store scope and requires a valid sin
   });
 });
 
-test("Project B canonical reconciler keeps dry-run stores separate from the apply scope", () => {
+test("Project B canonical reconciler keeps dry-run stores separate from the full apply scope", () => {
   withEnv(
     {
-      LINE_CHAT_MIRROR_RECONCILE_STORE_CODES: "28375,25610",
-      LINE_CHAT_MIRROR_RECONCILE_DRY_RUN_STORE_CODES: "20789, 29039;28375 20789",
+      LINE_CHAT_MIRROR_STORE_CODES: "28375,20789",
+      LINE_CHAT_MIRROR_RECONCILE_STORE_CODES: "25610",
+      LINE_CHAT_MIRROR_RECONCILE_DRY_RUN_STORE_CODES: "20789, 29039;28375 3791",
     },
     () => {
       assert.deepEqual(
         configuredLineChatMirrorReconcileStoreCodes(),
-        ["28375", "25610"],
+        ["28375", "20789", "25610"],
       );
       assert.deepEqual(
         configuredLineChatMirrorReconcileDryRunStoreCodes(),
-        ["20789", "29039"],
+        ["29039", "3791"],
       );
     },
   );
 });
 
-test("Project B canonical reconciler bounds interval and batch size", () => {
+test("Project B canonical reconciler bounds interval and caps per-store work at full-fleet scale", () => {
   withEnv(
     {
       LINE_CHAT_MIRROR_RECONCILE_INTERVAL_MS: "1000",
@@ -109,6 +112,8 @@ test("Project B canonical reconciler bounds interval and batch size", () => {
     () => {
       assert.equal(lineChatMirrorReconcileIntervalMs(), 30_000);
       assert.equal(lineChatMirrorReconcileBatchSize(), 1_000);
+      assert.equal(lineChatMirrorReconcileEffectiveBatchSize(16), 1_000);
+      assert.equal(lineChatMirrorReconcileEffectiveBatchSize(136), 100);
     },
   );
 });
