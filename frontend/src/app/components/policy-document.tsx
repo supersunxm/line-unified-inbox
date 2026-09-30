@@ -61,7 +61,7 @@ export function PolicyDocument({ content }: { content: Record<AppLanguage, Polic
       <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/90 backdrop-blur-md dark:border-slate-800 dark:bg-[#12151c]/90">
         <div className="mx-auto flex max-w-4xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
           <div className="flex min-w-0 items-center gap-2.5">
-            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-emerald-600 text-xs font-bold text-white shadow-xs dark:bg-emerald-500">O</span>
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[var(--app-accent)] text-xs font-bold text-white shadow-xs">O</span>
             <div className="min-w-0">
               <span className="block truncate text-sm font-semibold tracking-tight text-slate-900 dark:text-slate-100">{t.productName}</span>
               <span className="hidden text-xs text-slate-500 dark:text-slate-400 sm:inline">· {t.internalLabel}</span>

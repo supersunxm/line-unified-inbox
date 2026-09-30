@@ -357,5 +357,5 @@ test("Brand Accent: Global --app-accent uses the brand green and separates warni
   // Dashboard 7-day follower trend must consume semantic accent
   const dashV2 = readFileSync(new URL("../src/app/dashboard/executive-dashboard-v2.tsx", import.meta.url), "utf8");
   assert.doesNotMatch(dashV2, /stroke="#FF6900"/);
-  assert.match(dashV2, /stroke="var\(--app-accent, #00A651\)"/);
+  assert.match(dashV2, /stroke="var\(--app-accent, #1f6b4a\)"/);
 });

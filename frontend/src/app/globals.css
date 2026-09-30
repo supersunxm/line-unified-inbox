@@ -355,10 +355,6 @@ html[data-theme="dark"] img {
   --app-text-secondary: #40536f;
   --app-text-tertiary: #718196;
   --app-text-disabled: #b8c4cb;
-  --app-accent: #009b69;
-  --app-accent-hover: #007f57;
-  --app-accent-soft: #e5f7ef;
-  --app-accent-contrast: #ffffff;
   --app-success: #079669;
   --app-success-soft: #e8f8f0;
   --app-warning: #c97800;
@@ -400,10 +396,6 @@ html[data-theme="dark"] .store360-workspace {
   --app-text-secondary: #b4c0d0;
   --app-text-tertiary: #8190a5;
   --app-text-disabled: #596579;
-  --app-accent: #39d99a;
-  --app-accent-hover: #62e7b0;
-  --app-accent-soft: #103824;
-  --app-accent-contrast: #07140d;
   --app-success: #5be39a;
   --app-success-soft: #123322;
   --app-warning: #ffbd66;
@@ -506,18 +498,28 @@ button.bg-slate-900.text-white:disabled {
    Disabled ones take the primary-button disabled styling instead. */
 button.text-white[class~="bg-[var(--app-accent)]"]:not(:disabled, [aria-disabled="true"]),
 button.text-white[class~="bg-[var(--app-accent-hover)]"]:not(:disabled, [aria-disabled="true"]),
-button.text-white[class~="bg-[var(--app-accent,#00ba7c)]"]:not(:disabled, [aria-disabled="true"]),
+button.text-white[class~="bg-[var(--app-accent,#1f6b4a)]"]:not(:disabled, [aria-disabled="true"]),
 button.text-white[class~="bg-[var(--app-accent,#111827)]"]:not(:disabled, [aria-disabled="true"]) {
   color: var(--app-accent-contrast);
 }
 
 button.text-white[class~="bg-[var(--app-accent)]"]:is(:disabled, [aria-disabled="true"]),
 button.text-white[class~="bg-[var(--app-accent-hover)]"]:is(:disabled, [aria-disabled="true"]),
-button.text-white[class~="bg-[var(--app-accent,#00ba7c)]"]:is(:disabled, [aria-disabled="true"]),
+button.text-white[class~="bg-[var(--app-accent,#1f6b4a)]"]:is(:disabled, [aria-disabled="true"]),
 button.text-white[class~="bg-[var(--app-accent,#111827)]"]:is(:disabled, [aria-disabled="true"]) {
   background: var(--button-primary-disabled-bg);
   color: var(--button-primary-disabled-text);
   opacity: 1;
+}
+
+/* Dark mode maps --color-white to the surface color, so text-white on accent-filled
+   links, badges and logo tiles would render dark text on the brand green. */
+:not(button).text-white[class~="bg-[var(--app-accent)]"],
+:not(button).text-white[class~="bg-[var(--app-accent-hover)]"],
+:not(button).text-white[class~="bg-[var(--app-accent,#1f6b4a)]"],
+:not(button).text-white[class~="bg-[var(--app-accent,#111827)]"],
+html[data-theme="dark"] :not(button).text-white[class~="dark:bg-[var(--app-accent)]"] {
+  color: var(--app-accent-contrast);
 }
 
 .app-button-secondary {

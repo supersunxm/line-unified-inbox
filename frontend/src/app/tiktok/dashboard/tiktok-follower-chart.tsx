@@ -134,15 +134,15 @@ export function TikTokFollowerGrowthChart({ history, summary, accountDisplayName
           <div className="relative">
             <div className="w-full overflow-hidden">
               <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`} className="h-48 w-full overflow-visible sm:h-56" preserveAspectRatio="none">
-                <defs><linearGradient id="followerAreaGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#10b981" stopOpacity="0.25" /><stop offset="100%" stopColor="#10b981" stopOpacity="0" /></linearGradient></defs>
+                <defs><linearGradient id="followerAreaGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="var(--app-accent)" stopOpacity="0.25" /><stop offset="100%" stopColor="var(--app-accent)" stopOpacity="0" /></linearGradient></defs>
                 <line x1={paddingX} y1={paddingY} x2={chartWidth - paddingX} y2={paddingY} stroke="currentColor" className="text-slate-100 dark:text-slate-800" strokeDasharray="4 4" />
                 <line x1={paddingX} y1={chartHeight / 2} x2={chartWidth - paddingX} y2={chartHeight / 2} stroke="currentColor" className="text-slate-100 dark:text-slate-800" strokeDasharray="4 4" />
                 <line x1={paddingX} y1={chartHeight - paddingY} x2={chartWidth - paddingX} y2={chartHeight - paddingY} stroke="currentColor" className="text-slate-200 dark:text-slate-800" />
                 <path d={areaPath} fill="url(#followerAreaGrad)" />
-                <path d={linePath} fill="none" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                <path d={linePath} fill="none" stroke="var(--app-accent)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
                 {points.map((point) => {
                   const isHovered = hoveredIndex === point.idx;
-                  return <g key={point.item.id} className="cursor-pointer"><circle cx={point.x} cy={point.y} r={isHovered ? 6 : 3.5} fill={isHovered ? "#059669" : "#10b981"} stroke="#ffffff" strokeWidth={isHovered ? 2.5 : 1.5} className="transition-all duration-150" onMouseEnter={() => setHoveredIndex(point.idx)} onMouseLeave={() => setHoveredIndex(null)} /></g>;
+                  return <g key={point.item.id} className="cursor-pointer"><circle cx={point.x} cy={point.y} r={isHovered ? 6 : 3.5} fill={isHovered ? "var(--app-accent-hover)" : "var(--app-accent)"} stroke="#ffffff" strokeWidth={isHovered ? 2.5 : 1.5} className="transition-all duration-150" onMouseEnter={() => setHoveredIndex(point.idx)} onMouseLeave={() => setHoveredIndex(null)} /></g>;
                 })}
               </svg>
             </div>

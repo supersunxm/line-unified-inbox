@@ -306,7 +306,7 @@ function StoreBreakdownTableInner({
     <button
       type="button"
       onClick={() => handleSort(field)}
-      className={`flex w-full items-center gap-1 px-3 py-3 text-[11px] font-semibold uppercase tracking-[0.045em] text-[var(--muted)] hover:text-[#00A651] ${
+      className={`flex w-full items-center gap-1 px-3 py-3 text-[11px] font-semibold uppercase tracking-[0.045em] text-[var(--muted)] hover:text-[var(--app-accent)] ${
         align === "right" ? "justify-end" : "justify-start"
       }`}
     >
@@ -374,7 +374,7 @@ function StoreBreakdownTableInner({
                 type="button"
                 onClick={() => exportStoreCsv(filteredRows.map((row) => row.source), dateFrom, dateTo, language)}
                 disabled={filteredRows.length === 0}
-                className="inline-flex h-10 items-center justify-center gap-1.5 rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-3 text-xs font-semibold text-[var(--foreground)] hover:border-emerald-500 hover:text-emerald-600 disabled:opacity-40"
+                className="inline-flex h-10 items-center justify-center gap-1.5 rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-3 text-xs font-semibold text-[var(--foreground)] hover:border-[var(--app-accent)] hover:text-[var(--app-accent)] disabled:opacity-40"
                 title={t.exportCsv}
               >
                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -391,7 +391,7 @@ function StoreBreakdownTableInner({
       {storeError ? (
         <div className="flex flex-col items-center justify-center gap-3 p-10 text-center text-sm text-[var(--app-danger)]">
           <p>{t.errorLoadingStore}: {storeError}</p>
-          <button type="button" onClick={onRetry} className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-xs font-semibold text-[var(--foreground)] hover:border-emerald-500">
+          <button type="button" onClick={onRetry} className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-xs font-semibold text-[var(--foreground)] hover:border-[var(--app-accent)]">
             {t.retryStore}
           </button>
         </div>
@@ -450,7 +450,7 @@ function StoreBreakdownTableInner({
                 type="button"
                 onClick={() => goToPage(Math.max(1, safePage - 1))}
                 disabled={safePage <= 1}
-                className="h-8 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 text-xs font-medium text-[var(--foreground)] hover:border-emerald-500 hover:text-emerald-600 disabled:cursor-not-allowed disabled:opacity-40"
+                className="h-8 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 text-xs font-medium text-[var(--foreground)] hover:border-[var(--app-accent)] hover:text-[var(--app-accent)] disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {t.previous}
               </button>
@@ -463,8 +463,8 @@ function StoreBreakdownTableInner({
                     onClick={() => goToPage(page)}
                     className={`h-8 min-w-8 rounded-lg border px-2 text-xs font-semibold transition-colors ${
                       safePage === page
-                        ? "border-emerald-600 bg-emerald-600 text-white"
-                        : "border-[var(--border)] bg-[var(--surface)] text-[var(--foreground)] hover:border-emerald-500 hover:text-emerald-600"
+                        ? "border-[var(--app-accent)] bg-[var(--app-accent)] text-white"
+                        : "border-[var(--border)] bg-[var(--surface)] text-[var(--foreground)] hover:border-[var(--app-accent)] hover:text-[var(--app-accent)]"
                     }`}
                   >
                     {page}
@@ -478,7 +478,7 @@ function StoreBreakdownTableInner({
                 type="button"
                 onClick={() => goToPage(Math.min(totalPages, safePage + 1))}
                 disabled={safePage >= totalPages}
-                className="h-8 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 text-xs font-medium text-[var(--foreground)] hover:border-emerald-500 hover:text-emerald-600 disabled:cursor-not-allowed disabled:opacity-40"
+                className="h-8 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 text-xs font-medium text-[var(--foreground)] hover:border-[var(--app-accent)] hover:text-[var(--app-accent)] disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {t.next}
               </button>

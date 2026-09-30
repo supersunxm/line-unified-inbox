@@ -112,15 +112,15 @@ function FollowerTrend({ data }: { data: ExecutiveStoreHealth["followerTrend"] }
         <svg viewBox={`0 0 ${width} ${height}`} className="h-full w-full" role="img" aria-label="แนวโน้มผู้ติดตาม 7 วัน">
           <defs>
             <linearGradient id="followerArea" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="var(--app-accent, #00A651)" stopOpacity="0.18" />
-              <stop offset="100%" stopColor="var(--app-accent, #00A651)" stopOpacity="0" />
+              <stop offset="0%" stopColor="var(--app-accent, #1f6b4a)" stopOpacity="0.18" />
+              <stop offset="100%" stopColor="var(--app-accent, #1f6b4a)" stopOpacity="0" />
             </linearGradient>
           </defs>
           <polygon points={area} fill="url(#followerArea)" />
-          <polyline points={polyline} fill="none" stroke="var(--app-accent, #00A651)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+          <polyline points={polyline} fill="none" stroke="var(--app-accent, #1f6b4a)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
           {points.map((point, index) => (
             <g key={point.item.date}>
-              <circle cx={point.x} cy={point.y} r="3" fill="var(--app-accent, #00A651)">
+              <circle cx={point.x} cy={point.y} r="3" fill="var(--app-accent, #1f6b4a)">
                 <title>{`${formatDateLabel(point.item.date)}: ${point.item.followers.toLocaleString()} คน`}</title>
               </circle>
               {(index % Math.max(1, Math.ceil(points.length / 7)) === 0 || index === points.length - 1) && (

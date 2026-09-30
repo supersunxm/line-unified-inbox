@@ -40,7 +40,7 @@ test("primary buttons and focus rings use the brand accent in both themes", () =
   // `button { color: inherit; }` is unlayered and outranks text-white, so accent-filled
   // buttons need an explicit contrast color to stay readable on the darker brand green.
   assert.match(css, /button, input, select, textarea \{\n  color: inherit;\n\}/);
-  const backgrounds = ["bg-[var(--app-accent)]", "bg-[var(--app-accent-hover)]", "bg-[var(--app-accent,#00ba7c)]", "bg-[var(--app-accent,#111827)]"];
+  const backgrounds = ["bg-[var(--app-accent)]", "bg-[var(--app-accent-hover)]", "bg-[var(--app-accent,#1f6b4a)]", "bg-[var(--app-accent,#111827)]"];
   const enabledSelectors = backgrounds.map((background) => `button.text-white[class~="${background}"]:not(:disabled, [aria-disabled="true"])`);
   const disabledSelectors = backgrounds.map((background) => `button.text-white[class~="${background}"]:is(:disabled, [aria-disabled="true"])`);
   assert.ok(css.includes(`${enabledSelectors.join(",\n")} {\n  color: var(--app-accent-contrast);\n}`), "enabled accent buttons use the accent contrast color");

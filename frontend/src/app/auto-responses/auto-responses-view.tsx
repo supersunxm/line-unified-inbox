@@ -868,7 +868,7 @@ export function AutoResponsesView({ language, userRole }: AutoResponsesViewProps
                           {rule.status === "DRAFT" || rule.status === "INACTIVE" ? (
                             <button
                               onClick={() => setConfirmAction({ type: "activate", rule })}
-                              className="rounded-xl bg-emerald-600/10 px-3 py-1.5 text-xs font-semibold text-emerald-600 hover:bg-emerald-600/20"
+                              className="rounded-xl bg-[var(--app-accent)]/10 px-3 py-1.5 text-xs font-semibold text-[var(--app-accent)] hover:bg-[var(--app-accent)]/20"
                             >
                               {t.activateButton}
                             </button>

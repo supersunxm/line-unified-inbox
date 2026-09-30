@@ -15,12 +15,12 @@ export default function TikTokConnectPage() {
   const isConfigured = Boolean(process.env.TIKTOK_CLIENT_KEY?.trim());
 
   return (
-    <div className="min-h-screen bg-[var(--app-bg,#0b0d11)] text-[var(--app-text-primary,#f8fafc)] flex flex-col justify-between antialiased selection:bg-[var(--app-accent-soft,rgba(0,186,124,0.15))] selection:text-[var(--app-accent,#00ba7c)]">
+    <div className="min-h-screen bg-[var(--app-bg,#0b0d11)] text-[var(--app-text-primary,#f8fafc)] flex flex-col justify-between antialiased selection:bg-[var(--app-accent-soft,rgba(31,107,74,0.15))] selection:text-[var(--app-accent,#1f6b4a)]">
       {/* Header */}
       <header className="sticky top-0 z-30 border-b border-[var(--app-border,#1e2430)] bg-[var(--app-surface,#12151c)]/90 backdrop-blur-md">
         <div className="mx-auto flex h-16 max-w-4xl items-center justify-between px-4 sm:px-6">
           <Link href="/" className="flex items-center gap-2.5 group">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--app-accent,#00ba7c)] text-white font-bold text-lg shadow-sm group-hover:scale-105 transition">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--app-accent,#1f6b4a)] text-white font-bold text-lg shadow-sm group-hover:scale-105 transition">
               O
             </div>
             <div className="flex flex-col">
@@ -31,7 +31,7 @@ export default function TikTokConnectPage() {
           <div className="flex items-center gap-3 text-xs">
             <Link
               href="/stores"
-              className="text-[var(--app-text-secondary,#cbd5e1)] hover:text-[var(--app-accent,#00ba7c)] transition"
+              className="text-[var(--app-text-secondary,#cbd5e1)] hover:text-[var(--app-accent,#1f6b4a)] transition"
             >
               ← สาขาทั้งหมด
             </Link>
@@ -118,7 +118,7 @@ export default function TikTokConnectPage() {
                 <div className="flex flex-col sm:flex-row items-center gap-3">
                   <a
                     href="/api/tiktok/authorize"
-                    className="w-full sm:w-auto flex-1 inline-flex items-center justify-center gap-2.5 rounded-xl bg-[var(--app-accent,#00ba7c)] px-6 py-3.5 text-sm font-semibold text-white shadow-lg shadow-emerald-900/30 hover:bg-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:ring-offset-2 transition"
+                    className="w-full sm:w-auto flex-1 inline-flex items-center justify-center gap-2.5 rounded-xl bg-[var(--app-accent,#1f6b4a)] px-6 py-3.5 text-sm font-semibold text-white shadow-lg shadow-emerald-900/30 hover:bg-[var(--app-accent-hover)] focus:outline-none focus:ring-2 focus:ring-[var(--app-accent)] focus:ring-offset-2 transition"
                   >
                     <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
                       <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-2.88 2.5 2.89 2.89 0 0 1-2.88-2.88 2.89 2.89 0 0 1 2.88-2.88c.37 0 .72.07 1.05.2V9.08a6.37 6.37 0 0 0-1.05-.09A6.34 6.34 0 0 0 3 15.34 6.34 6.34 0 0 0 9.34 21.7a6.34 6.34 0 0 0 6.34-6.36V8.71a8.21 8.21 0 0 0 4.91 1.63v-3.45a4.85 4.85 0 0 1-1-.2z" />
@@ -196,14 +196,14 @@ export default function TikTokConnectPage() {
 
             {/* Policy & Terms Footer Links */}
             <div className="mt-8 pt-4 border-t border-[var(--app-border,#1e2430)] flex flex-wrap items-center justify-between gap-3 text-xs text-[var(--app-text-tertiary,#94a3b8)]">
-              <Link href="/tiktok-integration" className="hover:text-[var(--app-accent,#00ba7c)] transition">
+              <Link href="/tiktok-integration" className="hover:text-[var(--app-accent,#1f6b4a)] transition">
                 เกี่ยวกับ TikTok Integration
               </Link>
               <div className="flex items-center gap-4">
-                <Link href="/privacy" className="hover:text-[var(--app-accent,#00ba7c)] transition">
+                <Link href="/privacy" className="hover:text-[var(--app-accent,#1f6b4a)] transition">
                   Privacy Policy
                 </Link>
-                <Link href="/terms" className="hover:text-[var(--app-accent,#00ba7c)] transition">
+                <Link href="/terms" className="hover:text-[var(--app-accent,#1f6b4a)] transition">
                   Terms of Service
                 </Link>
               </div>

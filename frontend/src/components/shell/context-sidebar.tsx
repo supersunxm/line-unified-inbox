@@ -65,7 +65,7 @@ export function ContextSidebar({
   const [activeMenuStoreId, setActiveMenuStoreId] = useState<string | null>(null);
 
   const sidebarButtonClass = (view: SidebarView) =>
-    `app-nav-item w-full rounded-[var(--app-radius-md)] px-2.5 py-1.5 text-left text-xs font-medium transition-all duration-120 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 ${
+    `app-nav-item w-full rounded-[var(--app-radius-md)] px-2.5 py-1.5 text-left text-xs font-medium transition-all duration-120 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--app-accent)]/40 ${
       sidebarView === view
         ? "is-selected font-semibold bg-[var(--app-accent-soft)] text-[var(--app-accent)] border border-[var(--app-accent)]/20"
         : "text-[var(--app-text-secondary)] hover:text-[var(--app-text-primary)] hover:bg-[var(--app-surface-hover)]"
@@ -181,7 +181,7 @@ export function ContextSidebar({
                 setStorePage(1);
               }}
               placeholder={text.searchStoresPlaceholder || "Search stores..."}
-              className="app-input h-7 w-full rounded-[var(--app-radius-md)] border border-[var(--app-border)] bg-[var(--app-surface-subtle)] py-1 pl-7 pr-2.5 text-xs text-[var(--app-text-primary)] placeholder:text-[var(--app-text-tertiary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
+              className="app-input h-7 w-full rounded-[var(--app-radius-md)] border border-[var(--app-border)] bg-[var(--app-surface-subtle)] py-1 pl-7 pr-2.5 text-xs text-[var(--app-text-primary)] placeholder:text-[var(--app-text-tertiary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--app-accent)]/40"
             />
           </label>
         </div>
@@ -241,7 +241,7 @@ export function ContextSidebar({
           <button
             type="button"
             onClick={() => setSelectedStore("all")}
-            className={`app-store-row flex w-full items-center justify-between rounded-[var(--app-radius-md)] px-2.5 py-1.5 text-left text-xs transition-all duration-120 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 ${
+            className={`app-store-row flex w-full items-center justify-between rounded-[var(--app-radius-md)] px-2.5 py-1.5 text-left text-xs transition-all duration-120 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--app-accent)]/40 ${
               selectedStore === "all"
                 ? "is-selected font-semibold bg-[var(--app-surface-active)] text-[var(--app-text-primary)] border border-[var(--app-border)]"
                 : "text-[var(--app-text-secondary)] hover:text-[var(--app-text-primary)] hover:bg-[var(--app-surface-hover)]"
@@ -270,7 +270,7 @@ export function ContextSidebar({
                 <button
                   type="button"
                   onClick={() => setSelectedStore(store.id)}
-                  className={`app-store-row flex w-full flex-col rounded-[var(--app-radius-md)] px-2.5 py-1.5 text-left text-xs transition-all duration-120 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 ${
+                  className={`app-store-row flex w-full flex-col rounded-[var(--app-radius-md)] px-2.5 py-1.5 text-left text-xs transition-all duration-120 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--app-accent)]/40 ${
                     selectedStore === store.id
                       ? "is-selected font-semibold bg-[var(--app-surface-active)] text-[var(--app-text-primary)] border border-[var(--app-border)]"
                       : "text-[var(--app-text-secondary)] hover:text-[var(--app-text-primary)] hover:bg-[var(--app-surface-hover)]"

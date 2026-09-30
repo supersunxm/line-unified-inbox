@@ -1,3 +1,10 @@
+# UI accent cleanup: which greens become the brand accent (2026-09-30)
+
+- Only brand-accent uses move to `--app-accent*`: interactive affordances (focus rings, checkbox/radio accents, primary buttons, selected tabs/pages, action links), brand logo tiles, primary chart series, and theme color. Greens that carry meaning (replied, success, connected, ready, passed, positive delta) stay status colors, and the LINE-styled greeting module keeps its LINE green. The public store-locator keeps its `#00a651` page palette because that palette colours its LINE chat button; `/stores` already uses literal LINE green `#06C755`.
+- Accent-coloured text whose element already had a lighter `dark:text-emerald-*` variant is left unchanged. The accent token as small text on dark surfaces is only 3.69:1, so converting those would reduce dark-mode readability until a text-safe accent token exists.
+- Store 360 no longer overrides `--app-accent*`; it inherits the global brand accent while keeping its scoped status and surface palette.
+- Dark mode remaps `--color-white` to the surface color, so `text-white` on accent-filled links, badges and logo tiles rendered dark text on the darker green (about 3.7:1). A rule next to the existing button rule gives those non-button elements `--app-accent-contrast`. Light mode is unchanged.
+
 # UI foundation: accent, button contrast, and page titles (2026-09-30)
 
 - The brand accent is `#1f6b4a` in light mode (white text 6.44:1). Dark mode uses `#26805a` so white button text keeps 4.86:1; the light value would sit at 2.79:1 against dark surfaces. Accent used as small text on dark surfaces is 3.69:1 (AA large/UI only), a known tradeoff because many accent buttons hardcode `text-white`.

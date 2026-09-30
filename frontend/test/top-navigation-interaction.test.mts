@@ -57,7 +57,7 @@ test("secondary links are rendered in the current sidebar and mobile More menu",
 test("TopNavigation accessibility: focus rings, ARIA roles, and keyboard handlers are intact", () => {
   // Focus ring definition
   assert.match(topNavSource, /focus-visible:ring-2/);
-  assert.match(topNavSource, /focus-visible:ring-emerald-500\/40/);
+  assert.match(topNavSource, /focus-visible:ring-\[var\(--app-accent\)\]\/40/);
 
   // Escape key closes menus
   assert.match(topNavSource, /event\.key === "Escape"/);
