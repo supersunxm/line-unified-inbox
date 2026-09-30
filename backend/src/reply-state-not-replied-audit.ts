@@ -565,17 +565,15 @@ async function main() {
     historicalOpenInboundEventTypes: topEntries(historicalOpenEventTypes, 20),
     customerMessagesInCurrentOpenCycle: latestCustomerBurstSizes,
   }, null, 2) + "\n");
+
+  await prisma.$disconnect();
 }
 
-void main()
-  .catch((error) => {
-    process.stderr.write(JSON.stringify({
-      AUDIT_STATUS: "ERROR",
-      DATABASE_WRITES: 0,
-      error: error instanceof Error ? error.message : String(error),
-    }) + "\n");
-    process.exitCode = 1;
-  })
-  .finally(async () => {
-    // The process uses SELECT queries only; disconnecting does not mutate data.
-  });
+void main().catch((error) => {
+  process.stderr.write(JSON.stringify({
+    AUDIT_STATUS: "ERROR",
+    DATABASE_WRITES: 0,
+    error: error instanceof Error ? error.message : String(error),
+  }) + "\n");
+  process.exitCode = 1;
+});
