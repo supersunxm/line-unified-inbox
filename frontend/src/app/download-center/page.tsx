@@ -4,7 +4,8 @@ import { UnifiedPeriodPicker } from "@/components/date-range/unified-period-pick
 
 import Link from "next/link";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { AppShell } from "@/components/shell";
+import { AppShell, PageHeader } from "@/components/shell";
+import { Button, SectionCard } from "@/components/ui";
 import { api, ApiError } from "@/lib/api";
 import { canAccessPrimarySection, defaultRouteForUser, type AuthUser } from "@/lib/authorization";
 import { useAppLanguage } from "../language";
@@ -123,12 +124,11 @@ type DatasetLabels = { purpose: string; output: string; openSource: string };
 type DatasetCardProps = { title: string; description: string; purpose: string; output?: string; href: string; children?: ReactNode; labels: DatasetLabels };
 
 function DatasetCard({ title, description, purpose, output, href, children, labels }: DatasetCardProps) {
-  return <article className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-5 shadow-[var(--app-shadow-sm)]">
-    <div className="flex items-start justify-between gap-4"><div className="min-w-0"><h2 className="text-base font-semibold text-[var(--app-text-primary)]">{title}</h2><p className="mt-1.5 text-sm leading-6 text-[var(--app-text-secondary)]">{description}</p></div><span className="shrink-0 rounded-lg bg-[var(--app-accent-soft)] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--app-accent)]">Export</span></div>
-    <dl className="mt-4 space-y-3 text-sm"><div><dt className="text-xs font-semibold uppercase tracking-wide text-[var(--app-text-tertiary)]">{labels.purpose}</dt><dd className="mt-1 text-[var(--app-text-secondary)]">{purpose}</dd></div>{output && <div><dt className="text-xs font-semibold uppercase tracking-wide text-[var(--app-text-tertiary)]">{labels.output}</dt><dd className="mt-1 text-[var(--app-text-secondary)]">{output}</dd></div>}</dl>
+  return <SectionCard title={title} footer={<Link href={href} className="font-semibold text-[var(--app-accent)] hover:underline">{labels.openSource} →</Link>}>
+    <p className="text-sm leading-6 text-[var(--app-text-secondary)]">{description}</p>
+    <dl className="mt-4 space-y-3 text-sm"><div><dt className="text-xs font-semibold uppercase tracking-wide text-[var(--app-text-secondary)]">{labels.purpose}</dt><dd className="mt-1 text-[var(--app-text-secondary)]">{purpose}</dd></div>{output && <div><dt className="text-xs font-semibold uppercase tracking-wide text-[var(--app-text-secondary)]">{labels.output}</dt><dd className="mt-1 text-[var(--app-text-secondary)]">{output}</dd></div>}</dl>
     {children}
-    <div className="mt-5 flex flex-wrap items-center gap-2"><Link href={href} className="inline-flex h-9 items-center rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] px-3 text-xs font-semibold text-[var(--app-text-primary)] transition-colors hover:bg-[var(--app-surface-hover)]">{labels.openSource} →</Link></div>
-  </article>;
+  </SectionCard>;
 }
 
 export default function DownloadCenterPage() {
@@ -177,11 +177,11 @@ export default function DownloadCenterPage() {
 
   return <AppShell currentSection="follower-insights" authUser={authUser} text={{ appName: "OPPO LINE OA Monitor", searchPlaceholder: "Search customers, stores, or messages" }} language={language} changeLanguage={setLanguage} searchText={searchText} setSearchText={setSearchText} logout={logout} isLoading={loading} apiError={error}>
     <main className="min-h-0 flex-1 overflow-y-auto bg-[var(--app-bg)] px-4 py-6 sm:px-6 lg:px-8"><div className="mx-auto max-w-6xl">
-      <div className="flex flex-col gap-2 border-b border-[var(--app-border-subtle)] pb-5"><div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--app-text-tertiary)]">OPPO LINE OA · Reports & Data Export</div><h1 className="text-2xl font-bold tracking-tight text-[var(--app-text-primary)]">{t.title}</h1><p className="max-w-3xl text-sm leading-6 text-[var(--app-text-secondary)]">{t.description}</p></div>
-      {error && <div className="mt-4 rounded-xl border border-[var(--app-danger)]/30 bg-[var(--app-danger-soft)] px-4 py-3 text-sm text-[var(--app-danger)]">{error}</div>}
-      <section className="mt-6"><h2 className="mb-3 text-xs font-semibold uppercase tracking-[0.12em] text-[var(--app-text-tertiary)]">{t.catalog}</h2><div className="grid gap-4 lg:grid-cols-2">
-        <DatasetCard title={t.lineTitle} description={t.lineDesc} purpose={t.linePurpose} output={t.lineOutput} href="/follower-insights" labels={t}><div className="mt-4 rounded-xl border border-[var(--app-border-subtle)] bg-[var(--app-surface-subtle)] p-3"><div className="min-w-0"><UnifiedPeriodPicker dateFrom={dateFrom} dateTo={dateTo} language={language} onApply={(start, end) => { setDateFrom(start); setDateTo(end); }} /></div><p className="mt-2 text-[11px] text-[var(--app-text-tertiary)]">{t.allStoresNote}</p><button type="button" disabled={lineDownloading || !dateFrom || !dateTo || dateTo < dateFrom} onClick={() => void downloadLine()} className="mt-3 inline-flex h-9 items-center rounded-xl bg-[var(--app-accent)] px-3 text-xs font-semibold text-white disabled:opacity-50">↓ {lineDownloading ? t.preparing : t.download}</button></div></DatasetCard>
-        <DatasetCard title={t.storeTitle} description={t.storeDesc} purpose={t.storePurpose} output={t.storeOutput} href="/stores" labels={t}><button type="button" disabled={storeDownloading} onClick={() => void downloadStoreMaster()} className="mt-4 inline-flex h-9 items-center rounded-xl bg-[var(--app-accent)] px-3 text-xs font-semibold text-white disabled:opacity-50">↓ {storeDownloading ? t.exporting : t.download}</button></DatasetCard>
+      <PageHeader title={t.title} description={t.description} />
+      {error && <div className="rounded-xl border border-[var(--app-danger)]/30 bg-[var(--app-danger-soft)] px-4 py-3 text-sm text-[var(--app-danger)]">{error}</div>}
+      <section className="mt-6"><h2 className="mb-3 text-sm font-semibold text-[var(--app-text-secondary)]">{t.catalog}</h2><div className="grid gap-4 lg:grid-cols-2">
+        <DatasetCard title={t.lineTitle} description={t.lineDesc} purpose={t.linePurpose} output={t.lineOutput} href="/follower-insights" labels={t}><div className="mt-4 rounded-xl border border-[var(--app-border-subtle)] bg-[var(--app-surface-subtle)] p-3"><div className="min-w-0"><UnifiedPeriodPicker dateFrom={dateFrom} dateTo={dateTo} language={language} onApply={(start, end) => { setDateFrom(start); setDateTo(end); }} /></div><p className="mt-2 text-[11px] text-[var(--app-text-secondary)]">{t.allStoresNote}</p><Button variant="primary" disabled={lineDownloading || !dateFrom || !dateTo || dateTo < dateFrom} onClick={() => void downloadLine()} className="mt-3">↓ {lineDownloading ? t.preparing : t.download}</Button></div></DatasetCard>
+        <DatasetCard title={t.storeTitle} description={t.storeDesc} purpose={t.storePurpose} output={t.storeOutput} href="/storemanagement" labels={t}><Button variant="primary" disabled={storeDownloading} onClick={() => void downloadStoreMaster()} className="mt-4">↓ {storeDownloading ? t.exporting : t.download}</Button></DatasetCard>
         <DatasetCard title={t.followerTitle} description={t.followerDesc} purpose={t.followerPurpose} href="/follower-insights" labels={t} />
         <DatasetCard title={t.purchaseTitle} description={t.purchaseDesc} purpose={t.purchasePurpose} href="/admin/purchase-analytics" labels={t} />
         <DatasetCard title={t.reviewTitle} description={t.reviewDesc} purpose={t.reviewPurpose} href="/google-review-kpi" labels={t} />

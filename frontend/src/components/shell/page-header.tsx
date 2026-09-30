@@ -21,18 +21,18 @@ export function PageHeader({
 }: PageHeaderProps) {
   const resolvedActions = actions ?? actionSlot;
   return (
-    <header className={`flex flex-col md:flex-row md:items-center md:justify-between gap-4 py-1 select-none ${className}`}>
+    <header className={`mb-4 flex flex-col md:flex-row md:items-center md:justify-between gap-4 py-1 ${className}`}>
       <div>
         {tag && (
           <div className="mb-1 text-xs font-semibold uppercase tracking-[0.04em] text-[var(--app-text-tertiary)]">
             {tag}
           </div>
         )}
-        <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-[var(--app-text-primary)]">
+        <h1 className="text-xl sm:text-2xl font-semibold leading-[1.3] tracking-tight text-[var(--app-text-primary)]">
           {title}
         </h1>
         {description && (
-          <p className="mt-1 text-xs text-[var(--app-text-secondary)] leading-relaxed">
+          <p className="mt-1 text-[13px] text-[var(--app-text-secondary)] leading-relaxed">
             {description}
           </p>
         )}
