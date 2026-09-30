@@ -143,3 +143,37 @@ test("primary and secondary text meet 4.5:1 on surface, subtle surface and page 
     }
   }
 });
+
+test("Message Traffic uses PageHeader, KpiStrip and SectionCard on desktop", () => {
+  const source = read("../src/app/dashboard/message-traffic/message-traffic-view.tsx");
+  assert.match(source, /<PageHeader title=\{text\.title\} description=\{text\.description\} actions=\{<Button variant="secondary" size="sm" onClick=\{\(\) => void loadRange\(dateFrom, dateTo\)\} disabled=\{loading\}>\{text\.refresh\}<\/Button>\} \/>/);
+  assert.doesNotMatch(source, /tag=\{text\.tag\}/);
+  assert.match(source, /<FilterBar>/);
+  assert.match(source, /<div role="alert"/);
+  assert.match(source, /<KpiStrip\s+columns=\{5\}/);
+  assert.match(source, /id: "peak-hour", label: text\.peakHour, value: data\.overallPeakHour\.window, [^\n]*valueSize: "compact" \},\n/);
+  assert.match(source, /id: "busiest-day", label: text\.busiestDay, value: busiestDay \? dayLabel\(busiestDay\.dayOfWeek, language\) : null, [^\n]*valueSize: "compact" \},\n/);
+  assert.doesNotMatch(source, /<MetricCard|tone=/);
+  const kpiBlock = source.slice(source.indexOf("<KpiStrip"), source.indexOf("/>", source.indexOf("<KpiStrip")));
+  assert.doesNotMatch(kpiBlock, /period:/, "no period pills on a custom date range");
+  assert.match(source, /<SectionCard title=\{text\.hourly\}>/);
+  assert.match(source, /<SectionCard title=\{text\.weekday\} bodyPadding="none">/);
+  assert.match(source, /<SectionCard title=\{text\.ranking\} bodyPadding="none">/);
+  assert.doesNotMatch(source, /<TableContainer|<CardHeader|<CardTitle/);
+  // The mobile app is untouched.
+  assert.doesNotMatch(read("../src/app/dashboard/message-traffic/mobile-message-traffic-app.tsx"), /KpiStrip|SectionCard/);
+});
+
+test("Download Center uses PageHeader, SectionCard and the kit Button", () => {
+  const source = read("../src/app/download-center/page.tsx");
+  assert.match(source, /<PageHeader title=\{t\.title\} description=\{t\.description\} \/>/);
+  assert.doesNotMatch(source, /Reports & Data Export|<h1/);
+  assert.match(source, /<SectionCard title=\{title\} footer=\{<Link href=\{href\} className="[^"]*">\{labels\.openSource\} →<\/Link>\}>/);
+  assert.doesNotMatch(source, />Export</);
+  assert.doesNotMatch(source, /<article/);
+  assert.match(source, /<h2 className="mb-3 text-sm font-semibold text-\[var\(--app-text-secondary\)\]">\{t\.catalog\}<\/h2>/);
+  assert.match(source, /<Button variant="primary" disabled=\{lineDownloading \|\| !dateFrom \|\| !dateTo \|\| dateTo < dateFrom\} onClick=\{\(\) => void downloadLine\(\)\}/);
+  assert.match(source, /<Button variant="primary" disabled=\{storeDownloading\} onClick=\{\(\) => void downloadStoreMaster\(\)\}/);
+  assert.doesNotMatch(source, /<button/);
+  assert.doesNotMatch(source, /text-tertiary/);
+});

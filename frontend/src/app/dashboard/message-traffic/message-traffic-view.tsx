@@ -6,15 +6,13 @@ import { PageContainer, PageHeader, FilterBar } from "@/components/shell";
 import {
   Button,
   Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
+  KpiStrip,
   LoadingState,
-  MetricCard,
+  SectionCard,
+  SectionCardRow,
   Table,
   TableBody,
   TableCell,
-  TableContainer,
   TableEmptyState,
   TableHead,
   TableHeader,
@@ -189,7 +187,7 @@ export function MessageTrafficView() {
     >
       <PageContainer variant="wide">
         <div className="space-y-6">
-          <PageHeader tag={text.tag} title={text.title} description={text.description} actions={<Button variant="secondary" size="sm" onClick={() => void loadRange(dateFrom, dateTo)} disabled={loading}>{text.refresh}</Button>} />
+          <PageHeader title={text.title} description={text.description} actions={<Button variant="secondary" size="sm" onClick={() => void loadRange(dateFrom, dateTo)} disabled={loading}>{text.refresh}</Button>} />
 
           <FilterBar>
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -201,22 +199,25 @@ export function MessageTrafficView() {
 
           {loading && !data ? <LoadingState message={text.loadingTraffic} /> : data && (
             <>
-              <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-                <MetricCard label={text.inbound} value={number.format(data.totalInboundMessages)} subtext={activeRangeLabel} tone="accent" />
-                <MetricCard label={text.conversations} value={number.format(data.totalConversations)} subtext={text.inboundDetail} />
-                <MetricCard label={text.perConversation} value={data.messagesPerConversation.toFixed(2)} subtext={text.intensity} />
-                <MetricCard label={text.peakHour} value={data.overallPeakHour.window} subtext={`${number.format(data.overallPeakHour.count)} ${text.messagesPeak}`} tone="info" />
-                <MetricCard label={text.busiestDay} value={busiestDay ? dayLabel(busiestDay.dayOfWeek, language) : "—"} subtext={busiestDay ? `${number.format(busiestDay.count)} ${text.messages}` : text.noTraffic} />
-              </section>
+              <KpiStrip
+                columns={5}
+                items={[
+                  { id: "inbound", label: text.inbound, value: number.format(data.totalInboundMessages), subtext: activeRangeLabel },
+                  { id: "conversations", label: text.conversations, value: number.format(data.totalConversations), subtext: text.inboundDetail },
+                  { id: "per-conversation", label: text.perConversation, value: data.messagesPerConversation.toFixed(2), subtext: text.intensity },
+                  { id: "peak-hour", label: text.peakHour, value: data.overallPeakHour.window, subtext: `${number.format(data.overallPeakHour.count)} ${text.messagesPeak}`, valueSize: "compact" },
+                  { id: "busiest-day", label: text.busiestDay, value: busiestDay ? dayLabel(busiestDay.dayOfWeek, language) : null, subtext: busiestDay ? `${number.format(busiestDay.count)} ${text.messages}` : text.noTraffic, valueSize: "compact" },
+                ]}
+              />
 
               <section className="grid gap-4 xl:grid-cols-[1.25fr_0.75fr]">
-                <Card><CardHeader><CardTitle>{text.hourly}</CardTitle></CardHeader><CardContent><HourlyBars items={data.hourlyDistribution} formatter={number} /></CardContent></Card>
-                <Card><CardHeader><CardTitle>{text.weekday}</CardTitle></CardHeader><CardContent><div className="space-y-3">{[...data.dayOfWeekDistribution].sort((a, b) => b.count - a.count).map((item, index) => <div key={item.dayOfWeek} className="flex items-center justify-between gap-3 border-b border-[var(--app-border-subtle)] pb-2 last:border-0"><div className="flex items-center gap-2"><span className="w-5 text-xs font-tabular text-[var(--app-text-tertiary)]">{index + 1}.</span><span className="text-xs font-medium">{dayLabel(item.dayOfWeek, language)}</span></div><span className="text-xs font-tabular font-semibold">{number.format(item.count)}</span></div>)}</div></CardContent></Card>
+                <SectionCard title={text.hourly}><HourlyBars items={data.hourlyDistribution} formatter={number} /></SectionCard>
+                <SectionCard title={text.weekday} bodyPadding="none">{[...data.dayOfWeekDistribution].sort((a, b) => b.count - a.count).map((item, index) => <SectionCardRow key={item.dayOfWeek} className="flex items-center justify-between gap-3"><div className="flex items-center gap-2"><span className="w-5 text-xs font-tabular text-[var(--app-text-secondary)]">{index + 1}.</span><span className="text-xs font-medium">{dayLabel(item.dayOfWeek, language)}</span></div><span className="text-xs font-tabular font-semibold">{number.format(item.count)}</span></SectionCardRow>)}</SectionCard>
               </section>
 
-              <section>
-                <div className="mb-3"><h2 className="text-base font-semibold">{text.ranking}</h2><p className="mt-1 text-xs text-[var(--app-text-secondary)]">{text.rankingDesc}</p></div>
-                <TableContainer>
+              <SectionCard title={text.ranking} bodyPadding="none">
+                <p className="border-b border-[var(--app-border-subtle)] px-4 py-3 text-xs text-[var(--app-text-secondary)]">{text.rankingDesc}</p>
+                <div className="overflow-x-auto">
                   <Table>
                     <TableHeader><tr><TableHead>{text.rank}</TableHead><TableHead>{text.store}</TableHead><TableHead align="right">{text.inboundColumn}</TableHead><TableHead align="right">{text.conversationsColumn}</TableHead><TableHead align="right">{text.msgConv}</TableHead><TableHead>{text.peakHour}</TableHead><TableHead align="right">{text.peakVolume}</TableHead></tr></TableHeader>
                     <TableBody>
@@ -233,8 +234,8 @@ export function MessageTrafficView() {
                       ))}
                     </TableBody>
                   </Table>
-                </TableContainer>
-              </section>
+                </div>
+              </SectionCard>
             </>
           )}
         </div>
