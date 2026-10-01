@@ -2,14 +2,17 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/shell/app-shell";
+import { ShellSkeleton } from "@/components/shell/shell-skeleton";
 import { PageContainer, PageHeader, FilterBar } from "@/components/shell";
 import {
   Button,
   Card,
   KpiStrip,
-  LoadingState,
+  KpiStripSkeleton,
   SectionCard,
   SectionCardRow,
+  SectionCardSkeleton,
+  Skeleton,
   Table,
   TableBody,
   TableCell,
@@ -104,6 +107,20 @@ function HourlyBars({ items, formatter }: { items: HourBucket[]; formatter: Intl
   );
 }
 
+/** Same layout as the loaded view, with the real KPI labels and section titles. */
+function TrafficSkeleton({ kpiLabels, hourlyTitle, weekdayTitle, rankingTitle, label }: { kpiLabels: string[]; hourlyTitle: string; weekdayTitle: string; rankingTitle: string; label: string }) {
+  return (
+    <>
+      <KpiStripSkeleton columns={5} labels={kpiLabels} label={label} />
+      <section className="grid gap-4 xl:grid-cols-[1.25fr_0.75fr]">
+        <SectionCardSkeleton title={hourlyTitle} lines={8} label={label} />
+        <SectionCardSkeleton title={weekdayTitle} lines={7} label={label} />
+      </section>
+      <SectionCardSkeleton title={rankingTitle} lines={5} label={label} />
+    </>
+  );
+}
+
 export function MessageTrafficView() {
   const { language, setLanguage } = useAppLanguage();
   const locale = localeFor(language);
@@ -165,13 +182,23 @@ export function MessageTrafficView() {
   const busiestDay = useMemo(() => data?.dayOfWeekDistribution.length ? [...data.dayOfWeekDistribution].sort((a, b) => b.count - a.count)[0] : null, [data]);
   const activeRangeLabel = useMemo(() => data ? `${dateLabel.format(new Date(data.rangeStart))} – ${dateLabel.format(new Date(data.rangeEnd))}` : "", [data, dateLabel]);
 
+  const trafficSkeleton = (
+    <TrafficSkeleton
+      kpiLabels={[text.inbound, text.conversations, text.perConversation, text.peakHour, text.busiestDay]}
+      hourlyTitle={text.hourly}
+      weekdayTitle={text.weekday}
+      rankingTitle={text.ranking}
+      label={text.loadingTraffic}
+    />
+  );
+
   const logout = async () => {
     await api.logout().catch(() => undefined);
     setAuthUser(null);
     window.location.replace("/");
   };
 
-  if (!authChecked) return <main className="flex min-h-screen items-center justify-center bg-[var(--app-bg)]"><LoadingState message={text.loading} /></main>;
+  if (!authChecked) return <ShellSkeleton><PageContainer variant="wide"><div className="space-y-6"><PageHeader title={text.title} description={text.description} actions={<Button variant="secondary" size="sm" disabled>{text.refresh}</Button>} /><FilterBar><Skeleton className="h-9 w-64 max-w-full" /></FilterBar>{trafficSkeleton}</div></PageContainer></ShellSkeleton>;
   if (!authUser) return <main className="flex min-h-screen items-center justify-center bg-[var(--app-bg)] p-6"><Card className="max-w-md text-center"><h1 className="text-xl font-bold">{text.authRequired}</h1><p className="mt-2 text-xs text-[var(--app-text-secondary)]">{text.signIn}</p></Card></main>;
 
   return (
@@ -197,7 +224,7 @@ export function MessageTrafficView() {
 
           {error && <div role="alert" className="rounded-[var(--app-radius-md)] border border-[var(--app-danger)]/30 bg-[var(--app-danger-soft)] p-4 text-xs text-[var(--app-danger)]">{error}</div>}
 
-          {loading && !data ? <LoadingState message={text.loadingTraffic} /> : data && (
+          {loading && !data ? trafficSkeleton : data && (
             <>
               <KpiStrip
                 columns={5}

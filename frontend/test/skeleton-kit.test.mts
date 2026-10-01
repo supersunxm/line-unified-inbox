@@ -96,3 +96,11 @@ test("skeleton kit is exported from components/ui", () => {
     assert.match(uiIndex, new RegExp(`export \\* from "\\./${name}";`), name);
   }
 });
+
+test("KpiStripSkeleton and SectionCardSkeleton can show real labels and titles in the real classes", () => {
+  assert.match(kpiSkeleton, /const count = itemCount \?\? labels\?\.length \?\? columns \?\? 4;/);
+  assert.match(kpiSkeleton, /<div className=\{KPI_LABEL_CLASS\}>\s*\{labels\?\.\[index\] !== undefined \? <span className="min-w-0">\{labels\[index\]\}<\/span> : <Skeleton/);
+  // Same title element and classes as SectionCard.
+  assert.match(sectionSkeleton, /<Title className="min-w-0 text-\[15px\] font-semibold leading-snug text-\[var\(--app-text-primary\)\]">\{title\}<\/Title>/);
+  assert.match(read("../src/components/ui/section-card.tsx"), /<Title className="min-w-0 text-\[15px\] font-semibold leading-snug text-\[var\(--app-text-primary\)\]">\{title\}<\/Title>/);
+});
