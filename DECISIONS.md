@@ -3118,3 +3118,7 @@ The first production target proof confirmed that eligible candidate OAs have no 
 - Count a post-watermark store as traversed only when its latest enabled attachment has `lastSuccessfulSyncAt >= watermark`. Report the configured, attached, completed, and pending store counts separately.
 - Define Store Chats visibility as a canonical outbound Message attached to a conversation with a store scope. Treat that as data-path eligibility; production acceptance still observes the actual Store Chats surface.
 - Cap detailed observation/canonicalization correlation logs at ten per store cycle. The database audit remains the complete aggregate source when details are suppressed.
+
+## 2026-10-01 — GitHub Android CI cleanup
+
+Isolated CI-only change deletes 32 Android-only workflows and removes two Flutter jobs plus app-only auth scope from three mixed workflows. Backend/frontend/web validation and CI Gate are preserved. Actionlint and workflow dependency/preserved-job checks pass. No Railway, database, Mirror/worker or Manager profile change. Publish through a dedicated PR and delete obsolete signing secrets only after successful CI and default-branch verification.

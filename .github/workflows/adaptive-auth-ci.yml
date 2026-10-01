@@ -7,9 +7,6 @@ on:
       - "frontend/test/authorization.test.mts"
       - "frontend/src/components/shell/**"
       - "frontend/src/app/**"
-      - "android_app/lib/core/models/authorization_extensions.dart"
-      - "android_app/lib/features/shell/**"
-      - "android_app/test/authorization_extensions_test.dart"
       - ".github/workflows/adaptive-auth-ci.yml"
   workflow_dispatch:
 
@@ -45,34 +42,3 @@ jobs:
 
       - name: Frontend build
         run: npm run build
-
-  mobile-adaptive-auth:
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
-    defaults:
-      run:
-        working-directory: android_app
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-          cache: true
-
-      - name: Install dependencies
-        run: flutter pub get
-
-      - name: Generate localization
-        run: flutter gen-l10n
-
-      - name: Analyze
-        run: flutter analyze
-
-      - name: Adaptive authorization tests
-        run: flutter test test/authorization_extensions_test.dart
-
-      - name: Full mobile tests
-        run: flutter test
