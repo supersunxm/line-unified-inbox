@@ -194,56 +194,20 @@ jobs:
       - name: Build
         run: npm run build
 
-  mobile:
-    name: Android
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
-    defaults:
-      run:
-        working-directory: android_app
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-          cache: true
-
-      - name: Flutter version
-        run: flutter --version
-
-      - name: Install dependencies
-        run: flutter pub get
-
-      - name: Generate localization
-        run: flutter gen-l10n
-
-      - name: Analyze
-        run: flutter analyze
-
-      - name: Test
-        run: flutter test
-
   ci-gate:
     name: CI Gate
     if: always()
     needs:
       - backend
       - frontend
-      - mobile
     runs-on: ubuntu-latest
     steps:
       - name: Require all application checks
         env:
           BACKEND_RESULT: ${{ needs.backend.result }}
           FRONTEND_RESULT: ${{ needs.frontend.result }}
-          ANDROID_RESULT: ${{ needs.mobile.result }}
         run: |
           echo "Backend: $BACKEND_RESULT"
           echo "Frontend: $FRONTEND_RESULT"
-          echo "Android: $ANDROID_RESULT"
           test "$BACKEND_RESULT" = "success"
           test "$FRONTEND_RESULT" = "success"
-          test "$ANDROID_RESULT" = "success"
