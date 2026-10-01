@@ -2,34 +2,30 @@
 
 import React from "react";
 import { Skeleton } from "./loading-state";
+import { SkeletonText } from "./skeleton-text";
 
-/**
- * Placeholder for SectionCard while data loads.
- */
-export function SectionCardSkeleton({
-  lineCount = 5,
-  className = "",
-  ...rest
-}: {
-  lineCount?: number;
-  className?: string;
-} & React.HTMLAttributes<HTMLElement>) {
+export interface SectionCardSkeletonProps extends Omit<React.HTMLAttributes<HTMLElement>, "children" | "title"> {
+  lines?: number;
+  label?: string;
+}
+
+/** SectionCard placeholder: same frame, header row and body padding as SectionCard. */
+export function SectionCardSkeleton({ lines = 5, label = "กำลังโหลด…", className = "", ...rest }: SectionCardSkeletonProps) {
   return (
     <section
-      className={`overflow-hidden rounded-[var(--app-radius-md)] border border-[var(--app-border)] bg-[var(--app-surface)] flex flex-col ${className}`}
+      role="status"
+      aria-busy="true"
+      className={`overflow-hidden rounded-[var(--app-radius-md)] border border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-text-primary)] flex flex-col ${className}`}
       {...rest}
-      aria-hidden="true"
     >
+      <span className="sr-only">{label}</span>
       <header className="flex min-h-12 items-center justify-between gap-3 border-b border-[var(--app-border-subtle)] px-4">
-        <Skeleton className="h-4 w-32" />
+        <div className="min-w-0 text-[15px] leading-snug">
+          <Skeleton className="h-[1lh] w-36" />
+        </div>
       </header>
-      <div className="flex-1 space-y-3 p-4">
-        {Array.from({ length: lineCount }).map((_, index) => (
-          <Skeleton
-            key={index}
-            className={`h-3.5 ${index === lineCount - 1 ? "w-48 max-w-full" : "w-full"}`}
-          />
-        ))}
+      <div className="flex-1 p-4">
+        <SkeletonText lines={lines} />
       </div>
     </section>
   );

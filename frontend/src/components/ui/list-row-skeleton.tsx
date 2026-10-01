@@ -3,31 +3,49 @@
 import React from "react";
 import { Skeleton } from "./loading-state";
 
+export interface ListRowSkeletonProps {
+  count?: number;
+  label?: string;
+  /** Classes for the list that holds the rows (dividers, pulse). */
+  listClassName?: string;
+  rowClassName?: string;
+  /** Row content; defaults to a 40px avatar and two text lines. */
+  renderRow?: (index: number) => React.ReactNode;
+  className?: string;
+}
+
+function DefaultRow() {
+  return (
+    <>
+      <Skeleton className="h-10 w-10 shrink-0 rounded-full" />
+      <div className="min-w-0 flex-1 space-y-2 pt-1">
+        <Skeleton className="h-3.5 w-40 max-w-full" />
+        <Skeleton className="h-3 w-28 max-w-full" />
+      </div>
+    </>
+  );
+}
+
 /**
- * Placeholder for a list row while data loads. Shows an avatar on the left
- * and text lines on the right.
+ * A list of placeholder rows. The outer element announces the loading state;
+ * the row list itself is aria-hidden because it contains only grey blocks.
  */
 export function ListRowSkeleton({
-  lineCount = 2,
+  count = 5,
+  label = "กำลังโหลด…",
+  listClassName = "divide-y divide-[var(--app-border-subtle)]",
+  rowClassName = "flex items-start gap-3 px-4 py-3",
+  renderRow,
   className = "",
-  ...rest
-}: {
-  lineCount?: number;
-  className?: string;
-} & React.HTMLAttributes<HTMLDivElement>) {
+}: ListRowSkeletonProps) {
   return (
-    <div
-      className={`flex items-start gap-3 p-3 border-b border-[var(--app-border-subtle)] last:border-b-0 ${className}`}
-      {...rest}
-      aria-hidden="true"
-    >
-      <Skeleton className="h-10 w-10 flex-shrink-0 rounded-full" />
-      <div className="flex-1 min-w-0 space-y-2">
-        {Array.from({ length: lineCount }).map((_, index) => (
-          <Skeleton
-            key={index}
-            className={`h-3.5 ${index === 0 ? "w-40 max-w-full" : "w-32 max-w-full"}`}
-          />
+    <div role="status" aria-busy="true" className={className || undefined}>
+      <span className="sr-only">{label}</span>
+      <div aria-hidden="true" className={listClassName}>
+        {Array.from({ length: count }).map((_, index) => (
+          <div key={index} className={rowClassName}>
+            {renderRow ? renderRow(index) : <DefaultRow />}
+          </div>
         ))}
       </div>
     </div>

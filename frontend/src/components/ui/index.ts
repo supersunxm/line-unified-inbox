@@ -16,5 +16,6 @@ export * from "./skeleton-text";
 export * from "./kpi-strip-skeleton";
 export * from "./section-card-skeleton";
 export * from "./list-row-skeleton";
+export * from "./deferred-loading-model";
 export * from "./use-deferred-loading";
 export * from "./workspace-skeleton";

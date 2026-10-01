@@ -4,31 +4,23 @@ import React from "react";
 import { Skeleton } from "./loading-state";
 
 export interface SkeletonTextProps extends Omit<React.HTMLAttributes<HTMLDivElement>, "children"> {
-  /** Number of lines; defaults to 1. */
   lines?: number;
-  /** Height of each line (Tailwind class); defaults to "h-4". */
+  /** Tailwind height class for each line. */
   lineHeight?: string;
-  /** Optional width for the last line; defaults to full width. */
+  /** Width class for the last line, so a paragraph does not end flush. */
   lastLineWidth?: string;
-  /** Gap between lines; defaults to "gap-2". */
-  gap?: string;
 }
 
-export function SkeletonText({
-  lines = 1,
-  lineHeight = "h-4",
-  lastLineWidth,
-  gap = "gap-2",
-  className = "",
-  ...rest
-}: SkeletonTextProps) {
+/**
+ * Grey text lines. A building block (like Skeleton): it is aria-hidden and has no
+ * status role, so placing it inside a skeleton that announces itself does not
+ * create a second live region.
+ */
+export function SkeletonText({ lines = 1, lineHeight = "h-3.5", lastLineWidth = "w-2/3", className = "", ...rest }: SkeletonTextProps) {
   return (
-    <div className={`flex flex-col ${gap} ${className}`} {...rest}>
+    <div aria-hidden="true" className={`flex flex-col gap-2 ${className}`} {...rest}>
       {Array.from({ length: lines }).map((_, index) => (
-        <Skeleton
-          key={index}
-          className={`${lineHeight} ${index === lines - 1 && lastLineWidth ? lastLineWidth : "w-full"}`}
-        />
+        <Skeleton key={index} className={`${lineHeight} ${lines > 1 && index === lines - 1 ? lastLineWidth : "w-full"}`} />
       ))}
     </div>
   );

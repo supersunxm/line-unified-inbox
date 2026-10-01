@@ -2,29 +2,19 @@
 
 import React from "react";
 import { Skeleton } from "./loading-state";
-import { useDeferredLoading } from "./use-deferred-loading";
 
 /**
  * Placeholder for a page body while its data (or the signed-in user) is not
- * available yet. Shows layout only — never real content. Deferred by 200ms
- * to avoid flickering on fast networks.
+ * available yet. Shows layout only — never real content.
  */
 export function WorkspaceSkeleton({
   label = "กำลังโหลด…",
   className = "",
-  delay = 200,
-  isLoading = true,
 }: {
   /** Announced to screen readers; not shown visually. */
   label?: string;
   className?: string;
-  /** Milliseconds to wait before showing; defaults to 200. */
-  delay?: number;
-  /** Whether to defer; set to false to show immediately. Defaults to true. */
-  isLoading?: boolean;
 }) {
-  const show = useDeferredLoading(delay, isLoading);
-  if (!show) return null;
   return (
     <div role="status" aria-busy="true" className={`flex min-w-0 flex-col gap-5 p-4 sm:p-6 ${className}`}>
       <span className="sr-only">{label}</span>
