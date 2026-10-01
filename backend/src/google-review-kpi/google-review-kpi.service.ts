@@ -209,6 +209,9 @@ export class GoogleReviewKpiService {
           qualifiedReviews: kpiRecord.qualifiedReviews,
           qualificationRuleVersion: kpiRecord.qualificationRuleVersion,
           targetQualifiedReviews: target,
+          googleRating: kpiRecord.googleRating,
+          googleReviewCount: kpiRecord.googleReviewCount,
+          googleRatingCheckedAt: kpiRecord.googleRatingCheckedAt ? kpiRecord.googleRatingCheckedAt.toISOString() : null,
           isPassed,
           checkedAt: kpiRecord.checkedAt.toISOString(),
           checkedBy: kpiRecord.checkedByUser
@@ -233,6 +236,9 @@ export class GoogleReviewKpiService {
         googleMapsUrl,
         googleMapsName,
         hasGoogleMaps,
+        googleRating: kpiRecord?.googleRating ?? null,
+        googleReviewCount: kpiRecord?.googleReviewCount ?? null,
+        googleRatingCheckedAt: kpiRecord?.googleRatingCheckedAt ? kpiRecord.googleRatingCheckedAt.toISOString() : null,
         kpiResult,
       };
     });
@@ -465,6 +471,13 @@ export class GoogleReviewKpiService {
         qualifiedReviews,
         qualificationRuleVersion: dto.qualificationRuleVersion || "IMAGE_CAPTURE_MONTH_V1",
         targetQualifiedReviews,
+        googleRating: dto.googleRating ?? undefined,
+        googleReviewCount: dto.googleReviewCount ?? undefined,
+        googleRatingCheckedAt: dto.googleRatingCheckedAt
+          ? new Date(dto.googleRatingCheckedAt)
+          : dto.googleRating !== undefined
+            ? new Date()
+            : undefined,
         checkedAt: new Date(),
         checkedByUserId: user?.id ?? null,
       },
@@ -478,6 +491,13 @@ export class GoogleReviewKpiService {
         qualifiedReviews,
         qualificationRuleVersion: dto.qualificationRuleVersion || "IMAGE_CAPTURE_MONTH_V1",
         targetQualifiedReviews,
+        googleRating: dto.googleRating ?? null,
+        googleReviewCount: dto.googleReviewCount ?? null,
+        googleRatingCheckedAt: dto.googleRatingCheckedAt
+          ? new Date(dto.googleRatingCheckedAt)
+          : dto.googleRating !== undefined
+            ? new Date()
+            : null,
         checkedAt: new Date(),
         checkedByUserId: user?.id ?? null,
       },
@@ -1160,6 +1180,13 @@ export class GoogleReviewKpiService {
           reviewsOver15ThaiWords,
           qualifiedReviews,
           qualificationRuleVersion,
+          googleRating: dto.googleRating ?? undefined,
+          googleReviewCount: dto.googleReviewCount ?? undefined,
+          googleRatingCheckedAt: dto.googleRatingCheckedAt
+            ? new Date(dto.googleRatingCheckedAt)
+            : dto.googleRating !== undefined
+              ? new Date()
+              : undefined,
           checkedAt: new Date(),
           checkedByUserId: user?.id ?? null,
         },
@@ -1173,6 +1200,13 @@ export class GoogleReviewKpiService {
           qualifiedReviews,
           qualificationRuleVersion,
           targetQualifiedReviews: 10,
+          googleRating: dto.googleRating ?? null,
+          googleReviewCount: dto.googleReviewCount ?? null,
+          googleRatingCheckedAt: dto.googleRatingCheckedAt
+            ? new Date(dto.googleRatingCheckedAt)
+            : dto.googleRating !== undefined
+              ? new Date()
+              : null,
           checkedAt: new Date(),
           checkedByUserId: user?.id ?? null,
         },

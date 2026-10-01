@@ -1,3 +1,14 @@
+# 2026-10-01: Google Maps Aggregate Store Rating Metadata in Monthly Review KPI
+
+- **Google Maps Aggregate Store Rating & Review Count Schema Extension**:
+  - Added nullable columns `googleRating Float?`, `googleReviewCount Int?`, and `googleRatingCheckedAt DateTime?` to `GoogleReviewKpiResult`.
+  - Non-breaking, additive migration (`20261001170000_add_google_maps_store_rating_to_monthly_kpi`) safely preserves all existing historical monthly KPI totals and aggregates.
+  - Strict separation of concepts: Store aggregate lifetime review count (`googleReviewCount`) is decoupled from monthly audit count (`reviewsChecked`) and monthly qualified count (`qualifiedReviews`).
+
+- **Multi-Format Export & UI Inspection Parity**:
+  - Web UI at `/google-review-kpi` now features an interactive sortable "คะแนน Google" column and a dedicated "Google Maps ปัจจุบัน" store rating inspection card within the store detail drawer.
+  - CSV exports (UTF-8 BOM), JSON exports, and AI Import previews seamlessly include `googleRating`, `googleReviewCount`, and `googleRatingCheckedAt`.
+
 # 2026-10-01: Google Review KPI Refactor: External AI Audit Import, Results & Export Center
 
 - **Pivot from In-Browser Audit Runner to Import & Results Center**:

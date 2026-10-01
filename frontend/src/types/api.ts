@@ -2030,6 +2030,26 @@ export type GoogleReviewKpiStoreItem = {
   googleMapsUrl: string | null;
   googleMapsName: string | null;
   hasGoogleMaps: boolean;
+  googleRating?: number | null;
+  googleReviewCount?: number | null;
+  googleRatingCheckedAt?: string | null;
+  latestImportType?: "GAP_FILL" | "FULL_MONTH" | "MANUAL" | null;
+  latestImportDelta?: {
+    reviewsChecked: number;
+    reviewsWithPhoto: number;
+    photoReviewsInTargetMonth: number;
+    reviewsOver15ThaiWords: number;
+    qualifiedReviews: number;
+  } | null;
+  importHistory?: Array<{
+    date: string;
+    type: "GAP_FILL" | "FULL_MONTH" | "MANUAL";
+    qualified: number;
+    delta?: number;
+    user?: string;
+  }>;
+  needsAttention?: boolean;
+  needsAttentionReason?: string;
   kpiResult: {
     id: string;
     month: string;
@@ -2042,6 +2062,9 @@ export type GoogleReviewKpiStoreItem = {
     targetQualifiedReviews: number;
     isPassed: boolean;
     checkedAt: string;
+    googleRating?: number | null;
+    googleReviewCount?: number | null;
+    googleRatingCheckedAt?: string | null;
     checkedBy: {
       id: string;
       displayName: string;
@@ -2135,6 +2158,8 @@ export type GoogleReviewImportPreviewResponse = {
     beforeQualified: number;
     deltaQualified: number;
     afterQualified: number;
+    googleRating?: number;
+    googleReviewCount?: number;
   }>;
 };
 
