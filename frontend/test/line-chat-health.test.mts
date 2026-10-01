@@ -10,8 +10,15 @@ import {
   getOverallHealth,
 } from "../src/app/operations/line-chat-health/line-chat-health-status.ts";
 
-test("ACTIVE CONNECTED with seven failed jobs remains connected, including historical auth job failures", () => {
+const freshMirror = {
+  telemetryStatus: "FRESH" as const, profile: "A" as const, mappedStores: 90,
+  browser: "RUNNING" as const, observedAt: new Date().toISOString(), completedAt: new Date().toISOString(),
+  schedulerRunning: true, cycle: { attempted: 90, succeeded: 90, failed: 0, partial: 0, durationMs: 1000 },
+};
+
+test("ACTIVE CONNECTED with historical failed jobs is HEALTHY", () => {
   const session = {
+    liveMirror: freshMirror,
     id: "session",
     sessionKey: "account-1",
     displayName: "Account 1",
@@ -34,15 +41,78 @@ test("ACTIVE CONNECTED with seven failed jobs remains connected, including histo
     recentFailures: [],
     jobs: { pending: 0, processing: 0, success: 20, superseded: 2, total: 29, failed: 7, failedAuth: 0 },
   };
-  assert.equal(getOverallHealth(session).label, "Connected with job failures");
+  assert.equal(getOverallHealth(session).label, "Healthy");
+  assert.equal(getOverallHealth({ ...session, liveMirror: undefined }).label, "Unknown");
+  assert.equal(getOverallHealth({ ...session, liveMirror: { ...freshMirror, telemetryStatus: "STALE" } }).label, "Stale");
+  assert.equal(getOverallHealth({ ...session, healthStatus: "UNKNOWN" }).label, "Unknown");
   assert.equal(
     getOverallHealth({ ...session, jobs: { ...session.jobs, failedAuth: 1 } }).label,
-    "Connected with job failures",
+    "Healthy",
   );
+});
+
+test("current job risk, not historical counters, drives DEGRADED", () => {
+  const session = {
+    liveMirror: freshMirror,
+    id: "session-risk",
+    sessionKey: "profile-risk",
+    displayName: "Risk profile",
+    status: "ACTIVE",
+    healthStatus: "CONNECTED",
+    healthFailureStage: null,
+    activeProfileLeases: 0,
+    activeLeaseOperation: null,
+    browserState: "AVAILABLE" as const,
+    browserOperationKind: null,
+    browserBusyUntil: null,
+    consecutiveAuthFailures: 0,
+    mappedOaCount: 0,
+    enabledOaCount: 0,
+    lastAuthenticatedAt: null,
+    lastSuccessfulRequestAt: null,
+    lastAuthFailureAt: null,
+    healthLastCheckedAt: null,
+    healthLastHealthyAt: null,
+    recentFailures: [],
+    jobs: { pending: 1, processing: 0, success: 1, superseded: 0, total: 2, failed: 0, failedAuth: 0 },
+  };
+  assert.equal(getOverallHealth({ ...session, activeJobRisk: "WARNING" }).label, "Degraded");
+  assert.equal(getOverallHealth({ ...session, activeJobRisk: "CRITICAL", activeStuckJobs: 1 }).label, "Degraded");
+  assert.equal(getOverallHealth({ ...session, healthStatus: "DEGRADED", healthFailureStage: "TIMEOUT" }).label, "Degraded");
+});
+
+test("authentication failure or unusable browser is UNHEALTHY", () => {
+  const session = {
+    liveMirror: freshMirror,
+    id: "session-unhealthy",
+    sessionKey: "profile-unhealthy",
+    displayName: "Unhealthy profile",
+    status: "ACTIVE",
+    healthStatus: "CONNECTED",
+    healthFailureStage: null,
+    activeProfileLeases: 0,
+    activeLeaseOperation: null,
+    browserState: "AVAILABLE" as const,
+    browserOperationKind: null,
+    browserBusyUntil: null,
+    consecutiveAuthFailures: 0,
+    mappedOaCount: 0,
+    enabledOaCount: 0,
+    lastAuthenticatedAt: null,
+    lastSuccessfulRequestAt: null,
+    lastAuthFailureAt: null,
+    healthLastCheckedAt: null,
+    healthLastHealthyAt: null,
+    recentFailures: [],
+    jobs: { pending: 0, processing: 0, success: 0, superseded: 3, total: 3, failed: 0, failedAuth: 0 },
+  };
+  assert.equal(getOverallHealth({ ...session, healthStatus: "AUTH_REQUIRED" }).tone, "danger");
+  assert.equal(getOverallHealth({ ...session, liveMirror: { ...freshMirror, browser: "UNKNOWN" } }).label, "Unknown");
 });
 
 test("browser availability is independent from connected session health", () => {
   const session = {
+    liveMirror: freshMirror,
     id: "session-browser",
     sessionKey: "profile-browser",
     displayName: "Profile browser",
@@ -67,6 +137,9 @@ test("browser availability is independent from connected session health", () => 
   };
 
   assert.equal(getOverallHealth(session).label, "Healthy");
+  assert.equal(getOverallHealth({ ...session, liveMirror: undefined }).label, "Unknown");
+  assert.equal(getOverallHealth({ ...session, liveMirror: { ...freshMirror, telemetryStatus: "STALE" } }).label, "Stale");
+  assert.equal(getOverallHealth({ ...session, healthStatus: "UNKNOWN" }).label, "Unknown");
   assert.equal(getBrowserStateLabel("AVAILABLE"), "พร้อมใช้งาน");
   assert.equal(getBrowserStateLabel("BUSY"), "กำลังใช้งาน");
   assert.equal(getBrowserStateTone("BUSY"), "warning");
@@ -88,11 +161,11 @@ const viewSource = readFileSync(
 
 test("LINE Chat health keeps connected session state separate from failed jobs", () => {
   assert.match(statusSource, /healthStatus !== "CONNECTED"/);
-  assert.match(statusSource, /session\.jobs\.failed \+ session\.jobs\.failedAuth > 0/);
-  assert.match(statusSource, /Connected with job failures/);
+  assert.match(statusSource, /session\.activeJobRisk === "CRITICAL"/);
+  assert.doesNotMatch(statusSource, /Connected with job failures/);
   assert.ok(
     statusSource.indexOf('healthStatus !== "CONNECTED"') <
-      statusSource.indexOf("session.jobs.failed + session.jobs.failedAuth > 0"),
+      statusSource.indexOf('session.activeJobRisk === "CRITICAL"'),
   );
   assert.doesNotMatch(statusSource, /healthStatus === "AUTH_REQUIRED"[^\n]+jobs\.failedAuth/);
 });
@@ -157,14 +230,15 @@ test("Retry selected confirmation modal breaks down retryable vs non-retryable a
   assert.match(viewSource, /Retryable \/ Auto-fixable:/);
   assert.match(viewSource, /Non-retryable \/ Manual review:/);
   assert.match(viewSource, /Categories breakdown:/);
-  assert.match(viewSource, /Force retry non-retryable jobs/);
+  assert.match(viewSource, /never bypasses the safe retry policy/);
   assert.match(viewSource, /api\.retryLineChatSelectedJobs/);
 });
 
-test("Smart auto-fix flow provides preview dialog and invokes fixLineChatRetryableJobs", () => {
+test("Smart auto-fix flow provides preview dialog and invokes safe selected-job retry", () => {
   assert.match(viewSource, /Fix Retryable Failures/);
   assert.match(viewSource, /Safe to auto-fix \(transport, timeout, initial execution\):/);
   assert.match(viewSource, /Require manual review \(repeated failures, validation\):/);
   assert.match(viewSource, /Require system attention \/ re-login:/);
-  assert.match(viewSource, /api\.fixLineChatRetryableJobs/);
+  assert.match(viewSource, /api\.retryLineChatSelectedJobs/);
+  assert.match(viewSource, /isRetryEligible/);
 });

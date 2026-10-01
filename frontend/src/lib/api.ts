@@ -120,6 +120,16 @@ export type LineChatOperationsSession = {
   authRecoveryInProgress?: boolean; authRecoveryCooldownRemainingMs?: number;
   lastAuthenticatedAt: string | null; lastSuccessfulRequestAt: string | null; lastAuthFailureAt: string | null;
   healthLastCheckedAt: string | null; healthLastHealthyAt: string | null; jobs: LineChatJobCounts;
+  liveMirror?: {
+    telemetryStatus: "FRESH" | "STALE" | "UNKNOWN";
+    profile: "A" | "B" | null;
+    mappedStores: number | null;
+    browser: "RUNNING" | "STOPPED" | "START_FAILED" | "UNKNOWN";
+    observedAt: string | null;
+    completedAt: string | null;
+    schedulerRunning: boolean | null;
+    cycle: { attempted: number; succeeded: number; failed: number; partial: number; durationMs: number } | null;
+  };
   recentFailures: LineChatSafeJobFailure[];
   activeJobRisk?: LineChatJobActivityRisk;
   activeStuckJobs?: number;
@@ -159,7 +169,10 @@ export type LineChatFleetReadinessReport = {
   };
   stores: LineChatFleetReadinessStore[];
 };
-export type LineChatOperationsHealth = { timestamp: string; sessions: LineChatOperationsSession[]; queue: LineChatJobCounts; mapping: LineChatMappingQueueMetrics; rollout: { totalOas: number; enabledOas: number; disabledOas: number; missingChatBotId: number; missingSession: number }; fleetReadiness: LineChatFleetReadinessReport };
+export type LineChatOperationsHealth = { liveMirrorFleet?: {
+  observedAt: string; configuredStores: number; cycleRunning: boolean;
+  lastCycle: { completedAt: string; attempted: number; succeeded: number; failed: number; partial: number; skipped: number; durationMs: number } | null;
+} | null; timestamp: string; sessions: LineChatOperationsSession[]; queue: LineChatJobCounts; mapping: LineChatMappingQueueMetrics; rollout: { totalOas: number; enabledOas: number; disabledOas: number; missingChatBotId: number; missingSession: number }; fleetReadiness: LineChatFleetReadinessReport };
 
 export type UnresolvedMappingReason = "RESOLVE_NO_MATCH" | "RESOLVE_AMBIGUOUS" | "RESOLVE_CONFLICT";
 

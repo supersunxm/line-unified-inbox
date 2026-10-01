@@ -29,8 +29,6 @@ import {
   BROWSER_BUSY_HELP_TEXT,
   BROWSER_STATUS_HELP_TEXT,
   getBrowserOperationLabel,
-  getBrowserStateLabel,
-  getBrowserStateTone,
   getOverallHealth,
 } from "./line-chat-health-status";
 import { LineChatUnresolvedBacklogModal } from "./line-chat-unresolved-backlog-modal";
@@ -91,6 +89,12 @@ const actionLabel = (action: LineChatRecommendedAction): string => {
   }
 };
 
+const isRetryEligible = (failure: LineChatSafeJobFailure): boolean =>
+  failure.isActionable === true && failure.isAutoFixable;
+
+const failureStateLabel = (failure: LineChatSafeJobFailure): string =>
+  failure.resolutionState === "ACTIVE" ? actionLabel(failure.recommendedAction) : "Historical / resolved";
+
 function BrowserStatus({ session }: { session: LineChatOperationsSession }) {
   const operationLabel = getBrowserOperationLabel(session.browserOperationKind);
   const isBusy = session.browserState === "BUSY";
@@ -101,8 +105,8 @@ function BrowserStatus({ session }: { session: LineChatOperationsSession }) {
       title={isBusy ? `${BROWSER_STATUS_HELP_TEXT}\n${BROWSER_BUSY_HELP_TEXT}` : BROWSER_STATUS_HELP_TEXT}
     >
       <div className="text-xs text-[var(--app-text-tertiary)]">Browser</div>
-      <Badge variant={getBrowserStateTone(session.browserState)} dot>
-        {getBrowserStateLabel(session.browserState)}
+      <Badge variant={session.liveMirror?.browser === "RUNNING" ? "success" : session.liveMirror?.browser === "START_FAILED" ? "danger" : "neutral"} dot>
+        {session.liveMirror?.browser ?? "UNKNOWN"}
       </Badge>
       {operationLabel && <div className="text-xs text-[var(--app-text-secondary)]">{operationLabel}</div>}
       {isBusy && <div className="text-[11px] text-[var(--app-text-tertiary)]">{BROWSER_BUSY_HELP_TEXT}</div>}
@@ -122,7 +126,18 @@ function JobSummary({
 }) {
   const failedCount = session.jobs.failed + session.jobs.failedAuth;
   return (
-    <div className="flex flex-wrap items-center gap-1.5">
+    <div
+      className="flex flex-wrap items-center gap-1.5"
+      title="Job summary/history is auditable and does not determine current session health"
+    >
+      <div className="w-full space-y-1">
+        <div>Live Mirror: {session.liveMirror?.telemetryStatus ?? "UNKNOWN"}</div>
+        <div>Last cycle: {formatDate(session.liveMirror?.completedAt ?? null)}</div>
+        {session.liveMirror?.cycle && <div>
+          {session.liveMirror.cycle.attempted} attempted · {session.liveMirror.cycle.succeeded} success · {session.liveMirror.cycle.failed} failed · {session.liveMirror.cycle.partial} partial · {(session.liveMirror.cycle.durationMs / 1000).toFixed(1)}s
+        </div>}
+        <div className="text-xs text-[var(--app-text-tertiary)]">Nickname job history</div>
+      </div>
       <Badge variant="success">{session.jobs.success} success</Badge>
       <Badge variant={session.jobs.pending + session.jobs.processing ? "info" : "neutral"}>
         {session.jobs.pending} pending · {session.jobs.processing} running
@@ -169,7 +184,6 @@ export function LineChatHealthView() {
   const [detailSessionKey, setDetailSessionKey] = useState<string | null>(null);
   const [activeFilter, setActiveFilter] = useState<FilterTab>("ALL");
   const [selectedJobIds, setSelectedJobIds] = useState<Set<string>>(new Set());
-  const [overrideNonRetryable, setOverrideNonRetryable] = useState(false);
   const [fixPreviewOpen, setFixPreviewOpen] = useState(false);
   const [retrySelectedConfirmOpen, setRetrySelectedConfirmOpen] = useState(false);
   const [actionInProgress, setActionInProgress] = useState(false);
@@ -184,6 +198,9 @@ export function LineChatHealthView() {
       setSelectedKey((current) => current ?? health.sessions[0]?.sessionKey ?? null);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Unable to load LINE Chat health.");
+      setReport((current) => current ? { ...current, sessions: current.sessions.map((session) => ({
+        ...session, liveMirror: session.liveMirror ? { ...session.liveMirror, telemetryStatus: "STALE" } : undefined,
+      })) } : null);
     } finally {
       setLoading(false);
     }
@@ -214,19 +231,18 @@ export function LineChatHealthView() {
   const openDetailModal = (session: LineChatOperationsSession) => {
     setDetailSessionKey(session.sessionKey);
     setActiveFilter("ALL");
-    // Non-retryable unselected by default; pre-select auto-fixable
+    // Fail closed: only current failures with explicit retry eligibility are selected.
     const autoFixableIds = new Set(
-      session.recentFailures.filter((f) => f.isAutoFixable).map((f) => f.jobId),
+      session.recentFailures.filter(isRetryEligible).map((f) => f.jobId),
     );
     setSelectedJobIds(autoFixableIds);
-    setOverrideNonRetryable(false);
   };
 
   // Metrics for detail modal
   const failures = useMemo(() => detailSession?.recentFailures ?? [], [detailSession]);
   const metrics = useMemo(() => {
     const total = failures.length;
-    const autoFixable = failures.filter((f) => f.isAutoFixable).length;
+    const autoFixable = failures.filter(isRetryEligible).length;
     const manualReview = failures.filter((f) => f.recommendedAction === "MANUAL_REVIEW").length;
     const systemAttention = failures.filter(
       (f) =>
@@ -243,7 +259,7 @@ export function LineChatHealthView() {
   const filteredFailures = useMemo(() => {
     switch (activeFilter) {
       case "AUTO_FIXABLE":
-        return failures.filter((f) => f.isAutoFixable);
+        return failures.filter(isRetryEligible);
       case "MANUAL_REVIEW":
         return failures.filter((f) => f.recommendedAction === "MANUAL_REVIEW");
       case "AUTHENTICATION":
@@ -278,11 +294,12 @@ export function LineChatHealthView() {
   const toggleSelectAllFiltered = () => {
     setSelectedJobIds((prev) => {
       const next = new Set(prev);
-      const allFilteredSelected = filteredFailures.length > 0 && filteredFailures.every((f) => next.has(f.jobId));
+      const selectableFailures = filteredFailures.filter(isRetryEligible);
+      const allFilteredSelected = selectableFailures.length > 0 && selectableFailures.every((f) => next.has(f.jobId));
       if (allFilteredSelected) {
-        filteredFailures.forEach((f) => next.delete(f.jobId));
+        selectableFailures.forEach((f) => next.delete(f.jobId));
       } else {
-        filteredFailures.forEach((f) => next.add(f.jobId));
+        selectableFailures.forEach((f) => next.add(f.jobId));
       }
       return next;
     });
@@ -295,7 +312,7 @@ export function LineChatHealthView() {
 
   const selectedBreakdown = useMemo(() => {
     const total = selectedFailures.length;
-    const retryable = selectedFailures.filter((f) => f.isAutoFixable).length;
+    const retryable = selectedFailures.filter(isRetryEligible).length;
     const nonRetryable = total - retryable;
     const categories = [...new Set(selectedFailures.map((f) => f.failureCategory))];
     return { total, retryable, nonRetryable, categories };
@@ -304,10 +321,16 @@ export function LineChatHealthView() {
   // Execute Fix Retryable
   const executeFixRetryable = async () => {
     if (!detailSession) return;
+    const eligibleJobIds = failures.filter(isRetryEligible).map((failure) => failure.jobId);
+    if (eligibleJobIds.length === 0) return;
     setActionInProgress(true);
     setError(null);
     try {
-      const result = await api.fixLineChatRetryableJobs(detailSession.sessionKey);
+      const result = await api.retryLineChatSelectedJobs({
+        sessionKey: detailSession.sessionKey,
+        jobIds: eligibleJobIds,
+        overrideNonRetryable: false,
+      });
       setNotice(
         `${result.retriedCount} retryable failures safely re-queued for ${detailSession.sessionKey}. Remaining failures require manual review or re-login.`,
       );
@@ -323,14 +346,14 @@ export function LineChatHealthView() {
 
   // Execute Retry Selected
   const executeRetrySelected = async () => {
-    if (!detailSession || selectedJobIds.size === 0) return;
+    if (!detailSession || selectedBreakdown.retryable === 0) return;
     setActionInProgress(true);
     setError(null);
     try {
       const result = await api.retryLineChatSelectedJobs({
         sessionKey: detailSession.sessionKey,
-        jobIds: Array.from(selectedJobIds),
-        overrideNonRetryable,
+        jobIds: selectedFailures.filter(isRetryEligible).map((failure) => failure.jobId),
+        overrideNonRetryable: false,
       });
       setNotice(
         `${result.retriedCount} selected jobs queued for ${detailSession.sessionKey}. Skipped non-retryable: ${result.skippedCount}.`,
@@ -348,11 +371,17 @@ export function LineChatHealthView() {
   // Legacy full session retry
   const retryLegacy = async () => {
     if (!legacyRetryTarget) return;
+    const eligibleJobIds = legacyRetryTarget.recentFailures.filter(isRetryEligible).map((failure) => failure.jobId);
+    if (eligibleJobIds.length === 0) return;
     setLegacyRetrying(true);
     setError(null);
     try {
-      const result = await api.retryLineChatFailedJobs(legacyRetryTarget.sessionKey);
-      setNotice(`${result.retriedCount} failed jobs queued for ${legacyRetryTarget.sessionKey}.`);
+      const result = await api.retryLineChatSelectedJobs({
+        sessionKey: legacyRetryTarget.sessionKey,
+        jobIds: eligibleJobIds,
+        overrideNonRetryable: false,
+      });
+      setNotice(`${result.retriedCount} currently eligible failures queued for ${legacyRetryTarget.sessionKey}.`);
       setLegacyRetryTarget(null);
       await load();
     } catch (reason) {
@@ -433,7 +462,12 @@ export function LineChatHealthView() {
           <Card>
             <CardContent className="space-y-4 p-5">
               <div>
-                <h2 className="text-lg font-semibold">Fleet readiness audit</h2>
+                <h2 className="text-lg font-semibold">Live Mirror fleet</h2>
+                <p>Configured stores: {report.liveMirrorFleet?.configuredStores ?? "UNKNOWN"} · Cycle: {report.liveMirrorFleet ? report.liveMirrorFleet.cycleRunning ? "RUNNING" : "IDLE" : "UNKNOWN"}</p>
+                <p>Worker observed: {formatDate(report.liveMirrorFleet?.observedAt ?? null)}</p>
+                <p>Last NORMAL cycle: {formatDate(report.liveMirrorFleet?.lastCycle?.completedAt ?? null)}</p>
+                {report.liveMirrorFleet?.lastCycle && <p>{report.liveMirrorFleet.lastCycle.attempted} attempted · {report.liveMirrorFleet.lastCycle.succeeded} success · {report.liveMirrorFleet.lastCycle.failed} failed · {report.liveMirrorFleet.lastCycle.partial} partial · {report.liveMirrorFleet.lastCycle.skipped} skipped · {(report.liveMirrorFleet.lastCycle.durationMs / 1000).toFixed(1)}s</p>}
+                <h2 className="mt-4 text-lg font-semibold">Nickname mapping readiness</h2>
                 <p className="text-sm text-[var(--app-text-secondary)]">
                   Phase 0 audit for expanding direct customer links beyond the 7-store pilot. READY requires a complete OA/store mapping, chat bot ID, active authenticated session, and confirmed connected health.
                 </p>
@@ -559,7 +593,7 @@ export function LineChatHealthView() {
                     <TableHead>Session</TableHead>
                     <TableHead>Browser</TableHead>
                     <TableHead>Health</TableHead>
-                    <TableHead>Job summary</TableHead>
+                    <TableHead>Job summary / history</TableHead>
                     <TableHead>Last health check</TableHead>
                     <TableHead>Failure stage</TableHead>
                     <TableHead>Actions</TableHead>
@@ -576,10 +610,10 @@ export function LineChatHealthView() {
                         onClick={() => setSelectedKey(session.sessionKey)}
                       >
                         <TableCell>
-                          <div className="font-semibold">{session.displayName}</div>
+                          <div className="font-semibold">{session.liveMirror?.profile ? `Profile ${session.liveMirror.profile}` : session.displayName}</div>
                           <div className="text-xs text-[var(--app-text-tertiary)]">{session.sessionKey}</div>
                         </TableCell>
-                        <TableCell>{session.mappedOaCount}</TableCell>
+                        <TableCell>{session.liveMirror?.mappedStores ?? "UNKNOWN"}</TableCell>
                         <TableCell>
                           <Badge variant={tone(session.healthStatus)} dot>
                             {session.healthStatus}
@@ -596,7 +630,7 @@ export function LineChatHealthView() {
                         <TableCell>
                           <JobSummary session={session} onFailedClick={() => openDetailModal(session)} />
                         </TableCell>
-                        <TableCell>{formatDate(session.healthLastCheckedAt)}</TableCell>
+                        <TableCell>{formatDate(session.healthLastCheckedAt)}<div className="text-xs">Worker: {session.liveMirror?.telemetryStatus ?? "UNKNOWN"} · {formatDate(session.liveMirror?.observedAt ?? null)}</div></TableCell>
                         <TableCell>{session.healthFailureStage ?? "—"}</TableCell>
                         <TableCell>
                           <div className="flex items-center gap-1.5">
@@ -633,9 +667,14 @@ export function LineChatHealthView() {
                                 event.stopPropagation();
                                 setLegacyRetryTarget(session);
                               }}
-                              disabled={totalFailed === 0 || session.healthStatus === "AUTH_REQUIRED" || session.status === "AUTH_REQUIRED"}
+                              disabled={
+                                totalFailed === 0 ||
+                                (session.retryEligibleCount ?? 0) === 0 ||
+                                session.healthStatus === "AUTH_REQUIRED" ||
+                                session.status === "AUTH_REQUIRED"
+                              }
                             >
-                              Retry failed
+                              Retry eligible
                             </Button>
                           </div>
                         </TableCell>
@@ -685,11 +724,27 @@ export function LineChatHealthView() {
                   </div>
                   <div>
                     <dt className="text-[var(--app-text-tertiary)]">Mapped OAs</dt>
-                    <dd>{selected.mappedOaCount}</dd>
+                    <dd>{selected.liveMirror?.mappedStores ?? "UNKNOWN"}</dd>
                   </div>
                   <div>
                     <dt className="text-[var(--app-text-tertiary)]">Active leases</dt>
                     <dd>{selected.activeProfileLeases}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-[var(--app-text-tertiary)]">Current job risk</dt>
+                    <dd>{selected.activeJobRisk ?? "NORMAL"}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-[var(--app-text-tertiary)]">Active stuck jobs</dt>
+                    <dd>{selected.activeStuckJobs ?? 0}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-[var(--app-text-tertiary)]">Retry eligible</dt>
+                    <dd>{selected.retryEligibleCount ?? 0}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-[var(--app-text-tertiary)]">Historical failures</dt>
+                    <dd>{selected.historicalFailures ?? 0}</dd>
                   </div>
                   <div>
                     <dt className="text-[var(--app-text-tertiary)]">Last health check</dt>
@@ -746,9 +801,10 @@ export function LineChatHealthView() {
                             <Badge variant={failure.failureCategory === "AUTHENTICATION" ? "danger" : "warning"}>
                               {failure.failureCategory}
                             </Badge>
-                            <Badge variant={actionTone(failure.recommendedAction)}>
-                              {actionLabel(failure.recommendedAction)}
+                            <Badge variant={failure.resolutionState === "ACTIVE" ? actionTone(failure.recommendedAction) : "neutral"}>
+                              {failureStateLabel(failure)}
                             </Badge>
+                            {isRetryEligible(failure) && <Badge variant="success">Retry eligible</Badge>}
                           </div>
                         </div>
                         <div className="mt-2 grid grid-cols-2 gap-2 text-[var(--app-text-secondary)]">
@@ -802,7 +858,7 @@ export function LineChatHealthView() {
         footer={
           <div className="flex flex-wrap items-center justify-between w-full gap-2">
             <div className="text-xs text-[var(--app-text-secondary)]">
-              Selected: <strong>{selectedJobIds.size}</strong> of {failures.length}
+              Selected eligible: <strong>{selectedBreakdown.retryable}</strong> of {failures.length}
             </div>
             <div className="flex items-center gap-2">
               <Button onClick={() => setDetailSessionKey(null)} disabled={actionInProgress}>
@@ -811,9 +867,9 @@ export function LineChatHealthView() {
               <Button
                 variant="outline"
                 onClick={() => setRetrySelectedConfirmOpen(true)}
-                disabled={actionInProgress || selectedJobIds.size === 0}
+                disabled={actionInProgress || selectedBreakdown.retryable === 0}
               >
-                Retry selected ({selectedJobIds.size})
+                Retry selected ({selectedBreakdown.retryable})
               </Button>
               <Button
                 variant="primary"
@@ -924,6 +980,7 @@ export function LineChatHealthView() {
                         <input
                           type="checkbox"
                           checked={isSelected}
+                          disabled={!isRetryEligible(failure)}
                           onChange={() => toggleJobSelection(failure.jobId)}
                           className="mt-1 h-4 w-4 rounded border-[var(--app-border)] text-[var(--app-accent)] focus:ring-[var(--app-accent)]"
                           aria-label={`Select job ${failure.jobId}`}
@@ -941,12 +998,10 @@ export function LineChatHealthView() {
                               >
                                 {failure.failureCategory}
                               </Badge>
-                              <Badge variant={actionTone(failure.recommendedAction)}>
-                                {actionLabel(failure.recommendedAction)}
+                              <Badge variant={failure.resolutionState === "ACTIVE" ? actionTone(failure.recommendedAction) : "neutral"}>
+                                {failureStateLabel(failure)}
                               </Badge>
-                              {failure.isAutoFixable && (
-                                <Badge variant="success">Auto-fixable</Badge>
-                              )}
+                              {isRetryEligible(failure) && <Badge variant="success">Retry eligible</Badge>}
                             </div>
                           </div>
 
@@ -1103,19 +1158,8 @@ export function LineChatHealthView() {
             </div>
 
             {selectedBreakdown.nonRetryable > 0 && (
-              <div className="rounded-xl border border-[var(--app-warning)]/40 bg-[var(--app-warning-soft)] p-3 text-xs text-[var(--app-warning)] space-y-2">
-                <p>
-                  <strong>Warning:</strong> {selectedBreakdown.nonRetryable} selected jobs are classified as non-retryable (e.g. Authentication, Validation, or Repeated Execution errors). By default, the server rejects non-retryable jobs.
-                </p>
-                <label className="flex items-center gap-2 cursor-pointer font-medium">
-                  <input
-                    type="checkbox"
-                    checked={overrideNonRetryable}
-                    onChange={(e) => setOverrideNonRetryable(e.target.checked)}
-                    className="h-4 w-4 rounded border-[var(--app-border)] text-[var(--app-accent)]"
-                  />
-                  Force retry non-retryable jobs (may fail again if credentials or inputs are invalid)
-                </label>
+              <div className="rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-subtle)] p-3 text-xs text-[var(--app-text-secondary)]">
+                {selectedBreakdown.nonRetryable} selected historical or non-actionable jobs are excluded. The dashboard never bypasses the safe retry policy.
               </div>
             )}
 
@@ -1148,7 +1192,7 @@ export function LineChatHealthView() {
         {legacyRetryTarget && (
           <div className="space-y-3">
             <p>
-              <strong>{legacyRetryTarget.jobs.failed + legacyRetryTarget.jobs.failedAuth}</strong> jobs will be retried for{" "}
+              <strong>{legacyRetryTarget.retryEligibleCount ?? 0}</strong> currently eligible jobs will be retried for{" "}
               <strong>{legacyRetryTarget.sessionKey}</strong>.
             </p>
             <p>
@@ -1165,7 +1209,7 @@ export function LineChatHealthView() {
               ))}
             </div>
             <p className="text-[var(--app-text-secondary)]">
-              Retrying jobs does not prove or change the browser session’s health. Review the health badge separately.
+              Historical failures remain visible for audit and are not retryable from this dashboard. Retrying eligible jobs does not prove or change the browser session’s health.
             </p>
           </div>
         )}

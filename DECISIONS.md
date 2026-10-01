@@ -3122,3 +3122,9 @@ The first production target proof confirmed that eligible candidate OAs have no 
 ## 2026-10-01 — GitHub Android CI cleanup
 
 Isolated CI-only change deletes 32 Android-only workflows and removes two Flutter jobs plus app-only auth scope from three mixed workflows. Backend/frontend/web validation and CI Gate are preserved. Actionlint and workflow dependency/preserved-job checks pass. No Railway, database, Mirror/worker or Manager profile change. Publish through a dedicated PR and delete obsolete signing secrets only after successful CI and default-branch verification.
+
+## P0 health-only frontend publication
+
+Publish the health patch on current main through the user-authorized Git deployment so existing auth/dashboard changes and 47 APK assets remain intact. Do not shrink a direct upload by removing unrelated downloadable APKs. Keep worker/backend implementation publication separate from this frontend-only patch.
+
+Operational health derives from fresh passive worker/browser and completed-cycle evidence. Configuration and nickname pilot readiness alone cannot establish Live Mirror health; incomplete profile attribution stays UNKNOWN.

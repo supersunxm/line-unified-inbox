@@ -1,6 +1,6 @@
 import type { LineChatBrowserState, LineChatOperationsSession } from "@/lib/api";
 
-export type OverallHealth = { tone: "success" | "warning" | "danger"; label: string; reason: string };
+export type OverallHealth = { tone: "success" | "warning" | "danger" | "neutral"; label: string; reason: string };
 
 const BROWSER_STATE_LABELS: Record<LineChatBrowserState, string> = {
   AVAILABLE: "พร้อมใช้งาน",
@@ -68,11 +68,51 @@ export function getOverallHealth(session: LineChatOperationsSession): OverallHea
       reason: "The LINE session requires operator re-authentication.",
     };
   }
+  if (!session.liveMirror || session.liveMirror.telemetryStatus !== "FRESH" || session.liveMirror.browser === "UNKNOWN") {
+    return { tone: "neutral", label: session.liveMirror?.telemetryStatus === "STALE" ? "Stale" : "Unknown",
+      reason: "Fresh Live Mirror worker and browser telemetry is unavailable." };
+  }
+  const observation = Date.parse(session.liveMirror.observedAt ?? "");
+  if (!Number.isFinite(observation) || Date.now() - observation > 90_000 || observation > Date.now() + 5_000) {
+    return { tone: "neutral", label: "Stale", reason: "The worker telemetry observation has expired." };
+  }
+  if (session.liveMirror.browser !== "RUNNING") {
+    return { tone: "danger", label: "Failed", reason: `Worker browser is ${session.liveMirror.browser}.` };
+  }
+  if ((session.liveMirror.cycle?.failed ?? 0) > 0 || (session.liveMirror.cycle?.partial ?? 0) > 0) {
+    return { tone: "warning", label: "Degraded", reason: "The latest Live Mirror cycle has failed or partial stores." };
+  }
+  if (session.status !== "ACTIVE") {
+    return {
+      tone: "danger",
+      label: "Unhealthy",
+      reason: "The LINE session is not active.",
+    };
+  }
+  if (session.browserState === "RECOVERING") {
+    return {
+      tone: "warning",
+      label: "Degraded",
+      reason: "The Chromium profile is recovering and may be temporarily unavailable.",
+    };
+  }
   if (session.activeProfileLeases > 1 || session.healthFailureStage === "PROFILE_LOCK") {
     return {
       tone: "warning",
       label: "Lease or coordinator issue",
       reason: "Profile access is blocked or has more than one active lease.",
+    };
+  }
+  if (session.healthStatus === "UNKNOWN") {
+    return { tone: "neutral", label: "Unknown", reason: "The session health observation is missing or stale." };
+  }
+  if (session.healthStatus === "DEGRADED") {
+    return {
+      tone: "warning",
+      label: "Degraded",
+      reason: session.healthFailureStage
+        ? `The latest health check reported a recoverable issue (${session.healthFailureStage}).`
+        : "The latest health check reported a recoverable issue.",
     };
   }
   if (session.healthStatus !== "CONNECTED" || session.healthFailureStage) {
@@ -82,12 +122,23 @@ export function getOverallHealth(session: LineChatOperationsSession): OverallHea
       reason: "The latest session health evidence is not connected.",
     };
   }
-  if (session.jobs.failed + session.jobs.failedAuth > 0) {
+  if (session.activeJobRisk === "CRITICAL" || (session.activeStuckJobs ?? 0) > 0) {
     return {
       tone: "warning",
-      label: "Connected with job failures",
-      reason: "The session is connected; individual jobs need review.",
+      label: "Degraded",
+      reason: "The session is connected, but an active job has exceeded the operational recovery threshold.",
     };
   }
-  return { tone: "success", label: "Healthy", reason: "Session and job queue are healthy." };
+  if (session.activeJobRisk === "WARNING") {
+    return {
+      tone: "warning",
+      label: "Degraded",
+      reason: "The session is connected, but an active job is older than the normal operational window.",
+    };
+  }
+  return {
+    tone: "success",
+    label: "Healthy",
+    reason: "Session, browser, and current health checks are operational. Job outcomes remain available in history.",
+  };
 }
