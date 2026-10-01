@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type RefObject } from "react";
+import { useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { ExecutiveDashboardV2 as ExecutiveDashboardBase } from "./executive-dashboard-base";
 import { ExecutiveStorePeerPanel } from "./executive-store-peer-panel";
@@ -33,15 +33,19 @@ function StorePeerPanelPortal({
 }) {
   const [mountNode, setMountNode] = useState<HTMLDivElement | null>(null);
 
-  useEffect(() => {
+  // Layout effect: its cleanup (disconnect) runs inside the commit that removes
+  // the dashboard, before queued MutationObserver microtasks can fire. With a
+  // passive effect, attach() kept re-inserting into the detached tree forever.
+  useLayoutEffect(() => {
     const root = rootRef.current;
     if (!root) return;
     let node: HTMLDivElement | null = null;
 
     const attach = () => {
+      if (!root.isConnected) return;
       if (node?.isConnected) return;
       const header = root.querySelector("header");
-      if (!header?.parentElement) return;
+      if (!header?.parentElement || !header.isConnected) return;
       node = document.createElement("div");
       node.dataset.dashboardPeerPanel = "true";
       header.insertAdjacentElement("afterend", node);

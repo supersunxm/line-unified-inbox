@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, type ReactNode } from "react";
+import { useLayoutEffect, useMemo, useRef, type ReactNode } from "react";
 import { LanguageControl, useAppLanguage, type AppLanguage } from "./language";
 
 export type LegacyI18nPhrase = Record<AppLanguage, string>;
@@ -188,7 +188,9 @@ export function LegacyI18nBoundary({
     return map;
   }, [phrases]);
 
-  useEffect(() => {
+  // Layout effect: disconnect() must run inside the commit that removes this
+  // boundary, before queued MutationObserver microtasks fire on a detached tree.
+  useLayoutEffect(() => {
     const root = rootRef.current;
     if (!root) return;
 
@@ -217,6 +219,7 @@ export function LegacyI18nBoundary({
     };
 
     const translateTree = (node: Node) => {
+      if (!root.isConnected) return;
       if (node.nodeType === Node.TEXT_NODE) {
         const current = node.nodeValue ?? "";
         const translated = translateValue(current);
@@ -241,6 +244,7 @@ export function LegacyI18nBoundary({
 
     translateTree(root);
     const observer = new MutationObserver((mutations) => {
+      if (!root.isConnected) return;
       for (const mutation of mutations) {
         if (mutation.type === "characterData") translateTree(mutation.target);
         if (mutation.type === "attributes" && mutation.target instanceof Element) translateElement(mutation.target);
