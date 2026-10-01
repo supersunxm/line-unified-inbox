@@ -1,5 +1,7 @@
 import type { ApiBmReplyStatus, ApiConversation, ApiCustomerEvent, ApiCustomerIntelligence, ApiFollowUpStatus, ApiPriority, ApiStore, ApiTopic, BackfillJobResponseDto, BmReplyStatusSummaryResponse, ProductCorrectionInsightResponse, NetworkAccuracyReport, ProductReviewQueueResponse, ApproveAliasResponse, RejectAliasResponse, TargetedReanalysisResponse, ConversationListResponse, ConversationMessagesResponse, HistoricalVirtualChatListResponse, CreateLineOaInput, DashboardAnalyticsResponse, FriendAttributionConfigDto, FriendAttributionSessionStatusResult, FriendSourceLink, FriendSourceLinksFilters, FriendSourceLinksGenerateResult, FriendSourceLinksSummaryItem, IdentifyFriendAttributionInput, IdentifyFriendAttributionResult, LineOfficialAccountResponse, LineOaCredentialHealth, LineOaTestResult, LineOaWebhookInfo, ProductMetadataResponse, ProductVariantMetadata, PurchaseAnalyticsResponse, SendConversationMessageResponse, StoreDeletionPreview, StoreMasterSuggestion, StorePrioritySummaryResponse, StoreRemovalResult, StoreInsightsSummary, StoreInsightsResponsePerformance, StoreInsightsResponder, StoreInsightsSales, StoreInsightsConversationResponse, StoreInsightsCustomerVoice, StoreInsightsCustomerVoiceDimension, StoreInsightsCustomerVoiceDrilldownResponse, StoreInsightsResponseCasesResponse, StoreInsightsResponseSegment, StoreInsightsResponseSort, SummaryDailyRow, ByStoreAccountRow, SyncBatchResult, UpdateCustomerSalesInfoInput, UpdateFriendshipStatusInput, UpdateFriendshipStatusResult, UpsertFriendAttributionConfigInput } from "@/types/api";
 import { AUTH_UNAUTHORIZED_EVENT } from "@/lib/auth-session";
+import { authUserStore } from "@/lib/auth-user-store";
+import type { AuthUser } from "@/lib/authorization";
 import { API_BASE_URL } from "@/lib/runtime-config";
 
 export function messageMediaUrl(messageId: string) {
@@ -357,22 +359,44 @@ async function download(path: string) {
   return { blob: await response.blob(), filename };
 }
 
+/**
+ * Session-changing calls clear the cached user before and after the request,
+ * so every call site (including client-side logouts) starts from a clean cache.
+ */
+async function withAuthUserReset<T>(run: () => Promise<T>, { endSession = false }: { endSession?: boolean } = {}): Promise<T> {
+  const reset = () => (endSession ? authUserStore.endSession() : authUserStore.invalidate());
+  reset();
+  try {
+    return await run();
+  } finally {
+    reset();
+  }
+}
+
+/** Every successful /auth/me also warms the shared cache (unless invalidated meanwhile). */
+function seedAuthUserStore(startedAtGeneration: number) {
+  return <T>(user: T): T => {
+    authUserStore.seed(user as AuthUser, startedAtGeneration);
+    return user;
+  };
+}
+
 export const api = {
-  login: (identifier: string, password: string) => request<{ id: string; email: string; displayName: string; role: "ADMIN" | "VIEWER" }>("/auth/login", { method: "POST", body: JSON.stringify({ identifier, password }) }),
+  login: (identifier: string, password: string) => withAuthUserReset(() => request<{ id: string; email: string; displayName: string; role: "ADMIN" | "VIEWER" }>("/auth/login", { method: "POST", body: JSON.stringify({ identifier, password }) })),
   setupStatus: (options?: ApiRequestOptions) =>
     request<{ firstAdminRequired: boolean; registrationAvailable: boolean; emailProviderConfigured: boolean; emailProviderMode: string }>(
       "/auth/setup-status",
       { ...options, cache: "no-store", headers: { "Cache-Control": "no-cache, no-store, must-revalidate" } },
     ),
   requestSetupOtp: (displayName: string, email: string, password: string, language: "th" | "en" | "zh") => request<{ challengeId: string; maskedEmail: string; expiresInSeconds: number; resendAfterSeconds: number }>("/auth/setup/request-otp", { method: "POST", body: JSON.stringify({ displayName, email, password, language }) }),
-  verifySetupOtp: (input: { challengeId: string; displayName: string; email: string; password: string; otp: string; language: "th" | "en" | "zh" }) => request<{ id: string; email: string; displayName: string; role: "ADMIN" | "VIEWER" }>("/auth/setup/verify-otp", { method: "POST", body: JSON.stringify(input) }),
+  verifySetupOtp: (input: { challengeId: string; displayName: string; email: string; password: string; otp: string; language: "th" | "en" | "zh" }) => withAuthUserReset(() => request<{ id: string; email: string; displayName: string; role: "ADMIN" | "VIEWER" }>("/auth/setup/verify-otp", { method: "POST", body: JSON.stringify(input) })),
   resendSetupOtp: (challengeId: string, language: "th" | "en" | "zh") => request<{ challengeId: string; maskedEmail: string; expiresInSeconds: number; resendAfterSeconds: number }>("/auth/setup/resend-otp", { method: "POST", body: JSON.stringify({ challengeId, language }) }),
-  logout: () => request<{ success: true }>("/auth/logout", { method: "POST" }),
+  logout: () => withAuthUserReset(() => request<{ success: true }>("/auth/logout", { method: "POST" }), { endSession: true }),
   me: (options?: ApiRequestOptions) =>
     request<{ id: string; email: string; displayName: string; role: "ADMIN" | "VIEWER"; permissions?: { canAccessMainOa: boolean; canManageMainOa: boolean } }>(
       "/auth/me",
       { ...options, cache: "no-store", headers: { "Cache-Control": "no-cache, no-store, must-revalidate" } },
-    ),
+    ).then(seedAuthUserStore(authUserStore.generation())),
   getPendingRegistrations: async () => {
     const response = await request<{ registrations?: PendingRegistration[] } | PendingRegistration[]>("/admin/registrations/pending");
     return Array.isArray(response) ? response : response.registrations ?? [];
@@ -1192,3 +1216,7 @@ export const api = {
     return download(`/google-review-kpi/weekly/export?${query.toString()}`);
   },
 };
+
+authUserStore.configure(() =>
+  request<AuthUser>("/auth/me", { cache: "no-store", headers: { "Cache-Control": "no-cache, no-store, must-revalidate" } }),
+);

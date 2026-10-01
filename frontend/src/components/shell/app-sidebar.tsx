@@ -8,7 +8,7 @@ import type { PrimarySection } from "@/app/primary-navigation";
 import { canAccessPrimarySection, canAccessWebTool, defaultRouteForUser } from "@/lib/authorization";
 import type { Language, TopNavigationProps } from "./top-navigation";
 
-const SIDEBAR_STORAGE_KEY = "oppo-app-sidebar-collapsed";
+export const SIDEBAR_STORAGE_KEY = "oppo-app-sidebar-collapsed";
 const SIDEBAR_STORAGE_EVENT = "oppo-app-sidebar-storage";
 const EXPANDED_SIDEBAR_WIDTH = "16rem";
 const COMPACT_SIDEBAR_WIDTH = "4.25rem";

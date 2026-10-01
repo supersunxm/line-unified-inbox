@@ -6,7 +6,7 @@ import Link from "next/link";
 import type { ApiCustomerEvent } from "@/types/api";
 import { ApiError, api, isAbortError } from "@/lib/api";
 import { FOCUS_STORE_GROUP_ID, FOCUS_STORE_GROUP_ROUTE_PARAM, FOCUS_STORE_GROUP_ROUTE_VALUE, getFocusStoreGroupCopy } from "@/lib/focus-store-group";
-import { AUTH_UNAUTHORIZED_EVENT, getAuthState, resolveAuthRedirect, routeAfterLogin } from "@/lib/auth-session";
+import { AUTH_UNAUTHORIZED_EVENT, getAuthState, resolveAuthRedirect, routeAfterLogin, redirectToLogin } from "@/lib/auth-session";
 import { ThemeControl } from "./theme";
 import { PublicLandingPage } from "./public-landing-page";
 import type { PrimarySection } from "./primary-navigation";
@@ -2014,9 +2014,7 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
     const handleUnauthorized = () => {
       setAuthUser(null);
       setLoginPassword("");
-      if (window.location.pathname !== "/login") {
-        window.location.replace("/login");
-      }
+      redirectToLogin();
     };
     window.addEventListener(AUTH_UNAUTHORIZED_EVENT, handleUnauthorized);
     return () => window.removeEventListener(AUTH_UNAUTHORIZED_EVENT, handleUnauthorized);

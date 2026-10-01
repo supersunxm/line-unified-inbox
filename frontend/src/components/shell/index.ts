@@ -4,3 +4,4 @@ export * from "./context-sidebar";
 export * from "./page-container";
 export * from "./page-header";
 export * from "./filter-bar";
+export * from "./shell-skeleton";
