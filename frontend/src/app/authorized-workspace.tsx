@@ -10,7 +10,6 @@ import { beginLoginRedirect, isLoginRedirectStarted } from "@/lib/auth-session";
 import { authUserStore, getAuthUser, useAuthUserSnapshot } from "@/lib/auth-user-store";
 import { ShellSkeleton } from "@/components/shell/shell-skeleton";
 import { WorkspaceSkeleton } from "@/components/ui/workspace-skeleton";
-import { useDeferredLoading } from "@/components/ui/use-deferred-loading";
 import { LanguageControl, pickLanguageText, useAppLanguage } from "./language";
 
 const accessTranslations = {
@@ -49,9 +48,6 @@ export function AuthorizedSection({ section, children }: { section: PrimarySecti
   const user = snapshot.user && snapshot.version !== blockedVersion ? snapshot.user : null;
   const allowed = user !== null && canAccessPrimarySection(user, section);
   const deniedUser = user !== null && !allowed ? user : null;
-  // A cache hit is allowed on the first render, so no skeleton ever shows. A real
-  // wait shows the bare frame for 200ms, then the skeleton for at least 400ms.
-  const showSkeleton = useDeferredLoading(!allowed && !error);
 
   useEffect(() => {
     let cancelled = false;
@@ -88,10 +84,10 @@ export function AuthorizedSection({ section, children }: { section: PrimarySecti
     );
   }
 
-  if (!allowed || showSkeleton) {
+  if (!allowed) {
     return (
-      <ShellSkeleton placeholders={showSkeleton}>
-        {showSkeleton && <WorkspaceSkeleton label={t.checking} />}
+      <ShellSkeleton>
+        <WorkspaceSkeleton label={t.checking} />
       </ShellSkeleton>
     );
   }
@@ -99,16 +95,10 @@ export function AuthorizedSection({ section, children }: { section: PrimarySecti
   return <AuthorizedUserContext.Provider value={user}>{children}</AuthorizedUserContext.Provider>;
 }
 
-/** Hands the gate's user to the workspace so it skips its own setup-status and /auth/me calls. */
-function GatedApplicationWorkspace({ section }: { section: PrimarySection }) {
-  const user = useAuthorizedUser();
-  return <ApplicationWorkspace initialSection={section} initialAuthUser={user} />;
-}
-
 export function AuthorizedWorkspace({ section }: { section: PrimarySection }) {
   return (
     <AuthorizedSection section={section}>
-      <GatedApplicationWorkspace section={section} />
+      <ApplicationWorkspace initialSection={section} />
     </AuthorizedSection>
   );
 }

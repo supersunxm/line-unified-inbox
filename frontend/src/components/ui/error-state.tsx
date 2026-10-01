@@ -19,7 +19,7 @@ export function ErrorState({
   return (
     <div
       role="alert"
-      className={`flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 rounded-[var(--app-radius-lg)] border border-[var(--app-danger)]/30 bg-[var(--app-danger-soft)] p-4 text-xs text-[color-mix(in_srgb,var(--app-danger)_70%,var(--app-text-primary))] ${className}`}
+      className={`flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 rounded-[var(--app-radius-lg)] border border-[var(--app-danger)]/30 bg-[var(--app-danger-soft)] p-4 text-xs text-[#C62828] dark:text-[#fca5a5] ${className}`}
     >
       <div className="flex items-start gap-2.5">
         <svg
@@ -46,7 +46,7 @@ export function ErrorState({
           size="sm"
           variant="secondary"
           onClick={onRetry}
-          className="shrink-0 self-end sm:self-center border-[var(--app-danger)]/30 text-[color-mix(in_srgb,var(--app-danger)_70%,var(--app-text-primary))] hover:bg-[var(--app-danger)] hover:text-white"
+          className="shrink-0 self-end sm:self-center border-[var(--app-danger)]/30 text-[#C62828] dark:text-[#fca5a5] hover:bg-[var(--app-danger)] hover:text-white"
         >
           ลองใหม่อีกครั้ง
         </Button>

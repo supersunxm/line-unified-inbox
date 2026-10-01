@@ -7,7 +7,6 @@ import type { ApiCustomerEvent } from "@/types/api";
 import { ApiError, api, isAbortError } from "@/lib/api";
 import { FOCUS_STORE_GROUP_ID, FOCUS_STORE_GROUP_ROUTE_PARAM, FOCUS_STORE_GROUP_ROUTE_VALUE, getFocusStoreGroupCopy } from "@/lib/focus-store-group";
 import { AUTH_UNAUTHORIZED_EVENT, getAuthState, resolveAuthRedirect, routeAfterLogin, redirectToLogin } from "@/lib/auth-session";
-import { initialWorkspaceAuth } from "./workspace-auth-bootstrap";
 import { ThemeControl } from "./theme";
 import { PublicLandingPage } from "./public-landing-page";
 import type { PrimarySection } from "./primary-navigation";
@@ -1415,14 +1414,10 @@ export default function Home() {
   return <PublicLandingPage />;
 }
 
-type WorkspaceAuthUser = { id: string; email: string; displayName: string; role: "ADMIN" | "VIEWER"; permissions?: { canAccessMainOa?: boolean } };
-
-/** `initialAuthUser` is the user AuthorizedSection already resolved; /login passes none and runs the full setup check. */
-export function ApplicationWorkspace({ initialSection, initialAuthUser }: { initialSection: PrimarySection; initialAuthUser?: WorkspaceAuthUser | null }) {
+export function ApplicationWorkspace({ initialSection }: { initialSection: PrimarySection }) {
   const { widths: chatPaneWidths, containerRef: chatContainerRef, resize: resizeChatPanes, reset: resetChatPanes } = useResizablePanes(initialSection === "chats");
-  const [initialAuth] = useState(() => initialWorkspaceAuth(initialAuthUser));
-  const [authUser, setAuthUser] = useState<WorkspaceAuthUser | null>(initialAuth.authUser);
-  const [authChecked, setAuthChecked] = useState(initialAuth.authChecked);
+  const [authUser, setAuthUser] = useState<{ id: string; email: string; displayName: string; role: "ADMIN" | "VIEWER"; permissions?: { canAccessMainOa?: boolean } } | null>(null);
+  const [authChecked, setAuthChecked] = useState(false);
   const [setupStatus, setSetupStatus] = useState<{ firstAdminRequired: boolean; registrationAvailable: boolean; emailProviderConfigured: boolean; emailProviderMode: string } | null>(null);
   const [setupStatusError, setSetupStatusError] = useState<string | null>(null);
   const [setupName, setSetupName] = useState("");
@@ -2025,11 +2020,7 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
     return () => window.removeEventListener(AUTH_UNAUTHORIZED_EVENT, handleUnauthorized);
   }, []);
 
-  useEffect(() => {
-    if (!initialAuth.runSetupCheck) return undefined;
-    const timer = window.setTimeout(() => void checkSetupStatus(), 0);
-    return () => window.clearTimeout(timer);
-  }, [checkSetupStatus, initialAuth.runSetupCheck]);
+  useEffect(() => { const timer = window.setTimeout(() => void checkSetupStatus(), 0); return () => window.clearTimeout(timer); }, [checkSetupStatus]);
 
   useEffect(() => {
     if (!authChecked) return;
@@ -3163,7 +3154,7 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
     zh: { title: "创建首位管理员", name: "管理员姓名", email: "电子邮箱", password: "密码", confirm: "确认密码", send: "发送验证码", verifyTitle: "验证电子邮箱", sent: "请输入发送至以下邮箱的六位验证码", verify: "验证并创建管理员", resend: "重新发送验证码", change: "更改邮箱" },
   }[language];
 
-  if (!authChecked) return <main className="flex min-h-screen items-center justify-center bg-[var(--app-bg)] text-[var(--app-text-secondary)]"><div className="absolute right-6 top-6"><ThemeControl /></div>Loading…</main>;
+  if (!authChecked) return <main className="flex min-h-screen items-center justify-center bg-slate-100 text-slate-500"><div className="absolute right-6 top-6"><ThemeControl /></div>Loading…</main>;
   if (setupStatusError) return <main className="flex min-h-screen items-center justify-center bg-slate-100 p-6"><div className="w-full max-w-md rounded-2xl bg-white p-7 text-center shadow-xl"><h1 className="text-xl font-bold">Unable to check administrator setup</h1><p className="mt-3 rounded bg-red-50 p-3 text-sm text-red-700">{setupStatusError}</p><button onClick={() => void checkSetupStatus()} className="mt-5 rounded-lg bg-slate-900 px-4 py-2 text-white">Retry</button></div></main>;
   if (setupStatus?.firstAdminRequired) return <main className="flex min-h-screen items-center justify-center bg-slate-100 p-6"><div className="absolute right-6 top-6 flex gap-2">{(["th", "en", "zh"] as const).map((item) => <button key={item} onClick={() => setLanguage(item)} className={`rounded px-2 py-1 text-xs ${language === item ? "bg-slate-900 text-white" : "bg-white"}`}>{item.toUpperCase()}</button>)}</div>{!setupChallenge ? <form onSubmit={(event) => void sendSetupOtp(event)} className="w-full max-w-md rounded-2xl bg-white p-7 shadow-xl"><h1 className="text-2xl font-bold">{setupLabels.title}</h1>{!setupStatus.emailProviderConfigured && <p className="mt-3 rounded bg-amber-50 p-3 text-sm text-amber-800">Email delivery is not configured. Configure Resend or development console mode.</p>}{loginError && <p className="mt-3 rounded bg-red-50 p-3 text-sm text-red-700">{loginError}</p>}<label className="mt-5 block text-sm">{setupLabels.name}<input required value={setupName} onChange={(event) => setSetupName(event.target.value)} className="mt-1 w-full rounded-lg border p-2" /></label><label className="mt-4 block text-sm">{setupLabels.email}<input type="email" required value={setupEmail} onChange={(event) => setSetupEmail(event.target.value)} className="mt-1 w-full rounded-lg border p-2" /></label><label className="mt-4 block text-sm">{setupLabels.password}<input type={showSetupPassword ? "text" : "password"} minLength={12} required value={setupPassword} onChange={(event) => setSetupPassword(event.target.value)} className="mt-1 w-full rounded-lg border p-2" /></label><label className="mt-4 block text-sm">{setupLabels.confirm}<input type={showSetupPassword ? "text" : "password"} minLength={12} required value={setupPasswordConfirmation} onChange={(event) => setSetupPasswordConfirmation(event.target.value)} className="mt-1 w-full rounded-lg border p-2" /></label><label className="mt-3 flex gap-2 text-sm"><input type="checkbox" checked={showSetupPassword} onChange={(event) => setShowSetupPassword(event.target.checked)} />Show password</label><p className={`mt-2 text-xs ${setupPassword.length >= 12 ? "text-green-700" : "text-amber-700"}`}>Password must contain at least 12 characters</p><button disabled={loginLoading || setupPassword !== setupPasswordConfirmation || setupPassword.length < 12} className="mt-6 w-full rounded-lg bg-slate-900 px-4 py-2 text-white disabled:opacity-50">{setupLabels.send}</button></form> : <form onSubmit={(event) => void verifySetupOtp(event)} className="w-full max-w-md rounded-2xl bg-white p-7 shadow-xl"><h1 className="text-2xl font-bold">{setupLabels.verifyTitle}</h1><p className="mt-2 text-sm text-slate-500">{setupLabels.sent} {setupChallenge.maskedEmail}</p>{loginError && <p className="mt-3 rounded bg-red-50 p-3 text-sm text-red-700">{loginError}</p>}<input aria-label="Six-digit verification code" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} autoFocus value={setupOtp} onChange={(event) => setSetupOtp(event.target.value.replace(/\D/g, "").slice(0, 6))} onPaste={(event) => { const value = event.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6); if (value.length === 6) { event.preventDefault(); setSetupOtp(value); } }} className="mt-6 w-full rounded-lg border p-3 text-center font-mono text-3xl tracking-[0.5em]" /><p className="mt-2 text-center text-xs text-slate-500">{setupExpires > 0 ? `${Math.floor(setupExpires / 60)}:${String(setupExpires % 60).padStart(2, "0")}` : "Code expired"}</p><button disabled={loginLoading || setupOtp.length !== 6 || setupExpires === 0} className="mt-5 w-full rounded-lg bg-slate-900 px-4 py-2 text-white disabled:opacity-50">{setupLabels.verify}</button><div className="mt-4 flex justify-between text-sm"><button type="button" onClick={() => { setSetupChallenge(null); setSetupOtp(""); setLoginError(null); }} className="text-blue-700">{setupLabels.change}</button><button type="button" disabled={setupResend > 0 || loginLoading} onClick={() => void api.resendSetupOtp(setupChallenge.challengeId, language).then((result) => { setSetupChallenge(result); setSetupExpires(result.expiresInSeconds); setSetupResend(result.resendAfterSeconds); }).catch((error: unknown) => setLoginError(error instanceof Error ? error.message : "Unable to resend"))} className="text-blue-700 disabled:text-slate-400">{setupLabels.resend}{setupResend > 0 ? ` (${setupResend})` : ""}</button></div></form>}</main>;
   if (!authUser) {
