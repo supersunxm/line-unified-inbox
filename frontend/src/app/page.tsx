@@ -7,6 +7,7 @@ import type { ApiCustomerEvent } from "@/types/api";
 import { ApiError, api, isAbortError } from "@/lib/api";
 import { FOCUS_STORE_GROUP_ID, FOCUS_STORE_GROUP_ROUTE_PARAM, FOCUS_STORE_GROUP_ROUTE_VALUE, getFocusStoreGroupCopy } from "@/lib/focus-store-group";
 import { AUTH_UNAUTHORIZED_EVENT, getAuthState, resolveAuthRedirect, routeAfterLogin, redirectToLogin } from "@/lib/auth-session";
+import { initialWorkspaceAuth } from "./workspace-auth-bootstrap";
 import { ThemeControl } from "./theme";
 import { PublicLandingPage } from "./public-landing-page";
 import type { PrimarySection } from "./primary-navigation";
@@ -1414,10 +1415,14 @@ export default function Home() {
   return <PublicLandingPage />;
 }
 
-export function ApplicationWorkspace({ initialSection }: { initialSection: PrimarySection }) {
+type WorkspaceAuthUser = { id: string; email: string; displayName: string; role: "ADMIN" | "VIEWER"; permissions?: { canAccessMainOa?: boolean } };
+
+/** `initialAuthUser` is the user AuthorizedSection already resolved; /login passes none and runs the full setup check. */
+export function ApplicationWorkspace({ initialSection, initialAuthUser }: { initialSection: PrimarySection; initialAuthUser?: WorkspaceAuthUser | null }) {
   const { widths: chatPaneWidths, containerRef: chatContainerRef, resize: resizeChatPanes, reset: resetChatPanes } = useResizablePanes(initialSection === "chats");
-  const [authUser, setAuthUser] = useState<{ id: string; email: string; displayName: string; role: "ADMIN" | "VIEWER"; permissions?: { canAccessMainOa?: boolean } } | null>(null);
-  const [authChecked, setAuthChecked] = useState(false);
+  const [initialAuth] = useState(() => initialWorkspaceAuth(initialAuthUser));
+  const [authUser, setAuthUser] = useState<WorkspaceAuthUser | null>(initialAuth.authUser);
+  const [authChecked, setAuthChecked] = useState(initialAuth.authChecked);
   const [setupStatus, setSetupStatus] = useState<{ firstAdminRequired: boolean; registrationAvailable: boolean; emailProviderConfigured: boolean; emailProviderMode: string } | null>(null);
   const [setupStatusError, setSetupStatusError] = useState<string | null>(null);
   const [setupName, setSetupName] = useState("");
@@ -2020,7 +2025,11 @@ export function ApplicationWorkspace({ initialSection }: { initialSection: Prima
     return () => window.removeEventListener(AUTH_UNAUTHORIZED_EVENT, handleUnauthorized);
   }, []);
 
-  useEffect(() => { const timer = window.setTimeout(() => void checkSetupStatus(), 0); return () => window.clearTimeout(timer); }, [checkSetupStatus]);
+  useEffect(() => {
+    if (!initialAuth.runSetupCheck) return undefined;
+    const timer = window.setTimeout(() => void checkSetupStatus(), 0);
+    return () => window.clearTimeout(timer);
+  }, [checkSetupStatus, initialAuth.runSetupCheck]);
 
   useEffect(() => {
     if (!authChecked) return;

@@ -14,8 +14,10 @@ import {
 } from "./kpi-strip-model";
 
 export interface KpiStripSkeletonProps extends Omit<React.HTMLAttributes<HTMLDivElement>, "children"> {
-  /** Defaults to `columns`, i.e. one full row. */
+  /** Defaults to the number of `labels`, else `columns`, i.e. one full row. */
   itemCount?: number;
+  /** Real labels, when they are known before the data; otherwise grey blocks. */
+  labels?: React.ReactNode[];
   /** Same meaning as KpiStrip's `columns`; pass the value the real strip uses. */
   columns?: KpiColumns;
   /** Reserve the subtext line when the real items have one. */
@@ -28,8 +30,8 @@ export interface KpiStripSkeletonProps extends Omit<React.HTMLAttributes<HTMLDiv
  * value and subtext classes from kpi-strip-model, with each line's text replaced
  * by a block one line-height tall.
  */
-export function KpiStripSkeleton({ itemCount, columns, subtext = true, label = "กำลังโหลด…", className = "", ...rest }: KpiStripSkeletonProps) {
-  const count = itemCount ?? columns ?? 4;
+export function KpiStripSkeleton({ itemCount, labels, columns, subtext = true, label = "กำลังโหลด…", className = "", ...rest }: KpiStripSkeletonProps) {
+  const count = itemCount ?? labels?.length ?? columns ?? 4;
   const resolvedColumns = resolveKpiColumns(count, columns);
   return (
     <div role="status" aria-busy="true" className={`${kpiGridClass(resolvedColumns)} ${className}`} {...rest}>
@@ -37,7 +39,7 @@ export function KpiStripSkeleton({ itemCount, columns, subtext = true, label = "
       {Array.from({ length: count }).map((_, index) => (
         <div key={index} className={`${KPI_ITEM_CLASS} ${kpiItemSpanClass(index, count, resolvedColumns)}`}>
           <div className={KPI_LABEL_CLASS}>
-            <Skeleton className="h-[1lh] w-24 max-w-full" />
+            {labels?.[index] !== undefined ? <span className="min-w-0">{labels[index]}</span> : <Skeleton className="h-[1lh] w-24 max-w-full" />}
           </div>
           <div className={kpiValueClass()}>
             <Skeleton className="h-[1lh] w-20 max-w-full" />
