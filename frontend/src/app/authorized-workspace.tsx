@@ -1,11 +1,15 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 import type { PrimarySection } from "./primary-navigation";
 import { ApplicationWorkspace } from "./page";
-import { ApiError, api } from "@/lib/api";
+import { ApiError } from "@/lib/api";
 import { canAccessPrimarySection, defaultRouteForUser, type AuthUser } from "@/lib/authorization";
+import { beginLoginRedirect, isLoginRedirectStarted } from "@/lib/auth-session";
+import { authUserStore, getAuthUser, useAuthUserSnapshot } from "@/lib/auth-user-store";
+import { ShellSkeleton } from "@/components/shell/shell-skeleton";
+import { WorkspaceSkeleton } from "@/components/ui/workspace-skeleton";
 import { LanguageControl, pickLanguageText, useAppLanguage } from "./language";
 
 const accessTranslations = {
@@ -26,27 +30,32 @@ const accessTranslations = {
   },
 };
 
+const AuthorizedUserContext = createContext<AuthUser | null>(null);
+
+/** The signed-in user resolved by the nearest AuthorizedSection, or null outside one. */
+export function useAuthorizedUser(): AuthUser | null {
+  return useContext(AuthorizedUserContext);
+}
+
 export function AuthorizedSection({ section, children }: { section: PrimarySection; children: ReactNode }) {
   const { language } = useAppLanguage();
   const t = pickLanguageText(language, accessTranslations);
-  const [allowed, setAllowed] = useState(false);
+  const snapshot = useAuthUserSnapshot();
+  // Freshness is judged once, when this gate mounts: a cached user up to five
+  // minutes old renders immediately; an older one waits for the refetch.
+  const [blockedVersion] = useState(() => (authUserStore.peekUsable() ? null : authUserStore.getSnapshot().version));
   const [error, setError] = useState<string | null>(null);
+  const user = snapshot.user && snapshot.version !== blockedVersion ? snapshot.user : null;
+  const allowed = user !== null && canAccessPrimarySection(user, section);
+  const deniedUser = user !== null && !allowed ? user : null;
 
   useEffect(() => {
     let cancelled = false;
-    void api.me()
-      .then((rawUser) => {
-        if (cancelled) return;
-        const user = rawUser as AuthUser;
-        if (!canAccessPrimarySection(user, section)) {
-          window.location.replace(defaultRouteForUser(user));
-          return;
-        }
-        setAllowed(true);
-      })
+    void getAuthUser()
       .catch((reason: unknown) => {
         if (cancelled) return;
         if (reason instanceof ApiError && reason.status === 401) {
+          beginLoginRedirect();
           window.location.replace("/login");
           return;
         }
@@ -54,6 +63,13 @@ export function AuthorizedSection({ section, children }: { section: PrimarySecti
       });
     return () => { cancelled = true; };
   }, [section, t.unable]);
+
+  // Runs for the first answer and for any background revalidation that changes access.
+  useEffect(() => {
+    const user = deniedUser;
+    if (!user || isLoginRedirectStarted()) return;
+    window.location.replace(defaultRouteForUser(user));
+  }, [deniedUser]);
 
   if (error) {
     return (
@@ -70,14 +86,13 @@ export function AuthorizedSection({ section, children }: { section: PrimarySecti
 
   if (!allowed) {
     return (
-      <main className="relative flex min-h-screen items-center justify-center bg-[var(--app-bg)] text-sm text-[var(--app-text-secondary)]">
-        <LanguageControl className="absolute right-4 top-4" />
-        {t.checking}
-      </main>
+      <ShellSkeleton>
+        <WorkspaceSkeleton label={t.checking} />
+      </ShellSkeleton>
     );
   }
 
-  return children;
+  return <AuthorizedUserContext.Provider value={user}>{children}</AuthorizedUserContext.Provider>;
 }
 
 export function AuthorizedWorkspace({ section }: { section: PrimarySection }) {

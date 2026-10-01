@@ -1,5 +1,6 @@
 import React from "react";
 import { TopNavigation, TopNavigationProps } from "./top-navigation";
+import { refreshAuthUser } from "@/lib/auth-user-store";
 
 export interface AppShellProps extends TopNavigationProps {
   isLoading?: boolean;
@@ -181,7 +182,11 @@ export function AppShell({
           {loadApplicationData && (
             <button
               type="button"
-              onClick={() => void loadApplicationData()}
+              onClick={() => {
+                // Manual refresh also re-checks the signed-in user; a 401/403 clears the cache.
+                void refreshAuthUser().catch(() => undefined);
+                void loadApplicationData();
+              }}
               className="rounded-[var(--app-radius-sm)] border border-[var(--app-danger)]/30 bg-[var(--app-surface)] px-2.5 py-1 text-xs font-semibold text-[var(--app-danger)] hover:bg-[var(--app-danger)] hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--app-danger)]/40"
             >
               {normalizedText.retry}

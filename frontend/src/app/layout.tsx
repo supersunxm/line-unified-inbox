@@ -4,6 +4,7 @@ import "./globals.css";
 import "./public-branding.css";
 import { ThemeProvider } from "./theme";
 import { LanguageProvider } from "./language";
+import { AuthUnauthorizedListener } from "./auth-unauthorized-listener";
 
 export const metadata: Metadata = {
   title: {
@@ -61,7 +62,10 @@ export default function RootLayout({
       </head>
       <body className="min-h-full flex flex-col">
         <ThemeProvider>
-          <LanguageProvider>{children}</LanguageProvider>
+          <LanguageProvider>
+            <AuthUnauthorizedListener />
+            {children}
+          </LanguageProvider>
         </ThemeProvider>
       </body>
     </html>
