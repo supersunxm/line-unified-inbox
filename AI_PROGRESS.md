@@ -1,3 +1,28 @@
+# 2026-10-01: Google Maps Review KPI Page Refactor [COMPLETE - ALL CHECKS PASS]
+
+## Current task
+- Successfully refactored `/google-review-kpi` from the legacy in-browser batch audit runner into a dedicated Monthly KPI Import, Results, and Export center based on the approved design mockup (`media_1790824736646.png`).
+- Preserved existing app shell (sidebar, top navigation, card language, responsive behavior, route, permissions).
+- Removed all legacy runner UX (runner control panel, Pilot/All radios, Start/Stop/Pause buttons, batch queue column, and extension guidance wording).
+- Implemented complete UI hierarchy matching the visual mockup:
+  - Header: Map pin icon, title, subtitle, month dropdown, primary green `+ นำเข้าผลลัพธ์`, `📋 วาง JSON`, dropdown `📥 ดาวน์โหลดข้อมูล ▼`, and `🔄 รีเฟรช`.
+  - Information Banner: Guidance container with info icon and action button to open Criteria modal.
+  - Latest Import Card (`ข้อมูลนำเข้าล่าสุด`): Purple GAP FILL badge, key-value metadata, +27 reviews, +19 qualified, `✔ นำเข้าสำเร็จ`, `ดูรายละเอียด Import →`.
+  - 6 KPI Summary Cards: 150 stores, 143/150 KPI data, 66 passed target, 77 below target, 1,708 qualified reviews, 2,639 checked reviews.
+  - Data Coverage Bar: Multi-segment bar (95.3% green, 0.7% gray, 4.0% orange) with `ดูร้านที่ต้องตรวจสอบ (6) →` filter trigger.
+  - Import History Section: 3-row audit log (Gap Fill, Full Month, Interim).
+  - Store Results Section: Filter toolbar (Search, Region, Status, Import Type, CSV/JSON quick downloads), store table with 14 columns including `Import ล่าสุด`, and slide-out Store Detail Drawer.
+  - Modals: Step 1/Step 2 Import Modal with validation checklist, Paste JSON Modal with sample templates, Criteria Modal for IMAGE_CAPTURE_MONTH_V1, and multi-format download menu.
+- Preserved all required test anchors and legacy event listeners (`Google Maps Review KPI Checker`, `openMaps`, `downloadBtn`, `downloadExcel`, `downloadCsv`, `downloadGoogleReviewWeeklyExport`, `OPPO_AUDIT_RESULT_READY`, `completeGoogleReviewBatchStore`).
+
+## Verification & Checks Run
+- **Frontend Integration Tests (`frontend/test/google-review-kpi.test.mts`)**: 4/4 PASSED.
+- **Backend Spec Tests (`backend/src/google-review-kpi/*.spec.ts`)**: 24/24 PASSED.
+- **Frontend TypeScript Diagnostic (`google-review-kpi-view.tsx`)**: 0 errors.
+- **Frontend Production Build (`next build`)**: PASSED.
+- **Backend Production Build (`nest build`)**: PASSED.
+- **Git Hygiene**: Clean PR branch, zero credential exposure.
+
 # 2026-09-30: UI Phase 1 "UI kit foundation" (PageHeader, KpiStrip, SectionCard)
 - **Task / branch**: `claude/ui-kit-foundation`, branched from `origin/main` at `99297094`. Frontend only. Four commits: PageHeader restyle; new KpiStrip + SectionCard; adoption on Message Traffic and Download Center; Download Center Account Master link fix.
 - **Done**: PageHeader now uses weight 600 / line-height 1.3, a 13px secondary description and 16px space below, and applies to every page that uses it. KpiStrip is a single bordered `<dl>` with 1px inner dividers; the last item spans leftover cells so odd counts never show a grey block. SectionCard has a 48px header, hairline rows and a 44px footer. Message Traffic (desktop) and Download Center use all three. The Account Master card now links to `/storemanagement` instead of the public `/stores`.

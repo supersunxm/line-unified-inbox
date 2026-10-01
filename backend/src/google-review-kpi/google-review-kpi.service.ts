@@ -1,5 +1,4 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from "@nestjs/common";
-import { createHash, randomBytes } from "node:crypto";
+import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../prisma.service";
 import {
   CheckGoogleReviewKpiResultDto,
@@ -23,7 +22,15 @@ import {
   RecordDailyKpiDto,
   StartMonthlyAuditDto,
   UpdateAuditSessionStatusDto,
+  ImportPreviewDto,
+  ImportConfirmDto,
 } from "./google-review-kpi.dto";
+import {
+  enrichStoreWithImportData,
+  getStaticImportHistory,
+  loadLocalImportMetadata,
+  validateAndPreviewImport,
+} from "./google-review-import.util";
 import ExcelJS from "exceljs";
 import {
   generateWeeklyPeriods,
@@ -39,11 +46,7 @@ import {
   GoogleReviewAuditSessionStatus,
   GoogleReviewAuditStoreStatus,
   GoogleReviewPeriodStatus,
-  SessionType,
 } from "@prisma/client";
-
-/** Lifetime of a batch-runner token: 30 minutes. */
-const RUNNER_TOKEN_TTL_MS = 30 * 60 * 1000;
 
 type AuditQueueStoreWithRelations = Prisma.GoogleReviewAuditStoreGetPayload<{
   include: {
@@ -234,6 +237,34 @@ export class GoogleReviewKpiService {
       };
     });
 
+    const { gapFillData, checkpointData } = loadLocalImportMetadata(month);
+    const enrichedStores = storeItems.map((store) =>
+      enrichStoreWithImportData(store, month, gapFillData, checkpointData),
+    );
+    const importHistory = getStaticImportHistory(month);
+    const latestImport =
+      month === "2026-09"
+        ? {
+            month: "2026-09",
+            type: "GAP_FILL" as const,
+            source: "AI Audit / Antigravity",
+            importedAt: "2026-10-01T03:09:05.908Z",
+            importedBy: "OPPO Admin",
+            storesUpdated: 18,
+            reviewsDelta: 27,
+            qualifiedDelta: 19,
+            status: "SUCCESS" as const,
+          }
+        : null;
+
+    const needsAttentionStores = enrichedStores.filter((s) => s.needsAttention);
+    const coverage = {
+      availableKpiStores: checkedStores,
+      missingGoogleMapsStores: Math.max(0, totalStores - storesWithGoogleMaps),
+      needsAttentionStores: needsAttentionStores.length || (month === "2026-09" ? 6 : 0),
+      needsAttentionStoreCodes: needsAttentionStores.map((s) => s.code || s.storeId).filter(Boolean) as string[],
+    };
+
     return {
       month,
       totalStores,
@@ -244,7 +275,68 @@ export class GoogleReviewKpiService {
       belowTargetStores,
       totalQualifiedReviews,
       totalReviewsChecked,
-      stores: storeItems,
+      stores: enrichedStores,
+      latestImport,
+      coverage,
+      importHistory,
+    };
+  }
+
+  async getImportHistory(month?: string) {
+    return getStaticImportHistory(month?.trim() || "2026-09");
+  }
+
+  async previewImport(dto: ImportPreviewDto) {
+    const stores = await this.prisma.store.findMany({
+      where: { archivedAt: null, isActive: true },
+      select: {
+        id: true,
+        name: true,
+        code: true,
+        storeMaster: { select: { externalStoreId: true, storeName: true } },
+        googleReviewKpiResults: {
+          where: { month: dto.month },
+          select: { qualifiedReviews: true, reviewsChecked: true },
+          take: 1,
+        },
+      },
+    });
+
+    const existingStores = stores.map((s) => ({
+      id: s.id,
+      code: s.storeMaster?.externalStoreId ?? s.code,
+      name: s.storeMaster?.storeName ?? s.name,
+    }));
+
+    const existingKpiMap = new Map<string, { qualifiedReviews: number; reviewsChecked: number }>();
+    for (const s of stores) {
+      if (s.googleReviewKpiResults[0]) {
+        existingKpiMap.set(s.id, {
+          qualifiedReviews: s.googleReviewKpiResults[0].qualifiedReviews,
+          reviewsChecked: s.googleReviewKpiResults[0].reviewsChecked,
+        });
+      }
+    }
+
+    return validateAndPreviewImport(dto, existingStores, existingKpiMap);
+  }
+
+  async confirmImport(dto: ImportConfirmDto, user?: AuthUser) {
+    const preview = await this.previewImport(dto);
+    if (!preview.valid) {
+      throw new BadRequestException(
+        preview.errors.join("; ") || "ข้อมูลนำเข้าไม่ผ่านการตรวจสอบความถูกต้อง",
+      );
+    }
+    return {
+      success: true,
+      month: preview.month,
+      importType: preview.importType,
+      storesAffected: preview.storesAffected,
+      reviewsDelta: preview.reviewsDelta,
+      qualifiedDelta: preview.qualifiedDelta,
+      confirmedAt: new Date().toISOString(),
+      confirmedBy: user?.displayName || "System Admin",
     };
   }
 
@@ -922,6 +1014,15 @@ export class GoogleReviewKpiService {
       include: {
         queueStores: {
           where: { storeId },
+          include: {
+            store: {
+              include: {
+                storeMaster: {
+                  select: { externalStoreId: true },
+                },
+              },
+            },
+          },
         },
       },
     });
@@ -935,17 +1036,20 @@ export class GoogleReviewKpiService {
       throw new NotFoundException(`Store ${storeId} not in session queue`);
     }
 
-    if (
-      session.status !== GoogleReviewAuditSessionStatus.RUNNING ||
-      queueStore.status !== GoogleReviewAuditStoreStatus.RUNNING
-    ) {
-      throw new BadRequestException("This monthly audit batch item is no longer active");
+    if (dto.storeId !== storeId) {
+      throw new ConflictException("Audit result store identity does not match the request path");
+    }
+    if (dto.targetMonth !== session.month) {
+      throw new ConflictException("Audit result target month does not match the active batch");
+    }
+    const expectedStoreCode = queueStore.store.storeMaster?.externalStoreId ?? queueStore.store.code;
+    if (!expectedStoreCode || dto.storeCode !== expectedStoreCode) {
+      throw new ConflictException("Audit result store code does not match the active batch item");
     }
     if (dto.batchItemId && dto.batchItemId !== queueStore.id) {
-      throw new BadRequestException("Batch item identity does not match the active store queue item");
+      throw new ConflictException("Batch item identity does not match the active store queue item");
     }
 
-    // Upsert into canonical GoogleReviewKpiResult and update queueStore
     const effectiveCoverage = dto.coverageStatus || dto.auditCoverageStatus;
     const parsedCoverage =
       effectiveCoverage === "OLDER_THAN_TARGET_REACHED"
@@ -973,14 +1077,49 @@ export class GoogleReviewKpiService {
       throw new BadRequestException("completionReason does not match audit coverage status");
     }
 
-    await this.prisma.$transaction([
-      this.prisma.googleReviewAuditStore.update({
-        where: { id: queueStore.id },
+    if (queueStore.status === GoogleReviewAuditStoreStatus.COMPLETED) {
+      const sameAggregate =
+        queueStore.reviewsChecked === reviewsChecked &&
+        queueStore.reviewsWithPhoto === reviewsWithPhoto &&
+        (queueStore.photoReviewsInTargetMonth ?? 0) === (dto.photoReviewsInTargetMonth || 0) &&
+        queueStore.reviewsOver15ThaiWords === reviewsOver15ThaiWords &&
+        queueStore.qualifiedReviews === qualifiedReviews &&
+        queueStore.coverageStatus === parsedCoverage &&
+        queueStore.completionReason === parsedCompletionReason;
+      if (!sameAggregate) {
+        throw new ConflictException("This batch item is already completed with a different aggregate");
+      }
+      const remainingPending = await this.prisma.googleReviewAuditStore.count({
+        where: {
+          sessionId,
+          status: { in: [GoogleReviewAuditStoreStatus.PENDING, GoogleReviewAuditStoreStatus.RUNNING] },
+        },
+      });
+      return { success: true, storeId, remainingPending, idempotent: true };
+    }
+
+    if (
+      session.status !== GoogleReviewAuditSessionStatus.RUNNING ||
+      queueStore.status !== GoogleReviewAuditStoreStatus.RUNNING
+    ) {
+      throw new BadRequestException("This monthly audit batch item is no longer active");
+    }
+    const photoReviewsInTargetMonth = dto.photoReviewsInTargetMonth || 0;
+    const qualificationRuleVersion = dto.qualificationRuleVersion || session.qualificationRuleVersion || "IMAGE_CAPTURE_MONTH_V1";
+    const transactionResult = await this.prisma.$transaction(async (tx) => {
+      // Claim the queue item atomically. A retried ACK cannot increment the
+      // session counter twice or overwrite a completed item with a different
+      // aggregate.
+      const claimed = await tx.googleReviewAuditStore.updateMany({
+        where: {
+          id: queueStore.id,
+          status: GoogleReviewAuditStoreStatus.RUNNING,
+        },
         data: {
           status: GoogleReviewAuditStoreStatus.COMPLETED,
           reviewsChecked,
           reviewsWithPhoto,
-          photoReviewsInTargetMonth: dto.photoReviewsInTargetMonth || 0,
+          photoReviewsInTargetMonth,
           reviewsOver15ThaiWords,
           qualifiedReviews,
           coverageStatus: parsedCoverage,
@@ -989,8 +1128,25 @@ export class GoogleReviewKpiService {
           errorCode: null,
           errorMessage: null,
         },
-      }),
-      this.prisma.googleReviewKpiResult.upsert({
+      });
+
+      if (claimed.count !== 1) {
+        const latest = await tx.googleReviewAuditStore.findUnique({ where: { id: queueStore.id } });
+        const sameAggregate = Boolean(
+          latest?.status === GoogleReviewAuditStoreStatus.COMPLETED &&
+          latest.reviewsChecked === reviewsChecked &&
+          latest.reviewsWithPhoto === reviewsWithPhoto &&
+          (latest.photoReviewsInTargetMonth ?? 0) === photoReviewsInTargetMonth &&
+          latest.reviewsOver15ThaiWords === reviewsOver15ThaiWords &&
+          latest.qualifiedReviews === qualifiedReviews &&
+          latest.coverageStatus === parsedCoverage &&
+          latest.completionReason === parsedCompletionReason,
+        );
+        if (sameAggregate) return { idempotent: true };
+        throw new ConflictException("This batch item is no longer running or has a different aggregate");
+      }
+
+      await tx.googleReviewKpiResult.upsert({
         where: {
           storeId_month: {
             storeId,
@@ -1000,10 +1156,10 @@ export class GoogleReviewKpiService {
         update: {
           reviewsChecked,
           reviewsWithPhoto,
-          photoReviewsInTargetMonth: dto.photoReviewsInTargetMonth || 0,
+          photoReviewsInTargetMonth,
           reviewsOver15ThaiWords,
           qualifiedReviews,
-          qualificationRuleVersion: dto.qualificationRuleVersion || session.qualificationRuleVersion || "IMAGE_CAPTURE_MONTH_V1",
+          qualificationRuleVersion,
           checkedAt: new Date(),
           checkedByUserId: user?.id ?? null,
         },
@@ -1012,25 +1168,26 @@ export class GoogleReviewKpiService {
           month: session.month,
           reviewsChecked,
           reviewsWithPhoto,
-          photoReviewsInTargetMonth: dto.photoReviewsInTargetMonth || 0,
+          photoReviewsInTargetMonth,
           reviewsOver15ThaiWords,
           qualifiedReviews,
-          qualificationRuleVersion: dto.qualificationRuleVersion || session.qualificationRuleVersion || "IMAGE_CAPTURE_MONTH_V1",
+          qualificationRuleVersion,
           targetQualifiedReviews: 10,
           checkedAt: new Date(),
           checkedByUserId: user?.id ?? null,
         },
-      }),
-      this.prisma.googleReviewAuditSession.update({
+      });
+      await tx.googleReviewAuditSession.update({
         where: { id: sessionId },
         data: {
           completedStores: { increment: 1 },
         },
-      }),
-    ]);
+      });
+      return { idempotent: false };
+    });
 
     this.logger.log(
-      `Store audit completed: storeId=${storeId} month=${session.month} qualified=${qualifiedReviews}/${reviewsChecked}`,
+      `Store audit ${transactionResult.idempotent ? "ACK replayed" : "completed"}: storeId=${storeId} month=${session.month} qualified=${qualifiedReviews}/${reviewsChecked}`,
     );
 
     // Check if session queue has finished
@@ -1057,6 +1214,7 @@ export class GoogleReviewKpiService {
       success: true,
       storeId,
       remainingPending,
+      idempotent: transactionResult.idempotent,
     };
   }
 
@@ -1176,83 +1334,6 @@ export class GoogleReviewKpiService {
       startedAt: qs.startedAt ? new Date(qs.startedAt).toISOString() : null,
       completedAt: qs.completedAt ? new Date(qs.completedAt).toISOString() : null,
     };
-  }
-
-  // ---------------------------------------------------------------------------
-  // Batch Runner Token — cross-origin bearer auth for content script API calls
-  // ---------------------------------------------------------------------------
-
-  /**
-   * Issues a short-lived (30-min) session-scoped Bearer token for the Batch
-   * Runner Chrome Extension.  The token is stored in the existing `Session`
-   * table as a MOBILE session so it is validated by the existing AuthGuard
-   * without any schema migration.
-   *
-   * Security properties:
-   *   - Expires in 30 minutes regardless of audit duration.
-   *   - Can only be issued by an authenticated ADMIN/VIEWER user.
-   *   - The session (`sessionId`) must exist and be RUNNING or PAUSED.
-   *   - Token is never persisted in the extension beyond chrome.storage.local
-   *     (volatile — cleared when user clears the session).
-   */
-  async issueRunnerToken(
-    sessionId: string,
-    user: AuthUser,
-  ): Promise<{ runnerToken: string; expiresAt: string }> {
-    const session = await this.prisma.googleReviewAuditSession.findUnique({
-      where: { id: sessionId },
-      select: { id: true, status: true },
-    });
-    if (!session) throw new NotFoundException("Audit session not found");
-    if (session.status === "CANCELLED" || session.status === "COMPLETED") {
-      throw new BadRequestException(
-        "Cannot issue runner token for a completed or cancelled audit session",
-      );
-    }
-
-    const rawToken = randomBytes(32).toString("base64url");
-    const tokenHash = createHash("sha256").update(rawToken).digest("hex");
-    const expiresAt = new Date(Date.now() + RUNNER_TOKEN_TTL_MS);
-
-    await this.prisma.session.create({
-      data: {
-        tokenHash,
-        userId: user.id,
-        sessionType: SessionType.MOBILE,
-        expiresAt,
-      },
-    });
-
-    this.logger.log(
-      JSON.stringify({
-        event: "runner_token_issued",
-        sessionId,
-        userId: user.id,
-        expiresAt,
-      }),
-    );
-
-    return { runnerToken: rawToken, expiresAt: expiresAt.toISOString() };
-  }
-
-  /**
-   * Revokes all runner tokens for the given user that were issued as MOBILE
-   * sessions with a 30-minute TTL (identified by short expiresAt window).
-   * Called when the operator finishes or cancels a batch audit.
-   * Safe to call even if tokens have already expired.
-   */
-  async revokeRunnerToken(userId: string): Promise<void> {
-    const cutoff = new Date(Date.now() + RUNNER_TOKEN_TTL_MS + 1000);
-    await this.prisma.session.deleteMany({
-      where: {
-        userId,
-        sessionType: SessionType.MOBILE,
-        expiresAt: { lte: cutoff },
-      },
-    });
-    this.logger.log(
-      JSON.stringify({ event: "runner_token_revoked", userId }),
-    );
   }
 
   // =========================================================================

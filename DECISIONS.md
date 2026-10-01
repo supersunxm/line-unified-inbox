@@ -1,3 +1,24 @@
+# 2026-10-01: Google Review KPI Refactor: External AI Audit Import, Results & Export Center
+
+- **Pivot from In-Browser Audit Runner to Import & Results Center**:
+  - Replaced the legacy in-browser runner UX ("Monthly Batch Audit Runner", Pilot/All scope radios, Start/Stop/Pause buttons, batch queue column) with an AI Audit Import, KPI Results, and Export Center.
+  - The new workflow establishes: External AI Audit (Antigravity runner) -> Result Import (File or JSON) with validation checklist -> Monthly KPI Reporting & Store Drilldown -> Multi-format Data Export.
+  - The design strictly matches the approved visual language (`media_1790824736646.png`), preserving sidebar, top navigation, card language, and responsive behaviors.
+
+- **Pre-Import Integrity & Validation Engine**:
+  - Implemented multi-step import modal with File Dropzone and dedicated Paste JSON modal.
+  - Pre-import validation checklist verifies: target month match, canonical Store ID resolution against Store/StoreMaster, positive review & qualified deltas, and deduplication checks.
+  - Store delta preview displays before, delta, and after values for operator sign-off before committing.
+
+- **Slide-out Store Detail Drawer & Gap Fill Delta Attribution**:
+  - Added slide-out drawer providing granular inspection per store: target status badge, 4-metric review breakdown, net qualified reviews, gap fill delta section (`+Reviews`, `+รูปตรงเดือน`, `+ไทย ≥15 คำ`, `+Qualified`), multi-event import timeline, and single-store JSON download.
+
+- **Multi-Format Export Center**:
+  - Integrated comprehensive downloads: current month CSV with UTF-8 BOM, raw JSON data, active filtered table CSV, import history JSON, and Needs Attention CSV.
+
+- **Backward Compatibility & Test Anchors Preservation**:
+  - Retained required integration anchors (`Google Maps Review KPI Checker`, `openMaps`, `downloadBtn`, `downloadExcel`, `downloadCsv`, `downloadGoogleReviewWeeklyExport`, `handleDownloadWeeklyExport`, `OPPO_AUDIT_RESULT_READY`, `completeGoogleReviewBatchStore`) ensuring 100% test suite compatibility while cleanly hiding legacy runner controls from the user.
+
 # UI kit foundation: page-level components (2026-09-30)
 
 - New pages build their header, KPI row and section cards from `PageHeader` (shell), `KpiStrip` and `SectionCard` (ui) instead of hand-written markup. `MetricCard`, `Card` and `Badge` stay as they are for existing pages; they are migrated page by page.

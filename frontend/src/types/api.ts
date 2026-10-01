@@ -2048,6 +2048,36 @@ export type GoogleReviewKpiStoreItem = {
       email: string;
     } | null;
   } | null;
+  latestImportType?: "GAP_FILL" | "FULL_MONTH" | "MANUAL" | null;
+  latestImportDelta?: {
+    reviewsChecked: number;
+    reviewsWithPhoto: number;
+    photoReviewsInTargetMonth: number;
+    reviewsOver15ThaiWords: number;
+    qualifiedReviews: number;
+  } | null;
+  needsAttention?: boolean;
+  needsAttentionReason?: string | null;
+  importHistory?: Array<{
+    date: string;
+    type: "GAP_FILL" | "FULL_MONTH" | "MANUAL" | "INTERIM";
+    qualified: number;
+    delta?: number;
+    user?: string;
+  }>;
+};
+
+export type GoogleReviewImportHistoryItem = {
+  id: string;
+  importedAt: string;
+  month: string;
+  type: "GAP_FILL" | "FULL_MONTH" | "MANUAL" | "INTERIM";
+  source: string;
+  storesCount: number;
+  reviewsDelta: number;
+  qualifiedDelta: number;
+  status: "SUCCESS" | "FAILED" | "ARCHIVED";
+  details?: string;
 };
 
 export type GoogleReviewKpiSummary = {
@@ -2061,6 +2091,51 @@ export type GoogleReviewKpiSummary = {
   totalQualifiedReviews: number;
   totalReviewsChecked: number;
   stores: GoogleReviewKpiStoreItem[];
+  latestImport?: {
+    month: string;
+    type: "GAP_FILL" | "FULL_MONTH" | "MANUAL";
+    source: string;
+    importedAt: string;
+    importedBy: string;
+    storesUpdated: number;
+    reviewsDelta: number;
+    qualifiedDelta: number;
+    status: "SUCCESS" | "FAILED";
+  } | null;
+  coverage?: {
+    availableKpiStores: number;
+    missingGoogleMapsStores: number;
+    needsAttentionStores: number;
+    needsAttentionStoreCodes: string[];
+  };
+  importHistory?: GoogleReviewImportHistoryItem[];
+};
+
+export type GoogleReviewImportPreviewRequest = {
+  month: string;
+  importType: "GAP_FILL" | "FULL_MONTH" | "MANUAL";
+  source: string;
+  data: unknown;
+};
+
+export type GoogleReviewImportPreviewResponse = {
+  valid: boolean;
+  month: string;
+  importType: string;
+  source: string;
+  storesAffected: number;
+  reviewsDelta: number;
+  qualifiedDelta: number;
+  checklist: Array<{ label: string; passed: boolean; error?: string }>;
+  errors: string[];
+  warnings: string[];
+  previewStores: Array<{
+    storeCode: string;
+    storeName: string;
+    beforeQualified: number;
+    deltaQualified: number;
+    afterQualified: number;
+  }>;
 };
 
 export type CheckGoogleReviewKpiResultInput = {

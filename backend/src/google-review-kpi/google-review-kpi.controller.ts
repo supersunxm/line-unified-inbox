@@ -1,7 +1,6 @@
 import {
   Body,
   Controller,
-  Delete,
   Get,
   InternalServerErrorException,
   Param,
@@ -25,6 +24,8 @@ import {
   RecordDailyKpiDto,
   StartMonthlyAuditDto,
   UpdateAuditSessionStatusDto,
+  ImportPreviewDto,
+  ImportConfirmDto,
 } from "./google-review-kpi.dto";
 import { AuthGuard, type AuthRequest } from "../auth/auth.guard";
 import { Roles } from "../auth/auth.decorators";
@@ -198,31 +199,29 @@ export class GoogleReviewKpiController {
     return this.kpiService.reRunStore(sessionId, storeId);
   }
 
-  /**
-   * Issues a short-lived (30-min) Bearer token scoped to one audit session.
-   * The dashboard calls this on Start / Resume and passes the token to the
-   * Chrome Extension via chrome.storage.local so the content script on
-   * google.com/maps can authenticate batch-runner API calls without relying
-   * on cross-site cookies.
-   */
-  @Post("audit-session/:sessionId/runner-token")
-  @Roles(UserRole.ADMIN, UserRole.VIEWER)
-  async issueRunnerToken(
-    @Param("sessionId") sessionId: string,
-    @Req() req: AuthRequest,
-  ) {
-    return this.kpiService.issueRunnerToken(sessionId, req.user!);
+  // ==========================================
+  // Import History & Processing Endpoints
+  // (Defined before :storeId to prevent routing collision)
+  // ==========================================
+
+  @Get("import-history")
+  async getImportHistory(@Query("month") month?: string) {
+    return this.kpiService.getImportHistory(month);
   }
 
-  /**
-   * Revokes the runner token for the current user.
-   * Called when the operator cancels or explicitly closes the audit session.
-   */
-  @Delete("audit-session/:sessionId/runner-token")
+  @Post("import-preview")
   @Roles(UserRole.ADMIN, UserRole.VIEWER)
-  async revokeRunnerToken(@Req() req: AuthRequest) {
-    await this.kpiService.revokeRunnerToken(req.user!.id);
-    return { success: true };
+  async previewImport(@Body() dto: ImportPreviewDto) {
+    return this.kpiService.previewImport(dto);
+  }
+
+  @Post("import-confirm")
+  @Roles(UserRole.ADMIN, UserRole.VIEWER)
+  async confirmImport(
+    @Body() dto: ImportConfirmDto,
+    @Req() req: AuthRequest,
+  ) {
+    return this.kpiService.confirmImport(dto, req.user);
   }
 
   // ==========================================
