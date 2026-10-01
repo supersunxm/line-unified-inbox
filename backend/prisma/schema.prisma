@@ -2616,6 +2616,9 @@ model GoogleReviewKpiResult {
   qualifiedReviews       Int       @default(0)
   qualificationRuleVersion String  @default("REVIEW_CREATION_DATE_V1")
   targetQualifiedReviews Int       @default(10)
+  googleRating           Float?
+  googleReviewCount      Int?
+  googleRatingCheckedAt  DateTime?
   checkedAt              DateTime  @default(now())
   checkedByUserId        String?
   createdAt              DateTime  @default(now())

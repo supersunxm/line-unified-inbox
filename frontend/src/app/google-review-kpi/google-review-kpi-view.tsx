@@ -361,6 +361,8 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
   const [regionFilter, setRegionFilter] = useState<string>("ALL");
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
   const [importTypeFilter, setImportTypeFilter] = useState<string>("ALL");
+  const [sortField, setSortField] = useState<string | null>(null);
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
   const [error, setError] = useState<string | null>(null);
   const [selectedStoreIds, setSelectedStoreIds] = useState<string[]>([]);
 
@@ -597,8 +599,44 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
       }
 
       return true;
+    }).sort((a, b) => {
+      if (!sortField) return 0;
+      let valA: any = null;
+      let valB: any = null;
+
+      if (sortField === "googleRating") {
+        valA = a.googleRating ?? a.kpiResult?.googleRating ?? -1;
+        valB = b.googleRating ?? b.kpiResult?.googleRating ?? -1;
+      } else if (sortField === "qualifiedReviews") {
+        valA = a.kpiResult?.qualifiedReviews ?? -1;
+        valB = b.kpiResult?.qualifiedReviews ?? -1;
+      } else if (sortField === "reviewsChecked") {
+        valA = a.kpiResult?.reviewsChecked ?? -1;
+        valB = b.kpiResult?.reviewsChecked ?? -1;
+      }
+
+      if (valA === valB) return 0;
+      if (sortDirection === "asc") {
+        return valA > valB ? 1 : -1;
+      } else {
+        return valA < valB ? 1 : -1;
+      }
     });
-  }, [summary, search, regionFilter, statusFilter, importTypeFilter]);
+  }, [summary, search, regionFilter, statusFilter, importTypeFilter, sortField, sortDirection]);
+
+  const handleToggleSort = (field: string) => {
+    if (sortField === field) {
+      if (sortDirection === "desc") {
+        setSortDirection("asc");
+      } else {
+        setSortField(null);
+        setSortDirection("desc");
+      }
+    } else {
+      setSortField(field);
+      setSortDirection("desc");
+    }
+  };
 
   // Export & Download handlers
   const handleDownloadCsv = (filteredOnly: boolean = false) => {
@@ -611,6 +649,8 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
       "Province",
       "Region",
       "Google Maps URL",
+      "Google Rating",
+      "Google Review Count",
       "Reviews Checked",
       "With Photo",
       "Photo in Target Month",
@@ -619,6 +659,7 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
       "Target",
       "Status",
       "Import Type",
+      "Google Rating Checked At",
       "Last Updated",
     ];
 
@@ -628,6 +669,8 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
       `"${s.province || ""}"`,
       `"${s.region || ""}"`,
       `"${s.googleMapsUrl || ""}"`,
+      s.googleRating ?? s.kpiResult?.googleRating ?? "—",
+      s.googleReviewCount ?? s.kpiResult?.googleReviewCount ?? "—",
       s.kpiResult?.reviewsChecked ?? 0,
       s.kpiResult?.reviewsWithPhoto ?? 0,
       s.kpiResult?.photoReviewsInTargetMonth ?? 0,
@@ -636,6 +679,7 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
       s.kpiResult?.targetQualifiedReviews ?? 10,
       s.needsAttention ? "Needs Attention" : s.kpiResult?.isPassed ? "Passed" : s.kpiResult ? "Below Target" : "Not Checked",
       s.latestImportType || "—",
+      s.googleRatingCheckedAt || s.kpiResult?.googleRatingCheckedAt ? new Date((s.googleRatingCheckedAt || s.kpiResult?.googleRatingCheckedAt)!).toLocaleString("th-TH") : "—",
       s.kpiResult?.checkedAt ? new Date(s.kpiResult.checkedAt).toLocaleString("th-TH") : "—",
     ]);
 
@@ -1576,6 +1620,20 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
                         <th className="py-3 px-3">{t.storeId}</th>
                         <th className="py-3 px-3">จังหวัด</th>
                         <th className="py-3 px-3">{t.googleMaps}</th>
+                        <th
+                          className="py-3 px-3 text-center cursor-pointer hover:bg-[var(--app-surface-hover)] select-none transition-colors"
+                          onClick={() => handleToggleSort("googleRating")}
+                          title="คลิกเพื่อเรียงตามคะแนน Google Maps"
+                        >
+                          <div className="inline-flex items-center gap-1 font-semibold text-[var(--app-text-primary)]">
+                            <span>คะแนน Google</span>
+                            {sortField === "googleRating" ? (
+                              <span className="text-emerald-600 font-bold">{sortDirection === "asc" ? "↑" : "↓"}</span>
+                            ) : (
+                              <span className="text-[var(--app-text-tertiary)] opacity-40">↕</span>
+                            )}
+                          </div>
+                        </th>
                         <th className="py-3 px-3 text-right">{t.reviewsChecked}</th>
                         <th className="py-3 px-3 text-right">{t.withPhoto}</th>
                         <th className="py-3 px-3 text-right text-blue-600 dark:text-blue-400">รูปตรงเดือน</th>
@@ -1637,6 +1695,24 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
                                 </a>
                               ) : (
                                 <span className="text-[11px] text-[var(--app-text-tertiary)]">{t.noMapsLink}</span>
+                              )}
+                            </td>
+
+                            <td className="py-3 px-3 text-center">
+                              {(store.googleRating != null || kpi?.googleRating != null) ? (
+                                <div className="inline-flex flex-col items-center">
+                                  <div className="flex items-center gap-1 font-mono font-bold text-amber-500">
+                                    <span>★</span>
+                                    <span>{(store.googleRating ?? kpi?.googleRating)!.toFixed(1)}</span>
+                                  </div>
+                                  <span className="text-[10px] text-[var(--app-text-tertiary)]">
+                                    {(store.googleReviewCount != null || kpi?.googleReviewCount != null)
+                                      ? `${(store.googleReviewCount ?? kpi?.googleReviewCount)!.toLocaleString()} รีวิว`
+                                      : "—"}
+                                  </span>
+                                </div>
+                              ) : (
+                                <span className="text-[11px] text-[var(--app-text-tertiary)]">—</span>
                               )}
                             </td>
 
@@ -1806,6 +1882,54 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
                     ยังไม่มีข้อมูล KPI สำหรับเดือนนี้
                   </div>
                 )}
+
+                {/* Google Maps Store Rating (Top aggregate snapshot) */}
+                <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface-subtle)] p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-bold text-[var(--app-text-primary)] flex items-center gap-1.5">
+                      <span>📍</span>
+                      <span>Google Maps ปัจจุบัน</span>
+                    </h4>
+                    {(selectedStoreForDrawer.googleRating != null || selectedStoreForDrawer.kpiResult?.googleRating != null) && (
+                      <span className="text-[10px] font-semibold text-emerald-600 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                        จากหน้าโปรไฟล์ร้าน
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="rounded-xl bg-[var(--app-surface)] border border-[var(--app-border)] p-3">
+                      <div className="text-[10px] text-[var(--app-text-tertiary)]">คะแนน Google Maps</div>
+                      <div className="flex items-center gap-1 text-xl font-mono font-black text-amber-500">
+                        <span>★</span>
+                        <span>
+                          {(selectedStoreForDrawer.googleRating != null || selectedStoreForDrawer.kpiResult?.googleRating != null)
+                            ? (selectedStoreForDrawer.googleRating ?? selectedStoreForDrawer.kpiResult?.googleRating)!.toFixed(1)
+                            : "—"}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="rounded-xl bg-[var(--app-surface)] border border-[var(--app-border)] p-3">
+                      <div className="text-[10px] text-[var(--app-text-tertiary)]">รีวิวทั้งหมด</div>
+                      <div className="text-xl font-mono font-black text-[var(--app-text-primary)]">
+                        {(selectedStoreForDrawer.googleReviewCount != null || selectedStoreForDrawer.kpiResult?.googleReviewCount != null)
+                          ? `${(selectedStoreForDrawer.googleReviewCount ?? selectedStoreForDrawer.kpiResult?.googleReviewCount)!.toLocaleString()} รีวิว`
+                          : "—"}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="text-[10px] text-[var(--app-text-tertiary)] flex items-center justify-between pt-1 border-t border-[var(--app-border)]">
+                    <span>ตรวจล่าสุด:</span>
+                    <span className="font-mono">
+                      {(selectedStoreForDrawer.googleRatingCheckedAt || selectedStoreForDrawer.kpiResult?.googleRatingCheckedAt)
+                        ? new Date((selectedStoreForDrawer.googleRatingCheckedAt || selectedStoreForDrawer.kpiResult?.googleRatingCheckedAt)!).toLocaleString("th-TH")
+                        : selectedStoreForDrawer.kpiResult?.checkedAt
+                          ? new Date(selectedStoreForDrawer.kpiResult.checkedAt).toLocaleString("th-TH")
+                          : "—"}
+                    </span>
+                  </div>
+                </div>
 
                 {/* KPI Metrics Breakdown */}
                 <div className="space-y-2">

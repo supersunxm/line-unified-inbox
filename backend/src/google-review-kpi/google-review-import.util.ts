@@ -154,7 +154,23 @@ export function enrichStoreWithImportData(
     };
   }
 
-  return store;
+  // Enrich googleRating and googleReviewCount from gapStore or cpStore if not set in db
+  const observedRating = gapStore?.googleRating ?? cpStore?.googleRating ?? store.googleRating ?? null;
+  const observedReviewCount = gapStore?.googleReviewCount ?? cpStore?.googleReviewCount ?? store.googleReviewCount ?? null;
+  const observedCheckedAt = gapStore?.googleRatingCheckedAt ?? cpStore?.googleRatingCheckedAt ?? store.googleRatingCheckedAt ?? null;
+
+  return {
+    ...store,
+    googleRating: observedRating,
+    googleReviewCount: observedReviewCount,
+    googleRatingCheckedAt: observedCheckedAt,
+    kpiResult: store.kpiResult ? {
+      ...store.kpiResult,
+      googleRating: observedRating,
+      googleReviewCount: observedReviewCount,
+      googleRatingCheckedAt: observedCheckedAt,
+    } : null,
+  };
 }
 
 export function validateAndPreviewImport(
@@ -209,6 +225,8 @@ export function validateAndPreviewImport(
     beforeQualified: number;
     deltaQualified: number;
     afterQualified: number;
+    googleRating?: number;
+    googleReviewCount?: number;
   }> = [];
 
   for (const item of storesList) {
@@ -236,6 +254,22 @@ export function validateAndPreviewImport(
       (item.reviewsChecked != null && currentKpi ? Math.max(0, item.reviewsChecked - curChecked) : item.reviewsChecked || 0),
     );
 
+    // Validate optional Google Maps rating fields if present
+    const rawRating = item.googleRating ?? item.rating ?? item.storeRating;
+    if (rawRating != null) {
+      const numRating = Number(rawRating);
+      if (isNaN(numRating) || numRating < 1.0 || numRating > 5.0) {
+        errors.push(`รหัสร้าน ${code}: คะแนน Google Rating ต้องอยู่ระหว่าง 1.0 ถึง 5.0 (พบ ${rawRating})`);
+      }
+    }
+    const rawReviewCount = item.googleReviewCount ?? item.reviewCount ?? item.totalReviews;
+    if (rawReviewCount != null) {
+      const numCount = Number(rawReviewCount);
+      if (isNaN(numCount) || numCount < 0 || !Number.isInteger(numCount)) {
+        errors.push(`รหัสร้าน ${code}: จำนวนรีวิว Google Review Count ต้องเป็นจำนวนเต็มไม่ติดลบ (พบ ${rawReviewCount})`);
+      }
+    }
+
     qualifiedDelta += deltaQ;
     reviewsDelta += deltaC;
 
@@ -245,6 +279,8 @@ export function validateAndPreviewImport(
       beforeQualified: curQual,
       deltaQualified: deltaQ,
       afterQualified: curQual + deltaQ,
+      googleRating: rawRating != null ? Number(rawRating) : undefined,
+      googleReviewCount: rawReviewCount != null ? Number(rawReviewCount) : undefined,
     });
   }
 

@@ -1,4 +1,20 @@
+# 2026-10-01: Google Maps Aggregate Store Rating Feature in Review KPI [READY FOR MERGE]
+
+## Current task
+- Extended Google Review KPI monthly snapshot and import workflow to capture and display Google Maps store aggregate ratings (`googleRating Float?`, `googleReviewCount Int?`, `googleRatingCheckedAt DateTime?`).
+- Preserved September 2026 canonical totals strictly: Qualified Reviews = 1,708, Reviews Checked = 2,639.
+- Verified DOM rating and review count extractor with multilingual support (Thai and English).
+- Fully validated backend DTOs, Prisma migration, import previews, drawer UI, sortable table column, and multi-format exports.
+
+## Verification & Checks Run
+- **Rating Feature Unit Tests (`backend/src/google-review-kpi/google-rating-feature.spec.ts`)**: 9/9 PASSED.
+- **Frontend Integration Tests (`frontend/test/google-review-kpi.test.mts`)**: 4/4 PASSED.
+- **Frontend Production Build (`next build`)**: PASSED.
+- **Backend Production Build (`nest build`)**: PASSED.
+- **Git Hygiene**: Clean PR branch based on latest `origin/main` (`a0bfbd57`), zero credential or unreviewed file exposure.
+
 # 2026-10-01: Google Maps Review KPI Page Refactor [COMPLETE - ALL CHECKS PASS]
+
 
 ## Current task
 - Successfully refactored `/google-review-kpi` from the legacy in-browser batch audit runner into a dedicated Monthly KPI Import, Results, and Export center based on the approved design mockup (`media_1790824736646.png`).

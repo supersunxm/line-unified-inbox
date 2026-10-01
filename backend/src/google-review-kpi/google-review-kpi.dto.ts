@@ -3,9 +3,11 @@ import {
   ArrayMinSize,
   IsArray,
   IsBoolean,
+  IsDateString,
   IsIn,
   IsInt,
   IsNotEmpty,
+  IsNumber,
   IsOptional,
   IsString,
   Matches,
@@ -70,6 +72,23 @@ export class CheckGoogleReviewKpiResultDto {
   @IsOptional()
   @IsString()
   googleMapsReviewUrl?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
+  @Max(5)
+  googleRating?: number | null;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  googleReviewCount?: number | null;
+
+  @IsOptional()
+  @IsDateString()
+  googleRatingCheckedAt?: string | null;
 }
 
 export class QueryGoogleReviewKpiDto {
@@ -186,6 +205,23 @@ export class CompleteStoreAuditDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
+  @Max(5)
+  googleRating?: number | null;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  googleReviewCount?: number | null;
+
+  @IsOptional()
+  @IsDateString()
+  googleRatingCheckedAt?: string | null;
 }
 
 export class FailStoreAuditDto {
@@ -262,6 +298,9 @@ export type GoogleReviewKpiStoreItem = {
   googleMapsUrl: string | null;
   googleMapsName: string | null;
   hasGoogleMaps: boolean;
+  googleRating?: number | null;
+  googleReviewCount?: number | null;
+  googleRatingCheckedAt?: string | null;
   kpiResult: {
     id: string;
     month: string;
@@ -274,6 +313,9 @@ export type GoogleReviewKpiStoreItem = {
     targetQualifiedReviews: number;
     isPassed: boolean;
     checkedAt: string;
+    googleRating?: number | null;
+    googleReviewCount?: number | null;
+    googleRatingCheckedAt?: string | null;
     checkedBy: {
       id: string;
       displayName: string;
@@ -563,4 +605,3 @@ export class ImportConfirmDto {
   @IsNotEmpty()
   data!: unknown;
 }
-

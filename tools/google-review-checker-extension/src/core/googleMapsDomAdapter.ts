@@ -8,6 +8,7 @@
 
 import { parseImageCaptureMonth } from "./imageCaptureExtractor.ts";
 import { isDefinitelyNewerThanMonth } from "./googleReviewDateParser.ts";
+import { extractStoreGoogleRating, type ExtractedGoogleRatingData } from "./googleRatingExtractor.ts";
 
 export type PhotoEvidence =
   | "NONE"
@@ -680,5 +681,12 @@ export class GoogleMapsDomAdapter {
     }
 
     return { success: false, reason: "NEWEST_OPTION_NOT_FOUND" };
+  }
+
+  /**
+   * Extracts current overall store rating and total review count from the Google Maps page.
+   */
+  static extractStoreRating(doc?: Document): ExtractedGoogleRatingData {
+    return extractStoreGoogleRating(doc);
   }
 }

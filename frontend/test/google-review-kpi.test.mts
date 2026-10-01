@@ -70,4 +70,10 @@ test("Google Review KPI view has Download / Export buttons and handlers", () => 
   assert.match(kpiViewCode, /downloadExcel/);
   assert.match(kpiViewCode, /downloadCsv/);
   assert.match(kpiViewCode, /handleDownloadWeeklyExport/);
+  assert.match(kpiViewCode, /Google Rating/);
+  assert.match(kpiViewCode, /Google Review Count/);
+  assert.match(kpiViewCode, /คะแนน Google/);
+  assert.match(kpiViewCode, /Google Maps ปัจจุบัน/);
+  assert.match(kpiViewCode, /handleToggleSort/);
 });
+
