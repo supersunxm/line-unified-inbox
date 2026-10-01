@@ -109,6 +109,18 @@ export class StartMonthlyAuditDto {
 }
 
 export class CompleteStoreAuditDto {
+  @IsString()
+  @IsNotEmpty()
+  storeId!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  storeCode!: string;
+
+  @IsString()
+  @Matches(MONTH_REGEX, { message: "targetMonth must be in YYYY-MM format (e.g. 2026-08)" })
+  targetMonth!: string;
+
   @IsOptional()
   @IsString()
   batchItemId?: string;
@@ -268,6 +280,36 @@ export type GoogleReviewKpiStoreItem = {
       email: string;
     } | null;
   } | null;
+  latestImportType?: "GAP_FILL" | "FULL_MONTH" | "MANUAL" | null;
+  latestImportDelta?: {
+    reviewsChecked: number;
+    reviewsWithPhoto: number;
+    photoReviewsInTargetMonth: number;
+    reviewsOver15ThaiWords: number;
+    qualifiedReviews: number;
+  } | null;
+  needsAttention?: boolean;
+  needsAttentionReason?: string | null;
+  importHistory?: Array<{
+    date: string;
+    type: "GAP_FILL" | "FULL_MONTH" | "MANUAL" | "INTERIM";
+    qualified: number;
+    delta?: number;
+    user?: string;
+  }>;
+};
+
+export type GoogleReviewImportHistoryItem = {
+  id: string;
+  importedAt: string;
+  month: string;
+  type: "GAP_FILL" | "FULL_MONTH" | "MANUAL" | "INTERIM";
+  source: string;
+  storesCount: number;
+  reviewsDelta: number;
+  qualifiedDelta: number;
+  status: "SUCCESS" | "FAILED" | "ARCHIVED";
+  details?: string;
 };
 
 export type GoogleReviewKpiSummary = {
@@ -281,6 +323,24 @@ export type GoogleReviewKpiSummary = {
   totalQualifiedReviews: number;
   totalReviewsChecked: number;
   stores: GoogleReviewKpiStoreItem[];
+  latestImport?: {
+    month: string;
+    type: "GAP_FILL" | "FULL_MONTH" | "MANUAL";
+    source: string;
+    importedAt: string;
+    importedBy: string;
+    storesUpdated: number;
+    reviewsDelta: number;
+    qualifiedDelta: number;
+    status: "SUCCESS" | "FAILED";
+  } | null;
+  coverage?: {
+    availableKpiStores: number;
+    missingGoogleMapsStores: number;
+    needsAttentionStores: number;
+    needsAttentionStoreCodes: string[];
+  };
+  importHistory?: GoogleReviewImportHistoryItem[];
 };
 
 export const LOCKED_WEEKLY_KPI_STORE_CODES: readonly string[] = [
@@ -469,3 +529,38 @@ export class ExportWeeklyLeaderboardDto {
   @IsIn(["xlsx", "csv"])
   format?: "xlsx" | "csv";
 }
+
+export class ImportPreviewDto {
+  @IsString()
+  @Matches(MONTH_REGEX, { message: "month must be in YYYY-MM format (e.g. 2026-08)" })
+  month!: string;
+
+  @IsString()
+  @IsIn(["FULL_MONTH", "GAP_FILL", "MANUAL", "INTERIM"])
+  importType!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  source!: string;
+
+  @IsNotEmpty()
+  data!: unknown;
+}
+
+export class ImportConfirmDto {
+  @IsString()
+  @Matches(MONTH_REGEX, { message: "month must be in YYYY-MM format (e.g. 2026-08)" })
+  month!: string;
+
+  @IsString()
+  @IsIn(["FULL_MONTH", "GAP_FILL", "MANUAL", "INTERIM"])
+  importType!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  source!: string;
+
+  @IsNotEmpty()
+  data!: unknown;
+}
+

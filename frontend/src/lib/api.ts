@@ -1059,6 +1059,24 @@ export const api = {
       method: "POST",
       body: JSON.stringify(body),
     }),
+  getGoogleReviewImportHistory: (month?: string) => {
+    const sp = new URLSearchParams();
+    if (month) sp.set("month", month);
+    const qs = sp.toString();
+    return request<import("@/types/api").GoogleReviewImportHistoryItem[]>(
+      `/google-review-kpi/import-history${qs ? `?${qs}` : ""}`,
+    );
+  },
+  previewGoogleReviewImport: (body: import("@/types/api").GoogleReviewImportPreviewRequest) =>
+    request<import("@/types/api").GoogleReviewImportPreviewResponse>("/google-review-kpi/import-preview", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  confirmGoogleReviewImport: (body: { month: string; importType: string; source: string; data: unknown }) =>
+    request<{ success: boolean; storesUpdated: number; message: string }>("/google-review-kpi/import-confirm", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
   startGoogleReviewBatchAudit: (
     params: string | { month: string; scope?: "SELECTED" | "ALL_ELIGIBLE"; storeIds?: string[] },
   ) => {

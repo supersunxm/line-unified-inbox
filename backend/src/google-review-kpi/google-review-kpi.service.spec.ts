@@ -1,12 +1,50 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { BadRequestException, NotFoundException } from "@nestjs/common";
-import { GoogleReviewKpiService, getCurrentYearMonthBangkok } from "./google-review-kpi.service";
+import { BadRequestException, ConflictException, NotFoundException } from "@nestjs/common";
+import {
+  GoogleReviewKpiService,
+  getCurrentYearMonthBangkok,
+  normalizeAuditCompletionReason,
+  preserveSelectedStoreOrder,
+} from "./google-review-kpi.service";
+import { LOCKED_WEEKLY_KPI_STORE_CODES } from "./google-review-kpi.dto";
 import { PrismaService } from "../prisma.service";
+import {
+  GoogleReviewAuditCoverageStatus,
+  GoogleReviewAuditSessionStatus,
+  GoogleReviewAuditStoreStatus,
+  GoogleReviewAuditCompletionReason,
+} from "@prisma/client";
 
 test("getCurrentYearMonthBangkok returns valid YYYY-MM format", () => {
   const ym = getCurrentYearMonthBangkok();
   assert.match(ym, /^\d{4}-(0[1-9]|1[0-2])$/);
+});
+
+test("selected monthly batch order preserves Central World before Asawann", () => {
+  const stores = [
+    { id: "central-world", name: "OBS Central World FL.4 By OPPO" },
+    { id: "asawann", name: "OBS Asawann Nongkhai By OPPO" },
+    { id: "other", name: "Other" },
+  ];
+
+  const ordered = preserveSelectedStoreOrder(stores, ["central-world", "asawann"]);
+  assert.deepEqual(ordered.map((store) => store.id), ["central-world", "asawann"]);
+});
+
+test("monthly boundary normalizes internal older-than-target coverage", () => {
+  assert.equal(
+    normalizeAuditCompletionReason({ coverageStatus: "OLDER_THAN_TARGET_REACHED" }),
+    "MONTHLY_STOP_BOUNDARY_REACHED",
+  );
+  assert.equal(
+    normalizeAuditCompletionReason({ coverageStatus: "END_OF_AVAILABLE_REVIEWS" }),
+    "END_OF_REVIEW_FEED",
+  );
+  assert.equal(
+    normalizeAuditCompletionReason({ coverageStatus: "OLDER_THAN_TARGET_REACHED", completionReason: "END_OF_REVIEW_FEED" }),
+    "END_OF_REVIEW_FEED",
+  );
 });
 
 test("GoogleReviewKpiService.recordCheckResult validates inputs strictly", async () => {
@@ -96,6 +134,97 @@ test("GoogleReviewKpiService.recordCheckResult validates inputs strictly", async
       }),
     BadRequestException,
   );
+});
+
+test("completeStoreAudit validates identity and makes duplicate ACKs idempotent", async () => {
+  const queueStore: any = {
+    id: "item-1",
+    sessionId: "session-1",
+    storeId: "store-1",
+    status: GoogleReviewAuditStoreStatus.RUNNING,
+    reviewsChecked: 0,
+    reviewsWithPhoto: 0,
+    photoReviewsInTargetMonth: 0,
+    reviewsOver15ThaiWords: 0,
+    qualifiedReviews: 0,
+    coverageStatus: null,
+    completionReason: null,
+    store: {
+      code: "25610",
+      storeMaster: { externalStoreId: "25610" },
+    },
+  };
+  let kpiUpsertCount = 0;
+  let sessionUpdateCount = 0;
+  const auditSession = () => ({
+    id: "session-1",
+    month: "2026-09",
+    status: GoogleReviewAuditSessionStatus.RUNNING,
+    qualificationRuleVersion: "IMAGE_CAPTURE_MONTH_V1",
+    queueStores: [{ ...queueStore }],
+  });
+  const tx = {
+    googleReviewAuditStore: {
+      updateMany: async ({ data }: any) => {
+        if (queueStore.status !== GoogleReviewAuditStoreStatus.RUNNING) return { count: 0 };
+        Object.assign(queueStore, data);
+        return { count: 1 };
+      },
+      findUnique: async () => ({ ...queueStore }),
+    },
+    googleReviewKpiResult: {
+      upsert: async () => {
+        kpiUpsertCount += 1;
+      },
+    },
+    googleReviewAuditSession: {
+      update: async () => {
+        sessionUpdateCount += 1;
+      },
+    },
+  };
+  const prisma = {
+    googleReviewAuditSession: {
+      findUnique: async () => auditSession(),
+      update: async () => {
+        sessionUpdateCount += 1;
+      },
+    },
+    googleReviewAuditStore: {
+      count: async () => 0,
+    },
+    $transaction: async (callback: (client: typeof tx) => Promise<unknown>) => callback(tx),
+  } as unknown as PrismaService;
+  const service = new GoogleReviewKpiService(prisma);
+  const dto = {
+    storeId: "store-1",
+    storeCode: "25610",
+    targetMonth: "2026-09",
+    batchItemId: "item-1",
+    reviewsChecked: 190,
+    reviewsWithPhoto: 12,
+    photoReviewsInTargetMonth: 3,
+    reviewsOver15ThaiWords: 8,
+    qualifiedReviews: 2,
+    auditCoverageStatus: GoogleReviewAuditCoverageStatus.OLDER_THAN_TARGET_REACHED,
+    completionReason: GoogleReviewAuditCompletionReason.MONTHLY_STOP_BOUNDARY_REACHED,
+    qualificationRuleVersion: "IMAGE_CAPTURE_MONTH_V1",
+  } as any;
+
+  await assert.rejects(
+    () => service.completeStoreAudit("session-1", "store-1", { ...dto, storeCode: "27626" }, undefined),
+    ConflictException,
+  );
+
+  const first = await service.completeStoreAudit("session-1", "store-1", dto, undefined);
+  const updatesAfterFirst = sessionUpdateCount;
+  const replay = await service.completeStoreAudit("session-1", "store-1", dto, undefined);
+
+  assert.equal(first.idempotent, false);
+  assert.equal(replay.idempotent, true);
+  assert.equal(kpiUpsertCount, 1);
+  assert.equal(sessionUpdateCount, updatesAfterFirst);
+  assert.equal(queueStore.status, GoogleReviewAuditStoreStatus.COMPLETED);
 });
 
 test("GoogleReviewKpiService.recordCheckResult upserts result for matched store", async () => {
@@ -294,7 +423,6 @@ test("GoogleReviewKpiService.listMonthlyKpis aggregates store statistics correct
 });
 
 test("LOCKED_WEEKLY_KPI_STORE_CODES has exactly 65 unique store codes", () => {
-  const { LOCKED_WEEKLY_KPI_STORE_CODES } = require("./google-review-kpi.dto");
   assert.equal(LOCKED_WEEKLY_KPI_STORE_CODES.length, 65);
   const unique = new Set(LOCKED_WEEKLY_KPI_STORE_CODES);
   assert.equal(unique.size, 65);
@@ -409,4 +537,3 @@ test("GoogleReviewKpiService.getWeeklyCollectorStatus returns aggregated statist
   assert.equal(status.summaryToday.newReviewsDiscoveredToday, 4);
   assert.ok(status.lastRunAt);
 });
-
