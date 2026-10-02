@@ -129,6 +129,6 @@ test("Vision plain-text fallback stays bounded", () => {
   assert.equal(candidates.length, 1);
   assert.equal(
     candidates[0].text,
-    "มีเครื่องให้เลือกเยอะ พนักงานแนะนำจนได้เครื่องที่ถูกใจ OPPO A6c",
+    "มีเครื่องให้เลือกเยอะ พนักงานแนะนำจนได้เครื่องที่ถูกใจ",
   );
 });
