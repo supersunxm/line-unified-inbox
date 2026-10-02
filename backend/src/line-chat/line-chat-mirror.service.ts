@@ -418,6 +418,7 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
   private timer: NodeJS.Timeout | null = null;
   private startupTimer: NodeJS.Timeout | null = null;
   private running = false;
+  private schedulerActive = false;
   private lastLoggedOperationMode: MirrorOperationModeValue | null = null;
   private operationModeStateLoaded = false;
   private readonly targetCache = new Map<string, {
@@ -445,28 +446,73 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
-    const intervalMs = lineChatMirrorIntervalMs();
+    const delayAfterCycleMs = lineChatMirrorIntervalMs();
+    this.schedulerActive = true;
     this.logger.log(JSON.stringify({
       event: "line_chat_mirror_worker_started",
       storeCount: configuredLineChatMirrorStoreCodes().length,
-      intervalMs,
+      intervalMs: delayAfterCycleMs,
+      delayAfterCycleMs,
+      schedulingMode: "FIXED_DELAY_AFTER_COMPLETION",
       maxChangedChatsPerCycle: lineChatMirrorMaxChangedChatsPerCycle(),
       outboundRefreshIntervalMs: lineChatMirrorOutboundRefreshIntervalMs(),
       operationModeControlled: true,
       mode: "READ_ONLY_MANAGER_SOURCE",
     }));
 
-    this.startupTimer = setTimeout(() => void this.runCycle(), START_DELAY_MS);
+    this.startupTimer = setTimeout(() => {
+      this.startupTimer = null;
+      void this.runScheduledCycle();
+    }, START_DELAY_MS);
     this.startupTimer.unref?.();
-    this.timer = setInterval(() => void this.runCycle(), intervalMs);
-    this.timer.unref?.();
   }
 
   onModuleDestroy(): void {
-    if (this.timer) clearInterval(this.timer);
+    this.schedulerActive = false;
+    this.sessionService.setMirrorCooldownUntil(null);
+    if (this.timer) clearTimeout(this.timer);
     if (this.startupTimer) clearTimeout(this.startupTimer);
     this.timer = null;
     this.startupTimer = null;
+  }
+
+  private scheduleNextCycle(delayMs: number): void {
+    if (!this.schedulerActive) return;
+    if (this.timer) clearTimeout(this.timer);
+    this.timer = setTimeout(() => {
+      this.timer = null;
+      void this.runScheduledCycle();
+    }, delayMs);
+    this.timer.unref?.();
+  }
+
+  private async runScheduledCycle(): Promise<void> {
+    if (!this.schedulerActive) return;
+    if (this.running) {
+      this.scheduleNextCycle(MIN_INTERVAL_MS);
+      return;
+    }
+
+    this.sessionService.setMirrorCooldownUntil(null);
+    try {
+      await this.runCycle();
+    } finally {
+      if (this.schedulerActive) {
+        const delayAfterCycleMs = lineChatMirrorIntervalMs();
+        const nextCycleAt = new Date(Date.now() + delayAfterCycleMs);
+        this.sessionService.setMirrorCooldownUntil(nextCycleAt);
+        const cleanup = await this.sessionService.closeIdleManagedContexts("MIRROR_CYCLE_COOLDOWN");
+
+        this.logger.log(JSON.stringify({
+          event: "line_chat_mirror_cooldown_started",
+          delayAfterCycleMs,
+          nextCycleAt: nextCycleAt.toISOString(),
+          contextsClosed: cleanup.closed,
+          contextCloseFailures: cleanup.failed,
+        }));
+        this.scheduleNextCycle(delayAfterCycleMs);
+      }
+    }
   }
 
   public async runCycle(): Promise<LineChatMirrorCycleResult[]> {

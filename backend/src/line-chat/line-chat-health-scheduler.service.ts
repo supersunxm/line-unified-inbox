@@ -9,6 +9,7 @@ import { LINE_CHAT_SESSION_HEALTH_GREEN_FRESHNESS_MS } from "./line-chat-health-
 import { LineChatOaHealthProbeService } from "./line-chat-oa-health-probe.service";
 import { LineChatSessionHealthProbeService } from "./line-chat-session-health-probe.service";
 import { LineChatAuthRecoveryService } from "./line-chat-auth-recovery.service";
+import { LineChatSessionService } from "./line-chat-session.service";
 
 export const LINE_CHAT_HEALTH_SCHEDULER_TICK_MS = 30_000;
 export const LINE_CHAT_SESSION_HEALTH_TARGET_MS = 12 * 60_000;
@@ -55,6 +56,9 @@ export class LineChatHealthSchedulerService implements OnModuleInit, OnModuleDes
     @Optional()
     @Inject(LineChatAuthRecoveryService)
     private readonly authRecovery?: LineChatAuthRecoveryService,
+    @Optional()
+    @Inject(LineChatSessionService)
+    private readonly sessionService?: LineChatSessionService,
   ) {}
 
   onModuleInit(): void {
@@ -100,6 +104,10 @@ export class LineChatHealthSchedulerService implements OnModuleInit, OnModuleDes
     try {
       if (process.env.LINE_CHAT_NICKNAME_MAINTENANCE_MODE === "true"
         || process.env.DISABLE_NICKNAME_WORKER === "true") {
+        return "IDLE";
+      }
+
+      if (this.sessionService?.isMirrorCooldownActive(now)) {
         return "IDLE";
       }
 
