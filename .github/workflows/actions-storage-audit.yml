@@ -1,0 +1,67 @@
+name: Actions Storage Audit
+
+on:
+  push:
+    branches:
+      - chore/actions-storage-cleanup-20261003
+    paths:
+      - ".github/workflows/actions-storage-audit.yml"
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  audit:
+    name: Audit Actions artifacts
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Inventory artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          gh api --paginate --slurp "/repos/${GITHUB_REPOSITORY}/actions/artifacts?per_page=100" > /tmp/pages.json
+          jq '[.[].artifacts[]]' /tmp/pages.json > /tmp/artifacts.json
+
+          COUNT="$(jq 'length' /tmp/artifacts.json)"
+          BYTES="$(jq '[.[].size_in_bytes] | add // 0' /tmp/artifacts.json)"
+          MIB="$(awk -v b="$BYTES" 'BEGIN { printf "%.2f", b/1024/1024 }')"
+
+          echo "ARTIFACT_COUNT=$COUNT"
+          echo "ARTIFACT_BYTES=$BYTES"
+          echo "ARTIFACT_MIB=$MIB"
+
+          {
+            echo "# GitHub Actions artifact storage audit"
+            echo
+            echo "- Artifact count: **$COUNT**"
+            echo "- Current artifact bytes: **$BYTES**"
+            echo "- Current artifact size: **$MIB MiB**"
+            echo
+            echo "## Largest artifacts"
+            echo
+            echo "| Size MiB | Created (UTC) | Expires (UTC) | Artifact | ID |"
+            echo "|---:|---|---|---|---:|"
+            jq -r 'sort_by(.size_in_bytes) | reverse | .[:30][] | [((.size_in_bytes/1048576)*100|round/100), .created_at, .expires_at, .name, .id] | @tsv' /tmp/artifacts.json |
+              while IFS=$'\t' read -r size created expires name id; do
+                printf '| %s | %s | %s | %s | %s |\n' "$size" "$created" "$expires" "$name" "$id"
+              done
+
+            echo
+            echo "## Age buckets"
+            echo
+            NOW="$(date -u +%s)"
+            for DAYS in 1 3 7 14 30 60 90; do
+              CUTOFF="$(date -u -d "$DAYS days ago" +%s)"
+              STATS="$(jq --argjson cutoff "$CUTOFF" '[.[] | select((.created_at | fromdateiso8601) < $cutoff)] | {count:length, bytes:([.[].size_in_bytes] | add // 0)}' /tmp/artifacts.json)"
+              C="$(jq -r '.count' <<<"$STATS")"
+              B="$(jq -r '.bytes' <<<"$STATS")"
+              M="$(awk -v b="$B" 'BEGIN { printf "%.2f", b/1024/1024 }')"
+              echo "- Older than $DAYS day(s): **$C artifacts / $M MiB**"
+            done
+          } | tee -a "$GITHUB_STEP_SUMMARY"
