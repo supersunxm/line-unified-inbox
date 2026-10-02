@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { internalPageTitle } from "@/lib/page-title";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { InternalPageShell } from "@/components/shell/internal-page-shell";
 import { TikTokPublicDashboard } from "./tiktok-public-dashboard";
 import { fetchTikTokPublicOverview, fetchTikTokPublicStores } from "./tiktok-public-api";
 
@@ -30,5 +31,9 @@ export default async function TikTokOverviewPage() {
     throw error;
   }
 
-  return <TikTokPublicDashboard overview={overview} stores={stores} />;
+  return (
+    <InternalPageShell section="dashboard">
+      <TikTokPublicDashboard overview={overview} stores={stores} />
+    </InternalPageShell>
+  );
 }

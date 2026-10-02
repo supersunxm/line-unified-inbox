@@ -3,6 +3,7 @@ import { internalPageTitle } from "@/lib/page-title";
 import { cookies } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import { fetchTikTokAccountsListFromBackend } from "../../tiktok-api-client";
+import { InternalPageShell } from "@/components/shell/internal-page-shell";
 import { TikTokPublicStoreDetail } from "../../tiktok-public-store-detail";
 import { fetchTikTokPublicHistory, fetchTikTokPublicStore } from "../../tiktok-public-api";
 
@@ -46,5 +47,9 @@ export default async function TikTokPublicStorePage({ params }: Props) {
   }
 
   if (!store) notFound();
-  return <TikTokPublicStoreDetail store={store} history={history} />;
+  return (
+    <InternalPageShell section="dashboard">
+      <TikTokPublicStoreDetail store={store} history={history} />
+    </InternalPageShell>
+  );
 }

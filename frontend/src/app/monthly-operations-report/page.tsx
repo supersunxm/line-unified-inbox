@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AuthorizedSection } from "../authorized-workspace";
+import { InternalPageShell } from "@/components/shell/internal-page-shell";
 
 type FollowerCoverage = "complete" | "partial" | "missing";
 type ReplyCoverage = "complete" | "partial" | "not_covered";
@@ -423,7 +424,7 @@ function ReportContent() {
   }, [report, search]);
 
   return (
-    <main className="min-h-screen bg-[var(--app-bg)] px-4 py-6 text-[var(--app-text-primary)] md:ml-[var(--app-sidebar-width,16rem)] md:px-8">
+    <main className="min-h-full bg-[var(--app-bg)] px-4 py-6 text-[var(--app-text-primary)] md:px-8">
       <div className="mx-auto max-w-[1600px]">
         <div className="flex flex-col gap-4 border-b border-[var(--app-border)] pb-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
@@ -752,7 +753,9 @@ function ReportContent() {
 export default function MonthlyOperationsReportPage() {
   return (
     <AuthorizedSection section="dashboard">
-      <ReportContent />
+      <InternalPageShell section="dashboard">
+        <ReportContent />
+      </InternalPageShell>
     </AuthorizedSection>
   );
 }

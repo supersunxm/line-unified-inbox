@@ -141,7 +141,7 @@ export function RichMessagesView() {
   };
 
   return (
-    <main className="min-h-screen bg-[var(--app-bg)] p-6 text-[var(--app-text-primary)]">
+    <main className="min-h-full bg-[var(--app-bg)] p-6 text-[var(--app-text-primary)]">
       <div className="mx-auto max-w-7xl">
         <header className="mb-5 flex flex-wrap items-center justify-between gap-3">
           <div>

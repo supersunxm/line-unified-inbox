@@ -160,7 +160,7 @@ export function RichMenuOverviewView() {
   ] : [];
 
   return (
-    <main className="min-h-screen bg-[var(--app-bg)] px-4 py-6 text-[var(--app-text-primary)] md:px-8">
+    <main className="min-h-full bg-[var(--app-bg)] px-4 py-6 text-[var(--app-text-primary)] md:px-8">
       <div className="mx-auto max-w-[1600px]">
         <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>

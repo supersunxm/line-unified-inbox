@@ -2,12 +2,14 @@
 
 import Link from "next/link";
 import { AuthorizedSection } from "../authorized-workspace";
+import { InternalPageShell } from "@/components/shell/internal-page-shell";
 import { Store24hResponsePanel } from "../dashboard/store-24h-response-panel";
 
 export default function ReplyMessagePage() {
   return (
     <AuthorizedSection section="dashboard">
-      <main className="min-h-screen bg-[var(--app-bg)] text-[var(--app-text-primary)]">
+      <InternalPageShell section="dashboard">
+      <main className="min-h-full bg-[var(--app-bg)] text-[var(--app-text-primary)]">
         <div className="mx-auto w-full max-w-[1440px] px-4 py-5 sm:px-6 lg:px-8">
           <div className="mb-4 flex items-start justify-between gap-4">
             <div>
@@ -35,6 +37,7 @@ export default function ReplyMessagePage() {
           />
         </div>
       </main>
+      </InternalPageShell>
     </AuthorizedSection>
   );
 }
