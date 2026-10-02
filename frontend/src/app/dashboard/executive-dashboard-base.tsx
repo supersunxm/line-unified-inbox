@@ -279,7 +279,7 @@ export function ExecutiveDashboardV2({
   if (loading && (!analytics || !health)) {
     return (
       <div className="min-h-screen rounded-2xl bg-[var(--dash-bg)] p-6">
-        <div className="mx-auto max-w-[1280px] animate-pulse space-y-4">
+        <div className="mx-auto max-w-[1280px] motion-safe:animate-pulse space-y-4">
           <div className="h-16 rounded-2xl bg-[var(--dash-card)]" />
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1.5fr_1fr]">
             <div className="h-96 rounded-[20px] bg-[var(--dash-card)]" />
