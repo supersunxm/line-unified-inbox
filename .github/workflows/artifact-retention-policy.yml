@@ -1,0 +1,71 @@
+name: Artifact Retention Policy
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  enforce:
+    name: Enforce short artifact retention
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check upload-artifact retention
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+          import sys
+
+          MAX_DAYS = 3
+          failures = []
+
+          for path in sorted(Path(".github/workflows").glob("*.y*ml")):
+              lines = path.read_text(encoding="utf-8").splitlines()
+              i = 0
+              while i < len(lines):
+                  line = lines[i]
+                  match = re.match(r"^(\s*)-?\s*uses:\s*actions/upload-artifact@", line)
+                  if not match:
+                      i += 1
+                      continue
+
+                  base_indent = len(match.group(1))
+                  retention = None
+                  j = i + 1
+
+                  while j < len(lines):
+                      current = lines[j]
+                      if not current.strip():
+                          j += 1
+                          continue
+
+                      indent = len(current) - len(current.lstrip())
+                      if indent <= base_indent and re.match(r"^\s*-\s+", current):
+                          break
+
+                      retention_match = re.match(r"^\s*retention-days:\s*['\"]?([0-9]+)['\"]?\s*(?:#.*)?$", current)
+                      if retention_match:
+                          retention = int(retention_match.group(1))
+                          break
+                      j += 1
+
+                  if retention is None:
+                      failures.append(f"{path}:{i+1}: upload-artifact must declare retention-days: 1..{MAX_DAYS}")
+                  elif not 1 <= retention <= MAX_DAYS:
+                      failures.append(f"{path}:{i+1}: retention-days={retention} exceeds policy maximum {MAX_DAYS}")
+
+                  i += 1
+
+          if failures:
+              print("Artifact retention policy failed:")
+              for failure in failures:
+                  print(f"- {failure}")
+              sys.exit(1)
+
+          print(f"PASS: every actions/upload-artifact use has an explicit retention-days value between 1 and {MAX_DAYS}.")
