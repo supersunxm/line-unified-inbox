@@ -26,6 +26,8 @@ type ScanCandidate = {
 type VisionScanResponse = {
   provider: "google-cloud-vision";
   imagesProcessed: number;
+  estimatedReviewCount: number;
+  missingReviewCount: number;
   candidates: Array<{
     imageIndex: number;
     text: string;
@@ -261,6 +263,8 @@ export function Review15Checker() {
   const [text, setText] = useState("");
   const [scanImages, setScanImages] = useState<ScanImage[]>([]);
   const [scanCandidates, setScanCandidates] = useState<ScanCandidate[]>([]);
+  const [scanEstimatedReviewCount, setScanEstimatedReviewCount] = useState(0);
+  const [scanMissingReviewCount, setScanMissingReviewCount] = useState(0);
   const [scanProgress, setScanProgress] = useState(0);
   const [scanStatus, setScanStatus] = useState("");
   const [scanError, setScanError] = useState("");
@@ -293,6 +297,8 @@ export function Review15Checker() {
 
     setScanImages(next);
     setScanCandidates([]);
+    setScanEstimatedReviewCount(0);
+    setScanMissingReviewCount(0);
     setScanProgress(0);
     setScanStatus("");
     setScanError("");
@@ -327,6 +333,8 @@ export function Review15Checker() {
     setIsScanning(true);
     setScanError("");
     setScanCandidates([]);
+    setScanEstimatedReviewCount(0);
+    setScanMissingReviewCount(0);
     setScanProgress(8);
     setScanStatus("กำลังเตรียมภาพ...");
 
@@ -410,10 +418,22 @@ export function Review15Checker() {
       );
 
       setScanCandidates(nextCandidates);
+      setScanEstimatedReviewCount(payload.estimatedReviewCount ?? nextCandidates.length);
+      setScanMissingReviewCount(payload.missingReviewCount ?? 0);
       setScanProgress(100);
 
       if (nextCandidates.length > 0) {
-        setScanStatus("ตรวจพบ " + nextCandidates.length + " รีวิว");
+        if ((payload.missingReviewCount ?? 0) > 0) {
+          setScanStatus(
+            "แยกข้อความได้ " +
+              nextCandidates.length +
+              " จากประมาณ " +
+              payload.estimatedReviewCount +
+              " รีวิว",
+          );
+        } else {
+          setScanStatus("ตรวจพบ " + nextCandidates.length + " รีวิว");
+        }
       } else {
         setScanStatus("ยังไม่พบข้อความรีวิวที่ชัดเจน");
         setScanError(
@@ -619,13 +639,27 @@ export function Review15Checker() {
                   <div className="mb-3 flex items-end justify-between gap-3">
                     <div>
                       <h2 className="font-bold">
-                        พบ {scannedResults.length} รีวิว
+                        {scanMissingReviewCount > 0
+                          ? "แยกข้อความได้ " +
+                            scannedResults.length +
+                            " จากประมาณ " +
+                            scanEstimatedReviewCount +
+                            " รีวิว"
+                          : "พบ " + scannedResults.length + " รีวิว"}
                       </h2>
                       <p className="mt-1 text-xs text-[var(--app-text-secondary)]">
                         ตรวจข้อความที่ OCR อ่านได้ก่อนใช้ผลนับคำ
                       </p>
                     </div>
                   </div>
+
+                  {scanMissingReviewCount > 0 && (
+                    <div className="mb-3 rounded-xl border border-[var(--app-warning)]/30 bg-[var(--app-warning-soft)] px-3 py-2.5 text-xs leading-5">
+                      ระบบเห็นโครงสร้างรีวิวประมาณ {scanEstimatedReviewCount} รีวิว
+                      แต่แยกข้อความได้ {scannedResults.length} รีวิว
+                      อาจมีรีวิวตกหล่น กรุณาตรวจภาพต้นฉบับก่อนใช้ผล
+                    </div>
+                  )}
 
                   <div className="grid gap-3">
                     {scannedResults.map((candidate, index) => {

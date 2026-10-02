@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  analyzeReviewCandidatesFromVision,
   extractReviewCandidatesFromVision,
   VisionFullTextAnnotation,
 } from "./review15-vision-layout";
@@ -131,4 +132,100 @@ test("Vision plain-text fallback stays bounded", () => {
     candidates[0].text,
     "มีเครื่องให้เลือกเยอะ พนักงานแนะนำจนได้เครื่องที่ถูกใจ",
   );
+});
+
+
+test("Vision recovers two Google review cards when one date OCR is imperfect", () => {
+  const annotation: VisionFullTextAnnotation = {
+    text: [
+      "สุทา วงศกรา",
+      "1 รีวิว",
+      "3 สัปดาห์ทีแลว",
+      "มีเครื่องให้เลือกเยอะ พนักงานแนะนำจนได้เครื่องที่ถูกใจ",
+      "OPPO A6c",
+      "กดค้างเพื่อแสดงความรู้สึก",
+      "วินนา สินวลจันทร์",
+      "Local Guide · 1 รีวิว",
+      "2 เดือนที่แล้ว",
+      "ขอบคุณน้องๆให้คำแนะนำสเปกเครื่องอย่างดี",
+    ].join("\n"),
+    pages: [
+      {
+        width: 705,
+        height: 1536,
+        blocks: [
+          {
+            paragraphs: [
+              paragraph("สุทา วงศกรา", 330, 354),
+              paragraph("1 รีวิว", 365, 389),
+              paragraph("3 สัปดาห์ทีแลว", 405, 431),
+              paragraph(
+                "มีเครื่องให้เลือกเยอะ พนักงานแนะนำจนได้เครื่องที่ถูกใจ",
+                455,
+                486,
+              ),
+              paragraph("OPPO A6c", 610, 666, 190, 420),
+              paragraph("กดค้างเพื่อแสดงความรู้สึก", 790, 818),
+              paragraph("วินนา สินวลจันทร์", 990, 1016),
+              paragraph("Local Guide · 1 รีวิว", 1028, 1052),
+              paragraph("2 เดือนที่แล้ว", 1070, 1096),
+              paragraph(
+                "ขอบคุณน้องๆให้คำแนะนำสเปกเครื่องอย่างดี",
+                1118,
+                1148,
+              ),
+            ],
+          },
+        ],
+      },
+    ],
+  };
+
+  const analysis = analyzeReviewCandidatesFromVision(annotation);
+
+  assert.equal(analysis.estimatedReviewCount, 2);
+  assert.equal(analysis.candidates.length, 2);
+  assert.equal(
+    analysis.candidates[0].text,
+    "มีเครื่องให้เลือกเยอะ พนักงานแนะนำจนได้เครื่องที่ถูกใจ",
+  );
+  assert.equal(
+    analysis.candidates[1].text,
+    "ขอบคุณน้องๆให้คำแนะนำสเปกเครื่องอย่างดี",
+  );
+  assert.equal(
+    analysis.candidates.some((candidate) => candidate.text.includes("OPPO A6c")),
+    false,
+  );
+});
+
+test("Vision reports a higher estimated card count when one body cannot be extracted", () => {
+  const annotation: VisionFullTextAnnotation = {
+    pages: [
+      {
+        width: 705,
+        height: 1536,
+        blocks: [
+          {
+            paragraphs: [
+              paragraph("1 รีวิว", 300, 324),
+              paragraph("3 สัปดาห์ที่แล้ว", 340, 366),
+              paragraph(
+                "มีเครื่องให้เลือกเยอะ พนักงานแนะนำดี",
+                390,
+                420,
+              ),
+              paragraph("1 รีวิว", 920, 944),
+              paragraph("2 เดือนที่แล้ว", 960, 986),
+            ],
+          },
+        ],
+      },
+    ],
+  };
+
+  const analysis = analyzeReviewCandidatesFromVision(annotation);
+
+  assert.equal(analysis.estimatedReviewCount, 2);
+  assert.equal(analysis.candidates.length, 1);
 });

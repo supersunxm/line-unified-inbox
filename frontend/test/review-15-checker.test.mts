@@ -153,3 +153,17 @@ test("image OCR never auto-passes before BM confirms recognized text", () => {
   assert.match(checkerSource, /ระบบจะยังไม่ตัดสินผ่าน 15 คำ/);
   assert.match(checkerSource, /candidate\.confirmed/);
 });
+
+
+test("image scan UI warns when estimated review cards exceed extracted bodies", () => {
+  const checkerPath = path.join(
+    repoRoot,
+    "frontend/src/app/review15/review-15-checker.tsx",
+  );
+  const checkerSource = fs.readFileSync(checkerPath, "utf8");
+
+  assert.match(checkerSource, /estimatedReviewCount:\s*number/);
+  assert.match(checkerSource, /missingReviewCount:\s*number/);
+  assert.match(checkerSource, /อาจมีรีวิวตกหล่น/);
+  assert.match(checkerSource, /แยกข้อความได้/);
+});
