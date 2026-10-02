@@ -4,6 +4,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { countThaiWords, segmentThaiWords } from "../src/lib/thai-word-counter.ts";
+import {
+  extractGoogleReviewCandidates,
+  isReviewUiNoise,
+} from "../src/lib/google-review-image-text.ts";
 import { createReview15Rewrites } from "../next.config.ts";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -57,7 +61,12 @@ test("public review checker is client-only and does not call an API", () => {
   const checkerSource = fs.readFileSync(checkerPath, "utf8");
 
   assert.match(checkerSource, /segmentThaiWords/);
-  assert.match(checkerSource, /ข้อความไม่ถูกบันทึกหรือส่งออกจากอุปกรณ์/);
+  assert.match(checkerSource, /segmentThaiWords/);
+  assert.match(checkerSource, /สแกนจากภาพ/);
+  assert.match(checkerSource, /tha\+eng/);
+  assert.match(checkerSource, /tesseract\.js@5\.0\.5/);
+  assert.match(checkerSource, /กฎการนับคำ/);
+  assert.match(checkerSource, /ข้อความและผลตรวจไม่ถูกบันทึกลงฐานข้อมูล/);
   assert.doesNotMatch(checkerSource, /fetch\s*\(/);
 });
 
@@ -88,4 +97,44 @@ test("review15 has a 1200x630 generated Open Graph image", () => {
   assert.match(imageSource, /ตรวจสอบรีวิว/);
   assert.match(imageSource, /15/);
   assert.match(imageSource, /Review KPI/);
+});
+
+
+test("Google Review OCR extractor isolates multiple review bodies", () => {
+  const ocrText = `
+Reviews
+OPPO Experience Store Lotus Navanakorn IT City
+วิลาวัลย์ เรือนดี
+1 review · 1 photo
+★★★★★ a month ago
+บริการดีมากคับส่วนลดเยอะ ของแถมเยอะ ประทับใจมากคับ
+See translation (English)
+Press and hold to react
+วรรณา ดีสันเทียะ
+2 reviews · 1 photo
+★★★★★ a month ago
+พนักงานให้คำแนะนำดีมาก ของแถมเยอะมาก ใช้บัตรประชาชนใบเดียว
+คุยข้อมูลให้ทุกอย่าง
+See translation (English)
+Press and hold to react
+`;
+
+  const candidates = extractGoogleReviewCandidates(ocrText);
+  assert.equal(candidates.length, 2);
+  assert.equal(
+    candidates[0].text,
+    "บริการดีมากคับส่วนลดเยอะ ของแถมเยอะ ประทับใจมากคับ",
+  );
+  assert.equal(
+    candidates[1].text,
+    "พนักงานให้คำแนะนำดีมาก ของแถมเยอะมาก ใช้บัตรประชาชนใบเดียว คุยข้อมูลให้ทุกอย่าง",
+  );
+});
+
+test("OCR extraction excludes Google review UI and metadata", () => {
+  assert.equal(isReviewUiNoise("See translation (English)"), true);
+  assert.equal(isReviewUiNoise("Press and hold to react"), true);
+  assert.equal(isReviewUiNoise("★★★★★"), true);
+  assert.equal(isReviewUiNoise("1 review"), true);
+  assert.equal(isReviewUiNoise("บริการดีมาก"), false);
 });

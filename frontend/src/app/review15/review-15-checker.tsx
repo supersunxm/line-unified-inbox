@@ -1,12 +1,169 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  buildFallbackReviewText,
+  extractGoogleReviewCandidates,
+} from "@/lib/google-review-image-text";
 import { segmentThaiWords } from "@/lib/thai-word-counter";
 
 const MIN_WORDS = 15;
 const MAX_CHARS = 500;
+const MAX_SCAN_IMAGES = 3;
+const MAX_IMAGE_BYTES = 12 * 1024 * 1024;
+const TESSERACT_SRC =
+  "https://cdn.jsdelivr.net/npm/tesseract.js@5.0.5/dist/tesseract.min.js";
 const EXAMPLE_TEXT =
   "พนักงาน บริการ ดี มาก แนะนำ OPPO Reno 5G ใช้งาน ง่าย กล้อง สวย ราคา คุ้ม ประทับใจ";
+
+type Mode = "text" | "image";
+
+type TesseractLoggerMessage = {
+  status?: string;
+  progress?: number;
+};
+
+type TesseractApi = {
+  recognize: (
+    image: Blob,
+    language: string,
+    options?: {
+      logger?: (message: TesseractLoggerMessage) => void;
+    },
+  ) => Promise<{
+    data: {
+      text: string;
+    };
+  }>;
+};
+
+declare global {
+  interface Window {
+    Tesseract?: TesseractApi;
+  }
+}
+
+type ScanImage = {
+  id: string;
+  file: File;
+  previewUrl: string;
+};
+
+type ScanCandidate = {
+  id: string;
+  text: string;
+  sourceName: string;
+};
+
+let tesseractLoaderPromise: Promise<TesseractApi> | null = null;
+
+function loadTesseract(): Promise<TesseractApi> {
+  if (typeof window === "undefined") {
+    return Promise.reject(new Error("OCR requires a browser"));
+  }
+
+  if (window.Tesseract) {
+    return Promise.resolve(window.Tesseract);
+  }
+
+  if (tesseractLoaderPromise) {
+    return tesseractLoaderPromise;
+  }
+
+  tesseractLoaderPromise = new Promise<TesseractApi>((resolve, reject) => {
+    const existing = document.querySelector<HTMLScriptElement>(
+      'script[data-review15-ocr="true"]',
+    );
+
+    const finish = () => {
+      if (window.Tesseract) {
+        resolve(window.Tesseract);
+      } else {
+        tesseractLoaderPromise = null;
+        reject(new Error("OCR library did not initialize"));
+      }
+    };
+
+    if (existing) {
+      existing.addEventListener("load", finish, { once: true });
+      existing.addEventListener(
+        "error",
+        () => {
+          tesseractLoaderPromise = null;
+          reject(new Error("OCR library failed to load"));
+        },
+        { once: true },
+      );
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = TESSERACT_SRC;
+    script.async = true;
+    script.crossOrigin = "anonymous";
+    script.dataset.review15Ocr = "true";
+    script.addEventListener("load", finish, { once: true });
+    script.addEventListener(
+      "error",
+      () => {
+        tesseractLoaderPromise = null;
+        reject(new Error("OCR library failed to load"));
+      },
+      { once: true },
+    );
+    document.head.appendChild(script);
+  });
+
+  return tesseractLoaderPromise;
+}
+
+async function optimizeImageForOcr(file: File): Promise<Blob> {
+  const imageUrl = URL.createObjectURL(file);
+  try {
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const element = new Image();
+      element.onload = () => resolve(element);
+      element.onerror = () => reject(new Error("อ่านไฟล์ภาพไม่สำเร็จ"));
+      element.src = imageUrl;
+    });
+
+    const sourceWidth = image.naturalWidth || image.width;
+    const sourceHeight = image.naturalHeight || image.height;
+    const maxWidth = 1800;
+    const maxPixels = 7_000_000;
+
+    const widthScale = Math.min(1, maxWidth / Math.max(sourceWidth, 1));
+    const pixelScale = Math.min(
+      1,
+      Math.sqrt(maxPixels / Math.max(sourceWidth * sourceHeight, 1)),
+    );
+    const scale = Math.min(widthScale, pixelScale);
+
+    const width = Math.max(1, Math.round(sourceWidth * scale));
+    const height = Math.max(1, Math.round(sourceHeight * scale));
+
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+
+    const context = canvas.getContext("2d");
+    if (!context) {
+      return file;
+    }
+
+    context.drawImage(image, 0, 0, width, height);
+
+    return await new Promise<Blob>((resolve) => {
+      canvas.toBlob(
+        (blob) => resolve(blob ?? file),
+        "image/jpeg",
+        0.94,
+      );
+    });
+  } finally {
+    URL.revokeObjectURL(imageUrl);
+  }
+}
 
 function CheckIcon() {
   return (
@@ -30,9 +187,24 @@ function ChatIcon() {
   );
 }
 
-export function Review15Checker() {
-  const [text, setText] = useState("");
+function CameraIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-6 w-6" aria-hidden="true">
+      <path
+        fill="currentColor"
+        d="M9 4 7.2 6H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-3.2L15 4H9Zm3 13.2A4.2 4.2 0 1 1 12 8.8a4.2 4.2 0 0 1 0 8.4Zm0-1.8A2.4 2.4 0 1 0 12 10.6a2.4 2.4 0 0 0 0 4.8Z"
+      />
+    </svg>
+  );
+}
 
+function ManualChecker({
+  text,
+  onTextChange,
+}: {
+  text: string;
+  onTextChange: (value: string) => void;
+}) {
   const result = useMemo(() => segmentThaiWords(text), [text]);
   const count = result.count;
   const passed = count >= MIN_WORDS;
@@ -40,10 +212,333 @@ export function Review15Checker() {
   const hasText = text.trim().length > 0;
 
   return (
+    <>
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.55fr)_minmax(280px,0.75fr)] lg:items-stretch">
+        <section className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4 shadow-[var(--app-shadow-card)] sm:p-5">
+          <label htmlFor="review-text" className="mb-2 block text-sm font-semibold">
+            ข้อความรีวิวลูกค้า
+          </label>
+          <div className="relative">
+            <textarea
+              id="review-text"
+              value={text}
+              maxLength={MAX_CHARS}
+              autoComplete="off"
+              autoCorrect="off"
+              spellCheck={false}
+              onChange={(event) => onTextChange(event.target.value)}
+              placeholder="วางข้อความรีวิวที่นี่..."
+              className="min-h-44 w-full resize-y rounded-xl border border-[var(--app-border-strong)] bg-[var(--input-background)] px-4 py-3 pb-8 text-base leading-7 outline-none transition focus:border-[var(--app-accent)] focus:ring-2 focus:ring-[var(--app-accent)]/15 sm:min-h-52"
+            />
+            <span className="pointer-events-none absolute bottom-3 right-3 text-[11px] font-medium text-[var(--app-text-tertiary)]">
+              {text.length}/{MAX_CHARS}
+            </span>
+          </div>
+
+          <div className="mt-3 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+            <button
+              type="button"
+              onClick={() => onTextChange("")}
+              disabled={!text}
+              className="min-h-11 rounded-xl bg-[var(--app-accent)] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[var(--app-accent-hover)] disabled:opacity-45"
+            >
+              ล้างข้อความ
+            </button>
+            <button
+              type="button"
+              onClick={() => onTextChange(EXAMPLE_TEXT)}
+              className="min-h-11 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-subtle)] px-4 py-2.5 text-sm font-semibold transition hover:bg-[var(--app-surface-hover)]"
+            >
+              ใช้ข้อความตัวอย่าง
+            </button>
+          </div>
+        </section>
+
+        <section
+          aria-live="polite"
+          className={[
+            "flex min-h-48 flex-col items-center justify-center rounded-2xl border p-5 text-center shadow-[var(--app-shadow-card)] transition",
+            !hasText
+              ? "border-[var(--app-border)] bg-[var(--app-surface)]"
+              : passed
+                ? "border-[var(--app-success)]/25 bg-[var(--app-success-soft)]"
+                : "border-[var(--app-warning)]/25 bg-[var(--app-warning-soft)]",
+          ].join(" ")}
+        >
+          <div
+            className={[
+              "font-tabular text-5xl font-bold tracking-tight sm:text-6xl",
+              !hasText
+                ? "text-[var(--app-text-tertiary)]"
+                : passed
+                  ? "text-[var(--app-accent)]"
+                  : "text-[var(--app-warning)]",
+            ].join(" ")}
+          >
+            {count}
+            <span className="ml-1 text-2xl font-semibold sm:text-3xl">
+              / {MIN_WORDS} คำ
+            </span>
+          </div>
+
+          {!hasText ? (
+            <p className="mt-4 text-sm font-medium text-[var(--app-text-secondary)]">
+              วางข้อความเพื่อเริ่มตรวจ
+            </p>
+          ) : passed ? (
+            <>
+              <div className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-[var(--app-success)]/12 px-3 py-1.5 text-sm font-semibold text-[var(--app-accent)]">
+                <CheckIcon />
+                ครบ 15 คำแล้ว
+              </div>
+              <p className="mt-3 text-sm font-semibold text-[var(--app-accent)]">
+                ข้อความนี้ผ่านเกณฑ์จำนวนคำ
+              </p>
+            </>
+          ) : (
+            <>
+              <div className="mt-4 rounded-full bg-[var(--app-warning)]/12 px-3 py-1.5 text-sm font-semibold text-[var(--app-warning)]">
+                ยังไม่ครบ 15 คำ
+              </div>
+              <p className="mt-3 text-sm font-semibold">ขาดอีก {remaining} คำ</p>
+            </>
+          )}
+        </section>
+      </div>
+
+      <section className="mt-4 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4 shadow-[var(--app-shadow-card)] sm:p-5">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-sm font-bold">
+            คำที่ระบบนับ
+            {hasText ? " (" + count + " คำ)" : ""}
+          </h2>
+          {hasText && (
+            <span className="text-xs font-medium text-[var(--app-text-secondary)]">
+              ตามกฎ Review KPI
+            </span>
+          )}
+        </div>
+
+        {result.finalTokens.length > 0 ? (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {result.finalTokens.map((token, index) => (
+              <span
+                key={token + "-" + index}
+                className="rounded-full bg-[var(--app-accent-soft)] px-3 py-1.5 text-xs font-medium text-[var(--app-accent)]"
+              >
+                {token}
+              </span>
+            ))}
+          </div>
+        ) : (
+          <p className="mt-3 text-sm text-[var(--app-text-tertiary)]">
+            คำที่ผ่านกฎการนับจะแสดงที่นี่
+          </p>
+        )}
+      </section>
+    </>
+  );
+}
+
+export function Review15Checker() {
+  const [mode, setMode] = useState<Mode>("text");
+  const [text, setText] = useState("");
+  const [scanImages, setScanImages] = useState<ScanImage[]>([]);
+  const [scanCandidates, setScanCandidates] = useState<ScanCandidate[]>([]);
+  const [rawOcrTexts, setRawOcrTexts] = useState<
+    Array<{ sourceName: string; text: string }>
+  >([]);
+  const [scanProgress, setScanProgress] = useState(0);
+  const [scanStatus, setScanStatus] = useState("");
+  const [scanError, setScanError] = useState("");
+  const [isScanning, setIsScanning] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    return () => {
+      scanImages.forEach((image) => URL.revokeObjectURL(image.previewUrl));
+    };
+  }, [scanImages]);
+
+  const scannedResults = useMemo(
+    () =>
+      scanCandidates.map((candidate) => ({
+        ...candidate,
+        segmentation: segmentThaiWords(candidate.text),
+      })),
+    [scanCandidates],
+  );
+
+  const replaceScanImages = (files: File[]) => {
+    scanImages.forEach((image) => URL.revokeObjectURL(image.previewUrl));
+
+    const next = files.slice(0, MAX_SCAN_IMAGES).map((file, index) => ({
+      id: file.name + "-" + file.lastModified + "-" + index,
+      file,
+      previewUrl: URL.createObjectURL(file),
+    }));
+
+    setScanImages(next);
+    setScanCandidates([]);
+    setRawOcrTexts([]);
+    setScanProgress(0);
+    setScanStatus("");
+    setScanError("");
+  };
+
+  const handleFileSelection = (files: FileList | null) => {
+    if (!files) return;
+
+    const selected = Array.from(files);
+    const valid = selected.filter(
+      (file) => file.type.startsWith("image/") && file.size <= MAX_IMAGE_BYTES,
+    );
+
+    if (valid.length === 0) {
+      setScanError("กรุณาเลือกไฟล์ภาพ JPG / PNG ขนาดไม่เกิน 12 MB");
+      replaceScanImages([]);
+      return;
+    }
+
+    replaceScanImages(valid);
+
+    if (selected.length > MAX_SCAN_IMAGES) {
+      setScanError("สแกนได้ครั้งละไม่เกิน 3 ภาพ ระบบเลือก 3 ภาพแรกให้แล้ว");
+    } else if (valid.length !== selected.length) {
+      setScanError("มีบางไฟล์ที่ไม่ใช่ภาพหรือมีขนาดเกิน 12 MB จึงไม่ได้ถูกเลือก");
+    }
+  };
+
+  const runImageScan = async () => {
+    if (scanImages.length === 0 || isScanning) return;
+
+    setIsScanning(true);
+    setScanError("");
+    setScanCandidates([]);
+    setRawOcrTexts([]);
+    setScanProgress(1);
+    setScanStatus("กำลังเตรียมระบบอ่านภาษาไทย...");
+
+    try {
+      const tesseract = await loadTesseract();
+      const allCandidates: ScanCandidate[] = [];
+      const allRaw: Array<{ sourceName: string; text: string }> = [];
+
+      for (let index = 0; index < scanImages.length; index += 1) {
+        const image = scanImages[index];
+        setScanStatus(
+          "กำลังอ่านภาพ " + (index + 1) + " จาก " + scanImages.length,
+        );
+
+        const optimized = await optimizeImageForOcr(image.file);
+        const response = await tesseract.recognize(optimized, "tha+eng", {
+          logger: (message) => {
+            const localProgress =
+              typeof message.progress === "number" ? message.progress : 0;
+            const totalProgress =
+              ((index + Math.max(0, Math.min(1, localProgress))) /
+                scanImages.length) *
+              100;
+            setScanProgress(Math.max(1, Math.round(totalProgress)));
+            if (message.status) {
+              setScanStatus(
+                "ภาพ " +
+                  (index + 1) +
+                  "/" +
+                  scanImages.length +
+                  " • " +
+                  (message.status === "recognizing text"
+                    ? "กำลังอ่านข้อความ"
+                    : "กำลังเตรียม OCR"),
+              );
+            }
+          },
+        });
+
+        const rawText = response.data.text || "";
+        allRaw.push({ sourceName: image.file.name, text: rawText });
+
+        const extracted = extractGoogleReviewCandidates(rawText);
+        if (extracted.length > 0) {
+          extracted.forEach((candidate, candidateIndex) => {
+            allCandidates.push({
+              id:
+                image.id +
+                "-review-" +
+                candidate.sourceIndex +
+                "-" +
+                candidateIndex,
+              text: candidate.text,
+              sourceName: image.file.name,
+            });
+          });
+        } else {
+          const fallback = buildFallbackReviewText(rawText);
+          if (fallback) {
+            allCandidates.push({
+              id: image.id + "-fallback",
+              text: fallback,
+              sourceName: image.file.name,
+            });
+          }
+        }
+      }
+
+      const seen = new Set<string>();
+      const deduped = allCandidates.filter((candidate) => {
+        const key = candidate.text.toLocaleLowerCase("th").replace(/\s+/g, " ");
+        if (!key || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+
+      setRawOcrTexts(allRaw);
+      setScanCandidates(deduped);
+      setScanProgress(100);
+
+      if (deduped.length > 0) {
+        setScanStatus("ตรวจพบ " + deduped.length + " รีวิว");
+      } else {
+        setScanStatus("ยังแยกข้อความรีวิวอัตโนมัติไม่ได้");
+        setScanError(
+          "ลองใช้ภาพที่เห็นข้อความรีวิวชัดขึ้น หรือดูข้อความ OCR ดิบด้านล่างแล้วคัดลอกไปตรวจแบบพิมพ์ข้อความ",
+        );
+      }
+    } catch (error) {
+      console.error("Review image OCR failed", error);
+      setScanProgress(0);
+      setScanStatus("");
+      setScanError(
+        "สแกนภาพไม่สำเร็จ กรุณาลองใหม่บนอินเทอร์เน็ตที่เสถียร หรือใช้โหมดพิมพ์ข้อความ",
+      );
+    } finally {
+      setIsScanning(false);
+    }
+  };
+
+  const updateCandidate = (id: string, value: string) => {
+    setScanCandidates((current) =>
+      current.map((candidate) =>
+        candidate.id === id ? { ...candidate, text: value } : candidate,
+      ),
+    );
+  };
+
+  const useCandidateInManualMode = (value: string) => {
+    setText(value.slice(0, MAX_CHARS));
+    setMode("text");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  return (
     <main className="min-h-screen bg-[var(--app-bg)] text-[var(--app-text-primary)]">
       <header className="border-b border-[var(--app-border)] bg-[var(--app-surface)]">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6 lg:px-8">
-          <a href="/" className="text-[27px] font-bold tracking-[-0.075em]" aria-label="OPPO Home">
+          <a
+            href="/"
+            className="text-[27px] font-bold tracking-[-0.075em]"
+            aria-label="OPPO Home"
+          >
             oppo
           </a>
           <span className="hidden text-sm font-medium text-[var(--app-text-secondary)] sm:block">
@@ -61,147 +556,343 @@ export function Review15Checker() {
             ตรวจสอบรีวิว 15 คำ
           </h1>
           <p className="mt-2 text-sm text-[var(--app-text-secondary)] sm:text-base">
-            เช็กข้อความก่อนขอให้ลูกค้าโพสต์รีวิว
+            พิมพ์ข้อความ หรือสแกน Screenshot จาก Google Reviews
           </p>
         </div>
 
-        <div className="mt-7 grid gap-4 lg:mt-10 lg:grid-cols-[minmax(0,1.55fr)_minmax(280px,0.75fr)] lg:items-stretch">
-          <section className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4 shadow-[var(--app-shadow-card)] sm:p-5">
-            <label htmlFor="review-text" className="mb-2 block text-sm font-semibold">
-              ข้อความรีวิวลูกค้า
-            </label>
-            <div className="relative">
-              <textarea
-                id="review-text"
-                value={text}
-                maxLength={MAX_CHARS}
-                autoComplete="off"
-                autoCorrect="off"
-                spellCheck={false}
-                onChange={(event) => setText(event.target.value)}
-                placeholder="วางข้อความรีวิวที่นี่..."
-                className="min-h-44 w-full resize-y rounded-xl border border-[var(--app-border-strong)] bg-[var(--input-background)] px-4 py-3 pb-8 text-base leading-7 outline-none transition focus:border-[var(--app-accent)] focus:ring-2 focus:ring-[var(--app-accent)]/15 sm:min-h-52"
-              />
-              <span className="pointer-events-none absolute bottom-3 right-3 text-[11px] font-medium text-[var(--app-text-tertiary)]">
-                {text.length}/{MAX_CHARS}
-              </span>
-            </div>
-
-            <div className="mt-3 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
-              <button
-                type="button"
-                onClick={() => setText("")}
-                disabled={!text}
-                className="min-h-11 rounded-xl bg-[var(--app-accent)] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[var(--app-accent-hover)] disabled:opacity-45"
-              >
-                ล้างข้อความ
-              </button>
-              <button
-                type="button"
-                onClick={() => setText(EXAMPLE_TEXT)}
-                className="min-h-11 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-subtle)] px-4 py-2.5 text-sm font-semibold transition hover:bg-[var(--app-surface-hover)]"
-              >
-                ใช้ข้อความตัวอย่าง
-              </button>
-            </div>
-          </section>
-
-          <section
-            aria-live="polite"
+        <div className="mx-auto mt-6 grid max-w-xl grid-cols-2 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-1 shadow-sm">
+          <button
+            type="button"
+            onClick={() => setMode("text")}
             className={[
-              "flex min-h-48 flex-col items-center justify-center rounded-2xl border p-5 text-center shadow-[var(--app-shadow-card)] transition",
-              !hasText
-                ? "border-[var(--app-border)] bg-[var(--app-surface)]"
-                : passed
-                  ? "border-[var(--app-success)]/25 bg-[var(--app-success-soft)]"
-                  : "border-[var(--app-warning)]/25 bg-[var(--app-warning-soft)]",
+              "min-h-11 rounded-xl px-3 text-sm font-semibold transition",
+              mode === "text"
+                ? "bg-[var(--app-accent)] text-white"
+                : "text-[var(--app-text-secondary)]",
             ].join(" ")}
           >
-            <div
-              className={[
-                "font-tabular text-5xl font-bold tracking-tight sm:text-6xl",
-                !hasText
-                  ? "text-[var(--app-text-tertiary)]"
-                  : passed
-                    ? "text-[var(--app-accent)]"
-                    : "text-[var(--app-warning)]",
-              ].join(" ")}
-            >
-              {count}
-              <span className="ml-1 text-2xl font-semibold sm:text-3xl">/ {MIN_WORDS} คำ</span>
-            </div>
-
-            {!hasText ? (
-              <p className="mt-4 text-sm font-medium text-[var(--app-text-secondary)]">
-                วางข้อความเพื่อเริ่มตรวจ
-              </p>
-            ) : passed ? (
-              <>
-                <div className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-[var(--app-success)]/12 px-3 py-1.5 text-sm font-semibold text-[var(--app-accent)]">
-                  <CheckIcon />
-                  ครบ 15 คำแล้ว
-                </div>
-                <p className="mt-3 text-sm font-semibold text-[var(--app-accent)]">
-                  ข้อความนี้ผ่านเกณฑ์จำนวนคำ
-                </p>
-                <p className="mt-1 text-xs text-[var(--app-text-secondary)]">
-                  สามารถใช้ข้อความนี้ตรวจเงื่อนไข KPI ส่วนอื่นต่อได้
-                </p>
-              </>
-            ) : (
-              <>
-                <div className="mt-4 rounded-full bg-[var(--app-warning)]/12 px-3 py-1.5 text-sm font-semibold text-[var(--app-warning)]">
-                  ยังไม่ครบ 15 คำ
-                </div>
-                <p className="mt-3 text-sm font-semibold">
-                  ขาดอีก {remaining} คำ
-                </p>
-                <p className="mt-1 text-xs text-[var(--app-text-secondary)]">
-                  เพิ่มรายละเอียดรีวิวอีกเล็กน้อยแล้วตรวจใหม่
-                </p>
-              </>
-            )}
-          </section>
+            พิมพ์ข้อความ
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode("image")}
+            className={[
+              "min-h-11 rounded-xl px-3 text-sm font-semibold transition",
+              mode === "image"
+                ? "bg-[var(--app-accent)] text-white"
+                : "text-[var(--app-text-secondary)]",
+            ].join(" ")}
+          >
+            สแกนจากภาพ
+          </button>
         </div>
 
-        <section className="mt-4 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4 shadow-[var(--app-shadow-card)] sm:p-5">
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="text-sm font-bold">
-              คำที่ระบบนับ
-              {hasText ? " (" + count + " คำ)" : ""}
-            </h2>
-            {hasText && (
-              <span className="text-xs font-medium text-[var(--app-text-secondary)]">
-                ตามกฎ Review KPI
-              </span>
-            )}
+        <div className="mt-5 lg:mt-7">
+          {mode === "text" ? (
+            <ManualChecker text={text} onTextChange={setText} />
+          ) : (
+            <>
+              <section className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4 shadow-[var(--app-shadow-card)] sm:p-5">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[var(--app-accent-soft)] text-[var(--app-accent)]">
+                    <CameraIcon />
+                  </div>
+                  <div>
+                    <h2 className="font-bold">สแกนข้อความจากภาพรีวิว</h2>
+                    <p className="mt-1 text-xs leading-5 text-[var(--app-text-secondary)] sm:text-sm">
+                      รองรับ Screenshot ที่มีหลายรีวิวในภาพเดียว และเลือกได้สูงสุด 3 ภาพต่อครั้ง
+                    </p>
+                  </div>
+                </div>
+
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/*"
+                  multiple
+                  className="sr-only"
+                  onChange={(event) => handleFileSelection(event.target.files)}
+                />
+
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isScanning}
+                  className="mt-4 flex min-h-28 w-full flex-col items-center justify-center rounded-2xl border-2 border-dashed border-[var(--app-border-strong)] bg-[var(--app-surface-subtle)] px-4 py-5 text-center transition hover:border-[var(--app-accent)] disabled:opacity-50"
+                >
+                  <span className="text-sm font-bold text-[var(--app-accent)]">
+                    เลือกรูป / ถ่ายภาพ
+                  </span>
+                  <span className="mt-1 text-xs text-[var(--app-text-secondary)]">
+                    JPG, PNG • ไม่เกิน 12 MB ต่อภาพ
+                  </span>
+                </button>
+
+                {scanImages.length > 0 && (
+                  <>
+                    <div className="mt-4 grid grid-cols-3 gap-2">
+                      {scanImages.map((image) => (
+                        <div
+                          key={image.id}
+                          className="overflow-hidden rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-subtle)]"
+                        >
+                          <img
+                            src={image.previewUrl}
+                            alt={image.file.name}
+                            className="aspect-[3/4] w-full object-cover object-top"
+                          />
+                        </div>
+                      ))}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={runImageScan}
+                      disabled={isScanning}
+                      className="mt-4 min-h-12 w-full rounded-xl bg-[var(--app-accent)] px-4 py-3 text-sm font-bold text-white transition hover:bg-[var(--app-accent-hover)] disabled:opacity-55"
+                    >
+                      {isScanning ? "กำลังสแกน..." : "สแกนข้อความรีวิว"}
+                    </button>
+                  </>
+                )}
+
+                {(isScanning || scanProgress > 0) && (
+                  <div className="mt-4" aria-live="polite">
+                    <div className="flex items-center justify-between text-xs font-medium">
+                      <span>{scanStatus || "กำลังเตรียม..."}</span>
+                      <span>{scanProgress}%</span>
+                    </div>
+                    <div className="mt-2 h-2 overflow-hidden rounded-full bg-[var(--app-surface-subtle)]">
+                      <div
+                        className="h-full rounded-full bg-[var(--app-accent)] transition-all duration-300"
+                        style={{ width: scanProgress + "%" }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {scanError && (
+                  <div className="mt-4 rounded-xl border border-[var(--app-warning)]/25 bg-[var(--app-warning-soft)] px-3 py-2.5 text-xs leading-5">
+                    {scanError}
+                  </div>
+                )}
+
+                <div className="mt-4 rounded-xl bg-[var(--app-accent-soft)] px-3 py-2.5 text-xs leading-5 text-[var(--app-text-secondary)]">
+                  <strong className="text-[var(--app-accent)]">
+                    ประมวลผลบนอุปกรณ์:
+                  </strong>{" "}
+                  ภาพรีวิวไม่ถูกอัปโหลดเข้า server ของ lineoppo.click โดยระบบ OCR
+                  จะดาวน์โหลดตัวอ่านภาษาไทยครั้งแรกแล้วประมวลผลในเบราว์เซอร์
+                </div>
+              </section>
+
+              {scannedResults.length > 0 && (
+                <section className="mt-4">
+                  <div className="mb-3 flex items-end justify-between gap-3">
+                    <div>
+                      <h2 className="font-bold">
+                        พบ {scannedResults.length} รีวิว
+                      </h2>
+                      <p className="mt-1 text-xs text-[var(--app-text-secondary)]">
+                        ตรวจข้อความที่ OCR อ่านได้ก่อนใช้ผลนับคำ
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-3">
+                    {scannedResults.map((candidate, index) => {
+                      const count = candidate.segmentation.count;
+                      const passed = count >= MIN_WORDS;
+                      const remaining = Math.max(0, MIN_WORDS - count);
+
+                      return (
+                        <article
+                          key={candidate.id}
+                          className={[
+                            "rounded-2xl border bg-[var(--app-surface)] p-4 shadow-[var(--app-shadow-card)]",
+                            passed
+                              ? "border-[var(--app-success)]/25"
+                              : "border-[var(--app-warning)]/25",
+                          ].join(" ")}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <p className="text-sm font-bold">
+                                รีวิว {index + 1}
+                              </p>
+                              <p className="mt-0.5 max-w-[220px] truncate text-[11px] text-[var(--app-text-tertiary)]">
+                                {candidate.sourceName}
+                              </p>
+                            </div>
+                            <div
+                              className={[
+                                "rounded-full px-3 py-1.5 text-xs font-bold",
+                                passed
+                                  ? "bg-[var(--app-success-soft)] text-[var(--app-accent)]"
+                                  : "bg-[var(--app-warning-soft)] text-[var(--app-warning)]",
+                              ].join(" ")}
+                            >
+                              {count} / {MIN_WORDS} คำ
+                            </div>
+                          </div>
+
+                          <textarea
+                            value={candidate.text}
+                            onChange={(event) =>
+                              updateCandidate(candidate.id, event.target.value)
+                            }
+                            rows={4}
+                            className="mt-3 w-full resize-y rounded-xl border border-[var(--app-border-strong)] bg-[var(--input-background)] px-3 py-2.5 text-sm leading-6 outline-none focus:border-[var(--app-accent)]"
+                            aria-label={"ข้อความรีวิว " + (index + 1)}
+                          />
+
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            <span
+                              className={[
+                                "rounded-full px-3 py-1 text-xs font-semibold",
+                                passed
+                                  ? "bg-[var(--app-success-soft)] text-[var(--app-accent)]"
+                                  : "bg-[var(--app-warning-soft)] text-[var(--app-warning)]",
+                              ].join(" ")}
+                            >
+                              {passed
+                                ? "ครบ 15 คำแล้ว"
+                                : "ขาดอีก " + remaining + " คำ"}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                useCandidateInManualMode(candidate.text)
+                              }
+                              className="rounded-full border border-[var(--app-border)] px-3 py-1 text-xs font-semibold"
+                            >
+                              เปิดในโหมดพิมพ์
+                            </button>
+                          </div>
+
+                          {candidate.segmentation.finalTokens.length > 0 && (
+                            <div className="mt-3 flex flex-wrap gap-1.5">
+                              {candidate.segmentation.finalTokens.map(
+                                (token, tokenIndex) => (
+                                  <span
+                                    key={token + "-" + tokenIndex}
+                                    className="rounded-full bg-[var(--app-accent-soft)] px-2.5 py-1 text-[11px] font-medium text-[var(--app-accent)]"
+                                  >
+                                    {token}
+                                  </span>
+                                ),
+                              )}
+                            </div>
+                          )}
+                        </article>
+                      );
+                    })}
+                  </div>
+                </section>
+              )}
+
+              {rawOcrTexts.length > 0 && (
+                <details className="mt-4 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4 text-xs">
+                  <summary className="cursor-pointer font-semibold">
+                    ดูข้อความ OCR ดิบ
+                  </summary>
+                  <div className="mt-3 grid gap-3">
+                    {rawOcrTexts.map((item, index) => (
+                      <div key={item.sourceName + "-" + index}>
+                        <p className="font-semibold">{item.sourceName}</p>
+                        <pre className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap rounded-xl bg-[var(--app-surface-subtle)] p-3 font-sans leading-5 text-[var(--app-text-secondary)]">
+                          {item.text || "ไม่พบข้อความ"}
+                        </pre>
+                      </div>
+                    ))}
+                  </div>
+                </details>
+              )}
+            </>
+          )}
+        </div>
+
+        <section className="mt-5 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4 shadow-[var(--app-shadow-card)] sm:p-5">
+          <h2 className="text-sm font-bold">กฎการนับคำ</h2>
+          <p className="mt-1 text-xs leading-5 text-[var(--app-text-secondary)]">
+            หน้าเช็กนี้ใช้ตัวนับคำชุดเดียวกับ Google Review KPI
+          </p>
+
+          <div className="mt-3 grid gap-2 text-xs leading-5 sm:grid-cols-2">
+            <div className="rounded-xl bg-[var(--app-surface-subtle)] p-3">
+              <strong>15 คำขึ้นไป = ผ่าน</strong>
+              <p className="mt-1 text-[var(--app-text-secondary)]">
+                14 คำยังไม่ผ่าน และคำที่ซ้ำกันยังนับทุกครั้ง
+              </p>
+            </div>
+            <div className="rounded-xl bg-[var(--app-surface-subtle)] p-3">
+              <strong>ตัดคำภาษาไทยอัตโนมัติ</strong>
+              <p className="mt-1 text-[var(--app-text-secondary)]">
+                ไม่ได้นับจากจำนวนช่องว่างในประโยค
+              </p>
+            </div>
           </div>
 
-          {result.finalTokens.length > 0 ? (
-            <div className="mt-3 flex flex-wrap gap-2">
-              {result.finalTokens.map((token, index) => (
-                <span
-                  key={token + "-" + index}
-                  className="rounded-full bg-[var(--app-accent-soft)] px-3 py-1.5 text-xs font-medium text-[var(--app-accent)]"
-                >
-                  {token}
-                </span>
-              ))}
+          <details className="mt-3 rounded-xl border border-[var(--app-border)] p-3 text-xs leading-6">
+            <summary className="cursor-pointer font-semibold">
+              ดูรายละเอียดกฎทั้งหมด
+            </summary>
+            <ul className="mt-2 list-disc space-y-1 pl-5 text-[var(--app-text-secondary)]">
+              <li>
+                ไม่นับช่องว่าง เครื่องหมายวรรคตอน Emoji สัญลักษณ์ และตัวเลขล้วน
+              </li>
+              <li>
+                คำอังกฤษหรือชื่อแบรนด์ที่มีตัวอักษร เช่น OPPO, Reno และ 5G
+                สามารถนับเป็นคำได้
+              </li>
+              <li>
+                คำนำหน้า การ, ความ, น่า, ผู้, นัก, ชาว, ช่าง จะรวมกับคำถัดไปเป็น 1 คำ
+              </li>
+              <li>
+                คำประสมที่กำหนดไว้ เช่น โรงพยาบาล, เครื่องใช้, แม่บ้าน,
+                ท่องเที่ยว และต่างชาติ นับเป็น 1 คำ
+              </li>
+              <li>
+                ข้อความ UI ของ Google เช่น See translation, Like, Share, More,
+                อ่านเพิ่มเติม และดูคำแปล ไม่นับ
+              </li>
+              <li>
+                เมื่อสแกนจากภาพ ระบบพยายามตัดชื่อผู้รีวิว จำนวนรีวิว ดาว
+                และวันที่ออกก่อน แล้วให้ BM ตรวจแก้ข้อความ OCR ได้ก่อนนับ
+              </li>
+            </ul>
+
+            <div className="mt-3 grid gap-2 sm:grid-cols-3">
+              <div className="rounded-lg bg-[var(--app-accent-soft)] px-3 py-2">
+                <strong>ดี มาก ดี มาก</strong>
+                <div className="text-[var(--app-text-secondary)]">= 4 คำ</div>
+              </div>
+              <div className="rounded-lg bg-[var(--app-accent-soft)] px-3 py-2">
+                <strong>ความ + สะอาด</strong>
+                <div className="text-[var(--app-text-secondary)]">
+                  = ความสะอาด 1 คำ
+                </div>
+              </div>
+              <div className="rounded-lg bg-[var(--app-accent-soft)] px-3 py-2">
+                <strong>OPPO Reno 5G</strong>
+                <div className="text-[var(--app-text-secondary)]">= 3 คำ</div>
+              </div>
             </div>
-          ) : (
-            <p className="mt-3 text-sm text-[var(--app-text-tertiary)]">
-              คำที่ผ่านกฎการนับจะแสดงที่นี่
-            </p>
-          )}
+          </details>
         </section>
 
         <aside className="mt-4 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface-subtle)] p-4 text-xs leading-6 text-[var(--app-text-secondary)] sm:p-5">
-          <p className="font-semibold text-[var(--app-text-primary)]">หมายเหตุ</p>
+          <p className="font-semibold text-[var(--app-text-primary)]">หมายเหตุ KPI</p>
           <ul className="mt-1 list-disc pl-5">
-            <li>เครื่องมือนี้ตรวจเฉพาะจำนวนคำในข้อความรีวิวเท่านั้น</li>
-            <li>การผ่าน KPI จริงยังต้องผ่านเงื่อนไขภาพ เดือนของภาพ และกฎ Review KPI อื่น ๆ</li>
-            <li>ใช้กฎการนับคำเดียวกับระบบ Google Review KPI</li>
-            <li>ข้อความไม่ถูกบันทึกหรือส่งออกจากอุปกรณ์</li>
+            <li>เครื่องมือนี้ตรวจเฉพาะจำนวนคำในข้อความรีวิว</li>
+            <li>
+              การผ่าน KPI จริงยังต้องผ่านเงื่อนไขภาพ เดือนของภาพ และกฎ Review KPI อื่น ๆ
+            </li>
+            <li>
+              ผลจาก OCR ควรตรวจข้อความที่ระบบอ่านได้ก่อนยืนยัน เพราะภาพเบลอ
+              ฟอนต์ หรือข้อความถูกบังอาจทำให้อ่านคลาดเคลื่อนได้
+            </li>
+            <li>ข้อความและผลตรวจไม่ถูกบันทึกลงฐานข้อมูลจากหน้านี้</li>
           </ul>
         </aside>
       </section>
