@@ -35,6 +35,13 @@ export function createGoogleReviewApiRewrite(apiBaseUrl: string) {
   ];
 }
 
+export function createReview15Rewrite() {
+  return {
+    source: "/รีวิว15",
+    destination: "/review15",
+  };
+}
+
 const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: true,
@@ -58,6 +65,7 @@ const nextConfig: NextConfig = {
       createAuthRewrite(API_BASE_URL),
       createBackendRewrite(API_BASE_URL),
       ...createGoogleReviewApiRewrite(API_BASE_URL),
+      createReview15Rewrite(),
     ];
   },
 };
