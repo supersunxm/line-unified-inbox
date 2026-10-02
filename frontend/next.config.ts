@@ -35,11 +35,17 @@ export function createGoogleReviewApiRewrite(apiBaseUrl: string) {
   ];
 }
 
-export function createReview15Rewrite() {
-  return {
-    source: "/%E0%B8%A3%E0%B8%B5%E0%B8%A7%E0%B8%B4%E0%B8%A715",
-    destination: "/review15",
-  };
+export function createReview15Rewrites() {
+  return [
+    {
+      source: "/%E0%B8%A3%E0%B8%B5%E0%B8%A7%E0%B8%B4%E0%B8%A715%E0%B8%84%E0%B8%B3",
+      destination: "/review15",
+    },
+    {
+      source: "/%E0%B8%A3%E0%B8%B5%E0%B8%A7%E0%B8%B4%E0%B8%A715",
+      destination: "/review15",
+    },
+  ];
 }
 
 const nextConfig: NextConfig = {
@@ -65,7 +71,7 @@ const nextConfig: NextConfig = {
       createAuthRewrite(API_BASE_URL),
       createBackendRewrite(API_BASE_URL),
       ...createGoogleReviewApiRewrite(API_BASE_URL),
-      createReview15Rewrite(),
+      ...createReview15Rewrites(),
     ];
   },
 };
