@@ -1,4 +1,4 @@
-name: GitHub Packages Storage Audit
+name: GitHub Container Packages Audit
 
 on:
   push:
@@ -13,57 +13,34 @@ permissions:
 
 jobs:
   audit:
-    name: Audit GitHub Packages
+    name: Audit container packages
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: List account packages and versions
+      - name: List container packages
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -uo pipefail
           OWNER="${GITHUB_REPOSITORY_OWNER}"
-          TYPES=(container npm maven rubygems nuget)
-          TOTAL_PACKAGES=0
-          TOTAL_VERSIONS=0
 
-          echo "# GitHub Packages audit" | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "# GitHub Container Packages audit" | tee -a "$GITHUB_STEP_SUMMARY"
 
-          for TYPE in "${TYPES[@]}"; do
-            echo "=== PACKAGE_TYPE=$TYPE ==="
-            TMP="/tmp/packages-$TYPE.json"
-            if gh api --paginate --slurp "/users/$OWNER/packages?package_type=$TYPE&per_page=100" > "$TMP" 2>"/tmp/packages-$TYPE.err"; then
-              jq '[.[][]]' "$TMP" > "/tmp/packages-$TYPE-flat.json"
-              COUNT="$(jq 'length' "/tmp/packages-$TYPE-flat.json")"
-              TOTAL_PACKAGES=$((TOTAL_PACKAGES + COUNT))
-              echo "PACKAGE_TYPE_$TYPE=$COUNT"
+          if gh api "/users/$OWNER/packages?package_type=container&per_page=100" > /tmp/containers.json 2>/tmp/containers.err; then
+            COUNT="$(jq 'length' /tmp/containers.json)"
+            echo "CONTAINER_PACKAGE_COUNT=$COUNT"
+            jq -r '.[] | "PACKAGE=" + .name + " VERSIONS=" + (.version_count|tostring) + " VISIBILITY=" + .visibility + " CREATED=" + .created_at + " UPDATED=" + .updated_at' /tmp/containers.json
 
-              if [ "$COUNT" -gt 0 ]; then
-                jq -r '.[].name' "/tmp/packages-$TYPE-flat.json" | while IFS= read -r NAME; do
-                  ENCODED="$(jq -rn --arg v "$NAME" '$v|@uri')"
-                  VFILE="/tmp/versions-$TYPE-${RANDOM}.json"
-                  if gh api --paginate --slurp "/users/$OWNER/packages/$TYPE/$ENCODED/versions?per_page=100" > "$VFILE" 2>/tmp/version.err; then
-                    VCOUNT="$(jq '[.[][]] | length' "$VFILE")"
-                    echo "PACKAGE=$TYPE/$NAME VERSIONS=$VCOUNT"
-                    echo "- $TYPE / $NAME: **$VCOUNT versions**" >> "$GITHUB_STEP_SUMMARY"
-                    TOTAL_VERSIONS=$((TOTAL_VERSIONS + VCOUNT))
-                  else
-                    echo "PACKAGE=$TYPE/$NAME VERSIONS=UNREADABLE"
-                    cat /tmp/version.err || true
-                  fi
-                done
-              fi
-            else
-              echo "PACKAGE_TYPE_$TYPE=UNREADABLE"
-              cat "/tmp/packages-$TYPE.err" || true
-            fi
-          done
-
-          echo "TOTAL_PACKAGES=$TOTAL_PACKAGES"
-          echo "TOTAL_VERSIONS=$TOTAL_VERSIONS"
-          {
-            echo
-            echo "- Total packages visible to this repository token: **$TOTAL_PACKAGES**"
-            echo "- Total package versions counted: **$TOTAL_VERSIONS**"
-          } >> "$GITHUB_STEP_SUMMARY"
+            {
+              echo
+              echo "- Container packages visible: **$COUNT**"
+              echo
+              echo "## Packages"
+              jq -r '.[] | "- " + .name + ": **" + (.version_count|tostring) + " versions**, " + .visibility + ", updated " + .updated_at' /tmp/containers.json
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "CONTAINER_PACKAGE_QUERY_FAILED"
+            cat /tmp/containers.err
+            exit 0
+          fi
