@@ -1,4 +1,4 @@
-name: GitHub Container Packages Audit
+name: Set Actions Retention
 
 on:
   push:
@@ -8,39 +8,30 @@ on:
       - ".github/workflows/actions-storage-audit.yml"
 
 permissions:
+  actions: write
   contents: read
-  packages: read
 
 jobs:
-  audit:
-    name: Audit container packages
+  set-retention:
+    name: Set repository artifact retention
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 5
     steps:
-      - name: List container packages
+      - name: Set artifact and log retention to 1 day
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -uo pipefail
-          OWNER="${GITHUB_REPOSITORY_OWNER}"
+          ENDPOINT="/repos/${GITHUB_REPOSITORY}/actions/permissions/artifact-and-log-retention"
 
-          echo "# GitHub Container Packages audit" | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "CURRENT_RETENTION:"
+          gh api "$ENDPOINT" || true
 
-          if gh api "/users/$OWNER/packages?package_type=container&per_page=100" > /tmp/containers.json 2>/tmp/containers.err; then
-            COUNT="$(jq 'length' /tmp/containers.json)"
-            echo "CONTAINER_PACKAGE_COUNT=$COUNT"
-            jq -r '.[] | "PACKAGE=" + .name + " VERSIONS=" + (.version_count|tostring) + " VISIBILITY=" + .visibility + " CREATED=" + .created_at + " UPDATED=" + .updated_at' /tmp/containers.json
-
-            {
-              echo
-              echo "- Container packages visible: **$COUNT**"
-              echo
-              echo "## Packages"
-              jq -r '.[] | "- " + .name + ": **" + (.version_count|tostring) + " versions**, " + .visibility + ", updated " + .updated_at' /tmp/containers.json
-            } >> "$GITHUB_STEP_SUMMARY"
+          if gh api --method PUT "$ENDPOINT" -f days=1; then
+            echo "RETENTION_UPDATE=SUCCESS"
+            echo "UPDATED_RETENTION:"
+            gh api "$ENDPOINT" || true
           else
-            echo "CONTAINER_PACKAGE_QUERY_FAILED"
-            cat /tmp/containers.err
-            exit 0
+            echo "RETENTION_UPDATE=NOT_AUTHORIZED"
           fi
