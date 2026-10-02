@@ -5,7 +5,7 @@ import {
 } from "@nestjs/common";
 import { createSign } from "node:crypto";
 import {
-  extractReviewCandidatesFromVision,
+  analyzeReviewCandidatesFromVision,
   ReviewVisionCandidate,
   VisionFullTextAnnotation,
 } from "./review15-vision-layout";
@@ -36,6 +36,8 @@ export type Review15VisionScanResult = {
     }
   >;
   imagesProcessed: number;
+  estimatedReviewCount: number;
+  missingReviewCount: number;
 };
 
 function base64Url(value: string | Buffer): string {
@@ -124,6 +126,8 @@ export class Review15VisionService {
         provider: "google-cloud-vision",
         candidates: [],
         imagesProcessed: 0,
+        estimatedReviewCount: 0,
+        missingReviewCount: 0,
       };
     }
 
@@ -174,17 +178,19 @@ export class Review15VisionService {
     const results = body.responses ?? [];
 
     const candidates: Review15VisionScanResult["candidates"] = [];
+    let estimatedReviewCount = 0;
 
     results.forEach((result, imageIndex) => {
       if (result.error) {
         return;
       }
 
-      const extracted = extractReviewCandidatesFromVision(
+      const analysis = analyzeReviewCandidatesFromVision(
         result.fullTextAnnotation,
       );
+      estimatedReviewCount += analysis.estimatedReviewCount;
 
-      extracted.forEach((candidate) => {
+      analysis.candidates.forEach((candidate) => {
         candidates.push({
           ...candidate,
           imageIndex,
@@ -196,6 +202,8 @@ export class Review15VisionService {
       provider: "google-cloud-vision",
       candidates,
       imagesProcessed: images.length,
+      estimatedReviewCount,
+      missingReviewCount: Math.max(0, estimatedReviewCount - candidates.length),
     };
   }
 }
