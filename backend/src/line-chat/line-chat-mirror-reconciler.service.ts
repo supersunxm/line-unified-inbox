@@ -134,6 +134,7 @@ type ExactReconcileScope = {
   oaId: string;
   rows: MirrorRow[];
   conversationByChatId: ReadonlyMap<string, string>;
+  strictNonTextDuplicateGuard?: boolean;
 };
 
 function jsonObject(value: Prisma.JsonValue | null | undefined): Record<string, unknown> {
@@ -386,7 +387,9 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
   ): Promise<ExactMirrorManifestExecutionResult> {
     const manifest = parseExactMirrorManifestCsv(bytes, expectedSha256);
     if (manifest.rows.length !== expectedRows || manifest.storeCount !== expectedStores) {
-      throw new Error("EXACT_MIRROR_MANIFEST_EXPECTED_490_ROWS_ACROSS_24_STORES");
+      throw new Error(manifest.rows[0]?.kind === "MEDIA"
+        ? "EXACT_MIRROR_MEDIA_MANIFEST_APPROVED_SIZE_MISMATCH"
+        : "EXACT_MIRROR_MANIFEST_EXPECTED_490_ROWS_ACROSS_24_STORES");
     }
 
     const result: ExactMirrorManifestExecutionResult = {
@@ -435,13 +438,28 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
       throw new Error("EXACT_MIRROR_MANIFEST_RAW_CANDIDATE_LIMIT_EXCEEDED");
     }
 
+    const rawSourceIdOaRows = await this.prisma.lineChatMirrorMessage.findMany({
+      where: { managerMessageId: { in: [...new Set(manifest.rows.map((row) => row.sourceEventId))] } },
+      select: { lineOfficialAccountId: true, managerMessageId: true },
+    });
+    const rawOasBySourceId = new Map<string, Set<string>>();
+    for (const raw of rawSourceIdOaRows) {
+      const oas = rawOasBySourceId.get(raw.managerMessageId) ?? new Set<string>();
+      oas.add(raw.lineOfficialAccountId);
+      rawOasBySourceId.set(raw.managerMessageId, oas);
+    }
+
     const rawByIdentity = new Map(rawRows.map((row) => [exactMirrorIdentityKey({
       lineOfficialAccountId: row.lineOfficialAccountId,
       sourceEventId: row.managerMessageId,
     }), row]));
     const oaIds = [...new Set(manifest.rows.map((row) => row.lineOfficialAccountId))];
     const conversationIds = [...new Set(manifest.rows.map((row) => row.canonicalConversationId))];
-    const [oas, conversations, historicalIdentityCounts] = await Promise.all([
+    const historicalIdentityOr = manifest.rows.flatMap((row) => ([
+      { lineOfficialAccountId: row.lineOfficialAccountId, sourceEventId: row.sourceEventId },
+      { lineOfficialAccountId: row.lineOfficialAccountId, sourceEventId: `line-chat-manager:${row.sourceEventId}` },
+    ]));
+    const [oas, conversations, historicalMessages] = await Promise.all([
       this.prisma.lineOfficialAccount.findMany({
         where: { id: { in: oaIds } },
         select: {
@@ -465,58 +483,33 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
         where: { id: { in: conversationIds } },
         select: { id: true, storeId: true, lineOfficialAccountId: true, lineChatUserId: true },
       }),
-      this.prisma.historicalTimelineMessage.groupBy({
-        by: ["lineOfficialAccountId", "sourceEventId"],
-        where: {
-          OR: manifest.rows.map((row) => ({
-            lineOfficialAccountId: row.lineOfficialAccountId,
-            sourceEventId: row.sourceEventId,
-          })),
+      this.prisma.historicalTimelineMessage.findMany({
+        where: { OR: historicalIdentityOr },
+        select: {
+          storeId: true,
+          lineOfficialAccountId: true,
+          lineChatUserId: true,
+          sourceEventId: true,
+          sourceEventType: true,
+          direction: true,
+          text: true,
+          sentAt: true,
         },
-        _count: { _all: true },
       }),
     ]);
     const oaById = new Map(oas.map((oa) => [oa.id, oa]));
     const conversationById = new Map(conversations.map((conversation) => [conversation.id, conversation]));
-    const historicalCountsByIdentity = new Map(historicalIdentityCounts.map((group) => [
-      exactMirrorIdentityKey({
-        lineOfficialAccountId: group.lineOfficialAccountId,
-        sourceEventId: group.sourceEventId,
-      }),
-      group._count._all,
-    ]));
-    const historicalRows = historicalIdentityCounts
-      .filter((group) => group._count._all === 1)
-      .map((group) => ({
-        lineOfficialAccountId: group.lineOfficialAccountId,
-        sourceEventId: group.sourceEventId,
-      }));
-    const historicalMessages = historicalRows.length > 0
-      ? await this.prisma.historicalTimelineMessage.findMany({
-          where: {
-            OR: historicalRows.map((identity) => ({
-              lineOfficialAccountId: identity.lineOfficialAccountId,
-              sourceEventId: identity.sourceEventId,
-            })),
-          },
-          select: {
-            storeId: true,
-            lineOfficialAccountId: true,
-            lineChatUserId: true,
-            sourceEventId: true,
-            direction: true,
-            text: true,
-            sentAt: true,
-          },
-        })
-      : [];
-    const historicalByIdentity = new Map(historicalMessages.map((message) => [
-      exactMirrorIdentityKey({
-        lineOfficialAccountId: message.lineOfficialAccountId,
-        sourceEventId: message.sourceEventId,
-      }),
-      message,
-    ]));
+    const historicalByIdentity = new Map<string, typeof historicalMessages>();
+    for (const historical of historicalMessages) {
+      const sourceEventId = historical.sourceEventId.replace(/^line-chat-manager:/u, "");
+      const key = exactMirrorIdentityKey({
+        lineOfficialAccountId: historical.lineOfficialAccountId,
+        sourceEventId,
+      });
+      const matches = historicalByIdentity.get(key) ?? [];
+      matches.push(historical);
+      historicalByIdentity.set(key, matches);
+    }
 
     const crosswalkRequirements = manifest.rows.filter((row) => {
       const conversation = conversationById.get(row.canonicalConversationId);
@@ -551,6 +544,7 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
       oaId: string;
       rows: MirrorRow[];
       conversationByChatId: Map<string, string>;
+      strictNonTextDuplicateGuard?: boolean;
     }>();
     const destinationByChat = new Map<string, string>();
     const ambiguousManifestChats = new Set<string>();
@@ -575,6 +569,10 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
 
       if (!exactMirrorRawRowMatches(raw, expected)) {
         classify("newConflict", "RAW_SOURCE_PAYLOAD_OR_IDENTITY_CHANGED");
+        continue;
+      }
+      if ((rawOasBySourceId.get(expected.sourceEventId)?.size ?? 0) !== expected.rawSourceIdOaCount) {
+        classify("newHold", "RAW_SOURCE_ID_OA_CARDINALITY_CHANGED");
         continue;
       }
       const chatKey = `${expected.lineOfficialAccountId}\u0000${expected.lineChatUserId}`;
@@ -623,18 +621,22 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
         }
       }
 
-      const historicalCount = historicalCountsByIdentity.get(identityKey) ?? 0;
-      if (historicalCount > 1) {
+      const historicalCandidates = historicalByIdentity.get(identityKey) ?? [];
+      if (historicalCandidates.length > 1) {
         classify("newConflict", "DUPLICATE_HISTORICAL_SOURCE_IDENTITY");
         continue;
       }
-      const historical = historicalByIdentity.get(identityKey);
+      const historical = historicalCandidates[0];
       if (historical) {
+        const historicalType = historical.sourceEventType?.trim().toLowerCase();
+        const historicalPayloadMatches = expected.kind === "MEDIA"
+          ? historicalType === expected.messageType
+          : historical.text === raw.text;
         if (
           historical.storeId !== expected.storeId
           || historical.lineChatUserId !== expected.lineChatUserId
           || historical.direction !== MessageDirection.OUTBOUND
-          || historical.text !== raw.text
+          || !historicalPayloadMatches
           || historical.sentAt.getTime() !== expected.sentAt.getTime()
         ) {
           classify("newConflict", "HISTORICAL_OVERLAP_PAYLOAD_OR_DESTINATION_CONFLICT");
@@ -643,7 +645,10 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
         result.historicalOverlap += 1;
       }
 
-      const canonicalCandidates = await this.findExactCanonicals(expected.sourceEventId);
+      const canonicalCandidates = await this.findExactCanonicals(
+        expected.sourceEventId,
+        expected.lineOfficialAccountId,
+      );
       if (canonicalCandidates.length > 1) {
         classify("newConflict", "MULTIPLE_CANONICAL_SOURCE_IDENTITY_FORMS");
         continue;
@@ -653,8 +658,9 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
         const matches = canonical.conversationId === expected.canonicalConversationId
           && canonical.direction === MessageDirection.OUTBOUND
           && canonical.deliveryStatus === MessageDeliveryStatus.DELIVERED
-          && canonical.messageType === MessageType.TEXT
-          && canonical.originalText === raw.text
+          && canonical.messageType === canonicalMessageTypeFromMirror(raw.messageType)
+          && canonical.originalText === mirrorCanonicalText(raw)
+          && (canonical.messageType !== MessageType.FILE || canonical.fileName === raw.fileName)
           && canonical.sentAt.getTime() === expected.sentAt.getTime();
         if (!matches) {
           classify("newConflict", "EXISTING_CANONICAL_IDENTITY_PAYLOAD_OR_DESTINATION_CONFLICT");
@@ -672,7 +678,11 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
       }
 
       const mirrorRow = raw as MirrorRow;
-      const contentTime = await this.findContentTimeDuplicate(expected.canonicalConversationId, mirrorRow);
+      const contentTime = await this.findContentTimeDuplicate(
+        expected.canonicalConversationId,
+        mirrorRow,
+        expected.kind === "MEDIA",
+      );
       if (contentTime.length > 0) {
         classify("newHold", "CANONICAL_CONTENT_TIME_NEAR_MATCH_REQUIRES_REVIEW");
         continue;
@@ -687,6 +697,7 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
           oaId: expected.lineOfficialAccountId,
           rows: [],
           conversationByChatId: new Map<string, string>(),
+          strictNonTextDuplicateGuard: expected.kind === "MEDIA",
         };
         safeRowsByStore.set(groupKey, group);
       }
@@ -717,6 +728,7 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
           oaId: scope.oaId,
           rows: scope.rows,
           conversationByChatId: scope.conversationByChatId,
+          strictNonTextDuplicateGuard: scope.strictNonTextDuplicateGuard,
         },
       ));
     }
@@ -746,6 +758,7 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
           oaId: scope.oaId,
           rows: scope.rows,
           conversationByChatId: scope.conversationByChatId,
+          strictNonTextDuplicateGuard: scope.strictNonTextDuplicateGuard,
         },
       ));
     }
@@ -1023,7 +1036,10 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
           continue;
         }
 
-        const exact = await this.findExactCanonical(row.managerMessageId);
+        const exact = await this.findExactCanonical(
+          row.managerMessageId,
+          exactScope?.oaId,
+        );
         if (exact) {
           if (exact.conversationId !== mapping.conversationId
             || (exactScope && !this.canonicalMatchesMirrorRow(exact, row))) {
@@ -1052,7 +1068,11 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
           continue;
         }
 
-        const contentTime = await this.findContentTimeDuplicate(mapping.conversationId, row);
+        const contentTime = await this.findContentTimeDuplicate(
+          mapping.conversationId,
+          row,
+          exactScope?.strictNonTextDuplicateGuard ?? false,
+        );
         if (exactScope && contentTime.length > 0) {
           result.failed += 1;
           await this.markMirror(row.id, {
@@ -1497,6 +1517,7 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
 
   private async findExactCanonical(
     managerMessageId: string,
+    oaId?: string,
   ): Promise<{
     id: string;
     conversationId: string;
@@ -1505,15 +1526,12 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
     deliveryStatus: MessageDeliveryStatus;
     messageType: MessageType;
     originalText: string;
+    fileName: string | null;
     sentAt: Date;
     conversation: { storeId: string | null; lineOfficialAccountId: string | null };
   } | null> {
     return this.prisma.message.findFirst({
-      where: {
-        externalMessageId: {
-          in: [managerMessageId, mirrorCanonicalExternalId(managerMessageId)],
-        },
-      },
+      where: this.exactCanonicalIdentityWhere(managerMessageId, oaId),
       select: {
         id: true,
         conversationId: true,
@@ -1522,6 +1540,7 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
         deliveryStatus: true,
         messageType: true,
         originalText: true,
+        fileName: true,
         sentAt: true,
         conversation: { select: { storeId: true, lineOfficialAccountId: true } },
       },
@@ -1530,6 +1549,7 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
 
   private async findExactCanonicals(
     managerMessageId: string,
+    oaId: string,
   ): Promise<Array<{
     id: string;
     conversationId: string;
@@ -1538,14 +1558,11 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
     deliveryStatus: MessageDeliveryStatus;
     messageType: MessageType;
     originalText: string;
+    fileName: string | null;
     sentAt: Date;
   }>> {
     return this.prisma.message.findMany({
-      where: {
-        externalMessageId: {
-          in: [managerMessageId, mirrorCanonicalExternalId(managerMessageId)],
-        },
-      },
+      where: this.exactCanonicalIdentityWhere(managerMessageId, oaId),
       orderBy: [{ externalMessageId: "asc" }, { id: "asc" }],
       take: 3,
       select: {
@@ -1556,9 +1573,36 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
         deliveryStatus: true,
         messageType: true,
         originalText: true,
+        fileName: true,
         sentAt: true,
       },
     });
+  }
+
+  private exactCanonicalIdentityWhere(
+    managerMessageId: string,
+    oaId?: string,
+  ): Prisma.MessageWhereInput {
+    const identities = [managerMessageId, mirrorCanonicalExternalId(managerMessageId)];
+    if (!oaId) return { externalMessageId: { in: identities } };
+    const identityFilters: Prisma.MessageWhereInput[] = [
+      { externalMessageId: { in: identities } },
+    ];
+    for (const identity of identities) {
+      identityFilters.push({
+        AND: [
+          { conversation: { lineOfficialAccountId: oaId } },
+          { rawPayload: { path: ["providerMessageId"], equals: identity } },
+        ],
+      });
+      identityFilters.push({
+        AND: [
+          { conversation: { lineOfficialAccountId: oaId } },
+          { rawPayload: { path: ["managerMessageId"], equals: identity } },
+        ],
+      });
+    }
+    return { OR: identityFilters };
   }
 
   private canonicalMatchesMirrorRow(
@@ -1568,6 +1612,7 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
       deliveryStatus: MessageDeliveryStatus;
       messageType: MessageType;
       originalText: string;
+      fileName: string | null;
       sentAt: Date;
     },
     row: MirrorRow,
@@ -1576,12 +1621,14 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
       && canonical.deliveryStatus === MessageDeliveryStatus.DELIVERED
       && canonical.messageType === canonicalMessageTypeFromMirror(row.messageType)
       && canonical.originalText === mirrorCanonicalText(row)
+      && (canonical.messageType !== MessageType.FILE || canonical.fileName === row.fileName)
       && canonical.sentAt.getTime() === row.sentAt.getTime();
   }
 
   private async findContentTimeDuplicate(
     conversationId: string,
     row: MirrorRow,
+    strictNonTextGuard = false,
   ): Promise<Array<{ id: string }>> {
     const direction = row.direction === LineChatMirrorDirection.INBOUND
       ? MessageDirection.INBOUND
@@ -1598,7 +1645,15 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
       },
     };
 
-    if (messageType === MessageType.TEXT && row.text !== null) {
+    if (
+      strictNonTextGuard
+      && (messageType === MessageType.IMAGE
+        || messageType === MessageType.STICKER
+        || messageType === MessageType.FILE)
+    ) {
+      // An exact media manifest has no canonical media-byte comparator. A
+      // same-type, same-direction near-time row therefore fails closed.
+    } else if (messageType === MessageType.TEXT && row.text !== null) {
       where.originalText = row.text;
     } else if (messageType === MessageType.FILE && row.fileName) {
       where.fileName = row.fileName;
