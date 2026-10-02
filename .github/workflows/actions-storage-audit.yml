@@ -1,4 +1,4 @@
-name: Actions Storage Audit
+name: Actions Storage Cleanup
 
 on:
   push:
@@ -6,24 +6,29 @@ on:
       - chore/actions-storage-cleanup-20261003
     paths:
       - ".github/workflows/actions-storage-audit.yml"
-  workflow_dispatch:
 
 permissions:
-  actions: read
+  actions: write
   contents: read
 
 jobs:
-  audit:
-    name: Audit Actions artifacts
+  cleanup:
+    name: Delete stale QA artifacts
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Inventory artifacts
+      - name: Delete identified stale artifacts and verify
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
+
+          DELETE_IDS=(10345207639 10347501242 10347632979)
+          for id in "${DELETE_IDS[@]}"; do
+            echo "Deleting artifact $id"
+            gh api --method DELETE "/repos/${GITHUB_REPOSITORY}/actions/artifacts/$id"
+          done
 
           gh api --paginate --slurp "/repos/${GITHUB_REPOSITORY}/actions/artifacts?per_page=100" > /tmp/pages.json
           jq '[.[].artifacts[]]' /tmp/pages.json > /tmp/artifacts.json
@@ -32,36 +37,20 @@ jobs:
           BYTES="$(jq '[.[].size_in_bytes] | add // 0' /tmp/artifacts.json)"
           MIB="$(awk -v b="$BYTES" 'BEGIN { printf "%.2f", b/1024/1024 }')"
 
-          echo "ARTIFACT_COUNT=$COUNT"
-          echo "ARTIFACT_BYTES=$BYTES"
-          echo "ARTIFACT_MIB=$MIB"
+          echo "REMAINING_ARTIFACT_COUNT=$COUNT"
+          echo "REMAINING_ARTIFACT_BYTES=$BYTES"
+          echo "REMAINING_ARTIFACT_MIB=$MIB"
 
           {
-            echo "# GitHub Actions artifact storage audit"
+            echo "# Actions storage cleanup"
             echo
-            echo "- Artifact count: **$COUNT**"
-            echo "- Current artifact bytes: **$BYTES**"
-            echo "- Current artifact size: **$MIB MiB**"
+            echo "- Deleted stale artifact IDs: **${DELETE_IDS[*]}**"
+            echo "- Remaining artifacts: **$COUNT**"
+            echo "- Remaining artifact storage: **$MIB MiB**"
             echo
-            echo "## Largest artifacts"
-            echo
-            echo "| Size MiB | Created (UTC) | Expires (UTC) | Artifact | ID |"
-            echo "|---:|---|---|---|---:|"
-            jq -r 'sort_by(.size_in_bytes) | reverse | .[:30][] | [((.size_in_bytes/1048576)*100|round/100), .created_at, .expires_at, .name, .id] | @tsv' /tmp/artifacts.json |
+            echo "## Remaining artifacts"
+            jq -r '.[] | [((.size_in_bytes/1048576)*100|round/100), .created_at, .expires_at, .name, .id] | @tsv' /tmp/artifacts.json |
               while IFS=$'\t' read -r size created expires name id; do
-                printf '| %s | %s | %s | %s | %s |\n' "$size" "$created" "$expires" "$name" "$id"
+                printf -- '- %s MiB | %s | %s | id=%s\n' "$size" "$created" "$name" "$id"
               done
-
-            echo
-            echo "## Age buckets"
-            echo
-            NOW="$(date -u +%s)"
-            for DAYS in 1 3 7 14 30 60 90; do
-              CUTOFF="$(date -u -d "$DAYS days ago" +%s)"
-              STATS="$(jq --argjson cutoff "$CUTOFF" '[.[] | select((.created_at | fromdateiso8601) < $cutoff)] | {count:length, bytes:([.[].size_in_bytes] | add // 0)}' /tmp/artifacts.json)"
-              C="$(jq -r '.count' <<<"$STATS")"
-              B="$(jq -r '.bytes' <<<"$STATS")"
-              M="$(awk -v b="$B" 'BEGIN { printf "%.2f", b/1024/1024 }')"
-              echo "- Older than $DAYS day(s): **$C artifacts / $M MiB**"
-            done
           } | tee -a "$GITHUB_STEP_SUMMARY"
