@@ -522,6 +522,18 @@ html[data-theme="dark"] :not(button).text-white[class~="dark:bg-[var(--app-accen
   color: var(--app-accent-contrast);
 }
 
+/* Buttons that are LINE green in light mode and switch to the accent only in dark
+   mode (dark:bg-[var(--app-accent)]). Light mode is untouched. */
+html[data-theme="dark"] button.text-white[class~="dark:bg-[var(--app-accent)]"]:not(:disabled, [aria-disabled="true"]) {
+  color: var(--app-accent-contrast);
+}
+
+html[data-theme="dark"] button.text-white[class~="dark:bg-[var(--app-accent)]"]:is(:disabled, [aria-disabled="true"]) {
+  background: var(--button-primary-disabled-bg);
+  color: var(--button-primary-disabled-text);
+  opacity: 1;
+}
+
 .app-button-secondary {
   background: var(--button-secondary-background);
   border-color: var(--border);

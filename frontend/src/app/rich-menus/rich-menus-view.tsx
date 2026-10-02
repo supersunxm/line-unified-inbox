@@ -758,7 +758,7 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
               type="button"
               onClick={handleSaveTemplate}
               disabled={savingTemplate}
-              className="inline-flex items-center justify-center rounded bg-[#06C755] hover:bg-[#05b34c] text-white px-5 py-2 text-xs font-bold transition shadow-xs disabled:opacity-50"
+              className="inline-flex items-center justify-center rounded bg-[#06C755] hover:bg-[#05b34c] text-white px-5 py-2 text-xs font-bold transition shadow-xs disabled:opacity-50 dark:bg-[var(--app-accent)] dark:hover:bg-[var(--app-accent-hover)]"
             >
               {savingTemplate ? t.saving : t.saveDraft}
             </button>
