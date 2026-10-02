@@ -1,3 +1,4 @@
+import { canonicalSourceIds } from "./canonical-source-identity";
 export type ReplyState = "REPLIED" | "NOT_REPLIED" | "AMBIGUOUS";
 
 export type ReplyStateAmbiguityReason =
@@ -129,7 +130,7 @@ export function normalizeCanonicalReplyMessage(message: CanonicalReplyMessage): 
   return {
     stableId: "canonical:" + message.id,
     source: "CANONICAL",
-    durableIds: sourceIdKeys(message.externalMessageId),
+    durableIds: canonicalSourceIds(message).flatMap(sourceIdKeys),
     direction: message.direction,
     sentAt: message.sentAt,
     actor,
@@ -188,7 +189,11 @@ function mergeDuplicate(left: NormalizedReplyEvent, right: NormalizedReplyEvent)
     canonical.classificationConflict ||
     other.classificationConflict ||
     canonical.direction !== other.direction ||
-    canonical.sentAt.getTime() !== other.sentAt.getTime() ||
+    (canonical.sentAt.getTime() !== other.sentAt.getTime()
+      && !(hasDurableOverlap(canonical, other)
+        && canonical.textFingerprint !== null
+        && canonical.textFingerprint === other.textFingerprint
+        && Math.abs(canonical.sentAt.getTime() - other.sentAt.getTime()) <= 1_000)) ||
     actorConflict ||
     eventKindConflict;
 

@@ -22,6 +22,16 @@ import {
 import { isLineChatUserId } from "./line-chat-chat-discovery";
 import { configuredLineChatMirrorStoreCodes } from "./line-chat-mirror.service";
 import { selectLineChatStoreOa } from "./line-chat-store-oa-selector";
+import {
+  approvedExactMirrorManifest,
+  EXACT_MIRROR_MANIFEST_MAX_ROWS,
+  POST_LIVE_AUDIT_START_AT,
+  exactMirrorIdentityKey,
+  exactMirrorIdentityWhere,
+  exactMirrorRawRowMatches,
+  exactMirrorRawRowMatchesPriorState,
+  parseExactMirrorManifestCsv,
+} from "./line-chat-mirror-exact-manifest";
 
 const DEFAULT_INTERVAL_MS = 60_000;
 const MIN_INTERVAL_MS = 30_000;
@@ -58,7 +68,7 @@ type MappingResult =
   | {
       status: "MAPPED";
       conversationId: string;
-      source: "DIRECT_LINE_CHAT_USER_ID" | "EXACT_INBOUND_MESSAGE_ID" | "VERIFIED_WEBHOOK_USER_ID";
+      source: "DIRECT_LINE_CHAT_USER_ID" | "EXACT_INBOUND_MESSAGE_ID" | "VERIFIED_WEBHOOK_USER_ID" | "EXACT_MANIFEST_DESTINATION";
     }
   | { status: "UNMAPPED"; reason: string }
   | { status: "AMBIGUOUS"; reason: string };
@@ -99,6 +109,32 @@ export interface LineChatMirrorReconcileCycleResult {
   failed: number;
   durationMs: number;
 }
+
+export type ExactMirrorManifestExecutionResult = {
+  manifestRows: number;
+  manifestSha256: string;
+  storeCount: number;
+  rawRowsFound: number;
+  alreadyCanonical: number;
+  alreadyRepresentedEquivalent: number;
+  historicalOverlap: number;
+  stillSafeToApply: number;
+  newConflict: number;
+  newHold: number;
+  missingRawSource: number;
+  outsideManifestConsidered: 0;
+  unexplained: number;
+  writes: number;
+  reconcilerResults: LineChatMirrorReconcileCycleResult[];
+  reasons: Record<string, number>;
+};
+
+type ExactReconcileScope = {
+  storeId: string;
+  oaId: string;
+  rows: MirrorRow[];
+  conversationByChatId: ReadonlyMap<string, string>;
+};
 
 function jsonObject(value: Prisma.JsonValue | null | undefined): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -321,22 +357,426 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
     }
   }
 
+  /**
+   * Executes only source identities in a digest-verified immutable manifest.
+   * The Raw Mirror query is OA-scoped and uses the table's unique
+   * (lineOfficialAccountId, managerMessageId) identity. It never calls runCycle
+   * and never performs a time-window candidate scan.
+   */
+  public async reconcileExactManifestCsv(input: {
+    bytes: Uint8Array;
+    apply?: boolean;
+  }): Promise<ExactMirrorManifestExecutionResult> {
+    const approved = approvedExactMirrorManifest(input.bytes);
+    return this.reconcileExactManifestCsvWithExpectedHash(
+      input.bytes,
+      approved.sha256,
+      input.apply ?? false,
+      approved.rows,
+      approved.stores,
+    );
+  }
+
+  private async reconcileExactManifestCsvWithExpectedHash(
+    bytes: Uint8Array,
+    expectedSha256: string,
+    apply: boolean,
+    expectedRows: number = EXACT_MIRROR_MANIFEST_MAX_ROWS,
+    expectedStores: number = 24,
+  ): Promise<ExactMirrorManifestExecutionResult> {
+    const manifest = parseExactMirrorManifestCsv(bytes, expectedSha256);
+    if (manifest.rows.length !== expectedRows || manifest.storeCount !== expectedStores) {
+      throw new Error("EXACT_MIRROR_MANIFEST_EXPECTED_490_ROWS_ACROSS_24_STORES");
+    }
+
+    const result: ExactMirrorManifestExecutionResult = {
+      manifestRows: manifest.rows.length,
+      manifestSha256: manifest.sha256,
+      storeCount: manifest.storeCount,
+      rawRowsFound: 0,
+      alreadyCanonical: 0,
+      alreadyRepresentedEquivalent: 0,
+      historicalOverlap: 0,
+      stillSafeToApply: 0,
+      newConflict: 0,
+      newHold: 0,
+      missingRawSource: 0,
+      outsideManifestConsidered: 0,
+      unexplained: 0,
+      writes: 0,
+      reconcilerResults: [],
+      reasons: {},
+    };
+    const identities = manifest.rows.map((row) => ({
+      lineOfficialAccountId: row.lineOfficialAccountId,
+      sourceEventId: row.sourceEventId,
+    }));
+    const rawRows = await this.prisma.lineChatMirrorMessage.findMany({
+      where: exactMirrorIdentityWhere(identities),
+      select: {
+        id: true,
+        lineOfficialAccountId: true,
+        lineChatUserId: true,
+        managerMessageId: true,
+        eventType: true,
+        direction: true,
+        messageType: true,
+        text: true,
+        fileName: true,
+        bizId: true,
+        ownerName: true,
+        sentAt: true,
+        reconcileStatus: true,
+        reconcileAttempts: true,
+      },
+    });
+    result.rawRowsFound = rawRows.length;
+    if (rawRows.length > manifest.rows.length) {
+      throw new Error("EXACT_MIRROR_MANIFEST_RAW_CANDIDATE_LIMIT_EXCEEDED");
+    }
+
+    const rawByIdentity = new Map(rawRows.map((row) => [exactMirrorIdentityKey({
+      lineOfficialAccountId: row.lineOfficialAccountId,
+      sourceEventId: row.managerMessageId,
+    }), row]));
+    const oaIds = [...new Set(manifest.rows.map((row) => row.lineOfficialAccountId))];
+    const conversationIds = [...new Set(manifest.rows.map((row) => row.canonicalConversationId))];
+    const [oas, conversations, historicalIdentityCounts] = await Promise.all([
+      this.prisma.lineOfficialAccount.findMany({
+        where: { id: { in: oaIds } },
+        select: {
+          id: true,
+          storeId: true,
+          accountType: true,
+          isActive: true,
+          archivedAt: true,
+          store: {
+            select: {
+              id: true,
+              code: true,
+              isActive: true,
+              archivedAt: true,
+              storeMaster: { select: { externalStoreId: true } },
+            },
+          },
+        },
+      }),
+      this.prisma.conversation.findMany({
+        where: { id: { in: conversationIds } },
+        select: { id: true, storeId: true, lineOfficialAccountId: true, lineChatUserId: true },
+      }),
+      this.prisma.historicalTimelineMessage.groupBy({
+        by: ["lineOfficialAccountId", "sourceEventId"],
+        where: {
+          OR: manifest.rows.map((row) => ({
+            lineOfficialAccountId: row.lineOfficialAccountId,
+            sourceEventId: row.sourceEventId,
+          })),
+        },
+        _count: { _all: true },
+      }),
+    ]);
+    const oaById = new Map(oas.map((oa) => [oa.id, oa]));
+    const conversationById = new Map(conversations.map((conversation) => [conversation.id, conversation]));
+    const historicalCountsByIdentity = new Map(historicalIdentityCounts.map((group) => [
+      exactMirrorIdentityKey({
+        lineOfficialAccountId: group.lineOfficialAccountId,
+        sourceEventId: group.sourceEventId,
+      }),
+      group._count._all,
+    ]));
+    const historicalRows = historicalIdentityCounts
+      .filter((group) => group._count._all === 1)
+      .map((group) => ({
+        lineOfficialAccountId: group.lineOfficialAccountId,
+        sourceEventId: group.sourceEventId,
+      }));
+    const historicalMessages = historicalRows.length > 0
+      ? await this.prisma.historicalTimelineMessage.findMany({
+          where: {
+            OR: historicalRows.map((identity) => ({
+              lineOfficialAccountId: identity.lineOfficialAccountId,
+              sourceEventId: identity.sourceEventId,
+            })),
+          },
+          select: {
+            storeId: true,
+            lineOfficialAccountId: true,
+            lineChatUserId: true,
+            sourceEventId: true,
+            direction: true,
+            text: true,
+            sentAt: true,
+          },
+        })
+      : [];
+    const historicalByIdentity = new Map(historicalMessages.map((message) => [
+      exactMirrorIdentityKey({
+        lineOfficialAccountId: message.lineOfficialAccountId,
+        sourceEventId: message.sourceEventId,
+      }),
+      message,
+    ]));
+
+    const crosswalkRequirements = manifest.rows.filter((row) => {
+      const conversation = conversationById.get(row.canonicalConversationId);
+      return Boolean(conversation) && conversation?.lineChatUserId !== row.lineChatUserId;
+    });
+    const crosswalks = crosswalkRequirements.length > 0
+      ? await this.prisma.historicalConversationCrosswalk.findMany({
+          where: {
+            OR: crosswalkRequirements.map((row) => ({
+              storeId: row.storeId,
+              lineOfficialAccountId: row.lineOfficialAccountId,
+              historicalLineChatUserId: row.lineChatUserId,
+            })),
+          },
+          select: {
+            storeId: true,
+            lineOfficialAccountId: true,
+            historicalLineChatUserId: true,
+            classification: true,
+            canonicalConversationId: true,
+          },
+        })
+      : [];
+    const crosswalkByIdentity = new Map(crosswalks.map((crosswalk) => [
+      `${crosswalk.storeId}\u0000${crosswalk.lineOfficialAccountId}\u0000${crosswalk.historicalLineChatUserId}`,
+      crosswalk,
+    ]));
+
+    const safeRowsByStore = new Map<string, {
+      storeId: string;
+      storeCode: string;
+      oaId: string;
+      rows: MirrorRow[];
+      conversationByChatId: Map<string, string>;
+    }>();
+    const destinationByChat = new Map<string, string>();
+    const ambiguousManifestChats = new Set<string>();
+    for (const expected of manifest.rows) {
+      const chatKey = `${expected.lineOfficialAccountId}\u0000${expected.lineChatUserId}`;
+      const previous = destinationByChat.get(chatKey);
+      if (previous && previous !== expected.canonicalConversationId) ambiguousManifestChats.add(chatKey);
+      else destinationByChat.set(chatKey, expected.canonicalConversationId);
+    }
+    const classify = (kind: "alreadyCanonical" | "alreadyRepresentedEquivalent" | "newConflict" | "newHold" | "missingRawSource" | "stillSafeToApply", reason?: string) => {
+      result[kind] += 1;
+      if (reason) result.reasons[reason] = (result.reasons[reason] ?? 0) + 1;
+    };
+
+    for (const expected of manifest.rows) {
+      const identityKey = exactMirrorIdentityKey(expected);
+      const raw = rawByIdentity.get(identityKey);
+      if (!raw) {
+        classify("missingRawSource", "MANIFEST_RAW_IDENTITY_NOT_FOUND");
+        continue;
+      }
+
+      if (!exactMirrorRawRowMatches(raw, expected)) {
+        classify("newConflict", "RAW_SOURCE_PAYLOAD_OR_IDENTITY_CHANGED");
+        continue;
+      }
+      const chatKey = `${expected.lineOfficialAccountId}\u0000${expected.lineChatUserId}`;
+      if (ambiguousManifestChats.has(chatKey)) {
+        classify("newHold", "MANIFEST_CHAT_HAS_MULTIPLE_CANONICAL_DESTINATIONS");
+        continue;
+      }
+
+      const oa = oaById.get(expected.lineOfficialAccountId);
+      const store = oa?.store;
+      if (
+        !oa
+        || oa.accountType !== LineAccountType.STORE
+        || !oa.isActive
+        || oa.archivedAt !== null
+        || oa.storeId !== expected.storeId
+        || !store
+        || store.id !== expected.storeId
+        || !store.isActive
+        || store.archivedAt !== null
+        || (store.code !== expected.storeCode && store.storeMaster?.externalStoreId !== expected.storeCode)
+      ) {
+        classify("newHold", "CURRENT_OA_STORE_MAPPING_NOT_PROVEN");
+        continue;
+      }
+
+      const conversation = conversationById.get(expected.canonicalConversationId);
+      if (
+        !conversation
+        || conversation.storeId !== expected.storeId
+        || conversation.lineOfficialAccountId !== expected.lineOfficialAccountId
+      ) {
+        classify("newHold", "CANONICAL_DESTINATION_STORE_OR_OA_MISMATCH");
+        continue;
+      }
+      if (conversation.lineChatUserId !== expected.lineChatUserId) {
+        const crosswalkKey = `${expected.storeId}\u0000${expected.lineOfficialAccountId}\u0000${expected.lineChatUserId}`;
+        const crosswalk = crosswalkByIdentity.get(crosswalkKey);
+        if (
+          !crosswalk
+          || crosswalk.classification !== "LINK_SAFE"
+          || crosswalk.canonicalConversationId !== expected.canonicalConversationId
+        ) {
+          classify("newHold", "CANONICAL_DESTINATION_IDENTITY_NOT_PROVEN");
+          continue;
+        }
+      }
+
+      const historicalCount = historicalCountsByIdentity.get(identityKey) ?? 0;
+      if (historicalCount > 1) {
+        classify("newConflict", "DUPLICATE_HISTORICAL_SOURCE_IDENTITY");
+        continue;
+      }
+      const historical = historicalByIdentity.get(identityKey);
+      if (historical) {
+        if (
+          historical.storeId !== expected.storeId
+          || historical.lineChatUserId !== expected.lineChatUserId
+          || historical.direction !== MessageDirection.OUTBOUND
+          || historical.text !== raw.text
+          || historical.sentAt.getTime() !== expected.sentAt.getTime()
+        ) {
+          classify("newConflict", "HISTORICAL_OVERLAP_PAYLOAD_OR_DESTINATION_CONFLICT");
+          continue;
+        }
+        result.historicalOverlap += 1;
+      }
+
+      const canonicalCandidates = await this.findExactCanonicals(expected.sourceEventId);
+      if (canonicalCandidates.length > 1) {
+        classify("newConflict", "MULTIPLE_CANONICAL_SOURCE_IDENTITY_FORMS");
+        continue;
+      }
+      const canonical = canonicalCandidates[0];
+      if (canonical) {
+        const matches = canonical.conversationId === expected.canonicalConversationId
+          && canonical.direction === MessageDirection.OUTBOUND
+          && canonical.deliveryStatus === MessageDeliveryStatus.DELIVERED
+          && canonical.messageType === MessageType.TEXT
+          && canonical.originalText === raw.text
+          && canonical.sentAt.getTime() === expected.sentAt.getTime();
+        if (!matches) {
+          classify("newConflict", "EXISTING_CANONICAL_IDENTITY_PAYLOAD_OR_DESTINATION_CONFLICT");
+        } else if (canonical.externalMessageId === expected.sourceEventId) {
+          classify("alreadyRepresentedEquivalent");
+        } else {
+          classify("alreadyCanonical");
+        }
+        continue;
+      }
+
+      if (!exactMirrorRawRowMatchesPriorState(raw, expected)) {
+        classify("newHold", "RAW_RECONCILE_STATE_CHANGED_WITHOUT_CANONICAL_REPRESENTATION");
+        continue;
+      }
+
+      const mirrorRow = raw as MirrorRow;
+      const contentTime = await this.findContentTimeDuplicate(expected.canonicalConversationId, mirrorRow);
+      if (contentTime.length > 0) {
+        classify("newHold", "CANONICAL_CONTENT_TIME_NEAR_MATCH_REQUIRES_REVIEW");
+        continue;
+      }
+
+      const groupKey = `${expected.storeId}\u0000${expected.lineOfficialAccountId}`;
+      let group = safeRowsByStore.get(groupKey);
+      if (!group) {
+        group = {
+          storeId: expected.storeId,
+          storeCode: expected.storeCode,
+          oaId: expected.lineOfficialAccountId,
+          rows: [],
+          conversationByChatId: new Map<string, string>(),
+        };
+        safeRowsByStore.set(groupKey, group);
+      }
+      group.conversationByChatId.set(expected.lineChatUserId, expected.canonicalConversationId);
+      group.rows.push(raw);
+      classify("stillSafeToApply");
+    }
+
+    result.unexplained = manifest.rows.length
+      - result.alreadyCanonical
+      - result.alreadyRepresentedEquivalent
+      - result.stillSafeToApply
+      - result.newConflict
+      - result.newHold
+      - result.missingRawSource;
+    if (result.unexplained !== 0) throw new Error("EXACT_MIRROR_MANIFEST_ACCOUNTING_MISMATCH");
+
+    const scopes = [...safeRowsByStore.values()];
+    const dryResults: LineChatMirrorReconcileCycleResult[] = [];
+    for (const scope of scopes) {
+      dryResults.push(await this.reconcileStore(
+        scope.storeCode,
+        new Date(POST_LIVE_AUDIT_START_AT),
+        false,
+        scope.rows.length,
+        {
+          storeId: scope.storeId,
+          oaId: scope.oaId,
+          rows: scope.rows,
+          conversationByChatId: scope.conversationByChatId,
+        },
+      ));
+    }
+    result.reconcilerResults = dryResults;
+
+    const wouldImport = dryResults.reduce((sum, item) => sum + item.wouldImportOutbound, 0);
+    const dryRunFailures = dryResults.reduce((sum, item) => sum + item.failed + item.unmapped + item.ambiguous, 0);
+    if (wouldImport !== result.stillSafeToApply || dryRunFailures !== 0) {
+      result.newHold += result.stillSafeToApply;
+      result.reasons.EXISTING_RECONCILER_DRY_RUN_DID_NOT_CONFIRM_EXACT_SAFE_SET = 1;
+      result.stillSafeToApply = 0;
+      result.unexplained = 0;
+      return result;
+    }
+
+    if (!apply || result.stillSafeToApply === 0) return result;
+
+    const applyResults: LineChatMirrorReconcileCycleResult[] = [];
+    for (const scope of scopes) {
+      applyResults.push(await this.reconcileStore(
+        scope.storeCode,
+        new Date(POST_LIVE_AUDIT_START_AT),
+        true,
+        scope.rows.length,
+        {
+          storeId: scope.storeId,
+          oaId: scope.oaId,
+          rows: scope.rows,
+          conversationByChatId: scope.conversationByChatId,
+        },
+      ));
+    }
+    result.reconcilerResults = applyResults;
+    result.writes = applyResults.reduce((sum, item) => sum + item.importedOutbound, 0);
+    const applyFailures = applyResults.reduce((sum, item) => sum + item.failed + item.unmapped + item.ambiguous, 0);
+    if (result.writes !== result.stillSafeToApply || applyFailures > 0) {
+      result.reasons.APPLY_RESULT_REQUIRES_READ_BACK_REVIEW = Math.max(1, applyFailures);
+    }
+    return result;
+  }
+
   private async reconcileStore(
     storeCode: string,
     since: Date,
     apply: boolean,
     batchSize: number = lineChatMirrorReconcileBatchSize(),
+    exactScope?: ExactReconcileScope,
   ): Promise<LineChatMirrorReconcileCycleResult> {
     const startedAt = Date.now();
     const store = await this.prisma.store.findFirst({
-      where: {
-        isActive: true,
-        archivedAt: null,
-        OR: [
-          { code: storeCode },
-          { storeMaster: { externalStoreId: storeCode } },
-        ],
-      },
+      where: exactScope
+        ? { id: exactScope.storeId, isActive: true, archivedAt: null }
+        : {
+            isActive: true,
+            archivedAt: null,
+            OR: [
+              { code: storeCode },
+              { storeMaster: { externalStoreId: storeCode } },
+            ],
+          },
       select: {
         id: true,
         code: true,
@@ -355,25 +795,33 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
             archivedAt: null,
           },
           orderBy: { updatedAt: "desc" },
-          select: { id: true, name: true, basicId: true },
+          select: { id: true, storeId: true, name: true, basicId: true },
         },
       },
     });
     if (!store) throw new Error("RECONCILE_STORE_NOT_FOUND");
 
-    const oaSelection = selectLineChatStoreOa(
-      store.storeMaster,
-      store.lineOfficialAccounts.map((candidate) => ({
-        id: candidate.id,
-        name: candidate.name,
-        basicId: candidate.basicId,
-      })),
-    );
-    if (!oaSelection.ok) {
+    const oaSelection = exactScope
+      ? null
+      : selectLineChatStoreOa(
+          store.storeMaster,
+          store.lineOfficialAccounts.map((candidate) => ({
+            id: candidate.id,
+            name: candidate.name,
+            basicId: candidate.basicId,
+          })),
+        );
+    if (oaSelection && !oaSelection.ok) {
       throw new Error(`RECONCILE_OA_IDENTITY_${oaSelection.reason}`);
     }
-    const oa = store.lineOfficialAccounts.find((candidate) => candidate.id === oaSelection.oaId);
+    const selectedOaId = exactScope?.oaId ?? (oaSelection?.ok ? oaSelection.oaId : null);
+    const oa = selectedOaId
+      ? store.lineOfficialAccounts.find((candidate) => candidate.id === selectedOaId)
+      : undefined;
     if (!oa) throw new Error("RECONCILE_SELECTED_OA_NOT_FOUND");
+    if (exactScope && (oa.storeId !== exactScope.storeId || oa.id !== exactScope.oaId)) {
+      throw new Error("EXACT_RECONCILE_SCOPE_OA_STORE_MISMATCH");
+    }
 
     const effectiveStoreCode = store.code?.trim()
       || store.storeMaster?.externalStoreId?.trim()
@@ -385,7 +833,7 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
       storeMasterLineId: store.storeMaster?.lineId ?? null,
       lineOfficialAccountId: oa.id,
       lineOfficialAccountName: oa.name,
-      selectionSource: oaSelection.source,
+      selectionSource: exactScope ? "EXACT_MANIFEST" : oaSelection?.ok ? oaSelection.source : null,
     }));
     const rowSelect = {
       id: true,
@@ -405,7 +853,7 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
     // Drain new Manager replies first. This prevents inbound rows waiting for
     // webhook canonicalization from repeatedly occupying the whole batch and
     // starving outbound replies that Store Chats must surface.
-    const pendingOutbound = await this.prisma.lineChatMirrorMessage.findMany({
+    const pendingOutbound = exactScope ? [] : await this.prisma.lineChatMirrorMessage.findMany({
       where: {
         lineOfficialAccountId: oa.id,
         sentAt: { gte: since },
@@ -418,7 +866,7 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
     }) as MirrorRow[];
 
     const remainingAfterOutbound = Math.max(0, batchSize - pendingOutbound.length);
-    const pendingOther = remainingAfterOutbound > 0
+    const pendingOther = !exactScope && remainingAfterOutbound > 0
       ? await this.prisma.lineChatMirrorMessage.findMany({
           where: {
             lineOfficialAccountId: oa.id,
@@ -437,7 +885,7 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
       batchSize - pendingOutbound.length - pendingOther.length,
     );
     const retryNow = Date.now();
-    const retryRows = remainingAfterPending > 0
+    const retryRows = !exactScope && remainingAfterPending > 0
       ? await this.prisma.lineChatMirrorMessage.findMany({
           where: {
             lineOfficialAccountId: oa.id,
@@ -462,7 +910,7 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
         }) as MirrorRow[]
       : [];
 
-    const rows = [...pendingOutbound, ...pendingOther, ...retryRows];
+    const rows = exactScope ? exactScope.rows : [...pendingOutbound, ...pendingOther, ...retryRows];
 
     const result: LineChatMirrorReconcileCycleResult = {
       storeCode: effectiveStoreCode,
@@ -499,7 +947,9 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
       return result;
     }
 
-    const identityEvidence = await this.identityEvidence(oa.id);
+    const identityEvidence = exactScope
+      ? { verified: false, matches: 0, mismatches: 0, validPairs: 0, invalidPairs: 0 }
+      : await this.identityEvidence(oa.id);
     result.identityEquivalenceVerified = identityEvidence.verified;
     result.identityEvidenceMatches = identityEvidence.matches;
     result.identityEvidenceMismatches = identityEvidence.mismatches;
@@ -519,13 +969,24 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
       try {
         let mapping = mappingCache.get(row.lineChatUserId);
         if (!mapping) {
-          mapping = await this.resolveConversation({
-            lineOfficialAccountId: oa.id,
-            storeId: store.id,
-            lineChatUserId: row.lineChatUserId,
-            identityEquivalent: identityEvidence.verified,
-            apply,
-          });
+          if (exactScope) {
+            const destinationId = exactScope.conversationByChatId.get(row.lineChatUserId);
+            mapping = destinationId
+              ? {
+                  status: "MAPPED",
+                  conversationId: destinationId,
+                  source: "EXACT_MANIFEST_DESTINATION",
+                }
+              : { status: "UNMAPPED", reason: "EXACT_MANIFEST_DESTINATION_NOT_FOUND" };
+          } else {
+            mapping = await this.resolveConversation({
+              lineOfficialAccountId: oa.id,
+              storeId: store.id,
+              lineChatUserId: row.lineChatUserId,
+              identityEquivalent: identityEvidence.verified,
+              apply,
+            });
+          }
           mappingCache.set(row.lineChatUserId, mapping);
         }
 
@@ -564,14 +1025,17 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
 
         const exact = await this.findExactCanonical(row.managerMessageId);
         if (exact) {
-          if (exact.conversationId !== mapping.conversationId) {
+          if (exact.conversationId !== mapping.conversationId
+            || (exactScope && !this.canonicalMatchesMirrorRow(exact, row))) {
             result.failed += 1;
             await this.markMirror(row.id, {
               status: LineChatMirrorReconcileStatus.FAILED,
               conversationId: mapping.conversationId,
               messageId: exact.id,
-              source: "EXACT_EXTERNAL_ID_CONFLICT",
-              error: "Manager message ID already belongs to a different canonical conversation.",
+              source: exact.conversationId !== mapping.conversationId
+                ? "EXACT_EXTERNAL_ID_CONFLICT"
+                : "EXACT_EXTERNAL_ID_PAYLOAD_CONFLICT",
+              error: "Existing canonical source identity does not match the exact manifest destination and payload.",
             }, apply);
             continue;
           }
@@ -589,6 +1053,16 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
         }
 
         const contentTime = await this.findContentTimeDuplicate(mapping.conversationId, row);
+        if (exactScope && contentTime.length > 0) {
+          result.failed += 1;
+          await this.markMirror(row.id, {
+            status: LineChatMirrorReconcileStatus.FAILED,
+            conversationId: mapping.conversationId,
+            source: "EXACT_MANIFEST_CONTENT_TIME_CONFLICT",
+            error: "A content/time near-match appeared after exact manifest preflight.",
+          }, apply);
+          continue;
+        }
         if (contentTime.length === 1) {
           result.contentTimeDuplicates += 1;
           await this.markMirror(row.id, {
@@ -683,7 +1157,7 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
 
     if (apply) {
       for (const conversationId of touchedConversationIds) {
-        if (await this.recomputeConversationState(conversationId)) {
+        if (await this.recomputeConversationState(conversationId, !exactScope)) {
           result.conversationsRecomputed += 1;
         }
       }
@@ -1023,15 +1497,86 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
 
   private async findExactCanonical(
     managerMessageId: string,
-  ): Promise<{ id: string; conversationId: string } | null> {
+  ): Promise<{
+    id: string;
+    conversationId: string;
+    externalMessageId: string | null;
+    direction: MessageDirection;
+    deliveryStatus: MessageDeliveryStatus;
+    messageType: MessageType;
+    originalText: string;
+    sentAt: Date;
+    conversation: { storeId: string | null; lineOfficialAccountId: string | null };
+  } | null> {
     return this.prisma.message.findFirst({
       where: {
         externalMessageId: {
           in: [managerMessageId, mirrorCanonicalExternalId(managerMessageId)],
         },
       },
-      select: { id: true, conversationId: true },
+      select: {
+        id: true,
+        conversationId: true,
+        externalMessageId: true,
+        direction: true,
+        deliveryStatus: true,
+        messageType: true,
+        originalText: true,
+        sentAt: true,
+        conversation: { select: { storeId: true, lineOfficialAccountId: true } },
+      },
     });
+  }
+
+  private async findExactCanonicals(
+    managerMessageId: string,
+  ): Promise<Array<{
+    id: string;
+    conversationId: string;
+    externalMessageId: string | null;
+    direction: MessageDirection;
+    deliveryStatus: MessageDeliveryStatus;
+    messageType: MessageType;
+    originalText: string;
+    sentAt: Date;
+  }>> {
+    return this.prisma.message.findMany({
+      where: {
+        externalMessageId: {
+          in: [managerMessageId, mirrorCanonicalExternalId(managerMessageId)],
+        },
+      },
+      orderBy: [{ externalMessageId: "asc" }, { id: "asc" }],
+      take: 3,
+      select: {
+        id: true,
+        conversationId: true,
+        externalMessageId: true,
+        direction: true,
+        deliveryStatus: true,
+        messageType: true,
+        originalText: true,
+        sentAt: true,
+      },
+    });
+  }
+
+  private canonicalMatchesMirrorRow(
+    canonical: {
+      conversationId: string;
+      direction: MessageDirection;
+      deliveryStatus: MessageDeliveryStatus;
+      messageType: MessageType;
+      originalText: string;
+      sentAt: Date;
+    },
+    row: MirrorRow,
+  ): boolean {
+    return canonical.direction === MessageDirection.OUTBOUND
+      && canonical.deliveryStatus === MessageDeliveryStatus.DELIVERED
+      && canonical.messageType === canonicalMessageTypeFromMirror(row.messageType)
+      && canonical.originalText === mirrorCanonicalText(row)
+      && canonical.sentAt.getTime() === row.sentAt.getTime();
   }
 
   private async findContentTimeDuplicate(
@@ -1155,7 +1700,10 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
     });
   }
 
-  private async recomputeConversationState(conversationId: string): Promise<boolean> {
+  private async recomputeConversationState(
+    conversationId: string,
+    assignOwner = true,
+  ): Promise<boolean> {
     const conversation = await this.prisma.conversation.findUnique({
       where: { id: conversationId },
       select: {
@@ -1216,7 +1764,7 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
     const targetFollowUp = humanReply
       ? FollowUpStatus.COMPLETED
       : conversation.followUpStatus;
-    const ownerToAssign = humanReply?.senderUserId && !conversation.ownerUserId
+    const ownerToAssign = assignOwner && humanReply?.senderUserId && !conversation.ownerUserId
       ? humanReply.senderUserId
       : null;
     const latestMessageAt = latestMessage.sentAt > conversation.latestMessageAt

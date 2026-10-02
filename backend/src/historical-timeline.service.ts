@@ -1,3 +1,5 @@
+import { canonicalSourceIds, isCompatibleHistoricalDuplicate } from "./canonical-source-identity";
+import { provenHistoricalSourceAnchorsSql, type HistoricalSourceAnchor } from "./historical-source-anchors";
 import { createHash } from "node:crypto";
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { MessageDirection, MessageDeliveryStatus, MessageType, Prisma } from "@prisma/client";
@@ -390,15 +392,10 @@ export class HistoricalTimelineService {
           AND x."canonicalConversationId" IS NOT NULL
       )`,
       Prisma.sql`NOT EXISTS (
-        SELECT 1
-        FROM public."HistoricalTimelineMessage" h2
-        JOIN public."Message" m
-          ON m."externalMessageId" = h2."sourceEventId"
-          OR m."externalMessageId" = 'line-chat-manager:' || h2."sourceEventId"
-        WHERE h2."storeId" = h."storeId"
-          AND h2."lineOfficialAccountId" = h."lineOfficialAccountId"
-          AND h2."lineChatUserId" = h."lineChatUserId"
-          AND h2."sentAt" >= ${HISTORICAL_TIMELINE_START}
+        SELECT 1 FROM source_anchors anchor
+        WHERE anchor."storeId" = h."storeId"
+          AND anchor."lineOfficialAccountId" = h."lineOfficialAccountId"
+          AND anchor."lineChatUserId" = h."lineChatUserId"
       )`,
     ];
     if (accessibleStoreIds !== null) {
@@ -416,6 +413,7 @@ export class HistoricalTimelineService {
     }
     const whereClause = Prisma.join(filters, " AND ");
     const totalRows = await this.prisma.$queryRaw<Array<{ total: bigint }>>(Prisma.sql`
+      WITH source_anchors AS MATERIALIZED (${provenHistoricalSourceAnchorsSql(HISTORICAL_TIMELINE_START, { storeId: input.storeId })})
       SELECT COUNT(*)::bigint AS total
       FROM (
         SELECT h."storeId", h."lineOfficialAccountId", h."lineChatUserId"
@@ -430,7 +428,7 @@ export class HistoricalTimelineService {
     `);
     const total = Number(totalRows[0]?.total ?? 0n);
     const rows = await this.prisma.$queryRaw<VirtualChatRow[]>(Prisma.sql`
-      WITH chats AS (
+      WITH source_anchors AS MATERIALIZED (${provenHistoricalSourceAnchorsSql(HISTORICAL_TIMELINE_START, { storeId: input.storeId })}), chats AS (
         SELECT h."storeId", h."lineOfficialAccountId", h."lineChatUserId",
           MAX(h."sentAt") AS "latestMessageAt", COUNT(*)::int AS "messageCount"
         FROM public."HistoricalTimelineMessage" h
@@ -547,6 +545,12 @@ export class HistoricalTimelineService {
       select: { id: true },
     });
     if (canonical) throw new NotFoundException("Conversation is available in the current chat list");
+    const anchors = await this.prisma.$queryRaw<HistoricalSourceAnchor[]>(
+      provenHistoricalSourceAnchorsSql(HISTORICAL_TIMELINE_START, { storeId: record.storeId, lineOfficialAccountId }),
+    );
+    if (anchors.some((anchor) => anchor.lineChatUserId === lineChatUserId)) {
+      throw new NotFoundException("Conversation is available in the current chat list");
+    }
     const [count, customer] = await Promise.all([
       this.prisma.historicalTimelineMessage.count({
         where: { storeId: record.storeId, lineOfficialAccountId, lineChatUserId, sentAt: { gte: HISTORICAL_TIMELINE_START } },
@@ -743,13 +747,7 @@ export class HistoricalTimelineService {
         messages: [],
       };
       const duplicate = chat.messages.some((current) => {
-        const sameSource = current.externalMessageId === message.sourceEventId
-          || current.externalMessageId === `line-chat-manager:${message.sourceEventId}`;
-        return sameSource
-          && current.messageType === MessageType.TEXT
-          && current.direction === message.direction
-          && current.sentAt.getTime() === message.sentAt.getTime()
-          && current.text === message.text;
+        return isCompatibleHistoricalDuplicate(current, message);
       });
       if (!duplicate) {
         chat.messages.push({
@@ -1015,6 +1013,8 @@ export class HistoricalTimelineService {
     const canonicalChatKey = (conversationId: string) => `canonical:${conversationId}`;
     const historicalIdentityKey = (storeId: string, lineOfficialAccountId: string, lineChatUserId: string) =>
       `${storeId}\u0000${lineOfficialAccountId}\u0000${lineChatUserId}`;
+    const sourceEventIdentityKey = (lineOfficialAccountId: string, sourceEventId: string) =>
+      `${lineOfficialAccountId}\u0000${sourceEventId}`;
 
     const crosswalkByHistoricalIdentity = new Map<string, string>();
     const crosswalkCanonicalConversationIds = new Set<string>();
@@ -1079,8 +1079,9 @@ export class HistoricalTimelineService {
       const messages = chatMessages.get(key) ?? [];
       for (const message of conversation.messages) {
         currentMessageCount += 1;
-        const sourceEventId = normalizedSourceEventId(message.externalMessageId);
-        if (sourceEventId) setUniqueKey(sourceEventConversationKey, sourceEventId, key);
+        for (const sourceEventId of canonicalSourceIds(message)) {
+          setUniqueKey(sourceEventConversationKey, sourceEventIdentityKey(currentOaId, sourceEventId), key);
+        }
         messages.push({
           id: message.id,
           direction: message.direction,
@@ -1099,6 +1100,32 @@ export class HistoricalTimelineService {
         });
       }
       chatMessages.set(key, messages);
+    }
+    const sourceAnchoredChatKeyByIdentity = new Map<string, string | null>();
+    for (const message of historicalRows) {
+      const currentIdentity = currentIdentityByOaId.get(message.lineOfficialAccountId);
+      const currentStoreId = currentIdentity?.currentStoreId;
+      const currentOaId = currentIdentity?.currentOaId;
+      if (!currentStoreId || !currentOaId) continue;
+      const identity = historicalIdentityKey(currentStoreId, currentOaId, message.lineChatUserId);
+      const sourceEventId = normalizedSourceEventId(message.sourceEventId);
+      if (!sourceEventId) continue;
+      const sourceIdentity = sourceEventIdentityKey(currentOaId, sourceEventId);
+      if (!sourceEventConversationKey.has(sourceIdentity)) continue;
+
+      const anchorKey = sourceEventConversationKey.get(sourceIdentity) ?? null;
+      const crosswalkConversationId = crosswalkByHistoricalIdentity.get(identity);
+      const crosswalkKey = crosswalkConversationId ? canonicalChatKey(crosswalkConversationId) : null;
+      const directKey = directConversationKeyByIdentity.get(identity);
+      if (
+        !anchorKey
+        || (crosswalkKey && crosswalkKey !== anchorKey)
+        || (directKey !== undefined && directKey !== anchorKey)
+      ) {
+        sourceAnchoredChatKeyByIdentity.set(identity, null);
+        continue;
+      }
+      setUniqueKey(sourceAnchoredChatKeyByIdentity, identity, anchorKey);
     }
     const historicalInboundMessages = historicalRows.filter((message) => message.direction === MessageDirection.INBOUND).length;
     const historicalAutoOutboundMessages = historicalRows.filter((message) =>
@@ -1122,18 +1149,23 @@ export class HistoricalTimelineService {
       const identity = historicalIdentityKey(currentStoreId, currentOaId, message.lineChatUserId);
       const crosswalkConversationId = crosswalkByHistoricalIdentity.get(identity);
       const crosswalkKey = crosswalkConversationId ? canonicalChatKey(crosswalkConversationId) : null;
-      const sourceAnchorKey = sourceEventConversationKey.get(message.sourceEventId) ?? null;
+      const normalizedEventId = normalizedSourceEventId(message.sourceEventId);
+      const sourceAnchorKey = normalizedEventId
+        ? sourceEventConversationKey.get(sourceEventIdentityKey(currentOaId, normalizedEventId)) ?? null
+        : null;
+      const sourceAnchoredChatKey = sourceAnchoredChatKeyByIdentity.get(identity) ?? null;
       const directKey = directConversationKeyByIdentity.get(identity) ?? null;
       const key = crosswalkKey
         ?? sourceAnchorKey
+        ?? sourceAnchoredChatKey
         ?? directKey
         ?? directChatKey(currentStoreId, currentOaId, message.lineChatUserId, "");
 
       if (crosswalkKey) {
         crosswalkLinkedHistoricalRows += 1;
         setMergePath(key, "CROSSWALK");
-      } else if (sourceAnchorKey) {
-        sourceAnchoredHistoricalRows += 1;
+      } else if (sourceAnchorKey || sourceAnchoredChatKey) {
+        if (sourceAnchorKey) sourceAnchoredHistoricalRows += 1;
         setMergePath(key, "SOURCE_ANCHOR");
       } else if (directKey) {
         directLinkedHistoricalRows += 1;
@@ -1146,13 +1178,7 @@ export class HistoricalTimelineService {
       chatScopes.set(key, { storeId: currentStoreId, lineOfficialAccountId: currentOaId, lineChatUserId: message.lineChatUserId });
       const messages = chatMessages.get(key) ?? [];
       const duplicate = messages.some((current) => {
-        const hasSameSource = current.externalMessageId === message.sourceEventId
-          || current.externalMessageId === `line-chat-manager:${message.sourceEventId}`;
-        return hasSameSource
-          && current.messageType === MessageType.TEXT
-          && current.direction === message.direction
-          && current.sentAt.getTime() === message.sentAt.getTime()
-          && current.text === message.text;
+        return isCompatibleHistoricalDuplicate(current, message);
       });
       if (duplicate) {
         duplicateHistoricalRows += 1;

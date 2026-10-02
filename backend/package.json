@@ -53,6 +53,7 @@
     "line-oa:repair-store-binding": "tsx --env-file=.env scripts/repair-line-oa-store-binding.ts",
     "media:google-drive:oauth": "tsx --env-file=.env scripts/google-drive-oauth-setup.ts",
     "line-chat:login": "tsx src/line-chat/line-chat-login.cli.ts",
+    "line-chat:mirror:exact-manifest": "tsx src/line-chat/line-chat-mirror-exact-manifest.cli.ts",
     "line-chat:recover-auth": "tsx src/line-chat/line-chat-auth-recovery.cli.ts",
     "line-chat:nickname": "tsx src/line-chat/line-chat-nickname.cli.ts",
     "line-chat:diagnose": "tsx src/line-chat/line-chat-diagnose.cli.ts",

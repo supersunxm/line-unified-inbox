@@ -307,8 +307,12 @@ test("reconciler imports Manager outbound first, updates canonical reply state, 
   assert.deepEqual(h.queries.map((query) => query.take), [3, 2, 1]);
   assert.deepEqual(h.queries[2].orderBy, [{ updatedAt: "asc" }, { sentAt: "desc" }, { id: "desc" }]);
   const retryEligibility = h.queries[2].where?.OR ?? [];
-  assert.equal(retryEligibility.some((filter) => filter.reconcileAttempts?.lt === 3), true);
-  assert.equal(retryEligibility.some((filter) => filter.updatedAt?.lte instanceof Date), true);
+  const hasFilterProperty = (value: unknown, property: string): value is Record<string, unknown> =>
+    typeof value === "object" && value !== null && property in value;
+  assert.equal(retryEligibility.some((filter) =>
+    hasFilterProperty(filter.reconcileAttempts, "lt") && filter.reconcileAttempts.lt === 3), true);
+  assert.equal(retryEligibility.some((filter) =>
+    hasFilterProperty(filter.updatedAt, "lte") && filter.updatedAt.lte instanceof Date), true);
   assert.equal(first.importedOutbound, 1);
   assert.equal(first.conversationsRecomputed, 1);
   const reply = h.canonical.find((message) => message.direction === "OUTBOUND")!;
