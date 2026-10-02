@@ -1,47 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  buildFallbackReviewText,
-  extractGoogleReviewCandidates,
-} from "@/lib/google-review-image-text";
 import { segmentThaiWords } from "@/lib/thai-word-counter";
 
 const MIN_WORDS = 15;
 const MAX_CHARS = 500;
 const MAX_SCAN_IMAGES = 3;
 const MAX_IMAGE_BYTES = 12 * 1024 * 1024;
-const TESSERACT_SRC =
-  "https://cdn.jsdelivr.net/npm/tesseract.js@5.0.5/dist/tesseract.min.js";
-const EXAMPLE_TEXT =
-  "พนักงาน บริการ ดี มาก แนะนำ OPPO Reno 5G ใช้งาน ง่าย กล้อง สวย ราคา คุ้ม ประทับใจ";
-
 type Mode = "text" | "image";
-
-type TesseractLoggerMessage = {
-  status?: string;
-  progress?: number;
-};
-
-type TesseractApi = {
-  recognize: (
-    image: Blob,
-    language: string,
-    options?: {
-      logger?: (message: TesseractLoggerMessage) => void;
-    },
-  ) => Promise<{
-    data: {
-      text: string;
-    };
-  }>;
-};
-
-declare global {
-  interface Window {
-    Tesseract?: TesseractApi;
-  }
-}
 
 type ScanImage = {
   id: string;
@@ -54,69 +20,18 @@ type ScanCandidate = {
   text: string;
   sourceName: string;
   confirmed: boolean;
+  confidence: number | null;
 };
 
-let tesseractLoaderPromise: Promise<TesseractApi> | null = null;
-
-function loadTesseract(): Promise<TesseractApi> {
-  if (typeof window === "undefined") {
-    return Promise.reject(new Error("OCR requires a browser"));
-  }
-
-  if (window.Tesseract) {
-    return Promise.resolve(window.Tesseract);
-  }
-
-  if (tesseractLoaderPromise) {
-    return tesseractLoaderPromise;
-  }
-
-  tesseractLoaderPromise = new Promise<TesseractApi>((resolve, reject) => {
-    const existing = document.querySelector<HTMLScriptElement>(
-      'script[data-review15-ocr="true"]',
-    );
-
-    const finish = () => {
-      if (window.Tesseract) {
-        resolve(window.Tesseract);
-      } else {
-        tesseractLoaderPromise = null;
-        reject(new Error("OCR library did not initialize"));
-      }
-    };
-
-    if (existing) {
-      existing.addEventListener("load", finish, { once: true });
-      existing.addEventListener(
-        "error",
-        () => {
-          tesseractLoaderPromise = null;
-          reject(new Error("OCR library failed to load"));
-        },
-        { once: true },
-      );
-      return;
-    }
-
-    const script = document.createElement("script");
-    script.src = TESSERACT_SRC;
-    script.async = true;
-    script.crossOrigin = "anonymous";
-    script.dataset.review15Ocr = "true";
-    script.addEventListener("load", finish, { once: true });
-    script.addEventListener(
-      "error",
-      () => {
-        tesseractLoaderPromise = null;
-        reject(new Error("OCR library failed to load"));
-      },
-      { once: true },
-    );
-    document.head.appendChild(script);
-  });
-
-  return tesseractLoaderPromise;
-}
+type VisionScanResponse = {
+  provider: "google-cloud-vision";
+  imagesProcessed: number;
+  candidates: Array<{
+    imageIndex: number;
+    text: string;
+    confidence: number | null;
+  }>;
+};
 
 async function optimizeImageForOcr(file: File): Promise<Blob> {
   const imageUrl = URL.createObjectURL(file);
@@ -346,9 +261,6 @@ export function Review15Checker() {
   const [text, setText] = useState("");
   const [scanImages, setScanImages] = useState<ScanImage[]>([]);
   const [scanCandidates, setScanCandidates] = useState<ScanCandidate[]>([]);
-  const [rawOcrTexts, setRawOcrTexts] = useState<
-    Array<{ sourceName: string; text: string }>
-  >([]);
   const [scanProgress, setScanProgress] = useState(0);
   const [scanStatus, setScanStatus] = useState("");
   const [scanError, setScanError] = useState("");
@@ -381,7 +293,6 @@ export function Review15Checker() {
 
     setScanImages(next);
     setScanCandidates([]);
-    setRawOcrTexts([]);
     setScanProgress(0);
     setScanStatus("");
     setScanError("");
@@ -416,103 +327,107 @@ export function Review15Checker() {
     setIsScanning(true);
     setScanError("");
     setScanCandidates([]);
-    setRawOcrTexts([]);
-    setScanProgress(1);
-    setScanStatus("กำลังเตรียมระบบอ่านภาษาไทย...");
+    setScanProgress(8);
+    setScanStatus("กำลังเตรียมภาพ...");
 
     try {
-      const tesseract = await loadTesseract();
-      const allCandidates: ScanCandidate[] = [];
-      const allRaw: Array<{ sourceName: string; text: string }> = [];
+      const formData = new FormData();
 
       for (let index = 0; index < scanImages.length; index += 1) {
         const image = scanImages[index];
+        setScanProgress(
+          Math.round(10 + ((index + 1) / scanImages.length) * 25),
+        );
         setScanStatus(
-          "กำลังอ่านภาพ " + (index + 1) + " จาก " + scanImages.length,
+          "กำลังเตรียมภาพ " + (index + 1) + " จาก " + scanImages.length,
         );
 
         const optimized = await optimizeImageForOcr(image.file);
-        const response = await tesseract.recognize(optimized, "tha+eng", {
-          logger: (message) => {
-            const localProgress =
-              typeof message.progress === "number" ? message.progress : 0;
-            const totalProgress =
-              ((index + Math.max(0, Math.min(1, localProgress))) /
-                scanImages.length) *
-              100;
-            setScanProgress(Math.max(1, Math.round(totalProgress)));
-            if (message.status) {
-              setScanStatus(
-                "ภาพ " +
-                  (index + 1) +
-                  "/" +
-                  scanImages.length +
-                  " • " +
-                  (message.status === "recognizing text"
-                    ? "กำลังอ่านข้อความ"
-                    : "กำลังเตรียม OCR"),
-              );
-            }
-          },
-        });
-
-        const rawText = response.data.text || "";
-        allRaw.push({ sourceName: image.file.name, text: rawText });
-
-        const extracted = extractGoogleReviewCandidates(rawText);
-        if (extracted.length > 0) {
-          extracted.forEach((candidate, candidateIndex) => {
-            allCandidates.push({
-              id:
-                image.id +
-                "-review-" +
-                candidate.sourceIndex +
-                "-" +
-                candidateIndex,
-              text: candidate.text,
-              sourceName: image.file.name,
-              confirmed: false,
-            });
-          });
-        } else {
-          const fallback = buildFallbackReviewText(rawText);
-          if (fallback) {
-            allCandidates.push({
-              id: image.id + "-fallback",
-              text: fallback,
-              sourceName: image.file.name,
-              confirmed: false,
-            });
-          }
-        }
+        formData.append(
+          "images",
+          optimized,
+          "review-" + (index + 1) + ".jpg",
+        );
       }
 
-      const seen = new Set<string>();
-      const deduped = allCandidates.filter((candidate) => {
-        const key = candidate.text.toLocaleLowerCase("th").replace(/\s+/g, " ");
-        if (!key || seen.has(key)) return false;
-        seen.add(key);
-        return true;
+      setScanProgress(45);
+      setScanStatus("กำลังส่งภาพไปวิเคราะห์...");
+
+      const response = await fetch("/api-backend/review15/scan", {
+        method: "POST",
+        body: formData,
       });
 
-      setRawOcrTexts(allRaw);
-      setScanCandidates(deduped);
+      if (!response.ok) {
+        let message = "";
+        try {
+          const errorBody = (await response.json()) as {
+            message?: string | string[];
+          };
+          message = Array.isArray(errorBody.message)
+            ? errorBody.message.join(" ")
+            : errorBody.message ?? "";
+        } catch {
+          // Fall through to the status-based message below.
+        }
+
+        if (response.status === 429) {
+          throw new Error(
+            "สแกนถี่เกินไป กรุณารอสักครู่แล้วลองใหม่",
+          );
+        }
+
+        if (response.status === 503) {
+          throw new Error(
+            message ||
+              "ระบบ Google Vision ยังไม่พร้อมใช้งาน กรุณาลองใหม่ภายหลัง",
+          );
+        }
+
+        throw new Error(message || "อ่านภาพไม่สำเร็จ");
+      }
+
+      setScanProgress(78);
+      setScanStatus("กำลังแยกเฉพาะข้อความรีวิว...");
+
+      const payload = (await response.json()) as VisionScanResponse;
+      const nextCandidates: ScanCandidate[] = payload.candidates.map(
+        (candidate, index) => ({
+          id:
+            "vision-" +
+            candidate.imageIndex +
+            "-" +
+            index +
+            "-" +
+            Date.now(),
+          text: candidate.text,
+          sourceName:
+            scanImages[candidate.imageIndex]?.file.name ||
+            "ภาพ " + (candidate.imageIndex + 1),
+          confirmed: false,
+          confidence: candidate.confidence,
+        }),
+      );
+
+      setScanCandidates(nextCandidates);
       setScanProgress(100);
 
-      if (deduped.length > 0) {
-        setScanStatus("ตรวจพบ " + deduped.length + " รีวิว");
+      if (nextCandidates.length > 0) {
+        setScanStatus("ตรวจพบ " + nextCandidates.length + " รีวิว");
       } else {
-        setScanStatus("ยังแยกข้อความรีวิวอัตโนมัติไม่ได้");
+        setScanStatus("ยังไม่พบข้อความรีวิวที่ชัดเจน");
         setScanError(
-          "ลองใช้ภาพที่เห็นข้อความรีวิวชัดขึ้น หรือดูข้อความ OCR ดิบด้านล่างแล้วคัดลอกไปตรวจแบบพิมพ์ข้อความ",
+          "ระบบอ่านภาพแล้ว แต่ยังแยกข้อความรีวิวไม่ได้ ลองใช้ Screenshot ที่เห็นชื่อผู้รีวิว ดาว วันที่ และข้อความรีวิวครบในจอ",
         );
       }
     } catch (error) {
-      console.error("Review image OCR failed", error);
+      console.error("Review image Vision scan failed", error);
       setScanProgress(0);
       setScanStatus("");
       setScanError(
-        "สแกนภาพไม่สำเร็จ กรุณาลองใหม่บนอินเทอร์เน็ตที่เสถียร หรือใช้โหมดพิมพ์ข้อความ",
+        error instanceof Error
+          ? error.message
+          : "สแกนภาพไม่สำเร็จ กรุณาลองใหม่",
       );
     } finally {
       setIsScanning(false);
@@ -692,10 +607,10 @@ export function Review15Checker() {
 
                 <div className="mt-4 rounded-xl bg-[var(--app-accent-soft)] px-3 py-2.5 text-xs leading-5 text-[var(--app-text-secondary)]">
                   <strong className="text-[var(--app-accent)]">
-                    ประมวลผลบนอุปกรณ์:
+                    Google Vision OCR:
                   </strong>{" "}
-                  ภาพรีวิวไม่ถูกอัปโหลดเข้า server ของ lineoppo.click โดยระบบ OCR
-                  จะดาวน์โหลดตัวอ่านภาษาไทยครั้งแรกแล้วประมวลผลในเบราว์เซอร์
+                  ภาพจะถูกส่งแบบชั่วคราวผ่าน server ของ lineoppo.click ไปยัง Google Cloud Vision
+                  เพื่ออ่านข้อความและตำแหน่งของข้อความ ระบบหน้านี้ไม่บันทึกไฟล์ภาพลงฐานข้อมูล
                 </div>
               </section>
 
@@ -736,6 +651,11 @@ export function Review15Checker() {
                               <p className="mt-0.5 max-w-[220px] truncate text-[11px] text-[var(--app-text-tertiary)]">
                                 {candidate.sourceName}
                               </p>
+                              {typeof candidate.confidence === "number" && (
+                                <p className="mt-0.5 text-[10px] text-[var(--app-text-tertiary)]">
+                                  OCR confidence {Math.round(candidate.confidence * 100)}%
+                                </p>
+                              )}
                             </div>
                             <div
                               className={[
@@ -799,8 +719,8 @@ export function Review15Checker() {
 
                           {!candidate.confirmed && (
                             <p className="mt-2 text-[11px] leading-5 text-[var(--app-warning)]">
-                              OCR อาจอ่านชื่อร้าน ตัวอักษรบนรูปสินค้า หรือ UI ปนมาได้
-                              กรุณาตรวจ/แก้ข้อความก่อนยืนยัน ระบบจะยังไม่ตัดสินผ่าน 15 คำ
+                              ระบบใช้ตำแหน่งข้อความจาก Google Vision เพื่อแยกรีวิวออกจากรูปสินค้า
+                              แต่ยังต้องตรวจ/แก้ข้อความก่อนยืนยัน ระบบจะยังไม่ตัดสินผ่าน 15 คำ
                             </p>
                           )}
 
@@ -826,23 +746,6 @@ export function Review15Checker() {
                 </section>
               )}
 
-              {rawOcrTexts.length > 0 && (
-                <details className="mt-4 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4 text-xs">
-                  <summary className="cursor-pointer font-semibold">
-                    ดูข้อความ OCR ดิบ
-                  </summary>
-                  <div className="mt-3 grid gap-3">
-                    {rawOcrTexts.map((item, index) => (
-                      <div key={item.sourceName + "-" + index}>
-                        <p className="font-semibold">{item.sourceName}</p>
-                        <pre className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap rounded-xl bg-[var(--app-surface-subtle)] p-3 font-sans leading-5 text-[var(--app-text-secondary)]">
-                          {item.text || "ไม่พบข้อความ"}
-                        </pre>
-                      </div>
-                    ))}
-                  </div>
-                </details>
-              )}
             </>
           )}
         </div>
@@ -924,10 +827,12 @@ export function Review15Checker() {
               การผ่าน KPI จริงยังต้องผ่านเงื่อนไขภาพ เดือนของภาพ และกฎ Review KPI อื่น ๆ
             </li>
             <li>
-              ผลจาก OCR ควรตรวจข้อความที่ระบบอ่านได้ก่อนยืนยัน เพราะภาพเบลอ
-              ฟอนต์ หรือข้อความถูกบังอาจทำให้อ่านคลาดเคลื่อนได้
+              ผลจาก Google Vision ควรตรวจข้อความก่อนยืนยัน เพราะภาพเบลอ
+              ข้อความถูกบัง หรือ layout ผิดปกติยังทำให้อ่านคลาดเคลื่อนได้
             </li>
-            <li>ข้อความและผลตรวจไม่ถูกบันทึกลงฐานข้อมูลจากหน้านี้</li>
+            <li>
+              ภาพถูกส่งเพื่อ OCR แบบชั่วคราวและไม่ถูกบันทึกลงฐานข้อมูลของหน้านี้
+            </li>
           </ul>
         </aside>
       </section>
