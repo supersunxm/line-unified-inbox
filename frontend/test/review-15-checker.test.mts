@@ -36,9 +36,9 @@ test("Google Review checker compatibility module re-exports the canonical counte
   assert.doesNotMatch(compatibilitySource, /function\s+segmentThaiWords\s*\(/);
 });
 
-test("/รีวิว15 rewrites to a stable public route", () => {
+test("encoded Thai public URL rewrites to a stable public route", () => {
   assert.deepEqual(createReview15Rewrite(), {
-    source: "/รีวิว15",
+    source: "/%E0%B8%A3%E0%B8%B5%E0%B8%A7%E0%B8%B4%E0%B8%A715",
     destination: "/review15",
   });
 });

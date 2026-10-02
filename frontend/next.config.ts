@@ -37,7 +37,7 @@ export function createGoogleReviewApiRewrite(apiBaseUrl: string) {
 
 export function createReview15Rewrite() {
   return {
-    source: "/รีวิว15",
+    source: "/%E0%B8%A3%E0%B8%B5%E0%B8%A7%E0%B8%B4%E0%B8%A715",
     destination: "/review15",
   };
 }
