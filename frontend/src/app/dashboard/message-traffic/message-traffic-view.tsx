@@ -107,6 +107,32 @@ function HourlyBars({ items, formatter }: { items: HourBucket[]; formatter: Intl
   );
 }
 
+// Box-model classes copied from UnifiedPeriodPicker (a source test pins them to it), so the
+// placeholder is as tall as the real control: 42px preset group (16px line + 16px py-2 + 8px p-1 + 2px border)
+// beside a 38px trigger (20px line + 16px py-2 + 2px border), inside FilterBar's 12px padding and 1px border.
+const PICKER_WRAPPER_CLASS = "flex min-w-0 flex-wrap items-center gap-2";
+const PICKER_PRESET_GROUP_CLASS = "inline-flex rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] p-1";
+const PICKER_PRESET_BOX_CLASS = "rounded-lg px-3 py-2 text-xs font-semibold";
+const PICKER_TRIGGER_BOX_CLASS = "flex max-w-full items-center gap-2.5 rounded-xl bg-[var(--app-surface)] border border-[var(--app-border)] px-4 py-2 text-sm font-medium";
+
+/** FilterBar placeholder with the date picker's geometry, so nothing shifts when the real bar arrives. */
+function FilterBarSkeleton() {
+  return (
+    <FilterBar>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className={PICKER_WRAPPER_CLASS}>
+          <div className={PICKER_PRESET_GROUP_CLASS}>
+            {[0, 1, 2].map((index) => (
+              <div key={index} className={PICKER_PRESET_BOX_CLASS}><Skeleton className="h-[1lh] w-6" /></div>
+            ))}
+          </div>
+          <div className={PICKER_TRIGGER_BOX_CLASS}><Skeleton className="h-[1lh] w-44" /></div>
+        </div>
+      </div>
+    </FilterBar>
+  );
+}
+
 /** Same layout as the loaded view, with the real KPI labels and section titles. */
 function TrafficSkeleton({ kpiLabels, hourlyTitle, weekdayTitle, rankingTitle, label }: { kpiLabels: string[]; hourlyTitle: string; weekdayTitle: string; rankingTitle: string; label: string }) {
   return (
@@ -198,7 +224,7 @@ export function MessageTrafficView() {
     window.location.replace("/");
   };
 
-  if (!authChecked) return <ShellSkeleton><PageContainer variant="wide"><div className="space-y-6"><PageHeader title={text.title} description={text.description} actions={<Button variant="secondary" size="sm" disabled>{text.refresh}</Button>} /><FilterBar><Skeleton className="h-9 w-64 max-w-full" /></FilterBar>{trafficSkeleton}</div></PageContainer></ShellSkeleton>;
+  if (!authChecked) return <ShellSkeleton><PageContainer variant="wide"><div className="space-y-6"><PageHeader title={text.title} description={text.description} actions={<Button variant="secondary" size="sm" disabled>{text.refresh}</Button>} /><FilterBarSkeleton />{trafficSkeleton}</div></PageContainer></ShellSkeleton>;
   if (!authUser) return <main className="flex min-h-screen items-center justify-center bg-[var(--app-bg)] p-6"><Card className="max-w-md text-center"><h1 className="text-xl font-bold">{text.authRequired}</h1><p className="mt-2 text-xs text-[var(--app-text-secondary)]">{text.signIn}</p></Card></main>;
 
   return (

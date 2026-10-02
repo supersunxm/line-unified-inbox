@@ -9,6 +9,7 @@ const loginCode = read("../src/app/login/page.tsx");
 const gateCode = read("../src/app/authorized-workspace.tsx");
 const shellSkeletonCode = read("../src/components/shell/shell-skeleton.tsx");
 const trafficCode = read("../src/app/dashboard/message-traffic/message-traffic-view.tsx");
+const pickerCode = read("../src/components/date-range/unified-period-picker.tsx");
 const dashboardBaseCode = read("../src/app/dashboard/executive-dashboard-base.tsx");
 
 const checkSetupStatus = pageCode.match(/const checkSetupStatus = useCallback\(async \(\) => \{[\s\S]*?\n  \}, \[\]\);/)?.[0] ?? "";
@@ -63,4 +64,21 @@ test("Message Traffic loads behind skeletons with its real KPI labels and sectio
 test("the dashboard placeholder pulses only when motion is allowed", () => {
   assert.match(dashboardBaseCode, /max-w-\[1280px\] motion-safe:animate-pulse space-y-4/);
   assert.doesNotMatch(dashboardBaseCode, /(^|[\s"])animate-pulse/);
+});
+
+test("the pre-auth filter-bar placeholder has the date picker's geometry (42px preset group, 38px trigger)", () => {
+  assert.doesNotMatch(trafficCode, /h-9 w-64/);
+  assert.match(trafficCode, /<FilterBarSkeleton \/>\{trafficSkeleton\}/);
+  // Each box-model class string must be the picker's own, so the placeholder cannot drift from it.
+  for (const name of ["PICKER_WRAPPER_CLASS", "PICKER_PRESET_GROUP_CLASS", "PICKER_PRESET_BOX_CLASS", "PICKER_TRIGGER_BOX_CLASS"]) {
+    const value = trafficCode.match(new RegExp(`const ${name} = "([^"]+)";`))?.[1];
+    assert.ok(value, name);
+    assert.ok(pickerCode.includes(value), `${name} must appear verbatim in unified-period-picker.tsx`);
+  }
+  // One line-height block inside each box: 16 (text-xs) + 16 (py-2) = 32 + p-1 8 + border 2 = 42; 20 (text-sm) + 16 + 2 = 38.
+  assert.match(trafficCode, /className=\{PICKER_PRESET_BOX_CLASS\}><Skeleton className="h-\[1lh\] w-6" \/>/);
+  assert.match(trafficCode, /className=\{PICKER_TRIGGER_BOX_CLASS\}><Skeleton className="h-\[1lh\] w-44" \/>/);
+  // The real bar still uses the picker with its default quick ranges, i.e. the 42px group is present.
+  assert.match(trafficCode, /<FilterBar>\s*<div className="flex flex-wrap items-center justify-between gap-3">\s*<DateRangePicker disabled=\{loading\}/);
+  assert.doesNotMatch(trafficCode, /showOutsideQuickRanges=\{false\}/);
 });
