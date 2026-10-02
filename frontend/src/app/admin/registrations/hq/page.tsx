@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { AuthorizedSection } from "../../../authorized-workspace";
+import { InternalPageShell } from "@/components/shell/internal-page-shell";
 
 type PendingHq = {
   id: string;
@@ -176,7 +177,7 @@ function HqApprovalContent() {
   }
 
   return (
-    <main className="min-h-screen bg-[var(--app-bg)] p-6 text-[var(--app-text-primary)]">
+    <main className="min-h-full bg-[var(--app-bg)] p-6 text-[var(--app-text-primary)]">
       <div className="mx-auto max-w-5xl space-y-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -299,5 +300,5 @@ function HqApprovalContent() {
 }
 
 export default function HqRegistrationsPage() {
-  return <AuthorizedSection section="admin-registrations"><HqApprovalContent /></AuthorizedSection>;
+  return <AuthorizedSection section="admin-registrations"><InternalPageShell section="admin-registrations"><HqApprovalContent /></InternalPageShell></AuthorizedSection>;
 }

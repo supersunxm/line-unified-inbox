@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { InternalPageShell } from "@/components/shell/internal-page-shell";
 import { useAppLanguage } from "../../language";
 import type { TikTokAccountListItem, TikTokHistoricalMetricsData, TikTokStoreData } from "../tiktok-types";
 import { MobileTikTokDashboardView } from "./mobile-tiktok-dashboard-view";
@@ -30,6 +31,11 @@ export function TikTokDashboardResponsive(props: Props) {
   }, []);
 
   if (mode === "loading") return <main className="flex h-dvh items-center justify-center bg-[var(--app-bg)] text-sm text-[var(--app-text-secondary)]">{t.opening}</main>;
+  // The mobile view has its own MobilePageShell chrome; only desktop gets the AppShell sidebar.
   if (mode === "mobile") return <MobileTikTokDashboardView {...props} />;
-  return <TikTokDashboardView {...props} />;
+  return (
+    <InternalPageShell section="dashboard">
+      <TikTokDashboardView {...props} />
+    </InternalPageShell>
+  );
 }

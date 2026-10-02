@@ -24,6 +24,15 @@ export function resolveTheme(
   return theme === "system" ? (systemDark ? "dark" : "light") : theme;
 }
 
+/**
+ * The preference one click of the top-bar toggle sets: the opposite of the
+ * theme on screen. With "system" that is the opposite of what the system
+ * currently resolves to, and the choice becomes explicit.
+ */
+export function toggledThemePreference(shown: ResolvedTheme): ThemePreference {
+  return shown === "dark" ? "light" : "dark";
+}
+
 type ThemeRoot = {
   classList: Pick<DOMTokenList, "remove">;
   dataset: DOMStringMap;

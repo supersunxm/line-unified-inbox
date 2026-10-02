@@ -1,14 +1,15 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState, useSyncExternalStore } from "react";
 import type { ReactNode } from "react";
 import {
   applyThemeToRoot,
   loadTheme,
   resolveTheme,
   saveTheme,
+  toggledThemePreference,
 } from "./theme-logic";
-import type { ThemePreference } from "./theme-logic";
+import type { ResolvedTheme, ThemePreference } from "./theme-logic";
 
 const DARK_MEDIA_QUERY = "(prefers-color-scheme: dark)";
 
@@ -60,6 +61,32 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       {children}
     </ThemeContext.Provider>
   );
+}
+
+function subscribeToShownTheme(onChange: () => void) {
+  const observer = new MutationObserver(onChange);
+  observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+  return () => observer.disconnect();
+}
+
+function readShownTheme(): ResolvedTheme {
+  return document.documentElement.dataset.theme === "dark" ? "dark" : "light";
+}
+
+function readServerTheme(): ResolvedTheme {
+  return "light";
+}
+
+/**
+ * The theme on screen (read from <html data-theme>, so it follows "system"
+ * changes too) and a one-click switch to the other one. It saves through the
+ * same setTheme as ThemeControl.
+ */
+export function useThemeToggle(): { shown: ResolvedTheme; toggle: () => void } {
+  const context = useContext(ThemeContext);
+  if (!context) throw new Error("useThemeToggle must be used inside ThemeProvider");
+  const shown = useSyncExternalStore(subscribeToShownTheme, readShownTheme, readServerTheme);
+  return { shown, toggle: () => context.setTheme(toggledThemePreference(shown)) };
 }
 
 export function ThemeControl({ compact = false }: { compact?: boolean }) {

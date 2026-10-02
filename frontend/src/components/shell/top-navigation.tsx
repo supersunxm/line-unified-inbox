@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
-import { ThemeControl } from "@/app/theme";
+import { ThemeControl, useThemeToggle } from "@/app/theme";
 import type { PrimarySection } from "@/app/primary-navigation";
 import { canAccessPrimarySection, canAccessWebTool, defaultRouteForUser, type AuthUser } from "@/lib/authorization";
 import { AppSidebar, sidebarLabels } from "./app-sidebar";
@@ -70,7 +70,33 @@ function pageLabel(pathname: string, section: PrimarySection, language: Language
   const navigationLabels = sidebarLabels(language);
   if (pathname.startsWith("/download-center")) return navigationLabels.downloadCenter;
   if (pathname.startsWith("/dashboard/message-traffic")) return navigationLabels.traffic;
+  if (pathname.startsWith("/replymessage")) return navigationLabels.replySla;
+  if (pathname.startsWith("/monthly-operations-report")) return navigationLabels.monthlyOperationsReport;
+  if (pathname.startsWith("/rich-messages")) return "Rich Message";
+  if (pathname === "/tiktok" || pathname.startsWith("/tiktok/")) return "TikTok Analytics";
   return sectionLabel(section, language);
+}
+
+const themeToggleLabels: Record<Language, { toDark: string; toLight: string }> = {
+  th: { toDark: "สลับเป็นโหมดมืด", toLight: "สลับเป็นโหมดสว่าง" },
+  en: { toDark: "Switch to dark mode", toLight: "Switch to light mode" },
+  zh: { toDark: "切换到深色模式", toLight: "切换到浅色模式" },
+};
+
+/** One click switches light <-> dark; shows a moon in light mode and a sun in dark mode. */
+function ThemeToggleButton({ language }: { language: Language }) {
+  const { shown, toggle } = useThemeToggle();
+  const label = shown === "dark" ? themeToggleLabels[language].toLight : themeToggleLabels[language].toDark;
+  const common = { fill: "none", stroke: "currentColor", strokeWidth: 1.8, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
+  return (
+    <button type="button" data-theme-toggle onClick={toggle} aria-label={label} title={label} className={`${focusRing} flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-text-secondary)] hover:bg-[var(--app-surface-hover)] hover:text-[var(--app-text-primary)]`}>
+      <svg viewBox="0 0 24 24" aria-hidden="true" className="h-5 w-5">
+        {shown === "dark"
+          ? <><circle {...common} cx="12" cy="12" r="4" /><path {...common} d="M12 2.5v2m0 15v2M4.6 4.6 6 6m12 12 1.4 1.4M2.5 12h2m15 0h2M4.6 19.4 6 18M18 6l1.4-1.4" /></>
+          : <path {...common} d="M20 14.5A8.5 8.5 0 0 1 9.5 4 8.5 8.5 0 1 0 20 14.5Z" />}
+      </svg>
+    </button>
+  );
 }
 
 function ResponsiveSearch({ searchText, setSearchText, text }: Pick<TopNavigationProps, "searchText" | "setSearchText" | "text">) {
@@ -241,6 +267,7 @@ export function TopNavigation(props: TopNavigationProps) {
 
         <div className="flex shrink-0 items-center justify-end gap-2">
           <ResponsiveSearch searchText={searchText} setSearchText={setSearchText} text={text} />
+          <ThemeToggleButton language={language} />
           {lastUpdatedAt && (
             <button type="button" aria-label={updatedLabel} title={updatedLabel} className={`${focusRing} hidden h-9 items-center gap-1.5 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] px-2.5 text-[11px] font-medium text-[var(--app-text-secondary)] hover:bg-[var(--app-surface-hover)] md:flex`}>
               <span className="h-1.5 w-1.5 rounded-full bg-[var(--app-success)]" /><span>Live</span>
