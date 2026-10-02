@@ -48,6 +48,7 @@ type LayoutParagraph = {
   bottom: number;
   left: number;
   right: number;
+  pageWidth: number;
   pageHeight: number;
 };
 
@@ -133,6 +134,7 @@ function collectLayoutParagraphs(annotation: VisionFullTextAnnotation): LayoutPa
   const output: LayoutParagraph[] = [];
 
   for (const page of annotation.pages ?? []) {
+    const pageWidth = page.width ?? 0;
     const pageHeight = page.height ?? 0;
     for (const block of page.blocks ?? []) {
       for (const paragraph of block.paragraphs ?? []) {
@@ -150,6 +152,7 @@ function collectLayoutParagraphs(annotation: VisionFullTextAnnotation): LayoutPa
           bottom: box.bottom,
           left: box.left,
           right: box.right,
+          pageWidth,
           pageHeight,
         });
       }
@@ -219,11 +222,11 @@ function extractFromLayout(annotation: VisionFullTextAnnotation): ReviewVisionCa
       // metadata. Very narrow/centered text shortly after it is often text
       // printed on the attached product photo.
       const width = Math.max(1, paragraph.right - paragraph.left);
-      const pageWidthEstimate = Math.max(paragraph.right, 1);
+      const pageWidth = Math.max(paragraph.pageWidth, paragraph.right, 1);
       if (
         textParts.length > 0 &&
-        width < pageWidthEstimate * 0.18 &&
-        paragraph.left > pageWidthEstimate * 0.16
+        width < pageWidth * 0.2 &&
+        paragraph.left > pageWidth * 0.16
       ) {
         break;
       }
@@ -299,12 +302,10 @@ function extractFromPlainText(text?: string | null): ReviewVisionCandidate[] {
 
     if (looksLikeReviewBody(line)) {
       body.push(line);
-      if (body.length >= 2) {
-        // Plain-text fallback has no geometry. Keep it intentionally bounded
-        // so product-photo text cannot inflate the review count indefinitely.
-        flush();
-        collecting = false;
-      }
+      // Plain-text fallback has no geometry. Keep only the first plausible
+      // review line so product-photo text cannot inflate the count.
+      flush();
+      collecting = false;
     }
   }
 
