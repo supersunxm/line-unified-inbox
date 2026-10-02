@@ -1,4 +1,5 @@
 import { canonicalSourceIds, isCompatibleHistoricalDuplicate } from "./canonical-source-identity";
+import { provenHistoricalSourceAnchorsSql, type HistoricalSourceAnchor } from "./historical-source-anchors";
 import { createHash } from "node:crypto";
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { MessageDirection, MessageDeliveryStatus, MessageType, Prisma } from "@prisma/client";
@@ -391,15 +392,10 @@ export class HistoricalTimelineService {
           AND x."canonicalConversationId" IS NOT NULL
       )`,
       Prisma.sql`NOT EXISTS (
-        SELECT 1
-        FROM public."HistoricalTimelineMessage" h2
-        JOIN public."Message" m
-          ON m."externalMessageId" = h2."sourceEventId"
-          OR m."externalMessageId" = 'line-chat-manager:' || h2."sourceEventId"
-        WHERE h2."storeId" = h."storeId"
-          AND h2."lineOfficialAccountId" = h."lineOfficialAccountId"
-          AND h2."lineChatUserId" = h."lineChatUserId"
-          AND h2."sentAt" >= ${HISTORICAL_TIMELINE_START}
+        SELECT 1 FROM source_anchors anchor
+        WHERE anchor."storeId" = h."storeId"
+          AND anchor."lineOfficialAccountId" = h."lineOfficialAccountId"
+          AND anchor."lineChatUserId" = h."lineChatUserId"
       )`,
     ];
     if (accessibleStoreIds !== null) {
@@ -417,6 +413,7 @@ export class HistoricalTimelineService {
     }
     const whereClause = Prisma.join(filters, " AND ");
     const totalRows = await this.prisma.$queryRaw<Array<{ total: bigint }>>(Prisma.sql`
+      WITH source_anchors AS MATERIALIZED (${provenHistoricalSourceAnchorsSql(HISTORICAL_TIMELINE_START, { storeId: input.storeId })})
       SELECT COUNT(*)::bigint AS total
       FROM (
         SELECT h."storeId", h."lineOfficialAccountId", h."lineChatUserId"
@@ -431,7 +428,7 @@ export class HistoricalTimelineService {
     `);
     const total = Number(totalRows[0]?.total ?? 0n);
     const rows = await this.prisma.$queryRaw<VirtualChatRow[]>(Prisma.sql`
-      WITH chats AS (
+      WITH source_anchors AS MATERIALIZED (${provenHistoricalSourceAnchorsSql(HISTORICAL_TIMELINE_START, { storeId: input.storeId })}), chats AS (
         SELECT h."storeId", h."lineOfficialAccountId", h."lineChatUserId",
           MAX(h."sentAt") AS "latestMessageAt", COUNT(*)::int AS "messageCount"
         FROM public."HistoricalTimelineMessage" h
@@ -548,6 +545,12 @@ export class HistoricalTimelineService {
       select: { id: true },
     });
     if (canonical) throw new NotFoundException("Conversation is available in the current chat list");
+    const anchors = await this.prisma.$queryRaw<HistoricalSourceAnchor[]>(
+      provenHistoricalSourceAnchorsSql(HISTORICAL_TIMELINE_START, { storeId: record.storeId, lineOfficialAccountId }),
+    );
+    if (anchors.some((anchor) => anchor.lineChatUserId === lineChatUserId)) {
+      throw new NotFoundException("Conversation is available in the current chat list");
+    }
     const [count, customer] = await Promise.all([
       this.prisma.historicalTimelineMessage.count({
         where: { storeId: record.storeId, lineOfficialAccountId, lineChatUserId, sentAt: { gte: HISTORICAL_TIMELINE_START } },

@@ -20,6 +20,7 @@ import { persistStaffOutboundReplyState, reconcileStaffOutboundReplyState } from
 import { ownerTrackingInboundFilter } from "./owner-tracking";
 import { FOCUS_STORE_GROUP_ID, isFocusStoreReference } from "./focus-store-group";
 import { randomUUID } from "node:crypto";
+import { provenHistoricalSourceAnchorsSql, type HistoricalSourceAnchor } from "./historical-source-anchors";
 import { createPdfDocumentUrl } from "./media/pdf-document-url";
 import { PDF_MIME_TYPE, readPdfMaxBytes, validatePdfBuffer, PdfValidationError } from "./media/pdf-media";
 import { LineChatMessageSendQueueService } from "./line-chat/line-chat-message-send-queue.service";
@@ -796,6 +797,15 @@ export class ConversationsService {
         select: { historicalLineChatUserId: true },
       });
       for (const link of safeLinks) historicalLineChatUserIds.add(link.historicalLineChatUserId);
+    }
+    const sourceAnchors = await this.prisma.$queryRaw<HistoricalSourceAnchor[]>(
+      provenHistoricalSourceAnchorsSql(HISTORICAL_TIMELINE_START, {
+        storeId: conversation.storeId,
+        lineOfficialAccountId: conversation.lineOfficialAccountId,
+      }),
+    );
+    for (const anchor of sourceAnchors) {
+      if (anchor.canonicalConversationId === id) historicalLineChatUserIds.add(anchor.lineChatUserId);
     }
     if (historicalLineChatUserIds.size === 0) {
       const items = await this.prisma.message.findMany({ where, include: { media: true, sender: { select: { id: true, displayName: true } } }, orderBy: [{ sentAt: "desc" }, { id: "desc" }], skip: (safePage - 1) * safeSize, take: safeSize });

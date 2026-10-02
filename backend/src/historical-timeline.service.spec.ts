@@ -41,8 +41,12 @@ test("virtual Historical discovery leaves only chats without direct, safe-link, 
     assert.match(query, /HistoricalConversationCrosswalk/);
     assert.match(query, /LINK_SAFE/);
     assert.match(query, /canonicalConversationId/);
-    assert.match(query, /HistoricalTimelineMessage.*JOIN public\."Message"/s);
+    assert.match(query, /canonical_sources/);
+    assert.match(query, /JOIN canonical_sources/);
     assert.match(query, /externalMessageId/);
+    assert.match(query, /providerMessageId/);
+    assert.match(query, /lineOfficialAccountId/);
+    assert.match(query, /count\(DISTINCT c\."conversationId"\) = 1/);
   }
 });
 

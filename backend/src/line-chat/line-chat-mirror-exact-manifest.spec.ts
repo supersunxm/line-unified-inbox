@@ -534,3 +534,25 @@ test("a separately bounded four-row manifest never discovers adjacent original r
   assert.equal(second.writes, 0);
   await assert.rejects(harness.service.reconcileExactManifestCsv({ bytes, apply: true }), /DIGEST_MISMATCH/u);
 });
+
+test("a separately bounded nineteen-row manifest cannot select adjacent events or caller-supplied digests", async () => {
+  const harness = exactManifestHarness();
+  const all = csvRows();
+  const selected = [...Array.from({ length: 18 }, (_, index) => all[Math.floor(index / 6) * 24 + index % 6]), all[72]];
+  const bytes = bytesFor(selected);
+  const runner = harness.service as unknown as {
+    reconcileExactManifestCsvWithExpectedHash: (bytes: Uint8Array, hash: string, apply: boolean, rows: number, stores: number) => Promise<ExactMirrorManifestExecutionResult>;
+  };
+  const first = await runner.reconcileExactManifestCsvWithExpectedHash(bytes, digest(bytes), true, 19, 6);
+  assert.equal(first.manifestRows, 19);
+  assert.equal(first.rawRowsFound, 19);
+  assert.equal(first.writes, 19);
+  assert.equal(first.outsideManifestConsidered, 0);
+  assert.equal(harness.canonicalRows.length, 19);
+  assert.equal(harness.mirrorUpdates.length, 19);
+  const second = await runner.reconcileExactManifestCsvWithExpectedHash(bytes, digest(bytes), false, 19, 6);
+  assert.equal(second.alreadyCanonical, 19);
+  assert.equal(second.stillSafeToApply, 0);
+  assert.equal(second.writes, 0);
+  await assert.rejects(harness.service.reconcileExactManifestCsv({ bytes, apply: true }), /DIGEST_MISMATCH/u);
+});
