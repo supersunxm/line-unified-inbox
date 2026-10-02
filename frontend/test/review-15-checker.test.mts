@@ -54,3 +54,32 @@ test("public review checker is client-only and does not call an API", () => {
   assert.match(checkerSource, /ข้อความไม่ถูกบันทึกหรือส่งออกจากอุปกรณ์/);
   assert.doesNotMatch(checkerSource, /fetch\s*\(/);
 });
+
+
+test("review15 exposes dedicated social-preview metadata", () => {
+  const pagePath = path.join(
+    repoRoot,
+    "frontend/src/app/review15/page.tsx",
+  );
+  const pageSource = fs.readFileSync(pagePath, "utf8");
+
+  assert.match(pageSource, /เช็กข้อความรีวิวให้ครบ 15 คำตามกฎ Review KPI/);
+  assert.match(pageSource, /https:\/\/lineoppo\.click\/รีวิว15/);
+  assert.match(pageSource, /https:\/\/lineoppo\.click\/review15\/opengraph-image/);
+  assert.match(pageSource, /summary_large_image/);
+});
+
+test("review15 has a 1200x630 generated Open Graph image", () => {
+  const imagePath = path.join(
+    repoRoot,
+    "frontend/src/app/review15/opengraph-image.tsx",
+  );
+  const imageSource = fs.readFileSync(imagePath, "utf8");
+
+  assert.match(imageSource, /ImageResponse/);
+  assert.match(imageSource, /width:\s*1200/);
+  assert.match(imageSource, /height:\s*630/);
+  assert.match(imageSource, /ตรวจสอบรีวิว/);
+  assert.match(imageSource, /15/);
+  assert.match(imageSource, /Review KPI/);
+});
