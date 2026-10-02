@@ -60,7 +60,7 @@ async function main() {
         oldRowOverwriteRisks: preview.oldRowOverwriteRisks,
         closedStoreOperationalReview: preview.closedStoreOperationalReview,
         expectedStores: preview.parsed
-          .filter((row) => ["17469", "27258", "30280", "30783", "30538", "31749", "30679", "32610", "32983"].includes(row.externalStoreId ?? ""))
+          .filter((row) => ["2425", "18532", "21064", "24377", "26191", "26533", "27258", "30280", "30538", "30679", "30783", "31749", "31754", "32610", "32955", "32983"].includes(row.externalStoreId ?? ""))
           .map((row) => ({ externalStoreId: row.externalStoreId, storeName: row.storeName, accountName: row.accountName, lineId: row.lineId, sourceRowNumber: row.sourceRowNumber, isActive: row.isActive, dataQualityStatus: row.dataQualityStatus })),
       }));
       if (preview.identityConflicts.length > 0) process.exitCode = 1;
