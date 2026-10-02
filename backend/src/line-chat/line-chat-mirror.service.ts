@@ -497,21 +497,21 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
     try {
       await this.runCycle();
     } finally {
-      if (!this.schedulerActive) return;
+      if (this.schedulerActive) {
+        const delayAfterCycleMs = lineChatMirrorIntervalMs();
+        const nextCycleAt = new Date(Date.now() + delayAfterCycleMs);
+        this.sessionService.setMirrorCooldownUntil(nextCycleAt);
+        const cleanup = await this.sessionService.closeIdleManagedContexts("MIRROR_CYCLE_COOLDOWN");
 
-      const delayAfterCycleMs = lineChatMirrorIntervalMs();
-      const nextCycleAt = new Date(Date.now() + delayAfterCycleMs);
-      this.sessionService.setMirrorCooldownUntil(nextCycleAt);
-      const cleanup = await this.sessionService.closeIdleManagedContexts("MIRROR_CYCLE_COOLDOWN");
-
-      this.logger.log(JSON.stringify({
-        event: "line_chat_mirror_cooldown_started",
-        delayAfterCycleMs,
-        nextCycleAt: nextCycleAt.toISOString(),
-        contextsClosed: cleanup.closed,
-        contextCloseFailures: cleanup.failed,
-      }));
-      this.scheduleNextCycle(delayAfterCycleMs);
+        this.logger.log(JSON.stringify({
+          event: "line_chat_mirror_cooldown_started",
+          delayAfterCycleMs,
+          nextCycleAt: nextCycleAt.toISOString(),
+          contextsClosed: cleanup.closed,
+          contextCloseFailures: cleanup.failed,
+        }));
+        this.scheduleNextCycle(delayAfterCycleMs);
+      }
     }
   }
 
