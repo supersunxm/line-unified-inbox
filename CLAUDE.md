@@ -111,12 +111,19 @@ the dependency, show exactly what change would be required, and wait.
 - Keep commits focused. Do not force-push unless instructed.
 - **Stop at the pull request. Never merge to `main` yourself** — Railway deploys
   to production on merge, so merging is always the user's decision.
+- **Open every PR with base `main`.** After creating it, run
+  `gh pr view --json baseRefName` and confirm it says `main`. Do not stack PRs
+  on each other: branch each task from the latest `origin/main`, and if a task
+  depends on an unmerged PR, wait for that PR to merge into `main` first.
 
-## Validation (GitHub Actions currently unavailable)
+## Validation
 
-GitHub Actions quota is exhausted; do not trigger or rerun CI. Local validation
-is the temporary quality gate, and it is weaker than CI: a passing local build
-does not prove production safety.
+GitHub Actions is available. **CI must be green before merge.** Do not bypass a
+failing check: no merging over a red check, and no disabling, skipping, or
+loosening a check to get it green. Fix the cause. Local validation still runs
+first: run the commands below before you push, so CI confirms rather than
+discovers. A passing local build or CI run does not by itself prove production
+safety.
 
 Run from `frontend/`:
 
@@ -158,7 +165,7 @@ confirming none exists.
 3. Key implementation decisions
 4. Validation commands actually run
 5. Result of each
-6. What could not be validated because CI is unavailable
+6. What could not be validated locally, and the CI result (`gh pr checks`) once the PR exists
 7. Remaining risks
 8. Branch name
 9. Commit SHA, if committed
