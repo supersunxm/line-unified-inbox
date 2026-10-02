@@ -23,7 +23,7 @@ import { isLineChatUserId } from "./line-chat-chat-discovery";
 import { configuredLineChatMirrorStoreCodes } from "./line-chat-mirror.service";
 import { selectLineChatStoreOa } from "./line-chat-store-oa-selector";
 import {
-  APPROVED_EXACT_MIRROR_MANIFEST_SHA256,
+  approvedExactMirrorManifest,
   EXACT_MIRROR_MANIFEST_MAX_ROWS,
   POST_LIVE_AUDIT_START_AT,
   exactMirrorIdentityKey,
@@ -363,14 +363,17 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
    * (lineOfficialAccountId, managerMessageId) identity. It never calls runCycle
    * and never performs a time-window candidate scan.
    */
-  public reconcileExactManifestCsv(input: {
+  public async reconcileExactManifestCsv(input: {
     bytes: Uint8Array;
     apply?: boolean;
   }): Promise<ExactMirrorManifestExecutionResult> {
+    const approved = approvedExactMirrorManifest(input.bytes);
     return this.reconcileExactManifestCsvWithExpectedHash(
       input.bytes,
-      APPROVED_EXACT_MIRROR_MANIFEST_SHA256,
+      approved.sha256,
       input.apply ?? false,
+      approved.rows,
+      approved.stores,
     );
   }
 
@@ -378,9 +381,11 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
     bytes: Uint8Array,
     expectedSha256: string,
     apply: boolean,
+    expectedRows: number = EXACT_MIRROR_MANIFEST_MAX_ROWS,
+    expectedStores: number = 24,
   ): Promise<ExactMirrorManifestExecutionResult> {
     const manifest = parseExactMirrorManifestCsv(bytes, expectedSha256);
-    if (manifest.rows.length !== EXACT_MIRROR_MANIFEST_MAX_ROWS || manifest.storeCount !== 24) {
+    if (manifest.rows.length !== expectedRows || manifest.storeCount !== expectedStores) {
       throw new Error("EXACT_MIRROR_MANIFEST_EXPECTED_490_ROWS_ACROSS_24_STORES");
     }
 

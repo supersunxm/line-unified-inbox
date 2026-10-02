@@ -1,3 +1,4 @@
+import { canonicalSourceIds, isCompatibleHistoricalDuplicate } from "./canonical-source-identity";
 import { createHash } from "node:crypto";
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { MessageDirection, MessageDeliveryStatus, MessageType, Prisma } from "@prisma/client";
@@ -743,13 +744,7 @@ export class HistoricalTimelineService {
         messages: [],
       };
       const duplicate = chat.messages.some((current) => {
-        const sameSource = current.externalMessageId === message.sourceEventId
-          || current.externalMessageId === `line-chat-manager:${message.sourceEventId}`;
-        return sameSource
-          && current.messageType === MessageType.TEXT
-          && current.direction === message.direction
-          && current.sentAt.getTime() === message.sentAt.getTime()
-          && current.text === message.text;
+        return isCompatibleHistoricalDuplicate(current, message);
       });
       if (!duplicate) {
         chat.messages.push({
@@ -1081,8 +1076,7 @@ export class HistoricalTimelineService {
       const messages = chatMessages.get(key) ?? [];
       for (const message of conversation.messages) {
         currentMessageCount += 1;
-        const sourceEventId = normalizedSourceEventId(message.externalMessageId);
-        if (sourceEventId) {
+        for (const sourceEventId of canonicalSourceIds(message)) {
           setUniqueKey(sourceEventConversationKey, sourceEventIdentityKey(currentOaId, sourceEventId), key);
         }
         messages.push({
@@ -1181,13 +1175,7 @@ export class HistoricalTimelineService {
       chatScopes.set(key, { storeId: currentStoreId, lineOfficialAccountId: currentOaId, lineChatUserId: message.lineChatUserId });
       const messages = chatMessages.get(key) ?? [];
       const duplicate = messages.some((current) => {
-        const hasSameSource = current.externalMessageId === message.sourceEventId
-          || current.externalMessageId === `line-chat-manager:${message.sourceEventId}`;
-        return hasSameSource
-          && current.messageType === MessageType.TEXT
-          && current.direction === message.direction
-          && current.sentAt.getTime() === message.sentAt.getTime()
-          && current.text === message.text;
+        return isCompatibleHistoricalDuplicate(current, message);
       });
       if (duplicate) {
         duplicateHistoricalRows += 1;

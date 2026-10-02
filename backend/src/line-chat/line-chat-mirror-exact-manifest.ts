@@ -2,6 +2,16 @@ import { createHash } from "node:crypto";
 
 export const EXACT_MIRROR_MANIFEST_MAX_ROWS = 490;
 export const APPROVED_EXACT_MIRROR_MANIFEST_SHA256 = "62728708a1bf2a9500f03d4a750c9f8b59ce4045c4de7003e59014587630846d";
+export const APPROVED_ADDITIONAL_MIRROR_MANIFEST_SHA256 = "59eb6af927714169c2a3bb51bfdb52c03a82c996cc584497fbd479800e13a55c";
+
+/** Immutable proof sets; callers cannot supply their own digest or expand execution scope. */
+export function approvedExactMirrorManifest(bytes: Uint8Array): { sha256: string; rows: number; stores: number } {
+  const sha256 = createHash("sha256").update(bytes).digest("hex");
+  if (sha256 === APPROVED_EXACT_MIRROR_MANIFEST_SHA256) return { sha256, rows: 490, stores: 24 };
+  if (sha256 === APPROVED_ADDITIONAL_MIRROR_MANIFEST_SHA256) return { sha256, rows: 4, stores: 2 };
+  throw new Error("EXACT_MIRROR_MANIFEST_DIGEST_MISMATCH");
+}
+
 export const POST_LIVE_AUDIT_START_AT = new Date("2026-08-31T17:00:00.000Z");
 export const POST_LIVE_AUDIT_FREEZE_AT = new Date("2026-10-01T15:57:00.000Z");
 

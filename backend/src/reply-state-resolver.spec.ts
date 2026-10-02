@@ -355,3 +355,20 @@ void test("event-only historical evidence alone is NO_MESSAGE_EVIDENCE", () => {
   assert.equal(result.state, "AMBIGUOUS");
   if (result.state === "AMBIGUOUS") assert.equal(result.reason, "NO_MESSAGE_EVIDENCE");
 });
+
+void test("provider identity and bounded timestamp drift deduplicate without reply ambiguity", () => {
+  const timeline = normalizeReplyTimeline({
+    canonical: [canonical("provider-c", "INBOUND", "2026-09-01T10:00:00.082Z", { externalMessageId: "app-id", originalText: "hello", rawPayload: { providerMessageId: "provider-source" } })],
+    historical: [historical("provider-h", "INBOUND", "2026-09-01T10:00:00.000Z", { sourceEventId: "provider-source", text: "hello" })],
+  });
+  assert.equal(timeline.length, 1);
+  assert.equal(timeline[0].classificationConflict, false);
+  assert.equal(timeline[0].sentAt.toISOString(), "2026-09-01T10:00:00.082Z");
+});
+void test("provider identity timestamp conflict remains explicit above one second", () => {
+  const timeline = normalizeReplyTimeline({
+    canonical: [canonical("provider-c", "INBOUND", "2026-09-01T10:00:02Z", { externalMessageId: "app-id", originalText: "hello", rawPayload: { providerMessageId: "provider-source" } })],
+    historical: [historical("provider-h", "INBOUND", "2026-09-01T10:00:00Z", { sourceEventId: "provider-source", text: "hello" })],
+  });
+  assert.equal(timeline[0].classificationConflict, true);
+});

@@ -782,12 +782,10 @@ void test("ConversationsService getBmReplyStatusSummary and ConversationsControl
         findMany: async () => [{ id: "store-1", name: "Store 1" }],
       },
       conversation: {
-        groupBy: async (params: { _min?: { latestMessageAt?: boolean } }) => {
-          if (params._min) {
-            return [{ storeId: "store-1", _min: { latestMessageAt: new Date(Date.now() - 150 * 60 * 1000) } }];
-          }
-          return [{ storeId: "store-1", bmReplyStatus: "NOT_REPLIED", _count: { _all: 3 } }];
-        },
+        findMany: async () => Array.from({ length: 3 }, () => ({
+          storeId: "store-1", latestMessageAt: new Date(Date.now() - 150 * 60 * 1000),
+          bmReplyStatus: "NOT_REPLIED", replyStateProjection: { state: "NOT_REPLIED" },
+        })),
       },
     } as never,
     noopOperations,
@@ -841,12 +839,12 @@ void test("ConversationsService.getBmReplyStatusSummary aggregates overall and p
       ]),
     },
     conversation: {
-      groupBy: () => Promise.resolve([
-        { storeId: "store-1", bmReplyStatus: BmReplyStatus.NOT_REPLIED, _count: { _all: 10 } },
-        { storeId: "store-1", bmReplyStatus: BmReplyStatus.NOTIFIED_BM, _count: { _all: 5 } },
-        { storeId: "store-1", bmReplyStatus: BmReplyStatus.REPLIED, _count: { _all: 1 } },
-        { storeId: "store-2", bmReplyStatus: BmReplyStatus.NOT_REPLIED, _count: { _all: 20 } },
-        { storeId: "store-2", bmReplyStatus: BmReplyStatus.REPLIED, _count: { _all: 2 } },
+      findMany: () => Promise.resolve([
+        ...Array.from({ length: 10 }, () => ({ storeId: "store-1", bmReplyStatus: BmReplyStatus.NOT_REPLIED, latestMessageAt: null })),
+        ...Array.from({ length: 5 }, () => ({ storeId: "store-1", bmReplyStatus: BmReplyStatus.NOTIFIED_BM, latestMessageAt: null })),
+        { storeId: "store-1", bmReplyStatus: BmReplyStatus.REPLIED, latestMessageAt: null },
+        ...Array.from({ length: 20 }, () => ({ storeId: "store-2", bmReplyStatus: BmReplyStatus.NOT_REPLIED, latestMessageAt: null })),
+        ...Array.from({ length: 2 }, () => ({ storeId: "store-2", bmReplyStatus: BmReplyStatus.REPLIED, latestMessageAt: null })),
       ]),
     },
   } as unknown as PrismaService;
@@ -854,14 +852,14 @@ void test("ConversationsService.getBmReplyStatusSummary aggregates overall and p
   const service = new ConversationsService(prisma, noopOperations);
   const summary = await service.getBmReplyStatusSummary(null);
 
-  // 1. Overall aggregation across all stores (10+20=30 NOT_REPLIED, 5 NOTIFIED_BM, 1+2=3 REPLIED)
-  assert.equal(summary.overview.notReplied, 30);
-  assert.equal(summary.overview.notifiedBm, 5);
+  // Production effective-state contract treats legacy NOTIFIED_BM as waiting unless a reply projection proves otherwise.
+  assert.equal(summary.overview.notReplied, 35);
+  assert.equal(summary.overview.notifiedBm, 0);
   assert.equal(summary.overview.replied, 3);
 
   // 2. Per-store aggregation
   assert.deepEqual(summary.stores, [
-    { id: "store-1", storeId: "store-1", masterStoreId: null, externalStoreId: null, storeName: "Store Alpha", notReplied: 10, notifiedBm: 5, replied: 1, oldestWaitingMinutes: 0 },
+    { id: "store-1", storeId: "store-1", masterStoreId: null, externalStoreId: null, storeName: "Store Alpha", notReplied: 15, notifiedBm: 0, replied: 1, oldestWaitingMinutes: 0 },
     { id: "store-2", storeId: "store-2", masterStoreId: null, externalStoreId: null, storeName: "Store Beta", notReplied: 20, notifiedBm: 0, replied: 2, oldestWaitingMinutes: 0 },
     // 3. Empty store handling
     { id: "store-3", storeId: "store-3", masterStoreId: null, externalStoreId: null, storeName: "Store Gamma Empty", notReplied: 0, notifiedBm: 0, replied: 0, oldestWaitingMinutes: 0 },

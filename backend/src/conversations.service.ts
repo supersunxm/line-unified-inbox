@@ -827,7 +827,13 @@ export class ConversationsService {
         FROM public."HistoricalTimelineMessage" h
         JOIN public."Message" m ON m."conversationId" = ${id}
           AND (m."externalMessageId" = h."sourceEventId"
-            OR m."externalMessageId" = 'line-chat-manager:' || h."sourceEventId")
+            OR m."externalMessageId" = 'line-chat-manager:' || h."sourceEventId"
+            OR m."rawPayload"->>'providerMessageId' IN (h."sourceEventId", 'line-chat-manager:' || h."sourceEventId")
+            OR m."rawPayload"->>'managerMessageId' IN (h."sourceEventId", 'line-chat-manager:' || h."sourceEventId"))
+          AND (m."externalMessageId" IN (h."sourceEventId", 'line-chat-manager:' || h."sourceEventId")
+            OR (m."messageType" = 'TEXT' AND m.direction = h.direction
+              AND m."originalText" = h.text
+              AND abs(extract(epoch FROM (m."sentAt" - h."sentAt"))) <= 1))
         WHERE h."lineOfficialAccountId" = ${conversation.lineOfficialAccountId}
           AND h."storeId" = ${conversation.storeId}
           AND h."lineChatUserId" IN (${Prisma.join([...historicalLineChatUserIds])})

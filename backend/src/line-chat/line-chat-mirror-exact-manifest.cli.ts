@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import { PrismaService } from "../prisma.service";
 import { LineChatMirrorReconcilerService } from "./line-chat-mirror-reconciler.service";
 import {
-  APPROVED_EXACT_MIRROR_MANIFEST_SHA256,
+  approvedExactMirrorManifest,
   parseExactMirrorManifestCsv,
 } from "./line-chat-mirror-exact-manifest";
 
@@ -19,7 +19,7 @@ function applyRequested(): boolean {
 
 async function main(): Promise<void> {
   const bytes = await readFile(manifestPathArg());
-  parseExactMirrorManifestCsv(bytes, APPROVED_EXACT_MIRROR_MANIFEST_SHA256);
+  parseExactMirrorManifestCsv(bytes, approvedExactMirrorManifest(bytes).sha256);
 
   const prisma = new PrismaService();
   try {

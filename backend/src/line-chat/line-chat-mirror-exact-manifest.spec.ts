@@ -513,3 +513,24 @@ test("apply uses the existing reconciler and the second run is insert-free", asy
   assert.equal(second.writes, 0);
   assert.equal(second.unexplained, 0);
 });
+
+test("a separately bounded four-row manifest never discovers adjacent original rows", async () => {
+  const harness = exactManifestHarness();
+  const all = csvRows();
+  const bytes = bytesFor([all[0], all[1], all[24], all[25]]);
+  const runner = harness.service as unknown as {
+    reconcileExactManifestCsvWithExpectedHash: (bytes: Uint8Array, hash: string, apply: boolean, rows: number, stores: number) => Promise<ExactMirrorManifestExecutionResult>;
+  };
+  const first = await runner.reconcileExactManifestCsvWithExpectedHash(bytes, digest(bytes), true, 4, 2);
+  assert.equal(first.manifestRows, 4);
+  assert.equal(first.rawRowsFound, 4);
+  assert.equal(first.writes, 4);
+  assert.equal(first.outsideManifestConsidered, 0);
+  assert.equal(harness.canonicalRows.length, 4);
+  assert.equal(harness.mirrorUpdates.length, 4);
+  const second = await runner.reconcileExactManifestCsvWithExpectedHash(bytes, digest(bytes), false, 4, 2);
+  assert.equal(second.alreadyCanonical, 4);
+  assert.equal(second.stillSafeToApply, 0);
+  assert.equal(second.writes, 0);
+  await assert.rejects(harness.service.reconcileExactManifestCsv({ bytes, apply: true }), /DIGEST_MISMATCH/u);
+});
