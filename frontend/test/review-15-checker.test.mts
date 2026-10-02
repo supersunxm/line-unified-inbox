@@ -53,7 +53,7 @@ test("new Thai public URL is primary while the old URL remains compatible", () =
   ]);
 });
 
-test("public review checker is client-only and does not call an API", () => {
+test("public review checker uses Google Vision for image scanning", () => {
   const checkerPath = path.join(
     repoRoot,
     "frontend/src/app/review15/review-15-checker.tsx",
@@ -61,13 +61,13 @@ test("public review checker is client-only and does not call an API", () => {
   const checkerSource = fs.readFileSync(checkerPath, "utf8");
 
   assert.match(checkerSource, /segmentThaiWords/);
-  assert.match(checkerSource, /segmentThaiWords/);
   assert.match(checkerSource, /สแกนจากภาพ/);
-  assert.match(checkerSource, /tha\+eng/);
-  assert.match(checkerSource, /tesseract\.js@5\.0\.5/);
+  assert.match(checkerSource, /\/api-backend\/review15\/scan/);
+  assert.match(checkerSource, /Google Vision OCR/);
   assert.match(checkerSource, /กฎการนับคำ/);
-  assert.match(checkerSource, /ข้อความและผลตรวจไม่ถูกบันทึกลงฐานข้อมูล/);
-  assert.doesNotMatch(checkerSource, /fetch\s*\(/);
+  assert.match(checkerSource, /ไม่บันทึกไฟล์ภาพลงฐานข้อมูล/);
+  assert.doesNotMatch(checkerSource, /tesseract\.js/);
+  assert.doesNotMatch(checkerSource, /window\.Tesseract/);
 });
 
 
