@@ -83,7 +83,7 @@ function noRawCandidatesPrisma(whereCalls: unknown[]) {
     },
     lineOfficialAccount: { findMany: async () => [] },
     conversation: { findMany: async () => [] },
-    historicalTimelineMessage: { groupBy: async () => [] },
+    historicalTimelineMessage: { groupBy: async () => [], findMany: async () => [] },
   };
 }
 
@@ -196,16 +196,25 @@ function exactManifestHarness(options: {
   const rawWhereCalls: unknown[] = [];
   const prisma = {
     lineChatMirrorMessage: {
-      findMany: async (query: { where: { OR: Array<{ lineOfficialAccountId: string; managerMessageId: string }> } }) => {
-        rawWhereCalls.push(query.where);
-        const wanted = new Set(query.where.OR.map((identity) => exactMirrorIdentityKey({
-          lineOfficialAccountId: identity.lineOfficialAccountId,
-          sourceEventId: identity.managerMessageId,
-        })));
-        return rawRows.filter((row) => wanted.has(exactMirrorIdentityKey({
-          lineOfficialAccountId: row.lineOfficialAccountId,
-          sourceEventId: row.managerMessageId,
-        })));
+      findMany: async (query: {
+        where: {
+          OR?: Array<{ lineOfficialAccountId: string; managerMessageId: string }>;
+          managerMessageId?: { in: string[] };
+        };
+      }) => {
+        if (query.where.OR) {
+          rawWhereCalls.push(query.where);
+          const wanted = new Set(query.where.OR.map((identity) => exactMirrorIdentityKey({
+            lineOfficialAccountId: identity.lineOfficialAccountId,
+            sourceEventId: identity.managerMessageId,
+          })));
+          return rawRows.filter((row) => wanted.has(exactMirrorIdentityKey({
+            lineOfficialAccountId: row.lineOfficialAccountId,
+            sourceEventId: row.managerMessageId,
+          })));
+        }
+        const sourceIds = query.where.managerMessageId?.in ?? [];
+        return rawRows.filter((row) => sourceIds.includes(row.managerMessageId));
       },
       update: async (input: { where: { id: string }; data: { reconcileStatus: string; reconcileAttempts?: number } }) => {
         mirrorUpdates.push({ id: input.where.id, data: input.data });
@@ -245,9 +254,12 @@ function exactManifestHarness(options: {
     historicalConversationCrosswalk: { findMany: async () => [] },
     message: {
       findMany: async (query: { where: Record<string, unknown> }) => {
-        if (query.where.externalMessageId) {
-          const externalMessageIds = (query.where.externalMessageId as { in: string[] }).in;
-          return canonicalRows.filter((message) => message.externalMessageId && externalMessageIds.includes(message.externalMessageId));
+        if (Array.isArray(query.where.OR)) {
+          const alternatives = query.where.OR as Array<Record<string, unknown>>;
+          return canonicalRows.filter((message) => alternatives.some((alternative) => {
+            const external = alternative.externalMessageId as { in?: string[] } | undefined;
+            return Boolean(external?.in?.includes(message.externalMessageId ?? ""));
+          }));
         }
         if (query.where.direction) return [];
         if (query.where.conversationId) {
@@ -257,9 +269,15 @@ function exactManifestHarness(options: {
         }
         return canonicalRows;
       },
-      findFirst: async (query: { where: { externalMessageId: { in: string[] } } }) => canonicalRows.find(
-        (message) => message.externalMessageId && query.where.externalMessageId.in.includes(message.externalMessageId),
-      ) ?? null,
+      findFirst: async (query: { where: Record<string, unknown> }) => {
+        const alternatives = Array.isArray(query.where.OR)
+          ? query.where.OR as Array<Record<string, unknown>>
+          : [];
+        return canonicalRows.find((message) => alternatives.some((alternative) => {
+          const external = alternative.externalMessageId as { in?: string[] } | undefined;
+          return Boolean(external?.in?.includes(message.externalMessageId ?? ""));
+        })) ?? null;
+      },
       create: async (input: { data: Omit<typeof canonicalRows[number], "id"> }) => {
         const created = { ...input.data, id: `created-${canonicalRows.length}` };
         canonicalRows.push(created);
