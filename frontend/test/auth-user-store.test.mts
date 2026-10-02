@@ -275,10 +275,10 @@ test("AuthorizedSection reads the shared store and blocks on a skeleton, never f
   assert.doesNotMatch(gateCode, /api\.me\(/);
   assert.match(gateCode, /getAuthUser\(\)/);
   assert.match(gateCode, /authUserStore\.peekUsable\(\)/);
-  assert.match(gateCode, /<ShellSkeleton>\s*<WorkspaceSkeleton label=\{t\.checking\} \/>/);
+  assert.match(gateCode, /<ShellSkeleton placeholders=\{showSkeleton\}>\s*\{showSkeleton && <WorkspaceSkeleton label=\{t\.checking\} \/>\}/);
   assert.match(gateCode, /beginLoginRedirect\(\);\s*window\.location\.replace\("\/login"\);/);
   // Children (and therefore every data fetch) only render once an allowed user exists.
   assert.match(gateCode, /const allowed = user !== null && canAccessPrimarySection\(user, section\);/);
-  assert.match(gateCode, /if \(!allowed\) \{[\s\S]*?<ShellSkeleton>/);
+  assert.match(gateCode, /if \(!allowed \|\| showSkeleton\) \{[\s\S]*?<ShellSkeleton placeholders=\{showSkeleton\}>/);
   assert.match(gateCode, /<AuthorizedUserContext\.Provider value=\{user\}>\{children\}<\/AuthorizedUserContext\.Provider>/);
 });

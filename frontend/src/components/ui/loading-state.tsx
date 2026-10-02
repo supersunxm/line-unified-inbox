@@ -8,7 +8,8 @@ export function Skeleton({
 }: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={`animate-pulse rounded bg-[var(--app-surface-subtle)] border border-[var(--app-border-subtle)]/50 ${className}`}
+      aria-hidden="true"
+      className={`motion-safe:animate-pulse rounded bg-[var(--app-surface-subtle)] ${className}`}
       {...rest}
     />
   );
