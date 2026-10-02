@@ -7,6 +7,32 @@ const MIN_WORDS = 15;
 const MAX_CHARS = 500;
 const MAX_SCAN_IMAGES = 3;
 const MAX_IMAGE_BYTES = 12 * 1024 * 1024;
+type Mode = "text" | "image";
+
+type ScanImage = {
+  id: string;
+  file: File;
+  previewUrl: string;
+};
+
+type ScanCandidate = {
+  id: string;
+  text: string;
+  sourceName: string;
+  confirmed: boolean;
+  confidence: number | null;
+};
+
+type VisionScanResponse = {
+  provider: "google-cloud-vision";
+  imagesProcessed: number;
+  candidates: Array<{
+    imageIndex: number;
+    text: string;
+    confidence: number | null;
+  }>;
+};
+
 async function optimizeImageForOcr(file: File): Promise<Blob> {
   const imageUrl = URL.createObjectURL(file);
   try {
