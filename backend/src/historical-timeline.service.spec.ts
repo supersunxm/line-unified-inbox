@@ -303,6 +303,7 @@ test("reply analytics merges an exact live duplicate with Historical text and us
   assert.equal(result.overview.within24h, 1);
   assert.equal(result.sources.exactDuplicatesSuppressed, 1);
   assert.equal(result.sources.historicalTextMessages, 1);
+  assert.ok(result.responderCoverage);
   assert.equal(result.responderCoverage.knownHistoricalReplyCycles, 1);
   assert.equal(result.responders[0]?.source, "LINE_MANAGER_BIZ_ID");
   assert.equal(result.responders[0]?.total, 1);
@@ -709,6 +710,66 @@ test("reply analytics uses exact source-event anchor when no crosswalk exists", 
   assert.equal(result.overview.total, 1);
   assert.equal(result.overview.within24h, 1);
   assert.equal(result.sources.sourceAnchoredHistoricalRows, 1);
+});
+
+test("reply analytics keeps source-event anchors scoped to their OA", async () => {
+  const inboundAt = new Date("2026-09-01T02:00:00.000Z");
+  const prisma = {
+    store: { findMany: async () => [{ id: "store-1", name: "Store One" }] },
+    lineOfficialAccount: {
+      findMany: async () => [
+        { id: "oa-1", storeId: "store-1", basicId: "@one", channelId: "channel-1", destinationId: "destination-1" },
+        { id: "oa-2", storeId: "store-1", basicId: "@two", channelId: "channel-2", destinationId: "destination-2" },
+      ],
+    },
+    historicalTimelineMessage: {
+      findMany: async () => [{
+        id: "historical-outbound-other-oa",
+        storeId: "store-1",
+        lineOfficialAccountId: "oa-2",
+        lineChatUserId: "chat-2",
+        sourceEventId: "shared-manager-id",
+        sourceEventType: "messageSent",
+        direction: MessageDirection.OUTBOUND,
+        text: "Other OA response",
+        sentAt: new Date(inboundAt.getTime() + 20 * 60_000),
+        senderBizId: "biz-2",
+      }],
+    },
+    historicalConversationCrosswalk: { findMany: async () => [] },
+    conversation: {
+      findMany: async () => [{
+        id: "conversation-1",
+        storeId: "store-1",
+        lineOfficialAccountId: "oa-1",
+        lineChatUserId: null,
+        messages: [{
+          id: "canonical-inbound-oa-1",
+          externalMessageId: "line-chat-manager:shared-manager-id",
+          direction: MessageDirection.INBOUND,
+          messageType: MessageType.TEXT,
+          deliveryStatus: MessageDeliveryStatus.DELIVERED,
+          originalText: "Customer message",
+          sentAt: inboundAt,
+          senderUserId: null,
+          senderDisplayName: null,
+          rawPayload: null,
+        }],
+      }],
+    },
+  } as unknown as PrismaService;
+  const storeAccess = { accessibleStoreIds: async () => null } as unknown as StoreAccessService;
+  const service = new HistoricalTimelineService(prisma, storeAccess);
+  const result = await service.replyAnalytics(
+    { id: "admin-1", email: "admin@example.com", displayName: "Admin", role: "ADMIN" } as AuthUser,
+    { dateFrom: "2026-09-01", dateTo: "2026-09-01", mode: "RESPONSE_CYCLES" },
+  );
+
+  assert.equal(result.overview.total, 1);
+  assert.equal(result.overview.responded, 0);
+  assert.equal(result.overview.pending, 1);
+  assert.equal(result.sources.sourceAnchoredHistoricalRows, 0);
+  assert.equal(result.sources.virtualHistoricalRows, 1);
 });
 
 

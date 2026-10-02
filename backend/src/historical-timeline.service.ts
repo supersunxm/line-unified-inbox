@@ -1015,6 +1015,8 @@ export class HistoricalTimelineService {
     const canonicalChatKey = (conversationId: string) => `canonical:${conversationId}`;
     const historicalIdentityKey = (storeId: string, lineOfficialAccountId: string, lineChatUserId: string) =>
       `${storeId}\u0000${lineOfficialAccountId}\u0000${lineChatUserId}`;
+    const sourceEventIdentityKey = (lineOfficialAccountId: string, sourceEventId: string) =>
+      `${lineOfficialAccountId}\u0000${sourceEventId}`;
 
     const crosswalkByHistoricalIdentity = new Map<string, string>();
     const crosswalkCanonicalConversationIds = new Set<string>();
@@ -1080,7 +1082,9 @@ export class HistoricalTimelineService {
       for (const message of conversation.messages) {
         currentMessageCount += 1;
         const sourceEventId = normalizedSourceEventId(message.externalMessageId);
-        if (sourceEventId) setUniqueKey(sourceEventConversationKey, sourceEventId, key);
+        if (sourceEventId) {
+          setUniqueKey(sourceEventConversationKey, sourceEventIdentityKey(currentOaId, sourceEventId), key);
+        }
         messages.push({
           id: message.id,
           direction: message.direction,
@@ -1099,6 +1103,32 @@ export class HistoricalTimelineService {
         });
       }
       chatMessages.set(key, messages);
+    }
+    const sourceAnchoredChatKeyByIdentity = new Map<string, string | null>();
+    for (const message of historicalRows) {
+      const currentIdentity = currentIdentityByOaId.get(message.lineOfficialAccountId);
+      const currentStoreId = currentIdentity?.currentStoreId;
+      const currentOaId = currentIdentity?.currentOaId;
+      if (!currentStoreId || !currentOaId) continue;
+      const identity = historicalIdentityKey(currentStoreId, currentOaId, message.lineChatUserId);
+      const sourceEventId = normalizedSourceEventId(message.sourceEventId);
+      if (!sourceEventId) continue;
+      const sourceIdentity = sourceEventIdentityKey(currentOaId, sourceEventId);
+      if (!sourceEventConversationKey.has(sourceIdentity)) continue;
+
+      const anchorKey = sourceEventConversationKey.get(sourceIdentity) ?? null;
+      const crosswalkConversationId = crosswalkByHistoricalIdentity.get(identity);
+      const crosswalkKey = crosswalkConversationId ? canonicalChatKey(crosswalkConversationId) : null;
+      const directKey = directConversationKeyByIdentity.get(identity);
+      if (
+        !anchorKey
+        || (crosswalkKey && crosswalkKey !== anchorKey)
+        || (directKey !== undefined && directKey !== anchorKey)
+      ) {
+        sourceAnchoredChatKeyByIdentity.set(identity, null);
+        continue;
+      }
+      setUniqueKey(sourceAnchoredChatKeyByIdentity, identity, anchorKey);
     }
     const historicalInboundMessages = historicalRows.filter((message) => message.direction === MessageDirection.INBOUND).length;
     const historicalAutoOutboundMessages = historicalRows.filter((message) =>
@@ -1122,18 +1152,23 @@ export class HistoricalTimelineService {
       const identity = historicalIdentityKey(currentStoreId, currentOaId, message.lineChatUserId);
       const crosswalkConversationId = crosswalkByHistoricalIdentity.get(identity);
       const crosswalkKey = crosswalkConversationId ? canonicalChatKey(crosswalkConversationId) : null;
-      const sourceAnchorKey = sourceEventConversationKey.get(message.sourceEventId) ?? null;
+      const normalizedEventId = normalizedSourceEventId(message.sourceEventId);
+      const sourceAnchorKey = normalizedEventId
+        ? sourceEventConversationKey.get(sourceEventIdentityKey(currentOaId, normalizedEventId)) ?? null
+        : null;
+      const sourceAnchoredChatKey = sourceAnchoredChatKeyByIdentity.get(identity) ?? null;
       const directKey = directConversationKeyByIdentity.get(identity) ?? null;
       const key = crosswalkKey
         ?? sourceAnchorKey
+        ?? sourceAnchoredChatKey
         ?? directKey
         ?? directChatKey(currentStoreId, currentOaId, message.lineChatUserId, "");
 
       if (crosswalkKey) {
         crosswalkLinkedHistoricalRows += 1;
         setMergePath(key, "CROSSWALK");
-      } else if (sourceAnchorKey) {
-        sourceAnchoredHistoricalRows += 1;
+      } else if (sourceAnchorKey || sourceAnchoredChatKey) {
+        if (sourceAnchorKey) sourceAnchoredHistoricalRows += 1;
         setMergePath(key, "SOURCE_ANCHOR");
       } else if (directKey) {
         directLinkedHistoricalRows += 1;
