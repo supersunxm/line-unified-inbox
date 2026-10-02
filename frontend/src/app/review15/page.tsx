@@ -10,16 +10,19 @@ export const metadata: Metadata = {
     absolute: title,
   },
   description,
+  alternates: {
+    canonical: "https://lineoppo.click/รีวิว15คำ",
+  },
   openGraph: {
     title,
     description,
-    url: "https://lineoppo.click/รีวิว15",
+    url: "https://lineoppo.click/รีวิว15คำ",
     siteName: "OPPO Brand Shop",
     locale: "th_TH",
     type: "website",
     images: [
       {
-        url: "https://lineoppo.click/review15/opengraph-image",
+        url: "https://lineoppo.click/review15/opengraph-image?v=2",
         width: 1200,
         height: 630,
         alt: "ตรวจสอบรีวิว 15 คำ | OPPO Brand Shop",
@@ -30,7 +33,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title,
     description,
-    images: ["https://lineoppo.click/review15/opengraph-image"],
+    images: ["https://lineoppo.click/review15/opengraph-image?v=2"],
   },
 };
 

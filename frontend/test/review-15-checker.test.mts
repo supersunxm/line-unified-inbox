@@ -4,7 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { countThaiWords, segmentThaiWords } from "../src/lib/thai-word-counter.ts";
-import { createReview15Rewrite } from "../next.config.ts";
+import { createReview15Rewrites } from "../next.config.ts";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -36,11 +36,17 @@ test("Google Review checker compatibility module re-exports the canonical counte
   assert.doesNotMatch(compatibilitySource, /function\s+segmentThaiWords\s*\(/);
 });
 
-test("encoded Thai public URL rewrites to a stable public route", () => {
-  assert.deepEqual(createReview15Rewrite(), {
-    source: "/%E0%B8%A3%E0%B8%B5%E0%B8%A7%E0%B8%B4%E0%B8%A715",
-    destination: "/review15",
-  });
+test("new Thai public URL is primary while the old URL remains compatible", () => {
+  assert.deepEqual(createReview15Rewrites(), [
+    {
+      source: "/%E0%B8%A3%E0%B8%B5%E0%B8%A7%E0%B8%B4%E0%B8%A715%E0%B8%84%E0%B8%B3",
+      destination: "/review15",
+    },
+    {
+      source: "/%E0%B8%A3%E0%B8%B5%E0%B8%A7%E0%B8%B4%E0%B8%A715",
+      destination: "/review15",
+    },
+  ]);
 });
 
 test("public review checker is client-only and does not call an API", () => {
@@ -64,8 +70,8 @@ test("review15 exposes dedicated social-preview metadata", () => {
   const pageSource = fs.readFileSync(pagePath, "utf8");
 
   assert.match(pageSource, /เช็กข้อความรีวิวให้ครบ 15 คำตามกฎ Review KPI/);
-  assert.match(pageSource, /https:\/\/lineoppo\.click\/รีวิว15/);
-  assert.match(pageSource, /https:\/\/lineoppo\.click\/review15\/opengraph-image/);
+  assert.match(pageSource, /https:\/\/lineoppo\.click\/รีวิว15คำ/);
+  assert.match(pageSource, /https:\/\/lineoppo\.click\/review15\/opengraph-image\?v=2/);
   assert.match(pageSource, /summary_large_image/);
 });
 
