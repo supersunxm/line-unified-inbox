@@ -1193,7 +1193,7 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
                 </svg>
               </span>
               <div className="space-y-0.5">
-                <p className="text-xs font-bold text-blue-900 dark:text-blue-200">
+                <p className="text-xs font-bold text-blue-900 dark:text-[var(--app-text-primary)]">
                   ระบบนี้ใช้สำหรับรับผลลัพธ์การตรวจ KPI จาก AI Audit ภายนอก
                 </p>
                 <p className="text-xs text-blue-700 dark:text-blue-300 opacity-90">
@@ -1203,7 +1203,7 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
             </div>
 
             <div className="flex items-center gap-3 shrink-0">
-              <span className="rounded-xl bg-white/80 dark:bg-blue-900/50 border border-blue-200 dark:border-blue-700/50 px-3 py-1.5 text-[11px] font-medium text-blue-900 dark:text-blue-200 shadow-xs">
+              <span className="rounded-xl bg-white/80 dark:bg-blue-900/50 border border-blue-200 dark:border-blue-700/50 px-3 py-1.5 text-[11px] font-medium text-blue-900 dark:text-[var(--app-text-primary)] shadow-xs">
                 เกณฑ์ Qualified: รูปภาพลูกค้า + รูปอยู่ในเดือนเป้าหมาย + ข้อความภาษาไทย ≥ 15 คำ
               </span>
               <button

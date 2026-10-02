@@ -51,12 +51,12 @@ function formatMetricDate(date: string, locale: string) {
 
 function GrowthPill({ value, locale }: { value: number | null; locale: string }) {
   const className = value === null
-    ? "bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500"
+    ? "bg-slate-100 text-slate-400 dark:bg-[var(--app-surface-subtle)] dark:text-[var(--app-text-secondary)]"
     : value > 0
       ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400"
       : value < 0
         ? "bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-400"
-        : "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400";
+        : "bg-slate-100 text-slate-500 dark:bg-[var(--app-surface-subtle)] dark:text-[var(--app-text-secondary)]";
   return (
     <span className={`inline-flex min-w-16 justify-center rounded-full px-2.5 py-1 text-xs font-semibold tabular-nums ${className}`}>
       {growth(value, locale)}
@@ -124,14 +124,14 @@ function MetricCard({
   }[icon];
 
   return (
-    <div className="rounded-[24px] border border-slate-200/70 bg-white p-5 shadow-[0_10px_28px_rgba(15,23,42,0.045)] dark:border-white/10 dark:bg-slate-900">
+    <div className="rounded-[24px] border border-slate-200/70 bg-white p-5 shadow-[0_10px_28px_rgba(15,23,42,0.045)] dark:border-[var(--app-border)] dark:bg-[var(--app-surface)]">
       <div className="flex items-start gap-4">
         <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${iconClass}`}>
           <MetricIconGlyph type={icon} />
         </div>
         <div className="min-w-0">
-          <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">{label}</p>
-          <p className="mt-1 text-3xl font-black tracking-[-0.035em] text-slate-950 dark:text-white">{value}</p>
+          <p className="text-xs font-semibold text-slate-500 dark:text-[var(--app-text-secondary)]">{label}</p>
+          <p className="mt-1 text-3xl font-black tracking-[-0.035em] text-slate-950 dark:text-[var(--app-text-primary)]">{value}</p>
           {growthText ? (
             <div className="mt-2 inline-flex rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">
               {growthText}
@@ -359,29 +359,29 @@ export function TikTokPublicDashboard({ overview, stores }: Props) {
     : null;
 
   return (
-    <PageContainer variant="wide" className="bg-slate-50/70 dark:bg-slate-950/20">
+    <PageContainer variant="wide" className="bg-slate-50/70 dark:bg-[var(--app-bg)]">
       <div className="space-y-5 pb-10">
-        <section className="relative overflow-hidden rounded-[28px] bg-[#07111f] px-6 py-7 text-white shadow-[0_20px_60px_rgba(15,23,42,0.16)] sm:px-8 lg:px-9">
+        <section className="relative overflow-hidden rounded-[28px] bg-[#07111f] px-6 py-7 text-white dark:border dark:border-[var(--app-border)] dark:bg-[var(--app-surface)] dark:text-[var(--app-text-primary)] shadow-[0_20px_60px_rgba(15,23,42,0.16)] sm:px-8 lg:px-9">
           <div className="absolute -right-12 -top-20 h-64 w-64 rounded-full bg-blue-400/[0.08] blur-3xl" />
           <div className="absolute -bottom-28 right-72 h-64 w-64 rounded-full bg-emerald-400/[0.08] blur-3xl" />
           <div className="relative flex flex-col gap-6 xl:flex-row xl:items-center xl:justify-between">
             <div className="flex min-w-0 items-center gap-4">
-              <div className="hidden h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.06] sm:flex">
-                <svg viewBox="0 0 24 24" aria-hidden="true" className="h-7 w-7 text-white">
+              <div className="hidden h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.06] dark:border-[var(--app-border)] dark:bg-[var(--app-surface-subtle)] sm:flex">
+                <svg viewBox="0 0 24 24" aria-hidden="true" className="h-7 w-7 text-white dark:text-[var(--app-text-primary)]">
                   <path d="M13 4v10a4.5 4.5 0 1 1-4-4.5" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
                   <path d="M13 4c1.6 2.8 3.7 4 6 4.3" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               </div>
               <div className="min-w-0">
-                <p className="text-[10px] font-bold tracking-[0.18em] text-white/45">{text.eyebrow}</p>
+                <p className="text-[10px] font-bold tracking-[0.18em] text-white/45 dark:text-[var(--app-text-secondary)]">{text.eyebrow}</p>
                 <h1 className="mt-1 text-3xl font-black tracking-[-0.045em] sm:text-4xl">{text.title}</h1>
-                <p className="mt-2 max-w-2xl text-sm leading-6 text-white/60">{text.subtitle}</p>
+                <p className="mt-2 max-w-2xl text-sm leading-6 text-white/60 dark:text-[var(--app-text-secondary)]">{text.subtitle}</p>
               </div>
             </div>
 
             <div className="flex flex-wrap items-center gap-2 text-xs">
               {timestampLabel && (
-                <span className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-2 font-medium text-white/70">
+                <span className="rounded-full border border-white/10 bg-white/[0.06] dark:border-[var(--app-border)] dark:bg-[var(--app-surface-subtle)] px-3 py-2 font-medium text-white/70 dark:text-[var(--app-text-secondary)]">
                   {timestampLabel}
                 </span>
               )}
@@ -389,13 +389,13 @@ export function TikTokPublicDashboard({ overview, stores }: Props) {
                 <span className="h-2 w-2 rounded-full bg-emerald-400" />
                 {text.exact}
               </span>
-              <span className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-2 font-semibold text-white/75">
+              <span className="rounded-full border border-white/10 bg-white/[0.06] dark:border-[var(--app-border)] dark:bg-[var(--app-surface-subtle)] px-3 py-2 font-semibold text-white/75 dark:text-[var(--app-text-secondary)]">
                 {number(overview.trackedStores, locale)} stores
               </span>
               <button
                 onClick={handleRefresh}
                 disabled={isRefreshing}
-                className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.06] text-white/75 transition hover:bg-white/[0.12] disabled:opacity-50"
+                className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.06] dark:border-[var(--app-border)] dark:bg-[var(--app-surface-subtle)] text-white/75 transition hover:bg-white/[0.12] disabled:opacity-50 dark:text-[var(--app-text-secondary)] dark:hover:bg-[var(--app-surface-hover)]"
                 aria-label={text.refresh}
                 title={text.refresh}
               >
@@ -436,9 +436,9 @@ export function TikTokPublicDashboard({ overview, stores }: Props) {
         </section>
 
         <section className="grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">
-          <div className="rounded-[24px] border border-slate-200/70 bg-white p-5 shadow-[0_10px_28px_rgba(15,23,42,0.045)] dark:border-white/10 dark:bg-slate-900 sm:p-6">
+          <div className="rounded-[24px] border border-slate-200/70 bg-white p-5 shadow-[0_10px_28px_rgba(15,23,42,0.045)] dark:border-[var(--app-border)] dark:bg-[var(--app-surface)] sm:p-6">
             <div>
-              <h2 className="text-lg font-bold tracking-tight text-slate-950 dark:text-white">{text.dailyOverview}</h2>
+              <h2 className="text-lg font-bold tracking-tight text-slate-950 dark:text-[var(--app-text-primary)]">{text.dailyOverview}</h2>
               <p className="mt-1 text-xs text-slate-400">
                 {text.dailyOverviewSub}{comparisonLabel ? ` · ${comparisonLabel}` : ""}
               </p>
@@ -453,9 +453,9 @@ export function TikTokPublicDashboard({ overview, stores }: Props) {
                 <div className="text-xs font-semibold text-rose-700 dark:text-rose-300">{text.losers}</div>
                 <div className="mt-2 text-3xl font-black text-rose-700 dark:text-rose-200">{number(dailySummary.losers, locale)}</div>
               </div>
-              <div className="rounded-2xl bg-slate-100 p-4 dark:bg-slate-800">
-                <div className="text-xs font-semibold text-slate-600 dark:text-slate-300">{text.flat}</div>
-                <div className="mt-2 text-3xl font-black text-slate-800 dark:text-slate-100">{number(dailySummary.flat, locale)}</div>
+              <div className="rounded-2xl bg-slate-100 p-4 dark:bg-[var(--app-surface-subtle)]">
+                <div className="text-xs font-semibold text-slate-600 dark:text-[var(--app-text-secondary)]">{text.flat}</div>
+                <div className="mt-2 text-3xl font-black text-slate-800 dark:text-[var(--app-text-primary)]">{number(dailySummary.flat, locale)}</div>
               </div>
               <div className="rounded-2xl bg-amber-50 p-4 dark:bg-amber-500/10">
                 <div className="text-xs font-semibold text-amber-700 dark:text-amber-300">{text.missing}</div>
@@ -463,10 +463,10 @@ export function TikTokPublicDashboard({ overview, stores }: Props) {
               </div>
             </div>
 
-            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3 dark:border-white/[0.06] dark:bg-slate-950/60">
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3 dark:border-[var(--app-border-subtle)] dark:bg-[var(--app-surface-subtle)]">
               <div>
                 <div className="text-xs text-slate-400">{text.followers}</div>
-                <div className="mt-1 text-xl font-black tabular-nums text-slate-950 dark:text-white">
+                <div className="mt-1 text-xl font-black tabular-nums text-slate-950 dark:text-[var(--app-text-primary)]">
                   {dailyGrowthText ?? "—"}
                 </div>
               </div>
@@ -476,10 +476,10 @@ export function TikTokPublicDashboard({ overview, stores }: Props) {
             </div>
           </div>
 
-          <div className="rounded-[24px] border border-slate-200/70 bg-white p-5 shadow-[0_10px_28px_rgba(15,23,42,0.045)] dark:border-white/10 dark:bg-slate-900 sm:p-6">
+          <div className="rounded-[24px] border border-slate-200/70 bg-white p-5 shadow-[0_10px_28px_rgba(15,23,42,0.045)] dark:border-[var(--app-border)] dark:bg-[var(--app-surface)] sm:p-6">
             <div className="flex items-end justify-between gap-4">
               <div>
-                <h2 className="text-lg font-bold tracking-tight text-slate-950 dark:text-white">{text.ranking}</h2>
+                <h2 className="text-lg font-bold tracking-tight text-slate-950 dark:text-[var(--app-text-primary)]">{text.ranking}</h2>
                 <p className="mt-1 text-xs text-slate-400">{text.rankingSub}</p>
               </div>
               <a href="#tiktok-all-stores" className="text-xs font-semibold text-blue-600 hover:text-blue-700 dark:text-blue-300">
@@ -487,25 +487,25 @@ export function TikTokPublicDashboard({ overview, stores }: Props) {
               </a>
             </div>
 
-            <div className="mt-4 divide-y divide-slate-100 dark:divide-white/[0.06]">
+            <div className="mt-4 divide-y divide-slate-100 dark:divide-[var(--app-border-subtle)]">
               {leaders.map((store, index) => (
                 <Link
                   key={store.storeMasterId}
                   href={`/tiktok/stores/${encodeURIComponent(store.storeMasterId)}`}
                   className="group flex items-center gap-3 py-3.5"
                 >
-                  <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-black ${index === 0 ? "bg-slate-950 text-white dark:bg-white dark:text-slate-950" : "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-300"}`}>
+                  <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-black ${index === 0 ? "bg-slate-950 text-white dark:bg-[var(--app-text-primary)] dark:text-[var(--app-bg)]" : "bg-slate-100 text-slate-500 dark:bg-[var(--app-surface-subtle)] dark:text-[var(--app-text-secondary)]"}`}>
                     {index + 1}
                   </div>
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-slate-100 text-xs font-black text-slate-500 dark:bg-slate-800">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-slate-100 text-xs font-black text-slate-500 dark:bg-[var(--app-surface-subtle)]">
                     {store.avatarUrl ? <img src={store.avatarUrl} alt="" className="h-full w-full object-cover" /> : "T"}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold text-slate-800 dark:text-slate-100">{store.storeName}</p>
+                    <p className="truncate text-sm font-semibold text-slate-800 dark:text-[var(--app-text-primary)]">{store.storeName}</p>
                     <p className="truncate text-xs text-slate-400">@{store.username}</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-sm font-black tabular-nums text-slate-950 dark:text-white">{compact(store.followerCount, locale)}</p>
+                    <p className="text-sm font-black tabular-nums text-slate-950 dark:text-[var(--app-text-primary)]">{compact(store.followerCount, locale)}</p>
                     <p className="text-[10px] text-slate-400">{text.followersWord}</p>
                   </div>
                 </Link>
@@ -514,21 +514,21 @@ export function TikTokPublicDashboard({ overview, stores }: Props) {
           </div>
         </section>
 
-        <section id="tiktok-all-stores" className="scroll-mt-20 overflow-hidden rounded-[24px] border border-slate-200/70 bg-white shadow-[0_10px_28px_rgba(15,23,42,0.045)] dark:border-white/10 dark:bg-slate-900">
-          <div className="border-b border-slate-100 p-5 dark:border-white/[0.06] sm:p-6">
+        <section id="tiktok-all-stores" className="scroll-mt-20 overflow-hidden rounded-[24px] border border-slate-200/70 bg-white shadow-[0_10px_28px_rgba(15,23,42,0.045)] dark:border-[var(--app-border)] dark:bg-[var(--app-surface)]">
+          <div className="border-b border-slate-100 p-5 dark:border-[var(--app-border-subtle)] sm:p-6">
             <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
               <div>
-                <h2 className="text-lg font-bold tracking-tight text-slate-950 dark:text-white">{text.storePerformance}</h2>
+                <h2 className="text-lg font-bold tracking-tight text-slate-950 dark:text-[var(--app-text-primary)]">{text.storePerformance}</h2>
                 <p className="mt-1 text-xs text-slate-400">{text.storePerformanceSub}</p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <span className="rounded-full bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                <span className="rounded-full bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-600 dark:bg-[var(--app-surface-subtle)] dark:text-[var(--app-text-secondary)]">
                   {number(visibleStores.length, locale)} {text.result}
                 </span>
                 <button
                   type="button"
                   onClick={handleDownloadCsv}
-                  className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-800"
+                  className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-[var(--app-border)] dark:bg-[var(--app-surface-subtle)] dark:text-[var(--app-text-primary)] dark:hover:bg-[var(--app-surface-hover)]"
                 >
                   <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.8} aria-hidden="true">
                     <path d="M12 3v11m0 0 4-4m-4 4-4-4M5 19h14" strokeLinecap="round" strokeLinejoin="round" />
@@ -539,7 +539,7 @@ export function TikTokPublicDashboard({ overview, stores }: Props) {
                   type="button"
                   onClick={handleRefresh}
                   disabled={isRefreshing}
-                  className="inline-flex h-10 items-center gap-2 rounded-xl bg-slate-950 px-3.5 text-xs font-semibold text-white transition hover:bg-slate-800 disabled:opacity-50 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-200"
+                  className="inline-flex h-10 items-center gap-2 rounded-xl bg-slate-950 px-3.5 text-xs font-semibold text-white transition hover:bg-slate-800 disabled:opacity-50 dark:bg-[var(--app-accent)] dark:hover:bg-[var(--app-accent-hover)]"
                 >
                   <svg className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -560,7 +560,7 @@ export function TikTokPublicDashboard({ overview, stores }: Props) {
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
                   placeholder={text.search}
-                  className="h-11 w-full rounded-xl border border-slate-200 bg-white pl-10 pr-4 text-sm text-slate-800 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:focus:ring-blue-500/10"
+                  className="h-11 w-full rounded-xl border border-slate-200 bg-white pl-10 pr-4 text-sm text-slate-800 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100 dark:border-[var(--app-border)] dark:bg-[var(--app-surface-subtle)] dark:text-[var(--app-text-primary)] dark:focus:ring-blue-500/10"
                 />
               </label>
 
@@ -570,7 +570,7 @@ export function TikTokPublicDashboard({ overview, stores }: Props) {
                   setRegion(event.target.value);
                   setProvince("ALL");
                 }}
-                className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:border-blue-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
+                className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:border-blue-400 dark:border-[var(--app-border)] dark:bg-[var(--app-surface-subtle)] dark:text-[var(--app-text-primary)]"
               >
                 <option value="ALL">{text.allRegions}</option>
                 {regions.map((item) => <option key={item} value={item}>{item}</option>)}
@@ -579,7 +579,7 @@ export function TikTokPublicDashboard({ overview, stores }: Props) {
               <select
                 value={province}
                 onChange={(event) => setProvince(event.target.value)}
-                className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:border-blue-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
+                className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:border-blue-400 dark:border-[var(--app-border)] dark:bg-[var(--app-surface-subtle)] dark:text-[var(--app-text-primary)]"
               >
                 <option value="ALL">{text.allProvinces}</option>
                 {provinces.map((item) => <option key={item} value={item}>{item}</option>)}
@@ -588,7 +588,7 @@ export function TikTokPublicDashboard({ overview, stores }: Props) {
               <select
                 value={sort}
                 onChange={(event) => setSort(event.target.value)}
-                className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:border-blue-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
+                className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:border-blue-400 dark:border-[var(--app-border)] dark:bg-[var(--app-surface-subtle)] dark:text-[var(--app-text-primary)]"
               >
                 <option value="followers">{text.sortBy}: {text.followerSort}</option>
                 <option value="growth1d">{text.sortBy}: {text.growth1dSort}</option>
@@ -606,8 +606,8 @@ export function TikTokPublicDashboard({ overview, stores }: Props) {
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[1180px] text-sm">
-                <thead className="bg-slate-50/80 text-left text-[10px] font-bold uppercase tracking-[0.08em] text-slate-400 dark:bg-slate-950/60">
-                  <tr className="border-b border-slate-100 dark:border-white/[0.06]">
+                <thead className="bg-slate-50/80 text-left text-[10px] font-bold uppercase tracking-[0.08em] text-slate-400 dark:bg-[var(--app-surface-subtle)]">
+                  <tr className="border-b border-slate-100 dark:border-[var(--app-border-subtle)]">
                     <th className="w-12 px-4 py-3 text-center">#</th>
                     <th className="px-4 py-3">{text.store}</th>
                     <th className="px-4 py-3">{text.tiktok}</th>
@@ -620,17 +620,17 @@ export function TikTokPublicDashboard({ overview, stores }: Props) {
                     <th className="px-4 py-3 text-right"></th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-white/[0.06]">
+                <tbody className="divide-y divide-slate-100 dark:divide-[var(--app-border-subtle)]">
                   {visibleStores.map((store, index) => (
-                    <tr key={store.storeMasterId} className="group transition hover:bg-blue-50/30 dark:hover:bg-white/[0.025]">
+                    <tr key={store.storeMasterId} className="group transition hover:bg-blue-50/30 dark:hover:bg-[var(--app-surface-hover)]">
                       <td className="px-4 py-4 text-center text-xs font-semibold text-slate-400">{index + 1}</td>
                       <td className="px-4 py-4">
                         <Link href={`/tiktok/stores/${encodeURIComponent(store.storeMasterId)}`} className="flex items-center gap-3">
-                          <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-slate-100 text-xs font-black text-slate-500 dark:bg-slate-800">
+                          <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-slate-100 text-xs font-black text-slate-500 dark:bg-[var(--app-surface-subtle)]">
                             {store.avatarUrl ? <img src={store.avatarUrl} alt="" className="h-full w-full object-cover" /> : "T"}
                           </div>
                           <div className="min-w-0">
-                            <div className="max-w-[320px] truncate font-semibold text-slate-900 dark:text-slate-100">{store.storeName}</div>
+                            <div className="max-w-[320px] truncate font-semibold text-slate-900 dark:text-[var(--app-text-primary)]">{store.storeName}</div>
                             <div className="mt-0.5 truncate text-xs text-slate-400">
                               {[store.province, store.region].filter(Boolean).join(" · ")}
                             </div>
@@ -647,7 +647,7 @@ export function TikTokPublicDashboard({ overview, stores }: Props) {
                           @{store.username} ↗
                         </a>
                       </td>
-                      <td className="px-4 py-4 text-right font-black tabular-nums text-slate-900 dark:text-slate-100">{number(store.followerCount, locale)}</td>
+                      <td className="px-4 py-4 text-right font-black tabular-nums text-slate-900 dark:text-[var(--app-text-primary)]">{number(store.followerCount, locale)}</td>
                       <td className="px-4 py-4 text-right tabular-nums text-slate-500">{number(store.likesCount, locale)}</td>
                       <td className="px-4 py-4 text-right tabular-nums text-slate-500">{number(store.videoCount, locale)}</td>
                       <td className="px-4 py-4 text-center"><GrowthPill value={store.growth.daily.absolute} locale={locale} /></td>
@@ -656,7 +656,7 @@ export function TikTokPublicDashboard({ overview, stores }: Props) {
                       <td className="px-4 py-4 text-right">
                         <Link
                           href={`/tiktok/stores/${encodeURIComponent(store.storeMasterId)}`}
-                          className="inline-flex h-9 items-center rounded-xl border border-slate-200 px-3 text-xs font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+                          className="inline-flex h-9 items-center rounded-xl border border-slate-200 px-3 text-xs font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 dark:border-[var(--app-border)] dark:text-[var(--app-text-primary)] dark:hover:bg-[var(--app-surface-hover)]"
                         >
                           {text.open} →
                         </Link>

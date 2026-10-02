@@ -212,7 +212,7 @@ export function getBmTagChipClass(tag: BmCustomerTag): string {
         ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-200 border border-emerald-200/60 dark:border-emerald-800/40 font-semibold"
         : tag.rawStatus === "FILM"
           ? "bg-violet-100 text-violet-800 dark:bg-violet-950/60 dark:text-violet-200 border border-violet-200/60 dark:border-violet-800/40 font-semibold"
-        : "bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-200 border border-blue-200/60 dark:border-blue-800/40 font-semibold";
+        : "bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-[var(--app-text-primary)] border border-blue-200/60 dark:border-blue-800/40 font-semibold";
     case "filmBrand":
       return "bg-violet-50 text-violet-800 dark:bg-violet-950/40 dark:text-violet-200 border border-violet-200/60 dark:border-violet-800/40 font-semibold";
     case "interestLevel":

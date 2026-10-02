@@ -151,7 +151,7 @@ export function RichMessagesView() {
           </div>
           <div className="flex gap-2">
             <a href="/greeting-messages" className="rounded-lg border border-[var(--app-border)] bg-white px-4 py-2 text-sm">← Greeting Message</a>
-            <button type="button" onClick={reset} className="rounded-lg bg-[#06c755] px-4 py-2 text-sm font-semibold text-white">+ สร้างใหม่</button>
+            <button type="button" onClick={reset} className="rounded-lg bg-[#06c755] px-4 py-2 text-sm font-semibold text-white dark:bg-[var(--app-accent)]">+ สร้างใหม่</button>
           </div>
         </header>
 
@@ -226,13 +226,13 @@ export function RichMessagesView() {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2 border-t pt-4">
-                  <button type="button" disabled={saving || uploading} onClick={() => void save()} className="rounded-lg bg-[#06c755] px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50">{saving ? "กำลังบันทึก…" : selectedId ? "บันทึกการแก้ไข" : "สร้าง Rich Message"}</button>
+                  <button type="button" disabled={saving || uploading} onClick={() => void save()} className="rounded-lg bg-[#06c755] px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50 dark:bg-[var(--app-accent)]">{saving ? "กำลังบันทึก…" : selectedId ? "บันทึกการแก้ไข" : "สร้าง Rich Message"}</button>
                   {selected && <button type="button" onClick={async () => { await richMessageApi.setActive(selected.id, !selected.isActive); await load(); }} className="rounded-lg border border-gray-300 px-4 py-2.5 text-sm">{selected.isActive ? "ปิดใช้งาน" : "เปิดใช้งาน"}</button>}
                 </div>
               </div>
 
               <aside>
-                <div className="sticky top-5 rounded-xl bg-[#eef1f4] p-4">
+                <div className="sticky top-5 rounded-xl bg-[#eef1f4] p-4 dark:bg-[var(--app-surface-subtle)]">
                   <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-500">Preview</div>
                   <div className="overflow-hidden rounded-xl bg-white shadow-sm">
                     {previewUrl ? (
