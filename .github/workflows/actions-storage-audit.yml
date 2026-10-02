@@ -1,4 +1,4 @@
-name: Actions Storage Cleanup
+name: GitHub Packages Storage Audit
 
 on:
   push:
@@ -8,49 +8,62 @@ on:
       - ".github/workflows/actions-storage-audit.yml"
 
 permissions:
-  actions: write
   contents: read
+  packages: read
 
 jobs:
-  cleanup:
-    name: Delete stale QA artifacts
+  audit:
+    name: Audit GitHub Packages
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Delete identified stale artifacts and verify
+      - name: List account packages and versions
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          set -euo pipefail
+          set -uo pipefail
+          OWNER="${GITHUB_REPOSITORY_OWNER}"
+          TYPES=(container npm maven rubygems nuget)
+          TOTAL_PACKAGES=0
+          TOTAL_VERSIONS=0
 
-          DELETE_IDS=(10345207639 10347501242 10347632979)
-          for id in "${DELETE_IDS[@]}"; do
-            echo "Deleting artifact $id"
-            gh api --method DELETE "/repos/${GITHUB_REPOSITORY}/actions/artifacts/$id"
+          echo "# GitHub Packages audit" | tee -a "$GITHUB_STEP_SUMMARY"
+
+          for TYPE in "${TYPES[@]}"; do
+            echo "=== PACKAGE_TYPE=$TYPE ==="
+            TMP="/tmp/packages-$TYPE.json"
+            if gh api --paginate --slurp "/users/$OWNER/packages?package_type=$TYPE&per_page=100" > "$TMP" 2>"/tmp/packages-$TYPE.err"; then
+              jq '[.[][]]' "$TMP" > "/tmp/packages-$TYPE-flat.json"
+              COUNT="$(jq 'length' "/tmp/packages-$TYPE-flat.json")"
+              TOTAL_PACKAGES=$((TOTAL_PACKAGES + COUNT))
+              echo "PACKAGE_TYPE_$TYPE=$COUNT"
+
+              if [ "$COUNT" -gt 0 ]; then
+                jq -r '.[].name' "/tmp/packages-$TYPE-flat.json" | while IFS= read -r NAME; do
+                  ENCODED="$(jq -rn --arg v "$NAME" '$v|@uri')"
+                  VFILE="/tmp/versions-$TYPE-${RANDOM}.json"
+                  if gh api --paginate --slurp "/users/$OWNER/packages/$TYPE/$ENCODED/versions?per_page=100" > "$VFILE" 2>/tmp/version.err; then
+                    VCOUNT="$(jq '[.[][]] | length' "$VFILE")"
+                    echo "PACKAGE=$TYPE/$NAME VERSIONS=$VCOUNT"
+                    echo "- $TYPE / $NAME: **$VCOUNT versions**" >> "$GITHUB_STEP_SUMMARY"
+                    TOTAL_VERSIONS=$((TOTAL_VERSIONS + VCOUNT))
+                  else
+                    echo "PACKAGE=$TYPE/$NAME VERSIONS=UNREADABLE"
+                    cat /tmp/version.err || true
+                  fi
+                done
+              fi
+            else
+              echo "PACKAGE_TYPE_$TYPE=UNREADABLE"
+              cat "/tmp/packages-$TYPE.err" || true
+            fi
           done
 
-          gh api --paginate --slurp "/repos/${GITHUB_REPOSITORY}/actions/artifacts?per_page=100" > /tmp/pages.json
-          jq '[.[].artifacts[]]' /tmp/pages.json > /tmp/artifacts.json
-
-          COUNT="$(jq 'length' /tmp/artifacts.json)"
-          BYTES="$(jq '[.[].size_in_bytes] | add // 0' /tmp/artifacts.json)"
-          MIB="$(awk -v b="$BYTES" 'BEGIN { printf "%.2f", b/1024/1024 }')"
-
-          echo "REMAINING_ARTIFACT_COUNT=$COUNT"
-          echo "REMAINING_ARTIFACT_BYTES=$BYTES"
-          echo "REMAINING_ARTIFACT_MIB=$MIB"
-
+          echo "TOTAL_PACKAGES=$TOTAL_PACKAGES"
+          echo "TOTAL_VERSIONS=$TOTAL_VERSIONS"
           {
-            echo "# Actions storage cleanup"
             echo
-            echo "- Deleted stale artifact IDs: **${DELETE_IDS[*]}**"
-            echo "- Remaining artifacts: **$COUNT**"
-            echo "- Remaining artifact storage: **$MIB MiB**"
-            echo
-            echo "## Remaining artifacts"
-            jq -r '.[] | [((.size_in_bytes/1048576)*100|round/100), .created_at, .expires_at, .name, .id] | @tsv' /tmp/artifacts.json |
-              while IFS=$'\t' read -r size created expires name id; do
-                printf -- '- %s MiB | %s | %s | id=%s\n' "$size" "$created" "$name" "$id"
-              done
-          } | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "- Total packages visible to this repository token: **$TOTAL_PACKAGES**"
+            echo "- Total package versions counted: **$TOTAL_VERSIONS**"
+          } >> "$GITHUB_STEP_SUMMARY"
