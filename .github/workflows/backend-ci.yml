@@ -64,6 +64,12 @@ jobs:
       - name: Mirror cutover regression tests
         run: npx tsx --test src/line-chat/line-chat-mirror-cutover.spec.ts src/line-chat/line-chat-mirror-reconciler.service.spec.ts src/line-chat/line-chat-store-oa-selector.spec.ts src/line-chat/line-chat-store-chat-parity.spec.ts src/line-chat/line-chat-manager-media-materializer.spec.ts src/line-chat/line-chat-manager-nickname-sales-tag.spec.ts src/line-chat/line-chat-mirror-sales-tag-sync.service.spec.ts
 
+      - name: Exact manifest and Historical source anchor lint
+        run: npx eslint src/line-chat/line-chat-mirror-exact-manifest.ts src/line-chat/line-chat-mirror-exact-manifest.cli.ts src/line-chat/line-chat-mirror-exact-manifest.spec.ts src/historical-source-anchors.ts src/historical-source-anchors.spec.ts src/canonical-source-identity.ts src/canonical-source-identity.spec.ts src/historical-timeline.service.ts src/historical-timeline.service.spec.ts
+
+      - name: Exact manifest and Historical source anchor regression tests
+        run: npx tsx --test src/line-chat/line-chat-mirror-exact-manifest.spec.ts src/historical-source-anchors.spec.ts src/canonical-source-identity.spec.ts src/historical-timeline.service.spec.ts
+
       - name: LINE chat health regression tests
         run: npx tsx --test src/line-chat/line-chat-health.spec.ts src/line-chat/line-chat-profile-operation-coordinator.service.spec.ts src/line-chat/line-chat-session-health-probe.spec.ts src/line-chat/line-chat-health-probe.cli.spec.ts src/line-chat/line-chat-oa-health-probe.spec.ts src/line-chat/line-chat-oa-health-probe.cli.spec.ts src/line-chat/line-chat-health-scheduler.spec.ts src/line-chat/line-chat-operations-auth.spec.ts src/line-chat/line-chat-nickname-worker.service.spec.ts src/line-chat/line-chat-recent-resolver.service.spec.ts src/line-chat/line-chat-mirror.service.spec.ts
 

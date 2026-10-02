@@ -1,3 +1,9 @@
+# 2026-10-02: Narrow PR435 integration on actual current main
+
+- Rebuild from actual GitHub main rather than merging the stale local repository snapshot. Preserve current fixed-delay Live scheduling and normal reconciliation behavior; exact execution is a separate OA-scoped path inside the existing reconciler.
+- Keep immutable manifests pinned by digest and explicit counts. Never select adjacent events or expand by time. Read-only source anchors require compatible payload, direction and unique destination.
+- Reuse current fleet-cycle logs for deployment health evidence. Do not restore older worker/profile/operations implementations just to add a health endpoint.
+
 # 2026-10-01: Google Maps Aggregate Store Rating Metadata in Monthly Review KPI
 
 - **Google Maps Aggregate Store Rating & Review Count Schema Extension**:

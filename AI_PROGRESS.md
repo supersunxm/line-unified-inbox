@@ -1,3 +1,11 @@
+# 2026-10-02: PR435 clean remediation integration
+
+- Actual GitHub main verified at `62dd273311a870d14fb6b247ed753bd85261b6db`; clean integration rebuilt from that revision.
+- Only exact-manifest reconciliation, OA-scoped source dedupe, Historical source anchors, reply analytics regression coverage, and their CI checks are included. Current fixed-delay Live scheduler, worker runtime, Google Review implementation, and frontend remain unchanged.
+- Current integration verification: 183/183 focused Live/reconciler/Historical/reply tests passed; focused ESLint, Prisma validation, backend production build and diff check passed.
+- Existing fleet-cycle telemetry supplies the two consecutive NORMAL full-fleet health gate; no additional operations endpoint or scheduler change is required.
+- Next: update PR435 with an explicit remote-head lease, require CI, merge, verify Railway deployment and two healthy cycles, then dry-run each immutable manifest before any apply.
+
 # 2026-10-01: Google Maps Aggregate Store Rating Feature in Review KPI [READY FOR MERGE]
 
 ## Current task
