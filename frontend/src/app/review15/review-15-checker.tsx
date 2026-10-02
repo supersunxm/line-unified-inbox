@@ -53,6 +53,7 @@ type ScanCandidate = {
   id: string;
   text: string;
   sourceName: string;
+  confirmed: boolean;
 };
 
 let tesseractLoaderPromise: Promise<TesseractApi> | null = null;
@@ -470,6 +471,7 @@ export function Review15Checker() {
                 candidateIndex,
               text: candidate.text,
               sourceName: image.file.name,
+              confirmed: false,
             });
           });
         } else {
@@ -479,6 +481,7 @@ export function Review15Checker() {
               id: image.id + "-fallback",
               text: fallback,
               sourceName: image.file.name,
+              confirmed: false,
             });
           }
         }
@@ -519,7 +522,17 @@ export function Review15Checker() {
   const updateCandidate = (id: string, value: string) => {
     setScanCandidates((current) =>
       current.map((candidate) =>
-        candidate.id === id ? { ...candidate, text: value } : candidate,
+        candidate.id === id
+          ? { ...candidate, text: value, confirmed: false }
+          : candidate,
+      ),
+    );
+  };
+
+  const confirmCandidate = (id: string) => {
+    setScanCandidates((current) =>
+      current.map((candidate) =>
+        candidate.id === id ? { ...candidate, confirmed: true } : candidate,
       ),
     );
   };
@@ -727,12 +740,16 @@ export function Review15Checker() {
                             <div
                               className={[
                                 "rounded-full px-3 py-1.5 text-xs font-bold",
-                                passed
-                                  ? "bg-[var(--app-success-soft)] text-[var(--app-accent)]"
-                                  : "bg-[var(--app-warning-soft)] text-[var(--app-warning)]",
+                                candidate.confirmed
+                                  ? passed
+                                    ? "bg-[var(--app-success-soft)] text-[var(--app-accent)]"
+                                    : "bg-[var(--app-warning-soft)] text-[var(--app-warning)]"
+                                  : "bg-[var(--app-surface-subtle)] text-[var(--app-text-secondary)]",
                               ].join(" ")}
                             >
-                              {count} / {MIN_WORDS} คำ
+                              {candidate.confirmed
+                                ? count + " / " + MIN_WORDS + " คำ"
+                                : "รอตรวจข้อความ"}
                             </div>
                           </div>
 
@@ -747,18 +764,28 @@ export function Review15Checker() {
                           />
 
                           <div className="mt-3 flex flex-wrap gap-2">
-                            <span
-                              className={[
-                                "rounded-full px-3 py-1 text-xs font-semibold",
-                                passed
-                                  ? "bg-[var(--app-success-soft)] text-[var(--app-accent)]"
-                                  : "bg-[var(--app-warning-soft)] text-[var(--app-warning)]",
-                              ].join(" ")}
-                            >
-                              {passed
-                                ? "ครบ 15 คำแล้ว"
-                                : "ขาดอีก " + remaining + " คำ"}
-                            </span>
+                            {!candidate.confirmed ? (
+                              <button
+                                type="button"
+                                onClick={() => confirmCandidate(candidate.id)}
+                                className="rounded-full bg-[var(--app-accent)] px-3 py-1.5 text-xs font-semibold text-white"
+                              >
+                                ยืนยันข้อความนี้และนับคำ
+                              </button>
+                            ) : (
+                              <span
+                                className={[
+                                  "rounded-full px-3 py-1 text-xs font-semibold",
+                                  passed
+                                    ? "bg-[var(--app-success-soft)] text-[var(--app-accent)]"
+                                    : "bg-[var(--app-warning-soft)] text-[var(--app-warning)]",
+                                ].join(" ")}
+                              >
+                                {passed
+                                  ? "ครบ 15 คำแล้ว"
+                                  : "ขาดอีก " + remaining + " คำ"}
+                              </span>
+                            )}
                             <button
                               type="button"
                               onClick={() =>
@@ -770,20 +797,28 @@ export function Review15Checker() {
                             </button>
                           </div>
 
-                          {candidate.segmentation.finalTokens.length > 0 && (
-                            <div className="mt-3 flex flex-wrap gap-1.5">
-                              {candidate.segmentation.finalTokens.map(
-                                (token, tokenIndex) => (
-                                  <span
-                                    key={token + "-" + tokenIndex}
-                                    className="rounded-full bg-[var(--app-accent-soft)] px-2.5 py-1 text-[11px] font-medium text-[var(--app-accent)]"
-                                  >
-                                    {token}
-                                  </span>
-                                ),
-                              )}
-                            </div>
+                          {!candidate.confirmed && (
+                            <p className="mt-2 text-[11px] leading-5 text-[var(--app-warning)]">
+                              OCR อาจอ่านชื่อร้าน ตัวอักษรบนรูปสินค้า หรือ UI ปนมาได้
+                              กรุณาตรวจ/แก้ข้อความก่อนยืนยัน ระบบจะยังไม่ตัดสินผ่าน 15 คำ
+                            </p>
                           )}
+
+                          {candidate.confirmed &&
+                            candidate.segmentation.finalTokens.length > 0 && (
+                              <div className="mt-3 flex flex-wrap gap-1.5">
+                                {candidate.segmentation.finalTokens.map(
+                                  (token, tokenIndex) => (
+                                    <span
+                                      key={token + "-" + tokenIndex}
+                                      className="rounded-full bg-[var(--app-accent-soft)] px-2.5 py-1 text-[11px] font-medium text-[var(--app-accent)]"
+                                    >
+                                      {token}
+                                    </span>
+                                  ),
+                                )}
+                              </div>
+                            )}
                         </article>
                       );
                     })}
