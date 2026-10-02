@@ -138,3 +138,18 @@ test("OCR extraction excludes Google review UI and metadata", () => {
   assert.equal(isReviewUiNoise("1 review"), true);
   assert.equal(isReviewUiNoise("บริการดีมาก"), false);
 });
+
+
+test("image OCR never auto-passes before BM confirms recognized text", () => {
+  const checkerPath = path.join(
+    repoRoot,
+    "frontend/src/app/review15/review-15-checker.tsx",
+  );
+  const checkerSource = fs.readFileSync(checkerPath, "utf8");
+
+  assert.match(checkerSource, /confirmed:\s*boolean/);
+  assert.match(checkerSource, /confirmed:\s*false/);
+  assert.match(checkerSource, /ยืนยันข้อความนี้และนับคำ/);
+  assert.match(checkerSource, /ระบบจะยังไม่ตัดสินผ่าน 15 คำ/);
+  assert.match(checkerSource, /candidate\.confirmed/);
+});
