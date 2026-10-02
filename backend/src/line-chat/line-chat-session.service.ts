@@ -333,6 +333,7 @@ export class LineChatSessionService implements OnModuleDestroy {
   private readonly contextLeases = new WeakMap<BrowserContext, ManagedContextLease>();
   private readonly profileGenerations = new Map<string, number>();
   private isShuttingDown = false;
+  private mirrorCooldownUntilMs = 0;
   private lastRuntimeSnapshotAt = 0;
   private readonly discoveryContinuations = new WeakMap<LineChatDiscoveryContinuation, {
     botId: string;
@@ -344,6 +345,45 @@ export class LineChatSessionService implements OnModuleDestroy {
   constructor(@Optional() customLauncher?: ContextLauncher) {
     this.rawLauncher = customLauncher ?? ((dir, opts, metadata) => this.launchPlaywrightPersistentContext(dir, opts, metadata));
     this.defaultLauncher = (dir, opts, metadata) => this.launchManagedPersistentContext(dir, opts, metadata);
+  }
+
+  public setMirrorCooldownUntil(until: Date | null): void {
+    this.mirrorCooldownUntilMs = until ? Math.max(Date.now(), until.getTime()) : 0;
+  }
+
+  public isMirrorCooldownActive(now: Date = new Date()): boolean {
+    return this.mirrorCooldownUntilMs > now.getTime();
+  }
+
+  public async closeIdleManagedContexts(
+    reason = "MIRROR_CYCLE_COOLDOWN",
+  ): Promise<{ closed: number; failed: number }> {
+    let closed = 0;
+    let failed = 0;
+
+    for (const profilePath of [...this.managedProfileContexts.keys()]) {
+      const releaseProfileLock = await this.acquireProfileLock(profilePath);
+      try {
+        const record = this.managedProfileContexts.get(profilePath);
+        if (!record || record.state === "CLOSED") continue;
+        if (record.state === "BUSY") continue;
+
+        const closeError = await this.disposeManagedContext(record, {}, reason);
+        if (closeError) failed += 1;
+        else closed += 1;
+      } finally {
+        releaseProfileLock();
+      }
+    }
+
+    this.safeLog(failed > 0 ? "warn" : "log", {
+      event: "line_chat_chromium_idle_contexts_closed",
+      reason,
+      closed,
+      failed,
+      activeProfileContexts: this.countLiveManagedContexts(),
+    });
+    return { closed, failed };
   }
 
   /**
