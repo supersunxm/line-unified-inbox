@@ -159,8 +159,8 @@ test("Follower Insights localization dictionary returns correct Thai, English, a
   const en = getFollowerInsightsText("en");
   const zh = getFollowerInsightsText("zh");
 
-  assert.equal(th.followerInsightsTitle, "ข้อมูลผู้ติดตาม");
-  assert.equal(en.followerInsightsTitle, "Follower Insights");
+  assert.equal(th.followerInsightsTitle, "เพื่อน");
+  assert.equal(en.followerInsightsTitle, "Friends");
   assert.equal(zh.followerInsightsTitle, "关注者洞察");
 
   assert.equal(th.allStores, "ทุกร้าน");
@@ -247,13 +247,13 @@ test("Live locale switching updates rendered UI elements instantly across en, th
 
   // Verify text returned for language="en"
   const textEn = getFollowerInsightsText("en");
-  assert.equal(textEn.followerInsightsTitle, "Follower Insights");
-  assert.equal(textEn.totalFollowers, "Total Followers");
+  assert.equal(textEn.followerInsightsTitle, "Friends");
+  assert.equal(textEn.totalFollowers, "Friends added");
 
   // Verify text returned for language="th"
   const textTh = getFollowerInsightsText("th");
-  assert.equal(textTh.followerInsightsTitle, "ข้อมูลผู้ติดตาม");
-  assert.equal(textTh.totalFollowers, "ผู้ติดตามทั้งหมด");
+  assert.equal(textTh.followerInsightsTitle, "เพื่อน");
+  assert.equal(textTh.totalFollowers, "เพิ่มเพื่อน");
 
   // Verify text returned for language="zh"
   const textZh = getFollowerInsightsText("zh");
