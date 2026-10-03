@@ -3149,3 +3149,6 @@ Operational health derives from fresh passive worker/browser and completed-cycle
 ## 2026-10-03 — Preserve explicit Store Chats deep links across list refreshes
 
 An explicitly requested `conversationId` may be outside the current paginated or filtered conversation list. Keep that ID selected while its existing detail API request is pending or resolved, and render the exact fetched conversation detail when it is not in the list. If lookup fails, return to the visible list. A deliberate Store or OA scope change clears the route selection and its detail state so the previous scope cannot remain displayed. This is a read-path/UI-only change; it does not alter messages, reply state, Live Mirror, or Historical data.
+
+## 2026-10-04 — Gate exact remediation on active eligible fleet
+Use the production-derived active Store/OA set as the Live Mirror health denominator. Exclude only records proven archived/inactive; keep target redirects explicitly verified. Require consecutive full-fleet cycles over that exact scope before exact-manifest work. For Store Chats, merge page-one polling results by stable message ID with loaded older pages so routine refresh preserves pagination; scope state to the active conversation before applying concurrent responses.

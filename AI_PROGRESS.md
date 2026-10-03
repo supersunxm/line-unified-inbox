@@ -6107,3 +6107,9 @@ Live worker continues independently at 146 configured unique active OA identitie
 - Updated mobile follower insights, desktop translations, page metadata, sidebar/top navigation, and the affected navigation test.
 - Functional logic and API field names are unchanged; this is a UI terminology-only change.
 - Verification pending GitHub CI on PR.
+
+## 2026-10-04 — Post-Live eligibility and exact-manifest audit
+- Re-established the production Live Mirror denominator from active Store/OA evidence: 144 eligible OAs; two archived stores are excluded and four target redirects are verified. Two consecutive NORMAL runs completed 144/144 with no partial/failed OAs before exact manifests were processed.
+- Exact manifests #1–#5 have immutable provenance and recorded bounded results; continue the frozen-window, reply/KPI, and production UI acceptance from their read-backs.
+- Production UI pagination polling regression reproduced: Load Earlier expanded 30 to 60 messages, then the 12-second refresh reduced it to 30. Updating PR #412 against current main and requiring normal CI/deployment before retest.
+- Historical source recollection, Historical rewrites, manual canonical/status/KPI writes, LINE sends, and Account 2 work remain out of scope.

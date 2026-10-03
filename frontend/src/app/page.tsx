@@ -60,6 +60,7 @@ import { ResizableSeparator } from "./resizable-separator";
 import { CHAT_PANE_LIMITS } from "./resizable-panes";
 import { useResizablePanes } from "./use-resizable-panes";
 import { ConversationPaginationFooter } from "./conversation-pagination-footer";
+import { mergeConversationMessagePages } from "./conversation-message-pagination";
 import { ConversationRowSkeleton } from "./conversation-row-skeleton";
 import { getChatsPaginationText } from "./chats-pagination-utils";
 import { buildConversationListQuery, conversationListQueryKey, LatestConversationRequestGuard, reconcileConversationPage, type ConversationListQuery } from "./conversation-list-query";
@@ -2265,6 +2266,7 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
   useEffect(() => {
     if (!selectedConversationId) return;
     let active = true;
+    let hasLoadedSelectedConversation = false;
     const load = async () => {
       conversationDetailRequestController.current?.abort();
       const controller = new AbortController();
@@ -2275,7 +2277,12 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
           api.conversationMessages(selectedConversationId, 1, { signal: controller.signal }),
         ]);
         if (active && !controller.signal.aborted) {
-          setSelectedApiConversation(conversation); setChatHistory(messages);
+          setSelectedApiConversation(conversation);
+          const shouldMerge = hasLoadedSelectedConversation;
+          hasLoadedSelectedConversation = true;
+          setChatHistory((current) => shouldMerge
+            ? mergeConversationMessagePages(current, messages)
+            : messages);
           if (requestedRouteConversationIdRef.current === selectedConversationId) {
             const lookup = { id: selectedConversationId, status: "resolved" as const };
             routeConversationLookupRef.current = lookup;
