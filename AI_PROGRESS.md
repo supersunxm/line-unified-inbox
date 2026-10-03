@@ -6092,6 +6092,13 @@ Local validation on the exact current-main frontend plus this patch: health/auth
 
 Live worker continues independently at 146 configured unique active OA identities. All ten additions completed successful NORMAL collection; nine have inbound canonical duplicates and newly imported outbound messages at the correct Store/OA. Thalang has no eligible recent activity. First full cycle: 146 attempted, 135 success, 11 temporary coordinator-busy partials, zero failed/skipped. Automatic retries are being observed. No Historical behavior change or LINE sends.
 
+## 2026-10-03 — Post-Live exact-chat UI acceptance follow-up
+- Continued from current GitHub `main` (`8c2100085e49389a664912aaa7df89dee60e7c59`) in isolated worktree `/private/tmp/post-live-chat-navigation-20261003`; primary dirty checkout remains untouched.
+- Root cause: Store Chats discarded an explicit `conversationId` when the list page did not include that row, then fell back to page-one's first row. The exact target can instead load through the existing conversation-detail API and remain selected through polling.
+- Added a route-selection resolver that keeps an explicit deep link while pending/resolved, uses exact detail data off-page, and falls back after a proven lookup failure. Store/OA filter changes clear the route selection and detail state to prevent old scope leakage.
+- Frontend tests: 700/700 pass. Focused ESLint: zero errors, 16 pre-existing unused-code warnings. `git diff --check` passes. Standalone TypeScript reports existing unrelated whole-tree/type-fixture failures and none in changed files. Optimized build completes; Next skips its built-in type validation and logs a dynamic-font download 400 for an unrelated page. Local dev route returned HTTP 200 and compiled, but authenticated backend verification is unavailable locally (no backend on 3001).
+- Next: finish scoped source review and local checks; publish through GitHub PR/CI, merge only after required checks pass, allow Railway's normal deployment, then re-run exact production deep-link and remaining read-only audit cases.
+
 
 ## 2026-10-03 — LINE OA Friends terminology alignment
 - Updated follower-insights UI copy to match LINE Official Account wording shown in the official Friends analytics screen.

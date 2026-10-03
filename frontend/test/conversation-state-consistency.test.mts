@@ -118,13 +118,14 @@ test("classification filters are resolved to IDs and sent server-side", () => {
   assert.match(pageCode, /const filteredConversations = conversations/);
 });
 
-test("all query-shaping fields reset page and selected conversation stays in returned rows", () => {
+test("all query-shaping fields reset page and deep-linked selection survives list refresh", () => {
   for (const field of ["storeId", "lineOaId", "followUpStatus", "replyState", "search", "priority", "productSeriesId", "productModelId", "topicId", "pageSize"]) {
     assert.match(pageCode, new RegExp(`${field}: activeConversationQuery\\.${field}`));
   }
   assert.match(pageCode, /previousConversationFilterShape\.current !== conversationFilterShapeKey/);
   assert.match(pageCode, /setChatPage\(1\)/);
-  assert.match(pageCode, /mapped\.some\(\(\{ id \}\) => id === currentId\) \? currentId : mapped\[0\]\?\.id \?\? ""/);
+  assert.match(pageCode, /setSelectedConversationId\(\(currentId\) => resolveSelectedConversationId\(/);
+  assert.match(pageCode, /routeConversationId: requestedRouteConversationIdRef\.current/);
 });
 
 test("persisted filters are validated after metadata loads even when the result list is empty", () => {

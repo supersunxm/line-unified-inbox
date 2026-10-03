@@ -3145,3 +3145,7 @@ Isolated CI-only change deletes 32 Android-only workflows and removes two Flutte
 Publish the health patch on current main through the user-authorized Git deployment so existing auth/dashboard changes and 47 APK assets remain intact. Do not shrink a direct upload by removing unrelated downloadable APKs. Keep worker/backend implementation publication separate from this frontend-only patch.
 
 Operational health derives from fresh passive worker/browser and completed-cycle evidence. Configuration and nickname pilot readiness alone cannot establish Live Mirror health; incomplete profile attribution stays UNKNOWN.
+
+## 2026-10-03 — Preserve explicit Store Chats deep links across list refreshes
+
+An explicitly requested `conversationId` may be outside the current paginated or filtered conversation list. Keep that ID selected while its existing detail API request is pending or resolved, and render the exact fetched conversation detail when it is not in the list. If lookup fails, return to the visible list. A deliberate Store or OA scope change clears the route selection and its detail state so the previous scope cannot remain displayed. This is a read-path/UI-only change; it does not alter messages, reply state, Live Mirror, or Historical data.
