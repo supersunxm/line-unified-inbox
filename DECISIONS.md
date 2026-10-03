@@ -3161,3 +3161,6 @@ Use the production-derived active Store/OA set as the Live Mirror health denomin
 
 ## 2026-10-04 — Pin every exact remediation set by immutable digest
 Additional exact remediation must use a new immutable manifest and an explicit approved SHA-256, row count, and Store count in the existing Reconciler allowlist. The Reconciler must reject all other inputs before querying or writing; time-based catch-up and caller-supplied digests cannot expand scope. Manifest #7 is limited to 14 preflighted outbound sticker identities across 10 Stores.
+
+## 2026-10-04 — Pin outbound text manifest #8
+The 13-row outbound text preflight is admitted only by its immutable SHA-256 (`adc33c8480f548d9f164767c1fe4c8e8066b914efab450397bfb898e4f79db5f`) and fixed 5-Store count in the existing exact Reconciler. Keep this manifest separate from earlier text/media sets; the execution remains OA-scoped and cannot expand by timestamp. Production execution requires normal GitHub CI/deployment and a fresh exact dry-run.

@@ -5,6 +5,15 @@ export const APPROVED_EXACT_MIRROR_MANIFEST_SHA256 = "62728708a1bf2a9500f03d4a75
 export const APPROVED_ADDITIONAL_MIRROR_MANIFEST_SHA256 = "59eb6af927714169c2a3bb51bfdb52c03a82c996cc584497fbd479800e13a55c";
 export const APPROVED_DIRECT_CROSSWALK_MIRROR_MANIFEST_SHA256 = "944ed62b6bf00092f9bd9dcacee5a552d565cc7d2187c45f80170c022d7ffbde";
 export const APPROVED_KPI_STICKER_MANIFEST_SHA256 = "0f564c322a248f39424e6c8ba34d4758759cfb7be59bc957ef3cb8346102f54d";
+export const APPROVED_POST_LIVE_EXACT_TEXT_MANIFEST_SHA256 = "adc33c8480f548d9f164767c1fe4c8e8066b914efab450397bfb898e4f79db5f";
+
+export type ApprovedExactTextManifest = Readonly<{ sha256: string; rows: number; stores: number }>;
+export const APPROVED_EXACT_TEXT_MANIFESTS: readonly ApprovedExactTextManifest[] = Object.freeze([
+  Object.freeze({ sha256: APPROVED_EXACT_MIRROR_MANIFEST_SHA256, rows: 490, stores: 24 }),
+  Object.freeze({ sha256: APPROVED_ADDITIONAL_MIRROR_MANIFEST_SHA256, rows: 4, stores: 2 }),
+  Object.freeze({ sha256: APPROVED_DIRECT_CROSSWALK_MIRROR_MANIFEST_SHA256, rows: 19, stores: 6 }),
+  Object.freeze({ sha256: APPROVED_POST_LIVE_EXACT_TEXT_MANIFEST_SHA256, rows: 13, stores: 5 }),
+]);
 
 export type ApprovedExactMediaManifest = Readonly<{ sha256: string; rows: number; stores: number }>;
 export const APPROVED_EXACT_MEDIA_MANIFESTS: readonly ApprovedExactMediaManifest[] = Object.freeze([
@@ -21,9 +30,8 @@ export function approvedExactMirrorManifest(bytes: Uint8Array): {
   kind: "TEXT" | "MEDIA";
 } {
   const sha256 = createHash("sha256").update(bytes).digest("hex");
-  if (sha256 === APPROVED_EXACT_MIRROR_MANIFEST_SHA256) return { sha256, rows: 490, stores: 24, kind: "TEXT" };
-  if (sha256 === APPROVED_ADDITIONAL_MIRROR_MANIFEST_SHA256) return { sha256, rows: 4, stores: 2, kind: "TEXT" };
-  if (sha256 === APPROVED_DIRECT_CROSSWALK_MIRROR_MANIFEST_SHA256) return { sha256, rows: 19, stores: 6, kind: "TEXT" };
+  const text = APPROVED_EXACT_TEXT_MANIFESTS.find((entry) => entry.sha256 === sha256);
+  if (text) return { ...text, kind: "TEXT" };
   const media = APPROVED_EXACT_MEDIA_MANIFESTS.find((entry) => entry.sha256 === sha256);
   if (media) return { sha256, rows: media.rows, stores: media.stores, kind: "MEDIA" };
   throw new Error("EXACT_MIRROR_MANIFEST_DIGEST_MISMATCH");
