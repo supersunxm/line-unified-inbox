@@ -3152,3 +3152,6 @@ An explicitly requested `conversationId` may be outside the current paginated or
 
 ## 2026-10-04 — Gate exact remediation on active eligible fleet
 Use the production-derived active Store/OA set as the Live Mirror health denominator. Exclude only records proven archived/inactive; keep target redirects explicitly verified. Require consecutive full-fleet cycles over that exact scope before exact-manifest work. For Store Chats, merge page-one polling results by stable message ID with loaded older pages so routine refresh preserves pagination; scope state to the active conversation before applying concurrent responses.
+
+## 2026-10-04 — Pin every exact remediation set by immutable digest
+Additional exact remediation must use a new immutable manifest and an explicit approved SHA-256, row count, and Store count in the existing Reconciler allowlist. The Reconciler must reject all other inputs before querying or writing; time-based catch-up and caller-supplied digests cannot expand scope. Manifest #7 is limited to 14 preflighted outbound sticker identities across 10 Stores.

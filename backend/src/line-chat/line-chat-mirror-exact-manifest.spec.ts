@@ -8,6 +8,8 @@ import {
   type ExactMirrorManifestExecutionResult,
 } from "./line-chat-mirror-reconciler.service";
 import {
+  APPROVED_EXACT_MEDIA_MANIFESTS,
+  APPROVED_KPI_STICKER_MANIFEST_SHA256,
   EXACT_MIRROR_MANIFEST_MAX_ROWS,
   exactMirrorIdentityKey,
   exactMirrorIdentityWhere,
@@ -37,6 +39,13 @@ const HEADER = [
   "raw_source_id_oa_count",
 ].join(",");
 const TEXT_HASH = createHash("sha256").update("a", "utf8").digest("hex");
+
+test("KPI sticker remediation is pinned to its exact 14-row, 10-store manifest", () => {
+  assert.deepEqual(
+    APPROVED_EXACT_MEDIA_MANIFESTS.find((manifest) => manifest.sha256 === APPROVED_KPI_STICKER_MANIFEST_SHA256),
+    { sha256: APPROVED_KPI_STICKER_MANIFEST_SHA256, rows: 14, stores: 10 },
+  );
+});
 
 function csvRows(count = EXACT_MIRROR_MANIFEST_MAX_ROWS): string[] {
   const timestamp = "2026-09-22T00:00:00.000Z";
