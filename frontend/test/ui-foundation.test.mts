@@ -69,7 +69,7 @@ test("every internal route sets its document title through internalPageTitle", (
     ["../src/app/replymessage/layout.tsx", "อัตราตอบกลับ 24 ชม."],
     ["../src/app/chats/layout.tsx", "แชทร้านค้า"],
     ["../src/app/main-oa/layout.tsx", "Main OA"],
-    ["../src/app/follower-insights/layout.tsx", "ข้อมูลผู้ติดตาม"],
+    ["../src/app/follower-insights/layout.tsx", "เพื่อน"],
     ["../src/app/store-360/layout.tsx", "Store 360"],
     ["../src/app/monthly-operations-report/layout.tsx", "รายงาน LINE รายเดือน"],
     ["../src/app/download-center/layout.tsx", "Download Center"],
