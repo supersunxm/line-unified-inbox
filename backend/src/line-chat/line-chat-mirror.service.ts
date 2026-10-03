@@ -27,6 +27,8 @@ import {
 import { LineChatProfileOperationCoordinator } from "./line-chat-profile-operation-coordinator.service";
 import { LineChatSessionService } from "./line-chat-session.service";
 import { selectLineChatStoreOa, type LineChatStoreOaSelection } from "./line-chat-store-oa-selector";
+import { liveMirrorTargetCacheKey, readLiveMirrorAccountOverride, type LiveMirrorAccountOverride } from "./line-chat-live-account-override";
+import { resolveConfiguredMirrorFleetScope, type MirrorFleetScope } from "./line-chat-mirror-fleet-scope";
 import { MirrorOperationModeService, type MirrorOperationModeValue } from "./mirror-operation-mode.service";
 import { persistLineChatMirrorHistoryBatch } from "./line-chat-mirror-persistence";
 
@@ -602,7 +604,35 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
         return [];
       }
 
-      for (const storeCode of configuredLineChatMirrorStoreCodes()) {
+      let fleetScope: MirrorFleetScope;
+      try {
+        fleetScope = await this.resolveActiveFleetScope(configuredLineChatMirrorStoreCodes());
+      } catch (error) {
+        this.logger.error(JSON.stringify({
+          event: "line_chat_mirror_fleet_scope_resolution_failed",
+          errorType: safeErrorType(error),
+        }));
+        return [];
+      }
+      let disabledMirrorStates = 0;
+      if (fleetScope.disabledOaIds.length > 0) {
+        const disabled = await this.prisma.lineChatMirrorStoreState.updateMany({
+          where: { lineOfficialAccountId: { in: fleetScope.disabledOaIds }, enabled: true },
+          data: { enabled: false },
+        });
+        disabledMirrorStates = disabled.count;
+      }
+      this.logger.log(JSON.stringify({
+        event: "line_chat_mirror_fleet_scope_resolved",
+        configuredStoreCount: fleetScope.configuredStoreCodes.length,
+        activeEligibleStoreCount: fleetScope.eligibleStoreCodes.length,
+        activeEligibleOaCount: fleetScope.eligibleOaIds.length,
+        unconfiguredActiveStoreCount: fleetScope.unconfiguredActiveStoreCodes.length,
+        exclusions: fleetScope.exclusions,
+        disabledIneligibleMirrorStates: disabledMirrorStates,
+      }));
+
+      for (const storeCode of fleetScope.eligibleStoreCodes) {
         storesAttempted += 1;
         try {
           results.push(await this.syncStore(
@@ -636,7 +666,7 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
       let oldestSuccessfulStoreAgeMs: number | null = null;
       try {
         const storeStates = await this.prisma.lineChatMirrorStoreState.findMany({
-          where: { storeCode: { in: configuredLineChatMirrorStoreCodes() } },
+          where: { storeCode: { in: fleetScope.eligibleStoreCodes } },
           select: { lastSuccessfulSyncAt: true },
         });
         const oldest = storeStates
@@ -655,7 +685,13 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
       this.logger.log(JSON.stringify({
         event: "line_chat_mirror_fleet_cycle_completed",
         mode: operationState.mode,
-        storesConfigured: configuredLineChatMirrorStoreCodes().length,
+        storesConfigured: fleetScope.eligibleStoreCodes.length,
+        storesExcluded: fleetScope.exclusions.length,
+        unconfiguredActiveStores: fleetScope.unconfiguredActiveStoreCodes.length,
+        storesExcludedByReason: fleetScope.exclusions.reduce<Record<string, number>>((counts, item) => {
+          counts[item.reason] = (counts[item.reason] ?? 0) + 1;
+          return counts;
+        }, {}),
         storesAttempted,
         storesSucceeded: results.filter((result) => result.status === LineChatMirrorSyncStatus.SUCCESS).length,
         storesPartial: results.filter((result) => result.status === LineChatMirrorSyncStatus.PARTIAL).length,
@@ -668,6 +704,10 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
     } finally {
       this.running = false;
     }
+  }
+
+  private async resolveActiveFleetScope(storeCodes: readonly string[]): Promise<MirrorFleetScope> {
+    return resolveConfiguredMirrorFleetScope(this.prisma, storeCodes);
   }
 
   private async runBackfillStore(
@@ -835,6 +875,7 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
   private async syncStore(
     storeCode: string,
     catchUpStartAt: Date | null = null,
+    allowLiveAccountOverride = true,
   ): Promise<LineChatMirrorCycleResult> {
     const startedAtMs = Date.now();
     const targetInputsStartedAt = Date.now();
@@ -842,6 +883,19 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
     const targetInputsDurationMs = Date.now() - targetInputsStartedAt;
     const effectiveStoreCode = storeTarget.effectiveStoreCode;
     const oa = storeTarget.oa;
+    const liveAccountOverride = readLiveMirrorAccountOverride({
+      mode: allowLiveAccountOverride && catchUpStartAt === null ? "NORMAL" : "HISTORICAL",
+      storeCode: effectiveStoreCode,
+      lineOfficialAccountId: oa.id,
+      storedBasicId: oa.basicId,
+    });
+    if (
+      liveAccountOverride
+      && oa.lineChatSession
+      && oa.lineChatSession.sessionKey !== (liveAccountOverride.profile === "A" ? "account-1" : "profile-b")
+    ) {
+      throw new Error("LIVE_ACCOUNT_OVERRIDE_PROFILE_RELATION_MISMATCH");
+    }
     this.logger.log(JSON.stringify({
       event: "line_chat_mirror_oa_selected",
       storeCode: effectiveStoreCode,
@@ -899,6 +953,7 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
       lineChatWorkspaceUrl: oa.lineChatWorkspaceUrl,
       storeManagerUrl: storeTarget.storeManagerUrl,
       lineChatSession: oa.lineChatSession,
+      liveAccountOverride,
     });
     const targetResolutionDurationMs = Date.now() - targetResolutionStartedAt;
     if (!target.ok) {
@@ -984,7 +1039,7 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
         });
         operationContext.assertOwnership();
         if (recent.status !== "READY") {
-          this.targetCache.delete(oa.id);
+          this.targetCache.delete(liveMirrorTargetCacheKey(oa.id, liveAccountOverride));
           this.logger.warn(JSON.stringify({
             event: "line_chat_mirror_target_cache_evicted",
             lineOfficialAccountId: oa.id,
@@ -1259,6 +1314,7 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
     lineChatWorkspaceUrl: string | null;
     storeManagerUrl: string | null;
     lineChatSession: MirrorSessionTarget | null;
+    liveAccountOverride?: LiveMirrorAccountOverride;
     bypassCache?: boolean;
   }): Promise<MirrorTargetResolution> {
     const resolutionStartedAt = Date.now();
@@ -1292,9 +1348,10 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
       return { ok: false, errorCode, errorMessage };
     };
 
+    const targetCacheKey = liveMirrorTargetCacheKey(input.lineOfficialAccountId, input.liveAccountOverride);
     const cached = input.bypassCache
       ? null
-      : this.targetCache.get(input.lineOfficialAccountId);
+      : this.targetCache.get(targetCacheKey);
     if (cached && cached.session.status === LineChatSessionStatus.ACTIVE) {
       emitSummary("CACHE_HIT");
       return { ok: true, ...cached };
@@ -1302,7 +1359,8 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
 
     const existingBotId = input.chatBotId?.trim() || "";
     if (
-      existingBotId
+      !input.liveAccountOverride
+      && existingBotId
       && input.lineChatSession
       && input.lineChatSession.status === LineChatSessionStatus.ACTIVE
     ) {
@@ -1311,12 +1369,12 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
         session: input.lineChatSession,
         source: "EXISTING_OA" as const,
       };
-      this.targetCache.set(input.lineOfficialAccountId, resolved);
+      this.targetCache.set(targetCacheKey, resolved);
       emitSummary("EXISTING_OA");
       return { ok: true, ...resolved };
     }
 
-    const managerAccountKey = managerAccountKeyFromInputs({
+    const managerAccountKey = input.liveAccountOverride?.managerAccountKey ?? managerAccountKeyFromInputs({
       lineChatWorkspaceUrl: input.lineChatWorkspaceUrl,
       storeManagerUrl: input.storeManagerUrl,
       basicId: input.basicId,
@@ -1351,6 +1409,11 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
       if (!sessions.some((candidate) => candidate.id === session.id)) {
         sessions.push(session);
       }
+    }
+    if (input.liveAccountOverride) {
+      const expectedSessionKey = input.liveAccountOverride.profile === "A" ? "account-1" : "profile-b";
+      const assignedSessions = sessions.filter((session) => session.sessionKey === expectedSessionKey);
+      sessions.splice(0, sessions.length, ...assignedSessions);
     }
     diagnostics.sessionsConsidered = sessions.length;
 
@@ -1397,10 +1460,18 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
             );
             const page = context.pages()[0] || await context.newPage();
             const targetUrl = `https://chat.line.biz/account/${encodeURIComponent(managerAccountKey)}`;
-            await page.goto(targetUrl, {
-              waitUntil: "domcontentloaded",
-              timeout: 15_000,
-            }).catch(() => {});
+            if (input.liveAccountOverride) {
+              const navigation = await page.goto(targetUrl, {
+                waitUntil: "domcontentloaded",
+                timeout: 15_000,
+              });
+              if (!navigation || navigation.status() >= 400) return null;
+            } else {
+              await page.goto(targetUrl, {
+                waitUntil: "domcontentloaded",
+                timeout: 15_000,
+              }).catch(() => {});
+            }
             await page.waitForTimeout(1_000).catch(() => {});
             const auth = await confirmLineManagerAuthentication(
               () => this.sessionService.probeApiAuthentication(context!),
@@ -1526,7 +1597,7 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
       session: candidate.session,
       source: "MANAGER_ACCOUNT_REDIRECT" as const,
     };
-    this.targetCache.set(input.lineOfficialAccountId, result);
+      this.targetCache.set(targetCacheKey, result);
     this.logger.log(JSON.stringify({
       event: "line_chat_mirror_target_resolved",
       lineOfficialAccountId: input.lineOfficialAccountId,
