@@ -107,7 +107,7 @@ export class LineChatHealthSchedulerService implements OnModuleInit, OnModuleDes
         return "IDLE";
       }
 
-      if (this.sessionService?.isMirrorCooldownActive(now)) {
+      if (this.sessionService?.isMirrorCycleActive() || this.sessionService?.isMirrorCooldownActive(now)) {
         return "IDLE";
       }
 

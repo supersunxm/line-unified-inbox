@@ -6,6 +6,7 @@ export const PROFILE_OPERATION_LEASE_DURATION_MS = 90_000;
 export const PROFILE_OPERATION_HEARTBEAT_INTERVAL_MS = 20_000;
 export const PROFILE_OPERATION_RETRY_AFTER_MS = 5_000;
 export const PROFILE_OPERATION_HIGH_PRIORITY_WAIT_MS = 15_000;
+export const PROFILE_OPERATION_MIRROR_WAIT_MS = 90_000;
 
 export type LineChatProfileOperationKind =
   | "NICKNAME_UPDATE"
@@ -273,6 +274,7 @@ export class LineChatProfileOperationCoordinator {
       if (!Number.isFinite(overrideMs) || overrideMs <= 0) return 0;
       return Math.min(PROFILE_OPERATION_HIGH_PRIORITY_WAIT_MS, Math.floor(overrideMs));
     }
+    if (operationKind === "MIRROR_SYNC") return PROFILE_OPERATION_MIRROR_WAIT_MS;
     return operationKind === "MANUAL_DIAGNOSTIC" || operationKind === "RECENT_RESOLUTION"
       ? PROFILE_OPERATION_HIGH_PRIORITY_WAIT_MS
       : 0;

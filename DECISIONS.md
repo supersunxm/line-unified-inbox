@@ -1,3 +1,9 @@
+# 2026-10-04: Keep health probes out of an active Mirror fleet cycle
+
+- The first post-deployment cycle showed that scheduled read-only health probes can contend for the same Manager profile while a sequential Mirror sync is running. Because background operations do not wait for profile locks, this can turn an otherwise eligible store into a `PROFILE_OPERATION_BUSY` partial.
+- Track active scheduled Mirror-cycle state on the shared `LineChatSessionService`. The health scheduler returns idle while that state is active; a Mirror sync can wait up to 90 seconds for an already-running health operation to drain. After the cycle, resume health checks after a 30-second settle window while keeping the regular next-cycle interval unchanged. Clear the active flag in `finally` and during shutdown. This serializes maintenance probes around the existing Mirror cycle without changing OA scope, collection behavior, or reconciliation.
+- The exact-manifest health gate remains based on the authoritative 144 active eligible OAs, not the 146 configured targets; two archived/inactive targets remain explicit exclusions.
+
 # 2026-10-02: Narrow PR435 integration on actual current main
 
 - Rebuild from actual GitHub main rather than merging the stale local repository snapshot. Preserve current fixed-delay Live scheduling and normal reconciliation behavior; exact execution is a separate OA-scoped path inside the existing reconciler.

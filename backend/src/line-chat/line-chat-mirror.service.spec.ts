@@ -7,7 +7,7 @@ import {
 } from "@prisma/client";
 import { LineChatMirrorService } from "./line-chat-mirror.service";
 import type { PrismaService } from "../prisma.service";
-import type { LineChatSessionService } from "./line-chat-session.service";
+import { LineChatSessionService } from "./line-chat-session.service";
 import type { LineChatProfileOperationCoordinator } from "./line-chat-profile-operation-coordinator.service";
 import {
   configuredLineChatMirrorStoreCodes,
@@ -1193,6 +1193,65 @@ test("NORMAL mode starts a scheduled Live Mirror cycle", async () => {
     const results = await service.runCycle();
     assert.equal(syncCalls, 1);
     assert.equal(results.length, 1);
+  });
+});
+
+test("scheduled Mirror cycle blocks health-profile work until its cooldown is established", async () => {
+  await withEnvAsync({ LINE_CHAT_MIRROR_STORE_CODES: "20789" }, async () => {
+    const sessionService = new LineChatSessionService();
+    const prisma = { lineChatMirrorStoreState: { findMany: async () => [] } } as unknown as PrismaService;
+    const operationMode = {
+      getState: async () => ({
+        mode: "NORMAL" as const,
+        runId: null,
+        freezeAt: null,
+        backfillTargetStartAt: null,
+        catchUpStartAt: null,
+      }),
+    };
+    const service = new LineChatMirrorService(
+      prisma,
+      sessionService,
+      {} as LineChatProfileOperationCoordinator,
+      operationMode as never,
+    );
+    installTestFleetScope(service, ["20789"]);
+    Object.defineProperty(service, "schedulerActive", { configurable: true, writable: true, value: true });
+    Object.defineProperty(service, "scheduleNextCycle", { configurable: true, value: () => {} });
+    Object.defineProperty(service, "logger", { configurable: true, value: { log: () => {}, warn: () => {}, error: () => {} } });
+
+    let markStarted!: () => void;
+    let releaseCycle!: () => void;
+    const started = new Promise<void>((resolve) => { markStarted = resolve; });
+    const blocked = new Promise<void>((resolve) => { releaseCycle = resolve; });
+    Object.defineProperty(service, "syncStore", {
+      configurable: true,
+      value: async (storeCode: string) => {
+        assert.equal(sessionService.isMirrorCycleActive(), true);
+        markStarted();
+        await blocked;
+        return {
+          storeCode,
+          status: LineChatMirrorSyncStatus.SUCCESS,
+          recentChatsObserved: 0,
+          historiesFetched: 0,
+          messagesObserved: 0,
+          messagesInsertedOrUpdated: 0,
+          pendingChats: 0,
+          unknownDirectionEvents: 0,
+          durationMs: 0,
+        };
+      },
+    });
+
+    const scheduled = (service as unknown as { runScheduledCycle: () => Promise<void> }).runScheduledCycle();
+    await started;
+    assert.equal(sessionService.isMirrorCycleActive(), true);
+    releaseCycle();
+    await scheduled;
+    assert.equal(sessionService.isMirrorCycleActive(), false);
+    assert.equal(sessionService.isMirrorCooldownActive(), true);
+    service.onModuleDestroy();
   });
 });
 

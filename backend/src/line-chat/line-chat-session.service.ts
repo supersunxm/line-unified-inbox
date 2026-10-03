@@ -334,6 +334,7 @@ export class LineChatSessionService implements OnModuleDestroy {
   private readonly profileGenerations = new Map<string, number>();
   private isShuttingDown = false;
   private mirrorCooldownUntilMs = 0;
+  private mirrorCycleActive = false;
   private lastRuntimeSnapshotAt = 0;
   private readonly discoveryContinuations = new WeakMap<LineChatDiscoveryContinuation, {
     botId: string;
@@ -353,6 +354,14 @@ export class LineChatSessionService implements OnModuleDestroy {
 
   public isMirrorCooldownActive(now: Date = new Date()): boolean {
     return this.mirrorCooldownUntilMs > now.getTime();
+  }
+
+  public setMirrorCycleActive(active: boolean): void {
+    this.mirrorCycleActive = active;
+  }
+
+  public isMirrorCycleActive(): boolean {
+    return this.mirrorCycleActive;
   }
 
   public async closeIdleManagedContexts(

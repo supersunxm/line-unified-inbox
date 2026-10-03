@@ -16,6 +16,8 @@ function makeFixture(options: {
   oaOutcome?: "RECORDED" | "SKIPPED_BUSY";
   recoveryCandidateId?: string | null;
   authRecovery?: any;
+  mirrorCycleActive?: boolean;
+  mirrorCooldownActive?: boolean;
 } = {}) {
   const calls: string[] = [];
   const updates: Array<{ entity: "SESSION" | "OA"; id: string; data: Record<string, unknown> }> = [];
@@ -93,12 +95,17 @@ function makeFixture(options: {
       };
     },
   };
+  const sessionService = {
+    isMirrorCooldownActive: () => options.mirrorCooldownActive ?? false,
+    isMirrorCycleActive: () => options.mirrorCycleActive ?? false,
+  };
   return {
     service: new LineChatHealthSchedulerService(
       prisma as never,
       sessionProbe as never,
       oaProbe as never,
       options.authRecovery,
+      sessionService as never,
     ),
     calls,
     updates,
@@ -165,6 +172,14 @@ test("busy shared profile does not advance next-check timestamp", async () => {
   const fixture = makeFixture({ sessionId: "session-1", sessionOutcome: "SKIPPED_BUSY" });
   const result = await fixture.service.runTick();
   assert.equal(result, "SESSION");
+  assert.equal(fixture.updates.length, 0);
+});
+
+test("health scheduler skips all profile work while a Mirror fleet cycle is active", async () => {
+  const fixture = makeFixture({ mirrorCycleActive: true, sessionId: "session-1", oaId: "oa-1" });
+  const result = await fixture.service.runTick(new Date("2026-09-04T00:00:00.000Z"));
+  assert.equal(result, "IDLE");
+  assert.deepEqual(fixture.calls, []);
   assert.equal(fixture.updates.length, 0);
 });
 
