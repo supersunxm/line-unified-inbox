@@ -6091,3 +6091,12 @@ The backend enum-compatible Live lease read and passive worker browser/cycle tel
 Local validation on the exact current-main frontend plus this patch: health/auth-user/dashboard tests 39/39 pass, touched-file ESLint passes, webpack production build passes. The existing next/font dependency required network access. Scoped TypeScript diagnostics are in unchanged transitive auto-response, broadcast and follower-insights modules; Unchanged-base comparison produced identical diagnostics (four errors in three untouched transitive modules); zero new diagnostics from this patch. No lint/type suppression or build setting was added.
 
 Live worker continues independently at 146 configured unique active OA identities. All ten additions completed successful NORMAL collection; nine have inbound canonical duplicates and newly imported outbound messages at the correct Store/OA. Thalang has no eligible recent activity. First full cycle: 146 attempted, 135 success, 11 temporary coordinator-busy partials, zero failed/skipped. Automatic retries are being observed. No Historical behavior change or LINE sends.
+
+
+## 2026-10-03 — LINE OA Friends terminology alignment
+- Updated follower-insights UI copy to match LINE Official Account wording shown in the official Friends analytics screen.
+- Thai core terms: เพื่อน, เพิ่มเพื่อน, ทาร์เก็ตรีช, บล็อค; derived growth metric is labeled อัตราเพิ่มเพื่อน.
+- English core terms: Friends, Friends added, Target reach, Blocking; derived growth metric is labeled Friends added rate.
+- Updated mobile follower insights, desktop translations, page metadata, sidebar/top navigation, and the affected navigation test.
+- Functional logic and API field names are unchanged; this is a UI terminology-only change.
+- Verification pending GitHub CI on PR.

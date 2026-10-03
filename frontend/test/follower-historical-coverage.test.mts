@@ -154,12 +154,12 @@ test("all required follower historical coverage labels exist for th, en, and zh"
   assert.equal(followerInsightsTranslations.zh.accountCoverageDiffersNote, "每日参与计算的账号数量不同");
 
   // Confirm exact Requirement 14 backfill status strings
-  assert.equal(followerInsightsTranslations.th.backfillStatusQueued, "เชื่อมต่อสำเร็จ กำลังดึงข้อมูลผู้ติดตามย้อนหลัง");
+  assert.equal(followerInsightsTranslations.th.backfillStatusQueued, "เชื่อมต่อสำเร็จ กำลังดึงข้อมูลเพื่อนย้อนหลัง");
   assert.equal(followerInsightsTranslations.th.backfillStatusCompleted, "ดึงข้อมูลย้อนหลังสำเร็จ");
   assert.equal(followerInsightsTranslations.th.backfillStatusPartial, "ดึงข้อมูลย้อนหลังสำเร็จบางส่วน");
   assert.equal(followerInsightsTranslations.th.backfillStatusFailed, "ดึงข้อมูลย้อนหลังไม่สำเร็จ คลิกเพื่อลองใหม่");
 
-  assert.equal(followerInsightsTranslations.en.backfillStatusQueued, "Connected successfully. Historical follower data is being fetched.");
+  assert.equal(followerInsightsTranslations.en.backfillStatusQueued, "Connected successfully. Historical friends data is being fetched.");
   assert.equal(followerInsightsTranslations.en.backfillStatusCompleted, "Historical backfill completed.");
   assert.equal(followerInsightsTranslations.en.backfillStatusPartial, "Historical backfill completed with some errors.");
   assert.equal(followerInsightsTranslations.en.backfillStatusFailed, "Historical backfill failed. Click to retry.");

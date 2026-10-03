@@ -9,7 +9,7 @@ test("TopNavigation renders destination links as native Next.js Link components"
   const expectedRoutes = [
     { name: "Dashboard", href: "/dashboard" },
     { name: "Store Chats", href: "/chats" },
-    { name: "Follower Insights", href: "/follower-insights" },
+    { name: "Friends", href: "/follower-insights" },
     { name: "Stores", href: "/stores" },
     { name: "BM Approval", href: "/admin/registrations" },
     { name: "Purchase Intelligence", href: "/admin/purchase-analytics" },
