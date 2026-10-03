@@ -1,9 +1,18 @@
+# 2026-10-04: Post-Live eligibility and health-gate recovery
+
+- Current production fleet ledger: 144 active Store/OAs and 144 enabled Mirror states; all 144 are eligible, with zero active OAs missing state, zero unresolved target mappings, and 142 OAs with Raw Mirror events. Stores 26533 and 31754 are archived/inactive and disabled while their 675 existing Raw rows remain preserved.
+- The four previously ambiguous stores (22982, 23615, 25635, 27370) now have unique Manager-account ownership evidence and successful current-state syncs. The deployed worker resolved 144 eligible OAs and explicitly excluded the two archived OAs.
+- After PR #452 deployment, the first normal cycle exposed profile-operation contention: scheduled health probes overlapped active Mirror work and four eligible OAs were marked PARTIAL with `PROFILE_OPERATION_BUSY` in the observed in-progress snapshot; another OA had 10 `HISTORY_HTTP_401` chat-history failures, and one target-resolution attempt ended at `RECENT_DISCOVERY_TRANSPORT`. The exact-manifest gate remains closed; no new dry-run or writes were run.
+- Fix in progress on `codex/post-live-health-cycle-coordination-20261004`: mark the scheduled fleet cycle active in the shared session service, skip health probes during the cycle, let an in-flight health operation drain for up to 90 seconds, and resume health checks after a 30-second settle window between cycles. Focused regression tests pass 90/90; changed-file ESLint, backend build, and `git diff --check` pass. Repository-wide backend lint remains at the existing baseline of 892 errors and 2 warnings outside the changed files.
+- Current first-cycle progress at 2026-10-03T19:50:42Z: 66/144 attempted, 60 success, 5 partial, 1 failed. The exact-manifest gate remains closed.
+- Next: review the lock/auth/transport categories, deliver the tested scheduler fix by PR and normal Railway deployment, then require two consecutive new NORMAL cycles with 144/144 attempted and successful, partial=0, failed=0 before resuming immutable manifest checks.
+
 # 2026-10-02: PR435 clean remediation integration
 
 - Actual GitHub main verified at `62dd273311a870d14fb6b247ed753bd85261b6db`; clean integration rebuilt from that revision.
 - Only exact-manifest reconciliation, OA-scoped source dedupe, Historical source anchors, reply analytics regression coverage, and their CI checks are included. Current fixed-delay Live scheduler, worker runtime, Google Review implementation, and frontend remain unchanged.
 - Current integration verification: 183/183 focused Live/reconciler/Historical/reply tests passed; focused ESLint, Prisma validation, backend production build and diff check passed.
-- Existing fleet-cycle telemetry supplies the two consecutive NORMAL full-fleet health gate; no additional operations endpoint or scheduler change is required.
+- Existing fleet-cycle telemetry supplies the required gate measurement. Post-deployment verification on 2026-10-03 showed scheduler/profile contention can still produce partial cycles, so the follow-up adds narrowly scoped health/Mirror serialization before the gate can pass.
 - Next: update PR435 with an explicit remote-head lease, require CI, merge, verify Railway deployment and two healthy cycles, then dry-run each immutable manifest before any apply.
 
 # 2026-10-01: Google Maps Aggregate Store Rating Feature in Review KPI [READY FOR MERGE]

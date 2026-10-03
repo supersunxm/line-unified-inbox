@@ -35,6 +35,7 @@ import { persistLineChatMirrorHistoryBatch } from "./line-chat-mirror-persistenc
 const DEFAULT_INTERVAL_MS = 60_000;
 const MIN_INTERVAL_MS = 30_000;
 const START_DELAY_MS = 10_000;
+const PROFILE_HEALTH_RESUME_COOLDOWN_MS = 30_000;
 const DEFAULT_MAX_CHANGED_CHATS_PER_CYCLE = 20;
 const MAX_CHANGED_CHATS_PER_CYCLE = 50;
 const DEFAULT_OUTBOUND_REFRESH_INTERVAL_MS = 2 * 60_000;
@@ -450,6 +451,7 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
 
     const delayAfterCycleMs = lineChatMirrorIntervalMs();
     this.schedulerActive = true;
+    this.sessionService.setMirrorCycleActive(true);
     this.logger.log(JSON.stringify({
       event: "line_chat_mirror_worker_started",
       storeCount: configuredLineChatMirrorStoreCodes().length,
@@ -471,6 +473,7 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
 
   onModuleDestroy(): void {
     this.schedulerActive = false;
+    this.sessionService.setMirrorCycleActive(false);
     this.sessionService.setMirrorCooldownUntil(null);
     if (this.timer) clearTimeout(this.timer);
     if (this.startupTimer) clearTimeout(this.startupTimer);
@@ -496,18 +499,22 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
     }
 
     this.sessionService.setMirrorCooldownUntil(null);
+    this.sessionService.setMirrorCycleActive(true);
     try {
       await this.runCycle();
     } finally {
       if (this.schedulerActive) {
         const delayAfterCycleMs = lineChatMirrorIntervalMs();
-        const nextCycleAt = new Date(Date.now() + delayAfterCycleMs);
-        this.sessionService.setMirrorCooldownUntil(nextCycleAt);
         const cleanup = await this.sessionService.closeIdleManagedContexts("MIRROR_CYCLE_COOLDOWN");
+        const healthResumeAt = new Date(Date.now() + PROFILE_HEALTH_RESUME_COOLDOWN_MS);
+        const nextCycleAt = new Date(Date.now() + delayAfterCycleMs);
+        this.sessionService.setMirrorCooldownUntil(healthResumeAt);
+        this.sessionService.setMirrorCycleActive(false);
 
         this.logger.log(JSON.stringify({
           event: "line_chat_mirror_cooldown_started",
           delayAfterCycleMs,
+          healthResumeAt: healthResumeAt.toISOString(),
           nextCycleAt: nextCycleAt.toISOString(),
           contextsClosed: cleanup.closed,
           contextCloseFailures: cleanup.failed,

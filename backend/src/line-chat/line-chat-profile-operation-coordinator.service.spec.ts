@@ -234,6 +234,30 @@ test("bounded wait override lets a background mirror operation queue behind the 
   if (queuedResult.acquired) assert.equal(queuedResult.value, "materialized");
 });
 
+test("Mirror sync waits for an already-running profile health check", async () => {
+  const prisma = createFakePrisma();
+  const coordinator = new LineChatProfileOperationCoordinator(prisma as never);
+  let releaseHealth!: () => void;
+  const healthHold = new Promise<void>((resolve) => { releaseHealth = resolve; });
+  const health = coordinator.withProfileOperation(
+    { sessionId: "session-a", operationKind: "HEALTH_SESSION" },
+    async () => healthHold,
+  );
+  await new Promise((resolve) => setImmediate(resolve));
+
+  const mirror = coordinator.withProfileOperation(
+    { sessionId: "session-a", operationKind: "MIRROR_SYNC" },
+    async () => "synced",
+  );
+  await new Promise((resolve) => setImmediate(resolve));
+  releaseHealth();
+
+  assert.equal((await health).acquired, true);
+  const mirrorResult = await mirror;
+  assert.equal(mirrorResult.acquired, true);
+  if (mirrorResult.acquired) assert.equal(mirrorResult.value, "synced");
+});
+
 test("different sessions operate concurrently", async () => {
   const prisma = createFakePrisma();
   const coordinator = new LineChatProfileOperationCoordinator(prisma as never);
