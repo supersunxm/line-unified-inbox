@@ -21,7 +21,7 @@ import { mapRealtimeMessage, subscribeToRealtimeEvents } from "./realtime";
 import { isValidCanonicalWebhookUrl } from "./webhook-url";
 import { openLineOaManager } from "./line-oa-manager";
 import { getStoreGoogleMapsReadiness, type GoogleMapsReadinessStatus } from "@/lib/template-variable-resolver";
-import { buildChatsHref, readChatRouteFilters } from "./workspace-routing";
+import { buildChatsHref, readChatRouteFilters, resolveSelectedConversation, resolveSelectedConversationId, type ConversationRouteLookupStatus } from "./workspace-routing";
 import { FollowerInsightsView } from "./follower-insights/follower-insights-view";
 import { followerInsightsTranslations } from "./follower-insights/follower-insights-translations";
 import { getInclusiveCalendarDays } from "./follower-insights/follower-insights-utils";
@@ -1536,6 +1536,7 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
   const [managerLinkMissing, setManagerLinkMissing] = useState(false);
   const [selectedConversationId, setSelectedConversationId] = useState("");
   const [selectedApiConversation, setSelectedApiConversation] = useState<ApiConversation | null>(null);
+  const [routeConversationLookup, setRouteConversationLookup] = useState<{ id: string; status: ConversationRouteLookupStatus } | null>(null);
   const [customerNameHistory, setCustomerNameHistory] = useState<{ currentName: string; history: Array<{ id: string; displayName: string; source: string; capturedAt: string }> } | null>(null);
   const [customerNameHistoryLoading, setCustomerNameHistoryLoading] = useState(false);
   const [customerNameHistoryError, setCustomerNameHistoryError] = useState<string | null>(null);
@@ -1604,6 +1605,8 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
   const newestChatMessageRef = useRef<string | null>(null);
   const replyIdempotencyKeyRef = useRef<string | null>(null);
   const chatRouteHydrated = useRef(false);
+  const requestedRouteConversationIdRef = useRef("");
+  const routeConversationLookupRef = useRef<{ id: string; status: ConversationRouteLookupStatus } | null>(null);
   const [uiPreferencesLoaded, setUiPreferencesLoaded] = useState(false);
   const [chatPage, setChatPage] = useState(1);
   const [chatPageSize, setChatPageSize] = useState(CONVERSATION_PAGE_SIZE);
@@ -1820,9 +1823,14 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
       setConversations(mapped);
       setConversationStates(Object.fromEntries(response.items.map((item) => [item.id, mapApiConversationState(item)])));
       setSavedNotes(Object.fromEntries(response.items.map((item) => [item.id, item.notes[0]?.content ?? ""])));
-      setSelectedConversationId((currentId) =>
-        mapped.some(({ id }) => id === currentId) ? currentId : mapped[0]?.id ?? "",
-      );
+      setSelectedConversationId((currentId) => resolveSelectedConversationId({
+        selectedConversationId: currentId,
+        visibleConversations: mapped,
+        routeConversationId: requestedRouteConversationIdRef.current,
+        routeLookupStatus: routeConversationLookupRef.current?.id === currentId
+          ? routeConversationLookupRef.current.status
+          : undefined,
+      }));
       setLastUpdatedAt(new Date());
     } catch (error) {
       if (controller.signal.aborted || isAbortError(error) || !conversationRequestGuard.current.isLatest(requestGeneration)) return;
@@ -2098,6 +2106,11 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
       const route = readChatRouteFilters(window.location.search);
       const routeParams = new URLSearchParams(window.location.search);
       const focusGroupSelected = routeParams.get(FOCUS_STORE_GROUP_ROUTE_PARAM) === FOCUS_STORE_GROUP_ROUTE_VALUE;
+      requestedRouteConversationIdRef.current = route.conversationId ?? "";
+      const lookup = route.conversationId ? { id: route.conversationId, status: "pending" as const } : null;
+      routeConversationLookupRef.current = lookup;
+      setRouteConversationLookup(lookup);
+      setSelectedApiConversation(null);
       setSelectedStore(focusGroupSelected ? FOCUS_STORE_GROUP_ID : (route.store ?? "all"));
       setSidebarView(
         route.replyState === "REPLIED"
@@ -2223,21 +2236,31 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
   const filteredConversations = conversations;
 
   const selectedConversation = useMemo(
-    () => filteredConversations.find(({ id }) => id === selectedConversationId) ?? filteredConversations[0],
-    [filteredConversations, selectedConversationId],
+    () => resolveSelectedConversation({
+      visibleConversations: filteredConversations,
+      selectedConversationId,
+      routeConversation: selectedApiConversation?.id === selectedConversationId
+        ? mapApiConversation(selectedApiConversation)
+        : undefined,
+    }),
+    [filteredConversations, selectedApiConversation, selectedConversationId],
   );
   const selectedConversationState = selectedConversation
     ? conversationStates[selectedConversation.id]
     : undefined;
   useEffect(() => {
     if (!selectedConversation || selectedConversation.id === selectedConversationId) return;
-
-    const selectFirstVisible = window.setTimeout(
-      () => setSelectedConversationId(selectedConversation.id),
-      0,
-    );
-    return () => window.clearTimeout(selectFirstVisible);
-  }, [selectedConversation, selectedConversationId]);
+    const routeLookupStatus = routeConversationLookup?.id === selectedConversationId
+      ? routeConversationLookup.status
+      : undefined;
+    const resolvedId = resolveSelectedConversationId({
+      selectedConversationId,
+      visibleConversations: filteredConversations,
+      routeConversationId: requestedRouteConversationIdRef.current,
+      routeLookupStatus,
+    });
+    if (resolvedId !== selectedConversationId) setSelectedConversationId(resolvedId);
+  }, [filteredConversations, routeConversationLookup, selectedConversation, selectedConversationId]);
 
   useEffect(() => {
     if (!selectedConversationId) return;
@@ -2253,9 +2276,25 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
         ]);
         if (active && !controller.signal.aborted) {
           setSelectedApiConversation(conversation); setChatHistory(messages);
+          if (requestedRouteConversationIdRef.current === selectedConversationId) {
+            const lookup = { id: selectedConversationId, status: "resolved" as const };
+            routeConversationLookupRef.current = lookup;
+            setRouteConversationLookup(lookup);
+          }
         }
       } catch (error) {
-        if (!isAbortError(error)) { /* The main data error surface handles API availability. */ }
+        if (!isAbortError(error)) {
+          if (
+            active
+            && requestedRouteConversationIdRef.current === selectedConversationId
+            && routeConversationLookupRef.current?.status !== "resolved"
+          ) {
+            const lookup = { id: selectedConversationId, status: "failed" as const };
+            routeConversationLookupRef.current = lookup;
+            setRouteConversationLookup(lookup);
+          }
+          /* The main data error surface handles API availability. */
+        }
       } finally {
         if (conversationDetailRequestController.current === controller) {
           conversationDetailRequestController.current = null;
@@ -2735,12 +2774,13 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
   function selectSidebarView(view: SidebarView) {
     setSidebarView(view);
     if (view === "stores") {
-      setSelectedStore("all");
+      changeStoreFilter("all");
       setShowFilterPanel(true);
     }
   }
 
   function clearAllFilters() {
+    clearRequestedRouteConversation();
     setSearchText("");
     setSelectedStore("all");
     setStatusFilter("all");
@@ -2750,6 +2790,24 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
     setTopicFilter("all");
     setLineOaFilter("all");
     setSidebarView("all");
+  }
+
+  function clearRequestedRouteConversation() {
+    requestedRouteConversationIdRef.current = "";
+    routeConversationLookupRef.current = null;
+    setRouteConversationLookup(null);
+    setSelectedApiConversation(null);
+    setSelectedConversationId("");
+  }
+
+  function changeStoreFilter(storeId: string) {
+    clearRequestedRouteConversation();
+    setSelectedStore(storeId);
+  }
+
+  function changeLineOaFilter(lineOaId: string) {
+    clearRequestedRouteConversation();
+    setLineOaFilter(lineOaId);
   }
 
   function openMonitoring(filters: {
@@ -2775,6 +2833,17 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
     setLineOaFilter(filters.lineOaId ?? "all");
     if (filters.conversationId !== undefined) {
       setSelectedConversationId(filters.conversationId);
+      requestedRouteConversationIdRef.current = filters.conversationId;
+      const lookup = filters.conversationId ? { id: filters.conversationId, status: "pending" as const } : null;
+      routeConversationLookupRef.current = lookup;
+      setRouteConversationLookup(lookup);
+      setSelectedApiConversation(null);
+    } else {
+      setSelectedConversationId("");
+      requestedRouteConversationIdRef.current = "";
+      routeConversationLookupRef.current = null;
+      setRouteConversationLookup(null);
+      setSelectedApiConversation(null);
     }
   }
 
@@ -4354,7 +4423,7 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
                     <div className="app-filter-panel mt-3 grid grid-cols-2 gap-2 rounded-[var(--app-radius-md)] border border-[var(--app-border)] bg-[var(--app-surface-subtle)] p-2.5 shadow-[var(--app-shadow-card)]">
                       <label className="text-[var(--app-text-secondary)] text-xs font-medium">
                         {text.storeFilter}
-                        <select value={selectedStore} onChange={(event) => setSelectedStore(event.target.value)} className="mt-1 w-full rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface)] px-2 py-1 text-xs text-[var(--app-text-primary)] focus:border-[var(--app-accent)] focus:outline-none">
+                        <select value={selectedStore} onChange={(event) => changeStoreFilter(event.target.value)} className="mt-1 w-full rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface)] px-2 py-1 text-xs text-[var(--app-text-primary)] focus:border-[var(--app-accent)] focus:outline-none">
                           <option value="all">{text.allStores}</option>
                           <option value={FOCUS_STORE_GROUP_ID}>{focusStoreGroupCopy.label}</option>
                           {storeOptions.map((storeId) => <option key={storeId} value={storeId}>{getStoreDisplayName(availableStores.find(({ id }) => id === storeId)?.name ?? storeId)}</option>)}
@@ -4397,7 +4466,7 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
                       </label>
                       <label className="text-[var(--app-text-secondary)] col-span-2 text-xs font-medium">
                         {text.lineOaManagement}
-                        <select value={lineOaFilter} onChange={(event) => setLineOaFilter(event.target.value)} className="mt-1 w-full rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface)] px-2 py-1 text-xs text-[var(--app-text-primary)] focus:border-[var(--app-accent)] focus:outline-none">
+                        <select value={lineOaFilter} onChange={(event) => changeLineOaFilter(event.target.value)} className="mt-1 w-full rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface)] px-2 py-1 text-xs text-[var(--app-text-primary)] focus:border-[var(--app-accent)] focus:outline-none">
                           <option value="all">{text.allLineOa}</option>
                           {lineOas.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
                         </select>
@@ -4408,13 +4477,13 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
                   {hasActiveFilters && (
                     <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
                       {searchText.trim() && <button onClick={() => setSearchText("")} className="rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface-subtle)] text-[var(--app-text-primary)] px-2 py-0.5 text-[11px] font-medium">{text.searchFilter}: {searchText.trim()} ×</button>}
-                      {selectedStore !== "all" && <button onClick={() => setSelectedStore("all")} className="rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface-subtle)] text-[var(--app-text-primary)] px-2 py-0.5 text-[11px] font-medium">{text.storeFilter}: {selectedStore === FOCUS_STORE_GROUP_ID ? focusStoreGroupCopy.label : getStoreDisplayName(availableStores.find(({ id }) => id === selectedStore)?.name ?? selectedStore)} ×</button>}
+                      {selectedStore !== "all" && <button onClick={() => changeStoreFilter("all")} className="rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface-subtle)] text-[var(--app-text-primary)] px-2 py-0.5 text-[11px] font-medium">{text.storeFilter}: {selectedStore === FOCUS_STORE_GROUP_ID ? focusStoreGroupCopy.label : getStoreDisplayName(availableStores.find(({ id }) => id === selectedStore)?.name ?? selectedStore)} ×</button>}
                       {statusFilter !== "all" && <button onClick={() => setStatusFilter("all")} className="rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface-subtle)] text-[var(--app-text-primary)] px-2 py-0.5 text-[11px] font-medium">{text.statusFilter}: {getStatusLabel(language, statusFilter)} ×</button>}
                       {priorityFilter !== "all" && <button onClick={() => setPriorityFilter("all")} className="rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface-subtle)] text-[var(--app-text-primary)] px-2 py-0.5 text-[11px] font-medium">{text.priorityFilter}: {priorityFilter === "High" ? text.highPriority : text.normalPriority} ×</button>}
                       {seriesFilter !== "all" && <button onClick={() => setSeriesFilter("all")} className="rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface-subtle)] text-[var(--app-text-primary)] px-2 py-0.5 text-[11px] font-medium">{text.seriesFilter}: {seriesFilter} ×</button>}
                       {modelFilter !== "all" && <button onClick={() => setModelFilter("all")} className="rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface-subtle)] text-[var(--app-text-primary)] px-2 py-0.5 text-[11px] font-medium">{text.modelFilter}: {modelFilter} ×</button>}
                       {topicFilter !== "all" && <button onClick={() => setTopicFilter("all")} className="rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface-subtle)] text-[var(--app-text-primary)] px-2 py-0.5 text-[11px] font-medium">{text.topicFilter}: {topicFilter} ×</button>}
-                      {lineOaFilter !== "all" && <button onClick={() => setLineOaFilter("all")} className="rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface-subtle)] text-[var(--app-text-primary)] px-2 py-0.5 text-[11px] font-medium">{text.lineOaManagement}: {lineOas.find(({ id }) => id === lineOaFilter)?.name ?? lineOaFilter} ×</button>}
+                      {lineOaFilter !== "all" && <button onClick={() => changeLineOaFilter("all")} className="rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface-subtle)] text-[var(--app-text-primary)] px-2 py-0.5 text-[11px] font-medium">{text.lineOaManagement}: {lineOas.find(({ id }) => id === lineOaFilter)?.name ?? lineOaFilter} ×</button>}
                       {(sidebarView === "replied" || sidebarView === "notReplied") && <button onClick={() => setSidebarView("all")} className="rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface-subtle)] text-[var(--app-text-primary)] px-2 py-0.5 text-[11px] font-medium">{text.bmReplyStatus}: {bmReplyStatusLabels[language][sidebarView === "replied" ? "REPLIED" : "NOT_REPLIED"]} ×</button>}
                       <button onClick={clearAllFilters} className="text-[11px] font-medium text-[var(--app-danger)] hover:underline">{text.clearAll}</button>
                     </div>

@@ -10,6 +10,41 @@ export type ChatRouteFilters = {
   conversationId?: string;
 };
 
+export type ConversationRouteLookupStatus = "pending" | "resolved" | "failed";
+
+export function resolveSelectedConversation<T extends { id: string }>(input: {
+  visibleConversations: readonly T[];
+  selectedConversationId: string;
+  routeConversation?: T;
+}): T | undefined {
+  const listed = input.visibleConversations.find(({ id }) => id === input.selectedConversationId);
+  if (listed) return listed;
+  if (input.routeConversation?.id === input.selectedConversationId) return input.routeConversation;
+  return input.visibleConversations[0];
+}
+
+export function resolveSelectedConversationId(input: {
+  selectedConversationId: string;
+  visibleConversations: readonly { id: string }[];
+  routeConversationId?: string;
+  routeLookupStatus?: ConversationRouteLookupStatus;
+}): string {
+  const { selectedConversationId, visibleConversations } = input;
+  if (selectedConversationId && visibleConversations.some(({ id }) => id === selectedConversationId)) {
+    return selectedConversationId;
+  }
+
+  if (
+    selectedConversationId
+    && selectedConversationId === input.routeConversationId
+    && input.routeLookupStatus !== "failed"
+  ) {
+    return selectedConversationId;
+  }
+
+  return visibleConversations[0]?.id ?? "";
+}
+
 export function buildChatsHref(filters: ChatRouteFilters = {}): string {
   const query = new URLSearchParams();
   for (const [key, value] of Object.entries(filters)) {

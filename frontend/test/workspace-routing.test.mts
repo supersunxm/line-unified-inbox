@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { buildChatsHref, readChatRouteFilters } from "../src/app/workspace-routing.ts";
+import { buildChatsHref, readChatRouteFilters, resolveSelectedConversation, resolveSelectedConversationId } from "../src/app/workspace-routing.ts";
 
 const page = readFileSync(new URL("../src/app/page.tsx", import.meta.url), "utf8");
 
@@ -22,6 +22,52 @@ test("chat routes use effective two-state reply filters and normalize legacy not
   assert.equal(readChatRouteFilters("?replyState=REPLIED").replyState, "REPLIED");
   assert.equal(readChatRouteFilters("?bmReplyStatus=NOTIFIED_BM").replyState, "NOT_REPLIED");
   assert.equal(readChatRouteFilters("?bmReplyStatus=REPLIED").replyState, "REPLIED");
+});
+
+test("deep-linked conversation stays selected while its detail resolves outside the current list page", () => {
+  const base = {
+    selectedConversationId: "target-conversation",
+    visibleConversations: [{ id: "page-one-conversation" }],
+    routeConversationId: "target-conversation",
+  };
+
+  assert.equal(resolveSelectedConversationId({ ...base, routeLookupStatus: "pending" }), "target-conversation");
+  assert.equal(resolveSelectedConversationId({ ...base, routeLookupStatus: "resolved" }), "target-conversation");
+  assert.equal(resolveSelectedConversationId({ ...base, routeLookupStatus: "failed" }), "page-one-conversation");
+  assert.equal(resolveSelectedConversationId({ ...base, routeConversationId: "another-route" }), "page-one-conversation");
+  assert.equal(resolveSelectedConversationId({
+    ...base,
+    visibleConversations: [{ id: "target-conversation" }, { id: "page-one-conversation" }],
+    routeLookupStatus: "failed",
+  }), "target-conversation");
+});
+
+test("resolved deep-link detail is used when its row is outside the current page", () => {
+  const visible = [{ id: "page-one-conversation", customer: "Current page row" }];
+  const requested = { id: "target-conversation", customer: "Exact route target" };
+
+  assert.deepEqual(resolveSelectedConversation({
+    visibleConversations: visible,
+    selectedConversationId: requested.id,
+    routeConversation: requested,
+  }), requested);
+  assert.deepEqual(resolveSelectedConversation({
+    visibleConversations: visible,
+    selectedConversationId: "page-one-conversation",
+    routeConversation: requested,
+  }), visible[0]);
+  assert.equal(resolveSelectedConversation({
+    visibleConversations: visible,
+    selectedConversationId: "missing-target",
+  }), visible[0]);
+});
+
+test("changing Store or OA scope clears the exact deep-link selection before loading another scope", () => {
+  assert.match(page, /function clearRequestedRouteConversation\(\)[\s\S]*?setSelectedConversationId\(""\)/);
+  assert.match(page, /function changeStoreFilter\(storeId: string\)[\s\S]*?clearRequestedRouteConversation\(\)[\s\S]*?setSelectedStore\(storeId\)/);
+  assert.match(page, /function changeLineOaFilter\(lineOaId: string\)[\s\S]*?clearRequestedRouteConversation\(\)[\s\S]*?setLineOaFilter\(lineOaId\)/);
+  assert.match(page, /onChange=\{\(event\) => changeStoreFilter\(event\.target\.value\)\}/);
+  assert.match(page, /onChange=\{\(event\) => changeLineOaFilter\(event\.target\.value\)\}/);
 });
 
 const topNavCode = readFileSync(new URL("../src/components/shell/top-navigation.tsx", import.meta.url), "utf8");
@@ -50,6 +96,8 @@ test("stores and chats remain focused workspaces", () => {
   assert.match(page, /chat-resizable-grid/);
   assert.match(page, /managerUrl: selectedApiConversation\.resolvedLineOaManagerUrl/);
   assert.match(page, /setShowTranslation\(!showTranslation\)/);
+  assert.match(page, /resolveSelectedConversation\(/);
+  assert.match(page, /requestedRouteConversationIdRef/);
 });
 
 test("responsive navigation and workspace rules remain present", () => {
