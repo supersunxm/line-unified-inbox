@@ -50,7 +50,7 @@ function sectionLabel(section: PrimarySection, language: Language) {
     "admin-registrations": ["อนุมัติ BM", "BM Approval", "BM 审批"],
     "purchase-analytics": ["ข้อมูลการซื้อ", "Purchase Intelligence", "购买洞察"],
     "line-chat-health": ["สถานะ LINE Chat", "LINE Chat Health", "LINE Chat 健康"],
-    "follower-insights": ["ข้อมูลผู้ติดตาม", "Follower Insights", "关注者洞察"],
+    "follower-insights": ["เพื่อน", "Friends", "关注者洞察"],
     "friend-source-links": ["ลิงก์เพิ่มเพื่อน", "Friend Source Links", "加好友来源链接"],
     "mass-messages": ["ส่งข้อความ", "Mass Message", "群发消息"],
     broadcast: ["Broadcast", "Broadcast", "Broadcast"],
@@ -147,10 +147,10 @@ function MobileBottomNavigation({ authUser, currentSection, language, changeLang
   const [moreOpen, setMoreOpen] = useState(false);
   const secondaryActive = ["dashboard", "store-360", "stores", "admin-registrations", "purchase-analytics", "line-chat-health", "friend-source-links", "mass-messages", "broadcast", "coupons"].includes(currentSection);
   const labels = language === "th"
-    ? { home: "หน้าหลัก", dashboard: "แดชบอร์ด", chats: "แชทร้านค้า", insights: "ผู้ติดตาม", mainOa: "Main OA", more: "เพิ่มเติม", account: "บัญชี", profile: "โปรไฟล์", settings: "ตั้งค่า", traffic: "Message Traffic", store360: "Store 360", coupons: "คูปอง", stores: "จัดการร้านค้า", purchase: "ข้อมูลการซื้อ", friendLinks: "ลิงก์เพิ่มเพื่อน", mass: "ส่งข้อความ", broadcast: "Broadcast", approval: "อนุมัติ BM", richMenus: "จัดการ Rich Menu", autoResponses: "ข้อความตอบกลับอัตโนมัติ", greetingMessages: "ข้อความต้อนรับ", logout: "ออกจากระบบ", appearance: "รูปแบบการแสดงผล", language: "ภาษา" }
+    ? { home: "หน้าหลัก", dashboard: "แดชบอร์ด", chats: "แชทร้านค้า", insights: "เพื่อน", mainOa: "Main OA", more: "เพิ่มเติม", account: "บัญชี", profile: "โปรไฟล์", settings: "ตั้งค่า", traffic: "Message Traffic", store360: "Store 360", coupons: "คูปอง", stores: "จัดการร้านค้า", purchase: "ข้อมูลการซื้อ", friendLinks: "ลิงก์เพิ่มเพื่อน", mass: "ส่งข้อความ", broadcast: "Broadcast", approval: "อนุมัติ BM", richMenus: "จัดการ Rich Menu", autoResponses: "ข้อความตอบกลับอัตโนมัติ", greetingMessages: "ข้อความต้อนรับ", logout: "ออกจากระบบ", appearance: "รูปแบบการแสดงผล", language: "ภาษา" }
     : language === "zh"
       ? { home: "主页", dashboard: "仪表盘", chats: "门店聊天", insights: "关注者", mainOa: "Main OA", more: "更多", account: "账户", profile: "个人资料", settings: "设置", traffic: "消息流量", store360: "Store 360", coupons: "优惠券", stores: "门店管理", purchase: "购买洞察", friendLinks: "加好友链接", mass: "群发消息", broadcast: "Broadcast", approval: "BM 审批", richMenus: "Rich Menu 管理", autoResponses: "自动回复", greetingMessages: "欢迎消息", logout: "退出", appearance: "外观", language: "语言" }
-      : { home: "Main", dashboard: "Dashboard", chats: "Chats", insights: "Followers", mainOa: "Main OA", more: "More", account: "Account", profile: "Profile", settings: "Settings", traffic: "Message Traffic", store360: "Store 360", coupons: "Coupons", stores: "Stores", purchase: "Purchase", friendLinks: "Friend Links", mass: "Mass Message", broadcast: "Broadcast", approval: "BM Approval", richMenus: "Rich Menu Manager", autoResponses: "Auto-response", greetingMessages: "Greeting Messages", logout: "Logout", appearance: "Appearance", language: "Language" };
+      : { home: "Main", dashboard: "Dashboard", chats: "Chats", insights: "Friends", mainOa: "Main OA", more: "More", account: "Account", profile: "Profile", settings: "Settings", traffic: "Message Traffic", store360: "Store 360", coupons: "Coupons", stores: "Stores", purchase: "Purchase", friendLinks: "Friend Links", mass: "Mass Message", broadcast: "Broadcast", approval: "BM Approval", richMenus: "Rich Menu Manager", autoResponses: "Auto-response", greetingMessages: "Greeting Messages", logout: "Logout", appearance: "Appearance", language: "Language" };
 
   const itemClass = (active: boolean) => `${focusRing} flex min-h-[54px] min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-xl px-1 text-[10px] font-medium transition-colors ${active ? "text-[var(--app-accent)]" : "text-[var(--app-text-secondary)]"}`;
   const sheetLinkClass = `${focusRing} flex min-h-12 items-center justify-between rounded-xl px-3 text-sm font-medium text-[var(--app-text-primary)] hover:bg-[var(--app-surface-hover)]`;
