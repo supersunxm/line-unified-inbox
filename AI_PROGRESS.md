@@ -6113,3 +6113,10 @@ Live worker continues independently at 146 configured unique active OA identitie
 - Exact manifests #1–#5 have immutable provenance and recorded bounded results; continue the frozen-window, reply/KPI, and production UI acceptance from their read-backs.
 - Production UI pagination polling regression reproduced: Load Earlier expanded 30 to 60 messages, then the 12-second refresh reduced it to 30. Updating PR #412 against current main and requiring normal CI/deployment before retest.
 - Historical source recollection, Historical rewrites, manual canonical/status/KPI writes, LINE sends, and Account 2 work remain out of scope.
+
+## 2026-10-04 — Exact KPI sticker manifest follow-up
+- Production-derived active scope remains 144 eligible OAs; the latest two NORMAL cycles are 144/144 with zero partial or failed stores.
+- Read-only preflight identified 14 exact outbound staff-sticker events across 10 active Store/OAs, with stable OA-scoped source identity, one DIRECT destination, no canonical/Historical identity, no near-payload match, and zero unexplained rows. Frozen as manifest #7 with SHA-256 `0f564c322a248f39424e6c8ba34d4758759cfb7be59bc957ef3cb8346102f54d`.
+- The deployed exact-manifest runner rejected #7 because its immutable digest was not yet allowlisted; no rows were considered or written. Added only the exact digest/14-row/10-store entry and a focused regression test on a clean branch from current `origin/main`.
+- Focused exact-manifest tests pass 19/19, touched-file ESLint passes, backend build passes, and `git diff --check` passes. Standalone repository-wide `tsc --noEmit` is not a supported check here: it writes an incremental file into a restricted path and reports existing unrelated test-fixture/type errors; the production backend build type-checks successfully.
+- Next: publish the narrowly scoped allowlist change through required GitHub CI and normal Railway delivery; then dry-run/apply/read-back/idempotency-check manifest #7 and recompute frozen Reply/KPI/UI evidence. No Historical recollection, manual status/KPI mutation, LINE send, or Account 2 work.

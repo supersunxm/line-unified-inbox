@@ -4,10 +4,13 @@ export const EXACT_MIRROR_MANIFEST_MAX_ROWS = 490;
 export const APPROVED_EXACT_MIRROR_MANIFEST_SHA256 = "62728708a1bf2a9500f03d4a750c9f8b59ce4045c4de7003e59014587630846d";
 export const APPROVED_ADDITIONAL_MIRROR_MANIFEST_SHA256 = "59eb6af927714169c2a3bb51bfdb52c03a82c996cc584497fbd479800e13a55c";
 export const APPROVED_DIRECT_CROSSWALK_MIRROR_MANIFEST_SHA256 = "944ed62b6bf00092f9bd9dcacee5a552d565cc7d2187c45f80170c022d7ffbde";
+export const APPROVED_KPI_STICKER_MANIFEST_SHA256 = "0f564c322a248f39424e6c8ba34d4758759cfb7be59bc957ef3cb8346102f54d";
 
-const APPROVED_EXACT_MEDIA_MANIFESTS = new Map<string, { rows: number; stores: number }>([
-  ["eaff87a8919c5a87961efa73035350d05f3fb7335be794db571e212193bb3730", { rows: 490, stores: 63 }],
-  ["19c53a0e21035fa3da667171c6bd029d73f4bd25b7e72bc4c1532fa769b6774c", { rows: 61, stores: 9 }],
+export type ApprovedExactMediaManifest = Readonly<{ sha256: string; rows: number; stores: number }>;
+export const APPROVED_EXACT_MEDIA_MANIFESTS: readonly ApprovedExactMediaManifest[] = Object.freeze([
+  Object.freeze({ sha256: "eaff87a8919c5a87961efa73035350d05f3fb7335be794db571e212193bb3730", rows: 490, stores: 63 }),
+  Object.freeze({ sha256: "19c53a0e21035fa3da667171c6bd029d73f4bd25b7e72bc4c1532fa769b6774c", rows: 61, stores: 9 }),
+  Object.freeze({ sha256: APPROVED_KPI_STICKER_MANIFEST_SHA256, rows: 14, stores: 10 }),
 ]);
 
 /** Immutable proof sets; callers cannot supply their own digest or expand execution scope. */
@@ -21,8 +24,8 @@ export function approvedExactMirrorManifest(bytes: Uint8Array): {
   if (sha256 === APPROVED_EXACT_MIRROR_MANIFEST_SHA256) return { sha256, rows: 490, stores: 24, kind: "TEXT" };
   if (sha256 === APPROVED_ADDITIONAL_MIRROR_MANIFEST_SHA256) return { sha256, rows: 4, stores: 2, kind: "TEXT" };
   if (sha256 === APPROVED_DIRECT_CROSSWALK_MIRROR_MANIFEST_SHA256) return { sha256, rows: 19, stores: 6, kind: "TEXT" };
-  const media = APPROVED_EXACT_MEDIA_MANIFESTS.get(sha256);
-  if (media) return { sha256, ...media, kind: "MEDIA" };
+  const media = APPROVED_EXACT_MEDIA_MANIFESTS.find((entry) => entry.sha256 === sha256);
+  if (media) return { sha256, rows: media.rows, stores: media.stores, kind: "MEDIA" };
   throw new Error("EXACT_MIRROR_MANIFEST_DIGEST_MISMATCH");
 }
 
