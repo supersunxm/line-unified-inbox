@@ -9,7 +9,9 @@ import {
 } from "./line-chat-mirror-reconciler.service";
 import {
   APPROVED_EXACT_MEDIA_MANIFESTS,
+  APPROVED_EXACT_TEXT_MANIFESTS,
   APPROVED_KPI_STICKER_MANIFEST_SHA256,
+  APPROVED_POST_LIVE_EXACT_TEXT_MANIFEST_SHA256,
   EXACT_MIRROR_MANIFEST_MAX_ROWS,
   exactMirrorIdentityKey,
   exactMirrorIdentityWhere,
@@ -44,6 +46,13 @@ test("KPI sticker remediation is pinned to its exact 14-row, 10-store manifest",
   assert.deepEqual(
     APPROVED_EXACT_MEDIA_MANIFESTS.find((manifest) => manifest.sha256 === APPROVED_KPI_STICKER_MANIFEST_SHA256),
     { sha256: APPROVED_KPI_STICKER_MANIFEST_SHA256, rows: 14, stores: 10 },
+  );
+});
+
+test("post-Live outbound remediation is pinned to its exact 13-row, 5-store text manifest", () => {
+  assert.deepEqual(
+    APPROVED_EXACT_TEXT_MANIFESTS.find((manifest) => manifest.sha256 === APPROVED_POST_LIVE_EXACT_TEXT_MANIFEST_SHA256),
+    { sha256: APPROVED_POST_LIVE_EXACT_TEXT_MANIFEST_SHA256, rows: 13, stores: 5 },
   );
 });
 
