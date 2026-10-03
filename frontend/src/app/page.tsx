@@ -2150,7 +2150,7 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
       const lookup = route.conversationId ? { id: route.conversationId, status: "pending" as const } : null;
       routeConversationLookupRef.current = lookup;
       setRouteConversationLookup(lookup);
-      setSelectedApiConversation(null);
+      setSelectedApiConversationState(null);
       setSelectedStore(focusGroupSelected ? FOCUS_STORE_GROUP_ID : (route.store ?? "all"));
       setSidebarView(
         route.replyState === "REPLIED"
