@@ -201,6 +201,20 @@ async function withEnvAsync(
   }
 }
 
+function installTestFleetScope(service: LineChatMirrorService, codes: string[]): void {
+  Object.defineProperty(service, "resolveActiveFleetScope", {
+    configurable: true,
+    value: async () => ({
+      configuredStoreCodes: codes,
+      eligibleStoreCodes: codes,
+      eligibleOaIds: [],
+      unconfiguredActiveStoreCodes: [],
+      disabledOaIds: [],
+      exclusions: [],
+    }),
+  });
+}
+
 test("target-proof profile lookup selects only the canonical active Manager session", async () => {
   const queries: Array<Record<string, unknown>> = [];
   const sessions = new Map([
@@ -620,6 +634,63 @@ test("canonical Mirror target resolver uses Manager redirect fallback when OA bo
   assert.equal(summary?.verifiedCandidates, 1);
 });
 
+test("identity-bound Live account override uses only its assigned profile and Manager account", async () => {
+  const assigned = resolverTestSession("profile-a");
+  assigned.sessionKey = "account-1";
+  const other = resolverTestSession("profile-b-session");
+  other.sessionKey = "profile-b";
+  const resolvedBot = `U${"d".repeat(32)}`;
+  const opened: string[] = [];
+  const navigated: string[] = [];
+  const page = {
+    goto: async (url: string) => { navigated.push(url); return { status: () => 200 }; },
+    waitForTimeout: async () => {},
+    url: () => `https://chat.line.biz/${resolvedBot}`,
+  };
+  const context = {
+    pages: () => [page],
+    newPage: async () => page,
+  } as unknown as import("playwright").BrowserContext;
+  const prisma = { lineChatSession: { findMany: async () => [other, assigned] } } as unknown as PrismaService;
+  const sessionService = {
+    resolveProfilePath: (_session: ResolverTestSession) => "/tmp",
+    launchManagedPersistentContext: async (_path: string, _options: unknown, metadata: { sessionId: string }) => {
+      opened.push(metadata.sessionId);
+      return context;
+    },
+    probeApiAuthentication: async () => ({ authenticated: "YES" as const }),
+    closeManagedPersistentContext: async () => {},
+    discoverRecentChats: async () => ({ status: "READY" as const, chats: [], pagesFetched: 1, totalRawRecords: 0 }),
+  } as unknown as LineChatSessionService;
+  const coordinator = {
+    withProfileOperation: async (
+      input: { sessionId: string },
+      callback: (context: { assertOwnership: () => void }) => Promise<unknown>,
+    ) => ({ acquired: true as const, value: await callback({ assertOwnership() {} }), sessionId: input.sessionId, operationKind: "MIRROR_SYNC" as const, requestId: "test" }),
+  } as unknown as LineChatProfileOperationCoordinator;
+  const service = new LineChatMirrorService(prisma, sessionService, coordinator);
+  Object.defineProperty(service, "logger", { value: { log() {}, warn() {} } });
+
+  const result = await service.resolveMirrorTarget({
+    storeCode: "22982",
+    lineOfficialAccountId: "oa-22982",
+    chatBotId: `U${"a".repeat(32)}`,
+    basicId: "829oppo",
+    lineChatWorkspaceUrl: null,
+    storeManagerUrl: "https://chat.line.biz/account/829oppo",
+    lineChatSession: null,
+    liveAccountOverride: { profile: "A", managerAccountKey: "@manager-a" },
+  });
+
+  assert.equal(result.ok, true);
+  if (result.ok) {
+    assert.equal(result.botId, resolvedBot);
+    assert.equal(result.session.id, assigned.id);
+  }
+  assert.deepEqual(opened, [assigned.id]);
+  assert.deepEqual(navigated, ["https://chat.line.biz/account/%40manager-a"]);
+});
+
 test("Mirror target resolver reports cache hits without changing the cached target", async () => {
   const session = resolverTestSession("cache-session");
   const harness = createTargetResolverHarness({ sessions: [] });
@@ -948,6 +1019,7 @@ test("initial worker rollout temporarily keeps NORMAL behavior while the new mod
       {} as LineChatProfileOperationCoordinator,
       { getState: async () => { throw missing; } } as never,
     );
+    installTestFleetScope(service, ["20789"]);
     let syncCalls = 0;
     Object.defineProperty(service, "syncStore", {
       configurable: true,
@@ -999,6 +1071,7 @@ test("after operation mode has loaded once, later state-load failures fail close
       {} as LineChatProfileOperationCoordinator,
       operationMode as never,
     );
+    installTestFleetScope(service, ["20789"]);
     let syncCalls = 0;
     Object.defineProperty(service, "syncStore", {
       configurable: true,
@@ -1024,6 +1097,63 @@ test("after operation mode has loaded once, later state-load failures fail close
   });
 });
 
+test("normal Mirror cycles derive eligible scope from active Store/OA relations and disable archived states", async () => {
+  await withEnvAsync({ LINE_CHAT_MIRROR_STORE_CODES: "26533,active-good,missing-config" }, async () => {
+    const stores = [
+      {
+        id: "store-archived", code: "26533", isActive: false, archivedAt: new Date(), storeMaster: null,
+        lineOfficialAccounts: [{ id: "oa-archived", name: "Archived OA", basicId: "@old", isActive: false, archivedAt: new Date() }],
+      },
+      {
+        id: "store-good", code: "active-good", isActive: true, archivedAt: null,
+        storeMaster: { externalStoreId: "active-good", accountName: "Store label", normalizedAccountName: null, lineId: "@good" },
+        lineOfficialAccounts: [
+          { id: "oa-good", name: "Renamed OA", basicId: "@good", isActive: true, archivedAt: null },
+          { id: "oa-retired", name: "Old OA", basicId: "@old", isActive: false, archivedAt: null },
+        ],
+      },
+      {
+        id: "store-unconfigured", code: "unconfigured-active", isActive: true, archivedAt: null,
+        storeMaster: { externalStoreId: "unconfigured-active", accountName: null, normalizedAccountName: null, lineId: "@unconfigured" },
+        lineOfficialAccounts: [{ id: "oa-unconfigured", name: "OA", basicId: "@unconfigured", isActive: true, archivedAt: null }],
+      },
+    ];
+    const disabledQueries: Array<{ where: unknown; data: unknown }> = [];
+    const prisma = {
+      store: { findMany: async () => stores },
+      lineChatMirrorStoreState: {
+        updateMany: async (input: { where: unknown; data: unknown }) => { disabledQueries.push(input); return { count: 2 }; },
+        findMany: async () => [],
+      },
+    } as unknown as PrismaService;
+    const service = new LineChatMirrorService(prisma, {} as LineChatSessionService, {} as LineChatProfileOperationCoordinator, {
+      getState: async () => ({ mode: "NORMAL" as const, freezeAt: null, backfillTargetStartAt: null, catchUpStartAt: null }),
+    } as never);
+    const syncCalls: string[] = [];
+    Object.defineProperty(service, "syncStore", {
+      configurable: true,
+      value: async (storeCode: string) => {
+        syncCalls.push(storeCode);
+        return { storeCode, status: LineChatMirrorSyncStatus.SUCCESS, recentChatsObserved: 0, historiesFetched: 0,
+          messagesObserved: 0, messagesInsertedOrUpdated: 0, pendingChats: 0, unknownDirectionEvents: 0, durationMs: 0 };
+      },
+    });
+    const logs: Array<Record<string, unknown>> = [];
+    Object.defineProperty(service, "logger", { value: { log: (value: string) => logs.push(JSON.parse(value) as Record<string, unknown>), error: (value: string) => logs.push(JSON.parse(value) as Record<string, unknown>) } });
+
+    const results = await service.runCycle();
+    assert.deepEqual(syncCalls, ["active-good"]);
+    assert.equal(results.length, 1);
+    assert.deepEqual(disabledQueries[0]?.where, { lineOfficialAccountId: { in: ["oa-archived", "oa-retired"] }, enabled: true });
+    const scope = logs.find((event) => event.event === "line_chat_mirror_fleet_scope_resolved");
+    assert.equal(scope?.activeEligibleOaCount, 1);
+    assert.equal(scope?.unconfiguredActiveStoreCount, 1);
+    const cycle = logs.find((event) => event.event === "line_chat_mirror_fleet_cycle_completed");
+    assert.equal(cycle?.storesConfigured, 1);
+    assert.equal(cycle?.storesAttempted, 1);
+  });
+});
+
 test("NORMAL mode starts a scheduled Live Mirror cycle", async () => {
   await withEnvAsync({ LINE_CHAT_MIRROR_STORE_CODES: "20789" }, async () => {
     const operationMode = {
@@ -1040,6 +1170,7 @@ test("NORMAL mode starts a scheduled Live Mirror cycle", async () => {
       {} as LineChatProfileOperationCoordinator,
       operationMode as never,
     );
+    installTestFleetScope(service, ["20789"]);
     let syncCalls = 0;
     Object.defineProperty(service, "syncStore", {
       configurable: true,
@@ -1082,6 +1213,7 @@ test("CATCH_UP resumes live cycles from the persisted overlap boundary", async (
       {} as LineChatProfileOperationCoordinator,
       operationMode as never,
     );
+    installTestFleetScope(service, ["20789"]);
     const observedBoundaries: Array<Date | null> = [];
     Object.defineProperty(service, "syncStore", {
       configurable: true,
@@ -1124,6 +1256,7 @@ test("BACKFILL keeps the worker cycle active but serializes pilot stores without
       {} as LineChatProfileOperationCoordinator,
       operationMode as never,
     );
+    installTestFleetScope(service, ["29113"]);
     let liveCalls = 0;
     let activeBackfill = 0;
     let maxActiveBackfill = 0;
@@ -1176,6 +1309,7 @@ test("an in-flight live cycle may finish, then BACKFILL skips later live work", 
       {} as LineChatProfileOperationCoordinator,
       operationMode as never,
     );
+    installTestFleetScope(service, ["29113"]);
     let markStarted!: () => void;
     let finishSync!: () => void;
     const started = new Promise<void>((resolve) => { markStarted = resolve; });

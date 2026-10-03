@@ -400,7 +400,30 @@ test("full-fleet cycle passes the bounded batch to every effective apply store a
   const storeCodes = Array.from({ length: 136 }, (_, index) => String(10_000 + index));
   const calls: Array<{ code: string; apply: boolean; batch: number }> = [];
   const logs: Array<Record<string, unknown>> = [];
-  const service = new LineChatMirrorReconcilerService({} as PrismaService);
+  const prisma = {
+    store: {
+      findMany: async () => storeCodes.map((storeCode) => ({
+        id: `store-${storeCode}`,
+        code: storeCode,
+        isActive: true,
+        archivedAt: null,
+        storeMaster: {
+          externalStoreId: storeCode,
+          accountName: `Store ${storeCode}`,
+          normalizedAccountName: `store ${storeCode}`,
+          lineId: `@${storeCode}`,
+        },
+        lineOfficialAccounts: [{
+          id: `oa-${storeCode}`,
+          name: `OA ${storeCode}`,
+          basicId: `@${storeCode}`,
+          isActive: true,
+          archivedAt: null,
+        }],
+      })),
+    },
+  } as unknown as PrismaService;
+  const service = new LineChatMirrorReconcilerService(prisma);
   Object.defineProperty(service, "logger", { value: { log: (value: string) => logs.push(JSON.parse(value) as Record<string, unknown>) } });
   Object.defineProperty(service, "reconcileStore", { value: async (code: string, _since: Date, apply: boolean, batch: number) => {
     calls.push({ code, apply, batch });
@@ -416,10 +439,10 @@ test("full-fleet cycle passes the bounded batch to every effective apply store a
     process.env.LINE_CHAT_MIRROR_RECONCILE_BATCH_SIZE = "1000";
     service.onModuleInit();
     await service.runCycle();
-    assert.equal(calls.length, 137);
+    assert.equal(calls.length, 136);
     assert.deepEqual(calls.filter((call) => call.apply).map((call) => call.code), storeCodes);
     assert.ok(calls.every((call) => call.batch === 100));
-    assert.deepEqual(calls.at(-1), { code: "dry-test", apply: false, batch: 100 });
+    assert.ok(calls.every((call) => call.code !== "dry-test"));
     const startup = logs.find((log) => log.event === "line_chat_mirror_reconciler_started")!;
     assert.equal(startup.storeCount, 136);
     assert.equal(startup.apply, true);

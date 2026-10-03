@@ -22,6 +22,7 @@ import {
 import { isLineChatUserId } from "./line-chat-chat-discovery";
 import { configuredLineChatMirrorStoreCodes } from "./line-chat-mirror.service";
 import { selectLineChatStoreOa } from "./line-chat-store-oa-selector";
+import { resolveConfiguredMirrorFleetScope, type MirrorFleetScope } from "./line-chat-mirror-fleet-scope";
 import {
   approvedExactMirrorManifest,
   EXACT_MIRROR_MANIFEST_MAX_ROWS,
@@ -323,14 +324,38 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
     this.running = true;
     try {
       const results: LineChatMirrorReconcileCycleResult[] = [];
-      const primaryStoreCodes = configuredLineChatMirrorReconcileStoreCodes();
+      const configuredPrimaryStoreCodes = configuredLineChatMirrorReconcileStoreCodes();
+      const configuredDryRunStoreCodes = configuredLineChatMirrorReconcileDryRunStoreCodes();
+      let fleetScope: MirrorFleetScope;
+      try {
+        fleetScope = await resolveConfiguredMirrorFleetScope(this.prisma, [
+          ...configuredPrimaryStoreCodes,
+          ...configuredDryRunStoreCodes,
+        ]);
+      } catch (error) {
+        this.logger.error(JSON.stringify({
+          event: "line_chat_mirror_reconcile_fleet_scope_resolution_failed",
+          errorType: error instanceof Error ? error.name : "UNKNOWN_ERROR",
+        }));
+        return [];
+      }
+      const eligibleCodes = new Set(fleetScope.eligibleStoreCodes);
+      const primaryStoreCodes = configuredPrimaryStoreCodes.filter((storeCode) => eligibleCodes.has(storeCode));
+      const dryRunStoreCodes = configuredDryRunStoreCodes.filter((storeCode) => eligibleCodes.has(storeCode));
+      this.logger.log(JSON.stringify({
+        event: "line_chat_mirror_reconcile_fleet_scope_resolved",
+        configuredStoreCount: configuredPrimaryStoreCodes.length + configuredDryRunStoreCodes.length,
+        activeEligibleStoreCount: primaryStoreCodes.length,
+        observationOnlyStoreCount: dryRunStoreCodes.length,
+        exclusions: fleetScope.exclusions,
+      }));
       const effectiveBatchSize = lineChatMirrorReconcileEffectiveBatchSize(primaryStoreCodes.length);
       const scopes = [
         ...primaryStoreCodes.map((storeCode) => ({
           storeCode,
           apply: isLineChatMirrorReconcileApplyEnabled(),
         })),
-        ...configuredLineChatMirrorReconcileDryRunStoreCodes().map((storeCode) => ({
+        ...dryRunStoreCodes.map((storeCode) => ({
           storeCode,
           apply: false,
         })),
