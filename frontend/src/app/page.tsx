@@ -60,6 +60,13 @@ import { ResizableSeparator } from "./resizable-separator";
 import { CHAT_PANE_LIMITS } from "./resizable-panes";
 import { useResizablePanes } from "./use-resizable-panes";
 import { ConversationPaginationFooter } from "./conversation-pagination-footer";
+import {
+  conversationMessagePageForScope,
+  mergeScopedConversationMessagePage,
+  replaceScopedConversationMessagePage,
+  resetScopedConversationMessagePage,
+  updateScopedConversationMessagePage,
+} from "./conversation-message-pagination";
 import { ConversationRowSkeleton } from "./conversation-row-skeleton";
 import { getChatsPaginationText } from "./chats-pagination-utils";
 import { buildConversationListQuery, conversationListQueryKey, LatestConversationRequestGuard, reconcileConversationPage, type ConversationListQuery } from "./conversation-list-query";
@@ -1535,7 +1542,10 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [managerLinkMissing, setManagerLinkMissing] = useState(false);
   const [selectedConversationId, setSelectedConversationId] = useState("");
-  const [selectedApiConversation, setSelectedApiConversation] = useState<ApiConversation | null>(null);
+  const [selectedApiConversationState, setSelectedApiConversationState] = useState<{
+    scopeKey: string;
+    conversation: ApiConversation;
+  } | null>(null);
   const [routeConversationLookup, setRouteConversationLookup] = useState<{ id: string; status: ConversationRouteLookupStatus } | null>(null);
   const [customerNameHistory, setCustomerNameHistory] = useState<{ currentName: string; history: Array<{ id: string; displayName: string; source: string; capturedAt: string }> } | null>(null);
   const [customerNameHistoryLoading, setCustomerNameHistoryLoading] = useState(false);
@@ -1547,8 +1557,36 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
   const [customerEventsLoading, setCustomerEventsLoading] = useState(false);
   const [customerEventsError, setCustomerEventsError] = useState<string | null>(null);
   const [evidenceExpanded, setEvidenceExpanded] = useState(false);
-  const [chatHistory, setChatHistory] = useState<ConversationMessagesResponse>({ items: [], total: 0, page: 1, pageSize: 30, hasEarlier: false });
-  const [chatLoading, setChatLoading] = useState(false);
+  const [chatHistoryState, setChatHistoryState] = useState(() =>
+    resetScopedConversationMessagePage(""),
+  );
+  const conversationMessageScopeKey = JSON.stringify([
+    authUser?.id ?? "",
+    selectedStore,
+    lineOaFilter,
+    selectedConversationId,
+  ]);
+  const selectedApiConversation = selectedApiConversationState?.scopeKey === conversationMessageScopeKey
+    ? selectedApiConversationState.conversation
+    : null;
+  const setSelectedApiConversation = useCallback((
+    next: ApiConversation | null | ((current: ApiConversation | null) => ApiConversation | null),
+  ) => {
+    const scopeKey = conversationMessageScopeKey;
+    setSelectedApiConversationState((current) => {
+      const currentConversation = current?.scopeKey === scopeKey ? current.conversation : null;
+      const conversation = typeof next === "function" ? next(currentConversation) : next;
+      return conversation ? { scopeKey, conversation } : null;
+    });
+  }, [conversationMessageScopeKey]);
+  const chatHistory = conversationMessagePageForScope(chatHistoryState, conversationMessageScopeKey);
+  const [chatLoadingState, setChatLoadingState] = useState({ scopeKey: "", loading: false });
+  const chatLoading = chatLoadingState.scopeKey === conversationMessageScopeKey && chatLoadingState.loading;
+  const setScopedChatLoading = (scopeKey: string, loading: boolean) => {
+    setChatLoadingState((current) => loading
+      ? { scopeKey, loading: true }
+      : current.scopeKey === scopeKey ? { scopeKey, loading: false } : current);
+  };
   const [replyText, setReplyText] = useState("");
   const [replySending, setReplySending] = useState(false);
   const [replyError, setReplyError] = useState<string | null>(null);
@@ -1595,6 +1633,8 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
   const systemStatusRequestController = useRef<AbortController | null>(null);
   const setupStatusRequestController = useRef<AbortController | null>(null);
   const conversationDetailRequestController = useRef<AbortController | null>(null);
+  const earlierMessagesRequestGeneration = useRef(0);
+  const activeConversationMessageScope = useRef("");
   const storeMasterSearchRequestController = useRef<AbortController | null>(null);
   const pilotChecklistRequestController = useRef<AbortController | null>(null);
   const customerNameHistoryRequestController = useRef<AbortController | null>(null);
@@ -2110,7 +2150,7 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
       const lookup = route.conversationId ? { id: route.conversationId, status: "pending" as const } : null;
       routeConversationLookupRef.current = lookup;
       setRouteConversationLookup(lookup);
-      setSelectedApiConversation(null);
+      setSelectedApiConversationState(null);
       setSelectedStore(focusGroupSelected ? FOCUS_STORE_GROUP_ID : (route.store ?? "all"));
       setSidebarView(
         route.replyState === "REPLIED"
@@ -2263,8 +2303,12 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
   }, [filteredConversations, routeConversationLookup, selectedConversation, selectedConversationId]);
 
   useEffect(() => {
+    const scopeKey = conversationMessageScopeKey;
+    activeConversationMessageScope.current = scopeKey;
+    earlierMessagesRequestGeneration.current += 1;
     if (!selectedConversationId) return;
     let active = true;
+    let hasLoadedSelectedConversation = false;
     const load = async () => {
       conversationDetailRequestController.current?.abort();
       const controller = new AbortController();
@@ -2275,7 +2319,12 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
           api.conversationMessages(selectedConversationId, 1, { signal: controller.signal }),
         ]);
         if (active && !controller.signal.aborted) {
-          setSelectedApiConversation(conversation); setChatHistory(messages);
+          setSelectedApiConversation(conversation);
+          const shouldMerge = hasLoadedSelectedConversation;
+          hasLoadedSelectedConversation = true;
+          setChatHistoryState((current) => shouldMerge
+            ? mergeScopedConversationMessagePage(current, scopeKey, messages, activeConversationMessageScope.current)
+            : replaceScopedConversationMessagePage(current, scopeKey, messages, activeConversationMessageScope.current));
           if (requestedRouteConversationIdRef.current === selectedConversationId) {
             const lookup = { id: selectedConversationId, status: "resolved" as const };
             routeConversationLookupRef.current = lookup;
@@ -2308,7 +2357,7 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
       window.clearInterval(poll);
       conversationDetailRequestController.current?.abort();
     };
-  }, [selectedConversationId]);
+  }, [conversationMessageScopeKey, selectedConversationId, setSelectedApiConversation]);
 
   useEffect(() => {
     if (!authUser || !selectedConversationId) return;
@@ -2327,23 +2376,28 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
       if (!event.message) return;
       const incoming = mapRealtimeMessage(event.message);
       if (event.type === "message.created") {
-        setChatHistory((current) => current.items.some((item) => item.id === incoming.id)
-          ? current
-          : { ...current, items: [...current.items, incoming], total: current.total + 1 });
+        setChatHistoryState((current) => updateScopedConversationMessagePage(
+          current,
+          conversationMessageScopeKey,
+          (history) => history.items.some((item) => item.id === incoming.id)
+            ? history
+            : { ...history, items: [...history.items, incoming], total: history.total + 1 },
+          activeConversationMessageScope.current,
+        ));
         setSelectedApiConversation((current) => current && current.id === selectedConversationId && !current.messages.some((item) => item.id === incoming.id)
           ? { ...current, messages: [...current.messages, incoming] }
           : current);
         return;
       }
-      setChatHistory((current) => ({
-        ...current,
-        items: current.items.map((item) => item.id === incoming.id ? { ...item, media: incoming.media } : item),
-      }));
+      setChatHistoryState((current) => updateScopedConversationMessagePage(current, conversationMessageScopeKey, (history) => ({
+        ...history,
+        items: history.items.map((item) => item.id === incoming.id ? { ...item, media: incoming.media } : item),
+      }), activeConversationMessageScope.current));
       setSelectedApiConversation((current) => current && current.id === selectedConversationId
         ? { ...current, messages: current.messages.map((item) => item.id === incoming.id ? { ...item, media: incoming.media } : item) }
         : current);
     });
-  }, [authUser, selectedConversationId]);
+  }, [authUser, conversationMessageScopeKey, selectedConversationId, setSelectedApiConversation]);
 
   useEffect(() => {
     let active = true;
@@ -3082,14 +3136,25 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
   }
 
   async function loadEarlierMessages() {
-    if (!selectedConversationId || !chatHistory.hasEarlier) return;
-    setChatLoading(true);
-    try { const earlier = await api.conversationMessages(selectedConversationId, chatHistory.page + 1); setChatHistory((current) => ({ ...earlier, items: [...earlier.items, ...current.items] })); }
-    finally { setChatLoading(false); }
+    if (!selectedConversationId || !chatHistory.hasEarlier || chatLoading) return;
+    const conversationId = selectedConversationId;
+    const scopeKey = conversationMessageScopeKey;
+    const pageToLoad = chatHistory.page + 1;
+    const requestGeneration = ++earlierMessagesRequestGeneration.current;
+    setScopedChatLoading(scopeKey, true);
+    try {
+      const earlier = await api.conversationMessages(conversationId, pageToLoad);
+      if (requestGeneration !== earlierMessagesRequestGeneration.current) return;
+      setChatHistoryState((current) => mergeScopedConversationMessagePage(current, scopeKey, earlier, activeConversationMessageScope.current));
+    }
+    finally {
+      if (requestGeneration === earlierMessagesRequestGeneration.current) setScopedChatLoading(scopeKey, false);
+    }
   }
 
   async function sendReply() {
     const conversationId = selectedConversationId;
+    const scopeKey = conversationMessageScopeKey;
     const textToSend = replyText.trim();
     if (!conversationId || !textToSend || replySending || authUser?.role !== "ADMIN") return;
     const idempotencyKey = replyIdempotencyKeyRef.current ?? crypto.randomUUID();
@@ -3098,9 +3163,9 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
     setReplyError(null);
     try {
       const result = await api.sendConversationMessage(conversationId, textToSend, idempotencyKey);
-      setChatHistory((current) => current.items.some(({ id }) => id === result.message.id)
-        ? current
-        : { ...current, items: [...current.items, result.message], total: current.total + 1 });
+      setChatHistoryState((current) => updateScopedConversationMessagePage(current, scopeKey, (history) => history.items.some(({ id }) => id === result.message.id)
+        ? history
+        : { ...history, items: [...history.items, result.message], total: history.total + 1 }, activeConversationMessageScope.current));
       setConversationStates((current) => current[conversationId]
         ? { ...current, [conversationId]: { ...current[conversationId], bmReplyStatus: "REPLIED", status: "completed" } }
         : current);
@@ -3112,7 +3177,7 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
       setReplyError(error instanceof Error ? error.message : "ส่งข้อความไม่สำเร็จ กรุณาลองอีกครั้ง");
       if (conversationId) {
         void api.conversationMessages(conversationId, 1).then((res) => {
-          setChatHistory(res);
+          setChatHistoryState((current) => mergeScopedConversationMessagePage(current, scopeKey, res, activeConversationMessageScope.current));
           window.requestAnimationFrame(() => chatEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" }));
         }).catch(() => {});
       }
@@ -3125,15 +3190,16 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
 
   async function retryFailedMessage(messageId: string) {
     const conversationId = selectedConversationId;
+    const scopeKey = conversationMessageScopeKey;
     if (!conversationId || retryingMessageId || authUser?.role !== "ADMIN") return;
     setRetryingMessageId(messageId);
     setReplyError(null);
     try {
       const result = await api.retryConversationMessage(conversationId, messageId);
-      setChatHistory((current) => ({
-        ...current,
-        items: current.items.map((msg) => (msg.id === messageId ? result.message : msg)),
-      }));
+      setChatHistoryState((current) => updateScopedConversationMessagePage(current, scopeKey, (history) => ({
+        ...history,
+        items: history.items.map((msg) => (msg.id === messageId ? result.message : msg)),
+      }), activeConversationMessageScope.current));
       setConversationStates((current) => current[conversationId]
         ? { ...current, [conversationId]: { ...current[conversationId], bmReplyStatus: "REPLIED", status: "completed" } }
         : current);
@@ -3147,26 +3213,28 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
   }
 
   function updateMessageEnglishTranslation(messageId: string, translatedText: string) {
-    setChatHistory((current) => ({
-      ...current,
-      items: current.items.map((message) => message.id === messageId
+    setChatHistoryState((current) => updateScopedConversationMessagePage(current, conversationMessageScopeKey, (history) => ({
+      ...history,
+      items: history.items.map((message) => message.id === messageId
         ? { ...message, translatedEnglish: translatedText }
         : message),
-    }));
+    }), activeConversationMessageScope.current));
   }
 
   async function refreshProfile() {
     if (!selectedConversationId) return;
-    setChatLoading(true);
+    const scopeKey = conversationMessageScopeKey;
+    setScopedChatLoading(scopeKey, true);
     try { await api.refreshLineProfile(selectedConversationId); setSelectedApiConversation(await api.conversation(selectedConversationId)); }
-    finally { setChatLoading(false); }
+    finally { setScopedChatLoading(scopeKey, false); }
   }
 
   async function reanalyzeConversation() {
     if (!selectedConversationId) return;
-    setChatLoading(true);
+    const scopeKey = conversationMessageScopeKey;
+    setScopedChatLoading(scopeKey, true);
     try { const conversation = await api.reanalyzeConversation(selectedConversationId); setSelectedApiConversation(conversation); setToastMessage(text.classificationUpdated); await loadApplicationData(true); }
-    finally { setChatLoading(false); }
+    finally { setScopedChatLoading(scopeKey, false); }
   }
 
   function connectionLabel(status: LineOfficialAccountResponse["connectionStatus"]) {
