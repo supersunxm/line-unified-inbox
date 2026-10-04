@@ -5,7 +5,16 @@ import * as os from "node:os";
 import * as path from "node:path";
 import type { BrowserContext } from "playwright";
 import { LineChatSessionService, type ContextLauncher } from "./line-chat-session.service";
-import { isLineChatUserId, parseLineChatListResponse } from "./line-chat-chat-discovery";
+import { isLineChatUserId, parseLineChatListResponse, rejectedChatListEnvelopeShape } from "./line-chat-chat-discovery";
+
+test("rejected envelope diagnostics contain only fixed types", () => {
+  const secret = "DO_NOT_LOG_REMOTE_DATA";
+  const shape = rejectedChatListEnvelopeShape({ list: secret, next: { secret }, [secret]: secret });
+  assert.deepEqual(shape, { rootType: "object", listType: "string", nextType: "object" });
+  assert.equal(JSON.stringify(shape).includes(secret), false);
+  assert.deepEqual(rejectedChatListEnvelopeShape(null), { rootType: "null", listType: "undefined", nextType: "undefined" });
+  assert.deepEqual(rejectedChatListEnvelopeShape({ list: [], next: 42 }), { rootType: "object", listType: "array", nextType: "number" });
+});
 import {
   sanitizeDiagnosticUrl,
   summarizeChatListContractJson,

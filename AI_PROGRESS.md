@@ -1,3 +1,13 @@
+# 2026-10-04: Unblock the exact 19 non-success Live OAs
+
+- Scope: initial NORMAL cycle 125 SUCCESS / 17 FAILED / 2 PARTIAL across the closed eligible fleet of 144. Exactly 19 OAs audited; Historical work and Manifest #8 remain untouched.
+- Coordinated read-only target proofs: all four initially auth-failing OAs now authenticate; three verify, while Store 30413 returns an unsupported HTTP-200 chat-list envelope. Seven of the 13 initial recent-chat failures verify on their next read; six still reject HTTP-200 envelopes. This does not prove owner login is required.
+- Both busy partials were caused by background RECENT_RESOLUTION acquiring Profile A between Mirror stores. Defer nickname queue work during the scheduled fleet cycle and cleanup cooldown, including a post-lease ownership recheck. Scope, retry timeouts, profiles, and session data are unchanged.
+- Added fixed-type envelope diagnostics only; no remote values, key names, payloads, identifiers, cookies, or cursors are retained in these diagnostics. The parser remains fail-closed pending actual schema evidence.
+- Local validation: 55 focused tests and 146 affected coordination/discovery/Mirror tests pass; focused ESLint, build-scope TypeScript, backend production build, diff check pass. Isolated built worker starts without errors and GET /internal/health returns 200 with all browser/job schedulers disabled against local PostgreSQL.
+- Wider exploratory suite: 610 pass, 9 fail, 1 skipped. Seven assertion/DI failures reproduce unchanged on b2ea241; two files require sandbox permissions. General test-inclusive TypeScript also has existing errors; the production build scope passes. These unrelated areas are outside this task.
+- Next: required GitHub CI, worker deployment, classify rejected envelopes from safe diagnostics, then verify two consecutive scheduled NORMAL 144/144 cycles. No health gate has passed yet.
+
 # 2026-10-04: Post-Live eligibility and health-gate recovery
 
 - Current production fleet ledger: 144 active Store/OAs and 144 enabled Mirror states; all 144 are eligible, with zero active OAs missing state, zero unresolved target mappings, and 142 OAs with Raw Mirror events. Stores 26533 and 31754 are archived/inactive and disabled while their 675 existing Raw rows remain preserved.

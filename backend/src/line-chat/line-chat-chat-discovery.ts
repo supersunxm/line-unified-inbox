@@ -161,3 +161,14 @@ export function parseLineChatListResponse(
 export function parseLineChatListPage(body: unknown): LineChatDiscoveryPage {
   return parseV2Page(body);
 }
+
+/** Fixed schema facts only: never logs field names, payloads, IDs or cursor values. */
+export function rejectedChatListEnvelopeShape(body: unknown): {
+  rootType: string;
+  listType: string;
+  nextType: string;
+} {
+  const kind = (value: unknown): string => value === null ? "null" : Array.isArray(value) ? "array" : typeof value;
+  const wrapper = objectValue(body);
+  return { rootType: kind(body), listType: kind(wrapper?.list), nextType: kind(wrapper?.next) };
+}
