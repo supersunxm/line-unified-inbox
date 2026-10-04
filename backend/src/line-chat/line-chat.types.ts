@@ -256,6 +256,9 @@ export interface DiagnosticsResult {
 }
 
 export interface LineChatDiscoveredChat {
+  /** Explicit Manager nickname; never an identity/display-name fallback. */
+  managerNickname?: string | null;
+  managerNicknameReadStatus?: "READ" | "INVALID";
   chatUserId: string;
   displayName: string | null;
   lastMessageText: string | null;

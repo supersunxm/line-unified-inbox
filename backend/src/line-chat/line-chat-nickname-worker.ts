@@ -1,3 +1,5 @@
+import { NicknameSourceMappingService } from "./nickname-source-mapping.service";
+import { handleNicknameSourceAudit } from "./nickname-source-audit-route";
 import "reflect-metadata";
 import { NestFactory } from "@nestjs/core";
 import { Logger } from "@nestjs/common";
@@ -152,6 +154,7 @@ async function bootstrap() {
   const septemberInventory = app.get(LineChatSeptemberInventoryService);
   const mirrorService = app.get(LineChatMirrorService);
   const liveParityAuditService = app.get(LineChatMirrorLiveParityAuditService);
+  const nicknameSourceMapping = app.get(NicknameSourceMappingService);
   const targetProofService = app.get(LineChatTargetProofService);
   const relayContexts = new Map<string, ManagerRelayConversationSnapshot>();
   installRelayContextLoader(textRelay, relayContexts);
@@ -194,6 +197,10 @@ async function bootstrap() {
         return;
       }
 
+      const nicknameAudit = await handleNicknameSourceAudit({ method: request.method, pathname: requestUrl.pathname,
+        since: requestUrl.searchParams.get("since"), receivedSecret: request.headers["x-line-chat-internal-secret"],
+        expectedSecret: internalSecret, service: nicknameSourceMapping });
+      if (nicknameAudit) { writeJson(response, nicknameAudit.statusCode, nicknameAudit.body); return; }
       const liveParityAuditResponse = await handleLineChatMirrorLiveParityAuditRoute({
         method: request.method,
         pathname: requestUrl.pathname,

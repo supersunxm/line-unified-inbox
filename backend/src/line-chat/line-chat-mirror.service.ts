@@ -1,3 +1,4 @@
+import { NicknameSourceObserverService } from "./nickname-source-observer.service";
 import { Inject, Injectable, Logger, OnModuleDestroy, OnModuleInit, Optional } from "@nestjs/common";
 import {
   LineAccountType,
@@ -439,6 +440,8 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
     @Optional()
     @Inject(MirrorOperationModeService)
     private readonly operationModeService?: MirrorOperationModeService,
+    @Optional() @Inject(NicknameSourceObserverService)
+    private readonly nicknameObserver?: NicknameSourceObserverService,
   ) {}
 
   onModuleInit(): void {
@@ -1059,6 +1062,9 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
           );
         }
 
+        this.nicknameObserver?.enqueue({ storeId: storeTarget.storeId, lineOfficialAccountId: oa.id,
+          observedAt: new Date(), coverage: "BOUNDED_RECENT", chats: recent.chats,
+          profileKey: session.sessionKey === "account-1" ? "A" : session.sessionKey === "profile-b" ? "B" : undefined });
         const recentChatUserIds = [...new Set(recent.chats.map((chat) => chat.chatUserId))];
         let previousMirrorChats: Array<{
           lineChatUserId: string;

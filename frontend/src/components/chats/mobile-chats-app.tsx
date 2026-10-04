@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { NicknameSourceBadge } from "@/app/nickname-source-badge";
+import { useAppLanguage } from "@/app/language";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ApiError, api } from "@/lib/api";
 import type {
@@ -137,6 +139,7 @@ function MoreSheet({ user, onClose }: { user: AuthUser; onClose: () => void }) {
 }
 
 export function MobileChatsApp() {
+  const { language } = useAppLanguage();
   const [user, setUser] = useState<AuthUser | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [view, setView] = useState<MobileView>("list");
@@ -699,6 +702,9 @@ export function MobileChatsApp() {
             {!selected?.historicalOnly && <button type="button" onClick={() => void openManager()} className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--app-surface-subtle)] text-lg" aria-label="เปิดใน LINE OA">↗</button>}
           </header>
 
+          {selected?.nicknameSourceState?.tag && <div className="shrink-0 border-b border-[var(--app-border-subtle)] bg-[var(--app-surface)] px-3 py-1">
+            <NicknameSourceBadge tag={selected.nicknameSourceState.tag} language={language} />
+          </div>}
           {view === "chat" ? (
             <div className="flex min-h-0 flex-1 flex-col bg-[var(--app-surface)]">
               <div className="flex h-9 shrink-0 items-center justify-between border-b border-[var(--app-border-subtle)] px-3">

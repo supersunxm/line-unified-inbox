@@ -933,6 +933,9 @@ model Conversation {
   messageSendJobs       LineChatMessageSendJob[]
   historicalCrosswalks HistoricalConversationCrosswalk[] @relation("HistoricalCrosswalkCanonicalConversation")
 
+  nicknameSourceState NicknameSourceState?
+  nicknameObservations NicknameSourceObservation[]
+  nicknameSourceApplications NicknameSourceApplication[]
   replyStateProjection ConversationReplyStateProjection?
   @@index([latestMessageAt])
   @@index([followUpStatus])
@@ -2820,4 +2823,71 @@ model GoogleReviewFingerprint {
   @@index([fingerprint])
   @@index([storeCode, isQualified])
   @@index([reviewDate])
+}
+
+// Independent of customerSalesStatus and onlineSource. No inferred backfill.
+model NicknameSourceState {
+  conversationId String @id
+  tag String?
+  ruleVersion String?
+  sourceObservationId String?
+  sourceObservation NicknameSourceObservation? @relation(fields: [sourceObservationId], references: [id], onDelete: Restrict, map: "nickname_state_observation_fkey")
+  lastObservedAt DateTime
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Restrict)
+}
+
+// Immutable evidence. Applications are separate append-only receipts.
+model NicknameSourceObservation {
+  id String @id
+  batchId String
+  storeId String
+  lineOfficialAccountId String
+  lineChatUserId String
+  conversationId String?
+  nickname String?
+  nicknameReadStatus String
+  observedAt DateTime
+  parsedTag String?
+  ruleVersion String
+  ruleId String?
+  classification String
+  reason String
+  previousTag String?
+  resultingTag String?
+  conversation Conversation? @relation(fields: [conversationId], references: [id], onDelete: Restrict)
+  batch NicknameSourceCapture @relation(fields: [batchId], references: [id], onDelete: Restrict)
+  applications NicknameSourceApplication[]
+  derivedStates NicknameSourceState[]
+  @@unique([batchId, lineChatUserId])
+  @@index([lineOfficialAccountId, lineChatUserId, observedAt(sort: Desc), id(sort: Desc)])
+  @@index([observedAt, classification])
+}
+
+// Checkpoint includes readable empty OAs and incomplete bounded recent windows.
+model NicknameSourceCapture {
+  id String @id
+  storeId String
+  lineOfficialAccountId String
+  observedAt DateTime
+  completedAt DateTime @default(now())
+  chatCount Int
+  coverage String
+  profileKey String?
+  durationMs Int
+  observations NicknameSourceObservation[]
+  @@index([lineOfficialAccountId, observedAt(sort: Desc)])
+}
+
+model NicknameSourceApplication {
+  id String @id @default(uuid())
+  observationId String
+  conversationId String
+  manifestSha256 String
+  previousTag String?
+  resultingTag String
+  appliedAt DateTime @default(now())
+  observation NicknameSourceObservation @relation(fields: [observationId], references: [id], onDelete: Restrict)
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Restrict)
+  @@unique([manifestSha256, observationId])
+  @@index([conversationId, appliedAt])
 }

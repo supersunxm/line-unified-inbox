@@ -3172,3 +3172,9 @@ Additional exact remediation must use a new immutable manifest and an explicit a
 
 ## 2026-10-04 — Pin outbound text manifest #8
 The 13-row outbound text preflight is admitted only by its immutable SHA-256 (`adc33c8480f548d9f164767c1fe4c8e8066b914efab450397bfb898e4f79db5f`) and fixed 5-Store count in the existing exact Reconciler. Keep this manifest separate from earlier text/media sets; the execution remains OA-scoped and cannot expand by timestamp. Production execution requires normal GitHub CI/deployment and a fresh exact dry-run.
+
+## 2026-10-04 — Independent Manager nickname Source metadata
+- Honor owner decision: preserve ONLINE-only onlineSource; use independent one-per-Conversation Source state and append-only Manager nickname evidence/checkpoints/application receipts. Do not infer state from existing sales fields.
+- Capture explicit profile.nickname during existing Manager reads; retain profile.name for existing display-name/identity behavior. Persist only during cooldown and acquire no additional browser/profile lease. Nickname-only duplicate-page differences are held without changing Mirror health semantics.
+- Freeze exact source/date parsing as manager-source-v1; hold unsupported/ambiguous/unreadable or conflicting identity evidence without clearing the last proven Tag. Initial linking is exact DIRECT only.
+- Source writes require immutable file/row-set hashes, bounded manifest-only batches, normal 144-OA health, SERIALIZABLE identity/previous-Tag checks, and a fresh authoritative passive observation after manifest freeze. No auto-apply scheduler; production quality/canary acceptance is a separate required gate.

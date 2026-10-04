@@ -89,9 +89,17 @@ function normalizeUserChat(raw: unknown): LineChatDiscoveredChat | null {
   const value = objectValue(raw);
   if (!value || value.chatType !== "USER" || !isLineChatUserId(value.chatId)) return null;
   const latestEvent = normalizeLatestEventTimestamp(value);
+  const profile = objectValue(value.profile);
+  const hasNickname = profile !== null && Object.prototype.hasOwnProperty.call(profile, "nickname");
+  const rawNickname = profile?.nickname;
+  const nicknameReadable = rawNickname === null || typeof rawNickname === "string";
   return {
     chatUserId: value.chatId.trim(),
     displayName: normalizeCustomerName(value),
+    ...(hasNickname ? {
+      managerNickname: nicknameReadable ? rawNickname : null,
+      managerNicknameReadStatus: nicknameReadable ? "READ" as const : "INVALID" as const,
+    } : {}),
     // The verified v2 contract does not establish message text or direction semantics.
     lastMessageText: null,
     lastMessageAt: latestEvent.timestamp,
@@ -191,4 +199,15 @@ export function recentDiscoveryFailureCode(detail: string | undefined): string {
   if (/response was not JSON/u.test(detail ?? "")) return "RESPONSE_BODY_READ_FAILED";
   if (/unsupported or malformed envelope/u.test(detail ?? "")) return "RESPONSE_ENVELOPE_REJECTED";
   return "DISCOVERY_FAILED_WITHOUT_SAFE_SUBTYPE";
+}
+
+/** New nickname evidence must not change the existing Mirror duplicate-health contract. */
+export function discoveryIdentityFingerprint(chat: LineChatDiscoveredChat): string {
+  const { managerNickname, managerNicknameReadStatus, ...identity } = chat;
+  void managerNickname; void managerNicknameReadStatus;
+  return JSON.stringify(identity);
+}
+export function mergeNicknameDuplicate(previous: LineChatDiscoveredChat, current: LineChatDiscoveredChat): LineChatDiscoveredChat {
+  if (previous.managerNickname === current.managerNickname && previous.managerNicknameReadStatus === current.managerNicknameReadStatus) return previous;
+  return { ...previous, managerNickname: null, managerNicknameReadStatus: "INVALID" };
 }
