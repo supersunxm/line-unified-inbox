@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 
-export const NICKNAME_SOURCE_RULE_VERSION = "manager-source-v1";
+export const NICKNAME_SOURCE_RULE_VERSION = "manager-source-v2";
 export const SOURCE_TAGS = ["TikTok", "Facebook", "Instagram", "LINE", "Website", "Lemon8"] as const;
 export type SourceTag = typeof SOURCE_TAGS[number];
 export const AUDIT_CLASSES = ["TAG_MAPPED", "TAG_NEEDS_UPDATE", "NO_TAG_SIGNAL", "AMBIGUOUS", "IDENTITY_CONFLICT", "UNKNOWN"] as const;
@@ -13,8 +13,8 @@ export function parseNicknameSource(nickname: string | null, readable: boolean):
     return { kind: "UNKNOWN", tag: null, ruleId: null, reason: "NICKNAME_UNREADABLE" };
   }
   const value = (nickname ?? "").replace(/\s+/gu, " ").trim();
-  // Frozen v1 grammar. Do not inherit future changes to the legacy sales parser.
-  const exact = /^(TikTok|Facebook|Instagram|IG|LINE|Website|Lemon8) (0[1-9]|1[0-2])\/(\d{2})$/iu.exec(value);
+  // Frozen v2 grammar: ASCII alias casing only, without Unicode case-fold lookalikes.
+  const exact = /^(TikTok|Facebook|Instagram|IG|LINE|Website|Lemon8) (0[1-9]|1[0-2])\/(\d{2})$/i.exec(value);
   const aliasesToTag: Readonly<Record<string, SourceTag>> = {
     tiktok: "TikTok", facebook: "Facebook", instagram: "Instagram", ig: "Instagram",
     line: "LINE", website: "Website", lemon8: "Lemon8",
@@ -27,8 +27,8 @@ export function parseNicknameSource(nickname: string | null, readable: boolean):
   // Detect only when the ENTIRE nickname has this grammar, never arbitrary words.
   const aliases = "(?:TikTok|Facebook|Instagram|IG|LINE|Website|Lemon8)";
   const period = "(?:0[1-9]|1[0-2])/\\d{2}";
-  const joined = new RegExp(`^${aliases}(?:[ ,;+|/]+${aliases})+ ${period}$`, "iu");
-  const repeated = new RegExp(`^${aliases} ${period}(?:[ ,;+|]+${aliases} ${period})+$`, "iu");
+  const joined = new RegExp(`^${aliases}(?:[ ,;+|/]+${aliases})+ ${period}$`, "i");
+  const repeated = new RegExp(`^${aliases} ${period}(?:[ ,;+|]+${aliases} ${period})+$`, "i");
   if (joined.test(value) || repeated.test(value)) {
     return { kind: "AMBIGUOUS", tag: null, ruleId: "MULTIPLE_SOURCE_SIGNALS", reason: "MULTIPLE_SOURCE_SIGNALS" };
   }

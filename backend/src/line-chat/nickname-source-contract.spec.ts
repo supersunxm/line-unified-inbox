@@ -8,7 +8,7 @@ import type { PrismaService } from "../prisma.service";
 import type { LineChatSessionService } from "./line-chat-session.service";
 
 for (const tag of SOURCE_TAGS) {
-  test(`source v1 exact ${tag} syntax is stable across allowed casing/whitespace`, () => {
+  test(`source v2 exact ${tag} syntax is stable across allowed casing/whitespace`, () => {
     for (const nickname of [`${tag} 09/26`, `  ${tag.toUpperCase()}   09/26  `, `${tag.toLowerCase()}\u00a009/26`]) {
       const a = parseNicknameSource(nickname, true);
       assert.equal(a.kind, "SIGNAL"); assert.equal(a.tag, tag);
@@ -19,6 +19,13 @@ for (const tag of SOURCE_TAGS) {
 test("IG aliases Instagram and dates must satisfy the existing exact grammar", () => {
   assert.equal(parseNicknameSource("IG 09/26", true).tag, "Instagram");
   for (const x of ["TikTok", "TikTok 9/26", "TikTok 13/26", "TikTok 00/26", "TikTok-09/26", "Facebook 09/2026"]) assert.equal(parseNicknameSource(x, true).kind, "NO_TAG_SIGNAL");
+});
+test("Unicode case-fold lookalikes cannot produce an undefined or guessed source Tag", () => {
+  for (const nickname of ["Webſite 09/26", "TiKToK 09/26", "ＴｉｋＴｏｋ 09/26", "TikTok/Webſite 09/26"]) {
+    assert.deepEqual(parseNicknameSource(nickname, true), {
+      kind: "NO_TAG_SIGNAL", tag: null, ruleId: null, reason: "NO_SUPPORTED_SOURCE_PERIOD",
+    });
+  }
 });
 test("arbitrary names, Thai words and platform-like words never become source signals", () => {
   for (const x of ["Online", "", "สมชาย", "คุณ TikTok", "I love Facebook 09/26", "Website Developer 09/26", "Lemon88 09/26", "Film/LINE/09/26", "Facebook สด 09/26", "Other 09/26"]) {

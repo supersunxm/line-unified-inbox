@@ -52,7 +52,7 @@ export class NicknameSourceMappingService {
       await tx.$executeRaw`SET TRANSACTION READ ONLY`;
       const scope = await resolveConfiguredMirrorFleetScope(tx, configuredLineChatMirrorStoreCodes());
       const ids = scope.eligibleOaIds;
-      const captures = await tx.nicknameSourceCapture.findMany({ where: { lineOfficialAccountId: { in: ids }, observedAt: { gte: since } }, select: { lineOfficialAccountId: true, coverage: true, observedAt: true, durationMs: true, profileKey: true } });
+      const captures = await tx.nicknameSourceCapture.findMany({ where: { lineOfficialAccountId: { in: ids }, observedAt: { gte: since }, ruleVersion: NICKNAME_SOURCE_RULE_VERSION }, select: { lineOfficialAccountId: true, coverage: true, observedAt: true, durationMs: true, profileKey: true } });
       const observations = ids.length ? await tx.$queryRaw<Array<{
         id: string; storeId: string; lineOfficialAccountId: string; lineChatUserId: string; conversationId: string | null;
         nickname: string | null; nicknameReadStatus: string; observedAt: Date; parsedTag: string | null; ruleId: string | null;

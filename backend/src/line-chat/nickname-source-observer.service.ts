@@ -58,7 +58,7 @@ export class NicknameSourceObserverService implements OnModuleInit, OnModuleDest
   async capture(snapshot: NicknameSnapshot): Promise<void> {
     const started = Date.now();
     if (!Number.isFinite(snapshot.observedAt.getTime()) || snapshot.observedAt.getTime() > started) throw new Error("INVALID_CAPTURE_TIMESTAMP");
-    const batchId = evidenceHash(JSON.stringify([snapshot.storeId, snapshot.lineOfficialAccountId, snapshot.observedAt.toISOString()]));
+    const batchId = evidenceHash(JSON.stringify([snapshot.storeId, snapshot.lineOfficialAccountId, snapshot.observedAt.toISOString(), NICKNAME_SOURCE_RULE_VERSION]));
     await this.prisma.$transaction(async tx => {
       if (await tx.nicknameSourceCapture.findUnique({ where: { id: batchId } })) return;
       const oa = await tx.lineOfficialAccount.findFirst({ where: {
@@ -90,7 +90,8 @@ export class NicknameSourceObserverService implements OnModuleInit, OnModuleDest
       });
       await tx.nicknameSourceCapture.create({ data: { id: batchId, storeId: snapshot.storeId,
         lineOfficialAccountId: snapshot.lineOfficialAccountId, observedAt: snapshot.observedAt,
-        chatCount: rows.length, coverage: snapshot.coverage, profileKey: snapshot.profileKey, durationMs: Date.now() - started } });
+        chatCount: rows.length, coverage: snapshot.coverage, ruleVersion: NICKNAME_SOURCE_RULE_VERSION,
+        profileKey: snapshot.profileKey, durationMs: Date.now() - started } });
       if (rows.length) await tx.nicknameSourceObservation.createMany({ data: rows });
       const ids = rows.map(c => c.conversationId).filter((id): id is string => id !== null);
       if (ids.length) {

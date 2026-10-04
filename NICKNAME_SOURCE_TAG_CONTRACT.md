@@ -1,4 +1,4 @@
-# Independent nickname-derived Source Tag — manager-source-v1
+# Independent nickname-derived Source Tag — manager-source-v2
 
 Owner decision: this metadata is independent of sales/operational status. Conversation.onlineSource, its validation, clearing and existing sales UI retain their ONLINE-only contract. No backfill derives a Source Tag from onlineSource, Customer.displayName, MirrorChat.displayName or customer text.
 
@@ -12,9 +12,9 @@ Owner decision: this metadata is independent of sales/operational status. Conver
 
 ## Frozen parsing rules
 
-The entire normalized nickname must match `<source> <MM/YY>`. Supported aliases are TikTok, Facebook, Instagram, IG, LINE, Website, Lemon8, compared case-insensitively; IG maps to Instagram. Month has exactly two digits 01–12; year has exactly two digits. Leading/trailing whitespace and internal Unicode whitespace runs normalize to one space. Control characters, unreadable/malformed/missing values, and values over 1000 characters are UNKNOWN. An explicitly readable null/empty nickname is NO_TAG_SIGNAL.
+The entire normalized nickname must match `<source> <MM/YY>`. Supported aliases are TikTok, Facebook, Instagram, IG, LINE, Website, Lemon8, compared with ASCII letter casing only; IG maps to Instagram. Unicode case-fold lookalikes (including long s and Kelvin sign) are unsupported and never produce a source signal. Month has exactly two digits 01–12; year has exactly two digits. Leading/trailing whitespace and internal Unicode whitespace runs normalize to one space. Control characters, unreadable/malformed/missing values, and values over 1000 characters are UNKNOWN. An explicitly readable null/empty nickname is NO_TAG_SIGNAL.
 
-Each single signal emits `SOURCE_PERIOD_<canonical Tag>` with exact deterministic confidence. The grammar is frozen in its own versioned parser, independent of future changes to the legacy sales-nickname parser. Arbitrary platform-like words, custom Other values, invalid dates, unproven punctuation, Film/purchase nicknames and literal Online are not source signals.
+Each single signal emits `SOURCE_PERIOD_<canonical Tag>` with exact deterministic confidence. The grammar is frozen in its own versioned parser, independent of future changes to the legacy sales-nickname parser. Arbitrary platform-like words, custom Other values, invalid dates, unproven punctuation, Film/purchase nicknames and literal Online are not source signals. V1 was superseded before any Tag application after self-review exposed Unicode case folding that could produce an undefined alias. Its immutable observations remain versioned as v1; new checkpoints include ruleVersion and only checkpoints/observations of the current version satisfy current audit coverage. No old observations are rewritten or used to infer v2 coverage.
 
 AMBIGUOUS accepts only an entire explicit source list sharing a valid period or an entire sequence of complete source+period signals. Delimiters for source lists are spaces, commas, semicolons, plus, pipe and slash; complete repeated signals allow the same delimiters except slash. Multiple signals, including repeated identical signals, are held. No arbitrary text word search occurs.
 
