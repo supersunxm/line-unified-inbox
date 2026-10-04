@@ -6,6 +6,40 @@ import { LineChatSessionService } from "./line-chat-session.service";
 
 const CHAT_ID_FOR_TEST = `U${"a".repeat(32)}`;
 
+for (const state of ["active", "cooldown"] as const) {
+  test(`nickname queue defers without database work during mirror ${state}`, async () => {
+    let calls = 0;
+    const session = new LineChatSessionService();
+    if (state === "active") session.setMirrorCycleActive(true);
+    else session.setMirrorCooldownUntil(new Date(Date.now() + 60_000));
+    const worker = new LineChatNicknameWorkerService({ lineChatNicknameSyncJob: {
+      findMany: async () => { calls++; return []; },
+      updateMany: async () => { calls++; return { count: 0 }; },
+    } } as never, session);
+    assert.equal(await worker.processQueueCycle(), 0);
+    assert.equal(calls, 0);
+    session.setMirrorCycleActive(false);
+    session.setMirrorCooldownUntil(null);
+    assert.equal(await worker.processQueueCycle(), 0);
+    assert.ok(calls > 0);
+  });
+}
+
+test("nickname discovery rechecks fleet ownership after lease acquisition", async () => {
+  const session = new LineChatSessionService();
+  let browserCalls = 0;
+  const coordinator = { withProfileOperation: async (_input: unknown, callback: (context: never) => Promise<unknown>) => {
+    session.setMirrorCycleActive(true);
+    return { acquired: true, value: await callback({} as never) };
+  } };
+  const worker = new LineChatNicknameWorkerService({} as never, session, undefined, coordinator as never);
+  const internals = worker as unknown as {
+    withProfileOperation: (id: string, kind: "RECENT_RESOLUTION", callback: () => Promise<void>) => Promise<unknown>;
+  };
+  await assert.rejects(internals.withProfileOperation("profile-a", "RECENT_RESOLUTION", async () => { browserCalls++; }), /PROFILE_BROWSER_BUSY/u);
+  assert.equal(browserCalls, 0);
+});
+
 void test("worker lifecycle keeps maintenance alive without polling and preserves flag precedence", async () => {
   const originalNodeEnv = process.env.NODE_ENV;
   const originalMaintenance = process.env.LINE_CHAT_NICKNAME_MAINTENANCE_MODE;

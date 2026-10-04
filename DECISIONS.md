@@ -1,3 +1,7 @@
+# 2026-10-04: Mirror fleet ownership includes background nickname discovery
+
+The existing per-profile lease prevents simultaneous profile opening, but background recent mapping resolution could acquire the lease between stores in the same scheduled fleet cycle. Respect the existing fleet-active/cooldown signals before queue work and recheck after asynchronous lease acquisition. Do not change fleet configuration or mask contention with longer timeouts. Rejected chat-list responses remain failures; emit only fixed field types so a changed remote contract can be distinguished from malformed/error responses without logging customer or session data.
+
 # 2026-10-04: Keep health probes out of an active Mirror fleet cycle
 
 - The first post-deployment cycle showed that scheduled read-only health probes can contend for the same Manager profile while a sequential Mirror sync is running. Because background operations do not wait for profile locks, this can turn an otherwise eligible store into a `PROFILE_OPERATION_BUSY` partial.

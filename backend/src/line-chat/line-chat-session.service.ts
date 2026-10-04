@@ -20,7 +20,7 @@ import type {
   LineChatRecentDiscoveryResult,
   ObservedRequestSummary,
 } from "./line-chat.types";
-import { parseLineChatListPage } from "./line-chat-chat-discovery";
+import { parseLineChatListPage, rejectedChatListEnvelopeShape } from "./line-chat-chat-discovery";
 import {
   diagnosticResponseParseFailure,
   isChatLineOrigin,
@@ -1329,6 +1329,13 @@ export class LineChatSessionService implements OnModuleDestroy {
       try {
         firstPage = parseLineChatListPage(firstPageBody.body);
       } catch {
+        this.logger.warn(JSON.stringify({
+          event: "line_chat_rejected_chat_list_envelope",
+          sessionId: input.operationContext?.sessionId,
+          operationKind: input.operationContext?.operationKind,
+          httpStatus: firstResponse.status,
+          ...rejectedChatListEnvelopeShape(firstPageBody.body),
+        }));
         return {
           ...this.emptyDiscoveryResult(botId, endpoint, "LINE OA Manager v2 chat-list response had an unsupported or malformed envelope.", "PARTIAL"),
           ...(input.includeTransportMetadata ? {

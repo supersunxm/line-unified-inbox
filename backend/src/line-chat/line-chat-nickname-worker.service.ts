@@ -1,7 +1,7 @@
 import { Inject, Injectable, Logger, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
 import { PrismaService } from "../prisma.service";
 import { LineChatNicknameSyncJobStatus, LineChatSessionStatus } from "@prisma/client";
-import { isProfileBrowserBusyError, LineChatSessionService } from "./line-chat-session.service";
+import { isProfileBrowserBusyError, ProfileBrowserBusyError, LineChatSessionService } from "./line-chat-session.service";
 import { hostname } from "node:os";
 import { resolve } from "node:path";
 import { LineChatRecentResolverService } from "./line-chat-recent-resolver.service";
@@ -199,7 +199,7 @@ export class LineChatNicknameWorkerService implements OnModuleInit, OnModuleDest
    * Main processing cycle: claims and processes pending nickname jobs.
    */
   public async processQueueCycle(limit = 10): Promise<number> {
-    if (this.isProcessing) {
+    if (this.isProcessing || this.mirrorOwnsProfiles()) {
       return 0;
     }
     this.isProcessing = true;
@@ -226,6 +226,7 @@ export class LineChatNicknameWorkerService implements OnModuleInit, OnModuleDest
       let processedCount = 0;
 
       for (const job of pendingJobs) {
+        if (this.mirrorOwnsProfiles()) break;
         const lockedUntil = new Date(Date.now() + LEASE_DURATION_MS);
 
         // Atomic claim with lease and worker ID
@@ -454,14 +455,25 @@ export class LineChatNicknameWorkerService implements OnModuleInit, OnModuleDest
     }
   }
 
+  private mirrorOwnsProfiles(): boolean {
+    return this.sessionService.isMirrorCycleActive?.() === true
+      || this.sessionService.isMirrorCooldownActive?.() === true;
+  }
+
   private async withProfileOperation<T>(
     sessionId: string,
     operationKind: "NICKNAME_UPDATE" | "RECENT_RESOLUTION",
     callback: (context: LineChatProfileOperationContext) => Promise<T>,
     options: { waitForLock?: boolean } = {},
   ): Promise<ProfileOperationResult<T>> {
+    if (this.mirrorOwnsProfiles()) throw new ProfileBrowserBusyError();
+    const guardedCallback = (context: LineChatProfileOperationContext): Promise<T> => {
+      // The fleet can start while the database lease is being acquired.
+      if (this.mirrorOwnsProfiles()) throw new ProfileBrowserBusyError();
+      return callback(context);
+    };
     if (this.profileCoordinator) {
-      return this.profileCoordinator.withProfileOperation({ sessionId, operationKind }, callback, options);
+      return this.profileCoordinator.withProfileOperation({ sessionId, operationKind }, guardedCallback, options);
     }
 
     // Never allow a production worker to touch a persistent profile without
@@ -481,7 +493,7 @@ export class LineChatNicknameWorkerService implements OnModuleInit, OnModuleDest
     };
     return {
       acquired: true,
-      value: await callback(testContext),
+      value: await guardedCallback(testContext),
       sessionId,
       operationKind,
       requestId: "test-only",
@@ -545,6 +557,7 @@ export class LineChatNicknameWorkerService implements OnModuleInit, OnModuleDest
     }
 
     for (const oa of oas) {
+      if (this.mirrorOwnsProfiles()) return;
       const jobs = jobsByOa.get(oa.id);
       const session = oa.lineChatSession;
       const botId = oa.chatBotId?.trim();
