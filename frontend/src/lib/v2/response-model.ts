@@ -2,7 +2,7 @@
 // Reply state always comes from the backend resolver (effectiveReplyState / the
 // replyState filter); this file only measures time and groups by store.
 
-import { businessMinutesBetween, needsFollowUp, realMinutesBetween } from "./business-hours";
+import { businessMinutesBetween, needsFollowUp, realMinutesBetween } from "./business-hours.ts";
 
 export type ReplyState = "REPLIED" | "NOT_REPLIED";
 
@@ -17,12 +17,6 @@ export type ConversationLike = {
   customer: { displayName: string };
   store: { id: string; name: string; lineManagerUrl: string | null; lineManagerUrlStatus: string };
 };
-
-/** Same fallback as app/reply-state.ts getEffectiveReplyState. */
-export function replyStateOf(conversation: Pick<ConversationLike, "effectiveReplyState" | "bmReplyStatus">): ReplyState {
-  if (conversation.effectiveReplyState === "REPLIED" || conversation.effectiveReplyState === "NOT_REPLIED") return conversation.effectiveReplyState;
-  return conversation.bmReplyStatus === "REPLIED" ? "REPLIED" : "NOT_REPLIED";
-}
 
 /**
  * When the customer started waiting: the resolver's deciding customer message when it

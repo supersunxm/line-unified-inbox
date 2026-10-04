@@ -1,0 +1,114 @@
+"use client";
+
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import React, { useCallback, useMemo } from "react";
+import { PageHeader } from "@/components/shell/page-header";
+import { KpiStripSkeleton, SectionCardSkeleton, SegmentedControl, useDeferredLoading } from "@/components/ui";
+import { FOLLOW_UP_THRESHOLD_MINUTES } from "@/lib/v2/business-hours";
+import { filterStoreRows, sortStoreRows, type StoreTab } from "@/lib/v2/response-model";
+import { ALL_STORES, parseResponseUrl, responseUrlQuery, type ResponseUrlState, type ResponseView as View } from "@/lib/v2/response-url";
+import { ResponseChatView } from "./response-chat-view";
+import { ResponseKpis, ResponseStoresView } from "./response-stores-view";
+import { useV2Data, WAITING_MAX_PAGES, WAITING_PAGE_SIZE } from "./v2-data";
+import { SourceNotice } from "./v2-ui";
+
+const TAB_LABELS: Record<StoreTab, string> = { "follow-up": "ต้องตาม", all: "ทั้งหมด", "no-data": "ไม่มีข้อมูล" };
+
+function Notices() {
+  const data = useV2Data();
+  const notices: string[] = [];
+  if (data.summary.error) notices.push(`โหลดสถานะการตอบไม่สำเร็จ: ${data.summary.error}`);
+  if (data.waiting.error) notices.push(`โหลดรายการแชทที่รอไม่สำเร็จ: ${data.waiting.error}`);
+  if (data.waiting.data?.truncated) notices.push(`แสดงเวลารอจาก ${(WAITING_MAX_PAGES * WAITING_PAGE_SIZE).toLocaleString("th-TH")} แชทที่รอนานที่สุดเท่านั้น จำนวนแชทที่รอยังนับครบจากระบบ`);
+  if (data.fleet.error) notices.push(`โหลดสถานะการเก็บแชทไม่สำเร็จ จึงยังแยกร้านที่ไม่มีข้อมูลไม่ได้: ${data.fleet.error}`);
+  if (data.rates7d.error || data.ratesPrev7d.error) notices.push(`โหลดอัตราตอบใน 24 ชม. ไม่สำเร็จ: ${data.rates7d.error ?? data.ratesPrev7d.error}`);
+  if (data.daily.error) notices.push(`โหลดแนวโน้มรายวันไม่สำเร็จ: ${data.daily.error}`);
+  if (notices.length === 0) return null;
+  return <div className="space-y-2">{notices.map((notice) => <SourceNotice key={notice}>{notice}</SourceNotice>)}</div>;
+}
+
+export function ResponseView() {
+  const data = useV2Data();
+  const router = useRouter();
+  const pathname = usePathname() || "/v2/response";
+  const searchParams = useSearchParams();
+  const state = useMemo(() => parseResponseUrl(searchParams), [searchParams]);
+  const showSkeleton = useDeferredLoading(data.coreLoading);
+
+  const navigate = useCallback((patch: Partial<ResponseUrlState>) => {
+    router.replace(`${pathname}${responseUrlQuery({ ...state, ...patch })}`, { scroll: false });
+  }, [pathname, router, state]);
+
+  const rows = useMemo(() => sortStoreRows(filterStoreRows(data.storeRows, state.tab)), [data.storeRows, state.tab]);
+
+  const tabs = (
+    <div role="tablist" aria-label="ตัวกรองร้าน" className="inline-flex gap-1 rounded-[var(--app-radius-md)] bg-[var(--app-surface-subtle)] p-1">
+      {(Object.keys(TAB_LABELS) as StoreTab[]).map((tab) => {
+        const count = filterStoreRows(data.storeRows, tab).length;
+        const active = state.tab === tab;
+        return (
+          <button
+            key={tab}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            data-v2-tab={tab}
+            onClick={() => navigate({ tab, store: state.store === ALL_STORES ? ALL_STORES : null, conversation: null })}
+            className={`rounded-[var(--app-radius-sm)] px-3 py-1.5 text-sm font-medium ${active ? "bg-[var(--app-surface)] text-[var(--app-text-primary)] shadow-[var(--app-shadow-card)]" : "text-[var(--app-text-secondary)] hover:text-[var(--app-text-primary)]"}`}
+          >
+            {TAB_LABELS[tab]} <span className="tabular-nums text-[var(--app-text-tertiary)]">{data.summary.data ? count : ""}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+
+  return (
+    <div className={`flex h-full min-h-0 flex-col gap-4 px-6 py-5 ${state.view === "stores" ? "overflow-y-auto" : "overflow-hidden"}`}>
+      <PageHeader
+        title="การตอบแชท"
+        description={`ลูกค้าที่รอคำตอบ นับเวลาเฉพาะช่วงเปิดร้าน 10:00–21:00 · ต้องตามเมื่อรอ ≥ ${FOLLOW_UP_THRESHOLD_MINUTES} นาที · ร้านที่ไม่มีข้อมูลไม่นับในทุกตัวเลข`}
+        actions={
+          <SegmentedControl<View>
+            aria-label="มุมมอง"
+            value={state.view}
+            onChange={(view) => navigate({ view })}
+            items={[{ id: "stores", label: "ภาพรวมร้าน" }, { id: "chat", label: "หน้าแชท" }]}
+          />
+        }
+      />
+      <Notices />
+      {data.coreLoading ? (
+        showSkeleton ? (
+          <div className="space-y-4">
+            <KpiStripSkeleton columns={4} labels={["ร้านที่ต้องตาม", "แชทที่รอคำตอบ", "ตอบใน 24 ชม. · 7 วัน", "ร้านที่ไม่มีข้อมูล"]} />
+            <SectionCardSkeleton title="ร้านเรียงตามเวลารอนานสุด" lines={8} />
+          </div>
+        ) : null
+      ) : state.view === "stores" ? (
+        <>
+          <ResponseKpis />
+          {tabs}
+          <ResponseStoresView
+            rows={rows}
+            state={state}
+            onSelectStore={(store) => navigate({ store, conversation: null })}
+            onOpenConversation={(store, conversation) => navigate({ view: "chat", store, conversation })}
+          />
+        </>
+      ) : (
+        <>
+          {tabs}
+          <div className="min-h-0 flex-1">
+            <ResponseChatView
+              rows={rows}
+              state={state}
+              onSelectStore={(store) => navigate({ store, conversation: null })}
+              onSelectConversation={(store, conversation) => navigate({ store, conversation })}
+            />
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
