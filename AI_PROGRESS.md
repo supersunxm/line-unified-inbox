@@ -1,3 +1,11 @@
+# 2026-10-04: Safe diagnostics for the exact 19 Live health targets
+
+- PR #455 passed required CI, merged as 23ed046, and deployed successfully to the worker. Scheduled NORMAL cycle remains non-clean; no remediation manifest executed.
+- The first original target processed after deployment (31448) no longer failed with PROFILE_OPERATION_BUSY, but authenticated recent discovery was rejected. All four original auth targets authenticated during coordinated read-only isolated proof; no owner login requirement has been established.
+- Add fixed failure enums and HTTP status/transport observations to distinguish natural-request capture, body-read, parser-envelope, and authentication failures. Log no error bodies, headers, token values, cookies, customer content, or pagination cursors. Preserve existing fail-closed behavior; do not introduce retries before proving a cause.
+- Local checks: 77 focused tests and 105 related Mirror/coordinator/scheduler/nickname/discovery tests pass; focused ESLint, build-scope TypeScript, backend production build, and diff check pass. Built isolated worker health route returns HTTP 200 with jobs disabled and no startup stderr against local test PostgreSQL.
+- Full-fleet failures outside the original 19 are recorded only as health-gate blockers, without expanding the target population. Clean scheduled cycles remain 0/2. Next: required CI and normal worker deployment, then inspect safe diagnostic evidence for original targets. Manifest #8, Historical, reply/KPI data, and fleet configuration remain untouched.
+
 # 2026-10-04: Unblock the exact 19 non-success Live OAs
 
 - Scope: initial NORMAL cycle 125 SUCCESS / 17 FAILED / 2 PARTIAL across the closed eligible fleet of 144. Exactly 19 OAs audited; Historical work and Manifest #8 remain untouched.

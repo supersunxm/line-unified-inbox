@@ -172,3 +172,23 @@ export function rejectedChatListEnvelopeShape(body: unknown): {
   const wrapper = objectValue(body);
   return { rootType: kind(body), listType: kind(wrapper?.list), nextType: kind(wrapper?.next) };
 }
+
+export function chatListBodyReadFailureCode(error: unknown): string {
+  if (error instanceof SyntaxError) return "NON_JSON_RESPONSE";
+  if (!(error instanceof Error)) return "BODY_READ_FAILED";
+  if (/No resource with given identifier|No data found for resource|Network\.getResponseBody/iu.test(error.message)) return "BROWSER_BODY_UNAVAILABLE";
+  if (/Target page, context or browser has been closed|Target closed|has been disposed/iu.test(error.message)) return "BROWSER_CONTEXT_CLOSED";
+  if (/timeout|timed out/iu.test(error.message)) return "BODY_READ_TIMEOUT";
+  return "BODY_READ_FAILED";
+}
+
+export function recentDiscoveryFailureCode(detail: string | undefined): string {
+  if (/HTTP (401|403)/u.test(detail ?? "")) return "REMOTE_AUTH_REJECTED";
+  if (/HTTP \d{3}/u.test(detail ?? "")) return "REMOTE_HTTP_ERROR";
+  if (/natural GET was not observed/u.test(detail ?? "")) return "NATURAL_REQUEST_NOT_OBSERVED";
+  if (/response was not observed/u.test(detail ?? "")) return "NATURAL_RESPONSE_NOT_OBSERVED";
+  if (/parsing timed out|time limit reached/u.test(detail ?? "")) return "RESPONSE_TIMEOUT";
+  if (/response was not JSON/u.test(detail ?? "")) return "RESPONSE_BODY_READ_FAILED";
+  if (/unsupported or malformed envelope/u.test(detail ?? "")) return "RESPONSE_ENVELOPE_REJECTED";
+  return "DISCOVERY_FAILED_WITHOUT_SAFE_SUBTYPE";
+}
