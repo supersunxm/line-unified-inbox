@@ -12,6 +12,17 @@ export type ChatRouteFilters = {
 
 export type ConversationRouteLookupStatus = "pending" | "resolved" | "failed";
 
+/** A proven route destination can be outside the current paginated list. */
+export function resolveSelectedConversationState<T>(input: {
+  selectedConversationId: string;
+  listedStates: Readonly<Record<string, T>>;
+  routeConversationId?: string;
+  routeState?: T;
+}): T | undefined {
+  return input.listedStates[input.selectedConversationId]
+    ?? (input.routeConversationId === input.selectedConversationId ? input.routeState : undefined);
+}
+
 export function resolveSelectedConversation<T extends { id: string }>(input: {
   visibleConversations: readonly T[];
   selectedConversationId: string;
