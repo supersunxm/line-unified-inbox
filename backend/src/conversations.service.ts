@@ -35,6 +35,7 @@ const conversationBaseInclude = {
   purchaseRecordedBy: { select: { id: true, displayName: true } },
   salesRecordedBy: { select: { id: true, displayName: true } },
   owner: { select: { id: true, displayName: true, isActive: true, status: true, role: true, canAccessAllStores: true, memberships: { where: { status: "ACTIVE", store: { isActive: true, archivedAt: null } }, select: { storeId: true } } } },
+  nicknameSourceState: { select: { tag: true, ruleVersion: true, sourceObservationId: true, lastObservedAt: true } },
   salesProducts: { include: { productModel: { include: { productSeries: true } }, productVariant: true } },
   products: { include: { productModel: { include: { productSeries: true } }, productVariant: true } },
   topics: { include: { topic: true } },

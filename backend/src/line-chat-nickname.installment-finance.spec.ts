@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { describe, it } from "node:test";
+import assert from "node:assert/strict";
 import { buildLineChatNickname } from "./line-chat-nickname";
 
 const baseInput = {
@@ -9,18 +10,18 @@ const baseInput = {
 
 describe("LINE chat installment finance nickname labels", () => {
   it("keeps legacy INSTALLMENT as credit-card installment", () => {
-    expect(buildLineChatNickname({ ...baseInput, paymentMethod: "INSTALLMENT" })).toBe("A5 ผ่อน 09/26");
+    assert.equal(buildLineChatNickname({ ...baseInput, paymentMethod: "INSTALLMENT" }), "A5 ผ่อน 09/26");
   });
 
   it("maps explicit credit card to ผ่อน", () => {
-    expect(buildLineChatNickname({ ...baseInput, paymentMethod: "CREDIT_CARD" })).toBe("A5 ผ่อน 09/26");
+    assert.equal(buildLineChatNickname({ ...baseInput, paymentMethod: "CREDIT_CARD" }), "A5 ผ่อน 09/26");
   });
 
   it("maps Ufund to Ufund", () => {
-    expect(buildLineChatNickname({ ...baseInput, paymentMethod: "UFUND" })).toBe("A5 Ufund 09/26");
+    assert.equal(buildLineChatNickname({ ...baseInput, paymentMethod: "UFUND" }), "A5 Ufund 09/26");
   });
 
   it("maps SG Finance to SG", () => {
-    expect(buildLineChatNickname({ ...baseInput, paymentMethod: "SG_FINANCE" })).toBe("A5 SG 09/26");
+    assert.equal(buildLineChatNickname({ ...baseInput, paymentMethod: "SG_FINANCE" }), "A5 SG 09/26");
   });
 });

@@ -72,6 +72,7 @@ import { getChatsPaginationText } from "./chats-pagination-utils";
 import { buildConversationListQuery, conversationListQueryKey, LatestConversationRequestGuard, reconcileConversationPage, type ConversationListQuery } from "./conversation-list-query";
 import { getBmCustomerSalesTags, getBmTagChipClass, getConversationListTags, getConversationListTitle } from "./conversation-list-presentation";
 import { effectiveSummaryCounts, getEffectiveReplyState } from "./reply-state";
+import { NicknameSourceBadge } from "./nickname-source-badge";
 import { CustomerSalesTagEditor } from "./customer-sales-tag-editor";
 import type { ApiBmReplyStatus, ApiConversation, ApiEffectiveReplyState, ApiCustomerIntelligence, ApiCustomerSalesInformation, ApiFollowUpStatus, ApiStore, BackfillJobResponseDto, BmReplyStatusSummaryResponse, ConversationMessagesResponse, CreateLineOaInput, DashboardAnalyticsResponse, LineOfficialAccountResponse, LineOaTestResult, LineOaWebhookInfo, StoreDeletionPreview, StoreMasterSuggestion, StoreMasterSyncResult, SyncBatchResult } from "@/types/api";
 
@@ -157,6 +158,7 @@ type Conversation = {
   lineOaId: string;
   lineOaName: string;
   owner: { id: string; displayName: string } | null;
+  nicknameSourceState?: ApiConversation["nicknameSourceState"];
   customerSalesInformation?: ApiCustomerSalesInformation;
 };
 
@@ -1383,6 +1385,7 @@ function mapApiConversation(item: ApiConversation): Conversation {
     lineOaId: item.lineOfficialAccount?.id ?? "",
     lineOaName: item.lineOfficialAccount?.name ?? "",
     owner: item.owner ?? null,
+    nicknameSourceState: item.nicknameSourceState,
     customerSalesInformation: item.customerSalesInformation,
   };
 }
@@ -4810,6 +4813,7 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
                           </div>
                           {selectedApiConversation?.owner && <p data-chat-detail-owner className="mt-0.5 truncate text-[11px] font-medium text-[var(--app-text-tertiary)]">👤 {selectedApiConversation.owner.displayName}</p>}
                           <div className="mt-1 flex flex-wrap items-center gap-1.5 font-tabular">
+                            <NicknameSourceBadge tag={selectedApiConversation ? selectedApiConversation.nicknameSourceState?.tag : selectedConversation.nicknameSourceState?.tag} language={language} />
                             {getBmCustomerSalesTags(selectedApiConversation?.customerSalesInformation ?? selectedConversation.customerSalesInformation).map((tag, index) => (
                               <span
                                 key={`detail-bm-tag-${tag.kind}-${tag.label}-${index}`}

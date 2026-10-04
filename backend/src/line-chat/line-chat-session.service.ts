@@ -1,3 +1,4 @@
+import { discoveryIdentityFingerprint, mergeNicknameDuplicate } from "./line-chat-chat-discovery";
 import { Injectable, Logger, OnModuleDestroy, Optional } from "@nestjs/common";
 import { createHash, randomUUID } from "node:crypto";
 import * as path from "node:path";
@@ -1357,7 +1358,8 @@ export class LineChatSessionService implements OnModuleDestroy {
             byId.set(chat.chatUserId, chat);
           } else {
             duplicateIds += 1;
-            if (JSON.stringify(previous) !== JSON.stringify(chat)) conflictingIds.add(chat.chatUserId);
+            if (discoveryIdentityFingerprint(previous) !== discoveryIdentityFingerprint(chat)) conflictingIds.add(chat.chatUserId);
+            byId.set(chat.chatUserId, mergeNicknameDuplicate(previous, chat));
           }
         }
       };

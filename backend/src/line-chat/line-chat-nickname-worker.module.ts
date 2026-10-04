@@ -1,3 +1,5 @@
+import { NicknameSourceMappingService } from "./nickname-source-mapping.service";
+import { NicknameSourceObserverService } from "./nickname-source-observer.service";
 import "./line-chat-pdf-relay-patch";
 import { Module } from "@nestjs/common";
 import { PrismaModule } from "../prisma.module";
@@ -36,6 +38,8 @@ import { LineChatTargetProofService } from "./line-chat-target-proof.service";
 @Module({
   imports: [PrismaModule],
   providers: [
+    NicknameSourceObserverService,
+    NicknameSourceMappingService,
     LineChatProfileOperationCoordinator,
     LineChatSessionService,
     LineChatRecentResolverService,

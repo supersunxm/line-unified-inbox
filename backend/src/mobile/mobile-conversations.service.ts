@@ -92,6 +92,7 @@ export class MobileConversationsService {
           customerSalesStatus: true,
           filmBrand: true,
           onlineSource: true,
+          nicknameSourceState: { select: { tag: true, ruleVersion: true, sourceObservationId: true, lastObservedAt: true } },
           interestLevel: true,
           salesProducts: {
             select: {
@@ -128,6 +129,7 @@ export class MobileConversationsService {
           store: item.store,
           owner: serializeConversationOwner(item.owner, item.store?.id),
           ownerTracked: (item._count?.messages ?? 0) > 0,
+          nicknameSourceState: item.nicknameSourceState ?? null,
           customerSalesSummary: {
             status: item.customerSalesStatus,
             filmBrand: item.filmBrand ?? null,
@@ -174,6 +176,7 @@ export class MobileConversationsService {
         customerSalesStatus: true,
         filmBrand: true,
         onlineSource: true,
+        nicknameSourceState: { select: { tag: true, ruleVersion: true, sourceObservationId: true, lastObservedAt: true } },
         interestLevel: true,
         paymentMethod: true,
         productRelationship: true,
@@ -252,6 +255,7 @@ export class MobileConversationsService {
       store: conversation.store,
       owner: serializeConversationOwner(conversation.owner, conversation.store?.id),
       ownerTracked: (conversation._count?.messages ?? 0) > 0,
+      nicknameSourceState: conversation.nicknameSourceState ?? null,
       latestMessageAt: conversation.latestMessageAt,
       bmReplyStatus: conversation.bmReplyStatus,
       followUpStatus: conversation.followUpStatus,
