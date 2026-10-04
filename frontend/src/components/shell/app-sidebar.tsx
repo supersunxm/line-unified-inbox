@@ -172,6 +172,7 @@ export function AppSidebar({ authUser, changeLanguage, currentSection, language,
         <nav className="space-y-1" aria-label={t.operations}>{toolItems.map(renderItem)}</nav>
       </div>
 
+      <Link href="/v2" data-v2-entry-link className={`${focusRing} mx-2 mb-1 shrink-0 rounded-lg px-3 py-1.5 text-xs font-medium text-[var(--app-accent)] hover:bg-[var(--app-accent-soft)] ${collapsed ? "text-center" : ""}`}>{collapsed ? "v2" : "ลองเวอร์ชันใหม่ (v2)"}</Link>
       <div className="relative shrink-0 border-t border-[var(--app-border-subtle)] p-2">
         {accountPanel && !collapsed && (
           <div className="absolute bottom-[7.2rem] left-2 right-2 z-50 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-3 shadow-[var(--app-shadow-elevated)]">

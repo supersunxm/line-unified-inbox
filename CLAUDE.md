@@ -109,12 +109,18 @@ the dependency, show exactly what change would be required, and wait.
 - Confirm the working tree is clean before editing; do not overwrite unrelated
   changes.
 - Keep commits focused. Do not force-push unless instructed.
-- **Stop at the pull request. Never merge to `main` yourself** — Railway deploys
-  to production on merge, so merging is always the user's decision.
+- **Merging to `main` deploys to production** (Railway deploys on merge). Merge
+  only as the Merging rule below allows; otherwise stop at the pull request.
 - **Open every PR with base `main`.** After creating it, run
   `gh pr view --json baseRefName` and confirm it says `main`. Do not stack PRs
   on each other: branch each task from the latest `origin/main`, and if a task
   depends on an unmerged PR, wait for that PR to merge into `main` first.
+- **Merging:** once every CI check on a PR into main is green, merge it
+  automatically with a merge commit (`gh pr merge --merge`, or `--auto` when
+  available). Never bypass, override with admin rights, or disable a check.
+  Stop and report instead of merging if CI fails for reasons outside the task,
+  if a conflict touches unrelated files, or if branch protection blocks the
+  merge.
 
 ## Validation
 
