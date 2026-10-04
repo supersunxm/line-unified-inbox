@@ -120,6 +120,37 @@ test("real database: append-only evidence, sales independence, exact scope, stal
     assert.equal(disabledResult.counts.LIVE_MIRROR_HEALTH_DEGRADED, 1, "a disabled OA after preflight aborts before row consideration");
     assert.equal(await db.nicknameSourceApplication.count({ where: { conversationId: conversation.id } }), 1);
     await db.lineChatMirrorStoreState.update({ where: { lineOfficialAccountId: oas[143].id }, data: { enabled: true } });
+    const inactiveDuringBatch = db.$extends({ query: { lineChatMirrorStoreState: {
+      async findMany({ args, query }) {
+        const initialHealth = await query(args);
+        if (args.where?.enabled === true) await db.lineOfficialAccount.update({
+          where: { id: oas[143].id }, data: { isActive: false },
+        });
+        return initialHealth;
+      },
+    } } });
+    const scopeGuardedMapping = new NicknameSourceMappingService(inactiveDuringBatch as unknown as PrismaService);
+    const inactiveResult = await scopeGuardedMapping.processManifest(manifest, digest, true);
+    assert.equal(inactiveResult.counts.SCOPE_CHANGED, 1, "a non-target OA becoming inactive after preflight aborts the batch despite a successful health row");
+    assert.equal(await db.nicknameSourceApplication.count({ where: { conversationId: conversation.id } }), 1);
+    await db.lineOfficialAccount.update({ where: { id: oas[143].id }, data: { isActive: true } });
+    const replacementOaId = `${prefix}-replacement-oa`;
+    const reassignedDuringBatch = db.$extends({ query: { lineChatMirrorStoreState: {
+      async findMany({ args, query }) {
+        const initialHealth = await query(args);
+        if (args.where?.enabled === true) {
+          await db.lineOfficialAccount.update({ where: { id: oas[143].id }, data: { isActive: false } });
+          await db.lineOfficialAccount.create({ data: { id: replacementOaId, storeId: stores[143].id,
+            name: "Synthetic replacement OA", basicId: `@${prefix}-replacement`, webhookKey: `${prefix}-replacement-webhook` } });
+        }
+        return initialHealth;
+      },
+    } } });
+    const reassignedResult = await new NicknameSourceMappingService(reassignedDuringBatch as unknown as PrismaService).processManifest(manifest, digest, true);
+    assert.equal(reassignedResult.counts.SCOPE_CHANGED, 1, "a changed OA set aborts even when the eligible denominator remains 144");
+    assert.equal(await db.nicknameSourceApplication.count({ where: { conversationId: conversation.id } }), 1);
+    await db.lineOfficialAccount.update({ where: { id: replacementOaId }, data: { isActive: false } });
+    await db.lineOfficialAccount.update({ where: { id: oas[143].id }, data: { isActive: true } });
     await db.lineChatMirrorStoreState.update({ where: { lineOfficialAccountId: oas[0].id }, data: { status: "PARTIAL" } });
     await assert.rejects(mapping.processManifest(manifest, digest, true), /LIVE_MIRROR_HEALTH_GATE_FAILED/);
     const observation = await db.nicknameSourceObservation.findFirstOrThrow({ where: { lineOfficialAccountId: oas[0].id } });
