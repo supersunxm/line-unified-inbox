@@ -6172,3 +6172,12 @@ Live worker continues independently at 146 configured unique active OA identitie
 - Self-review found that per-row health checked only unhealthy present/enabled states; a missing or disabled state after initial preflight could evade that check. Require exactly 144 healthy enabled states before every row. Added a real-database race fixture disabling a non-target OA after preflight; no Source write is permitted.
 - Validation passes: source/database/discovery regression command 52/52 with zero skips, touched ESLint, production backend build and diff check. The observer's first normal Railway worker/frontend deployments are successful; backend is queued.
 - Next: validate and deliver this narrowly scoped safety repair through CI, then await natural passive coverage and audit/quality gates. No forced cycles or Manager writes.
+
+## 2026-10-04 — Source acceptance deep-link repair
+- PR #458 passed required CI and merged as `a64c9fae`; all three services deployed successfully and the exact additive migration is applied. Worker audit/auth/method gates and backend health/readiness pass. Source writes remain zero while natural passive fleet coverage accumulates.
+- Exact production legacy record is present in worker/backend and its API responds successfully, but the desktop detail pane is absent when the destination is outside the current list page. Root cause: detail state came only from paginated list entries despite an exact API route lookup.
+- Reuse exact API state only when its conversation ID matches the selected destination; retain existing listed/optimistic state priority. No display-name matching, data mutations or sales/reply behavior changes. Add identity-mismatch/off-page routing regression and CI coverage.
+- Validation: frontend 755 passed/one existing skip; touched lint has zero errors and the same 17 existing page warnings; production build passes after replacing a temporary dependency symlink rejected by Turbopack. Actual local API/route test with 45 newer synthetic conversations proves page-one exclusion, exact destination, Source=Facebook and HTTP 200 for list/detail/chat route.
+- Next: validate, CI and deploy the fix, then retest the exact off-page production record and independent Source display.
+
+- Delivery update: PR #460 passed all five required checks and merged as `34e14fbb`. Verified Railway worker/backend watch patterns exclude that UI-only change; Mirror remains uninterrupted. Reconciled the Source fleet gate repair with this new main; required CI must pass again before cooldown merge.

@@ -21,7 +21,7 @@ import { mapRealtimeMessage, subscribeToRealtimeEvents } from "./realtime";
 import { isValidCanonicalWebhookUrl } from "./webhook-url";
 import { openLineOaManager } from "./line-oa-manager";
 import { getStoreGoogleMapsReadiness, type GoogleMapsReadinessStatus } from "@/lib/template-variable-resolver";
-import { buildChatsHref, readChatRouteFilters, resolveSelectedConversation, resolveSelectedConversationId, type ConversationRouteLookupStatus } from "./workspace-routing";
+import { buildChatsHref, readChatRouteFilters, resolveSelectedConversation, resolveSelectedConversationId, resolveSelectedConversationState, type ConversationRouteLookupStatus } from "./workspace-routing";
 import { FollowerInsightsView } from "./follower-insights/follower-insights-view";
 import { followerInsightsTranslations } from "./follower-insights/follower-insights-translations";
 import { getInclusiveCalendarDays } from "./follower-insights/follower-insights-utils";
@@ -2289,7 +2289,11 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
     [filteredConversations, selectedApiConversation, selectedConversationId],
   );
   const selectedConversationState = selectedConversation
-    ? conversationStates[selectedConversation.id]
+    ? resolveSelectedConversationState({
+      selectedConversationId: selectedConversation.id, listedStates: conversationStates,
+      routeConversationId: selectedApiConversation?.id,
+      routeState: selectedApiConversation ? mapApiConversationState(selectedApiConversation) : undefined,
+    })
     : undefined;
   useEffect(() => {
     if (!selectedConversation || selectedConversation.id === selectedConversationId) return;
