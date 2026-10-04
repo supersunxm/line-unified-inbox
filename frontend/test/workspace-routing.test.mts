@@ -1,9 +1,22 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { buildChatsHref, readChatRouteFilters, resolveSelectedConversation, resolveSelectedConversationId } from "../src/app/workspace-routing.ts";
+import { buildChatsHref, readChatRouteFilters, resolveSelectedConversation, resolveSelectedConversationId, resolveSelectedConversationState } from "../src/app/workspace-routing.ts";
 
 const page = readFileSync(new URL("../src/app/page.tsx", import.meta.url), "utf8");
+
+test("off-page deep links render exact API state without borrowing another customer's state", () => {
+  type DetailState = { sourceTag: string | null; onlineSource: string | null; note: string };
+  const routeState: DetailState = { sourceTag: "Facebook", onlineSource: "TikTok", note: "" };
+  const listedState: DetailState = { sourceTag: null, onlineSource: null, note: "Local edit" };
+  assert.equal(resolveSelectedConversationState({ selectedConversationId: "off-page",
+    listedStates: { listed: listedState }, routeConversationId: "off-page", routeState }), routeState);
+  assert.equal(resolveSelectedConversationState({ selectedConversationId: "listed",
+    listedStates: { listed: listedState }, routeConversationId: "listed", routeState }), listedState);
+  assert.equal(resolveSelectedConversationState({ selectedConversationId: "off-page",
+    listedStates: { listed: listedState }, routeConversationId: "different-customer", routeState }), undefined);
+  assert.equal(resolveSelectedConversationState({ selectedConversationId: "off-page", listedStates: {} }), undefined);
+});
 
 test("chat filter URLs are shareable and restorable", () => {
   const href = buildChatsHref({ store: "store-1", status: "follow-up", priority: "high", topic: "pricing" });

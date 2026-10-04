@@ -203,7 +203,7 @@ jobs:
         run: node --test --experimental-strip-types test/store-chats-media-parity.test.mts
 
       - name: Independent nickname Source badge regression tests
-        run: node --test --experimental-strip-types test/nickname-source-badge.test.mts
+        run: node --test --experimental-strip-types test/nickname-source-badge.test.mts test/workspace-routing.test.mts
 
       - name: Canonical Store ID export regression tests
         run: node --test --experimental-strip-types test/canonical-store-id-export.test.mts
