@@ -2872,6 +2872,7 @@ model NicknameSourceCapture {
   completedAt DateTime @default(now())
   chatCount Int
   coverage String
+  ruleVersion String @default("manager-source-v1")
   profileKey String?
   durationMs Int
   observations NicknameSourceObservation[]

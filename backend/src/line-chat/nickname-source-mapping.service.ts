@@ -52,7 +52,7 @@ export class NicknameSourceMappingService {
       await tx.$executeRaw`SET TRANSACTION READ ONLY`;
       const scope = await resolveConfiguredMirrorFleetScope(tx, configuredLineChatMirrorStoreCodes());
       const ids = scope.eligibleOaIds;
-      const captures = await tx.nicknameSourceCapture.findMany({ where: { lineOfficialAccountId: { in: ids }, observedAt: { gte: since } }, select: { lineOfficialAccountId: true, coverage: true, observedAt: true, durationMs: true, profileKey: true } });
+      const captures = await tx.nicknameSourceCapture.findMany({ where: { lineOfficialAccountId: { in: ids }, observedAt: { gte: since }, ruleVersion: NICKNAME_SOURCE_RULE_VERSION }, select: { lineOfficialAccountId: true, coverage: true, observedAt: true, durationMs: true, profileKey: true } });
       const observations = ids.length ? await tx.$queryRaw<Array<{
         id: string; storeId: string; lineOfficialAccountId: string; lineChatUserId: string; conversationId: string | null;
         nickname: string | null; nicknameReadStatus: string; observedAt: Date; parsedTag: string | null; ruleId: string | null;
@@ -93,7 +93,7 @@ export class NicknameSourceMappingService {
         profileCoverage: Object.fromEntries(["A", "B", "UNKNOWN"].map(key => [key,
           new Set(captures.filter(c => (c.profileKey ?? "UNKNOWN") === key).map(c => c.lineOfficialAccountId)).size])),
         coverage: "BOUNDED_RECENT_MANAGER_WINDOW", ruleVersion: NICKNAME_SOURCE_RULE_VERSION,
-        captureCount: captures.length, maxCapturePersistenceMs: Math.max(0, ...captures.map(c => c.durationMs)), incrementalProfileMs: 0,
+        captureCount: captures.length, maxCapturePreparationMs: Math.max(0, ...captures.map(c => c.durationMs)), incrementalProfileMs: 0,
       };
       return { report, rows };
     }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead, timeout: 20000 });
@@ -128,12 +128,11 @@ export class NicknameSourceMappingService {
     for (const row of manifest.rows.slice(offset, offset + limit)) {
       const result = await this.prisma.$transaction(async tx => {
         if (!apply) await tx.$executeRaw`SET TRANSACTION READ ONLY`;
-        const unhealthy = await tx.lineChatMirrorStoreState.count({ where: { enabled: true,
-          lineOfficialAccountId: { in: scope.eligibleOaIds }, OR: [
-            { status: { notIn: ["SUCCESS", "RUNNING"] } }, { lastSuccessfulSyncAt: null },
-            { lastSuccessfulSyncAt: { lt: new Date(Date.now() - 7200000) } },
-          ] } });
-        if (unhealthy) return "LIVE_MIRROR_HEALTH_DEGRADED";
+        const healthy = await tx.lineChatMirrorStoreState.count({ where: { enabled: true,
+          lineOfficialAccountId: { in: scope.eligibleOaIds }, status: { in: ["SUCCESS", "RUNNING"] },
+          lastSuccessfulSyncAt: { gte: new Date(Date.now() - 7200000) },
+        } });
+        if (healthy !== 144) return "LIVE_MIRROR_HEALTH_DEGRADED";
         const oa = await tx.lineOfficialAccount.findFirst({ where: { id: row.lineOfficialAccountId, storeId: row.storeId,
           isActive: true, archivedAt: null, store: { isActive: true, archivedAt: null } }, select: { id: true } });
         if (!oa) return "SCOPE_CHANGED";

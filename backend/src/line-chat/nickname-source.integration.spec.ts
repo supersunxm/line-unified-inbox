@@ -39,6 +39,10 @@ test("real database: append-only evidence, sales independence, exact scope, stal
     assert.equal(await db.nicknameSourceState.count({ where: { conversationId: conversation.id } }), 0, "no backfill from onlineSource");
     const snapshot: NicknameSnapshot = { storeId: stores[0].id, lineOfficialAccountId: oas[0].id, observedAt: first,
       coverage: "BOUNDED_RECENT", chats: [{ chatUserId: chatId, managerNickname: "Facebook 09/26", managerNicknameReadStatus: "READ" }] };
+    await db.nicknameSourceCapture.create({ data: { id: evidenceHash(prefix + "legacy-v1"), storeId: stores[143].id,
+      lineOfficialAccountId: oas[143].id, observedAt: first, chatCount: 0, coverage: "BOUNDED_RECENT", durationMs: 0,
+      ruleVersion: "manager-source-v1" } });
+    assert.equal((await mapping.audit(since)).report.scannedOas, 0, "an old-rule checkpoint cannot satisfy current-rule fleet coverage");
     for (let i = 0; i < 144; i++) await observer.capture(i === 0 ? snapshot : { ...snapshot, storeId: stores[i].id, lineOfficialAccountId: oas[i].id, chats: [] });
     await observer.capture(snapshot);
     assert.equal(await db.nicknameSourceObservation.count({ where: { lineOfficialAccountId: oas[0].id } }), 1);
@@ -102,6 +106,20 @@ test("real database: append-only evidence, sales independence, exact scope, stal
       lineOfficialAccountId: oas[0].id, latestMessageAt: first, lineChatUserId: chatId } });
     assert.equal((await mapping.audit(since)).report.classifications.IDENTITY_CONFLICT, 1);
     assert.equal((await mapping.processManifest(manifest, digest, false)).counts.IDENTITY_CONFLICT, 1);
+    const disabledDuringBatch = db.$extends({ query: { lineChatMirrorStoreState: {
+      async findMany({ args, query }) {
+        const initialHealth = await query(args);
+        if (args.where?.enabled === true) await db.lineChatMirrorStoreState.update({
+          where: { lineOfficialAccountId: oas[143].id }, data: { enabled: false },
+        });
+        return initialHealth;
+      },
+    } } });
+    const guardedMapping = new NicknameSourceMappingService(disabledDuringBatch as unknown as PrismaService);
+    const disabledResult = await guardedMapping.processManifest(manifest, digest, true);
+    assert.equal(disabledResult.counts.LIVE_MIRROR_HEALTH_DEGRADED, 1, "a disabled OA after preflight aborts before row consideration");
+    assert.equal(await db.nicknameSourceApplication.count({ where: { conversationId: conversation.id } }), 1);
+    await db.lineChatMirrorStoreState.update({ where: { lineOfficialAccountId: oas[143].id }, data: { enabled: true } });
     await db.lineChatMirrorStoreState.update({ where: { lineOfficialAccountId: oas[0].id }, data: { status: "PARTIAL" } });
     await assert.rejects(mapping.processManifest(manifest, digest, true), /LIVE_MIRROR_HEALTH_GATE_FAILED/);
     const observation = await db.nicknameSourceObservation.findFirstOrThrow({ where: { lineOfficialAccountId: oas[0].id } });
