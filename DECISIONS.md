@@ -3178,3 +3178,6 @@ The 13-row outbound text preflight is admitted only by its immutable SHA-256 (`a
 - Capture explicit profile.nickname during existing Manager reads; retain profile.name for existing display-name/identity behavior. Persist only during cooldown and acquire no additional browser/profile lease. Nickname-only duplicate-page differences are held without changing Mirror health semantics.
 - Freeze exact source/date parsing as manager-source-v1; hold unsupported/ambiguous/unreadable or conflicting identity evidence without clearing the last proven Tag. Initial linking is exact DIRECT only.
 - Source writes require immutable file/row-set hashes, bounded manifest-only batches, normal 144-OA health, SERIALIZABLE identity/previous-Tag checks, and a fresh authoritative passive observation after manifest freeze. No auto-apply scheduler; production quality/canary acceptance is a separate required gate.
+
+## 2026-10-04 — Bind each Source write to the current fleet
+A successful Mirror health row does not prove that its OA is still part of the current eligible fleet. Re-resolve the existing fleet in each Source row transaction, compare actual OA membership and unexpected active Store scope with preflight, and abort on change. This adds only bounded database reads; browser leases, normal scheduling and the authoritative 144-OA configuration stay unchanged.

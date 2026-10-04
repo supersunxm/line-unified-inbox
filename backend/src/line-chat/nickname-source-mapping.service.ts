@@ -133,6 +133,10 @@ export class NicknameSourceMappingService {
           lastSuccessfulSyncAt: { gte: new Date(Date.now() - 7200000) },
         } });
         if (healthy !== 144) return "LIVE_MIRROR_HEALTH_DEGRADED";
+        const currentScope = await resolveConfiguredMirrorFleetScope(tx, configuredLineChatMirrorStoreCodes());
+        if (currentScope.eligibleOaIds.length !== 144
+          || currentScope.eligibleOaIds.some(id => !scope.eligibleOaIds.includes(id))
+          || currentScope.unconfiguredActiveStoreCodes.slice().sort().join("\n") !== scope.unconfiguredActiveStoreCodes.slice().sort().join("\n")) return "SCOPE_CHANGED";
         const oa = await tx.lineOfficialAccount.findFirst({ where: { id: row.lineOfficialAccountId, storeId: row.storeId,
           isActive: true, archivedAt: null, store: { isActive: true, archivedAt: null } }, select: { id: true } });
         if (!oa) return "SCOPE_CHANGED";
