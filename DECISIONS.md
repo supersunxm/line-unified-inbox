@@ -1,3 +1,7 @@
+## 2026-10-04 — Diagnose transport before changing retries
+
+An HTTP-200 chat-list rejection can originate from browser body retrieval, non-JSON content, or invalid envelope parsing. Distinguish those with fixed enums and media-type categories, without persisting raw response or exception content. Authentication observations expose only outcome, status, and transport enums. Keep normal discovery behavior fail-closed and retain the exact 19-target scope until evidence supports a bounded repair.
+
 # 2026-10-04: Mirror fleet ownership includes background nickname discovery
 
 The existing per-profile lease prevents simultaneous profile opening, but background recent mapping resolution could acquire the lease between stores in the same scheduled fleet cycle. Respect the existing fleet-active/cooldown signals before queue work and recheck after asynchronous lease acquisition. Do not change fleet configuration or mask contention with longer timeouts. Rejected chat-list responses remain failures; emit only fixed field types so a changed remote contract can be distinguished from malformed/error responses without logging customer or session data.

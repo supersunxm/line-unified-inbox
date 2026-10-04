@@ -5,7 +5,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import type { BrowserContext } from "playwright";
 import { LineChatSessionService, type ContextLauncher } from "./line-chat-session.service";
-import { isLineChatUserId, parseLineChatListResponse, rejectedChatListEnvelopeShape } from "./line-chat-chat-discovery";
+import { isLineChatUserId, parseLineChatListResponse, rejectedChatListEnvelopeShape, chatListBodyReadFailureCode, recentDiscoveryFailureCode } from "./line-chat-chat-discovery";
 
 test("rejected envelope diagnostics contain only fixed types", () => {
   const secret = "DO_NOT_LOG_REMOTE_DATA";
@@ -706,4 +706,48 @@ test("known chat ID matching returns flags only and never retains the supplied v
   }, knownChatId);
   assert.deepEqual(notFound?.knownChatIdMatch, { chatId: "NOT_FOUND", userId: "NOT_FOUND" });
   assert.ok(!JSON.stringify(notFound).includes(knownChatId));
+});
+
+test("body-read diagnostics distinguish failures without echoing exception data", () => {
+  const secret = "PRIVATE_TEST_VALUE";
+  const cases: Array<[unknown, string]> = [
+    [new SyntaxError(secret), "NON_JSON_RESPONSE"],
+    [new Error(`Protocol error Network.getResponseBody: No resource with given identifier ${secret}`), "BROWSER_BODY_UNAVAILABLE"],
+    [new Error(`Target page, context or browser has been closed ${secret}`), "BROWSER_CONTEXT_CLOSED"],
+    [new Error(`Timeout ${secret}`), "BODY_READ_TIMEOUT"],
+    [new Error(secret), "BODY_READ_FAILED"],
+    [secret, "BODY_READ_FAILED"],
+  ];
+  for (const [error, expected] of cases) {
+    assert.equal(chatListBodyReadFailureCode(error), expected);
+    assert.equal(chatListBodyReadFailureCode(error).includes(secret), false);
+  }
+  assert.equal(recentDiscoveryFailureCode(`HTTP 403 ${secret}`), "REMOTE_AUTH_REJECTED");
+  assert.equal(recentDiscoveryFailureCode(`HTTP 503 ${secret}`), "REMOTE_HTTP_ERROR");
+  assert.equal(recentDiscoveryFailureCode("natural GET was not observed"), "NATURAL_REQUEST_NOT_OBSERVED");
+  assert.equal(recentDiscoveryFailureCode("response was not observed"), "NATURAL_RESPONSE_NOT_OBSERVED");
+  assert.equal(recentDiscoveryFailureCode("response parsing timed out"), "RESPONSE_TIMEOUT");
+  assert.equal(recentDiscoveryFailureCode("response was not JSON"), "RESPONSE_BODY_READ_FAILED");
+  assert.equal(recentDiscoveryFailureCode("unsupported or malformed envelope"), "RESPONSE_ENVELOPE_REJECTED");
+  assert.equal(recentDiscoveryFailureCode(secret), "DISCOVERY_FAILED_WITHOUT_SAFE_SUBTYPE");
+});
+
+test("body-read failure logging excludes cookies, owner tokens and raw errors", async () => {
+  const secret = "PRIVATE_TEST_VALUE";
+  const records: string[] = [];
+  const service = new LineChatSessionService();
+  Object.defineProperty(service, "logger", { value: { warn: (record: string) => records.push(record) } });
+  const internals = service as unknown as {
+    readJsonResponse: (response: { json: () => Promise<unknown>; headers: () => Record<string, string> }, context: unknown) => Promise<{ ok: boolean }>;
+  };
+  const result = await internals.readJsonResponse({
+    json: async () => { throw new Error(`No resource with given identifier ${secret}`); },
+    headers: () => ({ "content-type": "application/json", "set-cookie": secret }),
+  }, { sessionId: "session-safe", operationKind: "MIRROR_SYNC", ownerToken: secret });
+  assert.equal(result.ok, false);
+  assert.equal(JSON.stringify(records).includes(secret), false);
+  assert.deepEqual(JSON.parse(records[0]), {
+    event: "line_chat_chat_list_body_read_failed", sessionId: "session-safe", operationKind: "MIRROR_SYNC",
+    failureCode: "BROWSER_BODY_UNAVAILABLE", responseFormat: "JSON",
+  });
 });

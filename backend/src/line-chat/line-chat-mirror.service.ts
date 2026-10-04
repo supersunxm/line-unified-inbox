@@ -25,6 +25,7 @@ import {
   runIndependently,
 } from "./line-chat-historical-backfill";
 import { LineChatProfileOperationCoordinator } from "./line-chat-profile-operation-coordinator.service";
+import { recentDiscoveryFailureCode } from "./line-chat-chat-discovery";
 import { LineChatSessionService } from "./line-chat-session.service";
 import { selectLineChatStoreOa, type LineChatStoreOaSelection } from "./line-chat-store-oa-selector";
 import { liveMirrorTargetCacheKey, readLiveMirrorAccountOverride, type LiveMirrorAccountOverride } from "./line-chat-live-account-override";
@@ -1491,6 +1492,16 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
               else diagnostics.redirectsWithoutBotId += 1;
             } else {
               diagnostics.authenticationNotConfirmed += 1;
+              this.logger.warn(JSON.stringify({
+                event: "line_chat_mirror_auth_unconfirmed",
+                storeCode: input.storeCode,
+                sessionId: session.id,
+                profile: session.sessionKey,
+                outcome: auth.outcome,
+                attempts: auth.attempts,
+                httpStatuses: auth.observations.map((observation) => observation.status ?? null),
+                transports: auth.observations.map((observation) => observation.transport ?? "UNKNOWN"),
+              }));
             }
           } finally {
             if (context) {
@@ -1508,6 +1519,7 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
             headless: true,
             maxPages: 1,
             maxChats: 5,
+            includeTransportMetadata: true,
             operationContext,
           });
           operationContext.assertOwnership();
@@ -1517,6 +1529,10 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
               event: "line_chat_mirror_target_candidate_rejected",
               ...(input.storeCode ? { storeCode: input.storeCode } : {}),
               reason: `RECENT_DISCOVERY_${verification.failureReason ?? "FAILED"}`,
+              failureCode: recentDiscoveryFailureCode(verification.failureDetail),
+              httpStatus: verification.recentChatHttpStatus ?? null,
+              requestObserved: verification.chatListRequestObserved ?? false,
+              envelopeValid: verification.responseStructureValid ?? false,
               botIdMasked: `${resolvedBotId.slice(0, 4)}...${resolvedBotId.slice(-4)}`,
             }));
             return null;

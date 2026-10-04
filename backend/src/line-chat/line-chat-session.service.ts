@@ -20,7 +20,7 @@ import type {
   LineChatRecentDiscoveryResult,
   ObservedRequestSummary,
 } from "./line-chat.types";
-import { parseLineChatListPage, rejectedChatListEnvelopeShape } from "./line-chat-chat-discovery";
+import { parseLineChatListPage, rejectedChatListEnvelopeShape, chatListBodyReadFailureCode } from "./line-chat-chat-discovery";
 import {
   diagnosticResponseParseFailure,
   isChatLineOrigin,
@@ -1297,7 +1297,7 @@ export class LineChatSessionService implements OnModuleDestroy {
       }
 
       const firstPageBody = await this.withTimeout(
-        this.readJsonResponse(firstResponse.response),
+        this.readJsonResponse(firstResponse.response, input.operationContext),
         remainingTimeMs(20_000),
       );
       if (!firstPageBody) {
@@ -1430,7 +1430,7 @@ export class LineChatSessionService implements OnModuleDestroy {
           break;
         }
         const body = await this.withTimeout(
-          this.readJsonResponse(response),
+          this.readJsonResponse(response, input.operationContext),
           remainingTimeMs(20_000),
         );
         if (!body) {
@@ -1537,10 +1537,22 @@ export class LineChatSessionService implements OnModuleDestroy {
     }
   }
 
-  private async readJsonResponse(response: { json: () => Promise<unknown> }): Promise<{ ok: true; body: unknown } | { ok: false; error: string }> {
+  private async readJsonResponse(response: { json: () => Promise<unknown>; headers?: () => Record<string, string> }, operationContext?: import("./line-chat-profile-operation-coordinator.service").LineChatProfileOperationContext): Promise<{ ok: true; body: unknown } | { ok: false; error: string }> {
     try {
       return { ok: true, body: await response.json() };
-    } catch {
+    } catch (error: unknown) {
+      let responseFormat = "UNKNOWN";
+      try {
+        const mediaType = response.headers?.()["content-type"]?.split(";")[0]?.trim().toLowerCase();
+        responseFormat = mediaType === "application/json" ? "JSON" : mediaType === "text/html" ? "HTML" : mediaType ? "OTHER" : "UNKNOWN";
+      } catch { /* A disposed response may not expose headers either. */ }
+      this.logger.warn(JSON.stringify({
+        event: "line_chat_chat_list_body_read_failed",
+        sessionId: operationContext?.sessionId,
+        operationKind: operationContext?.operationKind,
+        failureCode: chatListBodyReadFailureCode(error),
+        responseFormat,
+      }));
       return { ok: false, error: "LINE OA Manager chat-list response was not JSON" };
     }
   }
