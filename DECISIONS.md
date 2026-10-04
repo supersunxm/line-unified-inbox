@@ -3181,3 +3181,13 @@ The 13-row outbound text preflight is admitted only by its immutable SHA-256 (`a
 
 ## 2026-10-04 — Bind each Source write to the current fleet
 A successful Mirror health row does not prove that its OA is still part of the current eligible fleet. Re-resolve the existing fleet in each Source row transaction, compare actual OA membership and unexpected active Store scope with preflight, and abort on change. This adds only bounded database reads; browser leases, normal scheduling and the authoritative 144-OA configuration stay unchanged.
+
+## 2026-10-04 — Supersede nickname rules before production writes
+- `manager-source-v2` supersedes v1 before any Source Tag application. ASCII aliases avoid Unicode case-fold lookalikes; exact source/month-year grammar and six canonical Tags remain explicit. Preserve v1 observations unchanged.
+- Version passive OA checkpoints as well as individual observations so coverage cannot mix rule versions. Require fresh v2 evidence for all 144 eligible OAs and post-manifest nickname evidence before applying a candidate.
+- Hold unreadable nicknames and non-direct identities; do not infer links or source metadata from display names or existing onlineSource. An audit covers the existing bounded recent Manager window, not unobserved older chats.
+- Keep capture passive on normal Mirror reads. The first v2 normal cycle measured 6.17 seconds total database persistence, 161 milliseconds maximum per OA, and zero added profile occupancy. No independent scan or automatic source-write scheduler is justified.
+
+## 2026-10-05 — Persist operator evidence and hold on real authentication failure
+- A worker's generic /data directory is not necessarily persistent. Verify the actual volume mount, fsync immutable files there, and preserve independently hash-verified local backups. Original files may be recovered only when full file and canonical row-set digests prove identical bytes; otherwise create a new version and require its new freshness gate.
+- Keep Source writes blocked when the authoritative 144-OA Mirror gate fails, even with an otherwise complete read-only audit. Existing remembered-account recovery may run during cooldown under the existing lease mechanism, without initializing another Mirror cycle; QR/password/OTP challenges require the owner. No healthy-fleet result is inferred from profile B's 51 successes.
