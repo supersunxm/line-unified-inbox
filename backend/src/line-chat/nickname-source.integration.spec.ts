@@ -102,6 +102,20 @@ test("real database: append-only evidence, sales independence, exact scope, stal
       lineOfficialAccountId: oas[0].id, latestMessageAt: first, lineChatUserId: chatId } });
     assert.equal((await mapping.audit(since)).report.classifications.IDENTITY_CONFLICT, 1);
     assert.equal((await mapping.processManifest(manifest, digest, false)).counts.IDENTITY_CONFLICT, 1);
+    const disabledDuringBatch = db.$extends({ query: { lineChatMirrorStoreState: {
+      async findMany({ args, query }) {
+        const initialHealth = await query(args);
+        if (args.where?.enabled === true) await db.lineChatMirrorStoreState.update({
+          where: { lineOfficialAccountId: oas[143].id }, data: { enabled: false },
+        });
+        return initialHealth;
+      },
+    } } });
+    const guardedMapping = new NicknameSourceMappingService(disabledDuringBatch as unknown as PrismaService);
+    const disabledResult = await guardedMapping.processManifest(manifest, digest, true);
+    assert.equal(disabledResult.counts.LIVE_MIRROR_HEALTH_DEGRADED, 1, "a disabled OA after preflight aborts before row consideration");
+    assert.equal(await db.nicknameSourceApplication.count({ where: { conversationId: conversation.id } }), 1);
+    await db.lineChatMirrorStoreState.update({ where: { lineOfficialAccountId: oas[143].id }, data: { enabled: true } });
     await db.lineChatMirrorStoreState.update({ where: { lineOfficialAccountId: oas[0].id }, data: { status: "PARTIAL" } });
     await assert.rejects(mapping.processManifest(manifest, digest, true), /LIVE_MIRROR_HEALTH_GATE_FAILED/);
     const observation = await db.nicknameSourceObservation.findFirstOrThrow({ where: { lineOfficialAccountId: oas[0].id } });

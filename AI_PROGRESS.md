@@ -6165,3 +6165,10 @@ Live worker continues independently at 146 configured unique active OA identitie
 - Final clean-database CI regression command passes 52/52 with zero skips; frontend passes 754/755 with one existing skip. Backend and frontend production builds pass. Local backend health/readiness return 200, unauthorized requests 401; authenticated canonical/mobile APIs return separate Source metadata. Worker audit returns 200 with synthetic 144/144 coverage and zero unexplained; unauthorized audit is 401 and POST is 405.
 - Desktop and mobile browser acceptance with a synthetic session show exactly one visible Source badge, no horizontal overflow or browser errors. Fixed a mobile layout collision found during visual review. No real Manager profile was opened for these checks.
 - Production has not been changed in this implementation phase. Next: publish the reviewed PR, require CI, merge and normal Railway delivery, then first actual 144-OA read-only nickname audit and quality/canary gates.
+
+## 2026-10-04 — Source apply fleet gate self-review
+- PR #458 merged after all seven checks passed as `a64c9fae`; its exact additive migration applied without other migrations or existing row updates. Normal Railway rollout is in progress; Source Tag writes remain zero.
+- Latest pre-observer NORMAL cycle completed at 13:02 UTC: 144/144 SUCCESS, zero partial/failed, profiles A=93/B=51.
+- Self-review found that per-row health checked only unhealthy present/enabled states; a missing or disabled state after initial preflight could evade that check. Require exactly 144 healthy enabled states before every row. Added a real-database race fixture disabling a non-target OA after preflight; no Source write is permitted.
+- Validation passes: source/database/discovery regression command 52/52 with zero skips, touched ESLint, production backend build and diff check. The observer's first normal Railway worker/frontend deployments are successful; backend is queued.
+- Next: validate and deliver this narrowly scoped safety repair through CI, then await natural passive coverage and audit/quality gates. No forced cycles or Manager writes.

@@ -128,12 +128,11 @@ export class NicknameSourceMappingService {
     for (const row of manifest.rows.slice(offset, offset + limit)) {
       const result = await this.prisma.$transaction(async tx => {
         if (!apply) await tx.$executeRaw`SET TRANSACTION READ ONLY`;
-        const unhealthy = await tx.lineChatMirrorStoreState.count({ where: { enabled: true,
-          lineOfficialAccountId: { in: scope.eligibleOaIds }, OR: [
-            { status: { notIn: ["SUCCESS", "RUNNING"] } }, { lastSuccessfulSyncAt: null },
-            { lastSuccessfulSyncAt: { lt: new Date(Date.now() - 7200000) } },
-          ] } });
-        if (unhealthy) return "LIVE_MIRROR_HEALTH_DEGRADED";
+        const healthy = await tx.lineChatMirrorStoreState.count({ where: { enabled: true,
+          lineOfficialAccountId: { in: scope.eligibleOaIds }, status: { in: ["SUCCESS", "RUNNING"] },
+          lastSuccessfulSyncAt: { gte: new Date(Date.now() - 7200000) },
+        } });
+        if (healthy !== 144) return "LIVE_MIRROR_HEALTH_DEGRADED";
         const oa = await tx.lineOfficialAccount.findFirst({ where: { id: row.lineOfficialAccountId, storeId: row.storeId,
           isActive: true, archivedAt: null, store: { isActive: true, archivedAt: null } }, select: { id: true } });
         if (!oa) return "SCOPE_CHANGED";
