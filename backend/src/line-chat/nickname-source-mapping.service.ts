@@ -93,7 +93,7 @@ export class NicknameSourceMappingService {
         profileCoverage: Object.fromEntries(["A", "B", "UNKNOWN"].map(key => [key,
           new Set(captures.filter(c => (c.profileKey ?? "UNKNOWN") === key).map(c => c.lineOfficialAccountId)).size])),
         coverage: "BOUNDED_RECENT_MANAGER_WINDOW", ruleVersion: NICKNAME_SOURCE_RULE_VERSION,
-        captureCount: captures.length, maxCapturePersistenceMs: Math.max(0, ...captures.map(c => c.durationMs)), incrementalProfileMs: 0,
+        captureCount: captures.length, maxCapturePreparationMs: Math.max(0, ...captures.map(c => c.durationMs)), incrementalProfileMs: 0,
       };
       return { report, rows };
     }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead, timeout: 20000 });

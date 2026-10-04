@@ -6181,3 +6181,4 @@ Live worker continues independently at 146 configured unique active OA identitie
 - Next: validate, CI and deploy the fix, then retest the exact off-page production record and independent Source display.
 
 - Delivery update: PR #460 passed all five required checks and merged as `34e14fbb`. Verified Railway worker/backend watch patterns exclude that UI-only change; Mirror remains uninterrupted. Reconciled the Source fleet gate repair with this new main; required CI must pass again before cooldown merge.
+- Self-review corrected the audit duration label to maxCapturePreparationMs: immutable checkpoints measure preparation before inserts, while completion logs measure full persistence through commit. Actual rollout cost will use completion logs, avoiding an understated duration claim.
