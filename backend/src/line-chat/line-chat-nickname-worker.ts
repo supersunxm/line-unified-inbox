@@ -1,3 +1,4 @@
+import { handleMirrorDirectUrlRoute } from "./mirror-direct-url-route";
 import { NicknameSourceMappingService } from "./nickname-source-mapping.service";
 import { handleNicknameSourceAudit } from "./nickname-source-audit-route";
 import "reflect-metadata";
@@ -220,6 +221,17 @@ async function bootstrap() {
 
       if (!internalSecret || !matchesLineChatWorkerSecret(request.headers["x-line-chat-internal-secret"], internalSecret)) {
         writeJson(response, 401, { success: false, error: "UNAUTHORIZED" });
+        return;
+      }
+
+      const directUrlResponse = await handleMirrorDirectUrlRoute({
+        pathname: requestUrl.pathname, method: request.method,
+        conversationId: requestUrl.searchParams.get("conversationId"),
+        receivedSecret: request.headers["x-line-chat-internal-secret"], expectedSecret: internalSecret,
+        service: mirrorService,
+      });
+      if (directUrlResponse) {
+        writeJson(response, directUrlResponse.statusCode, directUrlResponse.body);
         return;
       }
 

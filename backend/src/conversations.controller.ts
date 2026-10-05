@@ -10,6 +10,7 @@ import { FOCUS_STORE_GROUP_ID } from "./focus-store-group";
 import { loadLatestManagerUrls, resolveLineOaManagerUrl } from "./store-master/line-oa-manager-url";
 import { LineChatRecentResolverService } from "./line-chat/line-chat-recent-resolver.service";
 import { ReplyStateShadowService } from "./reply-state-shadow.service";
+import { fetchCachedMirrorDirectUrl } from "./line-chat/mirror-direct-url";
 import type { LineChatDiscoveredChat } from "./line-chat/line-chat.types";
 
 const LINE_CHAT_USER_ID_PATTERN = /^U[0-9a-f]{32}$/iu;
@@ -206,14 +207,17 @@ export class ConversationsController {
     const conversation = await this.prisma.conversation.findUnique({
       where: { id },
       select: {
+        storeId: true,
+        lineOfficialAccountId: true,
         lineChatUserId: true,
         lineOfficialAccount: { select: { chatBotId: true } },
       },
     });
-    const url = buildDirectLineOaManagerUrl(
+    const storedUrl = buildDirectLineOaManagerUrl(
       conversation?.lineOfficialAccount.chatBotId,
       conversation?.lineChatUserId,
     );
+    const url = storedUrl ?? (conversation ? await fetchCachedMirrorDirectUrl(id, conversation) : null);
     return { url, direct: Boolean(url) };
   }
   @Get(":id/open-line-oa-manager")
@@ -223,6 +227,7 @@ export class ConversationsController {
     const conversation = await this.prisma.conversation.findUnique({
       where: { id },
       select: {
+        storeId: true,
         lineOfficialAccountId: true,
         lineChatUserId: true,
         lineOfficialAccount: {
@@ -258,6 +263,8 @@ export class ConversationsController {
     if (directUrl) return { url: directUrl, statusCode: 302 };
 
     if (conversation) {
+      const cachedDirectUrl = await fetchCachedMirrorDirectUrl(id, conversation);
+      if (cachedDirectUrl) return { url: cachedDirectUrl, statusCode: 302 };
       const resolvedDirectUrl = await this.resolveDirectLineOaManagerUrlOnDemand(id, conversation);
       if (resolvedDirectUrl) return { url: resolvedDirectUrl, statusCode: 302 };
     }
