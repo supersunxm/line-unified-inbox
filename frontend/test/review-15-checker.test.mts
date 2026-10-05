@@ -167,3 +167,15 @@ test("image scan UI warns when estimated review cards exceed extracted bodies", 
   assert.match(checkerSource, /อาจมีรีวิวตกหล่น/);
   assert.match(checkerSource, /แยกข้อความได้/);
 });
+
+test("the 'ใช้ข้อความตัวอย่าง' button uses a defined sample that passes the 15-word rule", async () => {
+  // #445 deleted EXAMPLE_TEXT but kept the button, so clicking it threw a ReferenceError.
+  const { REVIEW15_EXAMPLE_TEXT } = await import("../src/app/review15/review-15-example.ts");
+  assert.equal(REVIEW15_EXAMPLE_TEXT, example);
+  assert.ok(countThaiWords(REVIEW15_EXAMPLE_TEXT) >= 15);
+  const checker = fs.readFileSync(path.join(repoRoot, "frontend/src/app/review15/review-15-checker.tsx"), "utf8");
+  assert.match(checker, /import \{ REVIEW15_EXAMPLE_TEXT \} from "\.\/review-15-example";/);
+  assert.match(checker, /onClick=\{\(\) => onTextChange\(REVIEW15_EXAMPLE_TEXT\)\}[\s\S]{0,300}ใช้ข้อความตัวอย่าง/);
+  // Every identifier the button path uses must be defined: no bare EXAMPLE_TEXT left.
+  assert.doesNotMatch(checker, /(?<![\w_])EXAMPLE_TEXT(?![\w_])/);
+});

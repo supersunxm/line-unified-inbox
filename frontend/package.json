@@ -8,7 +8,8 @@
     "build": "next build",
     "start": "next start -H 0.0.0.0 -p ${PORT:-3000}",
     "lint": "eslint",
-    "test": "node --test --experimental-strip-types test/*.test.mts"
+    "test": "node --test --experimental-strip-types test/*.test.mts",
+    "typecheck:baseline": "node scripts/check-tsc-baseline.mjs"
   },
   "dependencies": {
     "@line/liff": "^2.29.1",

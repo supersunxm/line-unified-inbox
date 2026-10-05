@@ -208,6 +208,9 @@ jobs:
       - name: Canonical Store ID export regression tests
         run: node --test --experimental-strip-types test/canonical-store-id-export.test.mts
 
+      - name: Type error baseline (fails if tsc errors rise)
+        run: npm run typecheck:baseline
+
       - name: Build
         run: npm run build
 

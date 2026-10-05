@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { segmentThaiWords } from "@/lib/thai-word-counter";
+import { REVIEW15_EXAMPLE_TEXT } from "./review-15-example";
 
 const MIN_WORDS = 15;
 const MAX_CHARS = 500;
@@ -164,7 +165,7 @@ function ManualChecker({
             </button>
             <button
               type="button"
-              onClick={() => onTextChange(EXAMPLE_TEXT)}
+              onClick={() => onTextChange(REVIEW15_EXAMPLE_TEXT)}
               className="min-h-11 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-subtle)] px-4 py-2.5 text-sm font-semibold transition hover:bg-[var(--app-surface-hover)]"
             >
               ใช้ข้อความตัวอย่าง

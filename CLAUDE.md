@@ -137,9 +137,12 @@ Run from `frontend/`:
 - `npm run test`
 - `npm run build` — note: next.config.ts sets typescript.ignoreBuildErrors, so
   the build does NOT type-check.
-- `npx tsc --noEmit` — run manually as the type check (no repo script exists).
-  Baseline: 50 pre-existing errors on ee61a4f5. Report a regression only if the
-  count rises or a changed file has new errors.
+- `npx tsc --noEmit` — the type check. Report a regression if the count rises or
+  a changed file has new errors.
+- `npm run typecheck:baseline` — runs `tsc --noEmit` and fails if the error
+  count is above `frontend/tsc-baseline.json`. It runs in the Frontend CI job.
+  **Lower the baseline in the same PR whenever you fix type errors; never raise
+  it.** New type errors must be fixed, not absorbed into the baseline.
 
 Baselines drift as other work merges. Always measure the baseline yourself on
 the branch point before editing; treat the numbers above as a rough reference,
