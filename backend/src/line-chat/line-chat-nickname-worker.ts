@@ -420,7 +420,8 @@ async function bootstrap() {
 
   const shutdown = async (signal: string) => {
     logger.log(`Received ${signal}, shutting down gracefully...`);
-    await recovery.stop("profile-b", "process_shutdown").catch(() => undefined);
+    const recoverySessionKey = recovery.snapshot().sessionKey;
+    if (recoverySessionKey) await recovery.stop(recoverySessionKey, "process_shutdown").catch(() => undefined);
     await new Promise<void>((resolve) => server.close(() => resolve())).catch(() => {});
     await app.close();
     process.exit(0);
