@@ -943,6 +943,7 @@ model Conversation {
   @@index([storeId])
   @@index([customerId])
   @@index([lineChatUserId])
+  @@unique([lineOfficialAccountId, lineChatUserId], map: "Conversation_oa_chat_identity_key")
   @@index([lineChatMappingSource])
   @@index([customerSalesStatus])
   @@index([createdAt])

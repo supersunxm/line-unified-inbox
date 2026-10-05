@@ -72,6 +72,13 @@ jobs:
       - name: Mirror cutover regression tests
         run: npx tsx --test src/line-chat/line-chat-mirror-cutover.spec.ts src/line-chat/line-chat-mirror-reconciler.service.spec.ts src/line-chat/line-chat-store-oa-selector.spec.ts src/line-chat/line-chat-store-chat-parity.spec.ts src/line-chat/line-chat-manager-media-materializer.spec.ts src/line-chat/line-chat-manager-nickname-sales-tag.spec.ts src/line-chat/line-chat-mirror-sales-tag-sync.service.spec.ts
 
+      - name: Mirror identity bridge lint and database regression
+        env:
+          MIRROR_IDENTITY_TEST_DATABASE_URL: ${{ env.DATABASE_URL }}
+        run: |
+          npx eslint src/line-chat/mirror-identity*.ts
+          npx tsx --test src/line-chat/mirror-identity*.spec.ts
+
       - name: Exact manifest and Historical source anchor lint
         run: npx eslint src/line-chat/line-chat-mirror-exact-manifest.ts src/line-chat/line-chat-mirror-exact-manifest.cli.ts src/line-chat/line-chat-mirror-exact-manifest.spec.ts src/historical-source-anchors.ts src/historical-source-anchors.spec.ts src/canonical-source-identity.ts src/canonical-source-identity.spec.ts src/historical-timeline.service.ts src/historical-timeline.service.spec.ts
 

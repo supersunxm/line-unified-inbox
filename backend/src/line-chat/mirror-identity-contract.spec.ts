@@ -1,0 +1,22 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { classifyMirrorBridge, type BridgeConversation, type BridgeGroup } from "./mirror-identity-contract";
+
+const chat = `U${"a".repeat(32)}`;
+const other = `U${"b".repeat(32)}`;
+const conversation = (overrides: Partial<BridgeConversation> = {}): BridgeConversation => ({ id:"c",storeId:"s",lineOfficialAccountId:"oa",lineChatUserId:null,lineChatMappingSource:null,lineChatMappedAt:null,lineChatMappedById:null,latestMessageAt:new Date("2026-09-01"),...overrides });
+const group = (overrides: Partial<BridgeGroup> = {}): BridgeGroup => ({ lineOfficialAccountId:"oa",lineChatUserId:chat,canonicalConversationId:"c",rowCount:1,proofs:["exact-receipt"],invalidScope:false,...overrides });
+const classify = (groups:BridgeGroup[],conversations:BridgeConversation[]= [conversation()]) => classifyMirrorBridge(groups,conversations,["oa","oa2"]);
+test("one accepted receipt yields safe bridge; names are absent from the proof model",()=>assert.equal(classify([group()])[0].classification,"SAFE_BRIDGE_CANDIDATE"));
+test("same identity already linked preserves provenance",()=>assert.equal(classify([group()],[conversation({lineChatUserId:chat,lineChatMappingSource:"MANUAL"})])[0].classification,"ALREADY_LINKED"));
+test("existing different mapping is held",()=>assert.equal(classify([group()],[conversation({lineChatUserId:other})])[0].classification,"EXISTING_MAPPING_CONFLICT"));
+test("another destination owning the OA/chat is held",()=>assert.equal(classify([group()],[conversation(),conversation({id:"owner",lineChatUserId:chat})])[0].classification,"EXISTING_MAPPING_CONFLICT"));
+test("same chat ID under another OA is independent",()=>{const rows=classify([group(),group({lineOfficialAccountId:"oa2",canonicalConversationId:"c2"})],[conversation(),conversation({id:"c2",lineOfficialAccountId:"oa2",storeId:"s2"})]);assert.equal(rows.filter(r=>r.classification==="SAFE_BRIDGE_CANDIDATE").length,2);});
+test("reverse uniqueness rejects two Manager identities even if one claim is weak",()=>{const rows=classify([group(),group({lineChatUserId:other,proofs:[]})]);assert.equal(rows.filter(r=>r.classification==="MULTIPLE_MANAGER_IDS_FOR_CONVERSATION").length,2);});
+test("forward uniqueness rejects two canonical destinations including a held claim",()=>assert.equal(classify([group(),group({canonicalConversationId:"c2",proofs:[]})],[conversation(),conversation({id:"c2"})])[0].classification,"MULTIPLE_CONVERSATIONS_FOR_MANAGER_ID"));
+test("wrong OA/Store or archived contamination is held",()=>{for(const g of [group({invalidScope:true}),group({lineOfficialAccountId:"oa2"})])assert.equal(classify([g])[0].classification,"INSUFFICIENT_RECONCILIATION_EVIDENCE");});
+test("unreconciled/partial/content-time/Historical-only without accepted proof cannot map",()=>assert.equal(classify([group({proofs:[]})])[0].classification,"INSUFFICIENT_RECONCILIATION_EVIDENCE"));
+test("missing canonical destination is held",()=>assert.equal(classify([group({canonicalConversationId:null})]).find(r=>r.classification!=="NO_MIRROR_BRIDGE_EVIDENCE")?.classification,"INSUFFICIENT_RECONCILIATION_EVIDENCE"));
+test("conversations without Mirror evidence are explicitly accounted",()=>assert.equal(classify([])[0].classification,"NO_MIRROR_BRIDGE_EVIDENCE"));
+test("malformed Manager identity is held",()=>assert.equal(classify([group({lineChatUserId:"display-name"})])[0].classification,"INSUFFICIENT_RECONCILIATION_EVIDENCE"));
+test("outside-OA claim is still a reverse-identity conflict barrier",()=>assert.equal(classify([group(),group({lineOfficialAccountId:"archived"})])[0].classification,"MULTIPLE_MANAGER_IDS_FOR_CONVERSATION"));

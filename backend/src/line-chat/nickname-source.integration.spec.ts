@@ -102,10 +102,11 @@ test("real database: append-only evidence, sales independence, exact scope, stal
     assert.equal((await db.nicknameSourceState.findUniqueOrThrow({ where: { conversationId: conversation.id } })).tag, "Facebook");
 
 
-    await db.conversation.create({ data: { customerId: customer.id, storeId: stores[0].id,
-      lineOfficialAccountId: oas[0].id, latestMessageAt: first, lineChatUserId: chatId } });
-    assert.equal((await mapping.audit(since)).report.classifications.IDENTITY_CONFLICT, 1);
-    assert.equal((await mapping.processManifest(manifest, digest, false)).counts.IDENTITY_CONFLICT, 1);
+    await assert.rejects(db.conversation.create({ data: { customerId: customer.id, storeId: stores[0].id,
+      lineOfficialAccountId: oas[0].id, latestMessageAt: first, lineChatUserId: chatId } }),
+    (e: unknown) => e instanceof Error && "code" in e && e.code === "P2002", "OA/chat identity uniqueness rejects a competing destination");
+    assert.equal((await mapping.audit(since)).report.classifications.IDENTITY_CONFLICT, 0);
+    assert.equal((await mapping.processManifest(manifest, digest, false)).counts.STALE_OBSERVATION, 1);
     const disabledDuringBatch = db.$extends({ query: { lineChatMirrorStoreState: {
       async findMany({ args, query }) {
         const initialHealth = await query(args);

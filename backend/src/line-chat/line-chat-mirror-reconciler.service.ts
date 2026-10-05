@@ -15,6 +15,7 @@ import {
   UserStatus,
 } from "@prisma/client";
 import { PrismaService } from "../prisma.service";
+import { MirrorIdentityBridgeService } from "./mirror-identity-bridge.service";
 import {
   AUTO_REPLY_BOT_DISPLAY_NAME,
   isAutomatedOutboundMessage,
@@ -1778,6 +1779,16 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
         reconcileError: input.error ?? null,
       },
     });
+    if (input.conversationId && (input.source === "EXACT_EXTERNAL_ID" || input.source === "IMPORTED_OUTBOUND")) {
+      try {
+        const result = await new MirrorIdentityBridgeService(this.prisma).linkReconciled(mirrorMessageId);
+        if (result !== "ALREADY_LINKED") this.logger.log(JSON.stringify({ event: "line_chat_mirror_identity_bridge", result }));
+      } catch {
+        // Identity is optional metadata. Fail closed without rewriting a successful
+        // reconciliation receipt or introducing failures into normal Mirror cycles.
+        this.logger.warn(JSON.stringify({ event: "line_chat_mirror_identity_bridge", result: "IDENTITY_BRIDGE_FAILED_REQUIRES_READBACK" }));
+      }
+    }
   }
 
   private async recomputeConversationState(
