@@ -3203,3 +3203,7 @@ The existing identity fields represent the relationship but their indexes do not
 
 ### Reuse verified Mirror targets for direct navigation
 54 of 57 initial safe-candidate OAs have no stored bot ID. The existing Mirror cache already derives authenticated exact Manager targets. Expose a read-only protected cache lookup instead of writing OA metadata or adding a browser scan. Bind cached navigation to unchanged target inputs, current selected OA/Store, active session, recent healthy Mirror state and unique Conversation ownership. API validates the response against its authorized Conversation and exact LINE URL. A cold, stale or changed cache fails closed to the existing account fallback until normal scheduled Mirror reads establish fresh evidence. Do not change Mirror cache-hit behavior or scheduling.
+
+## 2026-10-05 — Identity rollout acceptance evidence
+
+Keep browser policy restrictions intact. The owner requests actual authenticated Manager navigation where possible; preserve verified app redirects/Manager navigation separately from read-only API destination validation, and report inaccessible UI cases explicitly. Do not circumvent blocked navigation via another browser/driver or diagnostics. No customer identity is inferred from a visible name. Immutable production metadata receipts remain off GitHub; public project evidence contains only aggregate counts, versions and hashes.
