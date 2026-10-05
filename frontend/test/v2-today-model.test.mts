@@ -6,7 +6,7 @@ import type { StoreRow } from "../src/lib/v2/response-model.ts";
 function row(storeId: string, patch: Partial<StoreRow> = {}): StoreRow {
   return {
     storeId, storeName: `ร้าน ${storeId}`, region: null, hasData: true, waitingCount: 0, recentWaitingCount: 0, oldWaitingCount: 0, oldestWaitingMinutes: null, longestChatId: null, longestBusinessMinutes: null, longestWaitingSince: null,
-    needsFollowUp: false, rate7d: 95, ratePrev7d: 95, rateDelta: 0, trend: [], managerUrl: null, ...patch,
+    sinceYesterdayCount: 0, followTodayCount: 0, followTodayLongestMinutes: null, followTodayRank: null, hasOverdueWait: false, province: null, rate7d: 95, ratePrev7d: 95, rateDelta: 0, trend: [], managerUrl: null, ...patch,
   };
 }
 const totals = (rate: number | null, total = 100) => ({ total, within24h: rate === null ? 0 : Math.round(total * rate / 100), over24h: 5, pending: 2, rate });
@@ -20,10 +20,10 @@ test("abnormal items appear in the fixed priority order with stores and an actio
   const items = buildTodayItems({
     ...loaded,
     storeRows: [
-      row("a", { needsFollowUp: true, waitingCount: 2, longestBusinessMinutes: 90, rate7d: 70, ratePrev7d: 90, rateDelta: -20 }),
-      row("b", { needsFollowUp: true, waitingCount: 1, longestBusinessMinutes: 300 }),
+      row("a", { followTodayRank: 2, followTodayCount: 2, followTodayLongestMinutes: 90, waitingCount: 2, longestBusinessMinutes: 90, rate7d: 70, ratePrev7d: 90, rateDelta: -20 }),
+      row("b", { followTodayRank: 1, followTodayCount: 3, followTodayLongestMinutes: 300, waitingCount: 3, longestBusinessMinutes: 300 }),
       row("c", { rate7d: 80, ratePrev7d: 85, rateDelta: -5 }),
-      row("z", { hasData: false, needsFollowUp: false, rate7d: 0, ratePrev7d: 100, rateDelta: -100 }),
+      row("z", { hasData: false, rate7d: 0, ratePrev7d: 100, rateDelta: -100 }),
     ],
     totals7d: totals(85),
     totalsPrev7d: totals(92),
@@ -33,10 +33,12 @@ test("abnormal items appear in the fixed priority order with stores and an actio
       { name: "ร้าน c", kpiResult: null },
     ],
   });
-  assert.deepEqual(items.map((item) => item.id), ["follow-up", "reply-rate", "google-review", "no-chat-data"]);
-  // 1) longest wait first
+  assert.deepEqual(items.map((item) => item.id), ["follow-today", "reply-rate", "google-review", "no-chat-data"]);
+  // 1) ตามวันนี้ order, top 3 named with their counts
+  assert.equal(items[0].problem, "2 ร้านต้องตามวันนี้");
   assert.deepEqual(items[0].stores.map((store) => store.name), ["ร้าน b", "ร้าน a"]);
-  assert.match(items[0].comparison, /จาก 3 ร้านที่มีข้อมูล/);
+  assert.match(items[0].stores[0].detail, /^3 แชท/);
+  assert.match(items[0].comparison, /จาก 2 ร้านที่มีลูกค้ารอเกิน 60 นาทีตั้งแต่เมื่อวาน 10:00/);
   assert.equal(items[0].action.href, "/v2/response");
   // 2) below target; the biggest drops are named, and a no-data store never is
   assert.match(items[1].problem, /85\.0% ต่ำกว่าเป้า 90%/);
@@ -56,7 +58,7 @@ test("a rate above target still shows when it fell vs last week", () => {
 });
 
 test("a source that failed to load leaves its item out instead of reporting it as fine", () => {
-  const storeRows = [row("a", { needsFollowUp: true, longestBusinessMinutes: 120, waitingCount: 1 }), row("z", { hasData: false })];
+  const storeRows = [row("a", { followTodayRank: 1, followTodayCount: 1, longestBusinessMinutes: 120, waitingCount: 1 }), row("z", { hasData: false })];
   const items = buildTodayItems({ storeRows, waitingLoaded: false, hasDataLoaded: false, totals7d: null, totalsPrev7d: null, googleStores: null });
   assert.deepEqual(items, []);
 });

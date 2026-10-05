@@ -2,7 +2,7 @@
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/lib/api";
-import type { ApiConversation, GoogleReviewKpiStoreItem } from "@/types/api";
+import type { ApiConversation, ApiStore, GoogleReviewKpiStoreItem } from "@/types/api";
 import {
   aggregateReplyRate,
   buildStoreRows,
@@ -11,6 +11,7 @@ import {
   storesWithRecentActivity,
   isRecentWait,
   type MirrorRow,
+  type StoreLocation,
   toWaitingChat,
   type ReplyRateRow,
   type ReplyRateTotals,
@@ -72,6 +73,8 @@ export type V2Data = {
   rates7d: Source<ReplyRateRow[]>;
   ratesPrev7d: Source<ReplyRateRow[]>;
   google: Source<GoogleReviewKpiStoreItem[]>;
+  /** Store region and province from GET /stores (Store.region / Store.area, synced from StoreMaster). */
+  locations: Source<Map<string, StoreLocation>>;
   daily: Source<ReplyRateRow[][]>;
   dailyDays: string[];
   /** Every store, with no-data stores flagged (hasData = false). */
@@ -121,6 +124,7 @@ export function V2DataProvider({ children }: { children: React.ReactNode }) {
   const [rates7d, loadRates7d] = useSource<ReplyRateRow[]>();
   const [ratesPrev7d, loadRatesPrev7d] = useSource<ReplyRateRow[]>();
   const [google, loadGoogle] = useSource<GoogleReviewKpiStoreItem[]>();
+  const [locations, loadLocations] = useSource<Map<string, StoreLocation>>();
   const [daily, loadDaily] = useSource<ReplyRateRow[][]>();
   const dailyRequested = useRef(false);
   const today = bangkokDateKey(now);
@@ -136,8 +140,13 @@ export function V2DataProvider({ children }: { children: React.ReactNode }) {
     void loadRates7d(() => fetchReplyRates(lastSevenDays(day)));
     void loadRatesPrev7d(() => fetchReplyRates(previousSevenDays(day)));
     void loadGoogle(async () => (await api.getGoogleReviewKpis({ month: day.slice(0, 7) })).stores);
+    // GET /stores returns full Store rows; region and area (province) are not in the shared ApiStore type.
+    void loadLocations(async () => new Map((await api.stores()).map((store) => {
+      const row = store as ApiStore & { region?: string | null; area?: string | null };
+      return [store.id, { region: row.region ?? null, province: row.area ?? null }];
+    })));
     if (dailyRequested.current) void loadDaily(() => Promise.all(sevenSingleDays(day).map(fetchReplyRates)));
-  }, [loadDaily, loadMirror, loadGoogle, loadRates7d, loadRatesPrev7d, loadSummary, loadWaiting]);
+  }, [loadDaily, loadMirror, loadGoogle, loadLocations, loadRates7d, loadRatesPrev7d, loadSummary, loadWaiting]);
 
   const requestDaily = useCallback(() => {
     if (dailyRequested.current) return;
@@ -162,7 +171,6 @@ export function V2DataProvider({ children }: { children: React.ReactNode }) {
     () => (mirror.data ? storesWithChatData(mirror.data, now) : mirror.error && rates7d.data ? storesWithRecentActivity(rates7d.data) : null),
     [mirror.data, mirror.error, rates7d.data, now],
   );
-  const regions = useMemo(() => new Map((google.data ?? []).filter((store) => store.storeId).map((store) => [store.storeId as string, store.region])), [google.data]);
   const allWaitingChats = useMemo(() => (waiting.data?.items ?? []).map((conversation) => toWaitingChat(conversation, now)), [waiting.data, now]);
 
   const value = useMemo<V2Data>(() => {
@@ -174,7 +182,7 @@ export function V2DataProvider({ children }: { children: React.ReactNode }) {
       rates7d: rates7d.data ?? [],
       ratesPrev7d: ratesPrev7d.data ?? [],
       daily: daily.data ?? undefined,
-      regions,
+      locations: locations.data ?? undefined,
     });
     const included = new Set(storeRows.filter((row) => row.hasData).map((row) => row.storeId));
     return {
@@ -185,6 +193,7 @@ export function V2DataProvider({ children }: { children: React.ReactNode }) {
       rates7d,
       ratesPrev7d,
       google,
+      locations,
       daily,
       dailyDays: dailyRanges.map((range) => range.dateFrom),
       storeRows,
@@ -198,7 +207,7 @@ export function V2DataProvider({ children }: { children: React.ReactNode }) {
       refresh,
       requestDaily,
     };
-  }, [allWaitingChats, daily, dailyRanges, google, hasDataSource, mirror, now, rates7d, ratesPrev7d, refresh, regions, requestDaily, storesWithData, summary, waiting]);
+  }, [allWaitingChats, daily, dailyRanges, google, hasDataSource, locations, mirror, now, rates7d, ratesPrev7d, refresh, requestDaily, storesWithData, summary, waiting]);
 
   return <V2DataContext.Provider value={value}>{children}</V2DataContext.Provider>;
 }

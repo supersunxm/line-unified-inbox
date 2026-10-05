@@ -1,12 +1,12 @@
 // The "วันนี้" list: only abnormal items, in a fixed priority order. Pure: node --test imports it.
 
-import { FOLLOW_UP_THRESHOLD_MINUTES, RESPONSE_RATE_TARGET_PERCENT, formatWaitMinutes } from "./business-hours.ts";
+import { FOLLOW_TODAY_LIMIT, FOLLOW_UP_THRESHOLD_MINUTES, RESPONSE_RATE_TARGET_PERCENT, formatWaitMinutes } from "./business-hours.ts";
 import { biggestRateDrops, responseKpis, sortStoreRows, type ReplyRateTotals, type StoreRow } from "./response-model.ts";
 
 export type TodayDomain = "การตอบแชท" | "รีวิว Google" | "ข้อมูลแชท";
 
 export type TodayItem = {
-  id: "follow-up" | "reply-rate" | "google-review" | "no-chat-data";
+  id: "follow-today" | "reply-rate" | "google-review" | "no-chat-data";
   domain: TodayDomain;
   /** One-line problem, with the number. */
   problem: string;
@@ -50,18 +50,18 @@ export function buildTodayItems(input: {
   const items: TodayItem[] = [];
   const kpis = responseKpis(input.storeRows);
 
-  // 1) Stores with a customer waiting ≥ threshold (business hours).
+  // 1) ตามวันนี้: the same selection as the sidebar badge, the tab and the KPI.
   if (input.waitingLoaded) {
-    const followUp = sortStoreRows(input.storeRows.filter((row) => row.hasData && row.needsFollowUp));
-    if (followUp.length > 0) {
+    const followToday = sortStoreRows(input.storeRows.filter((row) => row.hasData && row.followTodayRank !== null), "follow");
+    if (followToday.length > 0) {
       items.push({
-        id: "follow-up",
+        id: "follow-today",
         domain: "การตอบแชท",
-        problem: `${followUp.length} ร้านมีลูกค้ารอคำตอบเกิน ${FOLLOW_UP_THRESHOLD_MINUTES} นาที`,
-        comparison: `จาก ${kpis.storesWithData} ร้านที่มีข้อมูล · นับเฉพาะเวลาเปิดร้าน · เกณฑ์ ${FOLLOW_UP_THRESHOLD_MINUTES} นาที`,
-        stores: followUp.slice(0, STORES_SHOWN).map((row) => ({ name: row.storeName, detail: `รอนานสุด ${formatWaitMinutes(row.longestBusinessMinutes ?? 0)} · ${row.waitingCount} แชท` })),
-        moreStores: Math.max(0, followUp.length - STORES_SHOWN),
-        action: { label: "ดูร้านที่ต้องตาม", href: "/v2/response" },
+        problem: `${followToday.length} ร้านต้องตามวันนี้`,
+        comparison: `จาก ${kpis.followTodayCandidates} ร้านที่มีลูกค้ารอเกิน ${FOLLOW_UP_THRESHOLD_MINUTES} นาทีตั้งแต่เมื่อวาน 10:00 · นับเฉพาะเวลาเปิดร้าน · แสดงสูงสุด ${FOLLOW_TODAY_LIMIT} ร้าน`,
+        stores: followToday.slice(0, STORES_SHOWN).map((row) => ({ name: row.storeName, detail: `${row.followTodayCount} แชท · รอนานสุด ${formatWaitMinutes(row.followTodayLongestMinutes ?? 0)}` })),
+        moreStores: Math.max(0, followToday.length - STORES_SHOWN),
+        action: { label: "ดูร้านที่ต้องตามวันนี้", href: "/v2/response" },
       });
     }
   }

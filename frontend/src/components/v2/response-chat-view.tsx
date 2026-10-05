@@ -25,7 +25,7 @@ function StorePane({ rows, selected, onSelect }: { rows: StoreRow[]; selected: s
           <button key={row.storeId} type="button" data-v2-chat-store={row.storeId} onClick={() => onSelect(row.storeId)} aria-current={selected === row.storeId ? "true" : undefined} className={itemClass(selected === row.storeId)}>
             <span className="min-w-0 truncate">{row.storeName}</span>
             {row.hasData && row.waitingCount > 0 && (
-              <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-xs font-semibold tabular-nums ${row.needsFollowUp ? "bg-[var(--app-danger-soft)] text-[var(--app-danger)]" : "bg-[var(--app-neutral-soft)] text-[var(--app-text-secondary)]"}`}>
+              <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-xs font-semibold tabular-nums ${row.hasOverdueWait ? "bg-[var(--app-danger-soft)] text-[var(--app-danger)]" : "bg-[var(--app-neutral-soft)] text-[var(--app-text-secondary)]"}`}>
                 {row.waitingCount}
               </span>
             )}

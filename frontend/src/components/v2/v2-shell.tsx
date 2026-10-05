@@ -42,7 +42,7 @@ function NavLink({ item, pathname }: { item: NavItem; pathname: string }) {
       <NavIcon name={item.icon} />
       <span className="min-w-0 flex-1 truncate">{item.label}</span>
       {item.badge ? (
-        <span data-v2-follow-up-badge className="min-w-6 rounded-full bg-[var(--app-danger-soft)] px-1.5 py-0.5 text-center text-xs font-semibold tabular-nums text-[var(--app-danger)]" aria-label={`${item.badge} ร้านต้องตาม`}>
+        <span data-v2-follow-up-badge className="min-w-6 rounded-full bg-[var(--app-danger-soft)] px-1.5 py-0.5 text-center text-xs font-semibold tabular-nums text-[var(--app-danger)]" aria-label={`${item.badge} ร้านต้องตามวันนี้`}>
           {item.badge}
         </span>
       ) : null}
@@ -72,11 +72,12 @@ export function V2Shell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname() || "/v2";
   const data = useV2Data();
   const { user } = useAuthUserSnapshot();
-  const followUpStores = data.summary.data ? responseKpis(data.storeRows).followUpStores : null;
+  // Same number as the ตามวันนี้ tab count, the KPI and the "วันนี้" item 1.
+  const followTodayStores = data.waiting.data ? responseKpis(data.storeRows).followTodayStores : null;
 
   const mainItems: NavItem[] = [
     { href: "/v2", label: "วันนี้", icon: "today", active: (path) => path === "/v2" },
-    { href: "/v2/response", label: "การตอบแชท", icon: "response", badge: followUpStores, active: (path) => path.startsWith("/v2/response") },
+    { href: "/v2/response", label: "การตอบแชท", icon: "response", badge: followTodayStores, active: (path) => path.startsWith("/v2/response") },
     { href: "/admin/purchase-analytics", label: "ลูกค้าและการขาย", icon: "customers" },
     { href: "/follower-insights", label: "การเติบโต", icon: "growth" },
     { href: "/store-360", label: "สาขา", icon: "stores" },
