@@ -46,6 +46,24 @@ test("real PostgreSQL: strong proof, bidirectional conflicts, race, provenance, 
     assert.equal((await service.processManifest(manifest,true)).writes,0);
     assert.deepEqual(await controller.lineOaManagerUrl(saved.id,request),{url:`https://chat.line.biz/${bot}/chat/${proven.manager}`,direct:true});
     assert.deepEqual(await controller.openLineOaManager(saved.id,request),{url:`https://chat.line.biz/${bot}/chat/${proven.manager}`,statusCode:302});
+    const originalFetch=globalThis.fetch;
+    const originalWorkerUrl=process.env.LINE_CHAT_WORKER_INTERNAL_URL;
+    const originalWorkerSecret=process.env.LINE_CHAT_WORKER_INTERNAL_SECRET;
+    await db.lineOfficialAccount.update({where:{id:oas[0].id},data:{chatBotId:null}});
+    process.env.LINE_CHAT_WORKER_INTERNAL_URL="https://worker.test";
+    process.env.LINE_CHAT_WORKER_INTERNAL_SECRET="synthetic-test-secret";
+    try {
+      globalThis.fetch=async()=>new Response(JSON.stringify({success:true,target:{conversationId:saved.id,storeId:saved.storeId,lineOfficialAccountId:saved.lineOfficialAccountId,lineChatUserId:proven.manager,botId:bot,url:`https://chat.line.biz/${bot}/chat/${proven.manager}`}}));
+      assert.deepEqual(await controller.lineOaManagerUrl(saved.id,request),{url:`https://chat.line.biz/${bot}/chat/${proven.manager}`,direct:true});
+      assert.deepEqual(await controller.openLineOaManager(saved.id,request),{url:`https://chat.line.biz/${bot}/chat/${proven.manager}`,statusCode:302});
+      globalThis.fetch=async()=>new Response(JSON.stringify({success:true,target:null}));
+      assert.deepEqual(await controller.lineOaManagerUrl(saved.id,request),{url:null,direct:false});
+    } finally {
+      globalThis.fetch=originalFetch;
+      if(originalWorkerUrl===undefined)delete process.env.LINE_CHAT_WORKER_INTERNAL_URL;else process.env.LINE_CHAT_WORKER_INTERNAL_URL=originalWorkerUrl;
+      if(originalWorkerSecret===undefined)delete process.env.LINE_CHAT_WORKER_INTERNAL_SECRET;else process.env.LINE_CHAT_WORKER_INTERNAL_SECRET=originalWorkerSecret;
+      await db.lineOfficialAccount.update({where:{id:oas[0].id},data:{chatBotId:bot}});
+    }
     assert.equal(await service.linkReconciled(proven.m.id),"ALREADY_LINKED");
     const before=await db.conversation.findUniqueOrThrow({where:{id:saved.id}});
     assert.deepEqual(before,saved,"no-op does not change provenance or timestamps");
@@ -72,6 +90,12 @@ test("real PostgreSQL: strong proof, bidirectional conflicts, race, provenance, 
     const stale=await fixture({oa:2});const frozen=await service.buildManifest();
     const justStale:BridgeManifest={...frozen,rows:frozen.rows.filter(r=>r.canonicalConversationId===stale.c.id),rowSetSha256:""};
     const {canonicalBridgeRows}=await import("./mirror-identity-bridge.service");justStale.rowSetSha256=bridgeHash(canonicalBridgeRows(justStale.rows));
+    // The Manager alias still proves identity, but a changed canonical proof
+    // field must invalidate the frozen manifest rather than silently applying.
+    await db.message.update({where:{id:stale.m.canonicalMessageId!},data:{externalMessageId:"changed-external-alias"}});
+    const proofDrift=await service.processManifest(justStale,true);
+    assert.equal(proofDrift.writes,0);
+    assert.equal(proofDrift.results[0]?.result,"STALE_PROOF");
     await db.lineChatMirrorMessage.update({where:{id:stale.m.id},data:{reconcileStatus:"FAILED"}});
     assert.equal((await service.processManifest(justStale,true)).writes,0);
     assert.equal((await db.conversation.findUniqueOrThrow({where:{id:stale.c.id}})).lineChatUserId,null);

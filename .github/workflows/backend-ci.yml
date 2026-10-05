@@ -74,7 +74,8 @@ jobs:
 
       - name: Mirror identity bridge lint and database regression
         run: |
-          npx eslint src/line-chat/mirror-identity*.ts
+          npx eslint src/line-chat/mirror-identity*.ts src/line-chat/mirror-direct-url*.ts src/conversations.controller.ts
+          npx tsx --test src/line-chat/mirror-direct-url.spec.ts
           node <<'JS'
           const { PrismaClient } = require('@prisma/client');
           const { execFileSync } = require('node:child_process');

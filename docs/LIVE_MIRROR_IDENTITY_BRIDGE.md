@@ -64,3 +64,16 @@ prove zero additional writes. Preserve private operator evidence off GitHub.
 No Source Tag application, Manager nickname/message request, Conversation merge,
 canonical/Historical rewrite, Reply/KPI/status/assignment change, browser lease,
 fleet eligibility change or extra scheduled cycle is part of this project.
+
+## Direct Manager navigation without added profile cost
+
+The existing stored bot/chat direct URL remains first choice. When the OA has
+no stored bot ID, the conversation API requests the worker's protected GET
+`/internal/line-chat/mirror/direct-url?conversationId=...`. This reads only the
+existing verified Mirror target cache and database identity/state. It never
+resolves a target, opens a browser, acquires a lease or writes OA metadata.
+Current target inputs, selected OA/Store, unique chat owner, physical active
+session and recent healthy Mirror state must still match. The API rejects any
+response with different destination/Store/OA/chat or an unexpected URL. A cold
+or stale cache preserves the existing fallback; natural scheduled Mirror reads
+restore readiness. No additional browser scan is scheduled.

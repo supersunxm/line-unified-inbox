@@ -19,7 +19,7 @@ export class MirrorIdentityBridgeService {
     if (!eligibleOaIds.length) return [];
     const groups = await tx.$queryRaw<BridgeGroup[]>(Prisma.sql`
       SELECT m."lineOfficialAccountId", m."lineChatUserId", m."canonicalConversationId", COUNT(*)::int AS "rowCount",
-        COALESCE(array_agg(json_build_array(m.id,m."canonicalMessageId",m."canonicalConversationId",m."managerMessageId",m.direction::text,m."reconcileStatus"::text,m."reconcileSource",m."reconciledAt"::text)::text ORDER BY m.id) FILTER (WHERE
+        COALESCE(array_agg(json_build_array(m.id,m."canonicalMessageId",m."canonicalConversationId",m."managerMessageId",m.direction::text,m."reconcileStatus"::text,m."reconcileSource",m."reconciledAt"::text,p."externalMessageId",p.direction::text,p."deliveryStatus"::text,p."rawPayload"->>'source',p."rawPayload"->>'managerMessageId',p."rawPayload"->>'providerMessageId',p."conversationId",c."storeId",c."lineOfficialAccountId")::text ORDER BY m.id) FILTER (WHERE
           m."reconciledAt" IS NOT NULL AND m."reconcileError" IS NULL
           AND ((m."reconcileStatus"::text='DUPLICATE' AND m."reconcileSource"='EXACT_EXTERNAL_ID')
             OR (m."reconcileStatus"::text='IMPORTED' AND m."reconcileSource"='IMPORTED_OUTBOUND' AND m.direction::text='OUTBOUND'))

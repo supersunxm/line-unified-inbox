@@ -417,6 +417,16 @@ function maskIdentifier(value: string): string {
   return value.length <= 8 ? "[masked]" : `${value.slice(0, 4)}...${value.slice(-4)}`;
 }
 
+function mirrorDirectLinkSignature(input: {
+  lineOfficialAccountId: string; chatBotId: string | null; basicId: string | null;
+  lineChatWorkspaceUrl: string | null; storeManagerUrl: string | null;
+  lineChatSession: MirrorSessionTarget | null; liveAccountOverride?: LiveMirrorAccountOverride;
+}): string {
+  return JSON.stringify([input.lineOfficialAccountId, input.chatBotId, input.basicId,
+    input.lineChatWorkspaceUrl, input.storeManagerUrl, input.lineChatSession?.id ?? null,
+    input.liveAccountOverride ?? null]);
+}
+
 @Injectable()
 export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(LineChatMirrorService.name);
@@ -430,6 +440,7 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
     botId: string;
     session: MirrorSessionTarget;
     source: "EXISTING_OA" | "MANAGER_ACCOUNT_REDIRECT";
+    directLinkInputSignature: string;
   }>();
 
   constructor(
@@ -1320,6 +1331,44 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
     return result;
   }
 
+  /** Cache-only lookup: no target resolution, browser operation, lease, or metadata write. */
+  public async getCachedConversationDirectUrl(conversationId: string) {
+    const conversation = await this.prisma.conversation.findUnique({
+      where: { id: conversationId },
+      select: { id: true, storeId: true, lineOfficialAccountId: true, lineChatUserId: true, store: { select: { code: true } } },
+    });
+    if (!conversation?.store?.code || !conversation.storeId || !/^U[0-9a-f]{32}$/iu.test(conversation.lineChatUserId ?? "")) return null;
+    if (!configuredLineChatMirrorStoreCodes().includes(conversation.store.code)) return null;
+    try {
+      const target = await this.getStoreMirrorTargetInputs(conversation.store.code);
+      if (target.storeId !== conversation.storeId || target.oa.id !== conversation.lineOfficialAccountId) return null;
+      const override = readLiveMirrorAccountOverride({ mode: "NORMAL", storeCode: target.effectiveStoreCode,
+        lineOfficialAccountId: target.oa.id, storedBasicId: target.oa.basicId });
+      const cached = this.targetCache.get(liveMirrorTargetCacheKey(target.oa.id, override));
+      if (!cached || !/^U[0-9a-f]{32}$/iu.test(cached.botId)) return null;
+      if (cached.directLinkInputSignature !== mirrorDirectLinkSignature({ ...target.oa,
+        lineOfficialAccountId: target.oa.id, storeManagerUrl: target.storeManagerUrl, liveAccountOverride: override })) return null;
+      const [state, session] = await Promise.all([
+        this.prisma.lineChatMirrorStoreState.findUnique({ where: { lineOfficialAccountId: target.oa.id } }),
+        this.prisma.lineChatSession.findUnique({ where: { id: cached.session.id } }),
+      ]);
+      if (!state?.enabled || state.storeId !== conversation.storeId || state.lastErrorCode
+        || !["SUCCESS", "RUNNING"].includes(state.status) || !state.lastSuccessfulSyncAt
+        || Date.now() - state.lastSuccessfulSyncAt.getTime() > 2 * 60 * 60 * 1000
+        || state.lastSuccessfulSyncAt.getTime() > Date.now()
+        || !session || session.status !== LineChatSessionStatus.ACTIVE
+        || session.sessionKey !== cached.session.sessionKey || session.profilePath !== cached.session.profilePath
+        || session.profileStorageKey !== cached.session.profileStorageKey) return null;
+      const owners = await this.prisma.conversation.count({ where: { lineOfficialAccountId: target.oa.id, lineChatUserId: conversation.lineChatUserId } });
+      if (owners !== 1) return null;
+      return { conversationId, storeId: conversation.storeId, lineOfficialAccountId: target.oa.id,
+        lineChatUserId: conversation.lineChatUserId, botId: cached.botId,
+        url: `https://chat.line.biz/${cached.botId}/chat/${conversation.lineChatUserId}` };
+    } catch {
+      return null;
+    }
+  }
+
   public async resolveMirrorTarget(input: {
     storeCode?: string;
     lineOfficialAccountId: string;
@@ -1383,7 +1432,7 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
         session: input.lineChatSession,
         source: "EXISTING_OA" as const,
       };
-      this.targetCache.set(targetCacheKey, resolved);
+      this.targetCache.set(targetCacheKey, { ...resolved, directLinkInputSignature: mirrorDirectLinkSignature(input) });
       emitSummary("EXISTING_OA");
       return { ok: true, ...resolved };
     }
@@ -1626,7 +1675,7 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
       session: candidate.session,
       source: "MANAGER_ACCOUNT_REDIRECT" as const,
     };
-      this.targetCache.set(targetCacheKey, result);
+    this.targetCache.set(targetCacheKey, { ...result, directLinkInputSignature: mirrorDirectLinkSignature(input) });
     this.logger.log(JSON.stringify({
       event: "line_chat_mirror_target_resolved",
       lineOfficialAccountId: input.lineOfficialAccountId,
