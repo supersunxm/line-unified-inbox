@@ -2,7 +2,7 @@
 // Reply state always comes from the backend resolver (effectiveReplyState / the
 // replyState filter); this file only measures time and groups by store.
 
-import { RECENT_WAIT_WINDOW_MS, businessMinutesBetween, needsFollowUp, realMinutesBetween } from "./business-hours.ts";
+import { FOLLOW_TODAY_LIMIT, RECENT_WAIT_WINDOW_MS, businessMinutesBetween, followTodayWindowStart, needsFollowUp, realMinutesBetween } from "./business-hours.ts";
 
 export type ReplyState = "REPLIED" | "NOT_REPLIED";
 
@@ -124,10 +124,14 @@ export function isRecentWait(waitingSince: string, now: number): boolean {
 
 export type SummaryStore = { storeId: string; storeName: string; notReplied: number; notifiedBm: number; replied: number; oldestWaitingMinutes?: number };
 
+export type StoreLocation = { region: string | null; province: string | null };
+
 export type StoreRow = {
   storeId: string;
   storeName: string;
+  /** From GET /stores (Store.region / Store.area, synced from StoreMaster); null when unknown. */
   region: string | null;
+  province: string | null;
   hasData: boolean;
   /** Backend count of NOT_REPLIED chats (notReplied + notifiedBm). */
   waitingCount: number;
@@ -137,12 +141,20 @@ export type StoreRow = {
   oldWaitingCount: number;
   /** Real minutes since the oldest waiting chat (backend summary), for sorting by age. */
   oldestWaitingMinutes: number | null;
+  /** Waiting chats whose customer message was sent since yesterday 10:00 ("รอตอบ (ตั้งแต่เมื่อวาน)"). */
+  sinceYesterdayCount: number;
+  /** Of those, the chats that have waited ≥ the follow-up threshold in business minutes. */
+  followTodayCount: number;
+  /** Longest business-hours wait among the followTodayCount chats, or null. */
+  followTodayLongestMinutes: number | null;
+  /** Position in "ตามวันนี้" (1-based), or null when the store is not in it. */
+  followTodayRank: number | null;
   /** Longest business-hours wait among the recent (≤ 7 days) waiting chats, or null when none. */
   longestBusinessMinutes: number | null;
   longestWaitingSince: string | null;
   longestChatId: string | null;
-  /** A recent customer has waited ≥ the threshold in business hours. */
-  needsFollowUp: boolean;
+  /** The store's longest recent wait has reached the threshold (red badges). */
+  hasOverdueWait: boolean;
   rate7d: number | null;
   ratePrev7d: number | null;
   rateDelta: number | null;
@@ -150,6 +162,26 @@ export type StoreRow = {
   trend: Array<number | null>;
   managerUrl: string | null;
 };
+
+/** "ภาค · จังหวัด" from what is known, or null (then nothing is shown). */
+export function locationLabel(row: Pick<StoreRow, "region" | "province">): string | null {
+  const parts = [row.region, row.province].map((part) => part?.trim()).filter((part): part is string => Boolean(part));
+  return parts.length > 0 ? [...new Set(parts)].join(" · ") : null;
+}
+
+/**
+ * "ตามวันนี้": stores with data and at least one chat waiting ≥ the threshold whose customer
+ * message was sent since yesterday 10:00. Most such chats first, then the longest of those
+ * waits, then name (so ties are cut deterministically). At most `limit` stores.
+ */
+export function selectFollowToday<T extends Pick<StoreRow, "hasData" | "followTodayCount" | "followTodayLongestMinutes" | "storeName">>(rows: T[], limit = FOLLOW_TODAY_LIMIT): T[] {
+  return rows
+    .filter((row) => row.hasData && row.followTodayCount > 0)
+    .sort((a, b) => b.followTodayCount - a.followTodayCount
+      || (b.followTodayLongestMinutes ?? 0) - (a.followTodayLongestMinutes ?? 0)
+      || a.storeName.localeCompare(b.storeName, "th"))
+    .slice(0, limit);
+}
 
 export function buildStoreRows(input: {
   summaryStores: SummaryStore[];
@@ -160,7 +192,8 @@ export function buildStoreRows(input: {
   rates7d: ReplyRateRow[];
   ratesPrev7d: ReplyRateRow[];
   daily?: ReplyRateRow[][];
-  regions?: ReadonlyMap<string, string | null>;
+  locations?: ReadonlyMap<string, StoreLocation>;
+  followTodayLimit?: number;
 }): StoreRow[] {
   const byStore = new Map<string, WaitingChat[]>();
   for (const chat of input.waitingChats) {
@@ -169,8 +202,9 @@ export function buildStoreRows(input: {
     list.push(chat);
     byStore.set(chat.storeId, list);
   }
+  const windowStart = followTodayWindowStart(input.now);
   const rateOf = (rows: ReplyRateRow[], storeId: string) => rows.find((row) => row.storeId === storeId)?.responseRate24h ?? null;
-  return input.summaryStores.map((store) => {
+  const rows: StoreRow[] = input.summaryStores.map((store) => {
     const chats = sortWaitingChats(byStore.get(store.storeId) ?? []);
     const longest = chats[0] ?? null;
     const rate7d = rateOf(input.rates7d, store.storeId);
@@ -179,19 +213,27 @@ export function buildStoreRows(input: {
     const longestBusinessMinutes = longest ? longest.businessMinutes : null;
     const waitingCount = store.notReplied + store.notifiedBm;
     const recentWaitingCount = Math.min(chats.length, waitingCount);
+    const sinceYesterday = chats.filter((chat) => Date.parse(chat.waitingSince) >= windowStart);
+    const overdueSinceYesterday = sinceYesterday.filter((chat) => needsFollowUp(chat.businessMinutes));
+    const location = input.locations?.get(store.storeId);
     return {
       storeId: store.storeId,
       storeName: store.storeName,
-      region: input.regions?.get(store.storeId) ?? null,
+      region: location?.region ?? null,
+      province: location?.province ?? null,
       hasData,
       waitingCount,
       recentWaitingCount,
       oldWaitingCount: waitingCount - recentWaitingCount,
       oldestWaitingMinutes: waitingCount > 0 ? store.oldestWaitingMinutes ?? null : null,
+      sinceYesterdayCount: sinceYesterday.length,
+      followTodayCount: overdueSinceYesterday.length,
+      followTodayLongestMinutes: overdueSinceYesterday[0]?.businessMinutes ?? null,
+      followTodayRank: null,
       longestBusinessMinutes,
       longestWaitingSince: longest ? longest.waitingSince : null,
       longestChatId: longest ? longest.id : null,
-      needsFollowUp: hasData && longestBusinessMinutes !== null && needsFollowUp(longestBusinessMinutes),
+      hasOverdueWait: hasData && longestBusinessMinutes !== null && needsFollowUp(longestBusinessMinutes),
       rate7d,
       ratePrev7d,
       rateDelta: rateDelta(rate7d, ratePrev7d),
@@ -199,32 +241,49 @@ export function buildStoreRows(input: {
       managerUrl: chats.find((chat) => chat.managerUrl)?.managerUrl ?? null,
     };
   });
+  selectFollowToday(rows, input.followTodayLimit ?? FOLLOW_TODAY_LIMIT).forEach((row, index) => { row.followTodayRank = index + 1; });
+  return rows;
 }
 
-export type StoreTab = "follow-up" | "all" | "no-data";
+export type StoreTab = "follow-today" | "all" | "no-data";
 
-/** ต้องตาม / ทั้งหมด (stores with data) / ไม่มีข้อมูล. */
+/** ตามวันนี้ / ทั้งหมด (stores with data) / ไม่มีข้อมูล. */
 export function filterStoreRows(rows: StoreRow[], tab: StoreTab): StoreRow[] {
   if (tab === "no-data") return rows.filter((row) => !row.hasData);
-  if (tab === "follow-up") return rows.filter((row) => row.hasData && row.needsFollowUp);
+  if (tab === "follow-today") return rows.filter((row) => row.followTodayRank !== null);
   return rows.filter((row) => row.hasData);
 }
 
-export type StoreSort = "wait" | "age";
-
 /**
- * "wait" (default): longest recent business-hours wait first, nothing waiting last.
+ * "follow": the ตามวันนี้ order (count, then longest wait).
+ * "recent" (default in ทั้งหมด): most chats waiting since yesterday 10:00, then ตามวันนี้ count, then longest wait.
+ * "wait": longest recent business-hours wait first. "rate": lowest 24-hour rate first, no data last.
  * "age": oldest waiting chat first (real time, includes the > 7-day backlog).
- * Ties: waiting count, then name.
+ * Ties end with waiting count, then name.
  */
+export type StoreSort = "follow" | "recent" | "wait" | "rate" | "age";
+
+export function defaultSortForTab(tab: StoreTab): StoreSort {
+  return tab === "follow-today" ? "follow" : "recent";
+}
+
 export function sortStoreRows(rows: StoreRow[], sort: StoreSort = "wait"): StoreRow[] {
-  const key = (row: StoreRow) => (sort === "age" ? row.oldestWaitingMinutes : row.longestBusinessMinutes) ?? -1;
-  return [...rows].sort((a, b) => key(b) - key(a) || b.waitingCount - a.waitingCount || a.storeName.localeCompare(b.storeName, "th"));
+  const tail = (a: StoreRow, b: StoreRow) => b.waitingCount - a.waitingCount || a.storeName.localeCompare(b.storeName, "th");
+  const desc = (key: (row: StoreRow) => number | null) => (a: StoreRow, b: StoreRow) => (key(b) ?? -1) - (key(a) ?? -1);
+  const byFollow = (a: StoreRow, b: StoreRow) => (a.followTodayRank ?? Infinity) - (b.followTodayRank ?? Infinity);
+  const compare: Record<StoreSort, (a: StoreRow, b: StoreRow) => number> = {
+    follow: (a, b) => byFollow(a, b) || desc((row) => row.longestBusinessMinutes)(a, b) || tail(a, b),
+    recent: (a, b) => desc((row) => row.sinceYesterdayCount)(a, b) || desc((row) => row.followTodayCount)(a, b) || desc((row) => row.longestBusinessMinutes)(a, b) || tail(a, b),
+    wait: (a, b) => desc((row) => row.longestBusinessMinutes)(a, b) || tail(a, b),
+    rate: (a, b) => (a.rate7d ?? Infinity) - (b.rate7d ?? Infinity) || tail(a, b),
+    age: (a, b) => desc((row) => row.oldestWaitingMinutes)(a, b) || tail(a, b),
+  };
+  return [...rows].sort(compare[sort]);
 }
 
 /** The longest waits for the "วันนี้" side list: one row per store (its longest recent wait). */
 export function longestWaitPerStore(rows: StoreRow[], limit = 5): StoreRow[] {
-  return sortStoreRows(rows.filter((row) => row.hasData && row.longestBusinessMinutes !== null)).slice(0, limit);
+  return sortStoreRows(rows.filter((row) => row.hasData && row.longestBusinessMinutes !== null), "wait").slice(0, limit);
 }
 
 /** Stores with the biggest week-on-week drop in the 24-hour rate, biggest first. */
@@ -241,7 +300,10 @@ export function responseKpis(rows: StoreRow[]) {
   const waitingStores = withData.filter((row) => row.waitingCount > 0);
   return {
     storesWithData: withData.length,
-    followUpStores: withData.filter((row) => row.needsFollowUp).length,
+    /** = the sidebar badge, the ตามวันนี้ tab count and the "วันนี้" item 1. */
+    followTodayStores: withData.filter((row) => row.followTodayRank !== null).length,
+    /** Stores with at least one chat waiting ≥ the threshold since yesterday 10:00 (the "M" in "N จาก M"). */
+    followTodayCandidates: withData.filter((row) => row.followTodayCount > 0).length,
     waitingChats: waitingStores.reduce((sum, row) => sum + row.waitingCount, 0),
     waitingStores: waitingStores.length,
     oldBacklogChats: withData.reduce((sum, row) => sum + row.oldWaitingCount, 0),

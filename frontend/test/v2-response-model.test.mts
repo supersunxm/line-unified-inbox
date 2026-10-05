@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
   aggregateReplyRate,
@@ -11,6 +12,8 @@ import {
   storesWithChatData,
   storesWithRecentActivity,
   longestWaitPerStore,
+  selectFollowToday,
+  defaultSortForTab,
   type StoreRow,
   toWaitingChat,
   waitingSinceOf,
@@ -20,6 +23,8 @@ import {
 } from "../src/lib/v2/response-model.ts";
 import { buildConversationList } from "../src/lib/v2/conversation-list.ts";
 import { fetchPagesUntil } from "../src/lib/v2/waiting-pages.ts";
+import { buildTodayItems } from "../src/lib/v2/today-model.ts";
+import { FOLLOW_TODAY_LIMIT } from "../src/lib/v2/business-hours.ts";
 import { ALL_STORES, parseResponseUrl, responseUrlQuery } from "../src/lib/v2/response-url.ts";
 
 const bkk = (local: string) => `${local}+07:00`;
@@ -39,6 +44,12 @@ function conversation(id: string, storeId: string, waitingSince: string, extra: 
 }
 
 const summary = (storeId: string, notReplied: number, oldestWaitingMinutes?: number): SummaryStore => ({ storeId, storeName: `ร้าน ${storeId}`, notReplied, notifiedBm: 0, replied: 0, oldestWaitingMinutes });
+const emptyRow: StoreRow = {
+  storeId: "", storeName: "", region: null, province: null, hasData: false, waitingCount: 0, recentWaitingCount: 0, oldWaitingCount: 0,
+  oldestWaitingMinutes: null, sinceYesterdayCount: 0, followTodayCount: 0, followTodayLongestMinutes: null, followTodayRank: null,
+  longestBusinessMinutes: null, longestWaitingSince: null, longestChatId: null, hasOverdueWait: false,
+  rate7d: null, ratePrev7d: null, rateDelta: null, trend: [], managerUrl: null,
+};
 const mirror = (storeId: string, enabled: boolean, hoursAgo: number | null) => ({ storeId, enabled, status: "SUCCESS", lastSuccessfulSyncAt: hoursAgo === null ? null : new Date(NOW - hoursAgo * 3_600_000).toISOString() });
 const rate = (storeId: string, within24h: number, total: number): ReplyRateRow => ({ storeId, total, within24h, over24h: total - within24h, pending: 0, responseRate24h: total === 0 ? null : Math.round((within24h / total) * 1000) / 10 });
 
@@ -53,7 +64,7 @@ test("waiting starts at the resolver's deciding customer message, else the lates
   assert.equal(chat.managerUrl, "https://manager.line.biz/s1");
 });
 
-test("follow-up selection: a store needs follow-up when its longest wait reaches 60 business minutes and it has data", () => {
+test("ตามวันนี้ selection: a store qualifies with a chat waiting ≥ 60 business minutes since yesterday 10:00, and data", () => {
   const chats = [
     toWaitingChat(conversation("a", "s1", bkk("2026-10-04T13:59:00")), NOW), // 61 min
     toWaitingChat(conversation("b", "s2", bkk("2026-10-04T14:01:00")), NOW), // 59 min
@@ -76,17 +87,18 @@ test("follow-up selection: a store needs follow-up when its longest wait reaches
     ratesPrev7d: [],
   });
   const byId = new Map(rows.map((row) => [row.storeId, row]));
-  assert.equal(byId.get("s1")?.needsFollowUp, true);
-  assert.equal(byId.get("s2")?.needsFollowUp, false);
+  // s4 (300 min) outranks s1 (61 min): both have one overdue chat.
+  assert.equal(byId.get("s4")?.followTodayRank, 1);
+  assert.equal(byId.get("s1")?.followTodayRank, 2);
+  assert.equal(byId.get("s2")?.followTodayRank, null); // 59 min: below the threshold
   assert.equal(byId.get("s3")?.hasData, false);
-  assert.equal(byId.get("s3")?.needsFollowUp, false);
-  assert.equal(byId.get("s4")?.needsFollowUp, true);
+  assert.equal(byId.get("s3")?.followTodayRank, null); // no data, never listed
   assert.equal(byId.get("s4")?.waitingCount, 2); // count comes from the backend summary, not the chat list
-  assert.deepEqual(filterStoreRows(rows, "follow-up").map((row) => row.storeId).sort(), ["s1", "s4"]);
+  assert.deepEqual(filterStoreRows(rows, "follow-today").map((row) => row.storeId).sort(), ["s1", "s4"]);
   assert.deepEqual(filterStoreRows(rows, "all").map((row) => row.storeId).sort(), ["s1", "s2", "s4", "s5"]);
   assert.deepEqual(filterStoreRows(rows, "no-data").map((row) => row.storeId), ["s3"]);
   // No-data stores are excluded from every KPI.
-  assert.deepEqual(responseKpis(rows), { storesWithData: 4, followUpStores: 2, waitingChats: 4, waitingStores: 3, oldBacklogChats: 1, oldBacklogStores: 1, noDataStores: 1, totalStores: 5 });
+  assert.deepEqual(responseKpis(rows), { storesWithData: 4, followTodayStores: 2, followTodayCandidates: 2, waitingChats: 4, waitingStores: 3, oldBacklogChats: 1, oldBacklogStores: 1, noDataStores: 1, totalStores: 5 });
 });
 
 test("without a has-data source no store is marked as missing data", () => {
@@ -95,13 +107,13 @@ test("without a has-data source no store is marked as missing data", () => {
 });
 
 test("stores sort by longest business-hours wait, then waiting count, then name; nothing waiting goes last", () => {
-  const base = { region: null, hasData: true, needsFollowUp: false, rate7d: null, ratePrev7d: null, rateDelta: null, trend: [], managerUrl: null, longestWaitingSince: null, recentWaitingCount: 0, oldWaitingCount: 0, oldestWaitingMinutes: null, longestChatId: null };
+  const base = { ...emptyRow, hasData: true };
   const rows = sortStoreRows([
     { ...base, storeId: "a", storeName: "ข", waitingCount: 1, longestBusinessMinutes: 30 },
     { ...base, storeId: "b", storeName: "ก", waitingCount: 0, longestBusinessMinutes: null },
     { ...base, storeId: "c", storeName: "ค", waitingCount: 3, longestBusinessMinutes: 300 },
     { ...base, storeId: "d", storeName: "ง", waitingCount: 5, longestBusinessMinutes: 30 },
-  ]);
+  ], "wait");
   assert.deepEqual(rows.map((row) => row.storeId), ["c", "d", "a", "b"]);
   const chats = sortWaitingChats([
     toWaitingChat(conversation("x", "s1", bkk("2026-10-04T14:30:00")), NOW),
@@ -144,10 +156,12 @@ test("chat list: waiting first by longest wait, then replied by latest, limited 
 
 test("URL state round-trips and keeps the selection when the view changes", () => {
   const state = parseResponseUrl(new URLSearchParams("view=chat&tab=all&store=s1&conversation=c9"));
-  assert.deepEqual(state, { view: "chat", tab: "all", sort: "wait", store: "s1", conversation: "c9" });
+  assert.deepEqual(state, { view: "chat", tab: "all", sort: null, store: "s1", conversation: "c9" });
   assert.equal(responseUrlQuery({ ...state, view: "stores" }), "?tab=all&store=s1&conversation=c9");
-  assert.deepEqual(parseResponseUrl(new URLSearchParams("tab=bogus")), { view: "stores", tab: "follow-up", sort: "wait", store: null, conversation: null });
-  assert.equal(responseUrlQuery({ view: "chat", tab: "follow-up", sort: "wait", store: ALL_STORES, conversation: null }), "?view=chat&store=all");
+  assert.deepEqual(parseResponseUrl(new URLSearchParams("tab=bogus")), { view: "stores", tab: "follow-today", sort: null, store: null, conversation: null });
+  // The old tab name still works.
+  assert.equal(parseResponseUrl(new URLSearchParams("tab=follow-up")).tab, "follow-today");
+  assert.equal(responseUrlQuery({ view: "chat", tab: "follow-today", sort: null, store: ALL_STORES, conversation: null }), "?view=chat&store=all");
   assert.equal(responseUrlQuery({ ...parseResponseUrl(new URLSearchParams("tab=all&sort=age")), store: null }), "?tab=all&sort=age");
 });
 
@@ -177,14 +191,14 @@ test("7-day split: only waits within 7 days count for follow-up; older ones are 
     ratesPrev7d: [],
   });
   const [s1, s2] = rows;
-  assert.equal(s1.needsFollowUp, true);
+  assert.equal(s1.followTodayRank, 1);
   assert.deepEqual([s1.recentWaitingCount, s1.oldWaitingCount], [1, 2]);
-  assert.equal(s2.needsFollowUp, false); // its only loaded wait is older than 7 days
+  assert.equal(s2.followTodayRank, null); // its only loaded wait is older than 7 days
   assert.equal(s2.longestBusinessMinutes, null);
   assert.deepEqual([s2.recentWaitingCount, s2.oldWaitingCount], [0, 2]);
   const kpis = responseKpis(rows);
-  assert.deepEqual([kpis.followUpStores, kpis.oldBacklogChats, kpis.oldBacklogStores], [1, 4, 2]);
-  assert.deepEqual(filterStoreRows(rows, "follow-up").map((row) => row.storeId), ["s1"]);
+  assert.deepEqual([kpis.followTodayStores, kpis.oldBacklogChats, kpis.oldBacklogStores], [1, 4, 2]);
+  assert.deepEqual(filterStoreRows(rows, "follow-today").map((row) => row.storeId), ["s1"]);
   // "ค้างเกิน 7 วัน" links to tab=all sorted by age: the oldest backlog first.
   assert.deepEqual(sortStoreRows(rows, "age").map((row) => row.storeId), ["s1", "s2"]);
   assert.deepEqual(sortStoreRows(rows, "wait").map((row) => row.storeId), ["s1", "s2"]);
@@ -244,4 +258,91 @@ test("paging stops on a short page and reports truncation at the cap", async () 
     pageSize: 10, concurrency: 3, maxPages: 4, pastCutoff: () => false,
   });
   assert.deepEqual([capped.pagesUsed, capped.items.length, capped.truncated], [4, 40, true]);
+});
+
+test("ตามวันนี้ window starts at yesterday 10:00 Bangkok, whatever the time today", async () => {
+  const { followTodayWindowStart } = await import("../src/lib/v2/business-hours.ts");
+  const sundayOpen = Date.parse(bkk("2026-10-04T10:00:00"));
+  // Monday 2026-10-05: before opening, after closing, at midnight, mid-day → Sunday 10:00 (stores open daily).
+  for (const at of ["2026-10-05T08:00:00", "2026-10-05T22:30:00", "2026-10-05T00:00:00", "2026-10-05T14:00:00", "2026-10-05T23:59:59"]) {
+    assert.equal(followTodayWindowStart(bkk(at)), sundayOpen, at);
+  }
+  // One second before midnight it is still Sunday, so the window starts Saturday 10:00.
+  assert.equal(followTodayWindowStart(bkk("2026-10-04T23:59:59")), Date.parse(bkk("2026-10-03T10:00:00")));
+  // Bangkok midnight is 17:00 UTC: 16:59Z is still the previous Bangkok day.
+  assert.equal(followTodayWindowStart("2026-10-04T16:59:00Z"), Date.parse(bkk("2026-10-03T10:00:00")));
+  assert.equal(followTodayWindowStart("2026-10-04T17:00:00Z"), sundayOpen);
+});
+
+test("ตามวันนี้ counts only overdue chats since the window start", () => {
+  const rows = buildStoreRows({
+    summaryStores: [summary("s1", 4)],
+    waitingChats: [
+      toWaitingChat(conversation("in-overdue", "s1", bkk("2026-10-04T12:00:00")), NOW), // 180 min, today
+      toWaitingChat(conversation("in-fresh", "s1", bkk("2026-10-04T14:30:00")), NOW), // 30 min: in window, not overdue
+      toWaitingChat(conversation("yesterday", "s1", bkk("2026-10-03T10:00:00")), NOW), // exactly the window start
+      toWaitingChat(conversation("before", "s1", bkk("2026-10-03T09:59:00")), NOW), // before the window
+    ],
+    storesWithData: new Set(["s1"]),
+    now: NOW,
+    rates7d: [],
+    ratesPrev7d: [],
+  });
+  assert.deepEqual([rows[0].sinceYesterdayCount, rows[0].followTodayCount], [3, 2]);
+  assert.equal(rows[0].followTodayLongestMinutes, 660 + 300); // yesterday 10:00 → 21:00, today 10:00 → 15:00
+});
+
+test("ตามวันนี้ keeps the top N by count, then longest wait, then name (ties cut deterministically)", () => {
+  const make = (id: string, name: string, count: number, longest: number) => ({ ...emptyRow, storeId: id, storeName: name, hasData: true, followTodayCount: count, followTodayLongestMinutes: longest });
+  const rows = [
+    make("a", "ร้าน ก", 2, 100),
+    make("b", "ร้าน ข", 5, 70),
+    make("c", "ร้าน ค", 2, 400), // same count as a, longer wait → before a
+    make("d", "ร้าน ง", 2, 100), // ties a on count and wait → name decides (ก before ง)
+    make("e", "ร้าน จ", 0, 0), // nothing overdue: never listed
+    { ...make("f", "ร้าน ฉ", 9, 999), hasData: false }, // no data: never listed
+  ];
+  assert.deepEqual(selectFollowToday(rows, 15).map((row) => row.storeId), ["b", "c", "a", "d"]);
+  assert.deepEqual(selectFollowToday(rows, 3).map((row) => row.storeId), ["b", "c", "a"]);
+  // A run of identical stores is still cut at exactly N.
+  const many = Array.from({ length: 20 }, (_, index) => make(`s${String(index).padStart(2, "0")}`, `ร้าน ${String(index).padStart(2, "0")}`, 1, 60));
+  const top = selectFollowToday(many, FOLLOW_TODAY_LIMIT);
+  assert.equal(FOLLOW_TODAY_LIMIT, 15);
+  assert.equal(top.length, 15);
+  assert.deepEqual(top.map((row) => row.storeId), many.slice(0, 15).map((row) => row.storeId));
+});
+
+test("ทั้งหมด sorts by recent count (default), longest wait, or 24h rate", () => {
+  const make = (id: string, patch: Partial<StoreRow>) => ({ ...emptyRow, storeId: id, storeName: id, hasData: true, ...patch });
+  const rows = [
+    make("few-long", { sinceYesterdayCount: 1, longestBusinessMinutes: 900, rate7d: 95 }),
+    make("many", { sinceYesterdayCount: 6, longestBusinessMinutes: 70, rate7d: 40 }),
+    make("mid", { sinceYesterdayCount: 3, longestBusinessMinutes: 200, rate7d: null }),
+  ];
+  assert.equal(defaultSortForTab("all"), "recent");
+  assert.equal(defaultSortForTab("follow-today"), "follow");
+  assert.deepEqual(sortStoreRows(rows, "recent").map((row) => row.storeId), ["many", "mid", "few-long"]);
+  assert.deepEqual(sortStoreRows(rows, "wait").map((row) => row.storeId), ["few-long", "mid", "many"]);
+  assert.deepEqual(sortStoreRows(rows, "rate").map((row) => row.storeId), ["many", "few-long", "mid"]); // lowest first, no data last
+});
+
+test("consistency: sidebar badge = ตามวันนี้ tab count = KPI = วันนี้ item 1", () => {
+  const chats: ReturnType<typeof toWaitingChat>[] = [];
+  const stores: SummaryStore[] = [];
+  for (let index = 0; index < 20; index += 1) {
+    const id = `s${index}`;
+    stores.push(summary(id, index + 1));
+    for (let chat = 0; chat <= index % 4; chat += 1) chats.push(toWaitingChat(conversation(`${id}-${chat}`, id, bkk(`2026-10-04T1${chat}:00:00`)), NOW));
+  }
+  const rows = buildStoreRows({ summaryStores: stores, waitingChats: chats, storesWithData: new Set(stores.map((store) => store.storeId)), now: NOW, rates7d: [], ratesPrev7d: [] });
+  const kpis = responseKpis(rows);
+  const tabCount = filterStoreRows(rows, "follow-today").length;
+  const items = buildTodayItems({ storeRows: rows, waitingLoaded: true, hasDataLoaded: true, totals7d: null, totalsPrev7d: null, googleStores: [] });
+  const item = items.find((entry) => entry.id === "follow-today");
+  assert.equal(kpis.followTodayStores, 15);
+  assert.equal(tabCount, kpis.followTodayStores);
+  assert.equal(item?.problem, `${kpis.followTodayStores} ร้านต้องตามวันนี้`);
+  assert.equal(kpis.followTodayCandidates, 20);
+  // The sidebar badge reads responseKpis(...).followTodayStores (v2-shell.tsx).
+  assert.match(readFileSync(new URL("../src/components/v2/v2-shell.tsx", import.meta.url), "utf8"), /responseKpis\(data\.storeRows\)\.followTodayStores/);
 });

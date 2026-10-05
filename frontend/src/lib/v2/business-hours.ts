@@ -22,6 +22,21 @@ export const FOLLOW_UP_THRESHOLD_MINUTES = 60;
 export const RECENT_WAIT_WINDOW_DAYS = 7;
 export const RECENT_WAIT_WINDOW_MS = RECENT_WAIT_WINDOW_DAYS * 24 * 60 * 60 * 1000;
 
+/** "ตามวันนี้" lists at most this many stores. */
+export const FOLLOW_TODAY_LIMIT = 15;
+
+/**
+ * Start of the "ตามวันนี้" window: the previous business day's opening, i.e. yesterday
+ * 10:00 Bangkok. Stores open every day, so on Mondays this is still yesterday (Sunday).
+ * It depends only on today's Bangkok date, so it is the same before opening, after
+ * closing and right after midnight.
+ */
+export function followTodayWindowStart(now: Date | number | string = Date.now()): number {
+  const dayStartLocalMinutes = Math.floor(bangkokLocalMinutes(toMs(now)) / DAY_MINUTES) * DAY_MINUTES;
+  const openingLocalMinutes = dayStartLocalMinutes - DAY_MINUTES + BUSINESS_OPEN_MINUTE;
+  return openingLocalMinutes * MINUTE_MS - BANGKOK_OFFSET_MS;
+}
+
 /** Target for the backend's "replied within 24 hours" rate, in percent. */
 export const RESPONSE_RATE_TARGET_PERCENT = 90;
 

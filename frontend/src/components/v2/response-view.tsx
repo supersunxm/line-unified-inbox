@@ -4,15 +4,16 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import React, { useCallback, useEffect, useMemo } from "react";
 import { PageHeader } from "@/components/shell/page-header";
 import { KpiStripSkeleton, SectionCardSkeleton, SegmentedControl, useDeferredLoading } from "@/components/ui";
-import { FOLLOW_UP_THRESHOLD_MINUTES, RECENT_WAIT_WINDOW_DAYS } from "@/lib/v2/business-hours";
-import { filterStoreRows, sortStoreRows, type StoreTab } from "@/lib/v2/response-model";
+import { FOLLOW_TODAY_LIMIT, FOLLOW_UP_THRESHOLD_MINUTES, RECENT_WAIT_WINDOW_DAYS } from "@/lib/v2/business-hours";
+import { defaultSortForTab, filterStoreRows, sortStoreRows, type StoreSort, type StoreTab } from "@/lib/v2/response-model";
 import { ALL_STORES, parseResponseUrl, responseUrlQuery, type ResponseUrlState, type ResponseView as View } from "@/lib/v2/response-url";
 import { ResponseChatView } from "./response-chat-view";
 import { ResponseKpis, ResponseStoresView } from "./response-stores-view";
 import { useV2Data, WAITING_MAX_PAGES, WAITING_PAGE_SIZE } from "./v2-data";
 import { SourceNotice } from "./v2-ui";
 
-const TAB_LABELS: Record<StoreTab, string> = { "follow-up": "ต้องตาม", all: "ทั้งหมด", "no-data": "ไม่มีข้อมูล" };
+const TAB_LABELS: Record<StoreTab, string> = { "follow-today": "ตามวันนี้", all: "ทั้งหมด", "no-data": "ไม่มีข้อมูล" };
+const SORT_LABELS: Array<[StoreSort, string]> = [["recent", "รอตอบตั้งแต่เมื่อวาน"], ["wait", "รอนานสุด"], ["rate", "ตอบใน 24 ชม. (ต่ำสุดก่อน)"], ["age", "แชทค้างนานสุด"]];
 
 function Notices() {
   const data = useV2Data();
@@ -41,7 +42,8 @@ export function ResponseView() {
     router.replace(`${pathname}${responseUrlQuery({ ...state, ...patch })}`, { scroll: false });
   }, [pathname, router, state]);
 
-  const rows = useMemo(() => sortStoreRows(filterStoreRows(data.storeRows, state.tab), state.sort), [data.storeRows, state.tab, state.sort]);
+  const sort = state.sort ?? defaultSortForTab(state.tab);
+  const rows = useMemo(() => sortStoreRows(filterStoreRows(data.storeRows, state.tab), sort), [data.storeRows, state.tab, sort]);
 
   // Stores view: select the first row when nothing is selected, so the detail panel is never empty.
   const firstStoreId = rows[0]?.storeId ?? null;
@@ -62,7 +64,7 @@ export function ResponseView() {
             role="tab"
             aria-selected={active}
             data-v2-tab={tab}
-            onClick={() => navigate({ tab, sort: "wait", store: state.store === ALL_STORES ? ALL_STORES : null, conversation: null })}
+            onClick={() => navigate({ tab, sort: null, store: state.store === ALL_STORES ? ALL_STORES : null, conversation: null })}
             className={`rounded-[var(--app-radius-sm)] px-3 py-1.5 text-sm font-medium ${active ? "bg-[var(--app-surface)] text-[var(--app-text-primary)] shadow-[var(--app-shadow-card)]" : "text-[var(--app-text-secondary)] hover:text-[var(--app-text-primary)]"}`}
           >
             {TAB_LABELS[tab]} <span className="tabular-nums text-[var(--app-text-tertiary)]">{data.summary.data ? count : ""}</span>
@@ -72,11 +74,26 @@ export function ResponseView() {
     </div>
   );
 
+  // "ทั้งหมด" can be re-sorted; "ตามวันนี้" keeps its own order (count, then longest wait).
+  const sortControl = state.tab === "all" ? (
+    <label className="flex items-center gap-2 text-sm text-[var(--app-text-secondary)]">
+      เรียงตาม
+      <select
+        data-v2-sort
+        value={sort}
+        onChange={(event) => navigate({ sort: event.target.value as StoreSort })}
+        className="h-9 rounded-[var(--app-radius-md)] border border-[var(--app-border)] bg-[var(--app-surface)] px-2 text-sm text-[var(--app-text-primary)]"
+      >
+        {SORT_LABELS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+      </select>
+    </label>
+  ) : null;
+
   return (
     <div className={`flex h-full min-h-0 flex-col gap-4 px-6 py-5 ${state.view === "stores" ? "overflow-y-auto" : "overflow-hidden"}`}>
       <PageHeader
         title="การตอบแชท"
-        description={`ลูกค้าที่รอคำตอบ นับเวลาเฉพาะช่วงเปิดร้าน 10:00–21:00 · ต้องตามเมื่อรอ ≥ ${FOLLOW_UP_THRESHOLD_MINUTES} นาที · ร้านที่ไม่มีข้อมูลไม่นับในทุกตัวเลข`}
+        description={`ลูกค้าที่รอคำตอบ นับเวลาเฉพาะช่วงเปิดร้าน 10:00–21:00 · ตามวันนี้ = ร้านที่ลูกค้ารอ ≥ ${FOLLOW_UP_THRESHOLD_MINUTES} นาทีตั้งแต่เมื่อวาน 10:00 มากที่สุด ${FOLLOW_TODAY_LIMIT} ร้าน · ร้านที่ไม่มีข้อมูลไม่นับในทุกตัวเลข`}
         actions={
           <SegmentedControl<View>
             aria-label="มุมมอง"
@@ -90,17 +107,17 @@ export function ResponseView() {
       {data.coreLoading ? (
         showSkeleton ? (
           <div className="space-y-4">
-            <KpiStripSkeleton columns={5} labels={["ร้านที่ต้องตาม", "แชทที่รอคำตอบ", `ค้างเกิน ${RECENT_WAIT_WINDOW_DAYS} วัน`, "ตอบใน 24 ชม. · 7 วัน", "ร้านที่ไม่มีข้อมูล"]} />
+            <KpiStripSkeleton columns={5} labels={["ร้านที่ต้องตามวันนี้", "แชทที่รอคำตอบ", `ค้างเกิน ${RECENT_WAIT_WINDOW_DAYS} วัน`, "ตอบใน 24 ชม. · 7 วัน", "ร้านที่ไม่มีข้อมูล"]} />
             <SectionCardSkeleton title="ร้านเรียงตามเวลารอนานสุด" lines={8} />
           </div>
         ) : null
       ) : state.view === "stores" ? (
         <>
           <ResponseKpis />
-          {tabs}
+          <div className="flex flex-wrap items-center justify-between gap-3">{tabs}{sortControl}</div>
           <ResponseStoresView
             rows={rows}
-            state={state}
+            state={{ ...state, sort }}
             onSelectStore={(store) => navigate({ store, conversation: null })}
             onOpenConversation={(store, conversation) => navigate({ view: "chat", store, conversation })}
           />

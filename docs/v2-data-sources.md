@@ -36,15 +36,15 @@ Not used: `GET /operations/line-chat-nickname/fleet-readiness`. It is the nickna
 | Waiting chats per store (count) | `bmReplyStatusSummary.stores[].notReplied + notifiedBm` | available |
 | Waiting since (per chat) | `conversations?replyState=NOT_REPLIED` → `replyStateProjection.decidingEventAt` when `decidingEventKind = CUSTOMER_INBOUND`, else `latestMessageAt` (the same field the summary's `oldestWaitingMinutes` uses) | derivable (waits from the last 7 days) |
 | Wait in business minutes | `businessMinutesBetween(waitingSince, now)` in `lib/v2/business-hours.ts` | derivable |
-| "ต้องตาม" stores (a chat waiting ≥ 60 business min) | waiting chats above | derivable |
 | "Has data" (chats are being collected) | `mirror-status`: the store has an OA with `enabled = true` and `lastSuccessfulSyncAt` within the last 24 hours. If mirror-status fails to load, the fallback is any conversation in the last 7 days (`store-24h-response-summary` `total > 0`), and the page says which source it used. | available |
 | "ไม่มีข้อมูล" stores | stores without data by the rule above | available |
-| "ต้องตาม" (follow-up) | a waiting chat whose customer message is within the last 7 days (`RECENT_WAIT_WINDOW_DAYS`) and has waited ≥ 60 business minutes | derivable |
+| "ตามวันนี้" (daily chase list) | per store, waiting chats whose customer message was sent since yesterday 10:00 Bangkok (`followTodayWindowStart`) and that have waited ≥ 60 business minutes; the top `FOLLOW_TODAY_LIMIT` (15) stores by that count, then longest such wait, then name. The sidebar badge, the tab count, the KPI and "วันนี้" item 1 all use this one selection (`selectFollowToday`). | derivable |
+| "รอตอบ (ตั้งแต่เมื่อวาน)" | waiting chats whose customer message was sent since yesterday 10:00 | derivable |
 | "ค้างเกิน 7 วัน" (backlog) per store | summary waiting count − the store's waiting chats from the last 7 days; sort by age uses the summary's `oldestWaitingMinutes` | derivable |
 | ตอบใน 24 ชม. · 7 วัน, and the previous 7 days | `store-24h-response-summary` ×2 (`rangeForPreset("7d")` and the 7 days before), re-aggregated over stores with data as `Σwithin24h / Σtotal`, the backend's own overview formula | available |
 | Δ vs previous week per store | the two calls above | derivable |
 | 7-day mini trend and daily bar chart per store | `store-24h-response-summary` ×7, one call per Bangkok day | derivable (7 requests) |
-| Store region | `getGoogleReviewKpis().stores[].region` joined on `storeId` (StoreMaster region) | derivable; blank where a store has no StoreMaster row |
+| Store region and province | `api.stores()` → `GET /stores`, which returns full Store rows: `region` and `area` (the province), synced from StoreMaster by `sync-connected-line-oa`. Not in the shared `ApiStore` type, so v2 reads them locally. When both are empty, no location line is shown. (The Google Review KPI list has no region on production.) | available |
 | "เปิดใน LINE OA Manager" (store) | `conversation.store.lineManagerUrl` when `lineManagerUrlStatus = "VALID"`, read from one conversation of that store | available; button hidden when absent |
 | "เปิดใน LINE OA Manager" (chat) | `conversation.resolvedLineOaManagerUrl`, falling back to the store URL | available |
 | Chat list and thread (read-only) | `conversations`, `conversationMessages` | available |
@@ -54,7 +54,7 @@ Not used: `GET /operations/line-chat-nickname/fleet-readiness`. It is the nickna
 
 | Item | Source | Status |
 |---|---|---|
-| 1. Stores waiting ≥ threshold | as above | derivable |
+| 1. ตามวันนี้ | same selection as /v2/response; the top 3 are named with their counts | derivable |
 | 2. 24h rate below target (90%) or down vs last week; 3 biggest drops | `store-24h-response-summary` ×2 | available |
 | 3. Customer / product signals | `purchaseAnalytics` has record counts only: no target, no comparison period and no definition of "abnormal", and the counts depend on BM tagging habits | **MISSING**: omitted from the list |
 | 4. Google review stores below target | `getGoogleReviewKpis({ month: current })`, `kpiResult.isPassed === false` | available |
