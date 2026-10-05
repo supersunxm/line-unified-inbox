@@ -79,7 +79,7 @@ or authentication could not be confirmed. No policy workaround was attempted;
 API target validation does not imply a completed authenticated browser visit.
 An existing stored-bot direct link was also reverified after deployment.
 
-13,749 eligible Conversations lack a proven identity and retain existing
+At the rollout snapshot, 13,749 eligible Conversations lacked a proven identity and retained existing
 fallback behavior. Unproven/ambiguous mappings stay untouched. There are no
 October activity candidates to validate as a production sample.
 
@@ -105,5 +105,29 @@ The first naturally scheduled deployed-worker NORMAL cycle completed
 09:35:46 UTC: 144/144 success, failures/partials zero, A93/B51. This preceded
 the backfill and is not substituted for post-rollout regression.
 
-**Pending:** next naturally scheduled post-rollout NORMAL 144/144 completion.
-No forced cycle, health relaxation or fleet change is permitted.
+The post-rollout naturally scheduled NORMAL cycle completed 11:09:42 UTC:
+144 attempted/succeeded, failed/partial zero, A93/B51, unconfigured zero and
+two archived ineligible exclusions. Duration 2,036,033ms (33m56s), comparable to
+previous warm cycles of 2,064,946ms and 2,122,162ms. Inspected deployment logs show zero
+PROFILE_OPERATION_BUSY or IDENTITY_BRIDGE_FAILED_REQUIRES_READBACK events.
+No forced cycle, health relaxation or fleet change occurred.
+
+Final 11:11:26 UTC read-only acceptance: all 383 rollout identities remain exact,
+all 6,578 preexisting identity/provenance/timestamp/operator records remain
+unchanged, Source applications three, legacy job FAILED, active leases zero.
+Total linked Conversations 7,001; 40 subsequent existing exact inbound-ID
+links (PROJECT_B_EXACT_INBOUND_MESSAGE_ID) are separate from the 383 manifest
+writes. Eligible unlinked Conversations 13,730.
+The current bridge audit has 18,144 Mirror identities, already linked 6,167,
+safe remaining zero, conflicting classes zero, insufficient 11,977, separate
+conversation-only no-evidence 14,549, unexplained zero.
+
+The latest dynamic nickname audit covers 144/144 OAs, 16,677 observations,
+5,318 identities matched, mapped three, needs-update zero, no signal 3,748,
+ambiguous zero, identity conflict 11,359, unknown 1,567 and unexplained zero.
+This dynamic snapshot includes new ordinary observations; the fixed-cohort
+296-identity gain above is the direct comparison attributable to the backfill.
+
+Result: MIRROR_IDENTITY_BRIDGE_COMPLETE_WITH_EXPLICIT_EXCEPTIONS. The explicit
+exceptions are the remaining authenticated browser checks and absent October
+candidate samples. Unproven identities retain their normal holds/fallbacks.
