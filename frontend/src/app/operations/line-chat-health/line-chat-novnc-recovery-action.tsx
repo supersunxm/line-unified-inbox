@@ -14,12 +14,10 @@ type RecoveryStartResult = {
   message?: string;
 };
 
-const PROFILE_B_SESSION_KEY = "profile-b";
-
-function findProfileBActionsTarget(): HTMLElement | null {
+function findProfileActionsTarget(sessionKey: string): HTMLElement | null {
   for (const row of Array.from(document.querySelectorAll("tbody tr"))) {
-    if (!row.textContent?.includes(PROFILE_B_SESSION_KEY)) continue;
     const cells = row.querySelectorAll("td");
+    if (!cells.item(0)?.textContent?.includes(sessionKey)) continue;
     const actionsCell = cells.item(cells.length - 1);
     if (!(actionsCell instanceof HTMLElement)) return null;
     const existingActions = actionsCell.firstElementChild;
@@ -28,21 +26,24 @@ function findProfileBActionsTarget(): HTMLElement | null {
   return null;
 }
 
-export function LineChatNovncRecoveryAction() {
+export function LineChatNovncRecoveryAction({ sessionKey = "profile-b" }: { sessionKey?: "account-1" | "profile-b" }) {
   const [target, setTarget] = useState<HTMLElement | null>(null);
   const [healthStatus, setHealthStatus] = useState<string | null>(null);
   const [opening, setOpening] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const refreshTarget = useCallback(() => {
-    setTarget(findProfileBActionsTarget());
-  }, []);
+    setTarget(findProfileActionsTarget(sessionKey));
+  }, [sessionKey]);
 
   useEffect(() => {
-    refreshTarget();
+    const frame = requestAnimationFrame(refreshTarget);
     const observer = new MutationObserver(refreshTarget);
     observer.observe(document.body, { childList: true, subtree: true });
-    return () => observer.disconnect();
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
   }, [refreshTarget]);
 
   useEffect(() => {
@@ -50,8 +51,8 @@ export function LineChatNovncRecoveryAction() {
     void api.lineChatOperationsHealth()
       .then((report) => {
         if (cancelled) return;
-        const profileB = report.sessions.find((session) => session.sessionKey === PROFILE_B_SESSION_KEY);
-        setHealthStatus(profileB?.healthStatus ?? profileB?.status ?? null);
+        const profile = report.sessions.find((session) => session.sessionKey === sessionKey);
+        setHealthStatus(profile?.healthStatus ?? profile?.status ?? null);
       })
       .catch(() => {
         if (!cancelled) setHealthStatus(null);
@@ -59,7 +60,7 @@ export function LineChatNovncRecoveryAction() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [sessionKey]);
 
   const openRecovery = async () => {
     setOpening(true);
@@ -70,7 +71,7 @@ export function LineChatNovncRecoveryAction() {
 
     try {
       const response = await fetch(
-        `/api-backend/operations/line-chat-nickname/sessions/${encodeURIComponent(PROFILE_B_SESSION_KEY)}/manual-recovery/start`,
+        `/api-backend/operations/line-chat-nickname/sessions/${encodeURIComponent(sessionKey)}/manual-recovery/start`,
         {
           method: "POST",
           credentials: "include",
@@ -117,7 +118,7 @@ export function LineChatNovncRecoveryAction() {
         variant={needsReconnect ? "primary" : "outline"}
         isLoading={opening}
         disabled={opening}
-        title="Manual profile-b recovery. Opens a temporary noVNC session and reserves this browser profile while it is open."
+        title={`Manual ${sessionKey} recovery. Opens a temporary recovery session that yields when Live Mirror starts.`}
         onClick={(event) => {
           event.stopPropagation();
           void openRecovery();

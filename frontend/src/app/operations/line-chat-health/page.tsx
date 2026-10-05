@@ -9,7 +9,8 @@ export default function LineChatHealthPage() {
   return (
     <AuthorizedSection section="line-chat-health">
       <LineChatHealthView />
-      <LineChatNovncRecoveryAction />
+      <LineChatNovncRecoveryAction sessionKey="account-1" />
+      <LineChatNovncRecoveryAction sessionKey="profile-b" />
       <LineChatPendingControlAction />
     </AuthorizedSection>
   );

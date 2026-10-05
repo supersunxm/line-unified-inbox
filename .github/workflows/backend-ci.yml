@@ -81,6 +81,11 @@ jobs:
       - name: LINE chat health regression tests
         run: npx tsx --test src/line-chat/line-chat-health.spec.ts src/line-chat/line-chat-profile-operation-coordinator.service.spec.ts src/line-chat/line-chat-session-health-probe.spec.ts src/line-chat/line-chat-health-probe.cli.spec.ts src/line-chat/line-chat-oa-health-probe.spec.ts src/line-chat/line-chat-oa-health-probe.cli.spec.ts src/line-chat/line-chat-health-scheduler.spec.ts src/line-chat/line-chat-operations-auth.spec.ts src/line-chat/line-chat-nickname-worker.service.spec.ts src/line-chat/line-chat-recent-resolver.service.spec.ts src/line-chat/line-chat-mirror.service.spec.ts
 
+      - name: Manual Manager recovery regression
+        run: |
+          npx eslint src/line-chat/line-chat-novnc-recovery-worker.service.ts src/line-chat/line-chat-novnc-recovery.service.ts src/line-chat/line-chat-novnc-recovery-profile.spec.ts
+          npx tsx --test src/line-chat/line-chat-novnc-recovery-profile.spec.ts src/line-chat/line-chat-novnc-recovery-worker.service.spec.ts
+
       - name: Coupon unit tests
         run: npx tsx --test src/coupons/*.spec.ts
 

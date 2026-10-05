@@ -3,7 +3,7 @@ import { Injectable, ServiceUnavailableException } from "@nestjs/common";
 type WorkerRecoveryResponse = {
   success?: boolean;
   active?: boolean;
-  sessionKey?: string;
+  sessionKey?: string | null;
   path?: string;
   expiresAt?: string;
   error?: string;
@@ -14,23 +14,23 @@ export class LineChatNovncRecoveryService {
   public async status(sessionKey: string) {
     this.assertSession(sessionKey);
     const result = await this.callWorker("GET", "/internal/line-chat/recovery/status");
-    return this.toPublicResult(result);
+    return this.toPublicResult(result, sessionKey);
   }
 
   public async start(sessionKey: string) {
     this.assertSession(sessionKey);
     const result = await this.callWorker("POST", "/internal/line-chat/recovery/start", { sessionKey });
-    return this.toPublicResult(result);
+    return this.toPublicResult(result, sessionKey);
   }
 
   public async stop(sessionKey: string) {
     this.assertSession(sessionKey);
     const result = await this.callWorker("POST", "/internal/line-chat/recovery/stop", { sessionKey });
-    return this.toPublicResult(result);
+    return this.toPublicResult(result, sessionKey);
   }
 
   private assertSession(sessionKey: string): void {
-    if (sessionKey !== "profile-b") throw new ServiceUnavailableException("Manual recovery is enabled only for profile-b.");
+    if (sessionKey !== "account-1" && sessionKey !== "profile-b") throw new ServiceUnavailableException("Manual recovery is enabled only for account-1 and profile-b.");
   }
 
   private async callWorker(method: "GET" | "POST", path: string, body?: unknown): Promise<WorkerRecoveryResponse> {
@@ -64,12 +64,15 @@ export class LineChatNovncRecoveryService {
     }
   }
 
-  private toPublicResult(result: WorkerRecoveryResponse) {
+  private toPublicResult(result: WorkerRecoveryResponse, sessionKey: string) {
     const baseUrl = process.env.LINE_CHAT_NOVNC_PUBLIC_BASE_URL?.trim().replace(/\/+$/u, "");
+    if (result.active && result.sessionKey !== sessionKey) {
+      throw new ServiceUnavailableException("Manual recovery is active for another profile.");
+    }
     const url = result.active && result.path && baseUrl ? `${baseUrl}${result.path}` : null;
     return {
       active: result.active === true,
-      sessionKey: "profile-b",
+      sessionKey,
       expiresAt: result.expiresAt ?? null,
       url,
       readyToOpen: Boolean(url),

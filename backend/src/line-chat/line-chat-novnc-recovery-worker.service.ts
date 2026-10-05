@@ -7,7 +7,7 @@ import { PrismaService } from "../prisma.service";
 import { LineChatSessionService } from "./line-chat-session.service";
 import { LineChatProfileOperationCoordinator } from "./line-chat-profile-operation-coordinator.service";
 
-const RECOVERY_SESSION_KEY = "profile-b";
+const RECOVERY_SESSION_KEYS = new Set(["account-1", "profile-b"]);
 const DEFAULT_TTL_MS = 12 * 60 * 1000;
 const DISPLAY = ":99";
 const VNC_PORT = 5900;
@@ -15,12 +15,13 @@ const WEBSOCKIFY_PORT = 6080;
 
 export interface LineChatNovncRecoverySnapshot {
   active: boolean;
-  sessionKey: typeof RECOVERY_SESSION_KEY;
+  sessionKey: string | null;
   path?: string;
   expiresAt?: string;
 }
 
 type ActiveRecovery = {
+  sessionKey: string;
   token: string;
   expiresAt: Date;
   stop: (reason: string) => Promise<void>;
@@ -52,11 +53,11 @@ export class LineChatNovncRecoveryWorkerService {
 
   public snapshot(): LineChatNovncRecoverySnapshot {
     if (!this.active || this.active.expiresAt.getTime() <= Date.now()) {
-      return { active: false, sessionKey: RECOVERY_SESSION_KEY };
+      return { active: false, sessionKey: null };
     }
     return {
       active: true,
-      sessionKey: RECOVERY_SESSION_KEY,
+      sessionKey: this.active.sessionKey,
       path: `/recovery/${this.active.token}/vnc.html?autoconnect=true&resize=scale&path=recovery/${this.active.token}/websockify`,
       expiresAt: this.active.expiresAt.toISOString(),
     };
@@ -67,23 +68,31 @@ export class LineChatNovncRecoveryWorkerService {
   }
 
   public async start(sessionKey: string): Promise<LineChatNovncRecoverySnapshot> {
-    if (sessionKey !== RECOVERY_SESSION_KEY) throw new Error("RECOVERY_SESSION_NOT_ALLOWED");
+    if (!RECOVERY_SESSION_KEYS.has(sessionKey)) throw new Error("RECOVERY_SESSION_NOT_ALLOWED");
+    if (this.active && this.active.expiresAt.getTime() <= Date.now()) throw new Error("RECOVERY_STOPPING");
     const current = this.snapshot();
-    if (current.active) return current;
-    if (this.startPromise) return this.startPromise;
-    this.startPromise = this.startInternal().finally(() => { this.startPromise = null; });
+    if (current.active) {
+      if (current.sessionKey !== sessionKey) throw new Error("RECOVERY_OTHER_SESSION_ACTIVE");
+      return current;
+    }
+    if (this.startPromise) throw new Error("RECOVERY_START_IN_PROGRESS");
+    if (this.sessionService.isMirrorCycleActive()) throw new Error("LIVE_MIRROR_ACTIVE");
+    this.startPromise = this.startInternal(sessionKey).finally(() => { this.startPromise = null; });
     return this.startPromise;
   }
 
   public async stop(sessionKey: string, reason = "operator_stop"): Promise<LineChatNovncRecoverySnapshot> {
-    if (sessionKey !== RECOVERY_SESSION_KEY) throw new Error("RECOVERY_SESSION_NOT_ALLOWED");
-    if (this.active) await this.active.stop(reason);
+    if (!RECOVERY_SESSION_KEYS.has(sessionKey)) throw new Error("RECOVERY_SESSION_NOT_ALLOWED");
+    if (this.active) {
+      if (this.active.sessionKey !== sessionKey) throw new Error("RECOVERY_OTHER_SESSION_ACTIVE");
+      await this.active.stop(reason);
+    }
     return this.snapshot();
   }
 
-  private async startInternal(): Promise<LineChatNovncRecoverySnapshot> {
+  private async startInternal(sessionKey: string): Promise<LineChatNovncRecoverySnapshot> {
     const session = await this.prisma.lineChatSession.findUnique({
-      where: { sessionKey: RECOVERY_SESSION_KEY },
+      where: { sessionKey },
       select: { id: true, sessionKey: true, profileStorageKey: true, profilePath: true },
     });
     if (!session) throw new Error("RECOVERY_SESSION_NOT_FOUND");
@@ -124,19 +133,20 @@ export class LineChatNovncRecoveryWorkerService {
           browserContext = null;
           if (context) await this.sessionService.closeManagedPersistentContext(context, profilePath, {
             sessionId: session.id,
-            sessionKey: RECOVERY_SESSION_KEY,
+            sessionKey,
             profileStorageKey: session.profileStorageKey ?? undefined,
           }).catch(() => undefined);
           for (const child of [...children].reverse()) if (child.exitCode === null && !child.killed) child.kill("SIGTERM");
           await Promise.all(children.map((child) => waitForExit(child)));
           for (const child of children) if (child.exitCode === null && !child.killed) child.kill("SIGKILL");
           if (this.active?.token === token) this.active = null;
-          this.logger.log(JSON.stringify({ event: "line_chat_novnc_recovery_stopped", sessionKey: RECOVERY_SESSION_KEY, reason }));
+          this.logger.log(JSON.stringify({ event: "line_chat_novnc_recovery_stopped", sessionKey, reason }));
           stopResolve();
         };
 
         try {
           lease.assertOwnership();
+          if (this.sessionService.isMirrorCycleActive()) throw new Error("LIVE_MIRROR_ACTIVE");
           spawnManaged("Xvfb", [DISPLAY, "-screen", "0", "1440x900x24", "-nolisten", "tcp"]);
           await new Promise((resolve) => setTimeout(resolve, 500));
           spawnManaged("fluxbox", [], { DISPLAY });
@@ -152,7 +162,7 @@ export class LineChatNovncRecoveryWorkerService {
             args: ["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"],
           }, {
             sessionId: session.id,
-            sessionKey: RECOVERY_SESSION_KEY,
+            sessionKey,
             profileStorageKey: session.profileStorageKey ?? undefined,
             operationKind: "NOVNC_RECOVERY",
             reuseContext: false,
@@ -165,19 +175,27 @@ export class LineChatNovncRecoveryWorkerService {
           await page.goto("https://chat.line.biz/", { waitUntil: "domcontentloaded", timeout: 15_000 }).catch(() => undefined);
           lease.assertOwnership();
 
-          this.active = { token, expiresAt, stop: cleanup };
+          if (this.sessionService.isMirrorCycleActive()) throw new Error("LIVE_MIRROR_ACTIVE");
+          this.active = { sessionKey, token, expiresAt, stop: cleanup };
+          // Release the existing lease as soon as the normal Mirror cycle starts.
+          const mirrorYieldTimer = setInterval(() => {
+            if (this.sessionService.isMirrorCycleActive()) void cleanup("live_mirror_priority");
+          }, 250);
+          mirrorYieldTimer.unref?.();
           const timer = setTimeout(() => void cleanup("ttl_expired"), ttlMs);
           timer.unref?.();
-          this.logger.log(JSON.stringify({ event: "line_chat_novnc_recovery_started", sessionKey: RECOVERY_SESSION_KEY, expiresAt: expiresAt.toISOString() }));
+          this.logger.log(JSON.stringify({ event: "line_chat_novnc_recovery_started", sessionKey, expiresAt: expiresAt.toISOString() }));
           resolveStarted(this.snapshot());
           await stoppedPromise;
           clearTimeout(timer);
+          clearInterval(mirrorYieldTimer);
         } catch (error) {
           await cleanup("startup_error");
           rejectStarted(error instanceof Error ? error : new Error(String(error)));
           throw error;
         }
       },
+      { waitForLock: false },
     ).then((result) => {
       if (!result.acquired) rejectStarted(new Error("PROFILE_OPERATION_BUSY"));
     }).catch((error: unknown) => rejectStarted(error instanceof Error ? error : new Error(String(error))));
