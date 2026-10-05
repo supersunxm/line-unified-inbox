@@ -5,12 +5,12 @@ import type { StoreRow } from "../src/lib/v2/response-model.ts";
 
 function row(storeId: string, patch: Partial<StoreRow> = {}): StoreRow {
   return {
-    storeId, storeName: `ร้าน ${storeId}`, region: null, hasData: true, waitingCount: 0, longestBusinessMinutes: null, longestWaitingSince: null,
+    storeId, storeName: `ร้าน ${storeId}`, region: null, hasData: true, waitingCount: 0, recentWaitingCount: 0, oldWaitingCount: 0, oldestWaitingMinutes: null, longestChatId: null, longestBusinessMinutes: null, longestWaitingSince: null,
     needsFollowUp: false, rate7d: 95, ratePrev7d: 95, rateDelta: 0, trend: [], managerUrl: null, ...patch,
   };
 }
 const totals = (rate: number | null, total = 100) => ({ total, within24h: rate === null ? 0 : Math.round(total * rate / 100), over24h: 5, pending: 2, rate });
-const loaded = { waitingLoaded: true, fleetLoaded: true };
+const loaded = { waitingLoaded: true, hasDataLoaded: true };
 
 test("nothing abnormal: an empty list", () => {
   assert.deepEqual(buildTodayItems({ ...loaded, storeRows: [row("a")], totals7d: totals(95), totalsPrev7d: totals(94), googleStores: [] }), []);
@@ -57,7 +57,7 @@ test("a rate above target still shows when it fell vs last week", () => {
 
 test("a source that failed to load leaves its item out instead of reporting it as fine", () => {
   const storeRows = [row("a", { needsFollowUp: true, longestBusinessMinutes: 120, waitingCount: 1 }), row("z", { hasData: false })];
-  const items = buildTodayItems({ storeRows, waitingLoaded: false, fleetLoaded: false, totals7d: null, totalsPrev7d: null, googleStores: null });
+  const items = buildTodayItems({ storeRows, waitingLoaded: false, hasDataLoaded: false, totals7d: null, totalsPrev7d: null, googleStores: null });
   assert.deepEqual(items, []);
 });
 

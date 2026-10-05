@@ -15,6 +15,13 @@ export const BUSINESS_MINUTES_PER_DAY = BUSINESS_CLOSE_MINUTE - BUSINESS_OPEN_MI
 /** A store needs follow-up when a customer has waited this many business minutes. */
 export const FOLLOW_UP_THRESHOLD_MINUTES = 60;
 
+/**
+ * Only waits whose customer message is this recent count as today's follow-up; older ones
+ * are the "ค้างเกิน 7 วัน" backlog. It is also how far back v2 pages waiting chats.
+ */
+export const RECENT_WAIT_WINDOW_DAYS = 7;
+export const RECENT_WAIT_WINDOW_MS = RECENT_WAIT_WINDOW_DAYS * 24 * 60 * 60 * 1000;
+
 /** Target for the backend's "replied within 24 hours" rate, in percent. */
 export const RESPONSE_RATE_TARGET_PERCENT = 90;
 

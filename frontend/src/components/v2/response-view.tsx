@@ -1,10 +1,10 @@
 "use client";
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import React, { useCallback, useMemo } from "react";
+import React, { useCallback, useEffect, useMemo } from "react";
 import { PageHeader } from "@/components/shell/page-header";
 import { KpiStripSkeleton, SectionCardSkeleton, SegmentedControl, useDeferredLoading } from "@/components/ui";
-import { FOLLOW_UP_THRESHOLD_MINUTES } from "@/lib/v2/business-hours";
+import { FOLLOW_UP_THRESHOLD_MINUTES, RECENT_WAIT_WINDOW_DAYS } from "@/lib/v2/business-hours";
 import { filterStoreRows, sortStoreRows, type StoreTab } from "@/lib/v2/response-model";
 import { ALL_STORES, parseResponseUrl, responseUrlQuery, type ResponseUrlState, type ResponseView as View } from "@/lib/v2/response-url";
 import { ResponseChatView } from "./response-chat-view";
@@ -19,8 +19,10 @@ function Notices() {
   const notices: string[] = [];
   if (data.summary.error) notices.push(`โหลดสถานะการตอบไม่สำเร็จ: ${data.summary.error}`);
   if (data.waiting.error) notices.push(`โหลดรายการแชทที่รอไม่สำเร็จ: ${data.waiting.error}`);
-  if (data.waiting.data?.truncated) notices.push(`แสดงเวลารอจาก ${(WAITING_MAX_PAGES * WAITING_PAGE_SIZE).toLocaleString("th-TH")} แชทที่รอนานที่สุดเท่านั้น จำนวนแชทที่รอยังนับครบจากระบบ`);
-  if (data.fleet.error) notices.push(`โหลดสถานะการเก็บแชทไม่สำเร็จ จึงยังแยกร้านที่ไม่มีข้อมูลไม่ได้: ${data.fleet.error}`);
+  if (data.waiting.data?.truncated) notices.push(`แชทที่รอใน ${RECENT_WAIT_WINDOW_DAYS} วันมีมากกว่า ${(WAITING_MAX_PAGES * WAITING_PAGE_SIZE).toLocaleString("th-TH")} แชท จึงวัดเวลารอจากแชทล่าสุดเท่านั้น จำนวนแชทที่รอยังนับครบจากระบบ`);
+  if (data.mirror.error) notices.push(data.hasDataSource === "activity"
+    ? `โหลดสถานะการเก็บแชท (Live Mirror) ไม่สำเร็จ จึงนับร้านที่มีแชทใน 7 วันล่าสุดว่า "มีข้อมูล" แทน: ${data.mirror.error}`
+    : `โหลดสถานะการเก็บแชทไม่สำเร็จ จึงยังแยกร้านที่ไม่มีข้อมูลไม่ได้: ${data.mirror.error}`);
   if (data.rates7d.error || data.ratesPrev7d.error) notices.push(`โหลดอัตราตอบใน 24 ชม. ไม่สำเร็จ: ${data.rates7d.error ?? data.ratesPrev7d.error}`);
   if (data.daily.error) notices.push(`โหลดแนวโน้มรายวันไม่สำเร็จ: ${data.daily.error}`);
   if (notices.length === 0) return null;
@@ -39,7 +41,14 @@ export function ResponseView() {
     router.replace(`${pathname}${responseUrlQuery({ ...state, ...patch })}`, { scroll: false });
   }, [pathname, router, state]);
 
-  const rows = useMemo(() => sortStoreRows(filterStoreRows(data.storeRows, state.tab)), [data.storeRows, state.tab]);
+  const rows = useMemo(() => sortStoreRows(filterStoreRows(data.storeRows, state.tab), state.sort), [data.storeRows, state.tab, state.sort]);
+
+  // Stores view: select the first row when nothing is selected, so the detail panel is never empty.
+  const firstStoreId = rows[0]?.storeId ?? null;
+  const needsDefaultStore = state.view === "stores" && !data.coreLoading && firstStoreId !== null && (!state.store || state.store === ALL_STORES);
+  useEffect(() => {
+    if (needsDefaultStore && firstStoreId) navigate({ store: firstStoreId, conversation: null });
+  }, [firstStoreId, navigate, needsDefaultStore]);
 
   const tabs = (
     <div role="tablist" aria-label="ตัวกรองร้าน" className="inline-flex gap-1 rounded-[var(--app-radius-md)] bg-[var(--app-surface-subtle)] p-1">
@@ -53,7 +62,7 @@ export function ResponseView() {
             role="tab"
             aria-selected={active}
             data-v2-tab={tab}
-            onClick={() => navigate({ tab, store: state.store === ALL_STORES ? ALL_STORES : null, conversation: null })}
+            onClick={() => navigate({ tab, sort: "wait", store: state.store === ALL_STORES ? ALL_STORES : null, conversation: null })}
             className={`rounded-[var(--app-radius-sm)] px-3 py-1.5 text-sm font-medium ${active ? "bg-[var(--app-surface)] text-[var(--app-text-primary)] shadow-[var(--app-shadow-card)]" : "text-[var(--app-text-secondary)] hover:text-[var(--app-text-primary)]"}`}
           >
             {TAB_LABELS[tab]} <span className="tabular-nums text-[var(--app-text-tertiary)]">{data.summary.data ? count : ""}</span>
@@ -81,7 +90,7 @@ export function ResponseView() {
       {data.coreLoading ? (
         showSkeleton ? (
           <div className="space-y-4">
-            <KpiStripSkeleton columns={4} labels={["ร้านที่ต้องตาม", "แชทที่รอคำตอบ", "ตอบใน 24 ชม. · 7 วัน", "ร้านที่ไม่มีข้อมูล"]} />
+            <KpiStripSkeleton columns={5} labels={["ร้านที่ต้องตาม", "แชทที่รอคำตอบ", `ค้างเกิน ${RECENT_WAIT_WINDOW_DAYS} วัน`, "ตอบใน 24 ชม. · 7 วัน", "ร้านที่ไม่มีข้อมูล"]} />
             <SectionCardSkeleton title="ร้านเรียงตามเวลารอนานสุด" lines={8} />
           </div>
         ) : null

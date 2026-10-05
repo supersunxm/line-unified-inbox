@@ -41,7 +41,8 @@ function signedPoints(value: number): string {
 export function buildTodayItems(input: {
   storeRows: StoreRow[];
   waitingLoaded: boolean;
-  fleetLoaded: boolean;
+  /** A has-data source (Live Mirror, or the 7-day activity fallback) has loaded. */
+  hasDataLoaded: boolean;
   totals7d: ReplyRateTotals | null;
   totalsPrev7d: ReplyRateTotals | null;
   googleStores: GoogleReviewStore[] | null;
@@ -107,7 +108,7 @@ export function buildTodayItems(input: {
   }
 
   // 5) Stores whose chats are not being collected.
-  if (input.fleetLoaded) {
+  if (input.hasDataLoaded) {
     const noData = input.storeRows.filter((row) => !row.hasData).sort((a, b) => a.storeName.localeCompare(b.storeName, "th"));
     if (noData.length > 0) {
       items.push({
