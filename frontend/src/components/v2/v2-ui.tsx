@@ -6,17 +6,25 @@ import { thaiWeekday } from "@/lib/v2/date-ranges";
 
 export const NO_DATA_TEXT = "ยังไม่มีข้อมูลนี้";
 
-/** Business-hours wait, plus the real send time when the two differ. */
+/** "ส่งเมื่อ เมื่อวาน 20:30 · นับเฉพาะเวลาเปิดร้าน" when business time differs from real time, else "ส่งเมื่อ …". */
+export function waitNote(waitingSince: string, now: number): string {
+  return `ส่งเมื่อ ${formatSentAt(waitingSince, now)}${waitSpansClosedHours(waitingSince, now) ? " · นับเฉพาะเวลาเปิดร้าน" : ""}`;
+}
+
+/**
+ * Business-hours wait. Full: the real send time on a second line when it differs.
+ * Compact (tables): the duration only, with the send time and the note in a tooltip.
+ */
 export function WaitLabel({ businessMinutes, waitingSince, now, compact = false }: { businessMinutes: number | null; waitingSince: string | null; now: number; compact?: boolean }) {
   if (businessMinutes === null || !waitingSince) return <span className="text-[var(--app-text-tertiary)]">—</span>;
   const urgent = businessMinutes >= FOLLOW_UP_THRESHOLD_MINUTES;
   const differs = waitSpansClosedHours(waitingSince, now);
+  const duration = <span className={`whitespace-nowrap font-semibold tabular-nums ${urgent ? "text-[var(--app-danger)]" : "text-[var(--app-text-primary)]"}`}>{formatWaitMinutes(businessMinutes)}</span>;
+  if (compact) return <span title={waitNote(waitingSince, now)} data-v2-wait-note={waitNote(waitingSince, now)}>{duration}</span>;
   return (
     <span className="inline-flex flex-col">
-      <span className={`font-semibold tabular-nums ${urgent ? "text-[var(--app-danger)]" : "text-[var(--app-text-primary)]"}`}>{formatWaitMinutes(businessMinutes)}</span>
-      {differs && !compact && (
-        <span className="text-xs text-[var(--app-text-secondary)]">ส่งเมื่อ {formatSentAt(waitingSince, now)} · นับเฉพาะเวลาเปิดร้าน</span>
-      )}
+      {duration}
+      {differs && <span className="text-xs text-[var(--app-text-secondary)]">{waitNote(waitingSince, now)}</span>}
     </span>
   );
 }

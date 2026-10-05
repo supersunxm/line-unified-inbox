@@ -32,19 +32,20 @@ Not used: `GET /operations/line-chat-nickname/fleet-readiness`. It is the nickna
 
 | Item | Source | Status |
 |---|---|---|
-| Store universe | `bmReplyStatusSummary.stores` | available |
+| Store universe | `bmReplyStatusSummary.stores`, keeping only rows whose id is a Store record from `GET /stores`. The summary also prepends a synthetic "Focus group · 7 stores" row (id `focus-seven-store-group`) that re-counts 7 real stores; it is never a v2 store (`isRealStore`). | available |
 | Waiting chats per store (count) | `bmReplyStatusSummary.stores[].notReplied + notifiedBm` | available |
 | Waiting since (per chat) | `conversations?replyState=NOT_REPLIED` → `replyStateProjection.decidingEventAt` when `decidingEventKind = CUSTOMER_INBOUND`, else `latestMessageAt` (the same field the summary's `oldestWaitingMinutes` uses) | derivable (waits from the last 7 days) |
 | Wait in business minutes | `businessMinutesBetween(waitingSince, now)` in `lib/v2/business-hours.ts` | derivable |
 | "Has data" (chats are being collected) | `mirror-status`: the store has an OA with `enabled = true` and `lastSuccessfulSyncAt` within the last 24 hours. If mirror-status fails to load, the fallback is any conversation in the last 7 days (`store-24h-response-summary` `total > 0`), and the page says which source it used. | available |
 | "ไม่มีข้อมูล" stores | stores without data by the rule above | available |
 | "ตามวันนี้" (daily chase list) | per store, waiting chats whose customer message was sent since yesterday 10:00 Bangkok (`followTodayWindowStart`) and that have waited ≥ 60 business minutes; the top `FOLLOW_TODAY_LIMIT` (15) stores by that count, then longest such wait, then name. The sidebar badge, the tab count, the KPI and "วันนี้" item 1 all use this one selection (`selectFollowToday`). | derivable |
+| "รอนานสุด" | one value per store and scope (`displayedWait`): since yesterday 10:00 in the ตามวันนี้ tab, "วันนี้" item 1 and the top 5; the last 7 days in ทั้งหมด ("รอนานสุด (7 วัน)") | derivable |
 | "รอตอบ (ตั้งแต่เมื่อวาน)" | waiting chats whose customer message was sent since yesterday 10:00 | derivable |
 | "ค้างเกิน 7 วัน" (backlog) per store | summary waiting count − the store's waiting chats from the last 7 days; sort by age uses the summary's `oldestWaitingMinutes` | derivable |
 | ตอบใน 24 ชม. · 7 วัน, and the previous 7 days | `store-24h-response-summary` ×2 (`rangeForPreset("7d")` and the 7 days before), re-aggregated over stores with data as `Σwithin24h / Σtotal`, the backend's own overview formula | available |
 | Δ vs previous week per store | the two calls above | derivable |
 | 7-day mini trend and daily bar chart per store | `store-24h-response-summary` ×7, one call per Bangkok day | derivable (7 requests) |
-| Store region and province | `api.stores()` → `GET /stores`, which returns full Store rows: `region` and `area` (the province), synced from StoreMaster by `sync-connected-line-oa`. Not in the shared `ApiStore` type, so v2 reads them locally. When both are empty, no location line is shown. (The Google Review KPI list has no region on production.) | available |
+| Store region and province | `api.stores()` → `GET /stores`, which returns full Store rows: `region` and `area` (the province), synced from StoreMaster by `sync-connected-line-oa`. Not in the shared `ApiStore` type, so v2 reads them locally. Shown in Thai via `lib/v2/thai-geo.ts` (7 regions, all 77 provinces; unknown values pass through unchanged). When both are empty, no location line is shown. (The Google Review KPI list has no region on production.) | available |
 | "เปิดใน LINE OA Manager" (store) | `conversation.store.lineManagerUrl` when `lineManagerUrlStatus = "VALID"`, read from one conversation of that store | available; button hidden when absent |
 | "เปิดใน LINE OA Manager" (chat) | `conversation.resolvedLineOaManagerUrl`, falling back to the store URL | available |
 | Chat list and thread (read-only) | `conversations`, `conversationMessages` | available |

@@ -2,6 +2,7 @@
 // Reply state always comes from the backend resolver (effectiveReplyState / the
 // replyState filter); this file only measures time and groups by store.
 
+import { thaiLocationLabel } from "./thai-geo.ts";
 import { FOLLOW_TODAY_LIMIT, RECENT_WAIT_WINDOW_MS, businessMinutesBetween, followTodayWindowStart, needsFollowUp, realMinutesBetween } from "./business-hours.ts";
 
 export type ReplyState = "REPLIED" | "NOT_REPLIED";
@@ -147,6 +148,10 @@ export type StoreRow = {
   followTodayCount: number;
   /** Longest business-hours wait among the followTodayCount chats, or null. */
   followTodayLongestMinutes: number | null;
+  /** Longest business-hours wait among the since-yesterday chats (any length), with its chat. */
+  windowLongestMinutes: number | null;
+  windowLongestWaitingSince: string | null;
+  windowLongestChatId: string | null;
   /** Position in "ตามวันนี้" (1-based), or null when the store is not in it. */
   followTodayRank: number | null;
   /** Longest business-hours wait among the recent (≤ 7 days) waiting chats, or null when none. */
@@ -163,10 +168,35 @@ export type StoreRow = {
   managerUrl: string | null;
 };
 
-/** "ภาค · จังหวัด" from what is known, or null (then nothing is shown). */
+/** "ภาค · จังหวัด" in Thai (thai-geo.ts), or null (then nothing is shown). */
 export function locationLabel(row: Pick<StoreRow, "region" | "province">): string | null {
-  const parts = [row.region, row.province].map((part) => part?.trim()).filter((part): part is string => Boolean(part));
-  return parts.length > 0 ? [...new Set(parts)].join(" · ") : null;
+  return thaiLocationLabel(row.region, row.province);
+}
+
+export type WaitScope = "window" | "7d";
+
+/**
+ * The one "รอนานสุด" for a store in a given scope, so every place agrees:
+ * "window" = since yesterday 10:00 (ตามวันนี้ tab, "วันนี้" item 1 and top 5);
+ * "7d" = the last 7 days (ทั้งหมด, shown as "รอนานสุด (7 วัน)").
+ */
+export function displayedWait(row: StoreRow, scope: WaitScope): { minutes: number | null; waitingSince: string | null; chatId: string | null } {
+  return scope === "window"
+    ? { minutes: row.windowLongestMinutes, waitingSince: row.windowLongestWaitingSince, chatId: row.windowLongestChatId }
+    : { minutes: row.longestBusinessMinutes, waitingSince: row.longestWaitingSince, chatId: row.longestChatId };
+}
+
+/** The synthetic "Focus group · 7 stores" row that bm-reply-status-summary prepends; it is not a Store. */
+export const FOCUS_GROUP_SUMMARY_ID = "focus-seven-store-group";
+
+/**
+ * A v2 store is a summary row whose id is a Store record (from GET /stores). The synthetic
+ * focus-group row is never one: its counts are 7 real stores counted a second time.
+ * Without the Store list, only the synthetic id is dropped.
+ */
+export function isRealStore(storeId: string, storeIds: ReadonlySet<string> | null | undefined): boolean {
+  if (storeId === FOCUS_GROUP_SUMMARY_ID) return false;
+  return storeIds ? storeIds.has(storeId) : true;
 }
 
 /**
@@ -193,6 +223,8 @@ export function buildStoreRows(input: {
   ratesPrev7d: ReplyRateRow[];
   daily?: ReplyRateRow[][];
   locations?: ReadonlyMap<string, StoreLocation>;
+  /** Store record ids (GET /stores); rows not in it are not stores. null/undefined: only the synthetic group is dropped. */
+  storeIds?: ReadonlySet<string> | null;
   followTodayLimit?: number;
 }): StoreRow[] {
   const byStore = new Map<string, WaitingChat[]>();
@@ -204,7 +236,7 @@ export function buildStoreRows(input: {
   }
   const windowStart = followTodayWindowStart(input.now);
   const rateOf = (rows: ReplyRateRow[], storeId: string) => rows.find((row) => row.storeId === storeId)?.responseRate24h ?? null;
-  const rows: StoreRow[] = input.summaryStores.map((store) => {
+  const rows: StoreRow[] = input.summaryStores.filter((store) => isRealStore(store.storeId, input.storeIds)).map((store) => {
     const chats = sortWaitingChats(byStore.get(store.storeId) ?? []);
     const longest = chats[0] ?? null;
     const rate7d = rateOf(input.rates7d, store.storeId);
@@ -229,6 +261,9 @@ export function buildStoreRows(input: {
       sinceYesterdayCount: sinceYesterday.length,
       followTodayCount: overdueSinceYesterday.length,
       followTodayLongestMinutes: overdueSinceYesterday[0]?.businessMinutes ?? null,
+      windowLongestMinutes: sinceYesterday[0]?.businessMinutes ?? null,
+      windowLongestWaitingSince: sinceYesterday[0]?.waitingSince ?? null,
+      windowLongestChatId: sinceYesterday[0]?.id ?? null,
       followTodayRank: null,
       longestBusinessMinutes,
       longestWaitingSince: longest ? longest.waitingSince : null,
@@ -281,9 +316,12 @@ export function sortStoreRows(rows: StoreRow[], sort: StoreSort = "wait"): Store
   return [...rows].sort(compare[sort]);
 }
 
-/** The longest waits for the "วันนี้" side list: one row per store (its longest recent wait). */
+/** The longest waits for the "วันนี้" side list: one row per store, its longest wait since yesterday 10:00. */
 export function longestWaitPerStore(rows: StoreRow[], limit = 5): StoreRow[] {
-  return sortStoreRows(rows.filter((row) => row.hasData && row.longestBusinessMinutes !== null), "wait").slice(0, limit);
+  return rows
+    .filter((row) => row.hasData && row.windowLongestMinutes !== null)
+    .sort((a, b) => (b.windowLongestMinutes ?? 0) - (a.windowLongestMinutes ?? 0) || b.sinceYesterdayCount - a.sinceYesterdayCount || a.storeName.localeCompare(b.storeName, "th"))
+    .slice(0, limit);
 }
 
 /** Stores with the biggest week-on-week drop in the 24-hour rate, biggest first. */

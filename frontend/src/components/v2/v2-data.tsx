@@ -183,6 +183,8 @@ export function V2DataProvider({ children }: { children: React.ReactNode }) {
       ratesPrev7d: ratesPrev7d.data ?? [],
       daily: daily.data ?? undefined,
       locations: locations.data ?? undefined,
+      // GET /stores lists Store records; summary rows that are not one (the focus group) are dropped.
+      storeIds: locations.data ? new Set(locations.data.keys()) : null,
     });
     const included = new Set(storeRows.filter((row) => row.hasData).map((row) => row.storeId));
     return {
