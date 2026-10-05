@@ -2,7 +2,7 @@
 // Reply state always comes from the backend resolver (effectiveReplyState / the
 // replyState filter); this file only measures time and groups by store.
 
-import { businessMinutesBetween, needsFollowUp, realMinutesBetween } from "./business-hours.ts";
+import { RECENT_WAIT_WINDOW_MS, businessMinutesBetween, needsFollowUp, realMinutesBetween } from "./business-hours.ts";
 
 export type ReplyState = "REPLIED" | "NOT_REPLIED";
 
@@ -93,16 +93,36 @@ export function rateDelta(current: number | null, previous: number | null): numb
 
 // ---- Stores ----
 
-export type FleetRow = { storeId: string | null; status: string };
+/** One OA row of GET /operations/line-chat-nickname/mirror-status (Live Mirror chat collection). */
+export type MirrorRow = { storeId: string | null; enabled: boolean; status: string; lastSuccessfulSyncAt: string | null };
 
-/** Stores whose chats are being collected: at least one LINE Chat OA in READY state. */
-export function storesWithChatData(fleet: FleetRow[]): Set<string> {
-  const ready = new Set<string>();
-  for (const row of fleet) if (row.storeId && row.status === "READY") ready.add(row.storeId);
-  return ready;
+/** A mirror sync older than this no longer counts as "collecting". */
+export const MIRROR_FRESH_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Stores whose chats are being collected: at least one OA with Live Mirror enabled and a
+ * successful sync within the last 24 hours.
+ */
+export function storesWithChatData(mirror: MirrorRow[], now: number): Set<string> {
+  const collected = new Set<string>();
+  for (const row of mirror) {
+    if (!row.storeId || !row.enabled || !row.lastSuccessfulSyncAt) continue;
+    const syncedAt = Date.parse(row.lastSuccessfulSyncAt);
+    if (Number.isFinite(syncedAt) && now - syncedAt <= MIRROR_FRESH_MS) collected.add(row.storeId);
+  }
+  return collected;
 }
 
-export type SummaryStore = { storeId: string; storeName: string; notReplied: number; notifiedBm: number; replied: number };
+/** Fallback when mirror status cannot be read: any conversation in the last 7 days (replyAnalytics total > 0). */
+export function storesWithRecentActivity(rates7d: ReplyRateRow[]): Set<string> {
+  return new Set(rates7d.filter((row) => row.total > 0).map((row) => row.storeId));
+}
+
+export function isRecentWait(waitingSince: string, now: number): boolean {
+  return now - Date.parse(waitingSince) <= RECENT_WAIT_WINDOW_MS;
+}
+
+export type SummaryStore = { storeId: string; storeName: string; notReplied: number; notifiedBm: number; replied: number; oldestWaitingMinutes?: number };
 
 export type StoreRow = {
   storeId: string;
@@ -111,9 +131,17 @@ export type StoreRow = {
   hasData: boolean;
   /** Backend count of NOT_REPLIED chats (notReplied + notifiedBm). */
   waitingCount: number;
-  /** Longest business-hours wait among the loaded waiting chats, or null when none. */
+  /** Waiting chats whose customer message is within the last 7 days. */
+  recentWaitingCount: number;
+  /** waitingCount − recentWaitingCount: the "ค้างเกิน 7 วัน" backlog. */
+  oldWaitingCount: number;
+  /** Real minutes since the oldest waiting chat (backend summary), for sorting by age. */
+  oldestWaitingMinutes: number | null;
+  /** Longest business-hours wait among the recent (≤ 7 days) waiting chats, or null when none. */
   longestBusinessMinutes: number | null;
   longestWaitingSince: string | null;
+  longestChatId: string | null;
+  /** A recent customer has waited ≥ the threshold in business hours. */
   needsFollowUp: boolean;
   rate7d: number | null;
   ratePrev7d: number | null;
@@ -126,8 +154,9 @@ export type StoreRow = {
 export function buildStoreRows(input: {
   summaryStores: SummaryStore[];
   waitingChats: WaitingChat[];
-  /** null when fleet readiness could not be loaded: then no store is marked as missing data. */
+  /** null when no has-data source has loaded yet: then no store is marked as missing data. */
   storesWithData: ReadonlySet<string> | null;
+  now: number;
   rates7d: ReplyRateRow[];
   ratesPrev7d: ReplyRateRow[];
   daily?: ReplyRateRow[][];
@@ -135,6 +164,7 @@ export function buildStoreRows(input: {
 }): StoreRow[] {
   const byStore = new Map<string, WaitingChat[]>();
   for (const chat of input.waitingChats) {
+    if (!isRecentWait(chat.waitingSince, input.now)) continue;
     const list = byStore.get(chat.storeId) ?? [];
     list.push(chat);
     byStore.set(chat.storeId, list);
@@ -147,14 +177,20 @@ export function buildStoreRows(input: {
     const ratePrev7d = rateOf(input.ratesPrev7d, store.storeId);
     const hasData = input.storesWithData ? input.storesWithData.has(store.storeId) : true;
     const longestBusinessMinutes = longest ? longest.businessMinutes : null;
+    const waitingCount = store.notReplied + store.notifiedBm;
+    const recentWaitingCount = Math.min(chats.length, waitingCount);
     return {
       storeId: store.storeId,
       storeName: store.storeName,
       region: input.regions?.get(store.storeId) ?? null,
       hasData,
-      waitingCount: store.notReplied + store.notifiedBm,
+      waitingCount,
+      recentWaitingCount,
+      oldWaitingCount: waitingCount - recentWaitingCount,
+      oldestWaitingMinutes: waitingCount > 0 ? store.oldestWaitingMinutes ?? null : null,
       longestBusinessMinutes,
       longestWaitingSince: longest ? longest.waitingSince : null,
+      longestChatId: longest ? longest.id : null,
       needsFollowUp: hasData && longestBusinessMinutes !== null && needsFollowUp(longestBusinessMinutes),
       rate7d,
       ratePrev7d,
@@ -174,13 +210,21 @@ export function filterStoreRows(rows: StoreRow[], tab: StoreTab): StoreRow[] {
   return rows.filter((row) => row.hasData);
 }
 
-/** Longest business-hours wait first; stores with nothing waiting last; then by waiting count and name. */
-export function sortStoreRows(rows: StoreRow[]): StoreRow[] {
-  return [...rows].sort((a, b) => {
-    const aWait = a.longestBusinessMinutes ?? -1;
-    const bWait = b.longestBusinessMinutes ?? -1;
-    return bWait - aWait || b.waitingCount - a.waitingCount || a.storeName.localeCompare(b.storeName, "th");
-  });
+export type StoreSort = "wait" | "age";
+
+/**
+ * "wait" (default): longest recent business-hours wait first, nothing waiting last.
+ * "age": oldest waiting chat first (real time, includes the > 7-day backlog).
+ * Ties: waiting count, then name.
+ */
+export function sortStoreRows(rows: StoreRow[], sort: StoreSort = "wait"): StoreRow[] {
+  const key = (row: StoreRow) => (sort === "age" ? row.oldestWaitingMinutes : row.longestBusinessMinutes) ?? -1;
+  return [...rows].sort((a, b) => key(b) - key(a) || b.waitingCount - a.waitingCount || a.storeName.localeCompare(b.storeName, "th"));
+}
+
+/** The longest waits for the "วันนี้" side list: one row per store (its longest recent wait). */
+export function longestWaitPerStore(rows: StoreRow[], limit = 5): StoreRow[] {
+  return sortStoreRows(rows.filter((row) => row.hasData && row.longestBusinessMinutes !== null)).slice(0, limit);
 }
 
 /** Stores with the biggest week-on-week drop in the 24-hour rate, biggest first. */
@@ -200,6 +244,8 @@ export function responseKpis(rows: StoreRow[]) {
     followUpStores: withData.filter((row) => row.needsFollowUp).length,
     waitingChats: waitingStores.reduce((sum, row) => sum + row.waitingCount, 0),
     waitingStores: waitingStores.length,
+    oldBacklogChats: withData.reduce((sum, row) => sum + row.oldWaitingCount, 0),
+    oldBacklogStores: withData.filter((row) => row.oldWaitingCount > 0).length,
     noDataStores: rows.length - withData.length,
     totalStores: rows.length,
   };

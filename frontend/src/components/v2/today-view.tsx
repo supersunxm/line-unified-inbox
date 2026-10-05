@@ -5,6 +5,7 @@ import React from "react";
 import { PageHeader } from "@/components/shell/page-header";
 import { EmptyState, SectionCard, SectionCardSkeleton, useDeferredLoading } from "@/components/ui";
 import { buildTodayItems, weekComparison, type TodayItem } from "@/lib/v2/today-model";
+import { longestWaitPerStore } from "@/lib/v2/response-model";
 import { responseHref } from "@/lib/v2/response-url";
 import { useV2Data } from "./v2-data";
 import { SourceNotice, WaitLabel } from "./v2-ui";
@@ -40,23 +41,23 @@ function TodayRow({ item, index }: { item: TodayItem; index: number }) {
 
 function LongestWaits() {
   const data = useV2Data();
-  const top = data.waitingChats.slice(0, 5);
+  const top = longestWaitPerStore(data.storeRows, 5);
   return (
-    <SectionCard title="รอนานที่สุด 5 อันดับ" meta="เวลาเปิดร้าน" bodyPadding="none" footer={<Link href="/v2/response" className="font-medium text-[var(--app-accent)]">ดูทั้งหมด →</Link>}>
+    <SectionCard title="ร้านที่รอนานที่สุด 5 อันดับ" meta="ร้านละ 1 แถว · เวลาเปิดร้าน" bodyPadding="none" footer={<Link href="/v2/response" className="font-medium text-[var(--app-accent)]">ดูทั้งหมด →</Link>}>
       {!data.waiting.data ? (
         <p className="p-4 text-sm text-[var(--app-text-secondary)]">{data.waiting.error ? "ยังไม่มีข้อมูลนี้" : "กำลังโหลด…"}</p>
       ) : top.length === 0 ? (
         <p className="p-4 text-sm text-[var(--app-text-secondary)]">ไม่มีลูกค้ารอคำตอบ</p>
       ) : (
         <ol className="divide-y divide-[var(--app-border-subtle)]">
-          {top.map((chat) => (
-            <li key={chat.id}>
-              <Link href={responseHref({ view: "chat", store: chat.storeId, conversation: chat.id })} className="flex items-start justify-between gap-3 px-4 py-3 hover:bg-[var(--app-surface-hover)]">
+          {top.map((row) => (
+            <li key={row.storeId} data-v2-longest-wait-store={row.storeId}>
+              <Link href={responseHref({ view: "chat", store: row.storeId, conversation: row.longestChatId })} className="flex items-start justify-between gap-3 px-4 py-3 hover:bg-[var(--app-surface-hover)]">
                 <span className="min-w-0">
-                  <span className="block truncate text-sm font-medium">{chat.storeName}</span>
-                  <span className="block truncate text-xs text-[var(--app-text-secondary)]">{chat.customerName}</span>
+                  <span className="block truncate text-sm font-medium">{row.storeName}</span>
+                  <span className="block truncate text-xs text-[var(--app-text-secondary)]">รอตอบ {row.recentWaitingCount} แชท</span>
                 </span>
-                <span className="shrink-0 text-right text-sm"><WaitLabel businessMinutes={chat.businessMinutes} waitingSince={chat.waitingSince} now={data.now} /></span>
+                <span className="shrink-0 text-right text-sm"><WaitLabel businessMinutes={row.longestBusinessMinutes} waitingSince={row.longestWaitingSince} now={data.now} /></span>
               </Link>
             </li>
           ))}
@@ -99,12 +100,12 @@ function WeekComparison() {
 
 export function TodayView() {
   const data = useV2Data();
-  const loading = data.coreLoading || (data.waiting.loading && !data.waiting.data) || (data.fleet.loading && !data.fleet.data);
+  const loading = data.coreLoading;
   const showSkeleton = useDeferredLoading(loading);
   const items = buildTodayItems({
     storeRows: data.storeRows,
     waitingLoaded: Boolean(data.waiting.data),
-    fleetLoaded: Boolean(data.fleet.data),
+    hasDataLoaded: data.storesWithData !== null,
     totals7d: data.totals7d,
     totalsPrev7d: data.totalsPrev7d,
     googleStores: data.google.data ? data.google.data.map((store) => ({ name: store.name, kpiResult: store.kpiResult })) : null,
@@ -113,7 +114,7 @@ export function TodayView() {
     data.waiting.error && "ลูกค้าที่รอคำตอบ",
     (data.rates7d.error || data.ratesPrev7d.error) && "อัตราตอบใน 24 ชม.",
     data.google.error && "รีวิว Google",
-    data.fleet.error && "ร้านที่ไม่มีข้อมูลแชท",
+    data.mirror.error && data.hasDataSource === null && "ร้านที่ไม่มีข้อมูลแชท",
   ].filter(Boolean);
 
   return (

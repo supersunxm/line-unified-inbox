@@ -19,11 +19,13 @@ rate is the backend's `within24h / total` from `replyAnalytics`.
 | Client call | Endpoint | Notes |
 |---|---|---|
 | `api.bmReplyStatusSummary()` | `GET /conversations/bm-reply-status-summary` | Active, non-archived stores; per-store waiting counts from `resolveEffectiveReplyState`. Waiting = `notReplied + notifiedBm` (`effectiveSummaryCounts`). |
-| `api.conversations({ replyState: "NOT_REPLIED", sort: "latest-asc", pageSize: 100, page })` | `GET /conversations` | Same operational filter and resolver-based `replyState` filter as the summary. Each item carries `replyStateProjection.decidingEventKind/decidingEventAt`. Paged; v2 stops at 20 pages (2,000 chats) and says so if it stops early. |
+| `api.conversations({ replyState: "NOT_REPLIED", sort: "latest-desc", pageSize: 100, page })` | `GET /conversations` | Same operational filter and resolver-based `replyState` filter as the summary. Each item carries `replyStateProjection.decidingEventKind/decidingEventAt`. Newest first, at most 5 requests in flight, and paging stops at the first page that reaches chats older than 7 days (`lib/v2/waiting-pages.ts`). A 30-page cap is a safety net; v2 says so if it is hit. |
 | `api.conversations({ storeId, page, pageSize })` | `GET /conversations` | Chat view list (all states), as `/chats` uses it. |
 | `api.conversationMessages(id, page)` | `GET /conversations/:id/messages` | Chat view thread, as `/chats` uses it. |
 | `GET /api-backend/dashboard/store-24h-response-summary?dateFrom&dateTo` | `replyAnalytics` | Per-store `total`, `within24h`, `over24h`, `pending`, `responseRate24h` for a Bangkok date range (≤ 90 days). Same call the 24H Response Rate page makes. |
-| `api.lineChatFleetReadiness()` | `GET /operations/line-chat-nickname/fleet-readiness` | Per-OA LINE Chat collection status (`READY` / `NEED_BOT_MAPPING` / `NEED_LOGIN` / `BLOCKED`) with `storeId`. |
+| `GET /api-backend/operations/line-chat-nickname/mirror-status` | `LineChatMirrorStatusService.getStatus` | Per-OA Live Mirror state: `storeId`, `enabled`, `status`, `lastSuccessfulSyncAt`. This is whether a store's chats are being collected. |
+
+Not used: `GET /operations/line-chat-nickname/fleet-readiness`. It is the nickname feature's readiness (`READY` / `NEED_BOT_MAPPING` / `NEED_LOGIN` / `BLOCKED`), not chat collection. Using it marked 148 of 149 stores as "no data" on production.
 | `api.getGoogleReviewKpis({ month })` | `GET /google-review-kpi` | Per-store review KPI (`kpiResult.isPassed`, `qualifiedReviews`, `targetQualifiedReviews`) and StoreMaster `region`. |
 
 ## Step 3: /v2/response
@@ -32,10 +34,13 @@ rate is the backend's `within24h / total` from `replyAnalytics`.
 |---|---|---|
 | Store universe | `bmReplyStatusSummary.stores` | available |
 | Waiting chats per store (count) | `bmReplyStatusSummary.stores[].notReplied + notifiedBm` | available |
-| Waiting since (per chat) | `conversations?replyState=NOT_REPLIED` → `replyStateProjection.decidingEventAt` when `decidingEventKind = CUSTOMER_INBOUND`, else `latestMessageAt` (the same field the summary's `oldestWaitingMinutes` uses) | derivable (≤ 2,000 chats) |
+| Waiting since (per chat) | `conversations?replyState=NOT_REPLIED` → `replyStateProjection.decidingEventAt` when `decidingEventKind = CUSTOMER_INBOUND`, else `latestMessageAt` (the same field the summary's `oldestWaitingMinutes` uses) | derivable (waits from the last 7 days) |
 | Wait in business minutes | `businessMinutesBetween(waitingSince, now)` in `lib/v2/business-hours.ts` | derivable |
 | "ต้องตาม" stores (a chat waiting ≥ 60 business min) | waiting chats above | derivable |
-| "ไม่มีข้อมูล" stores (chats not being collected) | `lineChatFleetReadiness.stores[].status !== "READY"`, or no OA row for the store | available |
+| "Has data" (chats are being collected) | `mirror-status`: the store has an OA with `enabled = true` and `lastSuccessfulSyncAt` within the last 24 hours. If mirror-status fails to load, the fallback is any conversation in the last 7 days (`store-24h-response-summary` `total > 0`), and the page says which source it used. | available |
+| "ไม่มีข้อมูล" stores | stores without data by the rule above | available |
+| "ต้องตาม" (follow-up) | a waiting chat whose customer message is within the last 7 days (`RECENT_WAIT_WINDOW_DAYS`) and has waited ≥ 60 business minutes | derivable |
+| "ค้างเกิน 7 วัน" (backlog) per store | summary waiting count − the store's waiting chats from the last 7 days; sort by age uses the summary's `oldestWaitingMinutes` | derivable |
 | ตอบใน 24 ชม. · 7 วัน, and the previous 7 days | `store-24h-response-summary` ×2 (`rangeForPreset("7d")` and the 7 days before), re-aggregated over stores with data as `Σwithin24h / Σtotal`, the backend's own overview formula | available |
 | Δ vs previous week per store | the two calls above | derivable |
 | 7-day mini trend and daily bar chart per store | `store-24h-response-summary` ×7, one call per Bangkok day | derivable (7 requests) |
@@ -53,8 +58,8 @@ rate is the backend's `within24h / total` from `replyAnalytics`.
 | 2. 24h rate below target (90%) or down vs last week; 3 biggest drops | `store-24h-response-summary` ×2 | available |
 | 3. Customer / product signals | `purchaseAnalytics` has record counts only: no target, no comparison period and no definition of "abnormal", and the counts depend on BM tagging habits | **MISSING**: omitted from the list |
 | 4. Google review stores below target | `getGoogleReviewKpis({ month: current })`, `kpiResult.isPassed === false` | available |
-| 5. Stores with no chat data | fleet readiness | available |
-| Top 5 longest waits | waiting chats | derivable |
+| 5. Stores with no chat data | mirror-status (fallback: 7-day activity) | available |
+| Top 5 longest waits | waiting chats, one row per store (its longest recent wait and waiting count) | derivable |
 | This week vs last week (3 rows) | `store-24h-response-summary` overview fields `total`, `within24h` rate, `over24h + pending`, re-aggregated over stores with data | available |
 
 ## Known limits

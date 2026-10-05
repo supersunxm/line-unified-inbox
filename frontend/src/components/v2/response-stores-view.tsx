@@ -1,11 +1,12 @@
 "use client";
 
+import Link from "next/link";
 import React, { useEffect, useMemo, useState } from "react";
 import { KpiStrip, SectionCard, Table, TableBody, TableCell, TableEmptyState, TableHead, TableHeader, TableRow } from "@/components/ui";
 import { api } from "@/lib/api";
-import { FOLLOW_UP_THRESHOLD_MINUTES, RESPONSE_RATE_TARGET_PERCENT, formatWaitMinutes } from "@/lib/v2/business-hours";
+import { FOLLOW_UP_THRESHOLD_MINUTES, RECENT_WAIT_WINDOW_DAYS, RESPONSE_RATE_TARGET_PERCENT, formatWaitMinutes } from "@/lib/v2/business-hours";
 import { rateDelta, responseKpis, storeManagerUrlOf, type StoreRow } from "@/lib/v2/response-model";
-import type { ResponseUrlState } from "@/lib/v2/response-url";
+import { responseHref, type ResponseUrlState } from "@/lib/v2/response-url";
 import { useV2Data } from "./v2-data";
 import { DailyRateBars, ManagerLink, MiniTrend, NO_DATA_TEXT, RateDelta, WaitLabel, formatRate } from "./v2-ui";
 
@@ -17,19 +18,30 @@ export function ResponseKpis() {
   const delta = rateDelta(rate, previous);
   return (
     <KpiStrip
-      columns={4}
+      columns={5}
       items={[
         {
           id: "follow-up",
           label: "ร้านที่ต้องตาม",
           value: data.waiting.data ? kpis.followUpStores.toLocaleString("th-TH") : null,
-          subtext: data.waiting.data ? `จาก ${kpis.storesWithData} ร้านที่มีข้อมูล · ลูกค้ารอ ≥ ${FOLLOW_UP_THRESHOLD_MINUTES} นาที (เวลาเปิดร้าน)` : NO_DATA_TEXT,
+          subtext: data.waiting.data ? `จาก ${kpis.storesWithData} ร้านที่มีข้อมูล · ลูกค้ารอ ≥ ${FOLLOW_UP_THRESHOLD_MINUTES} นาที (เวลาเปิดร้าน) ภายใน ${RECENT_WAIT_WINDOW_DAYS} วัน` : NO_DATA_TEXT,
         },
         {
           id: "waiting",
           label: "แชทที่รอคำตอบ",
           value: kpis.waitingChats.toLocaleString("th-TH"),
           subtext: `ใน ${kpis.waitingStores} ร้าน จาก ${kpis.storesWithData} ร้านที่มีข้อมูล`,
+        },
+        {
+          id: "old-backlog",
+          label: `ค้างเกิน ${RECENT_WAIT_WINDOW_DAYS} วัน`,
+          value: data.waiting.data ? kpis.oldBacklogChats.toLocaleString("th-TH") : null,
+          subtext: data.waiting.data ? (
+            <>
+              ใน {kpis.oldBacklogStores} ร้าน · ไม่นับใน &quot;ต้องตาม&quot; ·{" "}
+              <Link href={responseHref({ tab: "all", sort: "age" })} className="font-medium text-[var(--app-accent)] hover:underline">ดูเรียงตามอายุ</Link>
+            </>
+          ) : NO_DATA_TEXT,
         },
         {
           id: "rate",
@@ -50,14 +62,14 @@ export function ResponseKpis() {
   );
 }
 
-function StoreTable({ rows, selectedStoreId, onSelect, tab }: { rows: StoreRow[]; selectedStoreId: string | null; onSelect: (storeId: string) => void; tab: ResponseUrlState["tab"] }) {
+function StoreTable({ rows, selectedStoreId, onSelect, tab, sort }: { rows: StoreRow[]; selectedStoreId: string | null; onSelect: (storeId: string) => void; tab: ResponseUrlState["tab"]; sort: ResponseUrlState["sort"] }) {
   const data = useV2Data();
   const trendLoading = data.daily.loading && !data.daily.data;
   const emptyMessage = tab === "follow-up"
     ? `ไม่มีร้านที่ลูกค้ารอเกิน ${FOLLOW_UP_THRESHOLD_MINUTES} นาทีในเวลาเปิดร้าน`
     : tab === "no-data" ? "ทุกร้านมีข้อมูลแชท" : "ไม่มีร้านที่มีข้อมูล";
   return (
-    <SectionCard title="ร้านเรียงตามเวลารอนานสุด" meta={`${rows.length} ร้าน`} bodyPadding="none">
+    <SectionCard title={sort === "age" ? "ร้านเรียงตามแชทที่ค้างนานสุด" : "ร้านเรียงตามเวลารอนานสุด"} meta={`${rows.length} ร้าน`} bodyPadding="none">
       <div className="overflow-x-auto">
         <Table>
           <TableHeader>
@@ -84,7 +96,10 @@ function StoreTable({ rows, selectedStoreId, onSelect, tab }: { rows: StoreRow[]
                   </button>
                   <div className="text-xs text-[var(--app-text-secondary)]">{row.hasData ? row.region ?? "ไม่ระบุภาค" : "ระบบไม่ได้เก็บแชทของร้านนี้"}</div>
                 </TableCell>
-                <TableCell align="right" numeric>{row.hasData ? row.waitingCount.toLocaleString("th-TH") : "—"}</TableCell>
+                <TableCell align="right" numeric>
+                  {row.hasData ? row.waitingCount.toLocaleString("th-TH") : "—"}
+                  {row.hasData && row.oldWaitingCount > 0 && <div className="text-xs font-normal text-[var(--app-text-secondary)]">ค้างเกิน {RECENT_WAIT_WINDOW_DAYS} วัน {row.oldWaitingCount}</div>}
+                </TableCell>
                 <TableCell>{row.hasData ? <WaitLabel businessMinutes={row.longestBusinessMinutes} waitingSince={row.longestWaitingSince} now={data.now} /> : "—"}</TableCell>
                 <TableCell>
                   {row.hasData ? (
@@ -159,9 +174,10 @@ function StoreDetail({ row, onOpenConversation }: { row: StoreRow | null; onOpen
         )}
         {row.hasData && (
           <div>
-            <h3 className="mb-2 text-sm font-semibold">แชทที่รอคำตอบ</h3>
+            <h3 className="mb-2 text-sm font-semibold">แชทที่รอคำตอบ ({RECENT_WAIT_WINDOW_DAYS} วันล่าสุด)</h3>
+            {row.oldWaitingCount > 0 && <p className="mb-2 text-xs text-[var(--app-text-secondary)]">และค้างเกิน {RECENT_WAIT_WINDOW_DAYS} วันอีก {row.oldWaitingCount} แชท (ไม่นับใน &quot;ต้องตาม&quot;)</p>}
             {chats.length === 0 ? (
-              <p className="text-sm text-[var(--app-text-secondary)]">{row.waitingCount > 0 ? "ยังโหลดรายการแชทของร้านนี้ไม่ครบ" : "ไม่มีแชทที่รอคำตอบ"}</p>
+              <p className="text-sm text-[var(--app-text-secondary)]">{row.waitingCount > 0 ? `ไม่มีแชทที่รอภายใน ${RECENT_WAIT_WINDOW_DAYS} วัน` : "ไม่มีแชทที่รอคำตอบ"}</p>
             ) : (
               <ul className="divide-y divide-[var(--app-border-subtle)]">
                 {chats.map((chat) => (
@@ -193,7 +209,7 @@ export function ResponseStoresView({ rows, state, onSelectStore, onOpenConversat
   const selected = data.storeRows.find((row) => row.storeId === state.store) ?? null;
   return (
     <div className="grid grid-cols-[minmax(0,1fr)_minmax(320px,400px)] items-start gap-5">
-      <StoreTable rows={rows} selectedStoreId={selected?.storeId ?? null} onSelect={onSelectStore} tab={state.tab} />
+      <StoreTable rows={rows} selectedStoreId={selected?.storeId ?? null} onSelect={onSelectStore} tab={state.tab} sort={state.sort} />
       <div className="sticky top-0">
         <StoreDetail row={selected} onOpenConversation={onOpenConversation} />
       </div>
