@@ -1,7 +1,7 @@
 // The "วันนี้" list: only abnormal items, in a fixed priority order. Pure: node --test imports it.
 
 import { FOLLOW_TODAY_LIMIT, FOLLOW_UP_THRESHOLD_MINUTES, RESPONSE_RATE_TARGET_PERCENT, formatWaitMinutes } from "./business-hours.ts";
-import { biggestRateDrops, responseKpis, sortStoreRows, type ReplyRateTotals, type StoreRow } from "./response-model.ts";
+import { biggestRateDrops, displayedWait, responseKpis, sortStoreRows, type ReplyRateTotals, type StoreRow } from "./response-model.ts";
 
 export type TodayDomain = "การตอบแชท" | "รีวิว Google" | "ข้อมูลแชท";
 
@@ -59,7 +59,7 @@ export function buildTodayItems(input: {
         domain: "การตอบแชท",
         problem: `${followToday.length} ร้านต้องตามวันนี้`,
         comparison: `จาก ${kpis.followTodayCandidates} ร้านที่มีลูกค้ารอเกิน ${FOLLOW_UP_THRESHOLD_MINUTES} นาทีตั้งแต่เมื่อวาน 10:00 · นับเฉพาะเวลาเปิดร้าน · แสดงสูงสุด ${FOLLOW_TODAY_LIMIT} ร้าน`,
-        stores: followToday.slice(0, STORES_SHOWN).map((row) => ({ name: row.storeName, detail: `${row.followTodayCount} แชท · รอนานสุด ${formatWaitMinutes(row.followTodayLongestMinutes ?? 0)}` })),
+        stores: followToday.slice(0, STORES_SHOWN).map((row) => ({ name: row.storeName, detail: `${row.followTodayCount} แชท · รอนานสุด ${formatWaitMinutes(displayedWait(row, "window").minutes ?? 0)}` })),
         moreStores: Math.max(0, followToday.length - STORES_SHOWN),
         action: { label: "ดูร้านที่ต้องตามวันนี้", href: "/v2/response" },
       });

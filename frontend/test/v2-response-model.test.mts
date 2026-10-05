@@ -47,6 +47,7 @@ const summary = (storeId: string, notReplied: number, oldestWaitingMinutes?: num
 const emptyRow: StoreRow = {
   storeId: "", storeName: "", region: null, province: null, hasData: false, waitingCount: 0, recentWaitingCount: 0, oldWaitingCount: 0,
   oldestWaitingMinutes: null, sinceYesterdayCount: 0, followTodayCount: 0, followTodayLongestMinutes: null, followTodayRank: null,
+  windowLongestMinutes: null, windowLongestWaitingSince: null, windowLongestChatId: null,
   longestBusinessMinutes: null, longestWaitingSince: null, longestChatId: null, hasOverdueWait: false,
   rate7d: null, ratePrev7d: null, rateDelta: null, trend: [], managerUrl: null,
 };
@@ -345,4 +346,58 @@ test("consistency: sidebar badge = ตามวันนี้ tab count = KPI =
   assert.equal(kpis.followTodayCandidates, 20);
   // The sidebar badge reads responseKpis(...).followTodayStores (v2-shell.tsx).
   assert.match(readFileSync(new URL("../src/components/v2/v2-shell.tsx", import.meta.url), "utf8"), /responseKpis\(data\.storeRows\)\.followTodayStores/);
+});
+
+test("one store, one รอนานสุด: item 1, the ตามวันนี้ table and the top 5 agree (window), ทั้งหมด uses 7 days", async () => {
+  const { displayedWait, longestWaitPerStore: top5 } = await import("../src/lib/v2/response-model.ts");
+  // Robinson Chonburi: a chat waiting since 4 days ago (7-day oldest) and one since yesterday evening.
+  const rows = buildStoreRows({
+    summaryStores: [summary("rob", 2), summary("other", 1)],
+    waitingChats: [
+      toWaitingChat(conversation("old", "rob", bkk("2026-09-30T12:00:00")), NOW),
+      toWaitingChat(conversation("recent", "rob", bkk("2026-10-03T20:33:00")), NOW),
+      toWaitingChat(conversation("o1", "other", bkk("2026-10-04T13:00:00")), NOW),
+    ],
+    storesWithData: new Set(["rob", "other"]),
+    now: NOW,
+    rates7d: [],
+    ratesPrev7d: [],
+  });
+  const rob = rows.find((row) => row.storeId === "rob")!;
+  const windowWait = displayedWait(rob, "window");
+  assert.equal(windowWait.minutes, 27 + 300); // 20:33–21:00 yesterday + 10:00–15:00 today
+  assert.equal(windowWait.chatId, "recent");
+  assert.notEqual(displayedWait(rob, "7d").minutes, windowWait.minutes); // the 7-day oldest is longer
+  // Item 1 names the same minutes…
+  const item = buildTodayItems({ storeRows: rows, waitingLoaded: true, hasDataLoaded: true, totals7d: null, totalsPrev7d: null, googleStores: [] }).find((entry) => entry.id === "follow-today");
+  assert.match(item!.stores.find((store) => store.name === rob.storeName)!.detail, /รอนานสุด 5 ชม\. 27 นาที/);
+  // …the ตามวันนี้ table uses the window scope…
+  const { waitScopeForTabSource } = { waitScopeForTabSource: readFileSync(new URL("../src/components/v2/response-stores-view.tsx", import.meta.url), "utf8") };
+  assert.match(waitScopeForTabSource, /return tab === "follow-today" \? "window" : "7d";/);
+  assert.match(waitScopeForTabSource, /<WaitLabel compact businessMinutes=\{displayedWait\(row, scope\)\.minutes\}/);
+  // …and the top 5 lists the store with the same wait and links to the same chat.
+  const top = top5(rows, 5).find((row) => row.storeId === "rob")!;
+  assert.deepEqual(displayedWait(top, "window"), windowWait);
+  assert.match(readFileSync(new URL("../src/components/v2/today-view.tsx", import.meta.url), "utf8"), /displayedWait\(row, "window"\)\.minutes/);
+});
+
+test("the focus-group summary row is not a store: dropped from every list and count", () => {
+  const summaryStores = [summary("s1", 2), summary("s2", 1), { ...summary("focus-seven-store-group", 9), storeName: "Focus group · 7 stores" }];
+  const withStores = buildStoreRows({ summaryStores, waitingChats: [], storesWithData: new Set(["s1"]), now: NOW, rates7d: [], ratesPrev7d: [], storeIds: new Set(["s1", "s2"]) });
+  assert.deepEqual(withStores.map((row) => row.storeId), ["s1", "s2"]);
+  assert.deepEqual([responseKpis(withStores).totalStores, responseKpis(withStores).noDataStores, responseKpis(withStores).waitingChats], [2, 1, 2]);
+  // Without the Store list, the synthetic id is still dropped.
+  const withoutStores = buildStoreRows({ summaryStores, waitingChats: [], storesWithData: null, now: NOW, rates7d: [], ratesPrev7d: [] });
+  assert.deepEqual(withoutStores.map((row) => row.storeId), ["s1", "s2"]);
+  // A summary row whose id is not a Store record is dropped too.
+  const unknown = buildStoreRows({ summaryStores: [...summaryStores, summary("ghost", 3)], waitingChats: [], storesWithData: null, now: NOW, rates7d: [], ratesPrev7d: [], storeIds: new Set(["s1", "s2"]) });
+  assert.deepEqual(unknown.map((row) => row.storeId), ["s1", "s2"]);
+});
+
+test("detail panel lists since-yesterday chats first and older ones in a collapsed section", () => {
+  const source = readFileSync(new URL("../src/components/v2/response-stores-view.tsx", import.meta.url), "utf8");
+  assert.match(source, /const recentChats = chats\.filter\(\(chat\) => Date\.parse\(chat\.waitingSince\) >= windowStart\);/);
+  assert.match(source, /<details data-v2-older-chats[\s\S]*?เก่ากว่าเมื่อวาน \(\{olderChats\.length\}\)/);
+  // Table cells show only the duration; the send time is in the tooltip.
+  assert.match(readFileSync(new URL("../src/components/v2/v2-ui.tsx", import.meta.url), "utf8"), /if \(compact\) return <span title=\{waitNote\(waitingSince, now\)\}/);
 });

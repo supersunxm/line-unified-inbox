@@ -5,7 +5,7 @@ import React from "react";
 import { PageHeader } from "@/components/shell/page-header";
 import { EmptyState, SectionCard, SectionCardSkeleton, useDeferredLoading } from "@/components/ui";
 import { buildTodayItems, weekComparison, type TodayItem } from "@/lib/v2/today-model";
-import { longestWaitPerStore } from "@/lib/v2/response-model";
+import { displayedWait, longestWaitPerStore } from "@/lib/v2/response-model";
 import { responseHref } from "@/lib/v2/response-url";
 import { useV2Data } from "./v2-data";
 import { SourceNotice, WaitLabel } from "./v2-ui";
@@ -43,7 +43,7 @@ function LongestWaits() {
   const data = useV2Data();
   const top = longestWaitPerStore(data.storeRows, 5);
   return (
-    <SectionCard title="ร้านที่รอนานที่สุด 5 อันดับ" meta="ร้านละ 1 แถว · เวลาเปิดร้าน" bodyPadding="none" footer={<Link href="/v2/response" className="font-medium text-[var(--app-accent)]">ดูทั้งหมด →</Link>}>
+    <SectionCard title="ร้านที่รอนานที่สุด 5 อันดับ" meta="ตั้งแต่เมื่อวาน 10:00 · ร้านละ 1 แถว" bodyPadding="none" footer={<Link href="/v2/response" className="font-medium text-[var(--app-accent)]">ดูทั้งหมด →</Link>}>
       {!data.waiting.data ? (
         <p className="p-4 text-sm text-[var(--app-text-secondary)]">{data.waiting.error ? "ยังไม่มีข้อมูลนี้" : "กำลังโหลด…"}</p>
       ) : top.length === 0 ? (
@@ -52,12 +52,12 @@ function LongestWaits() {
         <ol className="divide-y divide-[var(--app-border-subtle)]">
           {top.map((row) => (
             <li key={row.storeId} data-v2-longest-wait-store={row.storeId}>
-              <Link href={responseHref({ view: "chat", store: row.storeId, conversation: row.longestChatId })} className="flex items-start justify-between gap-3 px-4 py-3 hover:bg-[var(--app-surface-hover)]">
+              <Link href={responseHref({ view: "chat", store: row.storeId, conversation: row.windowLongestChatId })} className="flex items-start justify-between gap-3 px-4 py-3 hover:bg-[var(--app-surface-hover)]">
                 <span className="min-w-0">
                   <span className="block truncate text-sm font-medium">{row.storeName}</span>
-                  <span className="block truncate text-xs text-[var(--app-text-secondary)]">รอตอบ {row.recentWaitingCount} แชท</span>
+                  <span className="block truncate text-xs text-[var(--app-text-secondary)]">รอตอบตั้งแต่เมื่อวาน {row.sinceYesterdayCount} แชท</span>
                 </span>
-                <span className="shrink-0 text-right text-sm"><WaitLabel businessMinutes={row.longestBusinessMinutes} waitingSince={row.longestWaitingSince} now={data.now} /></span>
+                <span className="shrink-0 text-right text-sm"><WaitLabel businessMinutes={displayedWait(row, "window").minutes} waitingSince={displayedWait(row, "window").waitingSince} now={data.now} /></span>
               </Link>
             </li>
           ))}

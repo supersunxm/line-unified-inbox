@@ -6,7 +6,7 @@ import type { StoreRow } from "../src/lib/v2/response-model.ts";
 function row(storeId: string, patch: Partial<StoreRow> = {}): StoreRow {
   return {
     storeId, storeName: `ร้าน ${storeId}`, region: null, hasData: true, waitingCount: 0, recentWaitingCount: 0, oldWaitingCount: 0, oldestWaitingMinutes: null, longestChatId: null, longestBusinessMinutes: null, longestWaitingSince: null,
-    sinceYesterdayCount: 0, followTodayCount: 0, followTodayLongestMinutes: null, followTodayRank: null, hasOverdueWait: false, province: null, rate7d: 95, ratePrev7d: 95, rateDelta: 0, trend: [], managerUrl: null, ...patch,
+    sinceYesterdayCount: 0, followTodayCount: 0, followTodayLongestMinutes: null, followTodayRank: null, hasOverdueWait: false, windowLongestMinutes: null, windowLongestWaitingSince: null, windowLongestChatId: null, province: null, rate7d: 95, ratePrev7d: 95, rateDelta: 0, trend: [], managerUrl: null, ...patch,
   };
 }
 const totals = (rate: number | null, total = 100) => ({ total, within24h: rate === null ? 0 : Math.round(total * rate / 100), over24h: 5, pending: 2, rate });
@@ -20,8 +20,8 @@ test("abnormal items appear in the fixed priority order with stores and an actio
   const items = buildTodayItems({
     ...loaded,
     storeRows: [
-      row("a", { followTodayRank: 2, followTodayCount: 2, followTodayLongestMinutes: 90, waitingCount: 2, longestBusinessMinutes: 90, rate7d: 70, ratePrev7d: 90, rateDelta: -20 }),
-      row("b", { followTodayRank: 1, followTodayCount: 3, followTodayLongestMinutes: 300, waitingCount: 3, longestBusinessMinutes: 300 }),
+      row("a", { followTodayRank: 2, followTodayCount: 2, followTodayLongestMinutes: 90, windowLongestMinutes: 90, waitingCount: 2, longestBusinessMinutes: 90, rate7d: 70, ratePrev7d: 90, rateDelta: -20 }),
+      row("b", { followTodayRank: 1, followTodayCount: 3, followTodayLongestMinutes: 300, windowLongestMinutes: 300, waitingCount: 3, longestBusinessMinutes: 300 }),
       row("c", { rate7d: 80, ratePrev7d: 85, rateDelta: -5 }),
       row("z", { hasData: false, rate7d: 0, ratePrev7d: 100, rateDelta: -100 }),
     ],

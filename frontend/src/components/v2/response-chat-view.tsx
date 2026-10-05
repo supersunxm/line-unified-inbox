@@ -19,11 +19,11 @@ function StorePane({ rows, selected, onSelect }: { rows: StoreRow[]; selected: s
       <div className="border-b border-[var(--app-border-subtle)] px-4 py-3 text-xs font-semibold text-[var(--app-text-secondary)]">ร้าน ({rows.length})</div>
       <div className="min-h-0 flex-1 space-y-0.5 overflow-y-auto p-2">
         <button type="button" onClick={() => onSelect(ALL_STORES)} aria-current={selected === ALL_STORES ? "true" : undefined} className={itemClass(selected === ALL_STORES)}>
-          <span>ทุกร้านในรายการนี้</span>
+          <span className="text-[var(--app-text-primary)]">ทุกร้านในรายการนี้</span>
         </button>
         {rows.map((row) => (
           <button key={row.storeId} type="button" data-v2-chat-store={row.storeId} onClick={() => onSelect(row.storeId)} aria-current={selected === row.storeId ? "true" : undefined} className={itemClass(selected === row.storeId)}>
-            <span className="min-w-0 truncate">{row.storeName}</span>
+            <span className="min-w-0 truncate text-[var(--app-text-primary)]">{row.storeName}</span>
             {row.hasData && row.waitingCount > 0 && (
               <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-xs font-semibold tabular-nums ${row.hasOverdueWait ? "bg-[var(--app-danger-soft)] text-[var(--app-danger)]" : "bg-[var(--app-neutral-soft)] text-[var(--app-text-secondary)]"}`}>
                 {row.waitingCount}
@@ -47,7 +47,7 @@ function ConversationPane({ items, selected, onSelect, loading, error, showStore
           <li key={item.id}>
             <button type="button" data-v2-conversation={item.id} onClick={() => onSelect(item)} aria-current={selected === item.id ? "true" : undefined} className={`flex w-full flex-col gap-1 px-4 py-3 text-left ${selected === item.id ? "bg-[var(--app-accent-soft)]" : "hover:bg-[var(--app-surface-hover)]"}`}>
               <span className="flex items-center justify-between gap-2">
-                <span className="min-w-0 truncate text-sm font-medium">{item.customerName}</span>
+                <span className="min-w-0 truncate text-sm font-medium text-[var(--app-text-primary)]">{item.customerName}</span>
                 {item.kind === "waiting" ? (
                   <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${needsFollowUp(item.chat.businessMinutes) ? "bg-[var(--app-danger-soft)] text-[var(--app-danger)]" : "bg-[var(--app-warning-soft)] text-[var(--app-text-primary)]"}`}>
                     รอ {formatWaitMinutes(item.chat.businessMinutes)}
