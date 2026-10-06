@@ -13,6 +13,7 @@ export type ConversationListQuery = {
   productSeriesId?: string;
   productModelId?: string;
   topicId?: string;
+  month?: string;
 };
 
 export type ConversationListQueryInput = {
@@ -28,6 +29,7 @@ export type ConversationListQueryInput = {
   productSeriesId?: string;
   productModelId?: string;
   topicId?: string;
+  month?: string;
 };
 
 export function buildConversationListQuery(input: ConversationListQueryInput): ConversationListQuery {
@@ -44,6 +46,7 @@ export function buildConversationListQuery(input: ConversationListQueryInput): C
     productSeriesId: input.productSeriesId,
     productModelId: input.productModelId,
     topicId: input.topicId,
+    month: input.month && input.month !== "all" ? input.month : input.month === "all" ? "all" : undefined,
   };
 }
 
