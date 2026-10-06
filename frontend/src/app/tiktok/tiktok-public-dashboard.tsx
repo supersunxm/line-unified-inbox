@@ -640,7 +640,7 @@ export function TikTokPublicDashboard({ overview, stores }: Props) {
             <div className="p-14 text-center text-sm text-slate-400">{text.noData}</div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[980px] text-sm">
+              <table className="w-full min-w-[900px] text-sm">
                 <thead className="bg-slate-50/80 text-left text-[10px] font-bold uppercase tracking-[0.08em] text-slate-400 dark:bg-[var(--app-surface-subtle)]">
                   <tr className="border-b border-slate-100 dark:border-[var(--app-border-subtle)]">
                     <th className="w-12 px-4 py-3 text-center">#</th>
@@ -650,50 +650,59 @@ export function TikTokPublicDashboard({ overview, stores }: Props) {
                     <th className="px-4 py-3 text-right">Likes</th>
                     <th className="px-4 py-3 text-right">Videos</th>
                     <th className="px-4 py-3 text-center">{text.growthColumn} ({growthPeriod === "daily" ? "1D" : growthPeriod === "sevenDay" ? "7D" : "30D"})</th>
-                    <th className="px-4 py-3 text-right"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-[var(--app-border-subtle)]">
-                  {visibleStores.map((store, index) => (
-                    <tr key={store.storeMasterId} className="group transition hover:bg-blue-50/30 dark:hover:bg-[var(--app-surface-hover)]">
-                      <td className="px-4 py-4 text-center text-xs font-semibold text-slate-400">{index + 1}</td>
-                      <td className="px-4 py-4">
-                        <Link href={`/tiktok/stores/${encodeURIComponent(store.storeMasterId)}`} className="flex items-center gap-3">
-                          <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-slate-100 text-xs font-black text-slate-500 dark:bg-[var(--app-surface-subtle)]">
-                            {store.avatarUrl ? <img src={store.avatarUrl} alt="" className="h-full w-full object-cover" /> : "T"}
-                          </div>
-                          <div className="min-w-0">
-                            <div className="max-w-[320px] truncate font-semibold text-slate-900 dark:text-[var(--app-text-primary)]">{store.storeName}</div>
-                            <div className="mt-0.5 truncate text-xs text-slate-400">
-                              {[store.province, store.region].filter(Boolean).join(" · ")}
+                  {visibleStores.map((store, index) => {
+                    const detailHref = `/tiktok/stores/${encodeURIComponent(store.storeMasterId)}`;
+                    return (
+                      <tr
+                        key={store.storeMasterId}
+                        role="link"
+                        tabIndex={0}
+                        onClick={() => router.push(detailHref)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            router.push(detailHref);
+                          }
+                        }}
+                        className="group cursor-pointer transition hover:bg-emerald-50/40 focus-visible:bg-emerald-50/40 focus-visible:outline-none dark:hover:bg-[var(--app-surface-hover)] dark:focus-visible:bg-[var(--app-surface-hover)]"
+                        aria-label={`${store.storeName} — ${text.open}`}
+                      >
+                        <td className="px-4 py-4 text-center text-xs font-semibold text-slate-400">{index + 1}</td>
+                        <td className="px-4 py-4">
+                          <div className="flex items-center gap-3">
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-slate-100 text-xs font-black text-slate-500 dark:bg-[var(--app-surface-subtle)]">
+                              {store.avatarUrl ? <img src={store.avatarUrl} alt="" className="h-full w-full object-cover" /> : "T"}
+                            </div>
+                            <div className="min-w-0">
+                              <div className="max-w-[320px] truncate font-semibold text-slate-900 transition group-hover:text-emerald-800 dark:text-[var(--app-text-primary)] dark:group-hover:text-emerald-300">{store.storeName}</div>
+                              <div className="mt-0.5 truncate text-xs text-slate-400">
+                                {[store.province, store.region].filter(Boolean).join(" · ")}
+                              </div>
                             </div>
                           </div>
-                        </Link>
-                      </td>
-                      <td className="px-4 py-4">
-                        <a
-                          href={store.profileUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="font-medium text-blue-600 hover:underline dark:text-blue-300"
-                        >
-                          @{store.username} ↗
-                        </a>
-                      </td>
-                      <td className="px-4 py-4 text-right font-black tabular-nums text-slate-900 dark:text-[var(--app-text-primary)]">{number(store.followerCount, locale)}</td>
-                      <td className="px-4 py-4 text-right tabular-nums text-slate-500">{number(store.likesCount, locale)}</td>
-                      <td className="px-4 py-4 text-right tabular-nums text-slate-500">{number(store.videoCount, locale)}</td>
-                      <td className="px-4 py-4 text-center"><GrowthPill value={store.growth[growthPeriod].absolute} locale={locale} /></td>
-                      <td className="px-4 py-4 text-right">
-                        <Link
-                          href={`/tiktok/stores/${encodeURIComponent(store.storeMasterId)}`}
-                          className="inline-flex h-9 items-center rounded-xl border border-slate-200 px-3 text-xs font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 dark:border-[var(--app-border)] dark:text-[var(--app-text-primary)] dark:hover:bg-[var(--app-surface-hover)]"
-                        >
-                          {text.open} →
-                        </Link>
-                      </td>
-                    </tr>
-                  ))}
+                        </td>
+                        <td className="px-4 py-4">
+                          <a
+                            href={store.profileUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            onClick={(event) => event.stopPropagation()}
+                            onKeyDown={(event) => event.stopPropagation()}
+                            className="font-medium text-blue-600 hover:underline dark:text-blue-300"
+                          >
+                            @{store.username} ↗
+                          </a>
+                        </td>
+                        <td className="px-4 py-4 text-right font-black tabular-nums text-slate-900 dark:text-[var(--app-text-primary)]">{number(store.followerCount, locale)}</td>
+                        <td className="px-4 py-4 text-right tabular-nums text-slate-500">{number(store.likesCount, locale)}</td>
+                        <td className="px-4 py-4 text-right tabular-nums text-slate-500">{number(store.videoCount, locale)}</td>
+                        <td className="px-4 py-4 text-center"><GrowthPill value={store.growth[growthPeriod].absolute} locale={locale} /></td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
