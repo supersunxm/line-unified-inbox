@@ -3222,6 +3222,13 @@ Manual recovery uses the existing profile coordinator and managed Chromium safet
 The internal HTTP start acknowledges pending work immediately; the public endpoint and UI poll existing status. Same-profile requests share one startup, while another profile receives a specific conflict. This preserves the 20-second backend transport timeout without orphaning operator-visible startup state. No checkpoints are reset and no fleet historical backfill is initiated.
 Recovery waits within the coordinator's existing bounded high-priority local-lock budget, so an already-running health operation can safely yield without weakening the database lease or persistent-profile guard. Verification uses a new local database and synthetic profiles; the pre-existing database and production profiles are preserved.
 
+## 2026-10-06 — Apply Parser v3 from passive Manager observations
+- Reuse the existing `NicknameSourceObservation` rows written from the normal Mirror read. Run Parser v3 and independent metadata synchronization inside the existing post-cycle capture transaction; add no Manager/browser request, profile lease, migration, or scheduler.
+- Require the exact `(lineOfficialAccountId, lineChatUserId)` to resolve to one active conversation in the observed Store/OA and require that observation still be latest. Hold missing/unreadable, review, stale, and conflicting rows; rely on the existing capture queue retry if the transaction fails.
+- Update only `NicknameDerivedMetadataState` and append-only `NicknameDerivedMetadataApplication` receipts. A deterministic result replaces the full dimension set; NO_SIGNAL clears only the derived state and records the previous/resulting interpretation in its receipt. A repeated unchanged nickname creates no new Tag action.
+- Keep the existing Mirror-cycle deferral as the sole profile priority boundary. Synchronization is database-only after capture and must never invalidate a completed Mirror cycle.
+- Show the independent derived dimensions as compact row badges with the source tooltip. Keep the existing customer display name and CRM badge data flow intact; deduplicate only the rendered label list so the same concept does not appear twice while retaining separate source evidence.
+
 
 ## 2026-10-06 — UI-only LINE Chat health model
 

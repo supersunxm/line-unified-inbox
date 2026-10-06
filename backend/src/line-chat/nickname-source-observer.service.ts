@@ -4,6 +4,7 @@ import { PrismaService } from "../prisma.service";
 import { LineChatSessionService } from "./line-chat-session.service";
 import type { LineChatDiscoveredChat } from "./line-chat.types";
 import { classifyNickname, evidenceHash, NICKNAME_SOURCE_RULE_VERSION } from "./nickname-source-contract";
+import { synchronizeNicknameDerivedObservations } from "./nickname-derived-metadata-sync";
 
 export type NicknameSnapshot = {
   storeId: string; lineOfficialAccountId: string; observedAt: Date;
@@ -59,6 +60,17 @@ export class NicknameSourceObserverService implements OnModuleInit, OnModuleDest
     const started = Date.now();
     if (!Number.isFinite(snapshot.observedAt.getTime()) || snapshot.observedAt.getTime() > started) throw new Error("INVALID_CAPTURE_TIMESTAMP");
     const batchId = evidenceHash(JSON.stringify([snapshot.storeId, snapshot.lineOfficialAccountId, snapshot.observedAt.toISOString(), NICKNAME_SOURCE_RULE_VERSION]));
+    let derivedSync = {
+      observations: 0,
+      deterministicUpdates: 0,
+      noSignalClears: 0,
+      heldUnreadable: 0,
+      heldReview: 0,
+      identityConflicts: 0,
+      stale: 0,
+      duplicateReplays: 0,
+      unchangedSkips: 0,
+    };
     await this.prisma.$transaction(async tx => {
       if (await tx.nicknameSourceCapture.findUnique({ where: { id: batchId } })) return;
       const oa = await tx.lineOfficialAccount.findFirst({ where: {
@@ -92,7 +104,10 @@ export class NicknameSourceObserverService implements OnModuleInit, OnModuleDest
         lineOfficialAccountId: snapshot.lineOfficialAccountId, observedAt: snapshot.observedAt,
         chatCount: rows.length, coverage: snapshot.coverage, ruleVersion: NICKNAME_SOURCE_RULE_VERSION,
         profileKey: snapshot.profileKey, durationMs: Date.now() - started } });
-      if (rows.length) await tx.nicknameSourceObservation.createMany({ data: rows });
+      if (rows.length) {
+        await tx.nicknameSourceObservation.createMany({ data: rows });
+        derivedSync = await synchronizeNicknameDerivedObservations(tx, rows);
+      }
       const ids = rows.map(c => c.conversationId).filter((id): id is string => id !== null);
       if (ids.length) {
         await tx.nicknameSourceState.createMany({ data: ids.map(conversationId => ({ conversationId, lastObservedAt: snapshot.observedAt })), skipDuplicates: true });
@@ -100,6 +115,6 @@ export class NicknameSourceObserverService implements OnModuleInit, OnModuleDest
       }
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 5000, maxWait: 1000 });
     this.logger.log(JSON.stringify({ event: "nickname_source_capture_completed", chats: snapshot.chats.length,
-      durationMs: Date.now() - started, incrementalProfileMs: 0 }));
+      durationMs: Date.now() - started, incrementalProfileMs: 0, nicknameDerived: derivedSync }));
   }
 }

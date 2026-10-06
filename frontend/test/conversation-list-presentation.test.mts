@@ -7,9 +7,10 @@ import {
   getBmReplyStatusBadge,
   getBmTagChipClass,
   getConversationListTags,
+  getConversationListTagsWithNicknameMetadata,
   getConversationListTitle,
 } from "../src/app/conversation-list-presentation.ts";
-import type { ApiCustomerSalesInformation } from "../src/types/api.ts";
+import type { ApiCustomerSalesInformation, ApiNicknameDerivedMetadata } from "../src/types/api.ts";
 
 const labels = {
   conversations: "Conversations",
@@ -215,6 +216,74 @@ test("getConversationListTags truncates to maxVisible (default 3) and returns hi
   );
 });
 
+test("nickname-derived row badges follow dimension priority, share overflow and deduplicate visible CRM labels", () => {
+  const sales: ApiCustomerSalesInformation = {
+    status: "ONLINE",
+    filmBrand: null,
+    interestLevel: null,
+    purchaseChannel: ["ONLINE"],
+    paymentMethod: "INSTALLMENT",
+    products: [{
+      id: "crm-product",
+      model: { id: "crm-model", name: "OPPO Reno16 Pro", seriesName: null, category: null },
+      variant: null,
+      customProductName: null,
+      quantity: 1,
+      status: "PURCHASED",
+    }],
+    recordedBy: null,
+    recordedAt: null,
+  };
+  const metadata: ApiNicknameDerivedMetadata = {
+    parserVersion: "nickname-parser-v3.0.1",
+    provenance: "MANAGER_NICKNAME",
+    observedAt: "2026-10-06T00:00:00.000Z",
+    appliedAt: "2026-10-06T00:00:00.000Z",
+    source: "TikTok",
+    customerType: "ONLINE",
+    product: { name: "OPPO Reno16 Pro", classificationLevel: "MODEL" },
+    paymentMethod: "INSTALLMENT",
+    financeProvider: "SG_FINANCE",
+    service: "FILM_INSTALLATION",
+    period: { year: 2026, month: 9 },
+    eventDate: "2026-10-06",
+  };
+
+  const result = getConversationListTagsWithNicknameMetadata(sales, metadata, "en", 20);
+  assert.deepEqual(result.visible.map(({ label }) => label), [
+    "ONLINE", "Reno16 Pro", "SG FINANCE", "INSTALLMENT", "FILM", "TIKTOK", "SEP 2026", "OCT 6, 2026",
+  ]);
+  assert.equal(result.visible.filter(({ label }) => label === "INSTALLMENT").length, 1);
+  assert.equal(result.visible.filter(({ label }) => label === "Reno16 Pro").length, 1, "canonical-equivalent CRM and derived products share one visible label");
+  assert.equal(result.visible.find(({ label }) => label === "INSTALLMENT")?.kind, "nicknameDerived");
+  assert.equal(result.visible[0].kind, "nicknameDerived");
+  if (result.visible[0].kind === "nicknameDerived") {
+    assert.equal(result.visible[0].title, "Derived from LINE OA Manager nickname");
+  }
+  assert.equal(sales.paymentMethod, "INSTALLMENT", "the original CRM value stays intact");
+});
+
+test("nickname-derived badges use the existing row overflow behavior and empty state has no badges", () => {
+  const metadata: ApiNicknameDerivedMetadata = {
+    parserVersion: "nickname-parser-v3.0.1",
+    provenance: "MANAGER_NICKNAME",
+    observedAt: "2026-10-06T00:00:00.000Z",
+    appliedAt: "2026-10-06T00:00:00.000Z",
+    source: "LINE",
+    customerType: "ONLINE",
+    product: null,
+    paymentMethod: null,
+    financeProvider: null,
+    service: null,
+    period: { year: 2026, month: 9 },
+    eventDate: null,
+  };
+  const result = getConversationListTagsWithNicknameMetadata(null, metadata, "en", 2);
+  assert.deepEqual(result.visible.map(({ label }) => label), ["ONLINE", "LINE"]);
+  assert.deepEqual(result.hidden.map(({ label }) => label), ["SEP 2026"]);
+  assert.deepEqual(getConversationListTagsWithNicknameMetadata(null, null, "en"), { visible: [], hidden: [] });
+});
+
 test("message previews stay readable across content and row states while metadata remains quieter", () => {
   const pageCode = readFileSync(new URL("../src/app/page.tsx", import.meta.url), "utf8");
   const globalsCode = readFileSync(new URL("../src/app/globals.css", import.meta.url), "utf8");
@@ -239,8 +308,10 @@ test("conversation list rows render BM tags with data-conversation-bm-tag and no
   const rowEnd = pageCode.indexOf("<ConversationPaginationFooter", rowStart);
   const activeRows = pageCode.slice(rowStart, rowEnd);
 
-  assert.match(activeRows, /getConversationListTags\(conversation\.customerSalesInformation\)/);
-  assert.match(activeRows, /data-conversation-bm-tag=\{tag\.kind\}/);
+  assert.match(activeRows, /getConversationListTagsWithNicknameMetadata\([\s\S]*conversation\.customerSalesInformation[\s\S]*conversation\.nicknameDerivedMetadata/);
+  assert.match(activeRows, /data-conversation-bm-tag=\{tag\.kind === "nicknameDerived" \? undefined : tag\.kind\}/);
+  assert.match(activeRows, /data-conversation-nickname-tag=\{tag\.kind === "nicknameDerived" \? tag\.dimension : undefined\}/);
+  assert.match(activeRows, /title=\{tag\.kind === "nicknameDerived" \? tag\.title : undefined\}/);
   assert.match(activeRows, /getBmTagChipClass\(tag\)/);
   assert.match(activeRows, /data-conversation-bm-reply-status=\{currentBmReplyStatus\}/);
 
@@ -249,6 +320,13 @@ test("conversation list rows render BM tags with data-conversation-bm-tag and no
   assert.doesNotMatch(activeRows, /getStatusLabel\(language,\s*status\)/);
   assert.doesNotMatch(activeRows, /conversation\.product/);
   assert.doesNotMatch(activeRows, /conversation\.topic/);
+});
+
+test("mobile conversation rows render compact nickname-derived badges with provenance", () => {
+  const mobileCode = readFileSync(new URL("../src/components/chats/mobile-chats-app.tsx", import.meta.url), "utf8");
+  assert.match(mobileCode, /getConversationListTagsWithNicknameMetadata\(null, conversation\.nicknameDerivedMetadata, language, 3\)/);
+  assert.match(mobileCode, /data-mobile-nickname-tag/);
+  assert.match(mobileCode, /title=\{tag\.kind === "nicknameDerived" \? tag\.title : undefined\}/);
 });
 
 test("chat detail header renders BM tags with data-chat-detail-bm-tag, reply status dropdown, and relative time", () => {
