@@ -2,7 +2,6 @@ import React, { useMemo, useState } from "react";
 import { sortStoresByPriority } from "./store-priority-sorting.ts";
 import { filterStoresBySearch } from "./store-search.ts";
 import { formatWaitingDuration, getSlaRiskVariant, type StoreBmCountsItem } from "./store-priority-score.ts";
-import { FOCUS_STORE_GROUP_ID } from "@/lib/focus-store-group";
 
 export type SidebarView =
   | "dashboard"
@@ -27,13 +26,14 @@ export interface BulkUpdateRequest {
 export interface ContextSidebarProps {
   sidebarView: SidebarView;
   selectSidebarView: (view: SidebarView) => void;
-  overview: { notReplied: number; notifiedBm: number; replied: number };
+  overview: { total: number; notReplied: number; notifiedBm: number; replied: number };
+  period: string;
+  periodOptions: Array<{ value: string; label: string }>;
+  onPeriodChange: (period: string) => void;
   storeBmCounts: Record<string, StoreBmCountsItem>;
   selectedStore: string;
   setSelectedStore: (storeId: string) => void;
   clearAllFilters: () => void;
-  focusGroupLabel: string;
-  focusGroupSubtitle: string;
   stores: Array<{ id: string; storeId?: string | null; masterStoreId?: string | null; externalStoreId?: string | null; name: string; waiting: number; lineOaCount: number; code?: string; accountName?: string }>;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   text: Record<string, any>;
@@ -49,12 +49,13 @@ export function ContextSidebar({
   sidebarView,
   selectSidebarView,
   overview,
+  period,
+  periodOptions,
+  onPeriodChange,
   storeBmCounts,
   selectedStore,
   setSelectedStore,
   clearAllFilters,
-  focusGroupLabel,
-  focusGroupSubtitle,
   stores,
   text,
   getStoreDisplayName,
@@ -78,8 +79,13 @@ export function ContextSidebar({
 
   // Sort stores by operational priority and SLA aging urgency.
   const sortedStores = useMemo(() => {
+    if (period === "all") {
+      return [...filteredStores].sort((a, b) =>
+        getStoreDisplayName(a.name).localeCompare(getStoreDisplayName(b.name)),
+      );
+    }
     return sortStoresByPriority(filteredStores, storeBmCounts, getStoreDisplayName);
-  }, [filteredStores, storeBmCounts, getStoreDisplayName]);
+  }, [filteredStores, getStoreDisplayName, period, storeBmCounts]);
 
   const totalStorePages = Math.max(1, Math.ceil(sortedStores.length / STORE_LIST_PAGE_SIZE));
   const safeStorePage = Math.max(1, Math.min(storePage, totalStorePages));
@@ -92,19 +98,30 @@ export function ContextSidebar({
     clearAllFilters();
   };
 
-  const totalOverviewCount = (overview.notReplied ?? 0) + (overview.notifiedBm ?? 0) + (overview.replied ?? 0);
-  const focusGroupCounts = storeBmCounts[FOCUS_STORE_GROUP_ID];
-  const focusGroupTotalCount = focusGroupCounts
-    ? focusGroupCounts.notReplied + focusGroupCounts.notifiedBm + focusGroupCounts.replied
-    : 0;
+  const totalOverviewCount = overview.total ?? ((overview.notReplied ?? 0) + (overview.notifiedBm ?? 0) + (overview.replied ?? 0));
 
   return (
     <aside data-chat-pane="sidebar" className="app-surface flex flex-col h-full min-h-0 min-w-0 overflow-hidden border-r border-[var(--app-border)] bg-[var(--app-surface)]">
       <div className="p-3 pb-2 shrink-0 border-b border-[var(--app-border-subtle)]">
         {/* Overview Status Section */}
-        <p className="app-muted mb-3 text-xs font-semibold uppercase tracking-wider text-[var(--app-text-tertiary)]">
-          {text.overview || "ภาพรวม"}
-        </p>
+        <div className="mb-2.5 flex items-center justify-between gap-2">
+          <p className="app-muted text-xs font-semibold uppercase tracking-wider text-[var(--app-text-tertiary)]">
+            {text.overview || "ภาพรวม"}
+          </p>
+          <label className="min-w-0">
+            <span className="sr-only">{text.chatPeriod || "เดือน"}</span>
+            <select
+              data-chat-period-select
+              value={period}
+              onChange={(event) => onPeriodChange(event.target.value)}
+              className="h-7 max-w-[132px] rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface)] px-2 text-[11px] font-semibold text-[var(--app-text-primary)] focus:border-[var(--app-accent)] focus:outline-none"
+            >
+              {periodOptions.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+          </label>
+        </div>
 
         <nav aria-label="Conversation filters" className="space-y-0.5">
           <button
@@ -121,6 +138,8 @@ export function ContextSidebar({
             </span>
           </button>
 
+          {period !== "all" && (
+            <>
           <button
             type="button"
             onClick={() => selectSidebarView("notReplied")}
@@ -149,6 +168,9 @@ export function ContextSidebar({
             </span>
           </button>
         </nav>
+
+            </>
+          )}
 
         {/* Stores Filter Section */}
         <div className="my-2.5 border-t border-[var(--app-border-subtle)]" />
@@ -200,44 +222,6 @@ export function ContextSidebar({
         </div>
       ) : (
         <div className="space-y-0.5">
-          {focusGroupCounts && (
-            <button
-              type="button"
-              data-focus-store-group
-              onClick={() => {
-                setSelectedStore(FOCUS_STORE_GROUP_ID);
-                selectSidebarView("all");
-              }}
-              className={`mb-1.5 w-full rounded-[var(--app-radius-md)] border px-2.5 py-2.5 text-left transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/40 ${
-                selectedStore === FOCUS_STORE_GROUP_ID
-                  ? "border-purple-400/70 bg-purple-50 text-purple-950 shadow-sm dark:border-purple-500/50 dark:bg-purple-950/35 dark:text-purple-100"
-                  : "border-purple-200/80 bg-purple-50/55 text-[var(--app-text-primary)] hover:border-purple-300 hover:bg-purple-50 dark:border-purple-900/70 dark:bg-purple-950/20 dark:hover:bg-purple-950/30"
-              }`}
-            >
-              <div className="flex items-center gap-2 min-w-0">
-                <span aria-hidden="true" className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-purple-600 text-[12px] text-white shadow-sm">★</span>
-                <span className="min-w-0 flex-1">
-                  <span className="flex items-center gap-1.5">
-                    <span className="truncate text-xs font-bold" title={focusGroupLabel}>{focusGroupLabel}</span>
-                    <span className="shrink-0 rounded-full bg-red-500 px-1.5 py-0.5 text-[8px] font-bold leading-none text-white">NEW</span>
-                  </span>
-                  <span className="mt-0.5 block truncate text-[10px] font-medium text-purple-700/80 dark:text-purple-300/80">{focusGroupSubtitle}</span>
-                </span>
-                <span className="font-tabular shrink-0 rounded-full border border-purple-200 bg-white/80 px-2 py-0.5 text-[10px] font-bold text-purple-700 dark:border-purple-800 dark:bg-purple-950/50 dark:text-purple-200">
-                  {focusGroupTotalCount}
-                </span>
-              </div>
-              <div className="mt-2 flex items-center gap-1 pl-8 font-tabular">
-                <span className="rounded-[var(--app-radius-xs)] bg-[var(--app-danger-soft)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--app-danger)]" title="Not Replied">
-                  {focusGroupCounts.notReplied}
-                </span>
-                <span className="rounded-[var(--app-radius-xs)] bg-[var(--app-success-soft)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--app-success)]" title="Replied">
-                  {focusGroupCounts.replied}
-                </span>
-              </div>
-            </button>
-          )}
-
           <button
             type="button"
             onClick={() => setSelectedStore("all")}
@@ -249,12 +233,20 @@ export function ContextSidebar({
           >
             <span className="min-w-0 flex-1 truncate font-medium">{text.allStores || "ร้านค้าทั้งหมด"}</span>
             <div className="ml-2 flex items-center gap-1 shrink-0 font-tabular">
-              <span className="rounded-[var(--app-radius-xs)] bg-[var(--app-danger-soft)] text-[var(--app-danger)] px-1.5 py-0.5 text-[10px] font-medium" title="Not Replied">
-                {overview.notReplied}
-              </span>
-              <span className="rounded-[var(--app-radius-xs)] bg-[var(--app-success-soft)] text-[var(--app-success)] px-1.5 py-0.5 text-[10px] font-medium" title="Replied">
-                {overview.replied}
-              </span>
+              {period === "all" ? (
+                <span className="rounded-[var(--app-radius-xs)] border border-[var(--app-border-subtle)] bg-[var(--app-surface-subtle)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--app-text-secondary)]" title="Total conversations">
+                  {overview.total}
+                </span>
+              ) : (
+                <>
+                  <span className="rounded-[var(--app-radius-xs)] bg-[var(--app-danger-soft)] text-[var(--app-danger)] px-1.5 py-0.5 text-[10px] font-medium" title="Not Replied">
+                    {overview.notReplied}
+                  </span>
+                  <span className="rounded-[var(--app-radius-xs)] bg-[var(--app-success-soft)] text-[var(--app-success)] px-1.5 py-0.5 text-[10px] font-medium" title="Replied">
+                    {overview.replied}
+                  </span>
+                </>
+              )}
             </div>
           </button>
 
@@ -286,16 +278,24 @@ export function ContextSidebar({
                       {getStoreDisplayName(store.name)}
                     </span>
                     <div className="ml-2 flex items-center gap-1 shrink-0 font-tabular">
-                      <span className="rounded-[var(--app-radius-xs)] bg-[var(--app-danger-soft)] text-[var(--app-danger)] px-1.5 py-0.5 text-[10px] font-medium" title="Not Replied">
-                        {counts.notReplied}
-                      </span>
-                      <span className="rounded-[var(--app-radius-xs)] bg-[var(--app-success-soft)] text-[var(--app-success)] px-1.5 py-0.5 text-[10px] font-medium" title="Replied">
-                        {counts.replied}
-                      </span>
+                      {period === "all" ? (
+                        <span className="rounded-[var(--app-radius-xs)] border border-[var(--app-border-subtle)] bg-[var(--app-surface-subtle)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--app-text-secondary)]" title="Total conversations">
+                          {counts.total ?? 0}
+                        </span>
+                      ) : (
+                        <>
+                          <span className="rounded-[var(--app-radius-xs)] bg-[var(--app-danger-soft)] text-[var(--app-danger)] px-1.5 py-0.5 text-[10px] font-medium" title="Not Replied">
+                            {counts.notReplied}
+                          </span>
+                          <span className="rounded-[var(--app-radius-xs)] bg-[var(--app-success-soft)] text-[var(--app-success)] px-1.5 py-0.5 text-[10px] font-medium" title="Replied">
+                            {counts.replied}
+                          </span>
+                        </>
+                      )}
                     </div>
                   </div>
 
-                  {waitingMins > 0 && (
+                  {period !== "all" && waitingMins > 0 && (
                     <div className={`mt-0.5 flex items-center text-[10px] font-medium font-tabular ${
                       riskVariant === "danger"
                         ? "text-[var(--app-danger)] font-semibold"
@@ -313,7 +313,7 @@ export function ContextSidebar({
                   )}
                 </button>
 
-                {onRequestBulkUpdate && (
+                {onRequestBulkUpdate && period !== "all" && (
                   <div className="absolute right-1 top-1.5">
                     <button
                       type="button"
