@@ -6,6 +6,7 @@ import { type BrowserContext } from "playwright";
 import { PrismaService } from "../prisma.service";
 import { LineChatSessionService } from "./line-chat-session.service";
 import { LineChatProfileOperationCoordinator } from "./line-chat-profile-operation-coordinator.service";
+import { LineChatMirrorService } from "./line-chat-mirror.service";
 
 const RECOVERY_SESSION_KEYS = new Set(["account-1", "profile-b"]);
 const DEFAULT_TTL_MS = 12 * 60 * 1000;
@@ -49,6 +50,8 @@ export class LineChatNovncRecoveryWorkerService {
     @Inject(LineChatSessionService) private readonly sessionService: LineChatSessionService,
     @Inject(LineChatProfileOperationCoordinator)
     private readonly profileCoordinator: LineChatProfileOperationCoordinator,
+    @Inject(LineChatMirrorService)
+    private readonly mirrorService: LineChatMirrorService,
   ) {}
 
   public snapshot(): LineChatNovncRecoverySnapshot {
@@ -76,8 +79,15 @@ export class LineChatNovncRecoveryWorkerService {
       return current;
     }
     if (this.startPromise) throw new Error("RECOVERY_START_IN_PROGRESS");
-    if (this.sessionService.isMirrorCycleActive()) throw new Error("LIVE_MIRROR_ACTIVE");
-    this.startPromise = this.startInternal(sessionKey).finally(() => { this.startPromise = null; });
+    this.startPromise = (async () => {
+      await this.mirrorService.pauseForManualRecovery();
+      try {
+        return await this.startInternal(sessionKey);
+      } catch (error) {
+        this.mirrorService.resumeAfterManualRecovery();
+        throw error;
+      }
+    })().finally(() => { this.startPromise = null; });
     return this.startPromise;
   }
 
@@ -141,6 +151,7 @@ export class LineChatNovncRecoveryWorkerService {
           for (const child of children) if (child.exitCode === null && !child.killed) child.kill("SIGKILL");
           if (this.active?.token === token) this.active = null;
           this.logger.log(JSON.stringify({ event: "line_chat_novnc_recovery_stopped", sessionKey, reason }));
+          this.mirrorService.resumeAfterManualRecovery();
           stopResolve();
         };
 
