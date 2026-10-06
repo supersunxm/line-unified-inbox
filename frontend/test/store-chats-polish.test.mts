@@ -56,7 +56,8 @@ test("truncated store names expose the full name on hover", () => {
   assert.match(chatsPanes, /<span className="min-w-0 truncate font-medium text-\[var\(--app-text-secondary\)\]" title=\{conversation\.store\}>\{conversation\.store\}<\/span>/);
   const sidebar = read("../src/components/shell/context-sidebar.tsx");
   assert.match(sidebar, /<span className="min-w-0 flex-1 truncate pr-1 font-medium" title=\{getStoreDisplayName\(store\.name\)\}>/);
-  assert.match(sidebar, /<span className="truncate text-xs font-bold" title=\{focusGroupLabel\}>/);
+  assert.doesNotMatch(sidebar, /data-focus-store-group|focusGroupLabel|focusGroupSubtitle/);
+  assert.match(sidebar, /data-chat-period-select/);
 });
 
 test("Store Chats guardrail attributes are untouched", () => {
