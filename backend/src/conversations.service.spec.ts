@@ -868,7 +868,10 @@ void test("ConversationsService.getBmReplyStatusSummary aggregates overall and p
 });
 
 void test("Store Chats summary excludes pre-September status and scopes selected month in Bangkok time", async () => {
-  let capturedConversationWhere: any;
+  type CapturedConversationWhere = {
+    latestMessageAt?: { gte: Date; lt: Date };
+  };
+  let capturedConversationWhere: CapturedConversationWhere | undefined;
   const prisma = {
     store: {
       findMany: () => Promise.resolve([
@@ -876,7 +879,7 @@ void test("Store Chats summary excludes pre-September status and scopes selected
       ]),
     },
     conversation: {
-      findMany: ({ where }: { where: any }) => {
+      findMany: ({ where }: { where: CapturedConversationWhere }) => {
         capturedConversationWhere = where;
         return Promise.resolve([
           {
@@ -899,7 +902,7 @@ void test("Store Chats summary excludes pre-September status and scopes selected
   const service = new ConversationsService(prisma, noopOperations);
   const summary = await service.getBmReplyStatusSummary(null, "2026-10");
 
-  assert.deepEqual(capturedConversationWhere.latestMessageAt, {
+  assert.deepEqual(capturedConversationWhere?.latestMessageAt, {
     gte: new Date("2026-09-30T17:00:00.000Z"),
     lt: new Date("2026-10-31T17:00:00.000Z"),
   });
