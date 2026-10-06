@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
-import { PageContainer, PageHeader } from "@/components/shell";
+import { PageContainer } from "@/components/shell";
 import { useAppLanguage } from "../language";
 import type { TikTokPublicDashboardStore, TikTokPublicHistoryPoint } from "./tiktok-public-api";
 
@@ -112,21 +112,33 @@ export function TikTokPublicStoreDetail({ store, history }: Props) {
           </svg>
         </button>
       </div>
-      <PageHeader title={store.storeName} description={`@${store.username}${store.region ? ` · ${store.region}` : ""}${store.province ? ` · ${store.province}` : ""}`} />
-
-      <section className="flex flex-col gap-4 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-5 shadow-[var(--app-shadow-sm)] sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-4">
-          <div className="h-16 w-16 overflow-hidden rounded-full bg-[var(--app-surface-subtle)]">{store.avatarUrl ? <img src={store.avatarUrl} alt="" className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center text-xl font-bold">T</div>}</div>
-          <div>
-            <div className="text-lg font-bold">{store.displayName || store.accountName}</div>
-            <div className="mt-1 text-sm text-[var(--app-text-secondary)]">{store.bioDescription || `@${store.username}`}</div>
+      <section className="flex flex-col gap-5 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-5 shadow-[var(--app-shadow-sm)] sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 items-center gap-4">
+          <div className="h-16 w-16 shrink-0 overflow-hidden rounded-full bg-[var(--app-surface-subtle)]">
+            {store.avatarUrl
+              ? <img src={store.avatarUrl} alt="" className="h-full w-full object-cover" />
+              : <div className="flex h-full items-center justify-center text-xl font-bold">T</div>}
+          </div>
+          <div className="min-w-0">
+            <h1 className="truncate text-2xl font-black tracking-[-0.03em] text-[var(--app-text-primary)]">{store.storeName}</h1>
+            <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-[var(--app-text-secondary)]">
+              <span>@{store.username}</span>
+              {(store.province || store.region) && (
+                <span>· {[store.province, store.region].filter(Boolean).join(" · ")}</span>
+              )}
+            </div>
+            {(store.displayName || store.bioDescription) && (
+              <div className="mt-1.5 truncate text-sm text-[var(--app-text-tertiary)]">
+                {store.bioDescription || store.displayName || store.accountName}
+              </div>
+            )}
             <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[var(--app-text-tertiary)]">
               <span>{labels.snapshot}: {latestMetricDate ? formatMetricDate(latestMetricDate, locale) : "—"}</span>
               <span>{labels.updated}: {new Date(store.lastFetchedAt).toLocaleString(locale)}</span>
             </div>
           </div>
         </div>
-        <a href={store.profileUrl} target="_blank" rel="noreferrer" className="inline-flex h-10 items-center justify-center rounded-xl bg-[var(--app-accent)] px-4 text-sm font-semibold text-white">{labels.open}</a>
+        <a href={store.profileUrl} target="_blank" rel="noreferrer" className="inline-flex h-10 shrink-0 items-center justify-center rounded-xl bg-[var(--app-accent)] px-4 text-sm font-semibold text-white">{labels.open} ↗</a>
       </section>
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
