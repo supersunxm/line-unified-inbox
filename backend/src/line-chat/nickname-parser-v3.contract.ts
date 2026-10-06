@@ -1,7 +1,7 @@
 import { compactProductText, normalizeProductText } from "../classification/product-normalization";
 import { parseNicknameSource, type ParsedSource, type SourceTag } from "./nickname-source-contract";
 
-export const NICKNAME_PARSER_V3_RULE_VERSION = "nickname-parser-v3.0.0";
+export const NICKNAME_PARSER_V3_RULE_VERSION = "nickname-parser-v3.0.1";
 
 export type ParserV3Decision = "DETERMINISTIC" | "NO_SIGNAL" | "REVIEW" | "UNKNOWN";
 export type ParserV3ProductAliasSafety = "SAFE_EXACT" | "SAFE_COMPACT" | "REVIEW_REQUIRED" | "BLOCKED";
@@ -185,6 +185,34 @@ export function createNicknameProductResolver(products: readonly ParserV3Product
   type ExactCandidate = { product: ParserV3Product; alias: string; canonical: boolean };
   const exact = new Map<string, Map<string, ExactCandidate>>();
   const compact = new Map<string, Map<string, { product: ParserV3Product; alias: string }>>();
+  const canonicalOwners = new Map<string, Set<string>>();
+  const canonicalWithoutTerminal5gOwners = new Map<string, Set<string>>();
+  const addCanonicalOwner = (owners: Map<string, Set<string>>, key: string, productId: string) => {
+    if (!key) return;
+    const ids = owners.get(key) ?? new Set<string>();
+    ids.add(productId);
+    owners.set(key, ids);
+  };
+  const canonicalKeys = new Map<string, string>();
+  for (const product of products) {
+    if (!product.active) continue;
+    const key = compactProductText(product.name);
+    canonicalKeys.set(product.id, key);
+    addCanonicalOwner(canonicalOwners, key, product.id);
+    addCanonicalOwner(canonicalWithoutTerminal5gOwners, key.replace(/5g$/u, ""), product.id);
+  }
+  const competingCanonicalCount = (alias: string, productId: string): number => {
+    const key = compactProductText(alias);
+    const targetCanonicalKey = canonicalKeys.get(productId);
+    const competitors = new Set(canonicalOwners.get(key) ?? []);
+    // A shorthand such as Reno16F can collide with a separate canonical model
+    // named Reno16 F 5G. Keep the target's own canonical spelling valid.
+    if (key !== targetCanonicalKey) {
+      for (const id of canonicalWithoutTerminal5gOwners.get(key) ?? []) competitors.add(id);
+    }
+    competitors.delete(productId);
+    return competitors.size;
+  };
   const addExact = (
     key: string,
     product: ParserV3Product,
@@ -193,7 +221,8 @@ export function createNicknameProductResolver(products: readonly ParserV3Product
   ) => {
     if (!key) return;
     const candidates = exact.get(key) ?? new Map<string, ExactCandidate>();
-    candidates.set(product.id, { product, alias, canonical });
+    const existing = candidates.get(product.id);
+    if (!existing?.canonical || canonical) candidates.set(product.id, { product, alias, canonical });
     exact.set(key, candidates);
   };
 
@@ -221,6 +250,10 @@ export function createNicknameProductResolver(products: readonly ParserV3Product
     const exactMatches = exact.get(normalizeProductText(residual));
     if (exactMatches?.size === 1) {
       const [{ product, alias, canonical }] = [...exactMatches.values()];
+      const competingCount = canonical ? 0 : competingCanonicalCount(alias, product.id);
+      if (competingCount > 0) {
+        return { kind: "AMBIGUOUS", candidateCount: competingCount + 1 };
+      }
       return { kind: "MATCH", productId: product.id, productName: product.name, alias, matchKind: canonical ? "CANONICAL" : "APPROVED_ALIAS" };
     }
     if (exactMatches && exactMatches.size > 1) return { kind: "AMBIGUOUS", candidateCount: exactMatches.size };
@@ -229,6 +262,10 @@ export function createNicknameProductResolver(products: readonly ParserV3Product
     const compactMatches = compact.get(compactKey);
     if (compactMatches?.size === 1) {
       const [{ product, alias }] = [...compactMatches.values()];
+      const competingCount = competingCanonicalCount(alias, product.id);
+      if (competingCount > 0) {
+        return { kind: "AMBIGUOUS", candidateCount: competingCount + 1 };
+      }
       return { kind: "MATCH", productId: product.id, productName: product.name, alias, matchKind: "APPROVED_ALIAS" };
     }
     return compactMatches && compactMatches.size > 1
