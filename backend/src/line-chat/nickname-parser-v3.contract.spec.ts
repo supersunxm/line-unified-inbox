@@ -118,6 +118,36 @@ test("product aliases colliding across active models are ambiguous", () => {
   assert.ok(result.holdReasons.includes("PRODUCT_ALIAS_COLLISION"));
 });
 
+test("a safe alias is held when it conflicts with a distinct active canonical model", () => {
+  const resolveModels = createNicknameProductResolver([
+    {
+      id: "reno-16",
+      name: "OPPO Reno16",
+      active: true,
+      aliases: [
+        { alias: "Reno16F", safety: "SAFE_EXACT" },
+        { alias: "Reno16 5G", safety: "SAFE_EXACT" },
+        { alias: "Reno16", safety: "SAFE_COMPACT" },
+        { alias: "OPPO Reno16", safety: "SAFE_EXACT" },
+      ],
+    },
+    { id: "reno-16-f-5g", name: "OPPO Reno16 F 5G", active: true, aliases: [] },
+    { id: "reno-16-5g", name: "OPPO Reno16 5G", active: true, aliases: [] },
+  ]);
+
+  assert.deepEqual(resolveModels("Reno16F"), { kind: "AMBIGUOUS", candidateCount: 2 });
+  assert.deepEqual(resolveModels("Reno16 5G"), { kind: "AMBIGUOUS", candidateCount: 2 });
+  assert.equal(resolveModels("Reno16").kind, "MATCH");
+  assert.deepEqual(resolveModels("OPPO Reno16"), {
+    kind: "MATCH", productId: "reno-16", productName: "OPPO Reno16", alias: "OPPO Reno16", matchKind: "CANONICAL",
+  });
+  assert.equal(resolveModels("OPPO Reno16 F 5G").kind, "MATCH");
+
+  const shorthand = parseNicknameV3("Reno16F 26/9/69", true, resolveModels);
+  assert.equal(shorthand.decision, "REVIEW");
+  assert.ok(shorthand.holdReasons.includes("PRODUCT_ALIAS_COLLISION"));
+});
+
 test("English substrings and Thai substrings do not become business markers", () => {
   for (const value of ["online-shop", "offline", "design", "5G", "fundraising", "สดชื่น", "ผ่อนคลาย"]) {
     assert.equal(parse(value).values.customerType, null, value);
