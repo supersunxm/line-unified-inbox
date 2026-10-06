@@ -3228,3 +3228,12 @@ Recovery waits within the coordinator's existing bounded high-priority local-loc
 Keep backend lifecycle, health, failure-stage, fleet readiness and recovery behavior authoritative and unchanged. A pure presentation adapter collects evidence from existing session/store DTOs, then selects one UI status with shared precedence: BLOCKED > RECOVERING > NEED_SETUP > LOGIN_REQUIRED > DEGRADED > UNKNOWN > READY. Explicit blocks win over recovery; active recovery wins over older login warnings; known problems remain actionable without telemetry. Missing or unfamiliar health evidence cannot imply readiness. Account READY requires connected active health and a recent running-browser observation; historical failed job counters do not degrade current health. Store readiness is connection readiness and does not unlock rollout eligibility. OA access loss requests an access review rather than another login.
 
 Expose reason and recommended action through existing badge titles to keep the layout unchanged in PR1. Preserve raw technical badges and all existing controls. A deterministic clock parameter supports freshness-boundary tests; adapters never mutate input DTOs or introduce backend state writes.
+
+
+## 2026-10-06 — Store Chats is a monthly operational inbox, not an all-time reply scoreboard
+
+Use 2026-09-01 00:00 Asia/Bangkok as the Store Chats reply-status coverage boundary because reliable mirror coverage begins there. Preserve older conversations and messages as searchable history, but do not display, filter, or aggregate their reply status. Do not rewrite legacy rows to REPLIED/NOT_REPLIED and do not delete them.
+
+Default Store Chats to the current Bangkok month. The period selector scopes operational lists and summaries by Conversation.latestMessageAt so the row preview, current reply state, and selected month remain coherent. "All" is an archive view: show conversation totals, hide accumulated reply-state totals/filters, and keep pre-coverage rows statusless. Persist the selected period in the URL for desktop/mobile parity.
+
+Remove the seven-store purple focus group from Store Chats UI and routing. The legacy focus-group module/backend support may remain isolated for compatibility, but it is no longer an exposed chat navigation concept.
