@@ -3237,3 +3237,9 @@ Use 2026-09-01 00:00 Asia/Bangkok as the Store Chats reply-status coverage bound
 Default Store Chats to the current Bangkok month. The period selector scopes operational lists and summaries by Conversation.latestMessageAt so the row preview, current reply state, and selected month remain coherent. "All" is an archive view: show conversation totals, hide accumulated reply-state totals/filters, and keep pre-coverage rows statusless. Persist the selected period in the URL for desktop/mobile parity.
 
 Remove the seven-store purple focus group from Store Chats UI and routing. The legacy focus-group module/backend support may remain isolated for compatibility, but it is no longer an exposed chat navigation concept.
+
+## 2026-10-06 — Overview presentation and current attention
+
+Reuse the PR1 precedence table and presentation contract for aggregate summaries. Pending mapping and explicitly current actionable issue counts add presentation evidence through the same model; historical job totals never imply current issues. Bounded recent records and aggregate active counts are kept distinct without double counting. Unknown records remain available in diagnostics without claiming they are resolved or actionable. Group store attention by UI status to keep fleet size from overwhelming the overview.
+
+Session cards expose persisted display names, browser availability and current work in plain language. Stable session action anchors replace table-dependent attachment for existing portal controls; request endpoints, recovery orchestration, retry policy and polling cadence stay intact. Technical/backlog details remain available below the overview. Store table redesign and the full mobile store presentation are deferred to later PRs.

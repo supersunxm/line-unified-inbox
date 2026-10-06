@@ -161,8 +161,8 @@ const viewSource = readFileSync(
 
 test("LINE Chat health renders independent Session and Browser states with temporary BUSY guidance", () => {
   assert.match(viewSource, /<TableHead>Session<\/TableHead>/);
-  assert.match(viewSource, /<TableHead>Browser<\/TableHead>/);
-  assert.match(viewSource, /<BrowserStatus session=\{session\} \/>/);
+  assert.match(viewSource, /Browser state/);
+  assert.match(viewSource, /sessionBrowserLabel\(session\)/);
   assert.match(viewSource, /browserState/);
   assert.match(viewSource, /สถานะ Session แสดงการเชื่อมต่อ LINE/);
   assert.equal(

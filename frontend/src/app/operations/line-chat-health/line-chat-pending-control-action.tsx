@@ -70,6 +70,8 @@ type RunProgress = {
 };
 
 function findProfileBActionsTarget(): HTMLElement | null {
+  const cardTarget = Array.from(document.querySelectorAll<HTMLElement>("[data-session-actions]")).find(element => element.dataset.sessionActions === PROFILE_B_SESSION_KEY);
+  if (cardTarget) return cardTarget;
   for (const row of Array.from(document.querySelectorAll("tbody tr"))) {
     if (!row.textContent?.includes(PROFILE_B_SESSION_KEY)) continue;
     const cells = row.querySelectorAll("td");
@@ -230,27 +232,30 @@ export function LineChatPendingControlAction() {
   }, []);
 
   useEffect(() => {
-    refreshTarget();
+    const frame = requestAnimationFrame(refreshTarget);
     const timer = window.setInterval(refreshTarget, 1_000);
-    return () => window.clearInterval(timer);
+    return () => { cancelAnimationFrame(frame); window.clearInterval(timer); };
   }, [refreshTarget]);
 
   useEffect(() => {
-    const stored = loadStoredRun();
-    if (stored) setActiveRun(stored);
+    const frame = requestAnimationFrame(() => {
+      const stored = loadStoredRun();
+      if (stored) setActiveRun(stored);
+    });
+    return () => cancelAnimationFrame(frame);
   }, []);
 
   useEffect(() => {
-    void refreshStatus();
+    const frame = requestAnimationFrame(() => void refreshStatus());
     const timer = window.setInterval(() => void refreshStatus(), 10_000);
-    return () => window.clearInterval(timer);
+    return () => { cancelAnimationFrame(frame); window.clearInterval(timer); };
   }, [refreshStatus]);
 
   useEffect(() => {
     if (!activeRun) return;
-    void refreshRunProgress(activeRun);
+    const frame = requestAnimationFrame(() => void refreshRunProgress(activeRun));
     const timer = window.setInterval(() => void refreshRunProgress(activeRun), 3_000);
-    return () => window.clearInterval(timer);
+    return () => { cancelAnimationFrame(frame); window.clearInterval(timer); };
   }, [activeRun, refreshRunProgress]);
 
   const toggle = async () => {

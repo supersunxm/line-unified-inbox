@@ -6298,3 +6298,13 @@ Live worker continues independently at 146 configured unique active OA identitie
 - Coverage contract: conversations whose latest activity is before 2026-09-01 00:00 Asia/Bangkok remain searchable history but expose no reply-status badge/control and are excluded from reply-state filters/summaries. No database rows or historical messages are deleted.
 - UI: removed the purple seven-store focus card and its chat filter entry. "All" shows neutral totals instead of accumulated unanswered/replied totals. Desktop and mobile share the same period URL parameter.
 - Verification: targeted unit/guardrail coverage added for Bangkok month boundaries, pre-September status suppression, URL/query shaping, and the focus-card removal. Full CI pending on PR.
+
+- Delivery: PR #482 merged normally on 2026-10-06 at 08:47:01 UTC after Backend, Frontend, CI Gate and web-adaptive-auth all passed on e92eb2a8. Merge commit b00968afca071247c7bdd020d2bf020d84c47165. No CI or branch protection bypass. PR1 complete.
+
+## 2026-10-06 — LINE Chat Health Overview PR2
+
+- Task: one presentation-only PR based on merged PR #482 and latest main; approved first Drive mockup guides hierarchy, spacing and restrained status colors.
+- Implemented: header/timestamp/refresh; six System Status cards; grouped current Attention Needed; named session rows; current issues separate from neutral historical records; expandable technical/backlog details. Unified status model remains the presentation source, with existing precedence unchanged.
+- Preservation: store table markup/calculations regression matches main exactly; backend/API/schema/recovery requests and retry eligibility unchanged. Card attachment anchors preserve noVNC and pending-work controls. Initial pending-control UI effects move to the next animation frame to satisfy existing lint rules; polling intervals unchanged.
+- Checks: 828 frontend tests pass, touched-file lint passes, TypeScript baseline 50/50, production build passes. Browser at desktop 1440/1280 and tablet 834px verifies clean wrapping/no main overflow, refresh and healthy empty state despite historical failures. Synthetic pause/resume and recovery pending/poll/popup checks pass. Browser errors/warnings zero. Existing Next workspace-root warning unchanged.
+- Usage-limit interruption resolved on resume; final tablet header refined and screenshots captured. Rebased onto current main 32e6d229, preserving both tasks' progress/decision notes; code rebase had no conflicts. Rebased full frontend suite 831/831, TypeScript baseline 50/50 and production build pass. No production data writes. Next: open one PR and merge by merge commit only after all new CI passes.

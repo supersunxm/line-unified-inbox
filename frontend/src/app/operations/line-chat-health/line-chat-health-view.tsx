@@ -31,7 +31,10 @@ import {
   getBrowserOperationLabel,
   getOverallHealth,
   getLineChatUiHealth,
+  getLineChatWorkUiHealth,
 } from "./line-chat-health-status";
+import { buildLineChatOverview, sessionBrowserLabel, sessionWorkLabel } from "./line-chat-health-overview";
+import { LineChatHealthOverviewPanel } from "./line-chat-health-overview-panel";
 import { LineChatUnresolvedBacklogModal } from "./line-chat-unresolved-backlog-modal";
 
 type FilterTab = "ALL" | "AUTO_FIXABLE" | "MANUAL_REVIEW" | "AUTHENTICATION" | "SYSTEM_ATTENTION";
@@ -164,6 +167,7 @@ export function LineChatHealthView() {
   const { language, setLanguage } = useAppLanguage();
   const [user, setUser] = useState<AuthUser | null>(null);
   const [report, setReport] = useState<LineChatOperationsHealth | null>(null);
+  const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [backlogModalOpen, setBacklogModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -216,6 +220,8 @@ export function LineChatHealthView() {
     () => report?.sessions.find((item) => item.sessionKey === selectedKey) ?? null,
     [report, selectedKey],
   );
+
+  const overview = useMemo(() => report ? buildLineChatOverview(report) : null, [report]);
 
   const detailSession = useMemo(
     () => report?.sessions.find((item) => item.sessionKey === detailSessionKey) ?? null,
@@ -425,22 +431,16 @@ export function LineChatHealthView() {
     >
       <PageContainer variant="wide">
         <PageHeader
-          title="LINE Chat Operations Health"
-          description="Session connectivity and job outcomes are evaluated independently."
+          className="md:flex-wrap"
+          title="LINE Chat Health"
+          description="Monitor LINE sessions, Live Mirror, store readiness, and recovery status."
           actions={
-            <Button onClick={() => void load()} isLoading={loading}>
-              Refresh health data
-            </Button>
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="text-xs text-[var(--app-text-secondary)]">Last updated: {formatDate(report?.timestamp ?? null)}</span>
+              <Button onClick={() => void load()} isLoading={loading}>Refresh health data</Button>
+            </div>
           }
         />
-        <div
-          role="note"
-          title={BROWSER_STATUS_HELP_TEXT}
-          className="rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-subtle)] p-3 text-xs text-[var(--app-text-secondary)]"
-        >
-          <div>สถานะ Session แสดงการเชื่อมต่อ LINE</div>
-          <div>สถานะ Browser แสดงว่า Chromium Profile พร้อมรับงานใหม่หรือกำลังถูกใช้งาน</div>
-        </div>
         {error && (
           <div role="alert" className="rounded-xl border border-[var(--app-danger)]/30 bg-[var(--app-danger-soft)] p-3 text-sm text-[var(--app-danger)]">
             {error}
@@ -452,42 +452,88 @@ export function LineChatHealthView() {
           </div>
         )}
 
+        {overview && <LineChatHealthOverviewPanel overview={overview} onMapping={() => setBacklogModalOpen(true)} onSession={(key) => {
+          const session = report?.sessions.find(item => item.sessionKey === key);
+          if (session) { setSelectedKey(session.sessionKey); openDetailModal(session); }
+        }} />}
+
+        {overview && <section aria-labelledby="line-sessions-title" className="space-y-3">
+          <h2 id="line-sessions-title" className="text-lg font-semibold">LINE Sessions</h2>
+          <div className="grid min-w-0 gap-3">
+            {overview.sessions.map(({ session, health }) => {
+              const totalFailed = session.jobs.failed + session.jobs.failedAuth;
+              return <Card noPadding key={session.id} className="min-w-0">
+                <CardContent className="grid items-start gap-4 space-y-0 p-4 xl:grid-cols-[minmax(180px,1fr)_minmax(0,2fr)_minmax(180px,1.2fr)]">
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div><h3 className="text-base font-semibold">{session.displayName}</h3><p className="mt-1 text-xs text-[var(--app-text-tertiary)]">{session.sessionKey}</p></div>
+                      <Badge variant={health.tone} dot title={`${health.reason} ${health.recommendedAction}`}>{health.label}</Badge>
+                    </div>
+                    <p className="text-xs text-[var(--app-text-secondary)]">{health.reason}</p>
+                  </div>
+                  <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-xs">
+                    <div><dt className="text-[var(--app-text-tertiary)]">Last checked</dt><dd className="mt-1">{formatDate(session.healthLastCheckedAt)}</dd></div>
+                    <div><dt className="text-[var(--app-text-tertiary)]">Last healthy</dt><dd className="mt-1">{formatDate(session.healthLastHealthyAt)}</dd></div>
+                    <div><dt className="text-[var(--app-text-tertiary)]">Browser state</dt><dd className="mt-1">{sessionBrowserLabel(session)}</dd></div>
+                    <div><dt className="text-[var(--app-text-tertiary)]">Current work</dt><dd className="mt-1">{sessionWorkLabel(session)}</dd></div>
+                  </dl>
+                  <div className="space-y-2">
+                    <div data-session-actions={session.sessionKey} className="flex flex-wrap items-center gap-2">
+                      {(session.healthStatus === "AUTH_REQUIRED" || session.status === "AUTH_REQUIRED") && (
+                        <Button
+                          size="sm"
+                          disabled={recoveringKey === session.sessionKey || session.authRecoveryInProgress}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void executeTryRememberedLogin(session.sessionKey);
+                          }}
+                        >
+                          {recoveringKey === session.sessionKey || session.authRecoveryInProgress
+                            ? "Recovering..."
+                            : "Try remembered login"}
+                        </Button>
+                      )}
+                      {totalFailed > 0 && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            openDetailModal(session);
+                          }}
+                        >
+                          View failed ({totalFailed})
+                        </Button>
+                      )}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setLegacyRetryTarget(session);
+                        }}
+                        disabled={
+                          totalFailed === 0 ||
+                          (session.retryEligibleCount ?? 0) === 0 ||
+                          session.healthStatus === "AUTH_REQUIRED" ||
+                          session.status === "AUTH_REQUIRED"
+                        }
+                      >
+                        Retry eligible
+                      </Button>
+                    </div>
+                    <Button size="sm" variant="ghost" onClick={() => { setSelectedKey(session.sessionKey); setDiagnosticsOpen(true); }}>View technical details</Button>
+                  </div>
+                </CardContent>
+              </Card>;
+            })}
+          </div>
+        </section>}
+
         {report && (
-          <Card>
+          <Card id="store-readiness">
             <CardContent className="space-y-4 p-5">
-              <div>
-                <h2 className="text-lg font-semibold">Live Mirror fleet</h2>
-                <p>Configured stores: {report.liveMirrorFleet?.configuredStores ?? "UNKNOWN"} · Cycle: {report.liveMirrorFleet ? report.liveMirrorFleet.cycleRunning ? "RUNNING" : "IDLE" : "UNKNOWN"}</p>
-                <p>Worker observed: {formatDate(report.liveMirrorFleet?.observedAt ?? null)}</p>
-                <p>Last NORMAL cycle: {formatDate(report.liveMirrorFleet?.lastCycle?.completedAt ?? null)}</p>
-                {report.liveMirrorFleet?.lastCycle && <p>{report.liveMirrorFleet.lastCycle.attempted} attempted · {report.liveMirrorFleet.lastCycle.succeeded} success · {report.liveMirrorFleet.lastCycle.failed} failed · {report.liveMirrorFleet.lastCycle.partial} partial · {report.liveMirrorFleet.lastCycle.skipped} skipped · {(report.liveMirrorFleet.lastCycle.durationMs / 1000).toFixed(1)}s</p>}
-                <h2 className="mt-4 text-lg font-semibold">Nickname mapping readiness</h2>
-                <p className="text-sm text-[var(--app-text-secondary)]">
-                  Phase 0 audit for expanding direct customer links beyond the 7-store pilot. READY requires a complete OA/store mapping, chat bot ID, active authenticated session, and confirmed connected health.
-                </p>
-              </div>
-              <dl className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-                <div className="rounded-xl bg-[var(--app-surface-subtle)] p-3">
-                  <dt className="text-xs text-[var(--app-text-tertiary)]">Active store OAs</dt>
-                  <dd className="mt-1 text-xl font-semibold">{report.fleetReadiness.summary.totalStores}</dd>
-                </div>
-                <div className="rounded-xl bg-[var(--app-success-soft)] p-3">
-                  <dt className="text-xs text-[var(--app-text-tertiary)]">READY</dt>
-                  <dd className="mt-1 text-xl font-semibold">{report.fleetReadiness.summary.ready}</dd>
-                </div>
-                <div className="rounded-xl bg-[var(--app-surface-subtle)] p-3">
-                  <dt className="text-xs text-[var(--app-text-tertiary)]">Need bot mapping</dt>
-                  <dd className="mt-1 text-xl font-semibold">{report.fleetReadiness.summary.needBotMapping}</dd>
-                </div>
-                <div className="rounded-xl bg-[var(--app-surface-subtle)] p-3">
-                  <dt className="text-xs text-[var(--app-text-tertiary)]">Need login</dt>
-                  <dd className="mt-1 text-xl font-semibold">{report.fleetReadiness.summary.needLogin}</dd>
-                </div>
-                <div className="rounded-xl bg-[var(--app-surface-subtle)] p-3">
-                  <dt className="text-xs text-[var(--app-text-tertiary)]">Blocked</dt>
-                  <dd className="mt-1 text-xl font-semibold">{report.fleetReadiness.summary.blocked}</dd>
-                </div>
-              </dl>
+              <h2 className="text-lg font-semibold">Store Readiness</h2>
               <div className="text-xs text-[var(--app-text-tertiary)]">
                 Current 7-store pilot eligibility: {report.fleetReadiness.summary.currentlyPilotEligible} stores · Audit generated {formatDate(report.fleetReadiness.generatedAt)}
               </div>
@@ -541,7 +587,26 @@ export function LineChatHealthView() {
           </Card>
         )}
 
-        {report && (
+        {overview && <section aria-labelledby="recent-issues-title" className="space-y-3">
+          <h2 id="recent-issues-title" className="text-lg font-semibold">Recent Issues</h2>
+          <Card noPadding><CardContent className="space-y-3 p-5">
+            <h3 className="text-sm font-medium">Current / active ({overview.activeIssueCount})</h3>
+            {overview.currentIssues.length ? overview.currentIssues.map(({ session, failure }) => <div key={`${session.id}-${failure.jobId}`} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[var(--app-border)] p-3">
+              <div><p className="text-sm font-medium">{session.displayName} · {failure.oaName}</p><p className="mt-1 text-xs text-[var(--app-text-secondary)]">{getLineChatWorkUiHealth(0, 1).reason} Updated {formatDate(failure.updatedAt)}</p></div>
+              <Button size="sm" variant="outline" onClick={() => openDetailModal(session)}>Inspect issue</Button>
+            </div>) : <p className="text-sm text-[var(--app-text-secondary)]">{overview.activeIssueCount > 0 ? "Current issues exist beyond the recent records. Open session diagnostics to review." : "No current actionable issues."}</p>}
+            <details className="border-t border-[var(--app-border)] pt-3">
+              <summary className="cursor-pointer text-sm text-[var(--app-text-secondary)]">Historical / resolved ({overview.historicalIssues.length} recent records)</summary>
+              <p className="mt-2 text-xs text-[var(--app-text-tertiary)]">Historical records do not affect current system health.</p>
+              {overview.historicalIssues.map(({ session, failure }) => <div key={`${session.id}-${failure.jobId}`} className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-[var(--app-text-secondary)]"><span>{session.displayName} · {failure.oaName} · {formatDate(failure.updatedAt)}</span><Button size="sm" variant="ghost" onClick={() => openDetailModal(session)}>View record</Button></div>)}
+              {!overview.historicalIssues.length && <p className="mt-2 text-xs text-[var(--app-text-secondary)]">No historical issues in recent records.</p>}
+            </details>
+            {overview.otherIssues.length > 0 && <details className="border-t border-[var(--app-border)] pt-3"><summary className="cursor-pointer text-sm text-[var(--app-text-secondary)]">Other records / status unconfirmed ({overview.otherIssues.length})</summary><p className="mt-2 text-xs">These records are not confirmed actionable and do not affect the overview.</p>{overview.otherIssues.map(({ session, failure }) => <Button key={`${session.id}-${failure.jobId}`} size="sm" variant="ghost" onClick={() => openDetailModal(session)}>Inspect {session.displayName} record</Button>)}</details>}
+          </CardContent></Card>
+        </section>}
+
+        {report && <details className="rounded-xl border border-[var(--app-border)] p-4">
+          <summary className="cursor-pointer text-sm font-medium">Mapping backlog details</summary>
           <Card>
             <CardContent className="space-y-3 p-5">
               <div>
@@ -580,115 +645,20 @@ export function LineChatHealthView() {
               </dl>
             </CardContent>
           </Card>
-        )}
-
-        <Card>
-          <CardContent className="p-0">
-            <TableContainer>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Account / session</TableHead>
-                    <TableHead>Mapped OAs</TableHead>
-                    <TableHead>Session</TableHead>
-                    <TableHead>Browser</TableHead>
-                    <TableHead>Health</TableHead>
-                    <TableHead>Job summary / history</TableHead>
-                    <TableHead>Last health check</TableHead>
-                    <TableHead>Failure stage</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {report?.sessions.map((session) => {
-                    const overall = getOverallHealth(session);
-                    const totalFailed = session.jobs.failed + session.jobs.failedAuth;
-                    return (
-                      <TableRow
-                        key={session.id}
-                        className="cursor-pointer"
-                        onClick={() => setSelectedKey(session.sessionKey)}
-                      >
-                        <TableCell>
-                          <div className="font-semibold">{session.liveMirror?.profile ? `Profile ${session.liveMirror.profile}` : session.displayName}</div>
-                          <div className="text-xs text-[var(--app-text-tertiary)]">{session.sessionKey}</div>
-                        </TableCell>
-                        <TableCell>{session.liveMirror?.mappedStores ?? "UNKNOWN"}</TableCell>
-                        <TableCell>
-                          <Badge variant={tone(session.healthStatus)} dot>
-                            {session.healthStatus}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <BrowserStatus session={session} />
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={overall.tone} title={`${overall.reason} ${overall.recommendedAction}`} dot>
-                            {overall.label}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <JobSummary session={session} onFailedClick={() => openDetailModal(session)} />
-                        </TableCell>
-                        <TableCell>{formatDate(session.healthLastCheckedAt)}<div className="text-xs">Worker: {session.liveMirror?.telemetryStatus ?? "UNKNOWN"} · {formatDate(session.liveMirror?.observedAt ?? null)}</div></TableCell>
-                        <TableCell>{session.healthFailureStage ?? "—"}</TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-1.5">
-                            {(session.healthStatus === "AUTH_REQUIRED" || session.status === "AUTH_REQUIRED") && (
-                              <Button
-                                size="sm"
-                                disabled={recoveringKey === session.sessionKey || session.authRecoveryInProgress}
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  void executeTryRememberedLogin(session.sessionKey);
-                                }}
-                              >
-                                {recoveringKey === session.sessionKey || session.authRecoveryInProgress
-                                  ? "Recovering..."
-                                  : "Try remembered login"}
-                              </Button>
-                            )}
-                            {totalFailed > 0 && (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  openDetailModal(session);
-                                }}
-                              >
-                                View failed ({totalFailed})
-                              </Button>
-                            )}
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                setLegacyRetryTarget(session);
-                              }}
-                              disabled={
-                                totalFailed === 0 ||
-                                (session.retryEligibleCount ?? 0) === 0 ||
-                                session.healthStatus === "AUTH_REQUIRED" ||
-                                session.status === "AUTH_REQUIRED"
-                              }
-                            >
-                              Retry eligible
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </CardContent>
-        </Card>
+        </details>}
 
         {selected && (
-          <section aria-label={`${selected.sessionKey} details`} className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
+          <details key={selected.sessionKey} open={diagnosticsOpen} onToggle={event => setDiagnosticsOpen(event.currentTarget.open)} className="rounded-xl border border-[var(--app-border)] p-4">
+            <summary className="cursor-pointer text-sm font-medium">Technical diagnostics — {selected.displayName}</summary>
+        <div
+          role="note"
+          title={BROWSER_STATUS_HELP_TEXT}
+          className="rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-subtle)] p-3 text-xs text-[var(--app-text-secondary)]"
+        >
+          <div>สถานะ Session แสดงการเชื่อมต่อ LINE</div>
+          <div>สถานะ Browser แสดงว่า Chromium Profile พร้อมรับงานใหม่หรือกำลังถูกใช้งาน</div>
+        </div>
+          <section aria-label={`${selected.sessionKey} details`} className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
             <Card>
               <CardContent className="space-y-4 p-5">
                 <div>
@@ -842,6 +812,7 @@ export function LineChatHealthView() {
               </CardContent>
             </Card>
           </section>
+          </details>
         )}
       </PageContainer>
 

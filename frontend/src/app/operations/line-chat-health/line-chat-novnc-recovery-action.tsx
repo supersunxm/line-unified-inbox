@@ -17,6 +17,8 @@ type RecoveryStartResult = {
 };
 
 function findProfileActionsTarget(sessionKey: string): HTMLElement | null {
+  const cardTarget = Array.from(document.querySelectorAll<HTMLElement>("[data-session-actions]")).find(element => element.dataset.sessionActions === sessionKey);
+  if (cardTarget) return cardTarget;
   for (const row of Array.from(document.querySelectorAll("tbody tr"))) {
     const cells = row.querySelectorAll("td");
     if (!cells.item(0)?.textContent?.includes(sessionKey)) continue;
