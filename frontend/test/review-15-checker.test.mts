@@ -3,7 +3,11 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { countThaiWords, segmentThaiWords } from "../src/lib/thai-word-counter.ts";
+import {
+  countThaiWords,
+  segmentThaiWords,
+  WORD_COUNT_RULE_VERSION,
+} from "../src/lib/thai-word-counter.ts";
 import {
   extractGoogleReviewCandidates,
   isReviewUiNoise,
@@ -24,6 +28,30 @@ test("canonical counter enforces the 14/15 boundary", () => {
   assert.equal(countThaiWords(fourteen), 14);
   assert.equal(countThaiWords(fifteen), 15);
   assert.ok(segmentThaiWords(example).count >= 15);
+});
+
+test("V2 protects business-approved Thai lexical units before Intl segmentation", () => {
+  assert.equal(WORD_COUNT_RULE_VERSION, "THAI_REVIEW_WORDS_V2");
+
+  assert.deepEqual(segmentThaiWords("โปรโมชั่น").finalTokens, ["โปรโมชั่น"]);
+  assert.equal(countThaiWords("โปรโมชั่น"), 1);
+
+  assert.deepEqual(segmentThaiWords("สมาร์ทโฟน").finalTokens, ["สมาร์ทโฟน"]);
+  assert.equal(countThaiWords("สมาร์ทโฟน"), 1);
+
+  assert.deepEqual(segmentThaiWords("ประทับใจ").finalTokens, ["ประทับใจ"]);
+  assert.equal(countThaiWords("ประทับใจ"), 1);
+
+  assert.deepEqual(segmentThaiWords("โปรโมชั่นพิเศษ").finalTokens, ["โปรโมชั่น", "พิเศษ"]);
+  assert.equal(countThaiWords("โปรโมชั่นพิเศษ"), 2);
+});
+
+test("protected words remain deterministic when repeated or mixed with normal text", () => {
+  assert.deepEqual(
+    segmentThaiWords("โปรโมชั่น โปรโมชั่นดีมาก").finalTokens,
+    ["โปรโมชั่น", "โปรโมชั่น", "ดี", "มาก"],
+  );
+  assert.equal(countThaiWords("โปรโมชั่น โปรโมชั่นดีมาก"), 4);
 });
 
 test("Google Review checker compatibility module re-exports the canonical counter", () => {

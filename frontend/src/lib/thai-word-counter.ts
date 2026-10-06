@@ -7,6 +7,8 @@
  *   ↓
  * Strip Google Maps UI phrases (cleanReviewText)
  *   ↓
+ * Protect business-approved lexical units before segmentation
+ *   ↓
  * Intl.Segmenter("th", { granularity: "word" })
  *   ↓
  * Keep meaningful word-like tokens (exclude pure numbers, punct, emoji, symbols, UI words)
@@ -19,6 +21,14 @@
  *   ↓
  * finalWordCount >= 15
  */
+
+export const WORD_COUNT_RULE_VERSION = "THAI_REVIEW_WORDS_V2";
+
+export const PROTECTED_LEXICON = [
+  "โปรโมชั่น",
+  "สมาร์ทโฟน",
+  "ประทับใจ",
+] as const;
 
 export const THAI_COMPOUND_PREFIXES = new Set([
   "การ",
@@ -84,6 +94,36 @@ export function cleanReviewText(rawText?: string | null): string {
   }
 
   return text.replace(/\s+/g, " ").trim();
+}
+
+type ProtectedLexiconResult = {
+  text: string;
+  restore: Map<string, string>;
+};
+
+export function protectLexicalUnits(
+  text: string,
+  lexicon: readonly string[] = PROTECTED_LEXICON,
+): ProtectedLexiconResult {
+  let protectedText = text;
+  const restore = new Map<string, string>();
+
+  const ordered = [...lexicon]
+    .filter(Boolean)
+    .sort((a, b) => b.length - a.length || a.localeCompare(b, "th"));
+
+  ordered.forEach((word, index) => {
+    if (!protectedText.includes(word)) return;
+
+    const placeholder = `R15LEXICON${index}TOKEN`;
+    protectedText = protectedText.split(word).join(` ${placeholder} `);
+    restore.set(placeholder, word);
+  });
+
+  return {
+    text: protectedText.replace(/\s+/g, " ").trim(),
+    restore,
+  };
 }
 
 export function isMeaningfulToken(token: string): boolean {
@@ -162,17 +202,20 @@ export function segmentThaiWords(text?: string | null): ThaiWordSegmentation {
     return { rawTokens: [], finalTokens: [], count: 0 };
   }
 
+  const protectedLexicon = protectLexicalUnits(cleaned);
+
   let rawExtracted: string[] = [];
   if (typeof Intl !== "undefined" && "Segmenter" in Intl) {
     const segmenter = new (Intl as any).Segmenter("th", { granularity: "word" });
-    const segments = Array.from(segmenter.segment(cleaned)) as Array<{ segment: string; isWordLike?: boolean }>;
+    const segments = Array.from(segmenter.segment(protectedLexicon.text)) as Array<{ segment: string; isWordLike?: boolean }>;
     rawExtracted = segments.map((s) => s.segment);
   } else {
-    const cleanChars = cleaned.replace(/[^\u0E00-\u0E7Fa-zA-Z0-9]/g, " ");
+    const cleanChars = protectedLexicon.text.replace(/[^\u0E00-\u0E7Fa-zA-Z0-9]/g, " ");
     rawExtracted = cleanChars.split(/\s+/).filter(Boolean);
   }
 
   const rawTokens = rawExtracted
+    .map((tok) => protectedLexicon.restore.get(tok) ?? tok)
     .filter((tok) => isMeaningfulToken(tok))
     .map((t) => t.replace(/[ๆฯ]/g, "").trim())
     .filter(Boolean);
