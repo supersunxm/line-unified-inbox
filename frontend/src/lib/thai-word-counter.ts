@@ -7,9 +7,13 @@
  *   ↓
  * Strip Google Maps UI phrases (cleanReviewText)
  *   ↓
+ * Insert Thai ↔ Latin/number boundaries for mixed-script review text
+ *   ↓
  * Protect business-approved lexical units before segmentation
  *   ↓
  * Intl.Segmenter("th", { granularity: "word" })
+ *   ↓
+ * Split OPPO/model/connectivity tokens deterministically
  *   ↓
  * Keep meaningful word-like tokens (exclude pure numbers, punct, emoji, symbols, UI words)
  *   ↓
@@ -22,12 +26,23 @@
  * finalWordCount >= 15
  */
 
-export const WORD_COUNT_RULE_VERSION = "THAI_REVIEW_WORDS_V2";
+export const WORD_COUNT_RULE_VERSION = "THAI_REVIEW_WORDS_V3";
 
+/**
+ * Business-approved lexical units. Besides fixing browser-tokenizer drift,
+ * these also act as Thai lexical boundary anchors inside text with no spaces.
+ *
+ * Keep this list conservative and add a regression fixture for every disputed
+ * word or phrase before expanding it.
+ */
 export const PROTECTED_LEXICON = [
   "โปรโมชั่น",
   "สมาร์ทโฟน",
   "ประทับใจ",
+  "ใช้งาน",
+  "วันนี้",
+  "แบต",
+  "กล้อง",
 ] as const;
 
 export const THAI_COMPOUND_PREFIXES = new Set([
@@ -96,6 +111,20 @@ export function cleanReviewText(rawText?: string | null): string {
   return text.replace(/\s+/g, " ").trim();
 }
 
+/**
+ * Thai normally has no spaces between words, while product reviews often glue
+ * Thai directly to model names (for example ซื้อOPPOReno14Pro5Gวันนี้).
+ * Browser segmentation can then treat the whole mixed-script run as one token.
+ * Insert only script boundaries here; do not split ordinary Thai text.
+ */
+export function normalizeMixedScriptBoundaries(text: string): string {
+  return text
+    .replace(/([\u0E00-\u0E7F])([A-Za-z0-9])/g, "$1 $2")
+    .replace(/([A-Za-z0-9])([\u0E00-\u0E7F])/g, "$1 $2")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 type ProtectedLexiconResult = {
   text: string;
   restore: Map<string, string>;
@@ -124,6 +153,37 @@ export function protectLexicalUnits(
     text: protectedText.replace(/\s+/g, " ").trim(),
     restore,
   };
+}
+
+/**
+ * Split only the product patterns for which the business rule is explicit.
+ * We intentionally do not generic-split CamelCase because arbitrary model
+ * names may contain meaningful casing and digits.
+ *
+ * Example: OPPOReno14Pro5G -> OPPO / Reno14Pro / 5G
+ */
+export function splitProductToken(token: string): string[] {
+  if (!/^[A-Za-z0-9]+$/.test(token)) return [token];
+
+  let rest = token;
+  const result: string[] = [];
+
+  const oppoPrefix = rest.match(/^OPPO/i);
+  if (oppoPrefix && rest.length > oppoPrefix[0].length) {
+    result.push(oppoPrefix[0]);
+    rest = rest.slice(oppoPrefix[0].length);
+  }
+
+  if (!rest) return result;
+
+  const connectivitySuffix = rest.match(/^(.+?)([45]G)$/i);
+  if (connectivitySuffix?.[1]) {
+    result.push(connectivitySuffix[1], connectivitySuffix[2]);
+  } else {
+    result.push(rest);
+  }
+
+  return result;
 }
 
 export function isMeaningfulToken(token: string): boolean {
@@ -202,12 +262,16 @@ export function segmentThaiWords(text?: string | null): ThaiWordSegmentation {
     return { rawTokens: [], finalTokens: [], count: 0 };
   }
 
-  const protectedLexicon = protectLexicalUnits(cleaned);
+  const mixedScriptNormalized = normalizeMixedScriptBoundaries(cleaned);
+  const protectedLexicon = protectLexicalUnits(mixedScriptNormalized);
 
   let rawExtracted: string[] = [];
   if (typeof Intl !== "undefined" && "Segmenter" in Intl) {
     const segmenter = new (Intl as any).Segmenter("th", { granularity: "word" });
-    const segments = Array.from(segmenter.segment(protectedLexicon.text)) as Array<{ segment: string; isWordLike?: boolean }>;
+    const segments = Array.from(segmenter.segment(protectedLexicon.text)) as Array<{
+      segment: string;
+      isWordLike?: boolean;
+    }>;
     rawExtracted = segments.map((s) => s.segment);
   } else {
     const cleanChars = protectedLexicon.text.replace(/[^\u0E00-\u0E7Fa-zA-Z0-9]/g, " ");
@@ -216,6 +280,7 @@ export function segmentThaiWords(text?: string | null): ThaiWordSegmentation {
 
   const rawTokens = rawExtracted
     .map((tok) => protectedLexicon.restore.get(tok) ?? tok)
+    .flatMap((tok) => splitProductToken(tok))
     .filter((tok) => isMeaningfulToken(tok))
     .map((t) => t.replace(/[ๆฯ]/g, "").trim())
     .filter(Boolean);
