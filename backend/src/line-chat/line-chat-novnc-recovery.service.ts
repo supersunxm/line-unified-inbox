@@ -3,6 +3,7 @@ import { Injectable, ServiceUnavailableException } from "@nestjs/common";
 type WorkerRecoveryResponse = {
   success?: boolean;
   active?: boolean;
+  pending?: boolean;
   sessionKey?: string | null;
   path?: string;
   expiresAt?: string;
@@ -66,12 +67,14 @@ export class LineChatNovncRecoveryService {
 
   private toPublicResult(result: WorkerRecoveryResponse, sessionKey: string) {
     const baseUrl = process.env.LINE_CHAT_NOVNC_PUBLIC_BASE_URL?.trim().replace(/\/+$/u, "");
-    if (result.active && result.sessionKey !== sessionKey) {
+    if ((result.active || result.pending) && result.sessionKey !== sessionKey) {
       throw new ServiceUnavailableException("Manual recovery is active for another profile.");
     }
     const url = result.active && result.path && baseUrl ? `${baseUrl}${result.path}` : null;
     return {
       active: result.active === true,
+      pending: result.pending === true,
+      error: result.error ?? null,
       sessionKey,
       expiresAt: result.expiresAt ?? null,
       url,

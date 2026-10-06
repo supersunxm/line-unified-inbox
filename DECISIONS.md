@@ -3207,3 +3207,10 @@ The existing identity fields represent the relationship but their indexes do not
 ## 2026-10-05 — Identity rollout acceptance evidence
 
 Keep browser policy restrictions intact. The owner requests actual authenticated Manager navigation where possible; preserve verified app redirects/Manager navigation separately from read-only API destination validation, and report inaccessible UI cases explicitly. Do not circumvent blocked navigation via another browser/driver or diagnostics. No customer identity is inferred from a visible name. Immutable production metadata receipts remain off GitHub; public project evidence contains only aggregate counts, versions and hashes.
+
+## 2026-10-06 recovery ownership handoff
+
+Manual recovery uses the existing profile coordinator and managed Chromium safety guard. Mirror stops at store/profile boundaries, safely finishes current browser work, and closes retained contexts before recovery launches. Recovery resumes Mirror only after its coordinator operation settles, including lease release. A failed context close keeps Mirror paused and records an observable failure.
+
+The internal HTTP start acknowledges pending work immediately; the public endpoint and UI poll existing status. Same-profile requests share one startup, while another profile receives a specific conflict. This preserves the 20-second backend transport timeout without orphaning operator-visible startup state. No checkpoints are reset and no fleet historical backfill is initiated.
+Recovery waits within the coordinator's existing bounded high-priority local-lock budget, so an already-running health operation can safely yield without weakening the database lease or persistent-profile guard. Verification uses a new local database and synthetic profiles; the pre-existing database and production profiles are preserved.

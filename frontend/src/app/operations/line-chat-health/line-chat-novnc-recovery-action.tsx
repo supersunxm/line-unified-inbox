@@ -7,6 +7,8 @@ import { api } from "@/lib/api";
 
 type RecoveryStartResult = {
   active?: boolean;
+  pending?: boolean;
+  error?: string | null;
   sessionKey?: string;
   expiresAt?: string | null;
   url?: string | null;
@@ -70,7 +72,7 @@ export function LineChatNovncRecoveryAction({ sessionKey = "profile-b" }: { sess
     if (popup) popup.opener = null;
 
     try {
-      const response = await fetch(
+      let response = await fetch(
         `/api-backend/operations/line-chat-nickname/sessions/${encodeURIComponent(sessionKey)}/manual-recovery/start`,
         {
           method: "POST",
@@ -89,6 +91,18 @@ export function LineChatNovncRecoveryAction({ sessionKey = "profile-b" }: { sess
       if (!response.ok) {
         throw new Error(result.message || `Unable to start manual recovery (${response.status}).`);
       }
+      const deadline = Date.now() + 150_000;
+      while (result.pending && Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, 1_000));
+        response = await fetch(
+          `/api-backend/operations/line-chat-nickname/sessions/${encodeURIComponent(sessionKey)}/manual-recovery`,
+          { credentials: "include", headers: { Accept: "application/json" } },
+        );
+        result = await response.json() as RecoveryStartResult;
+        if (!response.ok) throw new Error(result.message || "Unable to check recovery status.");
+      }
+      if (result.pending) throw new Error("Recovery is still starting. Try again to reconnect to the pending session.");
+      if (result.error) throw new Error(result.error);
       if (!result.readyToOpen || !result.url) {
         throw new Error("Manual recovery started, but the secure noVNC URL is not available.");
       }
@@ -118,13 +132,13 @@ export function LineChatNovncRecoveryAction({ sessionKey = "profile-b" }: { sess
         variant={needsReconnect ? "primary" : "outline"}
         isLoading={opening}
         disabled={opening}
-        title={`Manual ${sessionKey} recovery. Opens a temporary recovery session that yields when Live Mirror starts.`}
+        title={`Manual ${sessionKey} recovery. Waits for Mirror to yield, then holds exclusive profile ownership until recovery closes.`}
         onClick={(event) => {
           event.stopPropagation();
           void openRecovery();
         }}
       >
-        {opening ? "Opening..." : needsReconnect ? "Reconnect LINE" : "Open noVNC"}
+        {opening ? "Waiting for Mirror to yield…" : needsReconnect ? "Reconnect LINE" : "Open noVNC"}
       </Button>
       {error ? (
         <span

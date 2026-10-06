@@ -246,7 +246,7 @@ async function bootstrap() {
           return;
         }
         const result = requestUrl.pathname.endsWith("/start")
-          ? await recovery.start(body.sessionKey.trim())
+          ? recovery.requestStart(body.sessionKey.trim())
           : await recovery.stop(body.sessionKey.trim());
         writeJson(response, 200, { success: true, ...result });
         return;
