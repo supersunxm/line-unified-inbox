@@ -44,12 +44,10 @@ function formatShortDate(date: string, locale: string) {
   }).format(new Date(`${date}T00:00:00.000Z`));
 }
 
-function growthTone(value: number | null) {
-  if (value === null || value === 0) {
-    return "bg-[var(--app-surface-subtle)] text-[var(--app-text-secondary)]";
-  }
-  if (value > 0) return "bg-emerald-500/10 text-emerald-600 dark:text-emerald-300";
-  return "bg-rose-500/10 text-rose-600 dark:text-rose-300";
+function growthTextClass(value: number | null) {
+  if (value === null || value === 0) return "text-[var(--app-text-secondary)]";
+  if (value > 0) return "text-emerald-600 dark:text-emerald-300";
+  return "text-rose-600 dark:text-rose-300";
 }
 
 function FollowerChart({
@@ -63,7 +61,7 @@ function FollowerChart({
 }) {
   if (points.length < 2) {
     return (
-      <div className="flex h-64 items-center justify-center text-sm text-[var(--app-text-tertiary)]">
+      <div className="flex h-56 items-center justify-center text-sm text-[var(--app-text-tertiary)]">
         {emptyLabel}
       </div>
     );
@@ -74,51 +72,63 @@ function FollowerChart({
   const max = Math.max(...values);
   const mid = Math.round((min + max) / 2);
   const span = Math.max(max - min, 1);
+  const chartTop = 24;
+  const chartBottom = 214;
+  const chartLeft = 24;
+  const chartRight = 976;
+  const chartHeight = chartBottom - chartTop;
+  const chartWidth = chartRight - chartLeft;
+
   const coords = points.map((point, index) => {
-    const x = points.length === 1 ? 4 : 4 + (index / (points.length - 1)) * 92;
-    const y = 88 - ((point.followerCount - min) / span) * 72;
-    return `${x},${y}`;
-  }).join(" ");
+    const x = points.length === 1
+      ? chartLeft
+      : chartLeft + (index / (points.length - 1)) * chartWidth;
+    const y = chartBottom - ((point.followerCount - min) / span) * chartHeight;
+    return [x, y] as const;
+  });
+  const linePoints = coords.map(([x, y]) => `${x},${y}`).join(" ");
+  const areaPoints = `${chartLeft},${chartBottom} ${linePoints} ${chartRight},${chartBottom}`;
   const middleIndex = Math.floor((points.length - 1) / 2);
 
   return (
     <div>
-      <div className="grid grid-cols-[52px_minmax(0,1fr)] gap-3">
-        <div className="flex h-64 flex-col justify-between py-2 text-right text-[11px] tabular-nums text-[var(--app-text-tertiary)]">
+      <div className="grid grid-cols-[48px_minmax(0,1fr)] gap-3">
+        <div className="flex h-56 flex-col justify-between py-1 text-right text-[11px] tabular-nums text-[var(--app-text-tertiary)]">
           <span>{compactNumber(max, locale)}</span>
           <span>{compactNumber(mid, locale)}</span>
           <span>{compactNumber(min, locale)}</span>
         </div>
-        <div className="relative h-64 overflow-hidden rounded-2xl bg-[var(--app-surface-subtle)]">
-          <div className="absolute inset-x-0 top-[16%] border-t border-dashed border-[var(--app-border-subtle)]" />
+        <div className="relative h-56">
+          <div className="absolute inset-x-0 top-0 border-t border-dashed border-[var(--app-border-subtle)]" />
           <div className="absolute inset-x-0 top-1/2 border-t border-dashed border-[var(--app-border-subtle)]" />
-          <div className="absolute inset-x-0 bottom-[12%] border-t border-dashed border-[var(--app-border-subtle)]" />
-          <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="relative z-10 h-full w-full" role="img" aria-label="Follower history chart">
+          <div className="absolute inset-x-0 bottom-0 border-t border-dashed border-[var(--app-border-subtle)]" />
+          <svg
+            viewBox="0 0 1000 240"
+            preserveAspectRatio="none"
+            className="relative z-10 h-full w-full overflow-visible"
+            role="img"
+            aria-label="Follower history chart"
+          >
+            <defs>
+              <linearGradient id="followerArea" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="var(--app-accent)" stopOpacity="0.18" />
+                <stop offset="100%" stopColor="var(--app-accent)" stopOpacity="0.015" />
+              </linearGradient>
+            </defs>
+            <polygon points={areaPoints} fill="url(#followerArea)" />
             <polyline
-              points={coords}
+              points={linePoints}
               fill="none"
-              stroke="currentColor"
-              strokeWidth="2.4"
+              stroke="var(--app-accent)"
+              strokeWidth="2.5"
               vectorEffect="non-scaling-stroke"
-              className="text-[var(--app-accent)]"
+              strokeLinecap="round"
+              strokeLinejoin="round"
             />
-            {points.map((point, index) => {
-              const [x, y] = coords.split(" ")[index].split(",");
-              return (
-                <circle
-                  key={point.metricDate}
-                  cx={x}
-                  cy={y}
-                  r="1.3"
-                  vectorEffect="non-scaling-stroke"
-                  className="fill-[var(--app-accent)]"
-                />
-              );
-            })}
           </svg>
         </div>
       </div>
-      <div className="ml-[64px] mt-2 flex justify-between text-[11px] text-[var(--app-text-tertiary)]">
+      <div className="ml-[60px] mt-2 flex justify-between text-[11px] text-[var(--app-text-tertiary)]">
         <span>{formatShortDate(points[0].metricDate, locale)}</span>
         <span>{formatShortDate(points[middleIndex].metricDate, locale)}</span>
         <span>{formatShortDate(points[points.length - 1].metricDate, locale)}</span>
@@ -146,20 +156,19 @@ export function TikTokPublicStoreDetail({ store, history }: Props) {
     following: "Following",
     likes: "Total Likes",
     videos: "Videos",
-    oneDay: "1 วัน",
+    oneDay: "วันนี้",
     seven: "7 วัน",
     thirty: "30 วัน",
     history: "Follower Growth",
-    historySub: "แนวโน้มจำนวนผู้ติดตามจาก Daily Snapshot",
-    snapshot: "Snapshot ล่าสุด",
-    updated: "ดึงข้อมูลล่าสุด",
-    noBaseline: "ยังไม่มีข้อมูลสำหรับเปรียบเทียบ",
-    open: "เปิด TikTok Profile",
-    contentSnapshot: "Content Snapshot",
+    historySub: "แนวโน้มผู้ติดตามจาก Daily Snapshot",
+    snapshot: "Snapshot",
+    updated: "อัปเดต",
+    noBaseline: "ยังไม่มีข้อมูลเปรียบเทียบ",
+    open: "เปิด TikTok",
+    content: "Content",
     growth: "Follower Growth",
-    performance: "Performance",
-    avgDaily: "เติบโตเฉลี่ยต่อวัน",
-    bestDay: "วันที่เติบโตดีที่สุด",
+    avgDaily: "เฉลี่ย / วัน",
+    bestDay: "ดีที่สุด / วัน",
     range: "ช่วงการเปลี่ยนแปลง",
     snapshots: "Snapshots",
     noHistory: "ต้องมีอย่างน้อย 2 Daily Snapshots เพื่อแสดงกราฟ",
@@ -169,21 +178,20 @@ export function TikTokPublicStoreDetail({ store, history }: Props) {
     following: "Following",
     likes: "Total Likes",
     videos: "Videos",
-    oneDay: "1 day",
+    oneDay: "Today",
     seven: "7 days",
     thirty: "30 days",
     history: "Follower Growth",
     historySub: "Follower trend from daily snapshots",
-    snapshot: "Latest snapshot",
-    updated: "Last collected",
-    noBaseline: "No comparison snapshot yet",
-    open: "Open TikTok Profile",
-    contentSnapshot: "Content Snapshot",
+    snapshot: "Snapshot",
+    updated: "Updated",
+    noBaseline: "No comparison data yet",
+    open: "Open TikTok",
+    content: "Content",
     growth: "Follower Growth",
-    performance: "Performance",
-    avgDaily: "Average daily growth",
-    bestDay: "Best growth day",
-    range: "Follower range",
+    avgDaily: "Avg / day",
+    bestDay: "Best / day",
+    range: "Change range",
     snapshots: "Snapshots",
     noHistory: "At least 2 daily snapshots are required to draw history",
   };
@@ -223,13 +231,13 @@ export function TikTokPublicStoreDetail({ store, history }: Props) {
 
   return (
     <PageContainer variant="wide" className="bg-slate-50/70 dark:bg-[var(--app-bg)]">
-      <div className="space-y-5 pb-10">
+      <div className="space-y-4 pb-10">
         <div className="flex items-center justify-between">
           <Link href="/tiktok" className="text-sm font-semibold text-[var(--app-accent)] hover:underline">← {labels.back}</Link>
           <button
             onClick={handleRefresh}
             disabled={isRefreshing}
-            className="flex h-8 w-8 items-center justify-center rounded-full border border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-text-secondary)] transition hover:bg-[var(--app-surface-subtle)] disabled:opacity-50"
+            className="flex h-9 w-9 items-center justify-center rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-text-secondary)] transition hover:bg-[var(--app-surface-subtle)] disabled:opacity-50"
             aria-label="Refresh data"
           >
             <svg className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -238,96 +246,108 @@ export function TikTokPublicStoreDetail({ store, history }: Props) {
           </button>
         </div>
 
-        <section className="flex flex-col gap-5 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-5 shadow-[var(--app-shadow-sm)] sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex min-w-0 items-center gap-4">
-            <div className="h-16 w-16 shrink-0 overflow-hidden rounded-full bg-[var(--app-surface-subtle)]">
+        <section className="flex flex-col gap-4 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] px-5 py-4 shadow-[var(--app-shadow-sm)] sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-center gap-3.5">
+            <div className="h-12 w-12 shrink-0 overflow-hidden rounded-full bg-[var(--app-surface-subtle)]">
               {store.avatarUrl
                 ? <img src={store.avatarUrl} alt="" className="h-full w-full object-cover" />
-                : <div className="flex h-full items-center justify-center text-xl font-bold">T</div>}
+                : <div className="flex h-full items-center justify-center text-base font-bold">T</div>}
             </div>
             <div className="min-w-0">
-              <h1 className="truncate text-2xl font-black tracking-[-0.03em] text-[var(--app-text-primary)]">{store.storeName}</h1>
-              <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-[var(--app-text-secondary)]">
+              <h1 className="truncate text-xl font-black tracking-[-0.025em] text-[var(--app-text-primary)]">{store.storeName}</h1>
+              <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm text-[var(--app-text-secondary)]">
                 <span>@{store.username}</span>
                 {(store.province || store.region) && (
                   <span>· {[store.province, store.region].filter(Boolean).join(" · ")}</span>
                 )}
               </div>
-              {(store.displayName || store.bioDescription) && (
-                <div className="mt-1.5 truncate text-sm text-[var(--app-text-tertiary)]">
-                  {store.bioDescription || store.displayName || store.accountName}
-                </div>
-              )}
-              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[var(--app-text-tertiary)]">
+              <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-[var(--app-text-tertiary)]">
                 <span>{labels.snapshot}: {latestMetricDate ? formatMetricDate(latestMetricDate, locale) : "—"}</span>
                 <span>{labels.updated}: {new Date(store.lastFetchedAt).toLocaleString(locale)}</span>
               </div>
             </div>
           </div>
-          <a href={store.profileUrl} target="_blank" rel="noreferrer" className="inline-flex h-10 shrink-0 items-center justify-center rounded-xl bg-[var(--app-accent)] px-4 text-sm font-semibold text-white">{labels.open} ↗</a>
+          <a href={store.profileUrl} target="_blank" rel="noreferrer" className="inline-flex h-9 shrink-0 items-center justify-center rounded-xl bg-[var(--app-accent)] px-4 text-xs font-bold text-white">
+            {labels.open} ↗
+          </a>
         </section>
 
-        <section className="grid gap-4 xl:grid-cols-[1.3fr_0.7fr]">
-          <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-5 shadow-[var(--app-shadow-sm)]">
-            <div className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--app-text-tertiary)]">{labels.followers}</div>
-            <div className="mt-2 text-4xl font-black tracking-[-0.045em] tabular-nums text-[var(--app-text-primary)]">
-              {formatNumber(store.followerCount, locale)}
+        <section className="overflow-hidden rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] shadow-[var(--app-shadow-sm)]">
+          <div className="grid sm:grid-cols-2 xl:grid-cols-[1.25fr_repeat(3,0.82fr)_1.1fr]">
+            <div className="border-b border-[var(--app-border-subtle)] p-5 sm:border-r xl:border-b-0">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--app-text-tertiary)]">{labels.followers}</div>
+              <div className="mt-1 text-3xl font-black tracking-[-0.04em] tabular-nums text-[var(--app-text-primary)]">
+                {formatNumber(store.followerCount, locale)}
+              </div>
             </div>
-            <div className="mt-5 grid gap-2 sm:grid-cols-3">
-              {growthCards.map(({ label, days, value }) => {
-                const baselineDate = latestMetricDate ? shiftMetricDate(latestMetricDate, -days) : null;
-                return (
-                  <div key={label} className="rounded-2xl bg-[var(--app-surface-subtle)] p-4">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs font-semibold text-[var(--app-text-tertiary)]">{label}</span>
-                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${growthTone(value.absolute)}`}>
-                        {percentText(value.percent)}
-                      </span>
-                    </div>
-                    <div className="mt-2 text-xl font-black tabular-nums text-[var(--app-text-primary)]">{growthText(value.absolute)}</div>
-                    <div className="mt-1 text-[10px] text-[var(--app-text-tertiary)]">
-                      {value.absolute === null
-                        ? labels.noBaseline
-                        : baselineDate && latestMetricDate
-                          ? `${formatShortDate(baselineDate, locale)} → ${formatShortDate(latestMetricDate, locale)}`
-                          : ""}
-                    </div>
+
+            {growthCards.map(({ label, days, value }, index) => {
+              const baselineDate = latestMetricDate ? shiftMetricDate(latestMetricDate, -days) : null;
+              return (
+                <div
+                  key={label}
+                  className={`border-b border-[var(--app-border-subtle)] p-5 sm:border-r xl:border-b-0 ${
+                    index === 2 ? "sm:border-r-0 xl:border-r" : ""
+                  }`}
+                >
+                  <div className="text-[11px] font-semibold text-[var(--app-text-tertiary)]">{label}</div>
+                  <div className={`mt-1.5 text-xl font-black tabular-nums ${growthTextClass(value.absolute)}`}>
+                    {growthText(value.absolute)}
                   </div>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-5 shadow-[var(--app-shadow-sm)]">
-            <div className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--app-text-tertiary)]">{labels.contentSnapshot}</div>
-            <div className="mt-4 divide-y divide-[var(--app-border-subtle)]">
-              {[
-                [labels.likes, store.likesCount],
-                [labels.videos, store.videoCount],
-                [labels.following, store.followingCount],
-              ].map(([label, value]) => (
-                <div key={String(label)} className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
-                  <span className="text-sm text-[var(--app-text-secondary)]">{String(label)}</span>
-                  <span className="text-lg font-black tabular-nums text-[var(--app-text-primary)]">{formatNumber(Number(value), locale)}</span>
+                  <div className={`mt-0.5 text-xs font-bold tabular-nums ${growthTextClass(value.absolute)}`}>
+                    {percentText(value.percent)}
+                  </div>
+                  <div className="mt-1 text-[10px] text-[var(--app-text-tertiary)]">
+                    {value.absolute === null
+                      ? labels.noBaseline
+                      : baselineDate && latestMetricDate
+                        ? `${formatShortDate(baselineDate, locale)} → ${formatShortDate(latestMetricDate, locale)}`
+                        : ""}
+                  </div>
                 </div>
-              ))}
+              );
+            })}
+
+            <div className="p-5">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--app-text-tertiary)]">{labels.content}</div>
+              <div className="mt-2 space-y-1.5 text-xs">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-[var(--app-text-secondary)]">{labels.likes}</span>
+                  <span className="font-black tabular-nums text-[var(--app-text-primary)]">{compactNumber(store.likesCount, locale)}</span>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-[var(--app-text-secondary)]">{labels.videos}</span>
+                  <span className="font-black tabular-nums text-[var(--app-text-primary)]">{formatNumber(store.videoCount, locale)}</span>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-[var(--app-text-secondary)]">{labels.following}</span>
+                  <span className="font-black tabular-nums text-[var(--app-text-primary)]">{formatNumber(store.followingCount, locale)}</span>
+                </div>
+              </div>
             </div>
           </div>
         </section>
 
-        <section className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-5 shadow-[var(--app-shadow-sm)]">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <section className="overflow-hidden rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] shadow-[var(--app-shadow-sm)]">
+          <div className="flex flex-col gap-3 border-b border-[var(--app-border-subtle)] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h2 className="text-lg font-bold text-[var(--app-text-primary)]">{labels.history}</h2>
-              <p className="mt-1 text-xs text-[var(--app-text-tertiary)]">{labels.historySub}</p>
+              <div className="flex items-baseline gap-3">
+                <h2 className="text-base font-bold text-[var(--app-text-primary)]">{labels.history}</h2>
+                {chartNetGrowth !== null && (
+                  <span className={`text-sm font-black tabular-nums ${growthTextClass(chartNetGrowth)}`}>
+                    {growthText(chartNetGrowth)}
+                  </span>
+                )}
+              </div>
+              <p className="mt-0.5 text-xs text-[var(--app-text-tertiary)]">{labels.historySub}</p>
             </div>
-            <div className="inline-flex w-fit rounded-xl bg-[var(--app-surface-subtle)] p-1">
+            <div className="inline-flex w-fit rounded-lg bg-[var(--app-surface-subtle)] p-1">
               {(["7D", "30D"] as HistoryPeriod[]).map((period) => (
                 <button
                   key={period}
                   type="button"
                   onClick={() => setHistoryPeriod(period)}
-                  className={`rounded-lg px-3 py-1.5 text-xs font-bold transition ${
+                  className={`rounded-md px-3 py-1.5 text-xs font-bold transition ${
                     historyPeriod === period
                       ? "bg-[var(--app-surface)] text-[var(--app-text-primary)] shadow-sm"
                       : "text-[var(--app-text-secondary)] hover:text-[var(--app-text-primary)]"
@@ -339,36 +359,40 @@ export function TikTokPublicStoreDetail({ store, history }: Props) {
             </div>
           </div>
 
-          <div className="mt-5">
+          <div className="px-5 py-5">
             <FollowerChart points={chartPoints} locale={locale} emptyLabel={labels.noHistory} />
           </div>
 
-          <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <div className="rounded-2xl bg-[var(--app-surface-subtle)] p-4">
-              <div className="text-xs text-[var(--app-text-tertiary)]">{labels.growth}</div>
-              <div className="mt-2 text-xl font-black tabular-nums text-[var(--app-text-primary)]">
+          <div className="grid border-t border-[var(--app-border-subtle)] sm:grid-cols-4 sm:divide-x sm:divide-[var(--app-border-subtle)]">
+            <div className="border-b border-[var(--app-border-subtle)] px-5 py-3 sm:border-b-0">
+              <div className="text-[10px] font-semibold uppercase tracking-[0.06em] text-[var(--app-text-tertiary)]">{labels.growth}</div>
+              <div className={`mt-1 text-base font-black tabular-nums ${growthTextClass(chartNetGrowth)}`}>
                 {chartNetGrowth === null ? "—" : growthText(chartNetGrowth)}
               </div>
             </div>
-            <div className="rounded-2xl bg-[var(--app-surface-subtle)] p-4">
-              <div className="text-xs text-[var(--app-text-tertiary)]">{labels.avgDaily}</div>
-              <div className="mt-2 text-xl font-black tabular-nums text-[var(--app-text-primary)]">
+            <div className="border-b border-[var(--app-border-subtle)] px-5 py-3 sm:border-b-0">
+              <div className="text-[10px] font-semibold uppercase tracking-[0.06em] text-[var(--app-text-tertiary)]">{labels.avgDaily}</div>
+              <div className="mt-1 text-base font-black tabular-nums text-[var(--app-text-primary)]">
                 {averageDailyGrowth === null ? "—" : `${averageDailyGrowth > 0 ? "+" : ""}${averageDailyGrowth.toFixed(1)}`}
               </div>
             </div>
-            <div className="rounded-2xl bg-[var(--app-surface-subtle)] p-4">
-              <div className="text-xs text-[var(--app-text-tertiary)]">{labels.bestDay}</div>
-              <div className="mt-2 text-xl font-black tabular-nums text-[var(--app-text-primary)]">
-                {bestDailyGrowth === null ? "—" : growthText(bestDailyGrowth)}
+            <div className="border-b border-[var(--app-border-subtle)] px-5 py-3 sm:border-b-0">
+              <div className="text-[10px] font-semibold uppercase tracking-[0.06em] text-[var(--app-text-tertiary)]">{labels.bestDay}</div>
+              <div className="mt-1 flex items-baseline gap-2">
+                <span className="text-base font-black tabular-nums text-[var(--app-text-primary)]">
+                  {bestDailyGrowth === null ? "—" : growthText(bestDailyGrowth)}
+                </span>
+                {bestDailyDate && <span className="text-[10px] text-[var(--app-text-tertiary)]">{formatShortDate(bestDailyDate, locale)}</span>}
               </div>
-              {bestDailyDate && <div className="mt-1 text-[10px] text-[var(--app-text-tertiary)]">{formatShortDate(bestDailyDate, locale)}</div>}
             </div>
-            <div className="rounded-2xl bg-[var(--app-surface-subtle)] p-4">
-              <div className="text-xs text-[var(--app-text-tertiary)]">{labels.range}</div>
-              <div className="mt-2 text-xl font-black tabular-nums text-[var(--app-text-primary)]">
-                {followerRange === null ? "—" : formatNumber(followerRange, locale)}
+            <div className="px-5 py-3">
+              <div className="text-[10px] font-semibold uppercase tracking-[0.06em] text-[var(--app-text-tertiary)]">{labels.range}</div>
+              <div className="mt-1 flex items-baseline gap-2">
+                <span className="text-base font-black tabular-nums text-[var(--app-text-primary)]">
+                  {followerRange === null ? "—" : formatNumber(followerRange, locale)}
+                </span>
+                <span className="text-[10px] text-[var(--app-text-tertiary)]">{chartPoints.length} {labels.snapshots}</span>
               </div>
-              <div className="mt-1 text-[10px] text-[var(--app-text-tertiary)]">{chartPoints.length} {labels.snapshots}</div>
             </div>
           </div>
         </section>
