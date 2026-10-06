@@ -270,6 +270,9 @@ export function TikTokPublicDashboard({ overview, stores }: Props) {
     followers: "ผู้ติดตามรวม",
     likes: "ยอดไลก์รวม",
     videos: "จำนวนวิดีโอรวม",
+    content: "คอนเทนต์",
+    likesShort: "ไลก์",
+    videosShort: "วิดีโอ",
     exact: "ข้อมูลจริงจาก Public Profile",
     ranking: "Top 5 ผู้ติดตามสูงสุด",
     rankingSub: "สาขาที่มีฐานผู้ติดตามสูงสุด",
@@ -322,6 +325,9 @@ export function TikTokPublicDashboard({ overview, stores }: Props) {
     followers: "Total followers",
     likes: "Total likes",
     videos: "Total videos",
+    content: "Content",
+    likesShort: "likes",
+    videosShort: "videos",
     exact: "Exact public profile data",
     ranking: "Top 5 by followers",
     rankingSub: "Stores with the largest follower base",
@@ -640,14 +646,13 @@ export function TikTokPublicDashboard({ overview, stores }: Props) {
             <div className="p-14 text-center text-sm text-slate-400">{text.noData}</div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[780px] text-sm">
+              <table className="w-full min-w-[680px] text-sm">
                 <thead className="bg-slate-50/80 text-left text-[10px] font-bold uppercase tracking-[0.08em] text-slate-400 dark:bg-[var(--app-surface-subtle)]">
                   <tr className="border-b border-slate-100 dark:border-[var(--app-border-subtle)]">
                     <th className="w-12 px-4 py-3 text-center">#</th>
                     <th className="px-4 py-3">{text.store}</th>
                     <th className="px-4 py-3 text-right">Followers</th>
-                    <th className="px-4 py-3 text-right">Likes</th>
-                    <th className="px-4 py-3 text-right">Videos</th>
+                    <th className="px-4 py-3 text-right">{text.content}</th>
                     <th className="px-4 py-3 text-center">{text.growthColumn} ({growthPeriod === "daily" ? "1D" : growthPeriod === "sevenDay" ? "7D" : "30D"})</th>
                   </tr>
                 </thead>
@@ -698,8 +703,10 @@ export function TikTokPublicDashboard({ overview, stores }: Props) {
                           </div>
                         </td>
                         <td className="px-4 py-4 text-right font-black tabular-nums text-slate-900 dark:text-[var(--app-text-primary)]">{number(store.followerCount, locale)}</td>
-                        <td className="px-4 py-4 text-right tabular-nums text-slate-500">{number(store.likesCount, locale)}</td>
-                        <td className="px-4 py-4 text-right tabular-nums text-slate-500">{number(store.videoCount, locale)}</td>
+                        <td className="px-4 py-4 text-right">
+                          <div className="font-semibold tabular-nums text-slate-700 dark:text-[var(--app-text-primary)]">{compact(store.likesCount, locale)} <span className="font-normal text-slate-400">{text.likesShort}</span></div>
+                          <div className="mt-0.5 text-xs tabular-nums text-slate-400">{number(store.videoCount, locale)} {text.videosShort}</div>
+                        </td>
                         <td className="px-4 py-4 text-center"><GrowthPill value={store.growth[growthPeriod].absolute} locale={locale} /></td>
                       </tr>
                     );
