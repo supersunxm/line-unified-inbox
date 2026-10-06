@@ -19,5 +19,5 @@ void test("virtual Historical chats remain a separate read-only list limited to 
   const loadListEnd = mobileChats.indexOf("}, [chatMonth, historicalPage, page, search, status, storeId, user]);", loadListStart);
   assert.ok(loadListStart >= 0 && loadListEnd > loadListStart);
   const loader = mobileChats.slice(loadListStart, loadListEnd);
-  assert.match(loader, /status === "all"\s*\? api\.historicalChats/);
+  assert.match(loader, /status === "all" && chatMonth === "all"\s*\? api\.historicalChats/);
 });
