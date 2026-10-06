@@ -188,7 +188,8 @@ export function LineChatPendingControlAction() {
   const [showBlockedCustomers, setShowBlockedCustomers] = useState(false);
 
   const refreshTarget = useCallback(() => {
-    setTarget(findProfileBActionsTarget());
+    const nextTarget = findProfileBActionsTarget();
+    setTarget((current) => current === nextTarget ? current : nextTarget);
   }, []);
 
   const refreshStatus = useCallback(async () => {
@@ -230,9 +231,8 @@ export function LineChatPendingControlAction() {
 
   useEffect(() => {
     refreshTarget();
-    const observer = new MutationObserver(refreshTarget);
-    observer.observe(document.body, { childList: true, subtree: true });
-    return () => observer.disconnect();
+    const timer = window.setInterval(refreshTarget, 1_000);
+    return () => window.clearInterval(timer);
   }, [refreshTarget]);
 
   useEffect(() => {
