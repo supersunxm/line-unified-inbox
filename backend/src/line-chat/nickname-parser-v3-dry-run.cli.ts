@@ -1,21 +1,13 @@
-import { PrismaClient, ProductAliasSource } from "@prisma/client";
-import {
-  automaticCatalogAliases,
-  catalogAliasSafety,
-  catalogAliasValue,
-  PRODUCT_CATALOG,
-  storedProductAliasSafety,
-} from "../classification/product-catalog";
-import { compactProductText, normalizeProductText } from "../classification/product-normalization";
+import { PrismaClient } from "@prisma/client";
 import {
   auditNicknameDateTokens,
-  createNicknameProductResolver,
   NICKNAME_PARSER_V3_RULE_VERSION,
   parseNicknameV3,
-  type ParserV3Product,
-  type ParserV3ProductAliasSafety,
   type ParserV3Decision,
 } from "./nickname-parser-v3.contract";
+import {
+  buildNicknameV3ProductResolver,
+} from "./nickname-parser-v3-products";
 
 type IdentityCounts = {
   totalIdentities: bigint;
@@ -37,20 +29,7 @@ type LatestReadableObservation = {
   profileKey: string | null;
 };
 
-type ActiveModel = {
-  id: string;
-  name: string;
-  classificationLevel: string;
-};
-
-type ActiveAlias = {
-  alias: string;
-  source: string;
-  productModel: { id: string; name: string; isActive: boolean };
-};
-
 const DECISIONS: readonly ParserV3Decision[] = ["DETERMINISTIC", "NO_SIGNAL", "REVIEW", "UNKNOWN"];
-const AUTO_SAFE = new Set<ParserV3ProductAliasSafety>(["SAFE_EXACT", "SAFE_COMPACT"]);
 
 function increment(map: Map<string, number>, key: string): void {
   map.set(key, (map.get(key) ?? 0) + 1);
@@ -60,90 +39,6 @@ function countBy<T>(items: readonly T[], key: (item: T) => string): Record<strin
   const counts = new Map<string, number>();
   for (const item of items) increment(counts, key(item));
   return Object.fromEntries([...counts.entries()].sort(([a], [b]) => a.localeCompare(b)));
-}
-
-function buildProducts(models: readonly ActiveModel[], aliases: readonly ActiveAlias[]) {
-  const aliasesById = new Map<string, ParserV3Product["aliases"]>();
-  const aliasAudit = {
-    activeAliasRows: aliases.length,
-    catalogAliases: 0,
-    manualAliasesExcluded: 0,
-    otherSourceAliasesExcluded: 0,
-    aliasesOnInactiveModelsExcluded: 0,
-    catalogSafeExact: 0,
-    catalogSafeCompact: 0,
-    catalogReviewRequired: 0,
-    catalogBlocked: 0,
-    activeCodeCatalogApprovedAliases: 0,
-    exactNormalizedCollisionKeys: 0,
-    compactNormalizedCollisionKeys: 0,
-  };
-  const activeModelsById = new Map(models.map((model) => [model.id, model]));
-
-  for (const row of aliases) {
-    if (!row.productModel.isActive) {
-      aliasAudit.aliasesOnInactiveModelsExcluded++;
-      continue;
-    }
-    if (row.source === "MANUAL") {
-      aliasAudit.manualAliasesExcluded++;
-      continue;
-    }
-    if (row.source !== "CATALOG") {
-      aliasAudit.otherSourceAliasesExcluded++;
-      continue;
-    }
-    aliasAudit.catalogAliases++;
-    const safety = storedProductAliasSafety(row.productModel.name, row.alias, ProductAliasSource.CATALOG);
-    if (safety === "SAFE_EXACT") aliasAudit.catalogSafeExact++;
-    else if (safety === "SAFE_COMPACT") aliasAudit.catalogSafeCompact++;
-    else if (safety === "BLOCKED") aliasAudit.catalogBlocked++;
-    else aliasAudit.catalogReviewRequired++;
-    if (AUTO_SAFE.has(safety)) {
-      const current = aliasesById.get(row.productModel.id) ?? [];
-      aliasesById.set(row.productModel.id, [...current, { alias: row.alias, safety }]);
-    }
-  }
-
-  for (const model of models) {
-    const entry = PRODUCT_CATALOG.find((candidate) => candidate.model === model.name);
-    if (!entry) continue;
-    const aliasesForModel = aliasesById.get(model.id) ?? [];
-    const codeAliases = automaticCatalogAliases(entry).map((alias) => ({
-      alias: catalogAliasValue(alias),
-      safety: catalogAliasSafety(alias),
-    }));
-    aliasAudit.activeCodeCatalogApprovedAliases += codeAliases.length;
-    aliasesById.set(model.id, [...aliasesForModel, ...codeAliases]);
-  }
-
-  const productCandidates: ParserV3Product[] = models.map((model) => ({
-    id: model.id,
-    name: model.name,
-    active: true,
-    aliases: aliasesById.get(model.id) ?? [],
-  }));
-
-  const exactOwners = new Map<string, Set<string>>();
-  const compactOwners = new Map<string, Set<string>>();
-  const addOwner = (owners: Map<string, Set<string>>, key: string, modelId: string) => {
-    if (!key) return;
-    const ids = owners.get(key) ?? new Set<string>();
-    ids.add(modelId);
-    owners.set(key, ids);
-  };
-  for (const product of productCandidates) {
-    addOwner(exactOwners, normalizeProductText(product.name), product.id);
-    for (const alias of product.aliases) {
-      if (!AUTO_SAFE.has(alias.safety)) continue;
-      addOwner(exactOwners, normalizeProductText(alias.alias), product.id);
-      if (alias.safety === "SAFE_COMPACT") addOwner(compactOwners, compactProductText(alias.alias), product.id);
-    }
-  }
-  aliasAudit.exactNormalizedCollisionKeys = [...exactOwners.values()].filter((owners) => owners.size > 1).length;
-  aliasAudit.compactNormalizedCollisionKeys = [...compactOwners.values()].filter((owners) => owners.size > 1).length;
-
-  return { productCandidates, aliasAudit, activeModelsById };
 }
 
 async function main(): Promise<void> {
@@ -203,8 +98,7 @@ async function main(): Promise<void> {
       return { identityCounts: { ...identityCounts, totalObservations: identityCounts.totalObservations }, observations, models, aliases };
     }, { timeout: 120_000, maxWait: 15_000 });
 
-    const { productCandidates, aliasAudit, activeModelsById } = buildProducts(report.models, report.aliases);
-    const resolveProduct = createNicknameProductResolver(productCandidates);
+    const { aliasAudit, activeModelsById, resolveProduct } = buildNicknameV3ProductResolver(report.models, report.aliases);
     const decisions = new Map<ParserV3Decision, number>(DECISIONS.map((decision) => [decision, 0]));
     const fieldCounts = {
       source: new Map<string, number>(),

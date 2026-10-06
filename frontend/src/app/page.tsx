@@ -73,8 +73,9 @@ import { buildConversationListQuery, conversationListQueryKey, LatestConversatio
 import { getBmCustomerSalesTags, getBmTagChipClass, getConversationListTags, getConversationListTitle } from "./conversation-list-presentation";
 import { effectiveSummaryCounts, getEffectiveReplyState } from "./reply-state";
 import { NicknameSourceBadge } from "./nickname-source-badge";
+import { NicknameDerivedMetadataCard } from "./nickname-derived-metadata-card";
 import { CustomerSalesTagEditor } from "./customer-sales-tag-editor";
-import type { ApiBmReplyStatus, ApiConversation, ApiEffectiveReplyState, ApiCustomerIntelligence, ApiCustomerSalesInformation, ApiFollowUpStatus, ApiStore, BackfillJobResponseDto, BmReplyStatusSummaryResponse, ConversationMessagesResponse, CreateLineOaInput, DashboardAnalyticsResponse, LineOfficialAccountResponse, LineOaTestResult, LineOaWebhookInfo, StoreDeletionPreview, StoreMasterSuggestion, StoreMasterSyncResult, SyncBatchResult } from "@/types/api";
+import type { ApiBmReplyStatus, ApiConversation, ApiEffectiveReplyState, ApiCustomerIntelligence, ApiCustomerSalesInformation, ApiNicknameDerivedMetadata, ApiFollowUpStatus, ApiStore, BackfillJobResponseDto, BmReplyStatusSummaryResponse, ConversationMessagesResponse, CreateLineOaInput, DashboardAnalyticsResponse, LineOfficialAccountResponse, LineOaTestResult, LineOaWebhookInfo, StoreDeletionPreview, StoreMasterSuggestion, StoreMasterSyncResult, SyncBatchResult } from "@/types/api";
 
 type Language = "th" | "en" | "zh";
 type FollowUpStatus =
@@ -159,6 +160,7 @@ type Conversation = {
   lineOaName: string;
   owner: { id: string; displayName: string } | null;
   nicknameSourceState?: ApiConversation["nicknameSourceState"];
+  nicknameDerivedMetadata?: ApiNicknameDerivedMetadata | null;
   customerSalesInformation?: ApiCustomerSalesInformation;
 };
 
@@ -1386,6 +1388,7 @@ function mapApiConversation(item: ApiConversation): Conversation {
     lineOaName: item.lineOfficialAccount?.name ?? "",
     owner: item.owner ?? null,
     nicknameSourceState: item.nicknameSourceState,
+    nicknameDerivedMetadata: item.nicknameDerivedMetadata,
     customerSalesInformation: item.customerSalesInformation,
   };
 }
@@ -5025,6 +5028,7 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
 
                           <div data-chat-detail-scroll className="min-h-0 flex-1 overflow-y-auto p-3.5 space-y-3">
                             <div data-chat-detail-lower className="chat-detail-lower grid gap-3">
+                              <NicknameDerivedMetadataCard metadata={selectedApiConversation?.nicknameDerivedMetadata ?? null} language={language} />
                               <CustomerSalesTagEditor
                                 conversationId={selectedConversation.id}
                                 salesInfo={selectedApiConversation?.customerSalesInformation ?? selectedConversation.customerSalesInformation}

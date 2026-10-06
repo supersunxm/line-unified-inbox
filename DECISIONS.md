@@ -1,3 +1,10 @@
+## 2026-10-06 — Nickname Parser v3 production metadata remains independent
+
+- Persist nickname-derived values in one typed current row per Conversation plus append-only application receipts referencing the exact immutable Manager nickname observation. Do not backfill from `onlineSource`, `NicknameSourceState`, or sales fields.
+- Resolve products only through active Product Master models and safe catalog-approved aliases; ambiguous ownership is held. Use one resolver for simulation and writes.
+- Freeze a manifest digest in memory before the one-shot bounded rollout. Before each state mutation, require the exact OA/chat identity, exactly one active matching Conversation/Store/OA, unchanged latest readable observation and nickname hash, unchanged parser result and sales-field hash, and unchanged expected nickname-derived state. Apply only the independent metadata state and append its receipt transactionally.
+- Keep API/UI output distinct from operational sales data. Production migration, canary, and fleet apply remain gated on normal CI/deployment and a fresh read-only readiness/manifest audit.
+
 ## 2026-10-04 — Diagnose transport before changing retries
 
 An HTTP-200 chat-list rejection can originate from browser body retrieval, non-JSON content, or invalid envelope parsing. Distinguish those with fixed enums and media-type categories, without persisting raw response or exception content. Authentication observations expose only outcome, status, and transport enums. Keep normal discovery behavior fail-closed and retain the exact 19-target scope until evidence supports a bounded repair.

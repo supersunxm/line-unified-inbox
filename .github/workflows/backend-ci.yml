@@ -102,6 +102,13 @@ jobs:
       - name: LINE chat health regression tests
         run: npx tsx --test src/line-chat/line-chat-health.spec.ts src/line-chat/line-chat-profile-operation-coordinator.service.spec.ts src/line-chat/line-chat-session-health-probe.spec.ts src/line-chat/line-chat-health-probe.cli.spec.ts src/line-chat/line-chat-oa-health-probe.spec.ts src/line-chat/line-chat-oa-health-probe.cli.spec.ts src/line-chat/line-chat-health-scheduler.spec.ts src/line-chat/line-chat-operations-auth.spec.ts src/line-chat/line-chat-nickname-worker.service.spec.ts src/line-chat/line-chat-recent-resolver.service.spec.ts src/line-chat/line-chat-mirror.service.spec.ts
 
+      - name: Nickname Parser v3 lint and regression tests
+        env:
+          NICKNAME_DERIVED_TEST_DATABASE_URL: ${{ env.DATABASE_URL }}
+        run: |
+          npx eslint src/line-chat/nickname-derived-metadata-rollout.cli.ts src/line-chat/nickname-derived-metadata.contract.ts src/line-chat/nickname-derived-metadata.contract.spec.ts src/line-chat/nickname-derived-metadata.integration.spec.ts src/line-chat/nickname-derived-metadata.migration.spec.ts src/line-chat/nickname-derived-metadata.service.ts src/line-chat/nickname-parser-v3-products.ts src/line-chat/nickname-parser-v3-products.spec.ts src/line-chat/nickname-parser-v3-dry-run.cli.ts src/line-chat/nickname-parser-v3.contract.ts src/line-chat/nickname-parser-v3.contract.spec.ts src/conversations.service.ts
+          npx tsx --test src/line-chat/nickname-derived-metadata.contract.spec.ts src/line-chat/nickname-derived-metadata.migration.spec.ts src/line-chat/nickname-derived-metadata.integration.spec.ts src/line-chat/nickname-parser-v3-products.spec.ts src/line-chat/nickname-parser-v3.contract.spec.ts src/line-chat/nickname-source-contract.spec.ts
+
       - name: Manual Manager recovery regression
         run: |
           npx eslint src/line-chat/line-chat-novnc-recovery-worker.service.ts src/line-chat/line-chat-novnc-recovery.service.ts src/line-chat/line-chat-novnc-recovery-profile.spec.ts

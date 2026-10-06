@@ -1,3 +1,13 @@
+# 2026-10-06: Nickname Parser v3 independent metadata rollout
+
+- Current task: deliver the owner-authorized production metadata rollout from the latest main in an isolated branch. Nickname-derived dimensions have independent typed storage/history; `Conversation.onlineSource`, `NicknameSourceState`, sales metadata, Manager state, and messages remain outside the write path.
+- Implemented additive Prisma schema/migration, exact Product Master resolver shared with dry-run, read-only readiness CLI, immutable in-process hashed manifest, per-row latest-observation/identity/parser/state revalidation, bounded canary/batches, read-back and rerun checks, safe conversation DTO, and separate read-only UI card.
+- Validation so far: clean migration chain plus new migration applied to disposable local PostgreSQL. Focused parser/contract/migration/product suite: 37/37 pass including database integration; focused backend lint, Prisma validate/generate, and backend production build pass. Local API health is HTTP 200 and unauthenticated conversation reads return 401; the temporary API is stopped. Frontend suite 780/780 and typecheck baseline pass (50 existing errors, unchanged); focused lint has 17 pre-existing page warnings and no errors. Post-rebase Next build passes; it emits existing dynamic-font/metadata warnings. Full backend suite has 19 unrelated failures and full backend lint has 892 existing errors; none of the listed failures is a v3 test.
+- No production migration, metadata write, Manager/browser request, LINE message, or Mirror cycle has been run. Production readiness remains to be rerun after normal deployment; old candidate counts are not authoritative.
+- Reconciled the branch onto latest `origin/main` (`7554a058`); the old candidate count is not authoritative.
+- PR #481 is open against `main`. At the reviewed head, Application CI (backend, frontend, CI Gate), Unified Auth CI, and Adaptive Auth CI all passed, including the new v3 focused CI gate. The unrelated TikTok public-profile diagnostic reached its probe successfully but artifact upload failed because GitHub Actions artifact storage is at quota; no nickname code depends on that diagnostic.
+- No production migration, metadata write, Manager/browser request, LINE message, or Mirror cycle has run. Next: finalize checks on the progress-only follow-up commit, merge when GitHub accepts the required checks, then observe normal Railway deployment and run fresh production readiness/canary/fleet verification.
+
 # 2026-10-04: Safe diagnostics for the exact 19 Live health targets
 
 - PR #455 passed required CI, merged as 23ed046, and deployed successfully to the worker. Scheduled NORMAL cycle remains non-clean; no remediation manifest executed.
