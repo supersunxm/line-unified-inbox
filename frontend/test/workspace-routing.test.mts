@@ -33,8 +33,25 @@ test("chat routes preserve monthly and archive period selection", () => {
     "/chats?storeId=store-1&month=2026-10",
   );
   assert.equal(buildChatsHref({ month: "all" }), "/chats?month=all");
+  assert.equal(
+    buildChatsHref({ month: "all", replyState: "NOT_REPLIED" }),
+    "/chats?month=all&replyState=NOT_REPLIED",
+  );
   assert.equal(readChatRouteFilters("?month=2026-09").month, "2026-09");
   assert.equal(readChatRouteFilters("?month=all").month, "all");
+  assert.deepEqual(readChatRouteFilters("?month=all&replyState=NOT_REPLIED"), {
+    store: undefined,
+    status: undefined,
+    replyState: "NOT_REPLIED",
+    priority: undefined,
+    model: undefined,
+    topic: undefined,
+    lineOaId: undefined,
+    month: "all",
+    conversationId: undefined,
+  });
+  // Empty search defaults to no month in route filters (which lets caller fall back to current Bangkok month)
+  assert.equal(readChatRouteFilters("").month, undefined);
 });
 
 test("chat routes use effective two-state reply filters and normalize legacy notified links", () => {

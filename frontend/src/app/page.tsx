@@ -300,6 +300,7 @@ const translations = {
     statusChangedTo: "เปลี่ยนสถานะเป็น",
     bmReplyStatus: "สถานะการตอบ BM",
     bmReplyStatusChangedTo: "เปลี่ยนสถานะการตอบ BM เป็น",
+    replyStatusCoverageNote: "สถานะตอบกลับนับตั้งแต่ ก.ย. 2026",
     notReplied: "ยังไม่ตอบ",
     notifiedBm: "แจ้ง BM แล้ว",
     replied: "ตอบแล้ว",
@@ -646,6 +647,7 @@ const translations = {
     statusChangedTo: "Status changed to",
     bmReplyStatus: "BM Reply Status",
     bmReplyStatusChangedTo: "BM reply status changed to",
+    replyStatusCoverageNote: "Reply status counted from Sep 2026",
     notReplied: "Not replied",
     notifiedBm: "BM notified",
     replied: "Replied",
@@ -990,6 +992,7 @@ const translations = {
     statusChangedTo: "状态已更改为",
     bmReplyStatus: "BM 回复状态",
     bmReplyStatusChangedTo: "BM 回复状态已更改为",
+    replyStatusCoverageNote: "回复状态从 2026 年 9 月起统计",
     notReplied: "尚未回复",
     notifiedBm: "已通知 BM",
     replied: "已回复",
@@ -2162,13 +2165,11 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
       setSelectedStore(route.store ?? "all");
       setChatMonth(restoredMonth);
       setSidebarView(
-        restoredMonth === "all"
-          ? "all"
-          : route.replyState === "REPLIED"
-            ? "replied"
-            : route.replyState === "NOT_REPLIED"
-              ? "notReplied"
-              : "all",
+        route.replyState === "REPLIED"
+          ? "replied"
+          : route.replyState === "NOT_REPLIED"
+            ? "notReplied"
+            : "all",
       );
       setStatusFilter("all");
       setPriorityFilter(route.priority?.toLowerCase() === "high" ? "High" : "all");
@@ -2193,7 +2194,7 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
           : undefined;
     const href = buildChatsHref({
       store: selectedStore,
-      replyState: chatMonth === "all" ? undefined : replyState,
+      replyState,
       status: statusFilter !== "all" ? statusFilter : undefined,
       priority: priorityFilter === "High" ? "high" : undefined,
       model: modelFilter,
@@ -2851,9 +2852,6 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
     if (!isSelectableChatPeriod(month)) return;
     clearRequestedRouteConversation();
     setChatMonth(month);
-    if (month === "all" && (sidebarView === "notReplied" || sidebarView === "replied")) {
-      setSidebarView("all");
-    }
   }
 
   function clearAllFilters() {
