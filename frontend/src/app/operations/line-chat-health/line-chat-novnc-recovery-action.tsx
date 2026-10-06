@@ -33,16 +33,16 @@ export function LineChatNovncRecoveryAction({ sessionKey = "profile-b" }: { sess
   const [error, setError] = useState<string | null>(null);
 
   const refreshTarget = useCallback(() => {
-    setTarget(findProfileActionsTarget(sessionKey));
+    const nextTarget = findProfileActionsTarget(sessionKey);
+    setTarget((current) => current === nextTarget ? current : nextTarget);
   }, [sessionKey]);
 
   useEffect(() => {
     const frame = requestAnimationFrame(refreshTarget);
-    const observer = new MutationObserver(refreshTarget);
-    observer.observe(document.body, { childList: true, subtree: true });
+    const timer = window.setInterval(refreshTarget, 1_000);
     return () => {
       cancelAnimationFrame(frame);
-      observer.disconnect();
+      window.clearInterval(timer);
     };
   }, [refreshTarget]);
 
