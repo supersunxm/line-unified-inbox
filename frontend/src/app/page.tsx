@@ -5,7 +5,6 @@ import type { FormEvent, KeyboardEvent } from "react";
 import Link from "next/link";
 import type { ApiCustomerEvent } from "@/types/api";
 import { ApiError, api, isAbortError } from "@/lib/api";
-import { FOCUS_STORE_GROUP_ID, FOCUS_STORE_GROUP_ROUTE_PARAM, FOCUS_STORE_GROUP_ROUTE_VALUE, getFocusStoreGroupCopy } from "@/lib/focus-store-group";
 import { AUTH_UNAUTHORIZED_EVENT, getAuthState, resolveAuthRedirect, routeAfterLogin, redirectToLogin } from "@/lib/auth-session";
 import { initialWorkspaceAuth } from "./workspace-auth-bootstrap";
 import { ThemeControl } from "./theme";
@@ -72,6 +71,7 @@ import { getChatsPaginationText } from "./chats-pagination-utils";
 import { buildConversationListQuery, conversationListQueryKey, LatestConversationRequestGuard, reconcileConversationPage, type ConversationListQuery } from "./conversation-list-query";
 import { getBmCustomerSalesTags, getBmTagChipClass, getConversationListTags, getConversationListTitle } from "./conversation-list-presentation";
 import { effectiveSummaryCounts, getEffectiveReplyState } from "./reply-state";
+import { getChatPeriodOptions, getCurrentBangkokMonth, isReplyStatusCovered, isSelectableChatPeriod } from "./chat-period";
 import { NicknameSourceBadge } from "./nickname-source-badge";
 import { NicknameDerivedMetadataCard } from "./nickname-derived-metadata-card";
 import { CustomerSalesTagEditor } from "./customer-sales-tag-editor";
@@ -1538,6 +1538,7 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
     initialSection === "stores" ? "lineOaManagement" : initialSection === "chats" ? "all" : "dashboard",
   );
   const [selectedStore, setSelectedStore] = useState("all");
+  const [chatMonth, setChatMonth] = useState(() => getCurrentBangkokMonth());
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>("all");
   const [seriesFilter, setSeriesFilter] = useState("all");
@@ -1628,7 +1629,7 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
   const [dashboardSummary, setDashboardSummary] =
     useState<DashboardAnalyticsResponse | null>(null);
   const [bmSummaryData, setBmSummaryData] = useState<BmReplyStatusSummaryResponse>({
-    overview: { notReplied: 0, notifiedBm: 0, replied: 0 },
+    overview: { total: 0, notReplied: 0, notifiedBm: 0, replied: 0 },
     stores: [],
   });
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
@@ -1692,7 +1693,7 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
     return text.aiReviewConversation;
   }, [customerIntelligence, text]);
   const chatsPaginationText = getChatsPaginationText(language);
-  const focusStoreGroupCopy = getFocusStoreGroupCopy(language);
+  const chatPeriodOptions = useMemo(() => getChatPeriodOptions(language), [language]);
   const storeOptions = useMemo(
     () => availableStores.filter(({ archivedAt }) => !archivedAt).map(({ id }) => id),
     [availableStores],
@@ -1820,8 +1821,9 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
       productSeriesId: initialSection === "chats" ? productSeriesId : undefined,
       productModelId: initialSection === "chats" ? productModelId : undefined,
       topicId: initialSection === "chats" ? topicId : undefined,
+      month: initialSection === "chats" ? chatMonth : undefined,
     }),
-    [activeConversationReplyState, activeConversationStatus, chatPage, chatPageSize, initialSection, lineOaFilter, priorityFilter, productModelId, productSeriesId, searchText, selectedStore, topicId],
+    [activeConversationReplyState, activeConversationStatus, chatMonth, chatPage, chatPageSize, initialSection, lineOaFilter, priorityFilter, productModelId, productSeriesId, searchText, selectedStore, topicId],
   );
   const activeConversationQueryKey = conversationListQueryKey(activeConversationQuery);
   const conversationQueryRef = useRef(activeConversationQuery);
@@ -1838,6 +1840,7 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
     productSeriesId: activeConversationQuery.productSeriesId,
     productModelId: activeConversationQuery.productModelId,
     topicId: activeConversationQuery.topicId,
+    month: activeConversationQuery.month,
     pageSize: activeConversationQuery.pageSize,
   });
   const previousConversationFilterShape = useRef(conversationFilterShapeKey);
@@ -1929,7 +1932,7 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
         loadChatMetadata ? api.products({ signal: controller.signal }) : Promise.resolve(null),
         loadChatMetadata ? api.topics({ signal: controller.signal }) : Promise.resolve(null),
         loadLineOas ? api.lineOfficialAccounts(showArchivedLineOas, { signal: controller.signal }) : Promise.resolve(null),
-        loadBmSummary ? api.bmReplyStatusSummary({ signal: controller.signal }) : Promise.resolve(null),
+        loadBmSummary ? api.bmReplyStatusSummary(chatMonth, { signal: controller.signal }) : Promise.resolve(null),
       ]);
       if (storeResponse) {
         setStores(
@@ -1975,7 +1978,7 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
       }
       if (!controller.signal.aborted && !silent) setIsLoading(false);
     }
-  }, [initialSection, showArchivedLineOas, showArchivedStores]);
+  }, [chatMonth, initialSection, showArchivedLineOas, showArchivedStores]);
 
   const loadApplicationData = useCallback(async (silent = false, includeWebhookInfo = !silent) => {
     await Promise.all([
@@ -2132,7 +2135,7 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
       const saved = loadUiPreferences();
       setLanguage(saved.language);
       setSearchText(saved.searchText);
-      setSidebarView(initialSection === "stores" ? "lineOaManagement" : initialSection === "chats" ? "notReplied" : "dashboard");
+      setSidebarView(initialSection === "stores" ? "lineOaManagement" : initialSection === "chats" ? "all" : "dashboard");
       setSelectedStore(saved.store);
       setStatusFilter(saved.status);
       setPriorityFilter(saved.priority);
@@ -2150,20 +2153,22 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
     if (!uiPreferencesLoaded || initialSection !== "chats") return;
     const restoreRoute = () => {
       const route = readChatRouteFilters(window.location.search);
-      const routeParams = new URLSearchParams(window.location.search);
-      const focusGroupSelected = routeParams.get(FOCUS_STORE_GROUP_ROUTE_PARAM) === FOCUS_STORE_GROUP_ROUTE_VALUE;
+      const restoredMonth = isSelectableChatPeriod(route.month) ? route.month : getCurrentBangkokMonth();
       requestedRouteConversationIdRef.current = route.conversationId ?? "";
       const lookup = route.conversationId ? { id: route.conversationId, status: "pending" as const } : null;
       routeConversationLookupRef.current = lookup;
       setRouteConversationLookup(lookup);
       setSelectedApiConversationState(null);
-      setSelectedStore(focusGroupSelected ? FOCUS_STORE_GROUP_ID : (route.store ?? "all"));
+      setSelectedStore(route.store ?? "all");
+      setChatMonth(restoredMonth);
       setSidebarView(
-        route.replyState === "REPLIED"
-          ? "replied"
-          : route.replyState === "NOT_REPLIED"
-            ? "notReplied"
-            : "all",
+        restoredMonth === "all"
+          ? "all"
+          : route.replyState === "REPLIED"
+            ? "replied"
+            : route.replyState === "NOT_REPLIED"
+              ? "notReplied"
+              : "all",
       );
       setStatusFilter("all");
       setPriorityFilter(route.priority?.toLowerCase() === "high" ? "High" : "all");
@@ -2187,21 +2192,19 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
           ? "NOT_REPLIED"
           : undefined;
     const href = buildChatsHref({
-      store: selectedStore === FOCUS_STORE_GROUP_ID ? "all" : selectedStore,
-      replyState,
+      store: selectedStore,
+      replyState: chatMonth === "all" ? undefined : replyState,
       status: statusFilter !== "all" ? statusFilter : undefined,
       priority: priorityFilter === "High" ? "high" : undefined,
       model: modelFilter,
       topic: topicFilter,
       lineOaId: lineOaFilter,
+      month: chatMonth,
       conversationId: selectedConversationId || undefined,
     });
     const routeUrl = new URL(href, window.location.origin);
-    if (selectedStore === FOCUS_STORE_GROUP_ID) {
-      routeUrl.searchParams.set(FOCUS_STORE_GROUP_ROUTE_PARAM, FOCUS_STORE_GROUP_ROUTE_VALUE);
-    }
     window.history.replaceState(null, "", `${routeUrl.pathname}${routeUrl.search}${routeUrl.hash}`);
-  }, [initialSection, lineOaFilter, modelFilter, priorityFilter, selectedConversationId, selectedStore, sidebarView, statusFilter, topicFilter, uiPreferencesLoaded]);
+  }, [chatMonth, initialSection, lineOaFilter, modelFilter, priorityFilter, selectedConversationId, selectedStore, sidebarView, statusFilter, topicFilter, uiPreferencesLoaded]);
 
   useEffect(() => {
     if (!uiPreferencesLoaded) return;
@@ -2231,7 +2234,7 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
     if (!uiPreferencesLoaded || !supportingDataLoaded) return;
 
     const validateFilters = window.setTimeout(() => {
-      if (selectedStore !== "all" && selectedStore !== FOCUS_STORE_GROUP_ID && !storeOptions.includes(selectedStore)) {
+      if (selectedStore !== "all" && !storeOptions.includes(selectedStore)) {
         setSelectedStore("all");
       }
       if (
@@ -2533,6 +2536,7 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
     for (const s of bmSummaryData.stores) {
       const effectiveCounts = effectiveSummaryCounts(s);
       countsMap[s.storeId] = {
+        total: s.total,
         notReplied: effectiveCounts.notReplied,
         notifiedBm: 0,
         replied: effectiveCounts.replied,
@@ -2632,7 +2636,7 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
       }));
       const [dashboardRes, bmSummaryRes] = await Promise.all([
         api.dashboard(),
-        api.bmReplyStatusSummary(),
+        api.bmReplyStatusSummary(chatMonth),
       ]);
       setDashboardSummary(dashboardRes);
       setBmSummaryData(bmSummaryRes);
@@ -2694,7 +2698,7 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
       }));
       const [dashboardRes, bmSummaryRes] = await Promise.all([
         api.dashboard(),
-        api.bmReplyStatusSummary(),
+        api.bmReplyStatusSummary(chatMonth),
       ]);
       setDashboardSummary(dashboardRes);
       setBmSummaryData(bmSummaryRes);
@@ -2759,7 +2763,7 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
 
       // Reconcile in place without full page reload
       const [bmSummaryRes, storeRes] = await Promise.all([
-        api.bmReplyStatusSummary(),
+        api.bmReplyStatusSummary(chatMonth),
         api.stores(showArchivedStores),
         loadConversations(conversationQueryRef.current, true),
       ]);
@@ -2840,6 +2844,15 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
     if (view === "stores") {
       changeStoreFilter("all");
       setShowFilterPanel(true);
+    }
+  }
+
+  function changeChatMonth(month: string) {
+    if (!isSelectableChatPeriod(month)) return;
+    clearRequestedRouteConversation();
+    setChatMonth(month);
+    if (month === "all" && (sidebarView === "notReplied" || sidebarView === "replied")) {
+      setSidebarView("all");
     }
   }
 
@@ -3351,16 +3364,18 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
               sidebarView={sidebarView}
               selectSidebarView={selectSidebarView}
               overview={{
+                total: bmSummaryData.overview.total,
                 notReplied: effectiveSummaryCounts(bmSummaryData.overview).notReplied,
                 notifiedBm: 0,
                 replied: effectiveSummaryCounts(bmSummaryData.overview).replied,
               }}
+              period={chatMonth}
+              periodOptions={chatPeriodOptions}
+              onPeriodChange={changeChatMonth}
               storeBmCounts={storeBmCounts}
               selectedStore={selectedStore}
               setSelectedStore={setSelectedStore}
               clearAllFilters={clearAllFilters}
-              focusGroupLabel={focusStoreGroupCopy.label}
-              focusGroupSubtitle={focusStoreGroupCopy.subtitle}
               stores={stores}
               text={text}
               getStoreDisplayName={getStoreDisplayName}
@@ -4477,7 +4492,7 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
                   <div className="flex items-center justify-between">
                     <div>
                       <h2 data-chat-list-title className="text-sm font-bold text-[var(--app-text-primary)]">
-                        {selectedStore === FOCUS_STORE_GROUP_ID ? `${focusStoreGroupCopy.label}${sidebarView === "all" ? "" : ` · ${conversationListTitle}`}` : conversationListTitle}
+                        {conversationListTitle}
                       </h2>
                       <p className="app-muted mt-0.5 text-xs text-[var(--app-text-tertiary)] font-tabular">
                         {chatTotalCount} {text.searchResults}
@@ -4503,7 +4518,6 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
                         {text.storeFilter}
                         <select value={selectedStore} onChange={(event) => changeStoreFilter(event.target.value)} className="mt-1 w-full rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface)] px-2 py-1 text-xs text-[var(--app-text-primary)] focus:border-[var(--app-accent)] focus:outline-none">
                           <option value="all">{text.allStores}</option>
-                          <option value={FOCUS_STORE_GROUP_ID}>{focusStoreGroupCopy.label}</option>
                           {storeOptions.map((storeId) => <option key={storeId} value={storeId}>{getStoreDisplayName(availableStores.find(({ id }) => id === storeId)?.name ?? storeId)}</option>)}
                         </select>
                       </label>
@@ -4555,7 +4569,7 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
                   {hasActiveFilters && (
                     <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
                       {searchText.trim() && <button onClick={() => setSearchText("")} className="rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface-subtle)] text-[var(--app-text-primary)] px-2 py-0.5 text-[11px] font-medium">{text.searchFilter}: {searchText.trim()} ×</button>}
-                      {selectedStore !== "all" && <button onClick={() => changeStoreFilter("all")} className="rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface-subtle)] text-[var(--app-text-primary)] px-2 py-0.5 text-[11px] font-medium">{text.storeFilter}: {selectedStore === FOCUS_STORE_GROUP_ID ? focusStoreGroupCopy.label : getStoreDisplayName(availableStores.find(({ id }) => id === selectedStore)?.name ?? selectedStore)} ×</button>}
+                      {selectedStore !== "all" && <button onClick={() => changeStoreFilter("all")} className="rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface-subtle)] text-[var(--app-text-primary)] px-2 py-0.5 text-[11px] font-medium">{text.storeFilter}: {getStoreDisplayName(availableStores.find(({ id }) => id === selectedStore)?.name ?? selectedStore)} ×</button>}
                       {statusFilter !== "all" && <button onClick={() => setStatusFilter("all")} className="rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface-subtle)] text-[var(--app-text-primary)] px-2 py-0.5 text-[11px] font-medium">{text.statusFilter}: {getStatusLabel(language, statusFilter)} ×</button>}
                       {priorityFilter !== "all" && <button onClick={() => setPriorityFilter("all")} className="rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface-subtle)] text-[var(--app-text-primary)] px-2 py-0.5 text-[11px] font-medium">{text.priorityFilter}: {priorityFilter === "High" ? text.highPriority : text.normalPriority} ×</button>}
                       {seriesFilter !== "all" && <button onClick={() => setSeriesFilter("all")} className="rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface-subtle)] text-[var(--app-text-primary)] px-2 py-0.5 text-[11px] font-medium">{text.seriesFilter}: {seriesFilter} ×</button>}
@@ -4655,6 +4669,7 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
                           <div className="flex items-center justify-between gap-2 min-w-0">
                             <p data-conversation-customer className="truncate text-sm font-bold leading-5 tracking-tight flex-1 min-w-0 text-[var(--app-text-primary)]">{conversation.customer}</p>
 
+                            {isReplyStatusCovered(conversation.time) && (
                             <div className="relative shrink-0" onClick={(e) => e.stopPropagation()}>
                               <button
                                 type="button"
@@ -4736,6 +4751,7 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
                                 </div>
                               )}
                             </div>
+                            )}
                           </div>
 
                           {conversation.owner && <p data-conversation-owner className="mt-0.5 truncate text-[10px] font-medium text-[var(--app-text-tertiary)]">👤 {conversation.owner.displayName}</p>}
@@ -4751,6 +4767,7 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
                           </div>
 
                           <div className="mt-2.5 flex flex-wrap items-center gap-1 font-tabular" title={allTagLabels || undefined} aria-label={allTagLabels || undefined}>
+                            {isReplyStatusCovered(conversation.time) && (
                             <span
                               data-conversation-bm-reply-status={currentBmReplyStatus}
                               className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
@@ -4761,6 +4778,7 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
                             >
                               {bmReplyStatusLabels[language][currentBmReplyStatus === "REPLIED" ? "REPLIED" : "NOT_REPLIED"]}
                             </span>
+                            )}
                             {tags.visible.map((tag, index) => (
                               <span
                                 key={`${tag.kind}-${tag.label}-${index}`}
@@ -4830,6 +4848,7 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
                                 {tag.label}
                               </span>
                             ))}
+                            {isReplyStatusCovered(selectedConversation.time) && (
                             <select
                               data-bm-reply-status-select
                               aria-label={text.bmReplyStatus}
@@ -4845,6 +4864,7 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
                               <option value="NOT_REPLIED">{bmReplyStatusLabels[language].NOT_REPLIED}</option>
                               <option value="REPLIED">{bmReplyStatusLabels[language].REPLIED}</option>
                             </select>
+                            )}
                             <span className="app-muted text-[10px] text-[var(--app-text-tertiary)] font-tabular">{formatRelativeTime(selectedConversation.time, language)}</span>
                           </div>
                         </div>
