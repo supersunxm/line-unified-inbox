@@ -20,11 +20,12 @@ test("dark mode remaps slate and white, which is why dark: palette classes break
 test("/tiktok uses --app-* tokens in dark mode", () => {
   assert.doesNotMatch(tiktokDashboard, darkPalette);
   assert.doesNotMatch(followerChart, darkPalette);
-  // Hero: a fixed dark panel in light mode; tokens in dark mode so the title is readable.
-  assert.match(tiktokDashboard, /bg-\[#07111f\] px-6 py-7 text-white dark:border dark:border-\[var\(--app-border\)\] dark:bg-\[var\(--app-surface\)\] dark:text-\[var\(--app-text-primary\)\]/);
-  assert.match(tiktokDashboard, /text-white\/45 dark:text-\[var\(--app-text-secondary\)\]/);
-  // KPI and section cards: surface in dark mode.
-  assert.equal(tiktokDashboard.match(/bg-white p-5 shadow-\[0_10px_28px_rgba\(15,23,42,0\.045\)\] dark:border-\[var\(--app-border\)\] dark:bg-\[var\(--app-surface\)\]/g)?.length, 3);
+  // Overview header: light surface in light mode and tokenized surface/text in dark mode.
+  assert.match(tiktokDashboard, /border border-slate-200\/70 bg-white px-5 py-5 shadow-\[0_8px_24px_rgba\(15,23,42,0\.035\)\] dark:border-\[var\(--app-border\)\] dark:bg-\[var\(--app-surface\)\]/);
+  assert.match(tiktokDashboard, /text-slate-950 dark:text-\[var\(--app-text-primary\)\] sm:text-3xl/);
+  // KPI and analytics cards continue to use app surfaces in dark mode.
+  assert.match(tiktokDashboard, /bg-white p-5 shadow-\[0_10px_28px_rgba\(15,23,42,0\.045\)\] dark:border-\[var\(--app-border\)\] dark:bg-\[var\(--app-surface\)\]/);
+  assert.equal(tiktokDashboard.match(/bg-white p-5 shadow-\[0_8px_24px_rgba\(15,23,42,0\.035\)\] dark:border-\[var\(--app-border\)\] dark:bg-\[var\(--app-surface\)\]/g)?.length, 3);
   // The filled refresh button becomes accent-filled in dark mode (white text via globals.css).
   assert.match(tiktokDashboard, /text-white transition hover:bg-slate-800 disabled:opacity-50 dark:bg-\[var\(--app-accent\)\] dark:hover:bg-\[var\(--app-accent-hover\)\]/);
 });
