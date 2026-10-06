@@ -9,6 +9,8 @@ import { AuthorizedSection, AuthorizedWorkspace } from "../authorized-workspace"
 import { LegacyI18nBoundary } from "../legacy-i18n-boundary";
 import { pickLanguageText, useAppLanguage } from "../language";
 import { mobileChatsPhrases, mobileChatsTemplates } from "../mobile-route-i18n";
+import { getChatPeriodOptions, getCurrentBangkokMonth, isSelectableChatPeriod } from "../chat-period";
+import { FOCUS_STORE_GROUP_ID } from "@/lib/focus-store-group";
 
 type ViewportMode = "loading" | "mobile" | "desktop";
 type MobileStatusFilter = "all" | ApiEffectiveReplyState;
@@ -66,21 +68,28 @@ function MobileChatFiltersBridge() {
   const [target, setTarget] = useState<HTMLElement | null>(null);
   const [summary, setSummary] = useState<BmReplyStatusSummaryResponse | null>(null);
   const [storeId, setStoreId] = useState("");
+  const [month, setMonth] = useState(() => getCurrentBangkokMonth());
   const [status, setStatus] = useState<MobileStatusFilter>("all");
 
   const labels = pickLanguageText(language, {
-    th: { store: "ร้านค้า", selectStore: "เลือกร้านค้า", allStores: "ร้านค้าทั้งหมด", all: "ทั้งหมด", notReplied: "ยังไม่ตอบ", replied: "ตอบแล้ว" },
-    en: { store: "Store", selectStore: "Select store", allStores: "All stores", all: "All", notReplied: "Not replied", replied: "Replied" },
-    zh: { store: "门店", selectStore: "选择门店", allStores: "全部门店", all: "全部", notReplied: "尚未回复", replied: "已回复" },
+    th: { month: "เดือน", store: "ร้านค้า", selectStore: "เลือกร้านค้า", allStores: "ร้านค้าทั้งหมด", all: "ทั้งหมด", notReplied: "ยังไม่ตอบ", replied: "ตอบแล้ว" },
+    en: { month: "Month", store: "Store", selectStore: "Select store", allStores: "All stores", all: "All", notReplied: "Not replied", replied: "Replied" },
+    zh: { month: "月份", store: "门店", selectStore: "选择门店", allStores: "全部门店", all: "全部", notReplied: "尚未回复", replied: "已回复" },
   });
   const locale = language === "th" ? "th-TH" : language === "zh" ? "zh-CN" : "en-US";
+  const periodOptions = getChatPeriodOptions(language);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const urlStatus = params.get("replyState") ?? params.get("bmReplyStatus");
+    const urlMonth = params.get("month");
+    const restoredMonth = isSelectableChatPeriod(urlMonth) ? urlMonth : getCurrentBangkokMonth();
     setStoreId(params.get("store") || params.get("storeId") || "");
+    setMonth(restoredMonth);
     setStatus(
-      urlStatus === "REPLIED"
+      restoredMonth === "all"
+        ? "all"
+        : urlStatus === "REPLIED"
         ? "REPLIED"
         : urlStatus === "NOT_REPLIED" || urlStatus === "NOTIFIED_BM"
           ? "NOT_REPLIED"
@@ -92,7 +101,7 @@ function MobileChatFiltersBridge() {
     let active = true;
     const refresh = () => {
       void api
-        .bmReplyStatusSummary()
+        .bmReplyStatusSummary(month)
         .then((value) => {
           if (active) setSummary(value);
         })
@@ -104,7 +113,7 @@ function MobileChatFiltersBridge() {
       active = false;
       window.removeEventListener("bm-reply-status-summary-refresh", refresh);
     };
-  }, []);
+  }, [month]);
 
   useEffect(() => {
     const syncTarget = () => {
@@ -128,20 +137,21 @@ function MobileChatFiltersBridge() {
   if (!target) return null;
 
   const selectedStore = summary?.stores.find((store) => store.storeId === storeId) ?? null;
-  const counts = selectedStore ?? summary?.overview ?? { notReplied: 0, notifiedBm: 0, replied: 0 };
+  const counts = selectedStore ?? summary?.overview ?? { total: 0, notReplied: 0, notifiedBm: 0, replied: 0 };
   const statusCounts: Record<MobileStatusFilter, number> = {
-    all: counts.notReplied + counts.notifiedBm + counts.replied,
+    all: counts.total,
     NOT_REPLIED: counts.notReplied + counts.notifiedBm,
     REPLIED: counts.replied,
   };
-  const stores = [...(summary?.stores ?? [])].sort((a, b) => a.storeName.localeCompare(b.storeName, locale));
+  const stores = [...(summary?.stores ?? [])].filter((store) => store.storeId !== FOCUS_STORE_GROUP_ID).sort((a, b) => a.storeName.localeCompare(b.storeName, locale));
 
-  const applyFilters = (nextStoreId: string, nextStatus: MobileStatusFilter) => {
+  const applyFilters = (nextStoreId: string, nextStatus: MobileStatusFilter, nextMonth = month) => {
     const url = new URL(window.location.href);
     if (nextStoreId) url.searchParams.set("store", nextStoreId);
     else url.searchParams.delete("store");
+    url.searchParams.set("month", nextMonth);
     url.searchParams.delete("bmReplyStatus");
-    if (nextStatus === "all") url.searchParams.delete("replyState");
+    if (nextStatus === "all" || nextMonth === "all") url.searchParams.delete("replyState");
     else url.searchParams.set("replyState", nextStatus);
     url.searchParams.delete("conversationId");
     window.location.assign(`${url.pathname}${url.search}`);
@@ -149,6 +159,30 @@ function MobileChatFiltersBridge() {
 
   return createPortal(
     <div data-mobile-chat-filter-bridge className="mt-2.5 space-y-2">
+      <label className="relative block">
+        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-[var(--app-text-tertiary)]">
+          {labels.month}
+        </span>
+        <select
+          data-mobile-chat-period-select
+          value={month}
+          onChange={(event) => {
+            const nextMonth = event.target.value;
+            setMonth(nextMonth);
+            const nextStatus = nextMonth === "all" ? "all" : status;
+            setStatus(nextStatus);
+            applyFilters(storeId, nextStatus, nextMonth);
+          }}
+          className="h-10 w-full appearance-none rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-subtle)] pl-16 pr-9 text-sm font-semibold text-[var(--app-text-primary)] outline-none focus:border-[var(--app-accent)]"
+          aria-label={labels.month}
+        >
+          {periodOptions.map((option) => (
+            <option key={option.value} value={option.value}>{option.label}</option>
+          ))}
+        </select>
+        <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[var(--app-text-tertiary)]">⌄</span>
+      </label>
+
       <label className="relative block">
         <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-[var(--app-text-tertiary)]">
           {labels.store}
@@ -175,11 +209,13 @@ function MobileChatFiltersBridge() {
 
       <div className="flex gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:none]">
         {(
-          [
-            ["all", labels.all],
-            ["NOT_REPLIED", labels.notReplied],
-            ["REPLIED", labels.replied],
-          ] as Array<[MobileStatusFilter, string]>
+          (month === "all"
+            ? [["all", labels.all]]
+            : [
+                ["all", labels.all],
+                ["NOT_REPLIED", labels.notReplied],
+                ["REPLIED", labels.replied],
+              ]) as Array<[MobileStatusFilter, string]>
         ).map(([value, label]) => (
           <button
             key={value}

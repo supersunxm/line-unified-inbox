@@ -22,6 +22,7 @@ test("authoritative query represents every server-side list dimension", () => {
     productSeriesId: "series-1",
     productModelId: "model-1",
     topicId: "topic-1",
+    month: "2026-10",
   });
 
   assert.deepEqual(query, {
@@ -35,6 +36,7 @@ test("authoritative query represents every server-side list dimension", () => {
     productSeriesId: "series-1",
     productModelId: "model-1",
     topicId: "topic-1",
+    month: "2026-10",
   });
   assert.equal(conversationListQueryKey(query), JSON.stringify(query));
 });
@@ -47,7 +49,7 @@ test("Clear All query is unfiltered page 1 and preserves a valid zero total", ()
     storeId: "all",
     lineOaId: "all",
   });
-  assert.deepEqual(query, { page: 1, pageSize: 20, search: undefined, storeId: undefined, lineOaId: undefined, followUpStatus: undefined, priority: undefined, productSeriesId: undefined, productModelId: undefined, topicId: undefined });
+  assert.deepEqual(query, { page: 1, pageSize: 20, search: undefined, storeId: undefined, lineOaId: undefined, followUpStatus: undefined, priority: undefined, productSeriesId: undefined, productModelId: undefined, topicId: undefined, month: undefined });
   assert.equal(reconcileConversationPage(0, 1, 20), 1);
   assert.match(pageCode, /\{chatTotalCount\} \{text\.searchResults\}/);
   assert.doesNotMatch(pageCode, /chatTotalCount \|\| filteredConversations\.length/);
@@ -89,7 +91,7 @@ test("silent workspace refreshes do not fan out webhook diagnostics", () => {
 
   assert.match(supportingCode, /if \(initialSection === "stores" && includeWebhookInfo && lineOaResponse\)/);
   assert.match(supportingCode, /lineOaResponse\.map\(async \(account\)/);
-  assert.match(supportingCode, /\[initialSection, showArchivedLineOas, showArchivedStores\]/);
+  assert.match(supportingCode, /\[chatMonth, initialSection, showArchivedLineOas, showArchivedStores\]/);
   assert.match(pageCode, /const loadApplicationData = useCallback\(async \(silent = false, includeWebhookInfo = !silent\)/);
   assert.match(pageCode, /loadSupportingData\(silent, includeWebhookInfo\)/);
   assert.match(pageCode, /await loadApplicationData\(true, true\)/);
@@ -119,7 +121,7 @@ test("classification filters are resolved to IDs and sent server-side", () => {
 });
 
 test("all query-shaping fields reset page and deep-linked selection survives list refresh", () => {
-  for (const field of ["storeId", "lineOaId", "followUpStatus", "replyState", "search", "priority", "productSeriesId", "productModelId", "topicId", "pageSize"]) {
+  for (const field of ["storeId", "lineOaId", "followUpStatus", "replyState", "search", "priority", "productSeriesId", "productModelId", "topicId", "month", "pageSize"]) {
     assert.match(pageCode, new RegExp(`${field}: activeConversationQuery\\.${field}`));
   }
   assert.match(pageCode, /previousConversationFilterShape\.current !== conversationFilterShapeKey/);

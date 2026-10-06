@@ -27,6 +27,7 @@ import { LineChatMessageSendQueueService } from "./line-chat/line-chat-message-s
 import { isLineChatMirrorOnlyStore } from "./line-chat/line-chat-pilot.constants";
 import { HISTORICAL_TIMELINE_START, mapHistoricalTimelineMessage } from "./historical-timeline.service";
 import { effectiveReplyStateWhere, resolveEffectiveReplyState } from "./reply-state-effective";
+import { CHAT_REPLY_STATUS_COVERAGE_START, isChatReplyStatusCovered, resolveChatMonthRange } from "./chat-period";
 
 const conversationBaseInclude = {
   customer: true,
@@ -343,8 +344,12 @@ export class ConversationsService {
         ? query.storeId
         : { in: query.storeId ? [query.storeId] : accessibleStoreIds };
     const resetFilter = await this.operations.getOperationalConversationFilter();
+    const monthRange = resolveChatMonthRange(query.month);
     const andFilters: Prisma.ConversationWhereInput[] = [];
     if (query.replyState) andFilters.push(effectiveReplyStateWhere(query.replyState));
+    if (query.replyState || query.bmReplyStatus) {
+      andFilters.push({ latestMessageAt: { gte: CHAT_REPLY_STATUS_COVERAGE_START } });
+    }
     if (search) {
       andFilters.push({
         OR: [
@@ -383,6 +388,7 @@ export class ConversationsService {
       ...resetFilter,
       storeId: storeFilter,
       lineOfficialAccountId: query.lineOaId,
+      latestMessageAt: monthRange ?? undefined,
       followUpStatus: query.followUpStatus,
       bmReplyStatus: query.replyState ? undefined : query.bmReplyStatus,
       priority: query.priority,
@@ -1571,7 +1577,7 @@ export class ConversationsService {
     return this.get(id);
   }
 
-  async getBmReplyStatusSummary(accessibleStoreIds: string[] | null | undefined) {
+  async getBmReplyStatusSummary(accessibleStoreIds: string[] | null | undefined, month?: string) {
     if (accessibleStoreIds === undefined) throw new ForbiddenException("Store scope is required");
     const storeScope: Prisma.StoreWhereInput = {
       isActive: true,
@@ -1590,12 +1596,15 @@ export class ConversationsService {
     });
 
     const resetFilter = await this.operations.getOperationalConversationFilter();
+    const monthRange = resolveChatMonthRange(month);
+    const enforceReplyStatusCoverage = month !== undefined;
 
     const summaryRows = await this.prisma.conversation.findMany({
       where: {
         store: storeScope,
         lineOfficialAccount: { accountType: "STORE" },
         ...(resetFilter as Prisma.ConversationWhereInput),
+        latestMessageAt: monthRange ?? undefined,
       },
       select: {
         storeId: true,
@@ -1606,25 +1615,32 @@ export class ConversationsService {
     });
 
     const overview = {
+      total: summaryRows.length,
       notReplied: 0,
       notifiedBm: 0,
       replied: 0,
     };
 
-    const storeMap = new Map<string, { notReplied: number; notifiedBm: number; replied: number }>();
+    const storeMap = new Map<string, { total: number; notReplied: number; notifiedBm: number; replied: number }>();
     for (const store of stores) {
-      storeMap.set(store.id, { notReplied: 0, notifiedBm: 0, replied: 0 });
+      storeMap.set(store.id, { total: 0, notReplied: 0, notifiedBm: 0, replied: 0 });
     }
 
     const now = Date.now();
     const oldestMap = new Map<string, number>();
 
     for (const item of summaryRows) {
+      const storeCounts = item.storeId ? storeMap.get(item.storeId) : undefined;
+      if (storeCounts) storeCounts.total += 1;
+
+      // Chats before the reliable mirror boundary remain searchable history,
+      // but they have no operational reply status in Store Chats.
+      if (enforceReplyStatusCoverage && !isChatReplyStatusCovered(item.latestMessageAt)) continue;
+
       const effectiveState = resolveEffectiveReplyState({
         bmReplyStatus: item.bmReplyStatus,
         projectionState: item.replyStateProjection?.state ?? null,
       }).state;
-      const storeCounts = item.storeId ? storeMap.get(item.storeId) : undefined;
 
       if (effectiveState === "REPLIED") {
         overview.replied += 1;
@@ -1648,13 +1664,14 @@ export class ConversationsService {
     }
 
     const storesList = stores.map((store) => {
-      const counts = storeMap.get(store.id) ?? { notReplied: 0, notifiedBm: 0, replied: 0 };
+      const counts = storeMap.get(store.id) ?? { total: 0, notReplied: 0, notifiedBm: 0, replied: 0 };
       return {
         id: store.id,
         storeId: store.id,
         masterStoreId: store.storeMaster?.externalStoreId ?? null,
         externalStoreId: store.storeMaster?.externalStoreId ?? null,
         storeName: store.name,
+        total: counts.total,
         notReplied: counts.notReplied,
         notifiedBm: counts.notifiedBm,
         replied: counts.replied,
@@ -1668,12 +1685,13 @@ export class ConversationsService {
         (result, store) => {
           const counts = storeMap.get(store.id);
           if (!counts) return result;
+          result.total += counts.total;
           result.notReplied += counts.notReplied;
           result.notifiedBm += counts.notifiedBm;
           result.replied += counts.replied;
           return result;
         },
-        { notReplied: 0, notifiedBm: 0, replied: 0 },
+        { total: 0, notReplied: 0, notifiedBm: 0, replied: 0 },
       );
       const focusOldestWaitingMinutes = focusStores.reduce(
         (oldest, store) => Math.max(oldest, oldestMap.get(store.id) ?? 0),
@@ -1685,6 +1703,7 @@ export class ConversationsService {
         masterStoreId: null,
         externalStoreId: null,
         storeName: "Focus group · 7 stores",
+        total: focusCounts.total,
         notReplied: focusCounts.notReplied,
         notifiedBm: focusCounts.notifiedBm,
         replied: focusCounts.replied,

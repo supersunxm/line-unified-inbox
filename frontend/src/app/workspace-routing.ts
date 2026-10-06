@@ -7,6 +7,7 @@ export type ChatRouteFilters = {
   model?: string;
   topic?: string;
   lineOaId?: string;
+  month?: string;
   conversationId?: string;
 };
 
@@ -59,7 +60,7 @@ export function resolveSelectedConversationId(input: {
 export function buildChatsHref(filters: ChatRouteFilters = {}): string {
   const query = new URLSearchParams();
   for (const [key, value] of Object.entries(filters)) {
-    if (value && value !== "all") query.set(key === "store" ? "storeId" : key, value);
+    if (value && (value !== "all" || key === "month")) query.set(key === "store" ? "storeId" : key, value);
   }
   const serialized = query.toString();
   return serialized ? `/chats?${serialized}` : "/chats";
@@ -86,6 +87,7 @@ export function readChatRouteFilters(search: string): ChatRouteFilters {
     model: query.get("model") ?? undefined,
     topic: query.get("topic") ?? undefined,
     lineOaId: query.get("lineOaId") ?? undefined,
+    month: query.get("month") ?? undefined,
     conversationId: query.get("conversationId") ?? undefined,
   };
 }

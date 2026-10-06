@@ -27,7 +27,7 @@ test("legacy bulk mutation plumbing remains backend-compatible but is not a repl
 test("Executing bulk update triggers reconciliation: calls bulkMarkRepliedByFilter, refreshes conversation list, and updates counters", () => {
   assert.match(pageCode, /const handleExecuteBulkUpdate = useCallback\(async \(\) =>/);
   assert.match(pageCode, /api\.bulkMarkRepliedByFilter\(\{/);
-  assert.match(pageCode, /api\.bmReplyStatusSummary\(\)/);
+  assert.match(pageCode, /api\.bmReplyStatusSummary\(chatMonth\)/);
   assert.match(pageCode, /api\.stores\(showArchivedStores\)/);
   assert.match(pageCode, /loadConversations\(conversationQueryRef\.current, true\)/);
   assert.match(pageCode, /setBmSummaryData\(bmSummaryRes\)/);

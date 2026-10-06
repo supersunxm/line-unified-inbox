@@ -15,7 +15,7 @@ function controllerFor(accessibleStoreIds: string[] | null | (() => Promise<neve
   const service = serviceOverride ?? {
     getBmReplyStatusSummary: async (scope: string[] | null) => {
       calls.push(scope);
-      return { stores: [], overview: { notReplied: 0, notifiedBm: 0, replied: 0 } };
+      return { stores: [], overview: { total: 0, notReplied: 0, notifiedBm: 0, replied: 0 } };
     },
   };
   return new ConversationsController(service as never, null as never, null as never, null as never, storeAccess as never);
@@ -24,7 +24,7 @@ function controllerFor(accessibleStoreIds: string[] | null | (() => Promise<neve
 void test("summary controllers pass ADMIN global scope and BM assigned-store scope to the service", async () => {
   const adminCalls: unknown[] = [];
   const adminController = controllerFor(null, adminCalls);
-  await adminController.bmReplyStatusSummary({ user: admin } as never);
+  await adminController.bmReplyStatusSummary({}, { user: admin } as never);
   assert.deepEqual(adminCalls, [null]);
 
   const bmCalls: unknown[] = [];
@@ -42,7 +42,7 @@ void test("inactive or unauthorized membership cannot reach summary aggregation"
   });
 
   await assert.rejects(
-    () => controller.bmReplyStatusSummary({ user: bm } as never),
+    () => controller.bmReplyStatusSummary({}, { user: bm } as never),
     ForbiddenException,
   );
   assert.equal(serviceCalled, false);

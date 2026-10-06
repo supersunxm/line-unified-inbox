@@ -840,11 +840,11 @@ void test("ConversationsService.getBmReplyStatusSummary aggregates overall and p
     },
     conversation: {
       findMany: () => Promise.resolve([
-        ...Array.from({ length: 10 }, () => ({ storeId: "store-1", bmReplyStatus: BmReplyStatus.NOT_REPLIED, latestMessageAt: null })),
-        ...Array.from({ length: 5 }, () => ({ storeId: "store-1", bmReplyStatus: BmReplyStatus.NOTIFIED_BM, latestMessageAt: null })),
-        { storeId: "store-1", bmReplyStatus: BmReplyStatus.REPLIED, latestMessageAt: null },
-        ...Array.from({ length: 20 }, () => ({ storeId: "store-2", bmReplyStatus: BmReplyStatus.NOT_REPLIED, latestMessageAt: null })),
-        ...Array.from({ length: 2 }, () => ({ storeId: "store-2", bmReplyStatus: BmReplyStatus.REPLIED, latestMessageAt: null })),
+        ...Array.from({ length: 10 }, () => ({ storeId: "store-1", bmReplyStatus: BmReplyStatus.NOT_REPLIED, latestMessageAt: new Date("2026-10-01T00:00:00.000Z") })),
+        ...Array.from({ length: 5 }, () => ({ storeId: "store-1", bmReplyStatus: BmReplyStatus.NOTIFIED_BM, latestMessageAt: new Date("2026-10-01T00:00:00.000Z") })),
+        { storeId: "store-1", bmReplyStatus: BmReplyStatus.REPLIED, latestMessageAt: new Date("2026-10-01T00:00:00.000Z") },
+        ...Array.from({ length: 20 }, () => ({ storeId: "store-2", bmReplyStatus: BmReplyStatus.NOT_REPLIED, latestMessageAt: new Date("2026-10-01T00:00:00.000Z") })),
+        ...Array.from({ length: 2 }, () => ({ storeId: "store-2", bmReplyStatus: BmReplyStatus.REPLIED, latestMessageAt: new Date("2026-10-01T00:00:00.000Z") })),
       ]),
     },
   } as unknown as PrismaService;
@@ -853,17 +853,66 @@ void test("ConversationsService.getBmReplyStatusSummary aggregates overall and p
   const summary = await service.getBmReplyStatusSummary(null);
 
   // Production effective-state contract treats legacy NOTIFIED_BM as waiting unless a reply projection proves otherwise.
+  assert.equal(summary.overview.total, 38);
   assert.equal(summary.overview.notReplied, 35);
   assert.equal(summary.overview.notifiedBm, 0);
   assert.equal(summary.overview.replied, 3);
 
   // 2. Per-store aggregation
   assert.deepEqual(summary.stores, [
-    { id: "store-1", storeId: "store-1", masterStoreId: null, externalStoreId: null, storeName: "Store Alpha", notReplied: 15, notifiedBm: 0, replied: 1, oldestWaitingMinutes: 0 },
-    { id: "store-2", storeId: "store-2", masterStoreId: null, externalStoreId: null, storeName: "Store Beta", notReplied: 20, notifiedBm: 0, replied: 2, oldestWaitingMinutes: 0 },
+    { id: "store-1", storeId: "store-1", masterStoreId: null, externalStoreId: null, storeName: "Store Alpha", total: 16, notReplied: 15, notifiedBm: 0, replied: 1, oldestWaitingMinutes: 0 },
+    { id: "store-2", storeId: "store-2", masterStoreId: null, externalStoreId: null, storeName: "Store Beta", total: 22, notReplied: 20, notifiedBm: 0, replied: 2, oldestWaitingMinutes: 0 },
     // 3. Empty store handling
-    { id: "store-3", storeId: "store-3", masterStoreId: null, externalStoreId: null, storeName: "Store Gamma Empty", notReplied: 0, notifiedBm: 0, replied: 0, oldestWaitingMinutes: 0 },
+    { id: "store-3", storeId: "store-3", masterStoreId: null, externalStoreId: null, storeName: "Store Gamma Empty", total: 0, notReplied: 0, notifiedBm: 0, replied: 0, oldestWaitingMinutes: 0 },
   ]);
+});
+
+void test("Store Chats summary excludes pre-September status and scopes selected month in Bangkok time", async () => {
+  type CapturedConversationWhere = {
+    latestMessageAt?: { gte: Date; lt: Date };
+  };
+  let capturedConversationWhere: CapturedConversationWhere | undefined;
+  const prisma = {
+    store: {
+      findMany: () => Promise.resolve([
+        { id: "store-1", name: "Store Alpha", code: null, storeMaster: null },
+      ]),
+    },
+    conversation: {
+      findMany: ({ where }: { where: CapturedConversationWhere }) => {
+        capturedConversationWhere = where;
+        return Promise.resolve([
+          {
+            storeId: "store-1",
+            latestMessageAt: new Date("2026-08-31T16:59:59.999Z"),
+            bmReplyStatus: "NOT_REPLIED",
+            replyStateProjection: null,
+          },
+          {
+            storeId: "store-1",
+            latestMessageAt: new Date("2026-10-02T00:00:00.000Z"),
+            bmReplyStatus: "NOT_REPLIED",
+            replyStateProjection: null,
+          },
+        ]);
+      },
+    },
+  } as unknown as PrismaService;
+
+  const service = new ConversationsService(prisma, noopOperations);
+  const summary = await service.getBmReplyStatusSummary(null, "2026-10");
+
+  assert.deepEqual(capturedConversationWhere?.latestMessageAt, {
+    gte: new Date("2026-09-30T17:00:00.000Z"),
+    lt: new Date("2026-10-31T17:00:00.000Z"),
+  });
+  // The pre-coverage fixture demonstrates that even if a provider returns an
+  // out-of-range legacy row, it contributes to archive total only, never status.
+  assert.equal(summary.overview.total, 2);
+  assert.equal(summary.overview.notReplied, 1);
+  assert.equal(summary.overview.replied, 0);
+  assert.equal(summary.stores[0].total, 2);
+  assert.equal(summary.stores[0].notReplied, 1);
 });
 
 void test("sendMessage uses Reply API when a fresh unused replyToken is available", async () => {

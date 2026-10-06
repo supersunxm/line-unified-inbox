@@ -81,7 +81,8 @@ test("current shell header and sidebar use high-contrast semantic tokens", () =>
   assert.match(topNavCode, /text-\[var\(--app-text-primary\)\]/);
   assert.match(topNavCode, /app-input/);
   assert.match(appSidebarCode, /text-\[var\(--app-text-primary\)\]/);
-  assert.match(contextSidebarCode, /app-muted mb-3/);
+  assert.match(contextSidebarCode, /app-muted text-xs font-semibold uppercase/);
+  assert.match(contextSidebarCode, /data-chat-period-select/);
 });
 
 test("production chats grid has five direct logical children in pane order", () => {

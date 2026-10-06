@@ -20,6 +20,7 @@ import { formatRelativeTime } from "@/app/relative-time";
 import { openLineOaManager } from "@/app/line-oa-manager";
 import { lineStickerLabel, MessageSticker } from "@/app/message-sticker";
 import { getEffectiveReplyState } from "@/app/reply-state";
+import { getCurrentBangkokMonth, isReplyStatusCovered, isSelectableChatPeriod } from "@/app/chat-period";
 
 type AuthUser = {
   id: string;
@@ -151,9 +152,15 @@ export function MobileChatsApp() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
+  const [chatMonth] = useState(() => {
+    if (typeof window === "undefined") return getCurrentBangkokMonth();
+    const value = new URLSearchParams(window.location.search).get("month");
+    return isSelectableChatPeriod(value) ? value : getCurrentBangkokMonth();
+  });
   const [status, setStatus] = useState<StatusFilter>(() => {
     if (typeof window === "undefined") return "all";
     const params = new URLSearchParams(window.location.search);
+    if (params.get("month") === "all") return "all";
     const value = params.get("replyState") ?? params.get("bmReplyStatus");
     return value === "REPLIED"
       ? "REPLIED"
@@ -162,7 +169,7 @@ export function MobileChatsApp() {
         : "all";
   });
   const [storeId] = useState(() => typeof window === "undefined" ? "" : new URLSearchParams(window.location.search).get("store") || "");
-  const [summary, setSummary] = useState({ notReplied: 0, notifiedBm: 0, replied: 0 });
+  const [summary, setSummary] = useState({ total: 0, notReplied: 0, notifiedBm: 0, replied: 0 });
   const [listLoading, setListLoading] = useState(false);
   const [listError, setListError] = useState<string | null>(null);
   const [statusUpdatingId, setStatusUpdatingId] = useState<string | null>(null);
@@ -186,7 +193,7 @@ export function MobileChatsApp() {
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const historicalTotalPages = Math.max(1, Math.ceil(historicalTotal / HISTORICAL_PAGE_SIZE));
   const statusCounts = useMemo(() => ({
-    all: summary.notReplied + summary.notifiedBm + summary.replied,
+    all: summary.total,
     NOT_REPLIED: summary.notReplied + summary.notifiedBm,
     REPLIED: summary.replied,
   }), [summary]);
@@ -209,11 +216,11 @@ export function MobileChatsApp() {
 
   const refreshSummary = useCallback(async () => {
     try {
-      const result = await api.bmReplyStatusSummary();
+      const result = await api.bmReplyStatusSummary(chatMonth);
       setSummary(result.overview);
       window.dispatchEvent(new Event("bm-reply-status-summary-refresh"));
     } catch { /* list remains usable without summary */ }
-  }, []);
+  }, [chatMonth]);
 
   useEffect(() => {
     let active = true;
@@ -299,8 +306,9 @@ export function MobileChatsApp() {
         search: search.trim() || undefined,
         replyState: status === "all" ? undefined : status,
         storeId: storeId || undefined,
+        month: chatMonth,
       });
-      const historicalRequest = status === "all"
+      const historicalRequest = status === "all" && chatMonth === "all"
         ? api.historicalChats({ page: historicalPage, pageSize: HISTORICAL_PAGE_SIZE, search: search.trim() || undefined, storeId: storeId || undefined })
           .catch(() => ({ items: [], total: 0, page: historicalPage, pageSize: HISTORICAL_PAGE_SIZE, hasNextPage: false }))
         : Promise.resolve({ items: [], total: 0, page: historicalPage, pageSize: HISTORICAL_PAGE_SIZE, hasNextPage: false });
@@ -315,7 +323,7 @@ export function MobileChatsApp() {
     } finally {
       if (requestId === listRequestId.current) setListLoading(false);
     }
-  }, [historicalPage, page, search, status, storeId, user]);
+  }, [chatMonth, historicalPage, page, search, status, storeId, user]);
 
   useEffect(() => {
     if (!user) return;
@@ -609,11 +617,13 @@ export function MobileChatsApp() {
                         <div className="mt-2 flex min-w-0 items-center gap-1.5">
                           <span className="min-w-0 flex-1 truncate text-[11px] text-[var(--app-text-tertiary)]">{conversation.store.name}</span>
                           {conversation.priority === "HIGH" || conversation.priority === "CRITICAL" ? <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold text-red-700 dark:bg-red-950/60 dark:text-red-200">สำคัญ</span> : null}
-                          <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${statusClass(getEffectiveReplyState(conversation))}`}>{statusLabels[getEffectiveReplyState(conversation)]}</span>
+                          {isReplyStatusCovered(conversation.latestMessageAt) && (
+                            <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${statusClass(getEffectiveReplyState(conversation))}`}>{statusLabels[getEffectiveReplyState(conversation)]}</span>
+                          )}
                         </div>
                       </div>
                     </button>
-                    {getEffectiveReplyState(conversation) !== "REPLIED" && user.role !== "VIEWER" ? (
+                    {isReplyStatusCovered(conversation.latestMessageAt) && getEffectiveReplyState(conversation) !== "REPLIED" && user.role !== "VIEWER" ? (
                       <button
                         data-mobile-mark-replied
                         type="button"
@@ -847,8 +857,8 @@ export function MobileChatsApp() {
                     <p className="text-xs font-semibold uppercase tracking-wide text-[var(--app-text-tertiary)]">{selected.historicalOnly ? "ประวัติแชท" : "สถานะการตอบ"}</p>
                     <div className="mt-3 flex items-center justify-between gap-3">
                       <div><p className="text-sm font-bold">{selected.customer.displayName}</p><p className="mt-0.5 text-xs text-[var(--app-text-tertiary)]">{selected.store.name}</p></div>
-                      {selected.historicalOnly ? <span className="rounded-full bg-[var(--app-accent-soft)] px-2 py-1 text-[10px] font-semibold text-[var(--app-accent)]">อ่านอย่างเดียว</span> : <span className={`rounded-full px-3 py-1.5 text-xs font-bold ${statusClass(getEffectiveReplyState(selected))}`}>{statusLabels[getEffectiveReplyState(selected)]}</span>}
-                      {!selected.historicalOnly && <select aria-hidden="true" tabIndex={-1} value={selected.bmReplyStatus} disabled className="hidden" onChange={(event) => void updateBmStatus(event.target.value as ApiBmReplyStatus)}>
+                      {selected.historicalOnly ? <span className="rounded-full bg-[var(--app-accent-soft)] px-2 py-1 text-[10px] font-semibold text-[var(--app-accent)]">อ่านอย่างเดียว</span> : isReplyStatusCovered(selected.latestMessageAt) ? <span className={`rounded-full px-3 py-1.5 text-xs font-bold ${statusClass(getEffectiveReplyState(selected))}`}>{statusLabels[getEffectiveReplyState(selected)]}</span> : null}
+                      {!selected.historicalOnly && isReplyStatusCovered(selected.latestMessageAt) && <select aria-hidden="true" tabIndex={-1} value={selected.bmReplyStatus} disabled className="hidden" onChange={(event) => void updateBmStatus(event.target.value as ApiBmReplyStatus)}>
                         <option value="NOT_REPLIED">ยังไม่ตอบ</option><option value="NOTIFIED_BM">แจ้ง BM แล้ว</option><option value="REPLIED">ตอบแล้ว</option>
                       </select>}
                     </div>

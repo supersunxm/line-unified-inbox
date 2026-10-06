@@ -6289,3 +6289,12 @@ Live worker continues independently at 146 configured unique active OA identitie
 - Verification: frontend full suite 814 passed; changed-file ESLint passed; TypeScript baseline remains 50/50; production build passed. Dependency symlink prevented the first build; physical worktree dependencies resolved it without a configuration change.
 - Functional check: built frontend on announced isolated port 3100 against synthetic read-only local API. All seven statuses, account/detail guidance and lost-store-access guidance rendered correctly; browser errors/warnings zero. No production or customer data writes. Existing Next workspace-root warning is environmental and unchanged.
 - Blockers: none. Next: commit, open one PR, wait for all new CI checks to pass, then merge normally without bypass.
+
+
+## 2026-10-06 — Store Chats monthly operational scope
+
+- Task: reduce misleading accumulated "ยังไม่ตอบ" counts on Store Chats without deleting historical messages.
+- Implemented: default Store Chats period is the current Bangkok calendar month; September 2026 and later months are selectable, plus an archive-only "All" view. Conversation lists and reply-status summaries accept the selected month and use Conversation.latestMessageAt for operational month placement.
+- Coverage contract: conversations whose latest activity is before 2026-09-01 00:00 Asia/Bangkok remain searchable history but expose no reply-status badge/control and are excluded from reply-state filters/summaries. No database rows or historical messages are deleted.
+- UI: removed the purple seven-store focus card and its chat filter entry. "All" shows neutral totals instead of accumulated unanswered/replied totals. Desktop and mobile share the same period URL parameter.
+- Verification: targeted unit/guardrail coverage added for Bangkok month boundaries, pre-September status suppression, URL/query shaping, and the focus-card removal. Full CI pending on PR.
