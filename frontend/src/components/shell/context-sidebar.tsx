@@ -167,10 +167,9 @@ export function ContextSidebar({
               {overview.replied}
             </span>
           </button>
-        </nav>
-
             </>
           )}
+        </nav>
 
         {/* Stores Filter Section */}
         <div className="my-2.5 border-t border-[var(--app-border-subtle)]" />
