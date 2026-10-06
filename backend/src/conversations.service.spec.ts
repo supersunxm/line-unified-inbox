@@ -867,6 +867,51 @@ void test("ConversationsService.getBmReplyStatusSummary aggregates overall and p
   ]);
 });
 
+void test("Store Chats summary excludes pre-September status and scopes selected month in Bangkok time", async () => {
+  let capturedConversationWhere: any;
+  const prisma = {
+    store: {
+      findMany: () => Promise.resolve([
+        { id: "store-1", name: "Store Alpha", code: null, storeMaster: null },
+      ]),
+    },
+    conversation: {
+      findMany: ({ where }: { where: any }) => {
+        capturedConversationWhere = where;
+        return Promise.resolve([
+          {
+            storeId: "store-1",
+            latestMessageAt: new Date("2026-08-31T16:59:59.999Z"),
+            bmReplyStatus: "NOT_REPLIED",
+            replyStateProjection: null,
+          },
+          {
+            storeId: "store-1",
+            latestMessageAt: new Date("2026-10-02T00:00:00.000Z"),
+            bmReplyStatus: "NOT_REPLIED",
+            replyStateProjection: null,
+          },
+        ]);
+      },
+    },
+  } as unknown as PrismaService;
+
+  const service = new ConversationsService(prisma, noopOperations);
+  const summary = await service.getBmReplyStatusSummary(null, "2026-10");
+
+  assert.deepEqual(capturedConversationWhere.latestMessageAt, {
+    gte: new Date("2026-09-30T17:00:00.000Z"),
+    lt: new Date("2026-10-31T17:00:00.000Z"),
+  });
+  // The pre-coverage fixture demonstrates that even if a provider returns an
+  // out-of-range legacy row, it contributes to archive total only, never status.
+  assert.equal(summary.overview.total, 2);
+  assert.equal(summary.overview.notReplied, 1);
+  assert.equal(summary.overview.replied, 0);
+  assert.equal(summary.stores[0].total, 2);
+  assert.equal(summary.stores[0].notReplied, 1);
+});
+
 void test("sendMessage uses Reply API when a fresh unused replyToken is available", async () => {
   let replyCalled = false;
   let pushCalled = false;
