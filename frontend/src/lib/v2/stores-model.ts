@@ -1,5 +1,6 @@
 import { RESPONSE_RATE_TARGET_PERCENT } from "./business-hours.ts";
 import type { StoreRow } from "./response-model.ts";
+import { thaiLocationLabel } from "./thai-geo.ts";
 
 export type StoreHealthTab = "attention" | "all" | "no-data";
 
@@ -76,7 +77,7 @@ export function filterStoreHealthRows(
     if (input.tab === "no-data" && row.hasData) return false;
     if (input.region && row.region !== input.region) return false;
     if (!query) return true;
-    return [row.storeName, row.region ?? "", row.province ?? ""]
+    return [row.storeName, row.region ?? "", row.province ?? "", thaiLocationLabel(row.region, row.province) ?? ""]
       .join(" ")
       .toLocaleLowerCase("th")
       .includes(query);
