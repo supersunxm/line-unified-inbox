@@ -12,6 +12,6 @@ test("dashboard page route dispatches responsive views on the client", () => {
   assert.match(dashboardPageCode, /<AuthorizedWorkspace section="dashboard" \/>/);
 });
 
-test("operational reset logic is wired to bmReplyStatusSummary", () => {
-  assert.match(pageCode, /api\.bmReplyStatusSummary\(\)/);
+test("operational reset logic is wired to the selected Store Chats period", () => {
+  assert.match(pageCode, /api\.bmReplyStatusSummary\(chatMonth(?:,|\))/);
 });
