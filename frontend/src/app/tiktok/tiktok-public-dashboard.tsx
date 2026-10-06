@@ -640,12 +640,11 @@ export function TikTokPublicDashboard({ overview, stores }: Props) {
             <div className="p-14 text-center text-sm text-slate-400">{text.noData}</div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[900px] text-sm">
+              <table className="w-full min-w-[780px] text-sm">
                 <thead className="bg-slate-50/80 text-left text-[10px] font-bold uppercase tracking-[0.08em] text-slate-400 dark:bg-[var(--app-surface-subtle)]">
                   <tr className="border-b border-slate-100 dark:border-[var(--app-border-subtle)]">
                     <th className="w-12 px-4 py-3 text-center">#</th>
                     <th className="px-4 py-3">{text.store}</th>
-                    <th className="px-4 py-3">{text.tiktok}</th>
                     <th className="px-4 py-3 text-right">Followers</th>
                     <th className="px-4 py-3 text-right">Likes</th>
                     <th className="px-4 py-3 text-right">Videos</th>
@@ -678,23 +677,25 @@ export function TikTokPublicDashboard({ overview, stores }: Props) {
                             </div>
                             <div className="min-w-0">
                               <div className="max-w-[320px] truncate font-semibold text-slate-900 transition group-hover:text-emerald-800 dark:text-[var(--app-text-primary)] dark:group-hover:text-emerald-300">{store.storeName}</div>
-                              <div className="mt-0.5 truncate text-xs text-slate-400">
-                                {[store.province, store.region].filter(Boolean).join(" · ")}
+                              <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
+                                <a
+                                  href={store.profileUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  onClick={(event) => event.stopPropagation()}
+                                  onKeyDown={(event) => event.stopPropagation()}
+                                  className="truncate font-medium text-blue-600 hover:underline dark:text-blue-300"
+                                >
+                                  @{store.username} ↗
+                                </a>
+                                {(store.province || store.region) && (
+                                  <span className="truncate text-slate-400">
+                                    {[store.province, store.region].filter(Boolean).join(" · ")}
+                                  </span>
+                                )}
                               </div>
                             </div>
                           </div>
-                        </td>
-                        <td className="px-4 py-4">
-                          <a
-                            href={store.profileUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            onClick={(event) => event.stopPropagation()}
-                            onKeyDown={(event) => event.stopPropagation()}
-                            className="font-medium text-blue-600 hover:underline dark:text-blue-300"
-                          >
-                            @{store.username} ↗
-                          </a>
                         </td>
                         <td className="px-4 py-4 text-right font-black tabular-nums text-slate-900 dark:text-[var(--app-text-primary)]">{number(store.followerCount, locale)}</td>
                         <td className="px-4 py-4 text-right tabular-nums text-slate-500">{number(store.likesCount, locale)}</td>
