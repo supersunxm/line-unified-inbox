@@ -30,6 +30,7 @@ import {
   BROWSER_STATUS_HELP_TEXT,
   getBrowserOperationLabel,
   getOverallHealth,
+  getLineChatUiHealth,
 } from "./line-chat-health-status";
 import { LineChatUnresolvedBacklogModal } from "./line-chat-unresolved-backlog-modal";
 
@@ -45,13 +46,6 @@ const tone = (value: string): "success" | "warning" | "danger" | "neutral" =>
       : value === "DEGRADED"
         ? "warning"
         : "danger";
-
-const readinessTone = (value: string): "success" | "warning" | "danger" | "neutral" =>
-  value === "READY"
-    ? "success"
-    : value === "NEED_BOT_MAPPING" || value === "NEED_LOGIN"
-      ? "warning"
-      : "danger";
 
 const actionTone = (action: LineChatRecommendedAction): "success" | "warning" | "danger" | "neutral" | "info" => {
   switch (action) {
@@ -513,27 +507,33 @@ export function LineChatHealthView() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {report.fleetReadiness.stores.map((store) => (
-                      <TableRow key={store.lineOfficialAccountId}>
-                        <TableCell>
-                          <div className="font-medium">{store.storeName}</div>
-                          <div className="text-xs text-[var(--app-text-tertiary)]">{store.storeCode || "No Store ID"} · {store.lineOfficialAccountName}</div>
-                        </TableCell>
-                        <TableCell><Badge variant={readinessTone(store.status)} dot>{store.status}</Badge></TableCell>
-                        <TableCell>{store.hasChatBotId ? "✓" : "—"}</TableCell>
-                        <TableCell>{store.sessionKey ?? "—"}</TableCell>
-                        <TableCell><Badge variant={tone(store.sessionHealthStatus ?? "UNKNOWN")}>{store.sessionHealthStatus ?? "—"}</Badge></TableCell>
-                        <TableCell><Badge variant={tone(store.oaHealthStatus)}>{store.oaHealthStatus}</Badge></TableCell>
-                        <TableCell>
-                          {store.mappedConversations}/{store.totalConversations}
-                          {store.mappingCoveragePercent !== null ? <span className="ml-1 text-xs text-[var(--app-text-tertiary)]">({store.mappingCoveragePercent}%)</span> : null}
-                        </TableCell>
-                        <TableCell>{store.currentlyPilotEligible ? "7-store" : "—"}</TableCell>
-                        <TableCell className="max-w-[260px] text-xs text-[var(--app-text-secondary)]">
-                          {store.blockers.length ? store.blockers.join(", ") : "—"}
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {report.fleetReadiness.stores.map((store) => {
+                      const health = getLineChatUiHealth({
+                        kind: "store", store,
+                        session: report.sessions.find(session => session.sessionKey === store.sessionKey),
+                      });
+                      return (
+                        <TableRow key={store.lineOfficialAccountId}>
+                          <TableCell>
+                            <div className="font-medium">{store.storeName}</div>
+                            <div className="text-xs text-[var(--app-text-tertiary)]">{store.storeCode || "No Store ID"} · {store.lineOfficialAccountName}</div>
+                          </TableCell>
+                          <TableCell><Badge variant={health.tone} title={`${health.reason} ${health.recommendedAction}`} dot>{health.label}</Badge></TableCell>
+                          <TableCell>{store.hasChatBotId ? "✓" : "—"}</TableCell>
+                          <TableCell>{store.sessionKey ?? "—"}</TableCell>
+                          <TableCell><Badge variant={tone(store.sessionHealthStatus ?? "UNKNOWN")}>{store.sessionHealthStatus ?? "—"}</Badge></TableCell>
+                          <TableCell><Badge variant={tone(store.oaHealthStatus)}>{store.oaHealthStatus}</Badge></TableCell>
+                          <TableCell>
+                            {store.mappedConversations}/{store.totalConversations}
+                            {store.mappingCoveragePercent !== null ? <span className="ml-1 text-xs text-[var(--app-text-tertiary)]">({store.mappingCoveragePercent}%)</span> : null}
+                          </TableCell>
+                          <TableCell>{store.currentlyPilotEligible ? "7-store" : "—"}</TableCell>
+                          <TableCell className="max-w-[260px] text-xs text-[var(--app-text-secondary)]">
+                            {store.blockers.length ? store.blockers.join(", ") : "—"}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </TableContainer>
@@ -623,7 +623,7 @@ export function LineChatHealthView() {
                           <BrowserStatus session={session} />
                         </TableCell>
                         <TableCell>
-                          <Badge variant={overall.tone} dot>
+                          <Badge variant={overall.tone} title={`${overall.reason} ${overall.recommendedAction}`} dot>
                             {overall.label}
                           </Badge>
                         </TableCell>
@@ -708,7 +708,7 @@ export function LineChatHealthView() {
                   </div>
                   <div className="rounded-xl border border-[var(--app-border)] p-3">
                     <div className="text-xs text-[var(--app-text-tertiary)]">Health</div>
-                    <Badge variant={getOverallHealth(selected).tone} dot>
+                    <Badge variant={getOverallHealth(selected).tone} title={`${getOverallHealth(selected).reason} ${getOverallHealth(selected).recommendedAction}`} dot>
                       {getOverallHealth(selected).label}
                     </Badge>
                   </div>

@@ -16,7 +16,7 @@ const freshMirror = {
   schedulerRunning: true, cycle: { attempted: 90, succeeded: 90, failed: 0, partial: 0, durationMs: 1000 },
 };
 
-test("ACTIVE CONNECTED with historical failed jobs is HEALTHY", () => {
+test("ACTIVE CONNECTED with historical failed jobs is READY", () => {
   const session = {
     liveMirror: freshMirror,
     id: "session",
@@ -41,13 +41,13 @@ test("ACTIVE CONNECTED with historical failed jobs is HEALTHY", () => {
     recentFailures: [],
     jobs: { pending: 0, processing: 0, success: 20, superseded: 2, total: 29, failed: 7, failedAuth: 0 },
   };
-  assert.equal(getOverallHealth(session).label, "Healthy");
+  assert.equal(getOverallHealth(session).label, "Ready");
   assert.equal(getOverallHealth({ ...session, liveMirror: undefined }).label, "Unknown");
-  assert.equal(getOverallHealth({ ...session, liveMirror: { ...freshMirror, telemetryStatus: "STALE" } }).label, "Stale");
+  assert.equal(getOverallHealth({ ...session, liveMirror: { ...freshMirror, telemetryStatus: "STALE" } }).label, "Unknown");
   assert.equal(getOverallHealth({ ...session, healthStatus: "UNKNOWN" }).label, "Unknown");
   assert.equal(
     getOverallHealth({ ...session, jobs: { ...session.jobs, failedAuth: 1 } }).label,
-    "Healthy",
+    "Ready",
   );
 });
 
@@ -81,7 +81,7 @@ test("current job risk, not historical counters, drives DEGRADED", () => {
   assert.equal(getOverallHealth({ ...session, healthStatus: "DEGRADED", healthFailureStage: "TIMEOUT" }).label, "Degraded");
 });
 
-test("authentication failure or unusable browser is UNHEALTHY", () => {
+test("authentication failure and unusable browser receive actionable statuses", () => {
   const session = {
     liveMirror: freshMirror,
     id: "session-unhealthy",
@@ -136,9 +136,9 @@ test("browser availability is independent from connected session health", () => 
     jobs: { pending: 0, processing: 0, success: 1, superseded: 0, total: 1, failed: 0, failedAuth: 0 },
   };
 
-  assert.equal(getOverallHealth(session).label, "Healthy");
+  assert.equal(getOverallHealth(session).label, "Ready");
   assert.equal(getOverallHealth({ ...session, liveMirror: undefined }).label, "Unknown");
-  assert.equal(getOverallHealth({ ...session, liveMirror: { ...freshMirror, telemetryStatus: "STALE" } }).label, "Stale");
+  assert.equal(getOverallHealth({ ...session, liveMirror: { ...freshMirror, telemetryStatus: "STALE" } }).label, "Unknown");
   assert.equal(getOverallHealth({ ...session, healthStatus: "UNKNOWN" }).label, "Unknown");
   assert.equal(getBrowserStateLabel("AVAILABLE"), "พร้อมใช้งาน");
   assert.equal(getBrowserStateLabel("BUSY"), "กำลังใช้งาน");
@@ -158,17 +158,6 @@ const viewSource = readFileSync(
   new URL("../src/app/operations/line-chat-health/line-chat-health-view.tsx", import.meta.url),
   "utf8",
 );
-
-test("LINE Chat health keeps connected session state separate from failed jobs", () => {
-  assert.match(statusSource, /healthStatus !== "CONNECTED"/);
-  assert.match(statusSource, /session\.activeJobRisk === "CRITICAL"/);
-  assert.doesNotMatch(statusSource, /Connected with job failures/);
-  assert.ok(
-    statusSource.indexOf('healthStatus !== "CONNECTED"') <
-      statusSource.indexOf('session.activeJobRisk === "CRITICAL"'),
-  );
-  assert.doesNotMatch(statusSource, /healthStatus === "AUTH_REQUIRED"[^\n]+jobs\.failedAuth/);
-});
 
 test("LINE Chat health renders independent Session and Browser states with temporary BUSY guidance", () => {
   assert.match(viewSource, /<TableHead>Session<\/TableHead>/);

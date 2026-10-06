@@ -1,6 +1,37 @@
-import type { LineChatBrowserState, LineChatOperationsSession } from "@/lib/api";
+import type { LineChatBrowserState, LineChatFleetReadinessStore, LineChatOperationsSession } from "@/lib/api";
 
-export type OverallHealth = { tone: "success" | "warning" | "danger" | "neutral"; label: string; reason: string };
+export type LineChatUiStatus = "READY" | "NEED_SETUP" | "LOGIN_REQUIRED" | "DEGRADED" | "BLOCKED" | "RECOVERING" | "UNKNOWN";
+
+export type LineChatUiHealth = {
+  status: LineChatUiStatus;
+  label: string;
+  tone: "success" | "warning" | "danger" | "neutral";
+  reason: string;
+  recommendedAction: string;
+};
+
+export type LineChatUiHealthInput =
+  | { kind: "session"; session: LineChatOperationsSession }
+  | { kind: "store"; store: LineChatFleetReadinessStore; session?: LineChatOperationsSession };
+
+// Explicit blocks win; active recovery overrides older login evidence. Known
+// problems remain actionable without telemetry. READY always requires evidence.
+const STATUS_PRECEDENCE: readonly LineChatUiStatus[] = [
+  "BLOCKED", "RECOVERING", "NEED_SETUP", "LOGIN_REQUIRED", "DEGRADED", "UNKNOWN", "READY",
+];
+const PRESENTATION: Record<LineChatUiStatus, Pick<LineChatUiHealth, "label" | "tone">> = {
+  READY: { label: "Ready", tone: "success" },
+  NEED_SETUP: { label: "Needs setup", tone: "warning" },
+  LOGIN_REQUIRED: { label: "Login required", tone: "danger" },
+  DEGRADED: { label: "Degraded", tone: "warning" },
+  BLOCKED: { label: "Blocked", tone: "danger" },
+  RECOVERING: { label: "Recovering", tone: "warning" },
+  UNKNOWN: { label: "Unknown", tone: "neutral" },
+};
+type Guidance = Pick<LineChatUiHealth, "reason" | "recommendedAction">;
+type Evidence = Partial<Record<LineChatUiStatus, Guidance>>;
+const guidance = (reason: string, recommendedAction: string): Guidance => ({ reason, recommendedAction });
+const UNKNOWN_GUIDANCE = guidance("Current status could not be confirmed.", "Refresh status. If it remains unknown, ask an administrator to check the service.");
 
 const BROWSER_STATE_LABELS: Record<LineChatBrowserState, string> = {
   AVAILABLE: "พร้อมใช้งาน",
@@ -43,102 +74,103 @@ export function getBrowserStateTone(state: LineChatBrowserState): "success" | "w
   }
 }
 
-export function getOverallHealth(session: LineChatOperationsSession): OverallHealth {
-  if (session.authRecoveryInProgress) {
-    return {
-      tone: "warning",
-      label: "Trying remembered login",
-      reason: "Automatic re-authentication recovery is currently running for this session.",
-    };
+function recoveryEvidence(session: LineChatOperationsSession | undefined): Guidance | undefined {
+  if (session?.authRecoveryInProgress) {
+    return guidance("LINE login recovery is in progress.", "Wait for recovery to finish before trying again.");
+  }
+  if (session?.browserState === "RECOVERING") {
+    return guidance("The account browser is being recovered.", "Complete LINE login in the recovery window, then close recovery to resume syncing.");
+  }
+  return undefined;
+}
+
+function sessionEvidence(session: LineChatOperationsSession, now: number): Evidence {
+  const evidence: Evidence = {};
+  if (session.status === "DISABLED" || session.status === "INACTIVE") {
+    evidence.BLOCKED = guidance("This account is disabled or inactive.", "Ask an administrator to enable the intended account.");
+  } else if (session.activeProfileLeases > 1 || session.healthFailureStage === "PROFILE_LOCK") {
+    evidence.BLOCKED = guidance("Another operation is preventing access to the account browser.", "Wait for the current operation to finish. If access stays blocked, ask an administrator to check it.");
+  } else if (session.healthFailureStage === "OA_ACCESS") {
+    evidence.BLOCKED = guidance("This LINE account cannot access the store.", "Confirm the correct LINE account and ask the store administrator to check its access.");
+  }
+  evidence.RECOVERING = recoveryEvidence(session);
+  if (session.healthStatus === "CONFIG_ERROR" || ["PROFILE_MISSING", "PROFILE_PATH_INVALID", "CONFIG_ERROR"].includes(session.healthFailureStage ?? "")) {
+    evidence.NEED_SETUP = guidance("The account browser setup is missing or incomplete.", "Ask an administrator to complete the account setup before logging in.");
   }
   if (session.healthStatus === "AUTH_REQUIRED" || session.status === "AUTH_REQUIRED") {
-    if (session.healthFailureStage === "MANAGER_AUTH") {
-      const inCooldown = (session.authRecoveryCooldownRemainingMs ?? 0) > 0;
-      return {
-        tone: "danger",
-        label: inCooldown ? "Manual login required" : "Authentication required",
-        reason: inCooldown
-          ? "Remembered login unavailable or cooling down; manual operator login required."
-          : "The LINE session requires re-authentication.",
-      };
-    }
-    return {
-      tone: "danger",
-      label: "Manual login required",
-      reason: "The LINE session requires operator re-authentication.",
-    };
+    evidence.LOGIN_REQUIRED = guidance("LINE login has expired or needs confirmation.", "Reconnect LINE using the account that has access to the intended stores.");
   }
-  if (!session.liveMirror || session.liveMirror.telemetryStatus !== "FRESH" || session.liveMirror.browser === "UNKNOWN") {
-    return { tone: "neutral", label: session.liveMirror?.telemetryStatus === "STALE" ? "Stale" : "Unknown",
-      reason: "Fresh Live Mirror worker and browser telemetry is unavailable." };
+  if (session.healthStatus === "DEGRADED" || session.healthFailureStage === "CHROMIUM_LAUNCH") {
+    evidence.DEGRADED = guidance("The latest account check could not complete normally.", "Allow the next check to retry. If the issue continues, inspect the account diagnostics.");
+  } else if (session.activeJobRisk === "CRITICAL" || (session.activeStuckJobs ?? 0) > 0) {
+    evidence.DEGRADED = guidance("Current work is taking longer than the recovery limit.", "Inspect the delayed work and follow its recommended recovery action.");
+  } else if (session.activeJobRisk === "WARNING") {
+    evidence.DEGRADED = guidance("Current work is taking longer than usual.", "Wait for it to finish. Inspect the work if the delay continues.");
   }
-  const observation = Date.parse(session.liveMirror.observedAt ?? "");
-  if (!Number.isFinite(observation) || Date.now() - observation > 90_000 || observation > Date.now() + 5_000) {
-    return { tone: "neutral", label: "Stale", reason: "The worker telemetry observation has expired." };
+  const mirror = session.liveMirror;
+  const observedAt = Date.parse(mirror?.observedAt ?? "");
+  const fresh = mirror?.telemetryStatus === "FRESH" && Number.isFinite(observedAt)
+    && Number.isFinite(now) && now - observedAt <= 90_000 && observedAt <= now + 5_000;
+  if (fresh && (mirror?.browser === "STOPPED" || mirror?.browser === "START_FAILED")) {
+    evidence.DEGRADED ??= guidance("The sync browser is not running.", "Ask an administrator to check the sync service and its startup diagnostics.");
+  } else if (fresh && ((mirror?.cycle?.failed ?? 0) > 0 || (mirror?.cycle?.partial ?? 0) > 0)) {
+    evidence.DEGRADED ??= guidance("Some stores did not finish the latest sync.", "Inspect the affected stores and their recommended actions while automatic syncing continues.");
   }
-  if (session.liveMirror.browser !== "RUNNING") {
-    return { tone: "danger", label: "Failed", reason: `Worker browser is ${session.liveMirror.browser}.` };
+  if (session.status !== "ACTIVE" || session.healthStatus !== "CONNECTED" || session.healthFailureStage) {
+    evidence.UNKNOWN = guidance("A successful account health check has not been confirmed.", "Refresh status and wait for the next account check.");
+  } else if (!fresh || mirror?.browser !== "RUNNING" || !["AVAILABLE", "BUSY"].includes(session.browserState)) {
+    evidence.UNKNOWN = guidance("A recent observation of the sync browser is unavailable.", "Refresh status. If it remains unknown, ask an administrator to check the sync service.");
+  } else {
+    evidence.READY = guidance("The account is connected and the sync browser is running.", "No action is needed. Normal syncing can continue.");
   }
-  if ((session.liveMirror.cycle?.failed ?? 0) > 0 || (session.liveMirror.cycle?.partial ?? 0) > 0) {
-    return { tone: "warning", label: "Degraded", reason: "The latest Live Mirror cycle has failed or partial stores." };
+  return evidence;
+}
+
+function storeEvidence(store: LineChatFleetReadinessStore, session?: LineChatOperationsSession): Evidence {
+  const evidence: Evidence = {};
+  if (store.blockers.includes("STORE_INACTIVE")) {
+    evidence.BLOCKED = guidance("This store is inactive.", "Ask an administrator to confirm whether the store should be enabled.");
+  } else if (store.sessionStatus === "INACTIVE" || store.sessionStatus === "DISABLED") {
+    evidence.BLOCKED = guidance("The store's LINE account is disabled or inactive.", "Ask an administrator to enable the intended account.");
+  } else if (store.oaHealthStatus === "OA_ACCESS_LOST") {
+    evidence.BLOCKED = guidance("This LINE account cannot access the store.", "Confirm the correct LINE account and ask the store administrator to check its access.");
   }
-  if (session.status !== "ACTIVE") {
-    return {
-      tone: "danger",
-      label: "Unhealthy",
-      reason: "The LINE session is not active.",
-    };
+  evidence.RECOVERING = recoveryEvidence(session);
+  if (!store.hasChatBotId || !store.sessionKey || !store.storeId || store.blockers.includes("STORE_MAPPING_INCOMPLETE")
+    || store.blockers.includes("MISSING_CHAT_BOT_ID") || store.blockers.includes("MISSING_LINE_CHAT_SESSION")
+    || store.status === "NEED_BOT_MAPPING" || store.sessionHealthStatus === "CONFIG_ERROR" || store.oaHealthStatus === "CONFIG_ERROR") {
+    evidence.NEED_SETUP = guidance("The store's LINE connection setup is incomplete.", "Ask an administrator to link the store, LINE account, and chat account.");
   }
-  if (session.browserState === "RECOVERING") {
-    return {
-      tone: "warning",
-      label: "Degraded",
-      reason: "The Chromium profile is recovering and may be temporarily unavailable.",
-    };
+  if (store.status === "NEED_LOGIN" || store.sessionStatus === "AUTH_REQUIRED"
+    || store.sessionHealthStatus === "AUTH_REQUIRED" || store.oaHealthStatus === "AUTH_REQUIRED") {
+    evidence.LOGIN_REQUIRED = guidance("The store's LINE account needs login confirmation.", "Reconnect LINE using the account that has access to this store.");
   }
-  if (session.activeProfileLeases > 1 || session.healthFailureStage === "PROFILE_LOCK") {
-    return {
-      tone: "warning",
-      label: "Lease or coordinator issue",
-      reason: "Profile access is blocked or has more than one active lease.",
-    };
+  if (store.sessionHealthStatus === "DEGRADED" || store.oaHealthStatus === "DEGRADED") {
+    evidence.DEGRADED = guidance("The latest store connection check could not complete normally.", "Allow the next check to retry. Inspect the store diagnostics if the issue continues.");
   }
-  if (session.healthStatus === "UNKNOWN") {
-    return { tone: "neutral", label: "Unknown", reason: "The session health observation is missing or stale." };
+  if (store.blockers.some(blocker => ![
+    "STORE_INACTIVE", "STORE_MAPPING_INCOMPLETE", "MISSING_CHAT_BOT_ID", "MISSING_LINE_CHAT_SESSION",
+    "SESSION_RELOGIN_REQUIRED", "SESSION_OR_OA_CONFIG_NOT_READY", "HEALTH_NOT_CONFIRMED_CONNECTED",
+  ].includes(blocker))) {
+    evidence.BLOCKED ??= guidance("A store requirement is preventing the connection from being used.", "Ask an administrator to review the store's connection requirements.");
   }
-  if (session.healthStatus === "DEGRADED") {
-    return {
-      tone: "warning",
-      label: "Degraded",
-      reason: session.healthFailureStage
-        ? `The latest health check reported a recoverable issue (${session.healthFailureStage}).`
-        : "The latest health check reported a recoverable issue.",
-    };
+  if (store.status === "READY" && store.sessionStatus === "ACTIVE"
+    && store.sessionHealthStatus === "CONNECTED" && store.oaHealthStatus === "CONNECTED") {
+    evidence.READY = guidance("The store's LINE connection is ready.", "No action is needed for the connection. Existing rollout limits still apply.");
+  } else {
+    evidence.UNKNOWN = guidance("A successful store connection check has not been confirmed.", "Refresh status and wait for the next store check.");
   }
-  if (session.healthStatus !== "CONNECTED" || session.healthFailureStage) {
-    return {
-      tone: "danger",
-      label: "Session error",
-      reason: "The latest session health evidence is not connected.",
-    };
-  }
-  if (session.activeJobRisk === "CRITICAL" || (session.activeStuckJobs ?? 0) > 0) {
-    return {
-      tone: "warning",
-      label: "Degraded",
-      reason: "The session is connected, but an active job has exceeded the operational recovery threshold.",
-    };
-  }
-  if (session.activeJobRisk === "WARNING") {
-    return {
-      tone: "warning",
-      label: "Degraded",
-      reason: "The session is connected, but an active job is older than the normal operational window.",
-    };
-  }
-  return {
-    tone: "success",
-    label: "Healthy",
-    reason: "Session, browser, and current health checks are operational. Job outcomes remain available in history.",
-  };
+  return evidence;
+}
+
+/** Presentation only: never changes technical states, retry policy, or rollout eligibility. */
+export function getLineChatUiHealth(input: LineChatUiHealthInput, now = Date.now()): LineChatUiHealth {
+  const evidence = input.kind === "session" ? sessionEvidence(input.session, now) : storeEvidence(input.store, input.session);
+  const status = STATUS_PRECEDENCE.find(candidate => evidence[candidate]) ?? "UNKNOWN";
+  return { status, ...PRESENTATION[status], ...(evidence[status] ?? UNKNOWN_GUIDANCE) };
+}
+
+// Existing account-health callers use the same model as store readiness.
+export function getOverallHealth(session: LineChatOperationsSession, now = Date.now()): LineChatUiHealth {
+  return getLineChatUiHealth({ kind: "session", session }, now);
 }
