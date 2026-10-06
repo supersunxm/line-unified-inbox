@@ -82,7 +82,8 @@ export function StoresView() {
   const [tab, setTab] = useState<StoreHealthTab>("attention");
   const [search, setSearch] = useState("");
   const [region, setRegion] = useState("");
-  const showSkeleton = useDeferredLoading(data.coreLoading);
+  const pageLoading = data.coreLoading || (!data.google.data && !data.google.error && data.google.loading);
+  const showSkeleton = useDeferredLoading(pageLoading);
 
   const healthRows = useMemo(
     () => buildStoreHealthRows(
@@ -102,7 +103,7 @@ export function StoresView() {
     [data.storeRows],
   );
 
-  if (data.coreLoading) {
+  if (pageLoading) {
     return (
       <div className="h-full overflow-y-auto px-6 py-5">
         <PageHeader title="สาขา" description="สุขภาพของแต่ละสาขาในมุมเดียว จากข้อมูลแชท อัตราตอบ และ Google Review ที่ระบบมีอยู่" />
