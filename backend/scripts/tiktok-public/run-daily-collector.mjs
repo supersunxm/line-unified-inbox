@@ -524,6 +524,8 @@ export async function runDailyCollector(cliOptions = {}) {
           `  -> SUCCESS (${extraction.source}): ${extraction.followerCount} followers (${extraction.precision}), ${extraction.followingCount ?? "-"} following, ${extraction.likesCount ?? "-"} likes, ${extraction.videoCount ?? "-"} videos (${extraction.durationMs}ms)`
         );
 
+        let persistenceError = null;
+
         // Database persistence
         if (!cliOptions.dryRun && prisma) {
           try {
@@ -608,18 +610,29 @@ export async function runDailyCollector(cliOptions = {}) {
               },
             });
           } catch (dbErr) {
+            persistenceError = dbErr;
             logger.error(`  -> DB PERSISTENCE ERROR for @${target.username}: ${dbErr.message}`);
           }
         }
 
-        successfulAccounts.push({
-          username: target.username,
-          stores: target.stores,
-          followers: extraction.followerCount,
-          precision: extraction.precision,
-          durationMs: extraction.durationMs,
-          source: extraction.source,
-        });
+        if (persistenceError) {
+          failedAccounts.push({
+            username: target.username,
+            stores: target.stores,
+            status: "DB_PERSISTENCE_ERROR",
+            error: persistenceError.message,
+            durationMs: extraction.durationMs || 0,
+          });
+        } else {
+          successfulAccounts.push({
+            username: target.username,
+            stores: target.stores,
+            followers: extraction.followerCount,
+            precision: extraction.precision,
+            durationMs: extraction.durationMs,
+            source: extraction.source,
+          });
+        }
       } else if (extraction.status === "PROFILE_NOT_FOUND") {
         logger.log(
           `  -> VERIFIED_PROFILE_NOT_FOUND: @${target.username} confirmed non-existent via ${extraction.notFoundAttempts?.length || 1} independent source(s) (${extraction.durationMs || 0}ms)`
