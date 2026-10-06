@@ -702,6 +702,15 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
       }));
 
       for (const storeCode of fleetScope.eligibleStoreCodes) {
+        if (this.manualRecoveryPaused) {
+          this.logger.warn(JSON.stringify({
+            event: "line_chat_mirror_cycle_preempted_for_manual_recovery",
+            storesAttempted,
+            storesRemaining: Math.max(0, fleetScope.eligibleStoreCodes.length - storesAttempted),
+          }));
+          break;
+        }
+
         storesAttempted += 1;
         try {
           results.push(await this.syncStore(
