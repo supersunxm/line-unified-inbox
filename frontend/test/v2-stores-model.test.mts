@@ -120,6 +120,7 @@ test("filters and priority order surface missing data, then today's chase, then 
   assert.deepEqual(filterStoreHealthRows(rows, { tab: "attention" }).map((item) => item.storeId).sort(), ["backlog", "follow", "missing"]);
   assert.deepEqual(filterStoreHealthRows(rows, { tab: "no-data" }).map((item) => item.storeId), ["missing"]);
   assert.deepEqual(filterStoreHealthRows(rows, { tab: "all", search: "Bangna" }).map((item) => item.storeId), ["normal"]);
+  assert.deepEqual(filterStoreHealthRows(rows, { tab: "all", search: "กรุงเทพ" }).map((item) => item.storeId), ["normal"]);
   assert.deepEqual(filterStoreHealthRows(rows, { tab: "all", region: "Eastern" }).map((item) => item.storeId).sort(), ["backlog", "follow", "missing"]);
 });
 
