@@ -13,14 +13,14 @@ export class ConversationQueryDto {
   @IsOptional() @IsString() productModelId?: string;
   @IsOptional() @IsString() topicId?: string;
   @IsOptional() @IsString() lineOaId?: string;
-  @IsOptional() @Matches(/^(all|\\d{4}-(0[1-9]|1[0-2]))$/) month?: string;
+  @IsOptional() @Matches(/^(all|\d{4}-(0[1-9]|1[0-2]))$/) month?: string;
   @IsOptional() @Transform(({ value }) => Number(value)) @IsInt() @Min(1) page = 1;
   @IsOptional() @Transform(({ value }) => Number(value)) @IsInt() @Min(1) @Max(100) pageSize = 25;
   @IsOptional() @IsIn(["latest-desc", "latest-asc", "priority-desc"]) sort = "latest-desc";
 }
 
 export class ConversationSummaryQueryDto {
-  @IsOptional() @Matches(/^(all|\\d{4}-(0[1-9]|1[0-2]))$/) month?: string;
+  @IsOptional() @Matches(/^(all|\d{4}-(0[1-9]|1[0-2]))$/) month?: string;
 }
 
 export class UpdateStatusDto {
