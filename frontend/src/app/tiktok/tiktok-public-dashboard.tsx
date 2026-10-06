@@ -14,6 +14,7 @@ type Props = {
 };
 
 type MetricIcon = "stores" | "followers" | "likes" | "videos";
+type GrowthPeriod = "daily" | "sevenDay" | "thirtyDay";
 
 function number(value: number, locale: string) {
   return new Intl.NumberFormat(locale).format(value);
@@ -32,21 +33,6 @@ function signed(value: number, locale: string) {
 function growth(value: number | null, locale: string) {
   if (value === null) return "—";
   return signed(value, locale);
-}
-
-function shiftMetricDate(date: string, days: number) {
-  const value = new Date(`${date}T00:00:00.000Z`);
-  value.setUTCDate(value.getUTCDate() + days);
-  return value.toISOString().slice(0, 10);
-}
-
-function formatMetricDate(date: string, locale: string) {
-  return new Intl.DateTimeFormat(locale, {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    timeZone: "UTC",
-  }).format(new Date(`${date}T00:00:00.000Z`));
 }
 
 function GrowthPill({ value, locale }: { value: number | null; locale: string }) {
@@ -158,6 +144,7 @@ export function TikTokPublicDashboard({ overview, stores }: Props) {
   const [region, setRegion] = useState("ALL");
   const [province, setProvince] = useState("ALL");
   const [sort, setSort] = useState("followers");
+  const [growthPeriod, setGrowthPeriod] = useState<GrowthPeriod>("sevenDay");
   const [isRefreshing, startTransition] = useTransition();
 
   const handleRefresh = () => {
@@ -219,6 +206,18 @@ export function TikTokPublicDashboard({ overview, stores }: Props) {
   }, [stores, query, region, province, sort, locale]);
 
   const leaders = useMemo(() => [...stores].sort((a, b) => b.followerCount - a.followerCount).slice(0, 5), [stores]);
+  const growthLeaders = useMemo(
+    () => [...stores]
+      .filter((store) => store.growth.sevenDay.absolute !== null)
+      .sort((a, b) => (b.growth.sevenDay.absolute ?? Number.NEGATIVE_INFINITY) - (a.growth.sevenDay.absolute ?? Number.NEGATIVE_INFINITY))
+      .slice(0, 5),
+    [stores],
+  );
+  const attentionSummary = useMemo(() => ({
+    dailyDeclines: stores.filter((store) => (store.growth.daily.absolute ?? 0) < 0).length,
+    sevenDayDeclines: stores.filter((store) => (store.growth.sevenDay.absolute ?? 0) < 0).length,
+    sevenDayFlat: stores.filter((store) => store.growth.sevenDay.absolute === 0).length,
+  }), [stores]);
   const totalFollowersShown = stores.reduce((sum, store) => sum + store.followerCount, 0);
 
   const dailySummary = useMemo(() => {
@@ -271,9 +270,19 @@ export function TikTokPublicDashboard({ overview, stores }: Props) {
     followers: "ผู้ติดตามรวม",
     likes: "ยอดไลก์รวม",
     videos: "จำนวนวิดีโอรวม",
+    content: "คอนเทนต์",
+    likesShort: "ไลก์",
+    videosShort: "วิดีโอ",
     exact: "ข้อมูลจริงจาก Public Profile",
-    ranking: "Top 5 สาขา",
-    rankingSub: "เรียงตามจำนวนผู้ติดตามสูงสุด",
+    ranking: "Top 5 ผู้ติดตามสูงสุด",
+    rankingSub: "สาขาที่มีฐานผู้ติดตามสูงสุด",
+    growthRanking: "Top 5 เติบโตเร็วสุด",
+    growthRankingSub: "เรียงตามผู้ติดตามที่เพิ่มขึ้นใน 7 วัน",
+    attention: "ร้านที่น่าจับตามอง",
+    attentionSub: "สัญญาณที่ควรตรวจสอบก่อนเป็นอันดับแรก",
+    dailyDeclineLabel: "ผู้ติดตามลดลงวันนี้",
+    weeklyDeclineLabel: "ผู้ติดตามลดลงใน 7 วัน",
+    weeklyFlatLabel: "ไม่มีการเติบโตใน 7 วัน",
     viewAll: "ดูทั้งหมด",
     dailyOverview: "การเติบโตผู้ติดตามรายวัน",
     dailyOverviewSub: "เทียบ Snapshot ล่าสุดกับ Snapshot ของวันก่อนหน้า",
@@ -296,6 +305,8 @@ export function TikTokPublicDashboard({ overview, stores }: Props) {
     videosSort: "จำนวนวิดีโอ",
     store: "สาขา",
     tiktok: "TikTok",
+    growthColumn: "การเติบโต",
+    growthPeriod: "ช่วงเวลา",
     daily: "การเติบโต (1 วัน)",
     seven: "การเติบโต (7 วัน)",
     thirty: "การเติบโต (30 วัน)",
@@ -314,9 +325,19 @@ export function TikTokPublicDashboard({ overview, stores }: Props) {
     followers: "Total followers",
     likes: "Total likes",
     videos: "Total videos",
+    content: "Content",
+    likesShort: "likes",
+    videosShort: "videos",
     exact: "Exact public profile data",
-    ranking: "Top 5 stores",
-    rankingSub: "Ranked by follower count",
+    ranking: "Top 5 by followers",
+    rankingSub: "Stores with the largest follower base",
+    growthRanking: "Top 5 fastest growth",
+    growthRankingSub: "Ranked by follower gain over 7 days",
+    attention: "Needs attention",
+    attentionSub: "Signals worth checking first",
+    dailyDeclineLabel: "Followers declined today",
+    weeklyDeclineLabel: "Followers declined in 7 days",
+    weeklyFlatLabel: "No follower growth in 7 days",
     viewAll: "View all",
     dailyOverview: "Daily follower growth",
     dailyOverviewSub: "Latest snapshot compared with the previous daily snapshot",
@@ -339,6 +360,8 @@ export function TikTokPublicDashboard({ overview, stores }: Props) {
     videosSort: "Videos",
     store: "Store",
     tiktok: "TikTok",
+    growthColumn: "Growth",
+    growthPeriod: "Period",
     daily: "1D growth",
     seven: "7D growth",
     thirty: "30D growth",
@@ -354,56 +377,49 @@ export function TikTokPublicDashboard({ overview, stores }: Props) {
   const dailyGrowthText = dailySummary.comparable > 0
     ? `${signed(dailySummary.delta, locale)}${dailySummary.percent === null ? "" : ` (${dailySummary.percent >= 0 ? "+" : ""}${dailySummary.percent.toFixed(2)}%)`}`
     : null;
-  const comparisonLabel = overview.latestMetricDate
-    ? `${formatMetricDate(overview.latestMetricDate, locale)} vs ${formatMetricDate(shiftMetricDate(overview.latestMetricDate, -1), locale)}`
-    : null;
-
   return (
     <PageContainer variant="wide" className="bg-slate-50/70 dark:bg-[var(--app-bg)]">
       <div className="space-y-5 pb-10">
-        <section className="relative overflow-hidden rounded-[28px] bg-[#07111f] px-6 py-7 text-white dark:border dark:border-[var(--app-border)] dark:bg-[var(--app-surface)] dark:text-[var(--app-text-primary)] shadow-[0_20px_60px_rgba(15,23,42,0.16)] sm:px-8 lg:px-9">
-          <div className="absolute -right-12 -top-20 h-64 w-64 rounded-full bg-blue-400/[0.08] blur-3xl" />
-          <div className="absolute -bottom-28 right-72 h-64 w-64 rounded-full bg-emerald-400/[0.08] blur-3xl" />
-          <div className="relative flex flex-col gap-6 xl:flex-row xl:items-center xl:justify-between">
-            <div className="flex min-w-0 items-center gap-4">
-              <div className="hidden h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.06] dark:border-[var(--app-border)] dark:bg-[var(--app-surface-subtle)] sm:flex">
-                <svg viewBox="0 0 24 24" aria-hidden="true" className="h-7 w-7 text-white dark:text-[var(--app-text-primary)]">
-                  <path d="M13 4v10a4.5 4.5 0 1 1-4-4.5" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
-                  <path d="M13 4c1.6 2.8 3.7 4 6 4.3" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </div>
-              <div className="min-w-0">
-                <p className="text-[10px] font-bold tracking-[0.18em] text-white/45 dark:text-[var(--app-text-secondary)]">{text.eyebrow}</p>
-                <h1 className="mt-1 text-3xl font-black tracking-[-0.045em] sm:text-4xl">{text.title}</h1>
-                <p className="mt-2 max-w-2xl text-sm leading-6 text-white/60 dark:text-[var(--app-text-secondary)]">{text.subtitle}</p>
-              </div>
+        <section className="flex flex-col gap-4 rounded-[22px] border border-slate-200/70 bg-white px-5 py-5 shadow-[0_8px_24px_rgba(15,23,42,0.035)] dark:border-[var(--app-border)] dark:bg-[var(--app-surface)] sm:px-6 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex min-w-0 items-center gap-4">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-slate-950 text-white dark:bg-[var(--app-text-primary)] dark:text-[var(--app-bg)]">
+              <svg viewBox="0 0 24 24" aria-hidden="true" className="h-6 w-6">
+                <path d="M13 4v10a4.5 4.5 0 1 1-4-4.5" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M13 4c1.6 2.8 3.7 4 6 4.3" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
             </div>
-
-            <div className="flex flex-wrap items-center gap-2 text-xs">
-              {timestampLabel && (
-                <span className="rounded-full border border-white/10 bg-white/[0.06] dark:border-[var(--app-border)] dark:bg-[var(--app-surface-subtle)] px-3 py-2 font-medium text-white/70 dark:text-[var(--app-text-secondary)]">
-                  {timestampLabel}
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="text-2xl font-black tracking-[-0.035em] text-slate-950 dark:text-[var(--app-text-primary)] sm:text-3xl">{text.title}</h1>
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                  {text.exact}
                 </span>
-              )}
-              <span className="inline-flex items-center gap-2 rounded-full border border-emerald-400/25 bg-emerald-400/10 px-3 py-2 font-semibold text-emerald-200">
-                <span className="h-2 w-2 rounded-full bg-emerald-400" />
-                {text.exact}
-              </span>
-              <span className="rounded-full border border-white/10 bg-white/[0.06] dark:border-[var(--app-border)] dark:bg-[var(--app-surface-subtle)] px-3 py-2 font-semibold text-white/75 dark:text-[var(--app-text-secondary)]">
-                {number(overview.trackedStores, locale)} stores
-              </span>
-              <button
-                onClick={handleRefresh}
-                disabled={isRefreshing}
-                className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.06] dark:border-[var(--app-border)] dark:bg-[var(--app-surface-subtle)] text-white/75 transition hover:bg-white/[0.12] disabled:opacity-50 dark:text-[var(--app-text-secondary)] dark:hover:bg-[var(--app-surface-hover)]"
-                aria-label={text.refresh}
-                title={text.refresh}
-              >
-                <svg className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-              </button>
+              </div>
+              <p className="mt-1.5 max-w-2xl text-sm text-slate-500 dark:text-[var(--app-text-secondary)]">{text.subtitle}</p>
             </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            {timestampLabel && (
+              <span className="rounded-xl bg-slate-50 px-3 py-2 font-medium text-slate-500 dark:bg-[var(--app-surface-subtle)] dark:text-[var(--app-text-secondary)]">
+                {timestampLabel}
+              </span>
+            )}
+            <span className="rounded-xl bg-slate-50 px-3 py-2 font-semibold text-slate-700 dark:bg-[var(--app-surface-subtle)] dark:text-[var(--app-text-primary)]">
+              {number(overview.trackedStores, locale)} stores
+            </span>
+            <button
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-50 disabled:opacity-50 dark:border-[var(--app-border)] dark:bg-[var(--app-surface-subtle)] dark:text-[var(--app-text-secondary)] dark:hover:bg-[var(--app-surface-hover)]"
+              aria-label={text.refresh}
+              title={text.refresh}
+            >
+              <svg className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+            </button>
           </div>
         </section>
 
@@ -435,79 +451,80 @@ export function TikTokPublicDashboard({ overview, stores }: Props) {
           />
         </section>
 
-        <section className="grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">
-          <div className="rounded-[24px] border border-slate-200/70 bg-white p-5 shadow-[0_10px_28px_rgba(15,23,42,0.045)] dark:border-[var(--app-border)] dark:bg-[var(--app-surface)] sm:p-6">
+        <section className="grid gap-4 xl:grid-cols-3">
+          <div className="rounded-[22px] border border-slate-200/70 bg-white p-5 shadow-[0_8px_24px_rgba(15,23,42,0.035)] dark:border-[var(--app-border)] dark:bg-[var(--app-surface)]">
             <div>
-              <h2 className="text-lg font-bold tracking-tight text-slate-950 dark:text-[var(--app-text-primary)]">{text.dailyOverview}</h2>
-              <p className="mt-1 text-xs text-slate-400">
-                {text.dailyOverviewSub}{comparisonLabel ? ` · ${comparisonLabel}` : ""}
-              </p>
+              <h2 className="text-base font-bold tracking-tight text-slate-950 dark:text-[var(--app-text-primary)]">{text.attention}</h2>
+              <p className="mt-1 text-xs text-slate-400">{text.attentionSub}</p>
             </div>
-
-            <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
-              <div className="rounded-2xl bg-emerald-50 p-4 dark:bg-emerald-500/10">
-                <div className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">{text.gainers}</div>
-                <div className="mt-2 text-3xl font-black text-emerald-700 dark:text-emerald-200">{number(dailySummary.gainers, locale)}</div>
-              </div>
-              <div className="rounded-2xl bg-rose-50 p-4 dark:bg-rose-500/10">
-                <div className="text-xs font-semibold text-rose-700 dark:text-rose-300">{text.losers}</div>
-                <div className="mt-2 text-3xl font-black text-rose-700 dark:text-rose-200">{number(dailySummary.losers, locale)}</div>
-              </div>
-              <div className="rounded-2xl bg-slate-100 p-4 dark:bg-[var(--app-surface-subtle)]">
-                <div className="text-xs font-semibold text-slate-600 dark:text-[var(--app-text-secondary)]">{text.flat}</div>
-                <div className="mt-2 text-3xl font-black text-slate-800 dark:text-[var(--app-text-primary)]">{number(dailySummary.flat, locale)}</div>
-              </div>
-              <div className="rounded-2xl bg-amber-50 p-4 dark:bg-amber-500/10">
-                <div className="text-xs font-semibold text-amber-700 dark:text-amber-300">{text.missing}</div>
-                <div className="mt-2 text-3xl font-black text-amber-700 dark:text-amber-200">{number(dailySummary.missing, locale)}</div>
-              </div>
-            </div>
-
-            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3 dark:border-[var(--app-border-subtle)] dark:bg-[var(--app-surface-subtle)]">
-              <div>
-                <div className="text-xs text-slate-400">{text.followers}</div>
-                <div className="mt-1 text-xl font-black tabular-nums text-slate-950 dark:text-[var(--app-text-primary)]">
-                  {dailyGrowthText ?? "—"}
+            <div className="mt-4 space-y-2.5">
+              {[
+                { label: text.dailyDeclineLabel, value: attentionSummary.dailyDeclines, tone: "rose" },
+                { label: text.weeklyDeclineLabel, value: attentionSummary.sevenDayDeclines, tone: "rose" },
+                { label: text.weeklyFlatLabel, value: attentionSummary.sevenDayFlat, tone: "amber" },
+              ].map((item) => (
+                <div key={item.label} className="flex items-center justify-between rounded-2xl border border-slate-100 px-4 py-3 dark:border-[var(--app-border-subtle)]">
+                  <div className="flex items-center gap-3">
+                    <span className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-black ${item.tone === "rose" ? "bg-rose-50 text-rose-600 dark:bg-rose-500/10 dark:text-rose-300" : "bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-300"}`}>
+                      {item.tone === "rose" ? "↓" : "–"}
+                    </span>
+                    <span className="text-sm font-medium text-slate-700 dark:text-[var(--app-text-primary)]">{item.label}</span>
+                  </div>
+                  <span className="text-xl font-black tabular-nums text-slate-950 dark:text-[var(--app-text-primary)]">{number(item.value, locale)}</span>
                 </div>
-              </div>
-              <div className="text-right text-xs text-slate-400">
-                {number(dailySummary.comparable, locale)} / {number(stores.length, locale)} {text.baselineCoverage}
+              ))}
+            </div>
+            <div className="mt-4 rounded-2xl bg-slate-50 px-4 py-3 dark:bg-[var(--app-surface-subtle)]">
+              <div className="text-[11px] font-medium text-slate-400">{text.dailyOverview}</div>
+              <div className="mt-1 flex items-end justify-between gap-4">
+                <span className="text-2xl font-black tabular-nums text-slate-950 dark:text-[var(--app-text-primary)]">{dailyGrowthText ?? "—"}</span>
+                <span className="text-right text-[11px] text-slate-400">{number(dailySummary.comparable, locale)} / {number(stores.length, locale)} {text.baselineCoverage}</span>
               </div>
             </div>
           </div>
 
-          <div className="rounded-[24px] border border-slate-200/70 bg-white p-5 shadow-[0_10px_28px_rgba(15,23,42,0.045)] dark:border-[var(--app-border)] dark:bg-[var(--app-surface)] sm:p-6">
+          <div className="rounded-[22px] border border-slate-200/70 bg-white p-5 shadow-[0_8px_24px_rgba(15,23,42,0.035)] dark:border-[var(--app-border)] dark:bg-[var(--app-surface)]">
             <div className="flex items-end justify-between gap-4">
               <div>
-                <h2 className="text-lg font-bold tracking-tight text-slate-950 dark:text-[var(--app-text-primary)]">{text.ranking}</h2>
+                <h2 className="text-base font-bold tracking-tight text-slate-950 dark:text-[var(--app-text-primary)]">{text.ranking}</h2>
                 <p className="mt-1 text-xs text-slate-400">{text.rankingSub}</p>
               </div>
-              <a href="#tiktok-all-stores" className="text-xs font-semibold text-blue-600 hover:text-blue-700 dark:text-blue-300">
-                {text.viewAll} →
-              </a>
+              <a href="#tiktok-all-stores" className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 dark:text-emerald-300">{text.viewAll} →</a>
             </div>
-
-            <div className="mt-4 divide-y divide-slate-100 dark:divide-[var(--app-border-subtle)]">
+            <div className="mt-3 divide-y divide-slate-100 dark:divide-[var(--app-border-subtle)]">
               {leaders.map((store, index) => (
-                <Link
-                  key={store.storeMasterId}
-                  href={`/tiktok/stores/${encodeURIComponent(store.storeMasterId)}`}
-                  className="group flex items-center gap-3 py-3.5"
-                >
-                  <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-black ${index === 0 ? "bg-slate-950 text-white dark:bg-[var(--app-text-primary)] dark:text-[var(--app-bg)]" : "bg-slate-100 text-slate-500 dark:bg-[var(--app-surface-subtle)] dark:text-[var(--app-text-secondary)]"}`}>
-                    {index + 1}
-                  </div>
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-slate-100 text-xs font-black text-slate-500 dark:bg-[var(--app-surface-subtle)]">
-                    {store.avatarUrl ? <img src={store.avatarUrl} alt="" className="h-full w-full object-cover" /> : "T"}
-                  </div>
+                <Link key={store.storeMasterId} href={`/tiktok/stores/${encodeURIComponent(store.storeMasterId)}`} className="group flex items-center gap-3 py-3">
+                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-black text-slate-500 dark:bg-[var(--app-surface-subtle)] dark:text-[var(--app-text-secondary)]">{index + 1}</div>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-semibold text-slate-800 dark:text-[var(--app-text-primary)]">{store.storeName}</p>
-                    <p className="truncate text-xs text-slate-400">@{store.username}</p>
+                    <p className="truncate text-[11px] text-slate-400">@{store.username}</p>
                   </div>
                   <div className="text-right">
                     <p className="text-sm font-black tabular-nums text-slate-950 dark:text-[var(--app-text-primary)]">{compact(store.followerCount, locale)}</p>
                     <p className="text-[10px] text-slate-400">{text.followersWord}</p>
                   </div>
+                </Link>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-[22px] border border-slate-200/70 bg-white p-5 shadow-[0_8px_24px_rgba(15,23,42,0.035)] dark:border-[var(--app-border)] dark:bg-[var(--app-surface)]">
+            <div className="flex items-end justify-between gap-4">
+              <div>
+                <h2 className="text-base font-bold tracking-tight text-slate-950 dark:text-[var(--app-text-primary)]">{text.growthRanking}</h2>
+                <p className="mt-1 text-xs text-slate-400">{text.growthRankingSub}</p>
+              </div>
+              <a href="#tiktok-all-stores" className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 dark:text-emerald-300">{text.viewAll} →</a>
+            </div>
+            <div className="mt-3 divide-y divide-slate-100 dark:divide-[var(--app-border-subtle)]">
+              {growthLeaders.map((store, index) => (
+                <Link key={store.storeMasterId} href={`/tiktok/stores/${encodeURIComponent(store.storeMasterId)}`} className="group flex items-center gap-3 py-3">
+                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-xs font-black text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">{index + 1}</div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold text-slate-800 dark:text-[var(--app-text-primary)]">{store.storeName}</p>
+                    <p className="truncate text-[11px] text-slate-400">@{store.username}</p>
+                  </div>
+                  <GrowthPill value={store.growth.sevenDay.absolute} locale={locale} />
                 </Link>
               ))}
             </div>
@@ -599,73 +616,181 @@ export function TikTokPublicDashboard({ overview, stores }: Props) {
                 <option value="videos">{text.sortBy}: {text.videosSort}</option>
               </select>
             </div>
+
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <span className="text-xs font-semibold text-slate-400">{text.growthPeriod}</span>
+              <div className="inline-flex rounded-xl bg-slate-100 p-1 dark:bg-[var(--app-surface-subtle)]">
+                {([
+                  ["daily", "1D"],
+                  ["sevenDay", "7D"],
+                  ["thirtyDay", "30D"],
+                ] as const).map(([period, label]) => (
+                  <button
+                    key={period}
+                    type="button"
+                    onClick={() => setGrowthPeriod(period)}
+                    className={`rounded-lg px-3 py-1.5 text-xs font-bold transition ${
+                      growthPeriod === period
+                        ? "bg-white text-slate-950 shadow-sm dark:bg-[var(--app-surface)] dark:text-[var(--app-text-primary)]"
+                        : "text-slate-500 hover:text-slate-800 dark:text-[var(--app-text-secondary)] dark:hover:text-[var(--app-text-primary)]"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
 
           {visibleStores.length === 0 ? (
             <div className="p-14 text-center text-sm text-slate-400">{text.noData}</div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[1180px] text-sm">
+            <>
+              <div className="space-y-2 p-3 md:hidden">
+                {visibleStores.map((store, index) => {
+                  const detailHref = `/tiktok/stores/${encodeURIComponent(store.storeMasterId)}`;
+                  return (
+                    <div
+                      key={store.storeMasterId}
+                      role="link"
+                      tabIndex={0}
+                      onClick={() => router.push(detailHref)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          router.push(detailHref);
+                        }
+                      }}
+                      className="cursor-pointer rounded-2xl border border-slate-100 bg-white p-4 transition active:bg-emerald-50/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/30 dark:border-[var(--app-border-subtle)] dark:bg-[var(--app-surface)] dark:active:bg-[var(--app-surface-hover)]"
+                      aria-label={`${store.storeName} — ${text.open}`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-slate-100 text-xs font-black text-slate-500 dark:bg-[var(--app-surface-subtle)]">
+                          {store.avatarUrl ? <img src={store.avatarUrl} alt="" className="h-full w-full object-cover" /> : "T"}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="truncate text-sm font-bold text-slate-900 dark:text-[var(--app-text-primary)]">
+                                <span className="mr-1.5 text-xs font-semibold text-slate-400">#{index + 1}</span>
+                                {store.storeName}
+                              </div>
+                              <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
+                                <a
+                                  href={store.profileUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  onClick={(event) => event.stopPropagation()}
+                                  onKeyDown={(event) => event.stopPropagation()}
+                                  className="truncate font-medium text-blue-600 hover:underline dark:text-blue-300"
+                                >
+                                  @{store.username} ↗
+                                </a>
+                                {(store.province || store.region) && (
+                                  <span className="truncate text-slate-400">
+                                    {[store.province, store.region].filter(Boolean).join(" · ")}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <span className="shrink-0 text-xs text-slate-300 dark:text-[var(--app-text-tertiary)]">›</span>
+                          </div>
+
+                          <div className="mt-3 grid grid-cols-[1fr_auto] items-end gap-3">
+                            <div>
+                              <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400">Followers</div>
+                              <div className="mt-0.5 text-xl font-black tabular-nums text-slate-950 dark:text-[var(--app-text-primary)]">
+                                {number(store.followerCount, locale)}
+                              </div>
+                            </div>
+                            <GrowthPill value={store.growth[growthPeriod].absolute} locale={locale} />
+                          </div>
+
+                          <div className="mt-3 flex items-center gap-3 border-t border-slate-100 pt-3 text-xs text-slate-400 dark:border-[var(--app-border-subtle)]">
+                            <span>{compact(store.likesCount, locale)} {text.likesShort}</span>
+                            <span>·</span>
+                            <span>{number(store.videoCount, locale)} {text.videosShort}</span>
+                            <span className="ml-auto font-semibold text-slate-500 dark:text-[var(--app-text-secondary)]">
+                              {growthPeriod === "daily" ? "1D" : growthPeriod === "sevenDay" ? "7D" : "30D"} {text.growthColumn}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="hidden overflow-x-auto md:block">
+                <table className="w-full min-w-[680px] text-sm">
                 <thead className="bg-slate-50/80 text-left text-[10px] font-bold uppercase tracking-[0.08em] text-slate-400 dark:bg-[var(--app-surface-subtle)]">
                   <tr className="border-b border-slate-100 dark:border-[var(--app-border-subtle)]">
                     <th className="w-12 px-4 py-3 text-center">#</th>
                     <th className="px-4 py-3">{text.store}</th>
-                    <th className="px-4 py-3">{text.tiktok}</th>
                     <th className="px-4 py-3 text-right">Followers</th>
-                    <th className="px-4 py-3 text-right">Likes</th>
-                    <th className="px-4 py-3 text-right">Videos</th>
-                    <th className="px-4 py-3 text-center">{text.daily}</th>
-                    <th className="px-4 py-3 text-center">{text.seven}</th>
-                    <th className="px-4 py-3 text-center">{text.thirty}</th>
-                    <th className="px-4 py-3 text-right"></th>
+                    <th className="px-4 py-3 text-right">{text.content}</th>
+                    <th className="px-4 py-3 text-center">{text.growthColumn} ({growthPeriod === "daily" ? "1D" : growthPeriod === "sevenDay" ? "7D" : "30D"})</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-[var(--app-border-subtle)]">
-                  {visibleStores.map((store, index) => (
-                    <tr key={store.storeMasterId} className="group transition hover:bg-blue-50/30 dark:hover:bg-[var(--app-surface-hover)]">
-                      <td className="px-4 py-4 text-center text-xs font-semibold text-slate-400">{index + 1}</td>
-                      <td className="px-4 py-4">
-                        <Link href={`/tiktok/stores/${encodeURIComponent(store.storeMasterId)}`} className="flex items-center gap-3">
-                          <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-slate-100 text-xs font-black text-slate-500 dark:bg-[var(--app-surface-subtle)]">
-                            {store.avatarUrl ? <img src={store.avatarUrl} alt="" className="h-full w-full object-cover" /> : "T"}
-                          </div>
-                          <div className="min-w-0">
-                            <div className="max-w-[320px] truncate font-semibold text-slate-900 dark:text-[var(--app-text-primary)]">{store.storeName}</div>
-                            <div className="mt-0.5 truncate text-xs text-slate-400">
-                              {[store.province, store.region].filter(Boolean).join(" · ")}
+                  {visibleStores.map((store, index) => {
+                    const detailHref = `/tiktok/stores/${encodeURIComponent(store.storeMasterId)}`;
+                    return (
+                      <tr
+                        key={store.storeMasterId}
+                        role="link"
+                        tabIndex={0}
+                        onClick={() => router.push(detailHref)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            router.push(detailHref);
+                          }
+                        }}
+                        className="group cursor-pointer transition hover:bg-emerald-50/40 focus-visible:bg-emerald-50/40 focus-visible:outline-none dark:hover:bg-[var(--app-surface-hover)] dark:focus-visible:bg-[var(--app-surface-hover)]"
+                        aria-label={`${store.storeName} — ${text.open}`}
+                      >
+                        <td className="px-4 py-4 text-center text-xs font-semibold text-slate-400">{index + 1}</td>
+                        <td className="px-4 py-4">
+                          <div className="flex items-center gap-3">
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-slate-100 text-xs font-black text-slate-500 dark:bg-[var(--app-surface-subtle)]">
+                              {store.avatarUrl ? <img src={store.avatarUrl} alt="" className="h-full w-full object-cover" /> : "T"}
+                            </div>
+                            <div className="min-w-0">
+                              <div className="max-w-[320px] truncate font-semibold text-slate-900 transition group-hover:text-emerald-800 dark:text-[var(--app-text-primary)] dark:group-hover:text-emerald-300">{store.storeName}</div>
+                              <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
+                                <a
+                                  href={store.profileUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  onClick={(event) => event.stopPropagation()}
+                                  onKeyDown={(event) => event.stopPropagation()}
+                                  className="truncate font-medium text-blue-600 hover:underline dark:text-blue-300"
+                                >
+                                  @{store.username} ↗
+                                </a>
+                                {(store.province || store.region) && (
+                                  <span className="truncate text-slate-400">
+                                    {[store.province, store.region].filter(Boolean).join(" · ")}
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           </div>
-                        </Link>
-                      </td>
-                      <td className="px-4 py-4">
-                        <a
-                          href={store.profileUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="font-medium text-blue-600 hover:underline dark:text-blue-300"
-                        >
-                          @{store.username} ↗
-                        </a>
-                      </td>
-                      <td className="px-4 py-4 text-right font-black tabular-nums text-slate-900 dark:text-[var(--app-text-primary)]">{number(store.followerCount, locale)}</td>
-                      <td className="px-4 py-4 text-right tabular-nums text-slate-500">{number(store.likesCount, locale)}</td>
-                      <td className="px-4 py-4 text-right tabular-nums text-slate-500">{number(store.videoCount, locale)}</td>
-                      <td className="px-4 py-4 text-center"><GrowthPill value={store.growth.daily.absolute} locale={locale} /></td>
-                      <td className="px-4 py-4 text-center"><GrowthPill value={store.growth.sevenDay.absolute} locale={locale} /></td>
-                      <td className="px-4 py-4 text-center"><GrowthPill value={store.growth.thirtyDay.absolute} locale={locale} /></td>
-                      <td className="px-4 py-4 text-right">
-                        <Link
-                          href={`/tiktok/stores/${encodeURIComponent(store.storeMasterId)}`}
-                          className="inline-flex h-9 items-center rounded-xl border border-slate-200 px-3 text-xs font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 dark:border-[var(--app-border)] dark:text-[var(--app-text-primary)] dark:hover:bg-[var(--app-surface-hover)]"
-                        >
-                          {text.open} →
-                        </Link>
-                      </td>
-                    </tr>
-                  ))}
+                        </td>
+                        <td className="px-4 py-4 text-right font-black tabular-nums text-slate-900 dark:text-[var(--app-text-primary)]">{number(store.followerCount, locale)}</td>
+                        <td className="px-4 py-4 text-right">
+                          <div className="font-semibold tabular-nums text-slate-700 dark:text-[var(--app-text-primary)]">{compact(store.likesCount, locale)} <span className="font-normal text-slate-400">{text.likesShort}</span></div>
+                          <div className="mt-0.5 text-xs tabular-nums text-slate-400">{number(store.videoCount, locale)} {text.videosShort}</div>
+                        </td>
+                        <td className="px-4 py-4 text-center"><GrowthPill value={store.growth[growthPeriod].absolute} locale={locale} /></td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
-              </table>
-            </div>
+                </table>
+              </div>
+            </>
           )}
         </section>
       </div>
