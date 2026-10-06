@@ -434,6 +434,7 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
   private startupTimer: NodeJS.Timeout | null = null;
   private running = false;
   private schedulerActive = false;
+  private manualRecoveryPaused = false;
   private lastLoggedOperationMode: MirrorOperationModeValue | null = null;
   private operationModeStateLoaded = false;
   private readonly targetCache = new Map<string, {
@@ -496,8 +497,47 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
     this.startupTimer = null;
   }
 
+  public async pauseForManualRecovery(timeoutMs = 120_000): Promise<void> {
+    this.manualRecoveryPaused = true;
+    this.schedulerActive = false;
+    if (this.timer) clearTimeout(this.timer);
+    if (this.startupTimer) clearTimeout(this.startupTimer);
+    this.timer = null;
+    this.startupTimer = null;
+
+    const deadline = Date.now() + Math.max(1_000, timeoutMs);
+    while (this.running || this.sessionService.isMirrorCycleActive()) {
+      if (Date.now() >= deadline) {
+        this.manualRecoveryPaused = false;
+        this.schedulerActive = true;
+        this.scheduleNextCycle(MIN_INTERVAL_MS);
+        throw new Error("LIVE_MIRROR_PAUSE_TIMEOUT");
+      }
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+
+    this.sessionService.setMirrorCooldownUntil(null);
+    this.sessionService.setMirrorCycleActive(false);
+    this.logger.warn(JSON.stringify({ event: "line_chat_mirror_paused_for_manual_recovery" }));
+  }
+
+  public resumeAfterManualRecovery(): void {
+    if (!this.manualRecoveryPaused) return;
+    this.manualRecoveryPaused = false;
+    if (
+      process.env.NODE_ENV === "test"
+      || !isLineChatMirrorEnabled()
+      || configuredLineChatMirrorStoreCodes().length === 0
+    ) return;
+    this.schedulerActive = true;
+    this.sessionService.setMirrorCooldownUntil(null);
+    this.sessionService.setMirrorCycleActive(false);
+    this.logger.log(JSON.stringify({ event: "line_chat_mirror_resumed_after_manual_recovery" }));
+    this.scheduleNextCycle(MIN_INTERVAL_MS);
+  }
+
   private scheduleNextCycle(delayMs: number): void {
-    if (!this.schedulerActive) return;
+    if (!this.schedulerActive || this.manualRecoveryPaused) return;
     if (this.timer) clearTimeout(this.timer);
     this.timer = setTimeout(() => {
       this.timer = null;
@@ -518,14 +558,14 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
     try {
       await this.runCycle();
     } finally {
-      if (this.schedulerActive) {
-        const delayAfterCycleMs = lineChatMirrorIntervalMs();
-        const cleanup = await this.sessionService.closeIdleManagedContexts("MIRROR_CYCLE_COOLDOWN");
+      const delayAfterCycleMs = lineChatMirrorIntervalMs();
+      const cleanup = await this.sessionService.closeIdleManagedContexts("MIRROR_CYCLE_COOLDOWN");
+      this.sessionService.setMirrorCycleActive(false);
+
+      if (this.schedulerActive && !this.manualRecoveryPaused) {
         const healthResumeAt = new Date(Date.now() + PROFILE_HEALTH_RESUME_COOLDOWN_MS);
         const nextCycleAt = new Date(Date.now() + delayAfterCycleMs);
         this.sessionService.setMirrorCooldownUntil(healthResumeAt);
-        this.sessionService.setMirrorCycleActive(false);
-
         this.logger.log(JSON.stringify({
           event: "line_chat_mirror_cooldown_started",
           delayAfterCycleMs,
@@ -535,6 +575,13 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
           contextCloseFailures: cleanup.failed,
         }));
         this.scheduleNextCycle(delayAfterCycleMs);
+      } else {
+        this.sessionService.setMirrorCooldownUntil(null);
+        this.logger.log(JSON.stringify({
+          event: "line_chat_mirror_cycle_released_for_manual_recovery",
+          contextsClosed: cleanup.closed,
+          contextCloseFailures: cleanup.failed,
+        }));
       }
     }
   }
