@@ -7,6 +7,7 @@ import type { BrowserContext } from "playwright";
 import type { PrismaService } from "../prisma.service";
 import type { LineChatSessionService } from "./line-chat-session.service";
 import type { LineChatProfileOperationCoordinator } from "./line-chat-profile-operation-coordinator.service";
+import type { LineChatMirrorService } from "./line-chat-mirror.service";
 import { LineChatNovncRecoveryWorkerService } from "./line-chat-novnc-recovery-worker.service";
 import { LineChatNovncRecoveryService } from "./line-chat-novnc-recovery.service";
 
@@ -14,6 +15,8 @@ function fixture(t: test.TestContext) {
   let mirrorActive = false;
   let closed = 0;
   let released = 0;
+  let mirrorPauses = 0;
+  let mirrorResumes = 0;
   let openedKey: string | null = null;
   t.mock.method(childProcess, "spawn", () => Object.assign(new EventEmitter(), {
     exitCode: null, killed: false, stderr: new EventEmitter(),
@@ -43,19 +46,32 @@ function fixture(t: test.TestContext) {
       return { acquired: true };
     },
   } as unknown as LineChatProfileOperationCoordinator;
+  const mirrorService = {
+    pauseForManualRecovery: async () => {
+      mirrorPauses++;
+      mirrorActive = false;
+    },
+    resumeAfterManualRecovery: () => {
+      mirrorResumes++;
+    },
+  } as unknown as LineChatMirrorService;
   return {
-    service: new LineChatNovncRecoveryWorkerService(prisma, sessionService, coordinator),
+    service: new LineChatNovncRecoveryWorkerService(prisma, sessionService, coordinator, mirrorService),
     activateMirror: () => { mirrorActive = true; },
-    counts: () => ({ closed, released, openedKey }),
+    counts: () => ({ closed, released, mirrorPauses, mirrorResumes, openedKey }),
   };
 }
 
-test("manual recovery rejects unsupported profiles and active Mirror before browser launch", async (t) => {
+test("manual recovery rejects unsupported profiles and pauses active Mirror before browser launch", async (t) => {
   const f = fixture(t);
   await assert.rejects(f.service.start("arbitrary"), /RECOVERY_SESSION_NOT_ALLOWED/);
   f.activateMirror();
-  await assert.rejects(f.service.start("account-1"), /LIVE_MIRROR_ACTIVE/);
-  assert.equal(f.counts().openedKey, null);
+  const result = await f.service.start("account-1");
+  assert.equal(result.active, true);
+  assert.equal(f.counts().openedKey, "account-1");
+  assert.equal(f.counts().mirrorPauses, 1);
+  await f.service.stop("account-1");
+  assert.equal(f.counts().mirrorResumes, 1);
 });
 
 test("profile A uses its exact existing session, blocks cross-profile token reuse, and releases for Mirror", async (t) => {
@@ -69,10 +85,15 @@ test("profile A uses its exact existing session, blocks cross-profile token reus
   await assert.rejects(f.service.start("profile-b"), /RECOVERY_OTHER_SESSION_ACTIVE/);
   await assert.rejects(f.service.stop("profile-b"), /RECOVERY_OTHER_SESSION_ACTIVE/);
   assert.equal(f.service.snapshot().active, true);
-  f.activateMirror();
-  await new Promise((resolve) => setTimeout(resolve, 400));
+  await f.service.stop("account-1");
   assert.equal(f.service.snapshot().active, false);
-  assert.deepEqual(f.counts(), { closed: 1, released: 1, openedKey: "account-1" });
+  assert.deepEqual(f.counts(), {
+    closed: 1,
+    released: 1,
+    mirrorPauses: 1,
+    mirrorResumes: 1,
+    openedKey: "account-1",
+  });
 });
 
 test("public recovery returns only the requested profile and never another profile's URL", async (t) => {
