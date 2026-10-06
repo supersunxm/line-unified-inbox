@@ -1,7 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { segmentThaiWords } from "@/lib/thai-word-counter";
+import {
+  segmentThaiWords,
+  WORD_COUNT_RULE_VERSION,
+} from "@/lib/thai-word-counter";
 import { REVIEW15_EXAMPLE_TEXT } from "./review-15-example";
 
 const MIN_WORDS = 15;
@@ -788,7 +791,7 @@ export function Review15Checker() {
         <section className="mt-5 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4 shadow-[var(--app-shadow-card)] sm:p-5">
           <h2 className="text-sm font-bold">กฎการนับคำ</h2>
           <p className="mt-1 text-xs leading-5 text-[var(--app-text-secondary)]">
-            หน้าเช็กนี้ใช้ตัวนับคำชุดเดียวกับ Google Review KPI
+            หน้าเช็กนี้ใช้ตัวนับคำชุดเดียวกับ Google Review KPI · {WORD_COUNT_RULE_VERSION}
           </p>
 
           <div className="mt-3 grid gap-2 text-xs leading-5 sm:grid-cols-2">
@@ -819,6 +822,14 @@ export function Review15Checker() {
                 สามารถนับเป็นคำได้
               </li>
               <li>
+                คำศัพท์ที่ล็อกตามกฎ เช่น โปรโมชั่น, สมาร์ทโฟน, ใช้งาน และ วันนี้
+                จะไม่ถูกตัวตัดคำของ browser แยกเป็นเศษคำ
+              </li>
+              <li>
+                ข้อความไทยที่ติดกับชื่อรุ่น เช่น ซื้อOPPOReno14Pro5Gวันนี้
+                จะแยกขอบเขตเป็น ซื้อ / OPPO / Reno14Pro / 5G / วันนี้ ก่อนนับ
+              </li>
+              <li>
                 คำนำหน้า การ, ความ, น่า, ผู้, นัก, ชาว, ช่าง จะรวมกับคำถัดไปเป็น 1 คำ
               </li>
               <li>
@@ -835,7 +846,7 @@ export function Review15Checker() {
               </li>
             </ul>
 
-            <div className="mt-3 grid gap-2 sm:grid-cols-3">
+            <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
               <div className="rounded-lg bg-[var(--app-accent-soft)] px-3 py-2">
                 <strong>ดี มาก ดี มาก</strong>
                 <div className="text-[var(--app-text-secondary)]">= 4 คำ</div>
@@ -845,6 +856,10 @@ export function Review15Checker() {
                 <div className="text-[var(--app-text-secondary)]">
                   = ความสะอาด 1 คำ
                 </div>
+              </div>
+              <div className="rounded-lg bg-[var(--app-accent-soft)] px-3 py-2">
+                <strong>โปรโมชั่น</strong>
+                <div className="text-[var(--app-text-secondary)]">= 1 คำ</div>
               </div>
               <div className="rounded-lg bg-[var(--app-accent-soft)] px-3 py-2">
                 <strong>OPPO Reno 5G</strong>
