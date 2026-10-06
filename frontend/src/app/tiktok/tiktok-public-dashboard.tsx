@@ -645,8 +645,84 @@ export function TikTokPublicDashboard({ overview, stores }: Props) {
           {visibleStores.length === 0 ? (
             <div className="p-14 text-center text-sm text-slate-400">{text.noData}</div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[680px] text-sm">
+            <>
+              <div className="space-y-2 p-3 md:hidden">
+                {visibleStores.map((store, index) => {
+                  const detailHref = `/tiktok/stores/${encodeURIComponent(store.storeMasterId)}`;
+                  return (
+                    <div
+                      key={store.storeMasterId}
+                      role="link"
+                      tabIndex={0}
+                      onClick={() => router.push(detailHref)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          router.push(detailHref);
+                        }
+                      }}
+                      className="cursor-pointer rounded-2xl border border-slate-100 bg-white p-4 transition active:bg-emerald-50/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/30 dark:border-[var(--app-border-subtle)] dark:bg-[var(--app-surface)] dark:active:bg-[var(--app-surface-hover)]"
+                      aria-label={`${store.storeName} — ${text.open}`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-slate-100 text-xs font-black text-slate-500 dark:bg-[var(--app-surface-subtle)]">
+                          {store.avatarUrl ? <img src={store.avatarUrl} alt="" className="h-full w-full object-cover" /> : "T"}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="truncate text-sm font-bold text-slate-900 dark:text-[var(--app-text-primary)]">
+                                <span className="mr-1.5 text-xs font-semibold text-slate-400">#{index + 1}</span>
+                                {store.storeName}
+                              </div>
+                              <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
+                                <a
+                                  href={store.profileUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  onClick={(event) => event.stopPropagation()}
+                                  onKeyDown={(event) => event.stopPropagation()}
+                                  className="truncate font-medium text-blue-600 hover:underline dark:text-blue-300"
+                                >
+                                  @{store.username} ↗
+                                </a>
+                                {(store.province || store.region) && (
+                                  <span className="truncate text-slate-400">
+                                    {[store.province, store.region].filter(Boolean).join(" · ")}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <span className="shrink-0 text-xs text-slate-300 dark:text-[var(--app-text-tertiary)]">›</span>
+                          </div>
+
+                          <div className="mt-3 grid grid-cols-[1fr_auto] items-end gap-3">
+                            <div>
+                              <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400">Followers</div>
+                              <div className="mt-0.5 text-xl font-black tabular-nums text-slate-950 dark:text-[var(--app-text-primary)]">
+                                {number(store.followerCount, locale)}
+                              </div>
+                            </div>
+                            <GrowthPill value={store.growth[growthPeriod].absolute} locale={locale} />
+                          </div>
+
+                          <div className="mt-3 flex items-center gap-3 border-t border-slate-100 pt-3 text-xs text-slate-400 dark:border-[var(--app-border-subtle)]">
+                            <span>{compact(store.likesCount, locale)} {text.likesShort}</span>
+                            <span>·</span>
+                            <span>{number(store.videoCount, locale)} {text.videosShort}</span>
+                            <span className="ml-auto font-semibold text-slate-500 dark:text-[var(--app-text-secondary)]">
+                              {growthPeriod === "daily" ? "1D" : growthPeriod === "sevenDay" ? "7D" : "30D"} {text.growthColumn}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="hidden overflow-x-auto md:block">
+                <table className="w-full min-w-[680px] text-sm">
                 <thead className="bg-slate-50/80 text-left text-[10px] font-bold uppercase tracking-[0.08em] text-slate-400 dark:bg-[var(--app-surface-subtle)]">
                   <tr className="border-b border-slate-100 dark:border-[var(--app-border-subtle)]">
                     <th className="w-12 px-4 py-3 text-center">#</th>
@@ -712,8 +788,9 @@ export function TikTokPublicDashboard({ overview, stores }: Props) {
                     );
                   })}
                 </tbody>
-              </table>
-            </div>
+                </table>
+              </div>
+            </>
           )}
         </section>
       </div>
