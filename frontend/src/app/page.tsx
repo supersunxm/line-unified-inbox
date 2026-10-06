@@ -2532,7 +2532,7 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
 
 
   const storeBmCounts = useMemo(() => {
-    const countsMap: Record<string, { notReplied: number; notifiedBm: number; replied: number; oldestWaitingMinutes?: number }> = {};
+    const countsMap: Record<string, { total: number; notReplied: number; notifiedBm: number; replied: number; oldestWaitingMinutes?: number }> = {};
     for (const s of bmSummaryData.stores) {
       const effectiveCounts = effectiveSummaryCounts(s);
       countsMap[s.storeId] = {
