@@ -1,3 +1,9 @@
+## 2026-10-06 — Store Chats month UX: fresh navigation current month default and operational All view
+
+- URL is the sole authority for non-default month selection (`/chats?month=YYYY-MM` or `/chats?month=all`). Do NOT persist month into localStorage or global UI preferences so fresh navigation from top/sidebar links always opens the current Bangkok month.
+- In archive mode (`month=all`), retain operational Not Replied / Replied overview buttons and store row counts for conversations covered by the Sep 1, 2026 Bangkok coverage start boundary, accompanied by a localized explanatory note. Pre-coverage history remains accessible without operational reply status.
+- Preserving replyState query param across All mode allows users to filter by Not Replied / Replied even in archive view without state corruption.
+
 ## 2026-10-06 — Nickname Parser v3 production metadata remains independent
 
 - Persist nickname-derived values in one typed current row per Conversation plus append-only application receipts referencing the exact immutable Manager nickname observation. Do not backfill from `onlineSource`, `NicknameSourceState`, or sales fields.

@@ -138,8 +138,6 @@ export function ContextSidebar({
             </span>
           </button>
 
-          {period !== "all" && (
-            <>
           <button
             type="button"
             onClick={() => selectSidebarView("notReplied")}
@@ -167,9 +165,13 @@ export function ContextSidebar({
               {overview.replied}
             </span>
           </button>
-            </>
-          )}
         </nav>
+
+        {period === "all" && (
+          <p className="mt-1.5 px-1 text-[11px] text-[var(--app-text-tertiary)]">
+            {text.replyStatusCoverageNote || "สถานะตอบกลับนับตั้งแต่ ก.ย. 2026"}
+          </p>
+        )}
 
         {/* Stores Filter Section */}
         <div className="my-2.5 border-t border-[var(--app-border-subtle)]" />
@@ -232,20 +234,12 @@ export function ContextSidebar({
           >
             <span className="min-w-0 flex-1 truncate font-medium">{text.allStores || "ร้านค้าทั้งหมด"}</span>
             <div className="ml-2 flex items-center gap-1 shrink-0 font-tabular">
-              {period === "all" ? (
-                <span className="rounded-[var(--app-radius-xs)] border border-[var(--app-border-subtle)] bg-[var(--app-surface-subtle)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--app-text-secondary)]" title="Total conversations">
-                  {overview.total}
-                </span>
-              ) : (
-                <>
-                  <span className="rounded-[var(--app-radius-xs)] bg-[var(--app-danger-soft)] text-[var(--app-danger)] px-1.5 py-0.5 text-[10px] font-medium" title="Not Replied">
-                    {overview.notReplied}
-                  </span>
-                  <span className="rounded-[var(--app-radius-xs)] bg-[var(--app-success-soft)] text-[var(--app-success)] px-1.5 py-0.5 text-[10px] font-medium" title="Replied">
-                    {overview.replied}
-                  </span>
-                </>
-              )}
+              <span className="rounded-[var(--app-radius-xs)] bg-[var(--app-danger-soft)] text-[var(--app-danger)] px-1.5 py-0.5 text-[10px] font-medium" title="Not Replied">
+                {overview.notReplied}
+              </span>
+              <span className="rounded-[var(--app-radius-xs)] bg-[var(--app-success-soft)] text-[var(--app-success)] px-1.5 py-0.5 text-[10px] font-medium" title="Replied">
+                {overview.replied}
+              </span>
             </div>
           </button>
 
@@ -277,20 +271,12 @@ export function ContextSidebar({
                       {getStoreDisplayName(store.name)}
                     </span>
                     <div className="ml-2 flex items-center gap-1 shrink-0 font-tabular">
-                      {period === "all" ? (
-                        <span className="rounded-[var(--app-radius-xs)] border border-[var(--app-border-subtle)] bg-[var(--app-surface-subtle)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--app-text-secondary)]" title="Total conversations">
-                          {counts.total ?? 0}
-                        </span>
-                      ) : (
-                        <>
-                          <span className="rounded-[var(--app-radius-xs)] bg-[var(--app-danger-soft)] text-[var(--app-danger)] px-1.5 py-0.5 text-[10px] font-medium" title="Not Replied">
-                            {counts.notReplied}
-                          </span>
-                          <span className="rounded-[var(--app-radius-xs)] bg-[var(--app-success-soft)] text-[var(--app-success)] px-1.5 py-0.5 text-[10px] font-medium" title="Replied">
-                            {counts.replied}
-                          </span>
-                        </>
-                      )}
+                      <span className="rounded-[var(--app-radius-xs)] bg-[var(--app-danger-soft)] text-[var(--app-danger)] px-1.5 py-0.5 text-[10px] font-medium" title="Not Replied">
+                        {counts.notReplied}
+                      </span>
+                      <span className="rounded-[var(--app-radius-xs)] bg-[var(--app-success-soft)] text-[var(--app-success)] px-1.5 py-0.5 text-[10px] font-medium" title="Replied">
+                        {counts.replied}
+                      </span>
                     </div>
                   </div>
 

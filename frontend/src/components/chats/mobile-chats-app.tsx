@@ -161,7 +161,6 @@ export function MobileChatsApp() {
   const [status, setStatus] = useState<StatusFilter>(() => {
     if (typeof window === "undefined") return "all";
     const params = new URLSearchParams(window.location.search);
-    if (params.get("month") === "all") return "all";
     const value = params.get("replyState") ?? params.get("bmReplyStatus");
     return value === "REPLIED"
       ? "REPLIED"

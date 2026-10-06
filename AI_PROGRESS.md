@@ -1,3 +1,12 @@
+# 2026-10-06: Store Chats month selector UX fix and All archive mode hardening
+
+- Current task: fix Store Chats month-selector UX (Problem 1: fresh navigation opening current Bangkok month vs deep link/refresh preservation; Problem 2: "All" archive mode showing operational Not Replied / Replied counts and filters with Sep 2026 coverage note).
+- Problem 1 resolved: fresh navigation from app nav/links without `month` query parameter defaults to current Bangkok month (`getCurrentBangkokMonth()`). Explicit deep link or refresh on `?month=YYYY-MM` or `?month=all` correctly preserves the selected month without storing month in localStorage or global UI preferences.
+- Problem 2 resolved: in "All" archive mode (`month=all`), overview displays All, Not Replied, and Replied buttons/counts; store rows display red/green operational counts; a muted note is rendered in Thai ("สถานะตอบกลับนับตั้งแต่ ก.ย. 2026"), English ("Reply status counted from Sep 2026"), and Chinese ("回复状态从 2026 年 9 月起统计"); replyState filter is preserved and syncs with URL when switching to/from All mode. Mobile filters bridge provides matching behavior with All / Not Replied / Replied buttons and the coverage note.
+- Strict isolation preserved: touched only Store Chats frontend components (`page.tsx`, `chats/page.tsx`, `mobile-chats-app.tsx`, `context-sidebar.tsx`, and tests). No backend or database changes made.
+- Validation: 835/835 frontend unit tests pass; TypeScript baseline check passes with 50 errors (unchanged baseline); ESLint on modified files clean (0 errors); Next.js production build succeeds with all 51 static/dynamic pages compiled.
+- Next: commit changes, push isolated branch, open PR, and verify CI status.
+
 # 2026-10-06: Continuous Manager nickname-derived metadata sync
 
 - Current task: implement passive continuous synchronization from already-captured Manager nicknames into the independent Parser v3 metadata state, then expose compact provenance-labeled badges in desktop and mobile chat lists.
