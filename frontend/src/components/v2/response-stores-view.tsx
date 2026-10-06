@@ -110,7 +110,6 @@ function StoreTable({ rows, selectedStoreId, onSelect, tab, sort }: { rows: Stor
               >
                 <TableCell className="max-w-[13rem]">
                   <button type="button" title={row.storeName} onClick={(event) => { event.stopPropagation(); onSelect(row.storeId); }} className="block max-w-full text-left font-medium hover:underline">
-                    {/* The colour is on the span: the global `button { color: inherit }` overrides utilities on buttons. */}
                     <span className="block truncate text-[var(--app-text-primary)]">{row.storeName}</span>
                   </button>
                   {!row.hasData ? (
