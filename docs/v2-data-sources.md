@@ -1,6 +1,6 @@
 # v2 data sources
 
-Inventory for `/v2` ("วันนี้") and `/v2/response` ("การตอบแชท"). Every number in
+Inventory for `/v2` ("วันนี้"), `/v2/response` ("การตอบแชท"), and `/v2/stores` ("สาขา"). Every number in
 v2 comes from an endpoint that already exists; nothing here needs a backend
 change. Status values:
 
