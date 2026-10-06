@@ -34,21 +34,6 @@ function growth(value: number | null, locale: string) {
   return signed(value, locale);
 }
 
-function shiftMetricDate(date: string, days: number) {
-  const value = new Date(`${date}T00:00:00.000Z`);
-  value.setUTCDate(value.getUTCDate() + days);
-  return value.toISOString().slice(0, 10);
-}
-
-function formatMetricDate(date: string, locale: string) {
-  return new Intl.DateTimeFormat(locale, {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    timeZone: "UTC",
-  }).format(new Date(`${date}T00:00:00.000Z`));
-}
-
 function GrowthPill({ value, locale }: { value: number | null; locale: string }) {
   const className = value === null
     ? "bg-slate-100 text-slate-400 dark:bg-[var(--app-surface-subtle)] dark:text-[var(--app-text-secondary)]"
@@ -380,10 +365,6 @@ export function TikTokPublicDashboard({ overview, stores }: Props) {
   const dailyGrowthText = dailySummary.comparable > 0
     ? `${signed(dailySummary.delta, locale)}${dailySummary.percent === null ? "" : ` (${dailySummary.percent >= 0 ? "+" : ""}${dailySummary.percent.toFixed(2)}%)`}`
     : null;
-  const comparisonLabel = overview.latestMetricDate
-    ? `${formatMetricDate(overview.latestMetricDate, locale)} vs ${formatMetricDate(shiftMetricDate(overview.latestMetricDate, -1), locale)}`
-    : null;
-
   return (
     <PageContainer variant="wide" className="bg-slate-50/70 dark:bg-[var(--app-bg)]">
       <div className="space-y-5 pb-10">
