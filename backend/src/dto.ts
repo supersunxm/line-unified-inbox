@@ -1,6 +1,6 @@
 import { BmReplyStatus, FollowUpStatus, Priority } from "@prisma/client";
 import { Transform } from "class-transformer";
-import { IsArray, IsEnum, IsIn, IsInt, IsNotEmpty, IsOptional, IsString, IsUUID, Max, MaxLength, Min } from "class-validator";
+import { IsArray, IsEnum, IsIn, IsInt, IsNotEmpty, IsOptional, IsString, IsUUID, Matches, Max, MaxLength, Min } from "class-validator";
 
 export class ConversationQueryDto {
   @IsOptional() @IsString() search?: string;
@@ -13,6 +13,7 @@ export class ConversationQueryDto {
   @IsOptional() @IsString() productModelId?: string;
   @IsOptional() @IsString() topicId?: string;
   @IsOptional() @IsString() lineOaId?: string;
+  @IsOptional() @Matches(/^(all|\\d{4}-(0[1-9]|1[0-2]))$/) month?: string;
   @IsOptional() @Transform(({ value }) => Number(value)) @IsInt() @Min(1) page = 1;
   @IsOptional() @Transform(({ value }) => Number(value)) @IsInt() @Min(1) @Max(100) pageSize = 25;
   @IsOptional() @IsIn(["latest-desc", "latest-asc", "priority-desc"]) sort = "latest-desc";
