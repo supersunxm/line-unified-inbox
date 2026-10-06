@@ -50,7 +50,7 @@ function NavLink({ item, pathname }: { item: NavItem; pathname: string }) {
   );
 }
 
-export const V2_PAGE_TITLES: Record<string, string> = { "/v2": "วันนี้", "/v2/response": "การตอบแชท" };
+export const V2_PAGE_TITLES: Record<string, string> = { "/v2": "วันนี้", "/v2/response": "การตอบแชท", "/v2/stores": "สาขา" };
 
 function ThemeToggle() {
   const { shown, toggle } = useThemeToggle();
@@ -80,7 +80,7 @@ export function V2Shell({ children }: { children: React.ReactNode }) {
     { href: "/v2/response", label: "การตอบแชท", icon: "response", badge: followTodayStores, active: (path) => path.startsWith("/v2/response") },
     { href: "/admin/purchase-analytics", label: "ลูกค้าและการขาย", icon: "customers" },
     { href: "/follower-insights", label: "การเติบโต", icon: "growth" },
-    { href: "/store-360", label: "สาขา", icon: "stores" },
+    { href: "/v2/stores", label: "สาขา", icon: "stores", active: (path) => path.startsWith("/v2/stores") },
   ];
   const toolItems: NavItem[] = [
     { href: "/mass-messages", label: "ส่งข้อความ", icon: "send" },

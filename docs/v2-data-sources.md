@@ -1,6 +1,6 @@
 # v2 data sources
 
-Inventory for `/v2` ("วันนี้") and `/v2/response` ("การตอบแชท"). Every number in
+Inventory for `/v2` ("วันนี้"), `/v2/response` ("การตอบแชท"), and `/v2/stores` ("สาขา"). Every number in
 v2 comes from an endpoint that already exists; nothing here needs a backend
 change. Status values:
 
@@ -62,6 +62,21 @@ Not used: `GET /operations/line-chat-nickname/fleet-readiness`. It is the nickna
 | 5. Stores with no chat data | mirror-status (fallback: 7-day activity) | available |
 | Top 5 longest waits | waiting chats, one row per store (its longest recent wait and waiting count) | derivable |
 | This week vs last week (3 rows) | `store-24h-response-summary` overview fields `total`, `within24h` rate, `over24h + pending`, re-aggregated over stores with data | available |
+
+## Step 5: /v2/stores
+
+The store-health page does not add new data sources. It joins the same v2 store rows with the current-month Google Review KPI response.
+
+| Item | Source | Status |
+|---|---|---|
+| Store universe and location | same Store records used by /v2/response; region/province from `GET /stores` | available |
+| Has chat data / missing chat data | same Live Mirror freshness rule as /v2/response | available |
+| Needs attention | frontend grouping only: missing chat data, ตามวันนี้ count > 0, >7-day backlog, 24h rate below target, or current-month Google Review below its store target | derivable |
+| Waiting and >7-day backlog | same resolver-backed summary + recent waiting-chat split as /v2/response | available / derivable |
+| 24h rate and week-on-week delta | same 7-day and previous-7-day `store-24h-response-summary` calls | available |
+| Google Review status | current-month `getGoogleReviewKpis`; joined by `GoogleReviewKpiStoreItem.id = Store.id` (the backend emits `id: store.id`) | available |
+| Drill-down to response | `/v2/response?tab=all&store=<Store.id>` | available |
+| Drill-down to Store 360 | existing `/store-360?storeId=<Store.id>` | available |
 
 ## Known limits
 
