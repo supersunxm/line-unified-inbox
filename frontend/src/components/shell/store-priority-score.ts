@@ -1,4 +1,5 @@
 export interface StoreBmCountsItem {
+  total?: number;
   notReplied: number;
   notifiedBm: number;
   replied: number;
