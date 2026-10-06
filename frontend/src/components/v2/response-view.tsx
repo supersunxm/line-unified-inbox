@@ -95,8 +95,6 @@ export function ResponseView() {
         title="การตอบแชท"
         description={`ลูกค้าที่รอคำตอบ นับเวลาเฉพาะช่วงเปิดร้าน 10:00–21:00 · ตามวันนี้ = ร้านที่ลูกค้ารอ ≥ ${FOLLOW_UP_THRESHOLD_MINUTES} นาทีตั้งแต่เมื่อวาน 10:00 มากที่สุด ${FOLLOW_TODAY_LIMIT} ร้าน · ร้านที่ไม่มีข้อมูลไม่นับในทุกตัวเลข`}
         actions={
-          // Inactive segments are <button>s, whose colour is inherited (`button { color: inherit }`);
-          // set it explicitly here so it never depends on an ancestor.
           <div data-v2-view-switch className="text-[var(--app-text-primary)]">
             <SegmentedControl<View>
               aria-label="มุมมอง"
