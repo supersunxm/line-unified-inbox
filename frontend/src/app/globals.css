@@ -271,11 +271,20 @@ body {
   background: var(--muted);
 }
 
-button, input, select, textarea {
-  color: inherit;
+/*
+ * Keep native buttons inheriting the app foreground by default, but place that
+ * reset in Tailwind's base layer so text-* utilities can override it. The old
+ * unlayered button rule outranked utilities and produced near-invisible labels
+ * on dark surfaces in /v2/response.
+ */
+@layer base {
+  button {
+    color: inherit;
+  }
 }
 
 input, select, textarea {
+  color: inherit;
   background-color: var(--input-background);
   border-color: var(--border);
 }
@@ -493,9 +502,8 @@ button.bg-slate-900.text-white:disabled {
   opacity: 1;
 }
 
-/* The unlayered `button { color: inherit; }` above outranks Tailwind's text-white
-   utility, so accent-filled buttons would render body text on the brand green.
-   Disabled ones take the primary-button disabled styling instead. */
+/* Keep explicit accent-button contrast as a defensive backstop for legacy
+   markup. Disabled ones take the primary-button disabled styling instead. */
 button.text-white[class~="bg-[var(--app-accent)]"]:not(:disabled, [aria-disabled="true"]),
 button.text-white[class~="bg-[var(--app-accent-hover)]"]:not(:disabled, [aria-disabled="true"]),
 button.text-white[class~="bg-[var(--app-accent,#1f6b4a)]"]:not(:disabled, [aria-disabled="true"]),
