@@ -19,6 +19,10 @@ export class ConversationQueryDto {
   @IsOptional() @IsIn(["latest-desc", "latest-asc", "priority-desc"]) sort = "latest-desc";
 }
 
+export class ConversationSummaryQueryDto {
+  @IsOptional() @Matches(/^(all|\\d{4}-(0[1-9]|1[0-2]))$/) month?: string;
+}
+
 export class UpdateStatusDto {
   @IsOptional() @IsEnum(FollowUpStatus) status?: FollowUpStatus;
   @IsOptional() @IsEnum(BmReplyStatus) bmReplyStatus?: BmReplyStatus;
