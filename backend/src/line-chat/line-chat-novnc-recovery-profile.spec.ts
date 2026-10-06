@@ -3,15 +3,17 @@ import test from "node:test";
 import { EventEmitter } from "node:events";
 import childProcess from "node:child_process";
 import { tmpdir } from "node:os";
+import { mkdtempSync, rmSync } from "node:fs";
+import { join } from "node:path";
 import type { BrowserContext } from "playwright";
 import type { PrismaService } from "../prisma.service";
-import type { LineChatSessionService } from "./line-chat-session.service";
+import { LineChatSessionService } from "./line-chat-session.service";
 import type { LineChatProfileOperationCoordinator } from "./line-chat-profile-operation-coordinator.service";
-import type { LineChatMirrorService } from "./line-chat-mirror.service";
+import { LineChatMirrorService } from "./line-chat-mirror.service";
 import { LineChatNovncRecoveryWorkerService } from "./line-chat-novnc-recovery-worker.service";
 import { LineChatNovncRecoveryService } from "./line-chat-novnc-recovery.service";
 
-function fixture(t: test.TestContext) {
+function fixture(t: test.TestContext, options: { pause?: () => Promise<void>; launchFails?: boolean; leaseBusy?: boolean; ttl?: boolean; onLaunch?: () => void } = {}) {
   let mirrorActive = false;
   let closed = 0;
   let released = 0;
@@ -19,8 +21,8 @@ function fixture(t: test.TestContext) {
   let mirrorResumes = 0;
   let openedKey: string | null = null;
   t.mock.method(childProcess, "spawn", () => Object.assign(new EventEmitter(), {
-    exitCode: null, killed: false, stderr: new EventEmitter(),
-    kill() { this.killed = true; return true; },
+    exitCode: null, signalCode: null, killed: false, stderr: new EventEmitter(),
+    kill() { this.killed = true; this.exitCode = 0; this.emit("exit"); return true; },
   }));
   const context = Object.assign(new EventEmitter(), {
     pages: () => [{ goto: async () => undefined }],
@@ -29,6 +31,8 @@ function fixture(t: test.TestContext) {
     isMirrorCycleActive: () => mirrorActive,
     resolveProfilePath: () => tmpdir(),
     launchManagedPersistentContext: async (_path: string, _options: unknown, metadata: { sessionKey: string }) => {
+      options.onLaunch?.();
+      if (options.launchFails) throw new Error("SYNTHETIC_LAUNCH_FAILED");
       openedKey = metadata.sessionKey;
       return context;
     },
@@ -38,24 +42,31 @@ function fixture(t: test.TestContext) {
     id: `id-${where.sessionKey}`, sessionKey: where.sessionKey, profileStorageKey: "existing", profilePath: null,
   }) } } as unknown as PrismaService;
   const coordinator = {
-    withProfileOperation: async (input: { sessionId: string }, callback: (lease: { assertOwnership: () => void }) => Promise<void>, options: { waitForLock: boolean }) => {
-      assert.equal(options.waitForLock, false);
+    withProfileOperation: async (input: { sessionId: string }, callback: (lease: { assertOwnership: () => void }) => Promise<void>, lockOptions: { waitForLock: boolean }) => {
+      assert.equal(lockOptions.waitForLock, true);
       assert.equal(input.sessionId, "id-account-1");
-      await callback({ assertOwnership: () => undefined });
-      released++;
+      if (options.leaseBusy) return { acquired: false };
+      try { await callback({ assertOwnership: () => undefined }); } finally { released++; }
       return { acquired: true };
     },
   } as unknown as LineChatProfileOperationCoordinator;
   const mirrorService = {
     pauseForManualRecovery: async () => {
       mirrorPauses++;
+      await options.pause?.();
       mirrorActive = false;
     },
     resumeAfterManualRecovery: () => {
+      assert.equal(released, options.leaseBusy ? 0 : 1, "Mirror resumes after operation releases");
       mirrorResumes++;
     },
   } as unknown as LineChatMirrorService;
+  if (options.ttl) {
+    const realTimeout = globalThis.setTimeout;
+    t.mock.method(globalThis, "setTimeout", (callback: () => void, delay: number) => realTimeout(callback, delay >= 300_000 ? 20 : delay));
+  }
   return {
+    browserExit: () => context.emit("close"),
     service: new LineChatNovncRecoveryWorkerService(prisma, sessionService, coordinator, mirrorService),
     activateMirror: () => { mirrorActive = true; },
     counts: () => ({ closed, released, mirrorPauses, mirrorResumes, openedKey }),
@@ -77,7 +88,7 @@ test("manual recovery rejects unsupported profiles and pauses active Mirror befo
 test("profile A uses its exact existing session, blocks cross-profile token reuse, and releases for Mirror", async (t) => {
   const f = fixture(t);
   const pending = f.service.start("account-1");
-  await assert.rejects(f.service.start("profile-b"), /RECOVERY_START_IN_PROGRESS/);
+  await assert.rejects(f.service.start("profile-b"), /RECOVERY_OTHER_SESSION_STARTING/);
   const result = await pending;
   assert.equal(result.sessionKey, "account-1");
   assert.equal(result.active, true);
@@ -117,4 +128,67 @@ test("public recovery returns only the requested profile and never another profi
   await assert.rejects(service.start("arbitrary"));
   t.mock.method(globalThis, "fetch", async () => new Response(JSON.stringify({ success: true, active: true, sessionKey: "profile-b", path: "/recovery/other/vnc.html" })));
   await assert.rejects(service.start("account-1"), /another profile/);
+});
+
+test("same-session HTTP starts are pending and idempotent while another profile is rejected", async (t) => {
+  let yieldMirror!: () => void;
+  const f = fixture(t, { pause: () => new Promise<void>((resolve) => { yieldMirror = resolve; }) });
+  assert.deepEqual(f.service.requestStart("account-1"), { active: false, pending: true, sessionKey: "account-1", error: undefined });
+  assert.equal(f.service.requestStart("account-1").pending, true);
+  assert.throws(() => f.service.requestStart("profile-b"), /RECOVERY_OTHER_SESSION_STARTING/);
+  const duplicate = f.service.start("account-1");
+  assert.equal(f.counts().mirrorPauses, 1);
+  yieldMirror();
+  assert.equal((await duplicate).active, true);
+  await f.service.stop("account-1");
+  await f.service.stop("account-1");
+  assert.equal(f.counts().mirrorResumes, 1);
+});
+
+for (const leaseBusy of [false, true]) {
+  test(`startup failure releases ownership and resumes Mirror once (lease busy ${leaseBusy})`, async (t) => {
+    const f = fixture(t, { launchFails: !leaseBusy, leaseBusy });
+    await assert.rejects(f.service.start("account-1"), leaseBusy ? /PROFILE_OPERATION_BUSY/ : /SYNTHETIC_LAUNCH_FAILED/);
+    assert.equal(f.counts().mirrorResumes, 1);
+    assert.equal(f.service.snapshot().pending, false);
+    assert.ok(f.service.snapshot().error);
+  });
+}
+
+for (const ttl of [false, true]) {
+  test(`${ttl ? "TTL" : "browser exit"} releases recovery and resumes Mirror exactly once`, async (t) => {
+    const f = fixture(t, { ttl });
+    await f.service.start("account-1");
+    if (!ttl) f.browserExit();
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    assert.equal(f.service.snapshot().active, false);
+    assert.equal(f.counts().released, 1);
+    assert.equal(f.counts().mirrorResumes, 1);
+    await f.service.stop("account-1");
+    assert.equal(f.counts().mirrorResumes, 1);
+  });
+}
+
+test("real managed retained context is closed by Mirror handoff before noVNC launches", async (t) => {
+  const profile = mkdtempSync(join(tmpdir(), "recovery-handoff-"));
+  t.after(() => rmSync(profile, { recursive: true, force: true }));
+  let closes = 0;
+  const browser = Object.assign(new EventEmitter(), { connected: true, isConnected() { return this.connected; } });
+  const retained = Object.assign(new EventEmitter(), {
+    pages: () => [],
+    browser: () => browser,
+    close: () => { closes++; browser.connected = false; return Promise.resolve(); },
+  }) as unknown as BrowserContext;
+  const sessions = new LineChatSessionService(() => Promise.resolve(retained));
+  const headless = await sessions.launchManagedPersistentContext(profile, { headless: true });
+  await sessions.closeManagedPersistentContext(headless, profile);
+  assert.equal(closes, 0, "Mirror retains its reusable idle context");
+  const mirror = new LineChatMirrorService({} as PrismaService, sessions, {} as LineChatProfileOperationCoordinator);
+  const f = fixture(t, {
+    pause: () => mirror.pauseForManualRecovery(),
+    onLaunch: () => assert.equal(closes, 1, "retained Chromium closed before headed launch"),
+  });
+  await f.service.start("account-1");
+  await f.service.stop("account-1");
+  assert.equal(f.counts().mirrorResumes, 1);
 });

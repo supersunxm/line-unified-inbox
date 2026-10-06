@@ -508,14 +508,14 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
     const deadline = Date.now() + Math.max(1_000, timeoutMs);
     while (this.running || this.sessionService.isMirrorCycleActive()) {
       if (Date.now() >= deadline) {
-        this.manualRecoveryPaused = false;
-        this.schedulerActive = true;
-        this.scheduleNextCycle(MIN_INTERVAL_MS);
+        this.resumeAfterManualRecovery();
         throw new Error("LIVE_MIRROR_PAUSE_TIMEOUT");
       }
       await new Promise((resolve) => setTimeout(resolve, 250));
     }
 
+    const cleanup = await this.sessionService.closeIdleManagedContexts("MANUAL_RECOVERY_HANDOFF");
+    if (cleanup.failed > 0) throw new Error("RECOVERY_CONTEXT_CLOSE_FAILED");
     this.sessionService.setMirrorCooldownUntil(null);
     this.sessionService.setMirrorCycleActive(false);
     this.logger.warn(JSON.stringify({ event: "line_chat_mirror_paused_for_manual_recovery" }));
@@ -531,7 +531,6 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
     ) return;
     this.schedulerActive = true;
     this.sessionService.setMirrorCooldownUntil(null);
-    this.sessionService.setMirrorCycleActive(false);
     this.logger.log(JSON.stringify({ event: "line_chat_mirror_resumed_after_manual_recovery" }));
     this.scheduleNextCycle(MIN_INTERVAL_MS);
   }
@@ -587,7 +586,7 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
   }
 
   public async runCycle(): Promise<LineChatMirrorCycleResult[]> {
-    if (this.running) return [];
+    if (this.running || this.manualRecoveryPaused) return [];
     const cycleStartedAt = Date.now();
     this.running = true;
     const results: LineChatMirrorCycleResult[] = [];
@@ -662,6 +661,7 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
         ) return [];
         const configuredStores = new Set(configuredLineChatMirrorStoreCodes());
         for (const storeCode of LINE_CHAT_HISTORICAL_PILOT_STORE_CODES) {
+          if (this.manualRecoveryPaused) break;
           if (!configuredStores.has(storeCode)) continue;
           await this.runBackfillStore(
             operationState.runId,
@@ -706,11 +706,10 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
           this.logger.warn(JSON.stringify({
             event: "line_chat_mirror_cycle_preempted_for_manual_recovery",
             storesAttempted,
-            storesRemaining: Math.max(0, fleetScope.eligibleStoreCodes.length - storesAttempted),
+            storesRemaining: fleetScope.eligibleStoreCodes.length - storesAttempted,
           }));
           break;
         }
-
         storesAttempted += 1;
         try {
           results.push(await this.syncStore(
@@ -1107,6 +1106,7 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
       { sessionId: session.id, operationKind: "MIRROR_SYNC" },
       async (operationContext) => {
         operationContext.assertOwnership();
+        if (this.manualRecoveryPaused) throw new Error("MANUAL_RECOVERY_HANDOFF");
         const recent = await this.sessionService.discoverRecentChats({
           botId,
           profilePath,
@@ -1541,6 +1541,11 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
       session: MirrorSessionTarget;
     }> = [];
     for (const session of sessions) {
+      if (this.manualRecoveryPaused) return fail(
+        "MIRROR_MANAGER_TARGET_BUSY",
+        "Mirror is yielding profile ownership for manual recovery.",
+        "PROFILE_BUSY",
+      );
       let profilePath: string;
       try {
         profilePath = this.sessionService.resolveProfilePath(session);
@@ -1553,6 +1558,7 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
       const resolved = await this.coordinator.withProfileOperation(
         { sessionId: session.id, operationKind: "MIRROR_SYNC" },
         async (operationContext) => {
+          if (this.manualRecoveryPaused) return null;
           diagnostics.sessionsAttempted += 1;
           operationContext.assertOwnership();
           let context: BrowserContext | null = null;
@@ -1624,6 +1630,7 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
 
           if (!resolvedBotId) return null;
           operationContext.assertOwnership();
+          if (this.manualRecoveryPaused) return null;
           const verification = await this.sessionService.discoverRecentChats({
             botId: resolvedBotId,
             profilePath,

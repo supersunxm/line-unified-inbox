@@ -16,6 +16,8 @@ const WEBSOCKIFY_PORT = 6080;
 
 export interface LineChatNovncRecoverySnapshot {
   active: boolean;
+  pending?: boolean;
+  error?: string;
   sessionKey: string | null;
   path?: string;
   expiresAt?: string;
@@ -29,7 +31,7 @@ type ActiveRecovery = {
 };
 
 function waitForExit(child: ChildProcess, timeoutMs = 2_000): Promise<void> {
-  if (child.exitCode !== null || child.killed) return Promise.resolve();
+  if (child.exitCode !== null || child.signalCode !== null) return Promise.resolve();
   return new Promise((resolve) => {
     const timer = setTimeout(resolve, timeoutMs);
     child.once("exit", () => {
@@ -43,6 +45,11 @@ function waitForExit(child: ChildProcess, timeoutMs = 2_000): Promise<void> {
 export class LineChatNovncRecoveryWorkerService {
   private readonly logger = new Logger(LineChatNovncRecoveryWorkerService.name);
   private active: ActiveRecovery | null = null;
+  private startingSessionKey: string | null = null;
+  private startupError: string | undefined;
+  private mirrorPaused = false;
+  private contextCloseFailed = false;
+  private operationPromise: Promise<void> | null = null;
   private startPromise: Promise<LineChatNovncRecoverySnapshot> | null = null;
 
   constructor(
@@ -56,7 +63,7 @@ export class LineChatNovncRecoveryWorkerService {
 
   public snapshot(): LineChatNovncRecoverySnapshot {
     if (!this.active || this.active.expiresAt.getTime() <= Date.now()) {
-      return { active: false, sessionKey: null };
+      return { active: false, pending: Boolean(this.startPromise), sessionKey: this.startingSessionKey, error: this.startupError };
     }
     return {
       active: true,
@@ -78,24 +85,54 @@ export class LineChatNovncRecoveryWorkerService {
       if (current.sessionKey !== sessionKey) throw new Error("RECOVERY_OTHER_SESSION_ACTIVE");
       return current;
     }
-    if (this.startPromise) throw new Error("RECOVERY_START_IN_PROGRESS");
+    if (this.startPromise) {
+      if (this.startingSessionKey !== sessionKey) throw new Error("RECOVERY_OTHER_SESSION_STARTING");
+      return this.startPromise;
+    }
+    this.startingSessionKey = sessionKey;
+    this.startupError = undefined;
+    this.operationPromise = null;
+    this.mirrorPaused = true;
     this.startPromise = (async () => {
-      await this.mirrorService.pauseForManualRecovery();
       try {
+        await this.mirrorService.pauseForManualRecovery();
+        this.contextCloseFailed = false;
         return await this.startInternal(sessionKey);
       } catch (error) {
-        this.mirrorService.resumeAfterManualRecovery();
+        await this.operationPromise;
+        const code = error instanceof Error ? error.message : "RECOVERY_START_FAILED";
+        if (code === "RECOVERY_CONTEXT_CLOSE_FAILED") this.contextCloseFailed = true;
+        this.resumeMirror();
+        this.startupError = /^(RECOVERY_|PROFILE_OPERATION_|LIVE_MIRROR_)[A-Z_]+$/u.test(code) ? code : "RECOVERY_START_FAILED";
         throw error;
       }
     })().finally(() => { this.startPromise = null; });
     return this.startPromise;
   }
 
+  // HTTP starts acknowledge immediately; status polling survives proxy disconnects.
+  public requestStart(sessionKey: string): LineChatNovncRecoverySnapshot {
+    if (!RECOVERY_SESSION_KEYS.has(sessionKey)) throw new Error("RECOVERY_SESSION_NOT_ALLOWED");
+    if (this.active && this.active.expiresAt.getTime() <= Date.now()) throw new Error("RECOVERY_STOPPING");
+    if (this.startPromise && this.startingSessionKey !== sessionKey) throw new Error("RECOVERY_OTHER_SESSION_STARTING");
+    if (this.active && this.active.sessionKey !== sessionKey) throw new Error("RECOVERY_OTHER_SESSION_ACTIVE");
+    void this.start(sessionKey).catch(() => undefined); // Failure remains observable through snapshot().
+    return this.snapshot();
+  }
+
+  private resumeMirror(): void {
+    if (!this.mirrorPaused || this.contextCloseFailed) return;
+    this.mirrorPaused = false;
+    this.mirrorService.resumeAfterManualRecovery();
+  }
+
   public async stop(sessionKey: string, reason = "operator_stop"): Promise<LineChatNovncRecoverySnapshot> {
     if (!RECOVERY_SESSION_KEYS.has(sessionKey)) throw new Error("RECOVERY_SESSION_NOT_ALLOWED");
+    if (this.startPromise) throw new Error("RECOVERY_STARTING_WAIT_FOR_STATUS");
     if (this.active) {
       if (this.active.sessionKey !== sessionKey) throw new Error("RECOVERY_OTHER_SESSION_ACTIVE");
       await this.active.stop(reason);
+      await this.operationPromise;
     }
     return this.snapshot();
   }
@@ -116,7 +153,7 @@ export class LineChatNovncRecoveryWorkerService {
       rejectStarted = reject;
     });
 
-    void this.profileCoordinator.withProfileOperation(
+    const operation = this.profileCoordinator.withProfileOperation(
       { sessionId: session.id, operationKind: "MANUAL_DIAGNOSTIC" },
       async (lease) => {
         const children: ChildProcess[] = [];
@@ -133,11 +170,21 @@ export class LineChatNovncRecoveryWorkerService {
           const child = spawn(command, args, { env: { ...process.env, ...env }, stdio: ["ignore", "ignore", "pipe"] });
           children.push(child);
           child.stderr?.on("data", () => undefined);
+          child.once("error", () => {
+            rejectStarted(new Error("RECOVERY_DISPLAY_PROCESS_FAILED"));
+            void cleanup("display_process_error");
+          });
+          child.once("exit", () => {
+            if (!stopped) {
+              rejectStarted(new Error("RECOVERY_DISPLAY_PROCESS_EXITED"));
+              void cleanup("display_process_exit");
+            }
+          });
           return child;
         };
 
         const cleanup = async (reason: string) => {
-          if (stopped) return;
+          if (stopped) return stoppedPromise;
           stopped = true;
           const context = browserContext;
           browserContext = null;
@@ -145,13 +192,16 @@ export class LineChatNovncRecoveryWorkerService {
             sessionId: session.id,
             sessionKey,
             profileStorageKey: session.profileStorageKey ?? undefined,
-          }).catch(() => undefined);
-          for (const child of [...children].reverse()) if (child.exitCode === null && !child.killed) child.kill("SIGTERM");
+          }).catch(() => {
+            this.contextCloseFailed = true;
+            this.startupError = "RECOVERY_CONTEXT_CLOSE_FAILED";
+            this.logger.error(JSON.stringify({ event: "line_chat_novnc_context_close_failed", sessionKey }));
+          });
+          for (const child of [...children].reverse()) if (child.exitCode === null && child.signalCode === null && !child.killed) child.kill("SIGTERM");
           await Promise.all(children.map((child) => waitForExit(child)));
-          for (const child of children) if (child.exitCode === null && !child.killed) child.kill("SIGKILL");
-          if (this.active?.token === token) this.active = null;
+          for (const child of children) if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
+
           this.logger.log(JSON.stringify({ event: "line_chat_novnc_recovery_stopped", sessionKey, reason }));
-          this.mirrorService.resumeAfterManualRecovery();
           stopResolve();
         };
 
@@ -160,11 +210,13 @@ export class LineChatNovncRecoveryWorkerService {
           if (this.sessionService.isMirrorCycleActive()) throw new Error("LIVE_MIRROR_ACTIVE");
           spawnManaged("Xvfb", [DISPLAY, "-screen", "0", "1440x900x24", "-nolisten", "tcp"]);
           await new Promise((resolve) => setTimeout(resolve, 500));
+          if (stopped) throw new Error("RECOVERY_DISPLAY_PROCESS_FAILED");
           spawnManaged("fluxbox", [], { DISPLAY });
           spawnManaged("x11vnc", ["-display", DISPLAY, "-localhost", "-forever", "-shared", "-nopw", "-rfbport", String(VNC_PORT)]);
           spawnManaged("websockify", [`127.0.0.1:${WEBSOCKIFY_PORT}`, `127.0.0.1:${VNC_PORT}`, "--web=/usr/share/novnc"]);
           await new Promise((resolve) => setTimeout(resolve, 750));
 
+          if (stopped) throw new Error("RECOVERY_DISPLAY_PROCESS_FAILED");
           browserContext = await this.sessionService.launchManagedPersistentContext(profilePath, {
             profilePath,
             headless: false,
@@ -178,6 +230,11 @@ export class LineChatNovncRecoveryWorkerService {
             operationKind: "NOVNC_RECOVERY",
             reuseContext: false,
           });
+          if (stopped) {
+            await this.sessionService.closeManagedPersistentContext(browserContext, profilePath);
+            browserContext = null;
+            throw new Error("RECOVERY_DISPLAY_PROCESS_FAILED");
+          }
           const contextForCloseHandler = browserContext;
           contextForCloseHandler.once("close", () => {
             if (!stopped && browserContext === contextForCloseHandler) void cleanup("browser_exit");
@@ -187,29 +244,28 @@ export class LineChatNovncRecoveryWorkerService {
           lease.assertOwnership();
 
           if (this.sessionService.isMirrorCycleActive()) throw new Error("LIVE_MIRROR_ACTIVE");
+          if (stopped) throw new Error("RECOVERY_BROWSER_EXITED_DURING_STARTUP");
           this.active = { sessionKey, token, expiresAt, stop: cleanup };
-          // Release the existing lease as soon as the normal Mirror cycle starts.
-          const mirrorYieldTimer = setInterval(() => {
-            if (this.sessionService.isMirrorCycleActive()) void cleanup("live_mirror_priority");
-          }, 250);
-          mirrorYieldTimer.unref?.();
           const timer = setTimeout(() => void cleanup("ttl_expired"), ttlMs);
           timer.unref?.();
           this.logger.log(JSON.stringify({ event: "line_chat_novnc_recovery_started", sessionKey, expiresAt: expiresAt.toISOString() }));
           resolveStarted(this.snapshot());
           await stoppedPromise;
           clearTimeout(timer);
-          clearInterval(mirrorYieldTimer);
         } catch (error) {
           await cleanup("startup_error");
           rejectStarted(error instanceof Error ? error : new Error(String(error)));
           throw error;
         }
       },
-      { waitForLock: false },
+      { waitForLock: true },
     ).then((result) => {
       if (!result.acquired) rejectStarted(new Error("PROFILE_OPERATION_BUSY"));
-    }).catch((error: unknown) => rejectStarted(error instanceof Error ? error : new Error(String(error))));
+    }).catch((error: unknown) => rejectStarted(error instanceof Error ? error : new Error(String(error)))).finally(() => {
+      this.active = null;
+      this.resumeMirror();
+    });
+    this.operationPromise = operation;
 
     return started;
   }

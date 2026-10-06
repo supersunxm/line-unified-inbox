@@ -49,6 +49,7 @@ function createTargetResolverHarness(options: {
   authBySession?: ReadonlyMap<string, "YES" | "NO" | "UNKNOWN">;
   botIdBySession?: ReadonlyMap<string, string | null>;
   failedDiscoveryBotIds?: ReadonlySet<string>;
+  onContextRelease?: () => void;
 }) {
   const logs: string[] = [];
   const leaseRequests: Array<{ sessionId: string; operationKind: string; waitForLock?: boolean }> = [];
@@ -88,7 +89,11 @@ function createTargetResolverHarness(options: {
     probeApiAuthentication: async (context: { resolverSessionId: string }) => ({
       authenticated: options.authBySession?.get(context.resolverSessionId) ?? "YES",
     }),
-    closeManagedPersistentContext: async () => {},
+    closeManagedPersistentContext: async () => { options.onContextRelease?.(); },
+    isMirrorCycleActive: () => false,
+    setMirrorCycleActive: () => {},
+    setMirrorCooldownUntil: () => {},
+    closeIdleManagedContexts: async () => ({ closed: 1, failed: 0 }),
     discoverRecentChats: async ({ botId }: { botId: string }) => options.failedDiscoveryBotIds?.has(botId)
       ? {
         status: "FAILED" as const,
@@ -1547,4 +1552,93 @@ test("a stale equal-timestamp candidate fetches and persists new messageSent wit
     chats: [candidate], recentChatUserIds: [candidate.lineChatUserId], catchUpStartAt: null,
     now: new Date(candidate.lastHistorySyncedAt.getTime() + 1_000), maxCandidates: 20, outboundRefreshIntervalMs: 120_000,
   }), []);
+});
+
+test("manual recovery lets current store finish, preempts fleet, and waits for retained context cleanup", async () => {
+  await withEnvAsync({ LINE_CHAT_MIRROR_STORE_CODES: "20789,20790,20791" }, async () => {
+    const sessionService = new LineChatSessionService();
+    const prisma = { lineChatMirrorStoreState: { findMany: async () => [] } } as unknown as PrismaService;
+    const operationMode = {
+      getState: async () => ({
+        mode: "NORMAL" as const,
+        runId: null,
+        freezeAt: null,
+        backfillTargetStartAt: null,
+        catchUpStartAt: null,
+      }),
+    };
+    const service = new LineChatMirrorService(
+      prisma,
+      sessionService,
+      {} as LineChatProfileOperationCoordinator,
+      operationMode as never,
+    );
+    installTestFleetScope(service, ["20789", "20790", "20791"]);
+    const stores: string[] = [];
+    let cleanupFinished = false;
+    Object.defineProperty(sessionService, "closeIdleManagedContexts", { value: async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      cleanupFinished = true;
+      return { closed: 2, failed: 0 };
+    } });
+    Object.defineProperty(service, "schedulerActive", { configurable: true, writable: true, value: true });
+    Object.defineProperty(service, "scheduleNextCycle", { configurable: true, value: () => {} });
+    Object.defineProperty(service, "logger", { configurable: true, value: { log: () => {}, warn: () => {}, error: () => {} } });
+
+    let markStarted!: () => void;
+    let releaseCycle!: () => void;
+    const started = new Promise<void>((resolve) => { markStarted = resolve; });
+    const blocked = new Promise<void>((resolve) => { releaseCycle = resolve; });
+    Object.defineProperty(service, "syncStore", {
+      configurable: true,
+      value: async (storeCode: string) => {
+        stores.push(storeCode);
+        assert.equal(sessionService.isMirrorCycleActive(), true);
+        markStarted();
+        await blocked;
+        return {
+          storeCode,
+          status: LineChatMirrorSyncStatus.SUCCESS,
+          recentChatsObserved: 0,
+          historiesFetched: 0,
+          messagesObserved: 0,
+          messagesInsertedOrUpdated: 0,
+          pendingChats: 0,
+          unknownDirectionEvents: 0,
+          durationMs: 0,
+        };
+      },
+    });
+
+    const scheduled = (service as unknown as { runScheduledCycle: () => Promise<void> }).runScheduledCycle();
+    await started;
+    assert.equal(sessionService.isMirrorCycleActive(), true);
+    const paused = service.pauseForManualRecovery();
+    assert.deepEqual(stores, ["20789"]);
+    assert.equal(cleanupFinished, false);
+    releaseCycle();
+    await Promise.all([scheduled, paused]);
+    assert.deepEqual(stores, ["20789"]);
+    assert.equal(cleanupFinished, true);
+    assert.deepEqual(await service.runCycle(), []);
+    assert.equal(sessionService.isMirrorCycleActive(), false);
+    assert.equal(sessionService.isMirrorCooldownActive(), false);
+    service.onModuleDestroy();
+  });
+});
+
+
+test("Mirror yields between profile attempts after the current profile safely releases", async () => {
+  const first = resolverTestSession("first");
+  const second = resolverTestSession("second");
+  let pause: Promise<void> | undefined;
+  const harness = createTargetResolverHarness({
+    sessions: [first, second],
+    authBySession: new Map([[first.id, "NO"]]),
+    onContextRelease: () => { pause = harness.service.pauseForManualRecovery(); },
+  });
+  const result = await harness.service.resolveMirrorTarget(targetResolverInput());
+  await pause;
+  assert.equal(result.ok, false);
+  assert.deepEqual(harness.leaseRequests.map((request) => request.sessionId), [first.id]);
 });
