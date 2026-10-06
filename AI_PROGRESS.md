@@ -6280,3 +6280,12 @@ Live worker continues independently at 146 configured unique active OA identitie
 - Real Linux worker: synthetic account-1 noVNC websocket connected in 7.0s; profile-b via backend proxy connected in 3.2s. Verified immediate pending 200, same-profile idempotence, cross-profile rejection, headed Chromium, exclusive database lease, stop/release, URL revocation, and no page errors.
 - Broad-check comparison: untouched main reproduces identical 892 lint errors/2 warnings and all 19 failures seen in patched full backend suite (2561 pass, 19 fail, 3 skip); baseline has one additional unrelated fixture failure. No patch-only test failure. These broad checks remain failing and are not claimed green.
 - PR #479 existing head CI is green; updated patch CI has not run because no push is authorized yet. Production authentication, Mirror catch-up, and store 20789 gap remain unverified. No manual deployment or historical checkpoint reset performed.
+
+
+## 2026-10-06 — LINE Chat Health redesign PR1
+
+- Task: one PR from current main 50c3b5ce; introduce a UI-only status model without layout or backend changes. Isolated managed worktree preserves unrelated local changes.
+- Implemented: common READY, NEED_SETUP, LOGIN_REQUIRED, DEGRADED, BLOCKED, RECOVERING and UNKNOWN status contract, human reason and recommended action; existing account and store badges consume the model. Raw states, controls and rollout restrictions remain unchanged.
+- Verification: frontend full suite 814 passed; changed-file ESLint passed; TypeScript baseline remains 50/50; production build passed. Dependency symlink prevented the first build; physical worktree dependencies resolved it without a configuration change.
+- Functional check: built frontend on announced isolated port 3100 against synthetic read-only local API. All seven statuses, account/detail guidance and lost-store-access guidance rendered correctly; browser errors/warnings zero. No production or customer data writes. Existing Next workspace-root warning is environmental and unchanged.
+- Blockers: none. Next: commit, open one PR, wait for all new CI checks to pass, then merge normally without bypass.

@@ -3221,3 +3221,10 @@ Manual recovery uses the existing profile coordinator and managed Chromium safet
 
 The internal HTTP start acknowledges pending work immediately; the public endpoint and UI poll existing status. Same-profile requests share one startup, while another profile receives a specific conflict. This preserves the 20-second backend transport timeout without orphaning operator-visible startup state. No checkpoints are reset and no fleet historical backfill is initiated.
 Recovery waits within the coordinator's existing bounded high-priority local-lock budget, so an already-running health operation can safely yield without weakening the database lease or persistent-profile guard. Verification uses a new local database and synthetic profiles; the pre-existing database and production profiles are preserved.
+
+
+## 2026-10-06 — UI-only LINE Chat health model
+
+Keep backend lifecycle, health, failure-stage, fleet readiness and recovery behavior authoritative and unchanged. A pure presentation adapter collects evidence from existing session/store DTOs, then selects one UI status with shared precedence: BLOCKED > RECOVERING > NEED_SETUP > LOGIN_REQUIRED > DEGRADED > UNKNOWN > READY. Explicit blocks win over recovery; active recovery wins over older login warnings; known problems remain actionable without telemetry. Missing or unfamiliar health evidence cannot imply readiness. Account READY requires connected active health and a recent running-browser observation; historical failed job counters do not degrade current health. Store readiness is connection readiness and does not unlock rollout eligibility. OA access loss requests an access review rather than another login.
+
+Expose reason and recommended action through existing badge titles to keep the layout unchanged in PR1. Preserve raw technical badges and all existing controls. A deterministic clock parameter supports freshness-boundary tests; adapters never mutate input DTOs or introduce backend state writes.
