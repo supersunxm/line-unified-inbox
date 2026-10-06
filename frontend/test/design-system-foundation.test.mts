@@ -288,6 +288,19 @@ test("Phase 3: Unified Chat Inbox (/chats) consumes semantic tokens and responsi
   assert.match(pageSource, /bg-\[var\(--app-accent\)\]/);
 });
 
+test("button colour reset stays in Tailwind base layer so component text utilities can override it", () => {
+  assert.match(
+    css,
+    /@layer base\s*\{[\s\S]*?button\s*\{\s*color:\s*inherit;\s*\}/,
+    "button color inheritance must stay in @layer base so Tailwind text utilities win",
+  );
+  assert.doesNotMatch(
+    css,
+    /button\s*,\s*input\s*,\s*select\s*,\s*textarea\s*\{\s*color:\s*inherit;/,
+    "do not restore the unlayered form-control rule that breaks dark-mode button labels",
+  );
+});
+
 test("Dark Mode Normalization: Tailwind v4 custom-variant dark and dashboard semantic bindings", () => {
   // Tailwind v4 custom variant
   assert.match(css, /@custom-variant dark \(&:(where\(\[data-theme="dark"\]|is\(\[data-theme="dark"\])/);
