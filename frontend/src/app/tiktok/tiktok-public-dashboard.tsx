@@ -14,6 +14,7 @@ type Props = {
 };
 
 type MetricIcon = "stores" | "followers" | "likes" | "videos";
+type GrowthPeriod = "daily" | "sevenDay" | "thirtyDay";
 
 function number(value: number, locale: string) {
   return new Intl.NumberFormat(locale).format(value);
@@ -143,6 +144,7 @@ export function TikTokPublicDashboard({ overview, stores }: Props) {
   const [region, setRegion] = useState("ALL");
   const [province, setProvince] = useState("ALL");
   const [sort, setSort] = useState("followers");
+  const [growthPeriod, setGrowthPeriod] = useState<GrowthPeriod>("sevenDay");
   const [isRefreshing, startTransition] = useTransition();
 
   const handleRefresh = () => {
@@ -300,6 +302,8 @@ export function TikTokPublicDashboard({ overview, stores }: Props) {
     videosSort: "จำนวนวิดีโอ",
     store: "สาขา",
     tiktok: "TikTok",
+    growthColumn: "การเติบโต",
+    growthPeriod: "ช่วงเวลา",
     daily: "การเติบโต (1 วัน)",
     seven: "การเติบโต (7 วัน)",
     thirty: "การเติบโต (30 วัน)",
@@ -350,6 +354,8 @@ export function TikTokPublicDashboard({ overview, stores }: Props) {
     videosSort: "Videos",
     store: "Store",
     tiktok: "TikTok",
+    growthColumn: "Growth",
+    growthPeriod: "Period",
     daily: "1D growth",
     seven: "7D growth",
     thirty: "30D growth",
@@ -604,13 +610,37 @@ export function TikTokPublicDashboard({ overview, stores }: Props) {
                 <option value="videos">{text.sortBy}: {text.videosSort}</option>
               </select>
             </div>
+
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <span className="text-xs font-semibold text-slate-400">{text.growthPeriod}</span>
+              <div className="inline-flex rounded-xl bg-slate-100 p-1 dark:bg-[var(--app-surface-subtle)]">
+                {([
+                  ["daily", "1D"],
+                  ["sevenDay", "7D"],
+                  ["thirtyDay", "30D"],
+                ] as const).map(([period, label]) => (
+                  <button
+                    key={period}
+                    type="button"
+                    onClick={() => setGrowthPeriod(period)}
+                    className={`rounded-lg px-3 py-1.5 text-xs font-bold transition ${
+                      growthPeriod === period
+                        ? "bg-white text-slate-950 shadow-sm dark:bg-[var(--app-surface)] dark:text-[var(--app-text-primary)]"
+                        : "text-slate-500 hover:text-slate-800 dark:text-[var(--app-text-secondary)] dark:hover:text-[var(--app-text-primary)]"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
 
           {visibleStores.length === 0 ? (
             <div className="p-14 text-center text-sm text-slate-400">{text.noData}</div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[1180px] text-sm">
+              <table className="w-full min-w-[980px] text-sm">
                 <thead className="bg-slate-50/80 text-left text-[10px] font-bold uppercase tracking-[0.08em] text-slate-400 dark:bg-[var(--app-surface-subtle)]">
                   <tr className="border-b border-slate-100 dark:border-[var(--app-border-subtle)]">
                     <th className="w-12 px-4 py-3 text-center">#</th>
@@ -619,9 +649,7 @@ export function TikTokPublicDashboard({ overview, stores }: Props) {
                     <th className="px-4 py-3 text-right">Followers</th>
                     <th className="px-4 py-3 text-right">Likes</th>
                     <th className="px-4 py-3 text-right">Videos</th>
-                    <th className="px-4 py-3 text-center">{text.daily}</th>
-                    <th className="px-4 py-3 text-center">{text.seven}</th>
-                    <th className="px-4 py-3 text-center">{text.thirty}</th>
+                    <th className="px-4 py-3 text-center">{text.growthColumn} ({growthPeriod === "daily" ? "1D" : growthPeriod === "sevenDay" ? "7D" : "30D"})</th>
                     <th className="px-4 py-3 text-right"></th>
                   </tr>
                 </thead>
@@ -655,9 +683,7 @@ export function TikTokPublicDashboard({ overview, stores }: Props) {
                       <td className="px-4 py-4 text-right font-black tabular-nums text-slate-900 dark:text-[var(--app-text-primary)]">{number(store.followerCount, locale)}</td>
                       <td className="px-4 py-4 text-right tabular-nums text-slate-500">{number(store.likesCount, locale)}</td>
                       <td className="px-4 py-4 text-right tabular-nums text-slate-500">{number(store.videoCount, locale)}</td>
-                      <td className="px-4 py-4 text-center"><GrowthPill value={store.growth.daily.absolute} locale={locale} /></td>
-                      <td className="px-4 py-4 text-center"><GrowthPill value={store.growth.sevenDay.absolute} locale={locale} /></td>
-                      <td className="px-4 py-4 text-center"><GrowthPill value={store.growth.thirtyDay.absolute} locale={locale} /></td>
+                      <td className="px-4 py-4 text-center"><GrowthPill value={store.growth[growthPeriod].absolute} locale={locale} /></td>
                       <td className="px-4 py-4 text-right">
                         <Link
                           href={`/tiktok/stores/${encodeURIComponent(store.storeMasterId)}`}
