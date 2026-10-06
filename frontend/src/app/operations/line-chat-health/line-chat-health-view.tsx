@@ -8,13 +8,6 @@ import {
   Card,
   CardContent,
   Modal,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableHeader,
-  TableRow,
 } from "@/components/ui";
 import {
   api,
@@ -30,11 +23,11 @@ import {
   BROWSER_STATUS_HELP_TEXT,
   getBrowserOperationLabel,
   getOverallHealth,
-  getLineChatUiHealth,
   getLineChatWorkUiHealth,
 } from "./line-chat-health-status";
 import { buildLineChatOverview, sessionBrowserLabel, sessionWorkLabel } from "./line-chat-health-overview";
 import { LineChatHealthOverviewPanel } from "./line-chat-health-overview-panel";
+import { LineChatStoreReadiness } from "./line-chat-store-readiness";
 import { LineChatUnresolvedBacklogModal } from "./line-chat-unresolved-backlog-modal";
 
 type FilterTab = "ALL" | "AUTO_FIXABLE" | "MANUAL_REVIEW" | "AUTHENTICATION" | "SYSTEM_ATTENTION";
@@ -530,62 +523,14 @@ export function LineChatHealthView() {
           </div>
         </section>}
 
-        {report && (
-          <Card id="store-readiness">
-            <CardContent className="space-y-4 p-5">
-              <h2 className="text-lg font-semibold">Store Readiness</h2>
-              <div className="text-xs text-[var(--app-text-tertiary)]">
-                Current 7-store pilot eligibility: {report.fleetReadiness.summary.currentlyPilotEligible} stores · Audit generated {formatDate(report.fleetReadiness.generatedAt)}
-              </div>
-              <TableContainer>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Store</TableHead>
-                      <TableHead>Readiness</TableHead>
-                      <TableHead>Bot</TableHead>
-                      <TableHead>Session</TableHead>
-                      <TableHead>Session health</TableHead>
-                      <TableHead>OA health</TableHead>
-                      <TableHead>Mapped conversations</TableHead>
-                      <TableHead>Pilot</TableHead>
-                      <TableHead>Blocker</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {report.fleetReadiness.stores.map((store) => {
-                      const health = getLineChatUiHealth({
-                        kind: "store", store,
-                        session: report.sessions.find(session => session.sessionKey === store.sessionKey),
-                      });
-                      return (
-                        <TableRow key={store.lineOfficialAccountId}>
-                          <TableCell>
-                            <div className="font-medium">{store.storeName}</div>
-                            <div className="text-xs text-[var(--app-text-tertiary)]">{store.storeCode || "No Store ID"} · {store.lineOfficialAccountName}</div>
-                          </TableCell>
-                          <TableCell><Badge variant={health.tone} title={`${health.reason} ${health.recommendedAction}`} dot>{health.label}</Badge></TableCell>
-                          <TableCell>{store.hasChatBotId ? "✓" : "—"}</TableCell>
-                          <TableCell>{store.sessionKey ?? "—"}</TableCell>
-                          <TableCell><Badge variant={tone(store.sessionHealthStatus ?? "UNKNOWN")}>{store.sessionHealthStatus ?? "—"}</Badge></TableCell>
-                          <TableCell><Badge variant={tone(store.oaHealthStatus)}>{store.oaHealthStatus}</Badge></TableCell>
-                          <TableCell>
-                            {store.mappedConversations}/{store.totalConversations}
-                            {store.mappingCoveragePercent !== null ? <span className="ml-1 text-xs text-[var(--app-text-tertiary)]">({store.mappingCoveragePercent}%)</span> : null}
-                          </TableCell>
-                          <TableCell>{store.currentlyPilotEligible ? "7-store" : "—"}</TableCell>
-                          <TableCell className="max-w-[260px] text-xs text-[var(--app-text-secondary)]">
-                            {store.blockers.length ? store.blockers.join(", ") : "—"}
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            </CardContent>
-          </Card>
-        )}
+        {report && <LineChatStoreReadiness report={report} onMapping={() => setBacklogModalOpen(true)} onSession={(key) => {
+          setSelectedKey(key);
+          requestAnimationFrame(() => {
+            const target = Array.from(document.querySelectorAll<HTMLElement>("[data-session-actions]")).find(item => item.dataset.sessionActions === key);
+            target?.scrollIntoView({ behavior: "smooth", block: "center" });
+            target?.querySelector<HTMLElement>("button:not(:disabled)")?.focus({ preventScroll: true });
+          });
+        }} />}
 
         {overview && <section aria-labelledby="recent-issues-title" className="space-y-3">
           <h2 id="recent-issues-title" className="text-lg font-semibold">Recent Issues</h2>

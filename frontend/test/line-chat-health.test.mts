@@ -160,7 +160,7 @@ const viewSource = readFileSync(
 );
 
 test("LINE Chat health renders independent Session and Browser states with temporary BUSY guidance", () => {
-  assert.match(viewSource, /<TableHead>Session<\/TableHead>/);
+  assert.match(viewSource, /data-session-actions=\{session.sessionKey\}/);
   assert.match(viewSource, /Browser state/);
   assert.match(viewSource, /sessionBrowserLabel\(session\)/);
   assert.match(viewSource, /browserState/);

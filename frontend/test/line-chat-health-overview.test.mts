@@ -328,17 +328,13 @@ const view = readFileSync(
   ),
   "utf8",
 );
-test("existing store table markup and calculations remain exactly unchanged", () => {
-  const start = view.indexOf(
-    "              <TableContainer>",
-    view.indexOf('id="store-readiness"'),
-  );
-  const end =
-    view.indexOf("              </TableContainer>", start) +
-    "              </TableContainer>".length;
+test("PR3 preserves the PR486 header, overview and session presentation exactly", () => {
+  const start = view.indexOf("        <PageHeader");
+  const end = view.indexOf("        {report && <LineChatStoreReadiness");
+  assert.ok(start >= 0 && end > start);
   assert.equal(
     createHash("sha256").update(view.slice(start, end)).digest("hex"),
-    "375bfb8e029d5e3c5b929dea916e89dc2ede8f0ad2947943001fc90bdd062092",
+    "72363f2b00c5d8490d454b1159c5c2bd1e3b8cb3f54eeb5837126045d91c008d",
   );
 });
 test("refresh and all existing retry/recovery attachment controls are preserved", () => {
