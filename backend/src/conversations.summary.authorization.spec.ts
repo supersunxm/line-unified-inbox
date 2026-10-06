@@ -24,7 +24,7 @@ function controllerFor(accessibleStoreIds: string[] | null | (() => Promise<neve
 void test("summary controllers pass ADMIN global scope and BM assigned-store scope to the service", async () => {
   const adminCalls: unknown[] = [];
   const adminController = controllerFor(null, adminCalls);
-  await adminController.bmReplyStatusSummary({ user: admin } as never);
+  await adminController.bmReplyStatusSummary({}, { user: admin } as never);
   assert.deepEqual(adminCalls, [null]);
 
   const bmCalls: unknown[] = [];
