@@ -1,4 +1,4 @@
-import type { ApiCustomerSalesInformation } from "@/types/api";
+import type { ApiCustomerSalesInformation, ApiNicknameDerivedMetadata } from "@/types/api";
 
 export type ConversationListSection = "dashboard" | "notReplied" | "notifiedBm" | "replied";
 
@@ -39,6 +39,13 @@ export type BmCustomerTag = {
   label: string;
   rawStatus?: "ONLINE" | "INTERESTED" | "PURCHASED" | "FILM" | null;
   rawInterestLevel?: "HOT" | "WARM" | "COLD" | null;
+};
+
+export type ConversationListTag = BmCustomerTag | {
+  kind: "nicknameDerived";
+  dimension: "customerType" | "product" | "finance" | "payment" | "service" | "source" | "period" | "eventDate";
+  label: string;
+  title: "Derived from LINE OA Manager nickname";
 };
 
 export function formatVariantLabel(
@@ -205,8 +212,59 @@ export function getConversationListTags(
   };
 }
 
-export function getBmTagChipClass(tag: BmCustomerTag): string {
+function nicknameDerivedTags(metadata: ApiNicknameDerivedMetadata | null | undefined, language: "th" | "en" | "zh"): ConversationListTag[] {
+  if (!metadata) return [];
+  const tags: ConversationListTag[] = [];
+  const add = (dimension: Extract<ConversationListTag, { kind: "nicknameDerived" }>["dimension"], label: string | null | undefined) => {
+    if (label?.trim()) tags.push({ kind: "nicknameDerived", dimension, label: label.trim(), title: "Derived from LINE OA Manager nickname" });
+  };
+  add("customerType", metadata.customerType === "ONLINE" ? "ONLINE" : metadata.customerType);
+  add("product", metadata.product?.name.replace(/^OPPO\s+/iu, ""));
+  add("finance", metadata.financeProvider === "SG_FINANCE" ? "SG FINANCE" : metadata.financeProvider === "UFUND" ? "UFUND" : metadata.financeProvider);
+  add("payment", metadata.paymentMethod);
+  add("service", metadata.service === "FILM_INSTALLATION" ? "FILM" : metadata.service);
+  add("source", metadata.source?.toUpperCase());
+  if (metadata.period) {
+    const label = new Intl.DateTimeFormat(language, { month: "short", year: "numeric", timeZone: "UTC" })
+      .format(new Date(Date.UTC(metadata.period.year, metadata.period.month - 1, 1)));
+    add("period", label.toUpperCase());
+  }
+  if (metadata.eventDate) {
+    const date = new Date(`${metadata.eventDate.slice(0, 10)}T00:00:00.000Z`);
+    if (Number.isFinite(date.getTime())) {
+      add("eventDate", new Intl.DateTimeFormat(language, { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(date).toUpperCase());
+    }
+  }
+  return tags;
+}
+
+export function getConversationListTagsWithNicknameMetadata(
+  sales: ApiCustomerSalesInformation | null | undefined,
+  metadata: ApiNicknameDerivedMetadata | null | undefined,
+  language: "th" | "en" | "zh",
+  maxVisible = 3,
+) {
+  const combined: ConversationListTag[] = [
+    ...nicknameDerivedTags(metadata, language),
+    ...getBmCustomerSalesTags(sales),
+  ];
+  const seenLabels = new Set<string>();
+  const unique = combined.filter((tag) => {
+    const key = tag.label.trim().toLocaleUpperCase().replace(/^OPPO\s+/u, "");
+    if (seenLabels.has(key)) return false;
+    seenLabels.add(key);
+    return true;
+  });
+  return {
+    visible: unique.slice(0, maxVisible),
+    hidden: unique.slice(maxVisible),
+  };
+}
+
+export function getBmTagChipClass(tag: ConversationListTag): string {
   switch (tag.kind) {
+    case "nicknameDerived":
+      return "bg-indigo-50 text-indigo-800 dark:bg-indigo-950/50 dark:text-indigo-200 border border-indigo-200/70 dark:border-indigo-800/50 font-medium";
     case "salesStatus":
       return tag.rawStatus === "PURCHASED"
         ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-200 border border-emerald-200/60 dark:border-emerald-800/40 font-semibold"

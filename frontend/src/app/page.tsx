@@ -69,7 +69,7 @@ import {
 import { ConversationRowSkeleton } from "./conversation-row-skeleton";
 import { getChatsPaginationText } from "./chats-pagination-utils";
 import { buildConversationListQuery, conversationListQueryKey, LatestConversationRequestGuard, reconcileConversationPage, type ConversationListQuery } from "./conversation-list-query";
-import { getBmCustomerSalesTags, getBmTagChipClass, getConversationListTags, getConversationListTitle } from "./conversation-list-presentation";
+import { getBmCustomerSalesTags, getBmTagChipClass, getConversationListTagsWithNicknameMetadata, getConversationListTitle } from "./conversation-list-presentation";
 import { effectiveSummaryCounts, getEffectiveReplyState } from "./reply-state";
 import { getChatPeriodOptions, getCurrentBangkokMonth, isReplyStatusCovered, isSelectableChatPeriod } from "./chat-period";
 import { NicknameSourceBadge } from "./nickname-source-badge";
@@ -4642,7 +4642,11 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
                     filteredConversations.map((conversation) => {
                       const isSelected = conversation.id === selectedConversation?.id;
                       const currentBmReplyStatus = conversationStates[conversation.id]?.bmReplyStatus ?? conversation.bmReplyStatus;
-                      const tags = getConversationListTags(conversation.customerSalesInformation);
+                      const tags = getConversationListTagsWithNicknameMetadata(
+                        conversation.customerSalesInformation,
+                        conversation.nicknameDerivedMetadata,
+                        language,
+                      );
                       const allTagLabels = [...tags.visible, ...tags.hidden].map(({ label }) => label).join(", ");
 
                       return (
@@ -4782,7 +4786,9 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
                             {tags.visible.map((tag, index) => (
                               <span
                                 key={`${tag.kind}-${tag.label}-${index}`}
-                                data-conversation-bm-tag={tag.kind}
+                                data-conversation-bm-tag={tag.kind === "nicknameDerived" ? undefined : tag.kind}
+                                data-conversation-nickname-tag={tag.kind === "nicknameDerived" ? tag.dimension : undefined}
+                                title={tag.kind === "nicknameDerived" ? tag.title : undefined}
                                 className={`rounded-full px-2 py-0.5 text-[10px] ${getBmTagChipClass(tag)}`}
                               >
                                 {tag.label}

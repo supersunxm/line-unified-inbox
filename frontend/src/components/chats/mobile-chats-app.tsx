@@ -21,6 +21,7 @@ import { openLineOaManager } from "@/app/line-oa-manager";
 import { lineStickerLabel, MessageSticker } from "@/app/message-sticker";
 import { getEffectiveReplyState } from "@/app/reply-state";
 import { getCurrentBangkokMonth, isReplyStatusCovered, isSelectableChatPeriod } from "@/app/chat-period";
+import { getBmTagChipClass, getConversationListTagsWithNicknameMetadata } from "@/app/conversation-list-presentation";
 
 type AuthUser = {
   id: string;
@@ -600,7 +601,10 @@ export function MobileChatsApp() {
               <div className="p-10 text-center"><p className="text-base font-bold">ไม่พบบทสนทนา</p><p className="mt-1 text-sm text-[var(--app-text-tertiary)]">ลองเปลี่ยนคำค้นหาหรือสถานะ</p></div>
             ) : (
               <div className="divide-y divide-[var(--app-border-subtle)]">
-                {conversations.map((conversation) => (
+                {conversations.map((conversation) => {
+                  const tags = getConversationListTagsWithNicknameMetadata(null, conversation.nicknameDerivedMetadata, language, 3);
+                  const allLabels = [...tags.visible, ...tags.hidden].map(({ label }) => label).join(", ");
+                  return (
                   <div key={conversation.id} className="flex w-full items-stretch gap-2 px-3 py-3">
                     <button
                       type="button"
@@ -614,6 +618,21 @@ export function MobileChatsApp() {
                           <span className="shrink-0 text-[11px] text-[var(--app-text-tertiary)]">{formatRelativeTime(conversation.latestMessageAt, "th")}</span>
                         </div>
                         <p className="mt-1 line-clamp-2 text-sm leading-5 text-[var(--app-text-secondary)]">{previewText(conversation)}</p>
+                        {tags.visible.length > 0 && (
+                          <div className="mt-1.5 flex flex-wrap gap-1" title={allLabels} aria-label={allLabels}>
+                            {tags.visible.map((tag, index) => (
+                              <span
+                                key={`${tag.kind}-${tag.label}-${index}`}
+                                data-mobile-nickname-tag={tag.kind === "nicknameDerived" ? tag.dimension : undefined}
+                                title={tag.kind === "nicknameDerived" ? tag.title : undefined}
+                                className={`max-w-full truncate rounded-full px-1.5 py-0.5 text-[9px] leading-3 ${getBmTagChipClass(tag)}`}
+                              >
+                                {tag.label}
+                              </span>
+                            ))}
+                            {tags.hidden.length > 0 && <span className="rounded-full border border-[var(--app-border)] bg-[var(--app-surface-subtle)] px-1.5 py-0.5 text-[9px] leading-3 text-[var(--app-text-tertiary)]">+{tags.hidden.length}</span>}
+                          </div>
+                        )}
                         <div className="mt-2 flex min-w-0 items-center gap-1.5">
                           <span className="min-w-0 flex-1 truncate text-[11px] text-[var(--app-text-tertiary)]">{conversation.store.name}</span>
                           {conversation.priority === "HIGH" || conversation.priority === "CRITICAL" ? <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold text-red-700 dark:bg-red-950/60 dark:text-red-200">สำคัญ</span> : null}
@@ -636,7 +655,8 @@ export function MobileChatsApp() {
                       </button>
                     ) : null}
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
             {totalPages > 1 && (

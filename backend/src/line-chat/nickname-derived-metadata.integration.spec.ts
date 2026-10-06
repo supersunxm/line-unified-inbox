@@ -5,6 +5,7 @@ import { randomUUID } from "node:crypto";
 import { PrismaClient } from "@prisma/client";
 import { NICKNAME_PARSER_V3_RULE_VERSION } from "./nickname-parser-v3.contract";
 import { NicknameDerivedMetadataService } from "./nickname-derived-metadata.service";
+import { synchronizeNicknameDerivedObservations } from "./nickname-derived-metadata-sync";
 
 // Set only against a disposable PostgreSQL database; receipts are intentionally immutable.
 const databaseUrl = process.env.NICKNAME_DERIVED_TEST_DATABASE_URL;
@@ -109,9 +110,6 @@ test("isolated database: exact identity, independent state, stale refusal, confl
     assert.equal(updated.paymentMethod, null);
     assert.equal(updated.productModel?.id, product.id);
     assert.equal(await db.nicknameDerivedMetadataApplication.count({ where: { conversationId: conversations[0].id } }), 2);
-    const independentConversation = await db.conversation.findUniqueOrThrow({ where: { id: conversations[0].id } });
-    assert.equal(independentConversation.onlineSource, null);
-    assert.equal(independentConversation.paymentMethod, "UFUND");
 
     const nextObservation = await addObservation(3, "Online", new Date(observedBase + 3000));
     assert.ok(nextObservation);
@@ -156,6 +154,33 @@ test("isolated database: exact identity, independent state, stale refusal, confl
     await assert.rejects(db.nicknameDerivedMetadataApplication.updateMany({ where: { conversationId: conversations[0].id }, data: { outcome: "MUTATED" } }));
     await assert.rejects(db.nicknameDerivedMetadataApplication.deleteMany({ where: { conversationId: conversations[0].id } }));
     assert.equal(await db.nicknameDerivedMetadataApplication.count({ where: { conversationId: conversations[0].id } }), 2);
+    const sync = async (id: string) => {
+      const observation = await db.nicknameSourceObservation.findUniqueOrThrow({ where: { id } });
+      return db.$transaction((tx) => synchronizeNicknameDerivedObservations(tx, [observation]), { isolationLevel: "Serializable" });
+    };
+    assert.equal((await sync(nextObservation)).deterministicUpdates, 1);
+    const onlineState = await db.nicknameDerivedMetadataState.findUniqueOrThrow({ where: { conversationId: conversations[0].id } });
+    assert.equal(onlineState.customerType, "ONLINE");
+    assert.equal(onlineState.productModelId, null);
+    assert.equal(onlineState.financeProvider, null);
+    const clearObservation = await addObservation(4, "Somchai", new Date(observedBase + 5000));
+    assert.equal((await sync(clearObservation)).noSignalClears, 1);
+    assert.equal(await db.nicknameDerivedMetadataState.findUnique({ where: { conversationId: conversations[0].id } }), null);
+    const clearReceipt = await db.nicknameDerivedMetadataApplication.findUniqueOrThrow({
+      where: { sourceObservationId_parserVersion: { sourceObservationId: clearObservation, parserVersion: NICKNAME_PARSER_V3_RULE_VERSION } },
+    });
+    assert.equal(clearReceipt.resultingValues, null);
+    assert.equal((await sync(clearObservation)).duplicateReplays, 1);
+    const sameNoSignal = await addObservation(5, "Somchai", new Date(observedBase + 6000));
+    assert.equal((await sync(sameNoSignal)).unchangedSkips, 1);
+    assert.equal((await db.customer.findUniqueOrThrow({ where: { id: customer.id } })).displayName, customer.displayName);
+    const crmAfterSync = await db.conversation.findUniqueOrThrow({ where: { id: conversations[0].id } });
+    assert.equal(crmAfterSync.customerSalesStatus, "INTERESTED");
+    assert.equal(crmAfterSync.paymentMethod, "UFUND");
+    assert.equal(crmAfterSync.onlineSource, null);
+    const independentConversation = await db.conversation.findUniqueOrThrow({ where: { id: conversations[0].id } });
+    assert.equal(independentConversation.onlineSource, null);
+    assert.equal(independentConversation.paymentMethod, "UFUND");
   } finally {
     void nicknames;
     await db.$disconnect();
