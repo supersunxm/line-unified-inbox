@@ -10,6 +10,7 @@ import { LegacyI18nBoundary } from "../legacy-i18n-boundary";
 import { pickLanguageText, useAppLanguage } from "../language";
 import { mobileChatsPhrases, mobileChatsTemplates } from "../mobile-route-i18n";
 import { getChatPeriodOptions, getCurrentBangkokMonth, isSelectableChatPeriod } from "../chat-period";
+import { FOCUS_STORE_GROUP_ID } from "@/lib/focus-store-group";
 
 type ViewportMode = "loading" | "mobile" | "desktop";
 type MobileStatusFilter = "all" | ApiEffectiveReplyState;
@@ -142,7 +143,7 @@ function MobileChatFiltersBridge() {
     NOT_REPLIED: counts.notReplied + counts.notifiedBm,
     REPLIED: counts.replied,
   };
-  const stores = [...(summary?.stores ?? [])].sort((a, b) => a.storeName.localeCompare(b.storeName, locale));
+  const stores = [...(summary?.stores ?? [])].filter((store) => store.storeId !== FOCUS_STORE_GROUP_ID).sort((a, b) => a.storeName.localeCompare(b.storeName, locale));
 
   const applyFilters = (nextStoreId: string, nextStatus: MobileStatusFilter, nextMonth = month) => {
     const url = new URL(window.location.href);
