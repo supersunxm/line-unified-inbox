@@ -936,6 +936,8 @@ model Conversation {
   nicknameSourceState NicknameSourceState?
   nicknameObservations NicknameSourceObservation[]
   nicknameSourceApplications NicknameSourceApplication[]
+  nicknameDerivedMetadataState NicknameDerivedMetadataState?
+  nicknameDerivedMetadataApplications NicknameDerivedMetadataApplication[]
   replyStateProjection ConversationReplyStateProjection?
   @@index([latestMessageAt])
   @@index([followUpStatus])
@@ -1159,6 +1161,7 @@ model ProductModel {
   aliases             ProductAlias[]
   signals             CustomerSignal[]
   variants            ProductVariant[]
+  nicknameDerivedMetadataStates NicknameDerivedMetadataState[]
 
   @@index([isActive])
   @@index([productSeriesId])
@@ -2859,6 +2862,8 @@ model NicknameSourceObservation {
   batch NicknameSourceCapture @relation(fields: [batchId], references: [id], onDelete: Restrict)
   applications NicknameSourceApplication[]
   derivedStates NicknameSourceState[]
+  nicknameDerivedMetadataState NicknameDerivedMetadataState?
+  nicknameDerivedMetadataApplications NicknameDerivedMetadataApplication[]
   @@unique([batchId, lineChatUserId])
   @@index([lineOfficialAccountId, lineChatUserId, observedAt(sort: Desc), id(sort: Desc)])
   @@index([observedAt, classification])
@@ -2892,4 +2897,47 @@ model NicknameSourceApplication {
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Restrict)
   @@unique([manifestSha256, observationId])
   @@index([conversationId, appliedAt])
+}
+
+// V3 nickname-derived dimensions are independent of sales fields and v2 tags.
+model NicknameDerivedMetadataState {
+  conversationId String @id
+  sourceObservationId String @unique
+  parserVersion String
+  observedAt DateTime
+  appliedAt DateTime @default(now())
+  provenance String @default("MANAGER_NICKNAME")
+  source String?
+  customerType String?
+  productModelId String?
+  paymentMethod String?
+  financeProvider String?
+  service String?
+  periodYear Int?
+  periodMonth Int?
+  eventDate DateTime? @db.Date
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Restrict)
+  sourceObservation NicknameSourceObservation @relation(fields: [sourceObservationId], references: [id], onDelete: Restrict)
+  productModel ProductModel? @relation(fields: [productModelId], references: [id], onDelete: Restrict)
+
+  @@index([productModelId])
+}
+
+// Immutable receipt for every state create/update; nickname text remains in the source observation.
+model NicknameDerivedMetadataApplication {
+  id String @id @default(uuid())
+  conversationId String
+  sourceObservationId String
+  parserVersion String
+  manifestSha256 String
+  outcome String
+  previousValues Json
+  resultingValues Json
+  appliedAt DateTime @default(now())
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Restrict)
+  sourceObservation NicknameSourceObservation @relation(fields: [sourceObservationId], references: [id], onDelete: Restrict)
+
+  @@unique([sourceObservationId, parserVersion])
+  @@index([conversationId, appliedAt])
+  @@index([manifestSha256])
 }

@@ -54,6 +54,8 @@
     "media:google-drive:oauth": "tsx --env-file=.env scripts/google-drive-oauth-setup.ts",
     "line-chat:login": "tsx src/line-chat/line-chat-login.cli.ts",
     "line-chat:nickname-parser-v3:dry-run": "tsx --env-file=.env src/line-chat/nickname-parser-v3-dry-run.cli.ts",
+    "line-chat:nickname-v3:readiness": "tsx --env-file=.env src/line-chat/nickname-derived-metadata-rollout.cli.ts",
+    "line-chat:nickname-v3:apply": "tsx --env-file=.env src/line-chat/nickname-derived-metadata-rollout.cli.ts --apply",
     "line-chat:mirror:exact-manifest": "tsx src/line-chat/line-chat-mirror-exact-manifest.cli.ts",
     "line-chat:recover-auth": "tsx src/line-chat/line-chat-auth-recovery.cli.ts",
     "line-chat:nickname": "tsx src/line-chat/line-chat-nickname.cli.ts",

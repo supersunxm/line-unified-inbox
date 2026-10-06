@@ -36,6 +36,7 @@ const conversationBaseInclude = {
   salesRecordedBy: { select: { id: true, displayName: true } },
   owner: { select: { id: true, displayName: true, isActive: true, status: true, role: true, canAccessAllStores: true, memberships: { where: { status: "ACTIVE", store: { isActive: true, archivedAt: null } }, select: { storeId: true } } } },
   nicknameSourceState: { select: { tag: true, ruleVersion: true, sourceObservationId: true, lastObservedAt: true } },
+  nicknameDerivedMetadataState: { include: { productModel: { select: { name: true, classificationLevel: true } } } },
   salesProducts: { include: { productModel: { include: { productSeries: true } }, productVariant: true } },
   products: { include: { productModel: { include: { productSeries: true } }, productVariant: true } },
   topics: { include: { topic: true } },
@@ -229,7 +230,7 @@ export class ConversationsService {
 
   private safe(item: IncludedConversation, latestManagerUrls: ReadonlyMap<string, string | null>) {
     const value = item.customer.lineUserId;
-    const { store: rawStore, lineOfficialAccount: rawLineOfficialAccount, purchaseRecordedBy, salesRecordedBy, owner: rawOwner, replyStateProjection: rawReplyStateProjection, _count: ownerTrackingCount, purchaseRecordedById: _purchaseRecordedById, purchaseRecordedAt: _purchaseRecordedAt, salesRecordedById: _salesRecordedById, salesRecordedAt: _salesRecordedAt, ...conversation } = item;
+    const { store: rawStore, lineOfficialAccount: rawLineOfficialAccount, purchaseRecordedBy, salesRecordedBy, owner: rawOwner, replyStateProjection: rawReplyStateProjection, nicknameDerivedMetadataState: rawNicknameDerivedMetadataState, _count: ownerTrackingCount, purchaseRecordedById: _purchaseRecordedById, purchaseRecordedAt: _purchaseRecordedAt, salesRecordedById: _salesRecordedById, salesRecordedAt: _salesRecordedAt, ...conversation } = item;
     void _purchaseRecordedById;
     void _purchaseRecordedAt;
     void _salesRecordedById;
@@ -253,6 +254,24 @@ export class ConversationsService {
       messages: item.messages.map((message) => this.safeMessage(message)),
       customerSalesInformation: buildCustomerSalesInformation({ ...item, purchaseRecordedBy, salesRecordedBy }),
       purchaseInformation: buildPurchaseInformation({ ...item, purchaseRecordedBy, salesRecordedBy }),
+      nicknameDerivedMetadata: rawNicknameDerivedMetadataState ? {
+        parserVersion: rawNicknameDerivedMetadataState.parserVersion,
+        provenance: rawNicknameDerivedMetadataState.provenance,
+        observedAt: rawNicknameDerivedMetadataState.observedAt,
+        appliedAt: rawNicknameDerivedMetadataState.appliedAt,
+        source: rawNicknameDerivedMetadataState.source,
+        customerType: rawNicknameDerivedMetadataState.customerType,
+        product: rawNicknameDerivedMetadataState.productModel
+          ? { name: rawNicknameDerivedMetadataState.productModel.name, classificationLevel: rawNicknameDerivedMetadataState.productModel.classificationLevel }
+          : null,
+        paymentMethod: rawNicknameDerivedMetadataState.paymentMethod,
+        financeProvider: rawNicknameDerivedMetadataState.financeProvider,
+        service: rawNicknameDerivedMetadataState.service,
+        period: rawNicknameDerivedMetadataState.periodYear !== null && rawNicknameDerivedMetadataState.periodMonth !== null
+          ? { year: rawNicknameDerivedMetadataState.periodYear, month: rawNicknameDerivedMetadataState.periodMonth }
+          : null,
+        eventDate: rawNicknameDerivedMetadataState.eventDate,
+      } : null,
       aiInsight: buildAiInsight(item),
       effectiveReplyState: effectiveReplyState.state,
       effectiveReplyStateSource: effectiveReplyState.source,
