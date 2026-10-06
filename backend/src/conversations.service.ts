@@ -1597,6 +1597,7 @@ export class ConversationsService {
 
     const resetFilter = await this.operations.getOperationalConversationFilter();
     const monthRange = resolveChatMonthRange(month);
+    const enforceReplyStatusCoverage = month !== undefined;
 
     const summaryRows = await this.prisma.conversation.findMany({
       where: {
@@ -1634,7 +1635,7 @@ export class ConversationsService {
 
       // Chats before the reliable mirror boundary remain searchable history,
       // but they have no operational reply status in Store Chats.
-      if (!isChatReplyStatusCovered(item.latestMessageAt)) continue;
+      if (enforceReplyStatusCoverage && !isChatReplyStatusCovered(item.latestMessageAt)) continue;
 
       const effectiveState = resolveEffectiveReplyState({
         bmReplyStatus: item.bmReplyStatus,
