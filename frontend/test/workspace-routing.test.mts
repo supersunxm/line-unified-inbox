@@ -23,8 +23,18 @@ test("chat filter URLs are shareable and restorable", () => {
   assert.equal(href, "/chats?storeId=store-1&status=follow-up&priority=high&topic=pricing");
   assert.deepEqual(readChatRouteFilters(href.slice(href.indexOf("?"))), {
     store: "store-1", status: "follow-up", priority: "high", model: undefined,
-    topic: "pricing", lineOaId: undefined, conversationId: undefined,
+    topic: "pricing", lineOaId: undefined, month: undefined, conversationId: undefined,
   });
+});
+
+test("chat routes preserve monthly and archive period selection", () => {
+  assert.equal(
+    buildChatsHref({ store: "store-1", month: "2026-10" }),
+    "/chats?storeId=store-1&month=2026-10",
+  );
+  assert.equal(buildChatsHref({ month: "all" }), "/chats?month=all");
+  assert.equal(readChatRouteFilters("?month=2026-09").month, "2026-09");
+  assert.equal(readChatRouteFilters("?month=all").month, "all");
 });
 
 test("chat routes use effective two-state reply filters and normalize legacy notified links", () => {
