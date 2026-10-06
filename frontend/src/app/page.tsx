@@ -2782,7 +2782,7 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
     } finally {
       setIsBulkUpdating(false);
     }
-  }, [bulkConfirmState, language, loadConversations, showArchivedStores]);
+  }, [bulkConfirmState, chatMonth, language, loadConversations, showArchivedStores]);
 
   function updateInternalNote(note: string) {
     if (!selectedConversation) return;
