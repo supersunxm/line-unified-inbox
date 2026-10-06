@@ -174,3 +174,23 @@ export function getLineChatUiHealth(input: LineChatUiHealthInput, now = Date.now
 export function getOverallHealth(session: LineChatOperationsSession, now = Date.now()): LineChatUiHealth {
   return getLineChatUiHealth({ kind: "session", session }, now);
 }
+
+/** Aggregate presentation without introducing another precedence table. */
+export function summarizeLineChatUiHealth(states: readonly LineChatUiHealth[]): LineChatUiHealth {
+  for (const status of STATUS_PRECEDENCE) {
+    const match = states.find(state => state.status === status);
+    if (match) return match;
+  }
+  return { status: "UNKNOWN", ...PRESENTATION.UNKNOWN, ...UNKNOWN_GUIDANCE };
+}
+
+/** Current work is presentation evidence only; never changes job eligibility. */
+export function getLineChatWorkUiHealth(pendingMapping: number, activeIssues: number): LineChatUiHealth {
+  const status: LineChatUiStatus = pendingMapping > 0 ? "NEED_SETUP" : activeIssues > 0 ? "DEGRADED" : "READY";
+  const detail = pendingMapping > 0
+    ? guidance("Current work is waiting for chat mapping.", "Review pending mappings before this work can continue.")
+    : activeIssues > 0
+      ? guidance("Current issues need review.", "Inspect the current issues and follow their recommended actions.")
+      : guidance("No current work requires attention.", "No action is needed. Continue monitoring normally.");
+  return { status, ...PRESENTATION[status], ...detail };
+}
