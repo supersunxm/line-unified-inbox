@@ -42,7 +42,7 @@ void test("inactive or unauthorized membership cannot reach summary aggregation"
   });
 
   await assert.rejects(
-    () => controller.bmReplyStatusSummary({ user: bm } as never),
+    () => controller.bmReplyStatusSummary({}, { user: bm } as never),
     ForbiddenException,
   );
   assert.equal(serviceCalled, false);
