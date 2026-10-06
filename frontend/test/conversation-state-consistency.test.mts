@@ -91,7 +91,7 @@ test("silent workspace refreshes do not fan out webhook diagnostics", () => {
 
   assert.match(supportingCode, /if \(initialSection === "stores" && includeWebhookInfo && lineOaResponse\)/);
   assert.match(supportingCode, /lineOaResponse\.map\(async \(account\)/);
-  assert.match(supportingCode, /\[initialSection, showArchivedLineOas, showArchivedStores\]/);
+  assert.match(supportingCode, /\[chatMonth, initialSection, showArchivedLineOas, showArchivedStores\]/);
   assert.match(pageCode, /const loadApplicationData = useCallback\(async \(silent = false, includeWebhookInfo = !silent\)/);
   assert.match(pageCode, /loadSupportingData\(silent, includeWebhookInfo\)/);
   assert.match(pageCode, /await loadApplicationData\(true, true\)/);
