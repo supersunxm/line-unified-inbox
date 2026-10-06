@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Param, Patch, Post, Query, Redirect, Req } from "@nestjs/common";
 import { ConversationsService } from "./conversations.service";
-import { BulkMarkRepliedByFilterDto, BulkMarkRepliedDto, BulkUpdateBmReplyStatusDto, ConversationQueryDto, CreateNoteDto, SendConversationMessageDto, UpdateBmReplyStatusDto, UpdatePriorityDto, UpdateStatusDto } from "./dto";
+import { BulkMarkRepliedByFilterDto, BulkMarkRepliedDto, BulkUpdateBmReplyStatusDto, ConversationQueryDto, ConversationSummaryQueryDto, CreateNoteDto, SendConversationMessageDto, UpdateBmReplyStatusDto, UpdatePriorityDto, UpdateStatusDto } from "./dto";
 import { PrismaService } from "./prisma.service";
 import { ClassificationService } from "./classification/classification.service";
 import { LineProfileService } from "./line-profile.service";
@@ -169,9 +169,9 @@ export class ConversationsController {
     if (query.storeId && query.storeId !== FOCUS_STORE_GROUP_ID) await this.storeAccess.assertStoreAccess(req.user!, query.storeId);
     return this.service.list(query, storeIds);
   }
-  @Get("bm-reply-status-summary") async bmReplyStatusSummary(@Req() req: AuthRequest) {
+  @Get("bm-reply-status-summary") async bmReplyStatusSummary(@Query() query: ConversationSummaryQueryDto, @Req() req: AuthRequest) {
     const accessibleStoreIds = await this.storeAccess.accessibleStoreIds(req.user!);
-    return this.service.getBmReplyStatusSummary(accessibleStoreIds);
+    return this.service.getBmReplyStatusSummary(accessibleStoreIds, query.month);
   }
   @Get("store-priority-summary") async storePrioritySummary(@Req() req: AuthRequest) {
     const accessibleStoreIds = await this.storeAccess.accessibleStoreIds(req.user!);
