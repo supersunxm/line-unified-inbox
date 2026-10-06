@@ -15,7 +15,7 @@ function controllerFor(accessibleStoreIds: string[] | null | (() => Promise<neve
   const service = serviceOverride ?? {
     getBmReplyStatusSummary: async (scope: string[] | null) => {
       calls.push(scope);
-      return { stores: [], overview: { notReplied: 0, notifiedBm: 0, replied: 0 } };
+      return { stores: [], overview: { total: 0, notReplied: 0, notifiedBm: 0, replied: 0 } };
     },
   };
   return new ConversationsController(service as never, null as never, null as never, null as never, storeAccess as never);
