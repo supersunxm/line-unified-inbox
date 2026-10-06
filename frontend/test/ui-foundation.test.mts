@@ -39,8 +39,8 @@ test("primary buttons and focus rings use the brand accent in both themes", () =
 
   // The default button colour reset belongs in Tailwind's base layer so component
   // text utilities can win. Explicit accent contrast remains a defensive legacy backstop.
-  assert.match(css, /@layer base\\s*\\{[\\s\\S]*?button\\s*\\{\\s*color:\\s*inherit;\\s*\\}/);
-  assert.doesNotMatch(css, /button\\s*,\\s*input\\s*,\\s*select\\s*,\\s*textarea\\s*\\{\\s*color:\\s*inherit;/);
+  assert.match(css, /@layer base\s*\{[\s\S]*?button\s*\{\s*color:\s*inherit;\s*\}/);
+  assert.doesNotMatch(css, /button\s*,\s*input\s*,\s*select\s*,\s*textarea\s*\{\s*color:\s*inherit;/);
   const backgrounds = ["bg-[var(--app-accent)]", "bg-[var(--app-accent-hover)]", "bg-[var(--app-accent,#1f6b4a)]", "bg-[var(--app-accent,#111827)]"];
   const enabledSelectors = backgrounds.map((background) => `button.text-white[class~="${background}"]:not(:disabled, [aria-disabled="true"])`);
   const disabledSelectors = backgrounds.map((background) => `button.text-white[class~="${background}"]:is(:disabled, [aria-disabled="true"])`);
