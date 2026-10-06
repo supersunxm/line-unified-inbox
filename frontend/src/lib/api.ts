@@ -493,7 +493,12 @@ export const api = {
   },
   mainOaConversation: (id: string) => request<ApiConversation>(`/main-oa/conversations/${encodeURIComponent(id)}`),
   sendMainOaMessage: (id: string, text: string, idempotencyKey: string) => request<SendConversationMessageResponse>(`/main-oa/conversations/${encodeURIComponent(id)}/messages`, { method: "POST", body: JSON.stringify({ text, idempotencyKey }) }),
-  bmReplyStatusSummary: (options?: ApiRequestOptions) => request<BmReplyStatusSummaryResponse>("/conversations/bm-reply-status-summary", options),
+  bmReplyStatusSummary: (monthOrOptions?: string | ApiRequestOptions, options?: ApiRequestOptions) => {
+    const month = typeof monthOrOptions === "string" ? monthOrOptions : undefined;
+    const requestOptions = typeof monthOrOptions === "string" ? options : monthOrOptions;
+    const query = month ? `?month=${encodeURIComponent(month)}` : "";
+    return request<BmReplyStatusSummaryResponse>(`/conversations/bm-reply-status-summary${query}`, requestOptions);
+  },
   storePrioritySummary: () => request<StorePrioritySummaryResponse>("/conversations/store-priority-summary"),
   conversation: (id: string, options?: ApiRequestOptions) => request<ApiConversation>(`/conversations/${id}`, options),
   conversationMessages: (id: string, page = 1, options?: ApiRequestOptions) => request<ConversationMessagesResponse>(`/conversations/${id}/messages?page=${page}&pageSize=30`, options),
