@@ -6371,3 +6371,11 @@ Live worker continues independently at 146 configured unique active OA identitie
 - Updated the public rule explanation and added `docs/review15-word-count-rule-v4.md`.
 - No database migration and no change to Google Review photo/month/edited qualification conditions.
 - Verification status: implementation complete on `fix/review15-word-rule-v4`; CI pending before merge.
+
+## 2026-10-07 — Review15 public header brand alignment
+
+- Replaced the Review15 page's text-only `oppo` link with the same public OPPO Brand Shop branding contract used by the store directory.
+- Reused `aria-label="OPPO Brand Shop Home"` so the shared `public-branding.css` applies `/images/LOGO_OBS.png` consistently.
+- Preserved the Review 15-Word Checker label and all word-count/OCR behavior.
+- Added a regression test to prevent the old text-only logo from returning.
+- Verification status: code complete on `fix/review15-public-brand-header`; hosted CI pending before merge.
