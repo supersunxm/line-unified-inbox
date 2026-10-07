@@ -3,14 +3,15 @@
 import Link from "next/link";
 import React, { useEffect, useRef } from "react";
 import { formatWaitingDuration } from "@/components/shell/store-priority-score";
-import { RESPONSE_RATE_TARGET_PERCENT } from "@/lib/v2/business-hours";
+import { KPI_DIFFERENCE_NOTE, RATE24_TARGET } from "@/lib/v2/kpi";
 import { monthShortLabel, periodLabel } from "@/lib/v2/month";
 import { chatsHref, reportHref } from "@/lib/v2/month-url";
 import { dailyBreakdown, storeCounts, tagCoverage, type MonthStoreRow } from "@/lib/v2/monthly-model";
 import { thaiLocationLabel } from "@/lib/v2/thai-geo";
-import { countState, formatValue, numericValue, rateState, type ValueState } from "@/lib/v2/value-state";
+import { countState, formatValue, numericValue, rateState } from "@/lib/v2/value-state";
+import { HowCounted, KpiCompareTable } from "./kpi-cards";
 import { useStoreMonth, useTrend, useV2Month } from "./v2-month-data";
-import { DeltaValue, ManagerLink, StateValue } from "./v2-ui";
+import { ManagerLink, StateValue } from "./v2-ui";
 
 const cell = "px-3 py-2 text-xs whitespace-nowrap";
 
@@ -23,40 +24,6 @@ function Section({ title, meta, children }: { title: string; meta?: React.ReactN
       </div>
       {children}
     </section>
-  );
-}
-
-function KpiTable({ row }: { row: MonthStoreRow }) {
-  const data = useV2Month();
-  const lines: Array<{ label: string; current: ValueState; previous: ValueState; delta: ValueState; format: "count" | "percent"; deltaKind: "count" | "points"; worseWhen: "up" | "down"; target?: number }> = [
-    { label: "แชท", current: row.chats, previous: row.previousChats, delta: { kind: "not-applicable", why: "ไม่มีเป้า" }, format: "count", deltaKind: "count", worseWhen: "up" },
-    { label: "ยังไม่ตอบ", current: row.unreplied, previous: row.previousUnreplied, delta: row.unrepliedDelta, format: "count", deltaKind: "count", worseWhen: "up" },
-    { label: "ตอบแล้ว %", current: row.replyRate, previous: row.previousReplyRate, delta: row.replyRateDelta, format: "percent", deltaKind: "points", worseWhen: "down" },
-    { label: "ตอบใน 24 ชม.", current: row.rate24, previous: row.previousRate24, delta: row.rate24Delta, format: "percent", deltaKind: "points", worseWhen: "down", target: RESPONSE_RATE_TARGET_PERCENT },
-  ];
-  return (
-    <table data-v2-drawer-kpis className="w-full text-left">
-      <thead className="text-[11px] text-[var(--app-text-secondary)]">
-        <tr className="border-b border-[var(--app-border)]">
-          <th scope="col" className={`${cell} font-medium`}>ตัวชี้วัด</th>
-          <th scope="col" className={`${cell} text-right font-medium`}>{periodLabel(data.frame.current)}</th>
-          <th scope="col" className={`${cell} text-right font-medium`}>{periodLabel(data.frame.previous)}</th>
-          <th scope="col" className={`${cell} text-right font-medium`}>เปลี่ยน</th>
-          <th scope="col" className={`${cell} text-right font-medium`}>เป้า</th>
-        </tr>
-      </thead>
-      <tbody className="divide-y divide-[var(--app-border-subtle)]">
-        {lines.map((line) => (
-          <tr key={line.label}>
-            <th scope="row" className={`${cell} font-medium`}>{line.label}</th>
-            <td className={`${cell} text-right font-semibold`}><StateValue state={line.current} format={line.format} target={line.target} showN={line.format === "percent"} /></td>
-            <td className={`${cell} text-right`}><StateValue state={line.previous} format={line.format} /></td>
-            <td className={`${cell} text-right`}>{line.label === "แชท" ? <span className="text-[var(--app-text-secondary)]">—</span> : <DeltaValue state={line.delta} kind={line.deltaKind} worseWhen={line.worseWhen} />}</td>
-            <td className={`${cell} text-right text-[var(--app-text-secondary)]`}>{line.target ? `${line.target}%` : line.label === "ยังไม่ตอบ" ? "0" : "—"}</td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
   );
 }
 
@@ -94,7 +61,7 @@ function Trend({ storeId }: { storeId: string }) {
               <td className={`${cell} text-right`}><StateValue state={point.chats} /></td>
               <td className={`${cell} text-right`}><StateValue state={point.unreplied} /></td>
               <td className={`${cell} text-right`}><StateValue state={point.replyRate} format="percent" /></td>
-              <td className={`${cell} text-right`}><StateValue state={point.rate24} format="percent" target={RESPONSE_RATE_TARGET_PERCENT} /></td>
+              <td className={`${cell} text-right`}><StateValue state={point.rate24} format="percent" target={RATE24_TARGET ?? undefined} /></td>
             </tr>
           ))}
         </tbody>
@@ -201,7 +168,9 @@ export function StoreScorecardDrawer({ row, onClose }: { row: MonthStoreRow; onC
         </header>
         <div className="min-h-0 flex-1 space-y-6 overflow-y-auto p-5">
           <Section title="ตัวชี้วัดเดือนนี้">
-            <KpiTable row={row} />
+            <KpiCompareTable totals={row} frame={data.frame} />
+            <p className="text-xs text-[var(--app-text-secondary)]">{KPI_DIFFERENCE_NOTE}</p>
+            <div className="grid grid-cols-2 gap-3"><HowCounted kpi="replied" /><HowCounted kpi="rate24" /></div>
             <p className="text-xs text-[var(--app-text-secondary)]">
               {waiting ? <>แชทที่ยังไม่ตอบที่ค้างนานสุด: <span className="font-medium text-[var(--app-text-primary)]">{waiting}</span> (นับเวลาจริง เหมือนหน้าแชทร้านค้า)</> : formatValue(row.unreplied).text === "0" ? "ไม่มีแชทที่ยังไม่ตอบในเดือนนี้" : null}
             </p>

@@ -3,78 +3,20 @@
 import Link from "next/link";
 import React from "react";
 import { PageHeader } from "@/components/shell/page-header";
-import { KpiStrip, KpiStripSkeleton, SectionCard, SectionCardSkeleton, Table, TableBody, TableCell, TableEmptyState, TableHead, TableHeader, TableRow, useDeferredLoading } from "@/components/ui";
-import { RESPONSE_RATE_TARGET_PERCENT } from "@/lib/v2/business-hours";
+import { KpiStripSkeleton, SectionCard, SectionCardSkeleton, Table, TableBody, TableCell, TableEmptyState, TableHead, TableHeader, TableRow, useDeferredLoading } from "@/components/ui";
+import { RATE24_TARGET, REPLIED_RATE_TARGET } from "@/lib/v2/kpi";
 import { monthLongLabel, periodLabel } from "@/lib/v2/month";
 import { reportHref, storesHref } from "@/lib/v2/month-url";
-import { topUnreplied, type GroupTotals } from "@/lib/v2/monthly-model";
-import { formatValue, numericValue, type ValueState } from "@/lib/v2/value-state";
+import { topUnreplied } from "@/lib/v2/monthly-model";
+import { TwoKpiCards, VolumeLine } from "./kpi-cards";
 import { DataLine, OverviewTabs } from "./v2-month-controls";
 import { useV2Month } from "./v2-month-data";
-import { DeltaValue, SourceNotice, StateValue } from "./v2-ui";
-
-function kpiValue(state: ValueState, format: "count" | "percent", target?: number) {
-  const formatted = formatValue(state, format);
-  if (formatted.text === "—") return null;
-  return <StateValue state={state} format={format} target={target} />;
-}
-
-/** " · +3" when the change can be computed; nothing otherwise (the previous value already says why). */
-function deltaPart(state: ValueState, kind: "count" | "points", worseWhen: "up" | "down") {
-  return numericValue(state) === null ? null : <> · <DeltaValue state={state} kind={kind} worseWhen={worseWhen} /></>;
-}
-
-function previousText(state: ValueState, format: "count" | "percent") {
-  const formatted = formatValue(state, format);
-  return formatted.text === "—" ? `— (${formatted.reason})` : formatted.text;
-}
-
-function NetworkKpis({ totals }: { totals: GroupTotals }) {
-  const data = useV2Month();
-  const previousLabel = periodLabel(data.frame.previous);
-  const reason = (state: ValueState) => formatValue(state, "count").reason;
-  return (
-    <KpiStrip
-      data-v2-network-kpis
-      columns={4}
-      items={[
-        {
-          id: "chats",
-          label: "แชททั้งหมด",
-          period: periodLabel(data.frame.current),
-          value: kpiValue(totals.chats, "count"),
-          subtext: reason(totals.chats) ?? <>{previousLabel}: {previousText(totals.previousChats, "count")} · เหมือนหน้าแชทร้านค้า</>,
-        },
-        {
-          id: "unreplied",
-          label: "ยังไม่ตอบ",
-          period: periodLabel(data.frame.current),
-          value: kpiValue(totals.unreplied, "count"),
-          subtext: reason(totals.unreplied) ?? <>{previousLabel}: {previousText(totals.previousUnreplied, "count")}{deltaPart(totals.unrepliedDelta, "count", "up")}</>,
-        },
-        {
-          id: "replied",
-          label: "ตอบแล้ว",
-          period: periodLabel(data.frame.current),
-          value: kpiValue(totals.replyRate, "percent"),
-          subtext: formatValue(totals.replyRate, "percent").reason ?? <>{formatValue(totals.replied).text} แชท · {previousLabel}: {previousText(totals.previousReplyRate, "percent")}{deltaPart(totals.replyRateDelta, "points", "down")}</>,
-        },
-        {
-          id: "rate24",
-          label: "ตอบใน 24 ชม.",
-          period: periodLabel(data.frame.current),
-          value: kpiValue(totals.rate24, "percent", RESPONSE_RATE_TARGET_PERCENT),
-          subtext: formatValue(totals.rate24, "percent").reason ?? <>เป้า {RESPONSE_RATE_TARGET_PERCENT}% · {previousLabel}: {previousText(totals.previousRate24, "percent")}{deltaPart(totals.rate24Delta, "points", "down")}</>,
-        },
-      ]}
-    />
-  );
-}
+import { CountCell, DeltaValue, RateCell, SourceNotice, StateValue } from "./v2-ui";
 
 function PartnerTable() {
   const data = useV2Month();
   return (
-    <SectionCard title="Partner" meta={`${data.periodText} · เรียงตามยังไม่ตอบ`} bodyPadding="none">
+    <SectionCard title="Partner" meta={`${data.periodText} · เรียงตามช่องว่างถึงเป้าตอบใน 24 ชม. (ห่างสุดก่อน)`} bodyPadding="none">
       <div className="overflow-x-auto">
         <Table data-v2-partner-table>
           <TableHeader>
@@ -83,15 +25,14 @@ function PartnerTable() {
               <TableHead scope="col" align="right">สาขา</TableHead>
               <TableHead scope="col" align="right">แชท</TableHead>
               <TableHead scope="col" align="right">ยังไม่ตอบ</TableHead>
-              <TableHead scope="col" align="right">เทียบเดือนก่อน</TableHead>
               <TableHead scope="col" align="right">ตอบแล้ว %</TableHead>
-              <TableHead scope="col" align="right">ตอบใน 24 ชม.</TableHead>
+              <TableHead scope="col" align="right">ตอบใน 24 ชม. %</TableHead>
               <TableHead scope="col"><span className="sr-only">รายงาน</span></TableHead>
             </tr>
           </TableHeader>
           <TableBody>
             {data.partners.length === 0 ? (
-              <TableEmptyState colSpan={8} message="ยังไม่มีสาขา" />
+              <TableEmptyState colSpan={7} message="ยังไม่มีสาขา" />
             ) : data.partners.map((row) => (
               <TableRow key={row.partner} data-v2-partner={row.partner}>
                 <TableCell className="font-medium">
@@ -99,10 +40,9 @@ function PartnerTable() {
                 </TableCell>
                 <TableCell align="right" numeric>{row.storeCount.toLocaleString("th-TH")}</TableCell>
                 <TableCell align="right" numeric><StateValue state={row.chats} /></TableCell>
-                <TableCell align="right" numeric className="font-semibold"><StateValue state={row.unreplied} /></TableCell>
-                <TableCell align="right"><DeltaValue state={row.unrepliedDelta} kind="count" worseWhen="up" /></TableCell>
-                <TableCell align="right" numeric><StateValue state={row.replyRate} format="percent" /></TableCell>
-                <TableCell align="right" numeric><StateValue state={row.rate24} format="percent" target={RESPONSE_RATE_TARGET_PERCENT} /></TableCell>
+                <TableCell align="right" numeric><CountCell value={row.unreplied} delta={row.unrepliedDelta} /></TableCell>
+                <TableCell align="right" numeric><RateCell value={row.replyRate} delta={row.replyRateDelta} target={REPLIED_RATE_TARGET} /></TableCell>
+                <TableCell align="right" numeric><RateCell value={row.rate24} delta={row.rate24Delta} target={RATE24_TARGET} /></TableCell>
                 <TableCell>
                   <Link href={reportHref({ month: data.month, partner: row.partner, store: null })} target="_blank" className="whitespace-nowrap text-xs font-medium text-[var(--app-accent)] hover:underline">รายงาน ↗<span className="sr-only"> {row.partner}</span></Link>
                 </TableCell>
@@ -115,10 +55,9 @@ function PartnerTable() {
                 <th scope="row" className="px-4 py-3 text-left font-semibold">ทุกสาขา</th>
                 <td className="px-4 py-3 text-right tabular-nums">{data.rows.length.toLocaleString("th-TH")}</td>
                 <td className="px-4 py-3 text-right"><StateValue state={data.network.chats} /></td>
-                <td className="px-4 py-3 text-right font-semibold"><StateValue state={data.network.unreplied} /></td>
-                <td className="px-4 py-3 text-right"><DeltaValue state={data.network.unrepliedDelta} kind="count" worseWhen="up" /></td>
-                <td className="px-4 py-3 text-right"><StateValue state={data.network.replyRate} format="percent" /></td>
-                <td className="px-4 py-3 text-right"><StateValue state={data.network.rate24} format="percent" target={RESPONSE_RATE_TARGET_PERCENT} /></td>
+                <td className="px-4 py-3 text-right"><CountCell value={data.network.unreplied} delta={data.network.unrepliedDelta} /></td>
+                <td className="px-4 py-3 text-right"><RateCell value={data.network.replyRate} delta={data.network.replyRateDelta} target={REPLIED_RATE_TARGET} /></td>
+                <td className="px-4 py-3 text-right"><RateCell value={data.network.rate24} delta={data.network.rate24Delta} target={RATE24_TARGET} /></td>
                 <td className="px-4 py-3">
                   <Link href={reportHref({ month: data.month, partner: null, store: null })} target="_blank" className="whitespace-nowrap text-xs font-medium text-[var(--app-accent)] hover:underline">รายงาน ↗<span className="sr-only"> ทุกสาขา</span></Link>
                 </td>
@@ -155,7 +94,7 @@ function TopUnreplied() {
                 </span>
                 <span className="shrink-0 text-right">
                   <span className="block text-sm font-semibold"><StateValue state={row.unreplied} /> <span className="text-xs font-normal text-[var(--app-text-secondary)]">แชท</span></span>
-                  <DeltaValue state={row.unrepliedDelta} kind="count" worseWhen="up" />
+                  <span className="block text-xs text-[var(--app-text-secondary)]">ตอบใน 24 ชม. <StateValue state={row.rate24} format="percent" target={RATE24_TARGET ?? undefined} /> · <DeltaValue state={row.unrepliedDelta} kind="count" worseWhen="up" /></span>
                 </span>
               </Link>
             </li>
@@ -190,13 +129,14 @@ export function MonthOverview() {
         {data.coreLoading ? (
           showSkeleton ? (
             <div className="space-y-4">
-              <KpiStripSkeleton columns={4} labels={["แชททั้งหมด", "ยังไม่ตอบ", "ตอบแล้ว", "ตอบใน 24 ชม."]} />
+              <KpiStripSkeleton columns={2} labels={["ตอบแล้ว %", "ตอบใน 24 ชม. %"]} />
               <SectionCardSkeleton title="Partner" lines={8} />
             </div>
           ) : null
         ) : (
           <>
-            <NetworkKpis totals={data.network} />
+            <TwoKpiCards totals={data.network} frame={data.frame} />
+            <VolumeLine totals={data.network} frame={data.frame} />
             <div className="grid grid-cols-[minmax(0,1fr)_minmax(300px,380px)] items-start gap-5">
               <PartnerTable />
               <TopUnreplied />

@@ -10,9 +10,10 @@ const params = (query: string) => new URLSearchParams(query);
 
 test("store list URL: month always written, defaults left out, unknown values fall back", () => {
   assert.equal(storesHref({ month: "2026-10" }), "/v2/stores?month=2026-10");
-  assert.equal(storesHref({ month: "2026-09", partner: "TG", region: "Eastern", sort: "rate24", store: "s1" }), "/v2/stores?month=2026-09&partner=TG&region=Eastern&sort=rate24&store=s1");
+  assert.equal(storesHref({ month: "2026-09", partner: "TG", region: "Eastern", sort: "unreplied", store: "s1" }), "/v2/stores?month=2026-09&partner=TG&region=Eastern&sort=unreplied&store=s1");
+  assert.equal(storesHref({ month: "2026-09", sort: "rate24" }), "/v2/stores?month=2026-09", "the default sort (24h gap) is left out");
   assert.deepEqual(parseStoresUrl(params("month=2026-09&partner=TG&sort=delta&store=s1"), NOW), { month: "2026-09", partner: "TG", region: null, sort: "delta", store: "s1" });
-  assert.deepEqual(parseStoresUrl(params("month=2026-08&sort=bogus"), NOW), { month: "2026-10", partner: null, region: null, sort: "unreplied", store: null });
+  assert.deepEqual(parseStoresUrl(params("month=2026-08&sort=bogus"), NOW), { month: "2026-10", partner: null, region: null, sort: "rate24", store: null });
   assert.equal(withMonth("/v2", "2026-09"), "/v2?month=2026-09");
 });
 

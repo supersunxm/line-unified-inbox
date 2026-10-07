@@ -4,16 +4,16 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import React, { Suspense, useMemo, useState } from "react";
 import { AuthorizedSection } from "@/app/authorized-workspace";
-import { RESPONSE_RATE_TARGET_PERCENT } from "@/lib/v2/business-hours";
+import { KPI_DIFFERENCE_NOTE, KPI_HOW_COUNTED, RATE24_TARGET, REPLIED_RATE_TARGET } from "@/lib/v2/kpi";
 import { monthLongLabel, monthShortLabel, monthStatusLabel, periodLabel } from "@/lib/v2/month";
 import { parseReportUrl, storesHref } from "@/lib/v2/month-url";
-import { dataCoverage, sortMonthRows, type GroupTotals, type MonthStoreRow } from "@/lib/v2/monthly-model";
+import { coverageText, dataCoverage, previousCoverage, sortMonthRows, type GroupTotals, type MonthStoreRow } from "@/lib/v2/monthly-model";
 import { buildReportSummary, OPEN_MONTH_NOTE } from "@/lib/v2/report-summary";
 import { thaiLocationLabel } from "@/lib/v2/thai-geo";
-import { type ValueState } from "@/lib/v2/value-state";
+import { KpiCompareTable } from "./kpi-cards";
 import { PartnerRank } from "./store-scorecard-view";
 import { useV2Month, V2MonthDataProvider } from "./v2-month-data";
-import { DeltaValue, StateValue } from "./v2-ui";
+import { CountCell, RateCell, StateValue } from "./v2-ui";
 
 // The report is light-only and A4: these light token values apply inside .v2-report whatever
 // the app theme is, and @page sets the paper. They are :root's light values from
@@ -40,40 +40,6 @@ const REPORT_CSS = `
 const th = "border-b border-[var(--app-border)] px-2 py-1.5 text-[11px] font-semibold text-[var(--app-text-secondary)]";
 const td = "border-b border-[var(--app-border-subtle)] px-2 py-1.5 text-xs";
 
-function KpiTable({ totals }: { totals: GroupTotals }) {
-  const data = useV2Month();
-  const lines: Array<[string, ValueState, ValueState, React.ReactNode, "count" | "percent", number | undefined]> = [
-    ["แชท", totals.chats, totals.previousChats, "—", "count", undefined],
-    ["ยังไม่ตอบ", totals.unreplied, totals.previousUnreplied, <DeltaValue key="d" state={totals.unrepliedDelta} kind="count" worseWhen="up" />, "count", undefined],
-    ["ตอบแล้ว %", totals.replyRate, totals.previousReplyRate, <DeltaValue key="d" state={totals.replyRateDelta} kind="points" worseWhen="down" />, "percent", undefined],
-    ["ตอบใน 24 ชม.", totals.rate24, totals.previousRate24, <DeltaValue key="d" state={totals.rate24Delta} kind="points" worseWhen="down" />, "percent", RESPONSE_RATE_TARGET_PERCENT],
-  ];
-  return (
-    <table data-v2-report-kpis>
-      <thead>
-        <tr>
-          <th scope="col" className={`${th} text-left`}>ตัวชี้วัด</th>
-          <th scope="col" className={`${th} text-right`}>{periodLabel(data.frame.current)}</th>
-          <th scope="col" className={`${th} text-right`}>{periodLabel(data.frame.previous)}</th>
-          <th scope="col" className={`${th} text-right`}>เปลี่ยน</th>
-          <th scope="col" className={`${th} text-right`}>เป้า</th>
-        </tr>
-      </thead>
-      <tbody>
-        {lines.map(([label, current, previous, delta, format, target]) => (
-          <tr key={label}>
-            <th scope="row" className={`${td} text-left font-medium`}>{label}</th>
-            <td className={`${td} text-right font-semibold`}><StateValue state={current} format={format} target={target} showN={format === "percent"} /></td>
-            <td className={`${td} text-right`}><StateValue state={previous} format={format} /></td>
-            <td className={`${td} text-right`}>{delta}</td>
-            <td className={`${td} text-right text-[var(--app-text-secondary)]`}>{target ? `${target}%` : label === "ยังไม่ตอบ" ? "0" : "—"}</td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  );
-}
-
 function StoreTable({ rows }: { rows: MonthStoreRow[] }) {
   return (
     <table data-v2-report-stores>
@@ -82,9 +48,8 @@ function StoreTable({ rows }: { rows: MonthStoreRow[] }) {
           <th scope="col" className={`${th} text-left`}>สาขา</th>
           <th scope="col" className={`${th} text-right`}>แชท</th>
           <th scope="col" className={`${th} text-right`}>ยังไม่ตอบ</th>
-          <th scope="col" className={`${th} text-right`}>เทียบ</th>
           <th scope="col" className={`${th} text-right`}>ตอบแล้ว %</th>
-          <th scope="col" className={`${th} text-right`}>ตอบใน 24 ชม. (n)</th>
+          <th scope="col" className={`${th} text-right`}>ตอบใน 24 ชม. % (n)</th>
           <th scope="col" className={`${th} text-right`}>อันดับ</th>
         </tr>
       </thead>
@@ -96,10 +61,9 @@ function StoreTable({ rows }: { rows: MonthStoreRow[] }) {
               {thaiLocationLabel(row.region, row.province) && <span className="block text-[11px] text-[var(--app-text-secondary)]">{thaiLocationLabel(row.region, row.province)}</span>}
             </th>
             <td className={`${td} text-right`}><StateValue state={row.chats} /></td>
-            <td className={`${td} text-right font-semibold`}><StateValue state={row.unreplied} /></td>
-            <td className={`${td} text-right`}><DeltaValue state={row.unrepliedDelta} kind="count" worseWhen="up" /></td>
-            <td className={`${td} text-right`}><StateValue state={row.replyRate} format="percent" /></td>
-            <td className={`${td} text-right`}><StateValue state={row.rate24} format="percent" target={RESPONSE_RATE_TARGET_PERCENT} showN /></td>
+            <td className={`${td} text-right`}><CountCell value={row.unreplied} delta={row.unrepliedDelta} /></td>
+            <td className={`${td} text-right`}><RateCell value={row.replyRate} delta={row.replyRateDelta} target={REPLIED_RATE_TARGET} /></td>
+            <td className={`${td} text-right`}><RateCell value={row.rate24} delta={row.rate24Delta} target={RATE24_TARGET} showN /></td>
             <td className={`${td} text-right`}><PartnerRank row={row} /></td>
           </tr>
         ))}
@@ -118,9 +82,8 @@ function PartnerSummaryTable() {
           <th scope="col" className={`${th} text-right`}>สาขา</th>
           <th scope="col" className={`${th} text-right`}>แชท</th>
           <th scope="col" className={`${th} text-right`}>ยังไม่ตอบ</th>
-          <th scope="col" className={`${th} text-right`}>เทียบ</th>
           <th scope="col" className={`${th} text-right`}>ตอบแล้ว %</th>
-          <th scope="col" className={`${th} text-right`}>ตอบใน 24 ชม.</th>
+          <th scope="col" className={`${th} text-right`}>ตอบใน 24 ชม. %</th>
         </tr>
       </thead>
       <tbody>
@@ -129,10 +92,9 @@ function PartnerSummaryTable() {
             <th scope="row" className={`${td} text-left font-medium`}>{row.partner}</th>
             <td className={`${td} text-right`}>{row.storeCount}</td>
             <td className={`${td} text-right`}><StateValue state={row.chats} /></td>
-            <td className={`${td} text-right font-semibold`}><StateValue state={row.unreplied} /></td>
-            <td className={`${td} text-right`}><DeltaValue state={row.unrepliedDelta} kind="count" worseWhen="up" /></td>
-            <td className={`${td} text-right`}><StateValue state={row.replyRate} format="percent" /></td>
-            <td className={`${td} text-right`}><StateValue state={row.rate24} format="percent" target={RESPONSE_RATE_TARGET_PERCENT} /></td>
+            <td className={`${td} text-right`}><CountCell value={row.unreplied} delta={row.unrepliedDelta} /></td>
+            <td className={`${td} text-right`}><RateCell value={row.replyRate} delta={row.replyRateDelta} target={REPLIED_RATE_TARGET} /></td>
+            <td className={`${td} text-right`}><RateCell value={row.rate24} delta={row.rate24Delta} target={RATE24_TARGET} /></td>
           </tr>
         ))}
       </tbody>
@@ -153,10 +115,10 @@ function ReportBody() {
     }
     if (request.partner) {
       const partner = data.partners.find((entry) => entry.partner === request.partner) ?? null;
-      const rows = sortMonthRows(data.rows.filter((row) => row.partner === request.partner), "unreplied");
+      const rows = sortMonthRows(data.rows.filter((row) => row.partner === request.partner), "rate24");
       return partner ? { kind: "partner" as const, label: `Partner ${partner.partner}`, totals: partner as GroupTotals, rows } : null;
     }
-    return { kind: "network" as const, label: "ทุกสาขา", totals: data.network, rows: sortMonthRows(data.rows, "unreplied") };
+    return { kind: "network" as const, label: "ทุกสาขา", totals: data.network, rows: sortMonthRows(data.rows, "rate24") };
   }, [data.network, data.partners, data.rows, request.partner, request.store]);
 
   const summary = scope ? buildReportSummary({ monthLabel: monthShortLabel(data.month), periodText: data.periodText, scopeLabel: scope.label, totals: scope.totals, stores: scope.rows, inProgress: data.frame.inProgress }) : "";
@@ -198,7 +160,8 @@ function ReportBody() {
         <div className="space-y-6">
           <section>
             <h2 className="mb-2 text-sm font-semibold">ตัวชี้วัดเทียบเดือนก่อนและเป้า</h2>
-            <KpiTable totals={scope.totals} />
+            <KpiCompareTable totals={scope.totals} frame={data.frame} dense />
+            <p className="mt-2 text-[11px] text-[var(--app-text-secondary)]">{KPI_DIFFERENCE_NOTE}</p>
           </section>
           {scope.kind === "network" && (
             <section>
@@ -207,11 +170,11 @@ function ReportBody() {
             </section>
           )}
           <section>
-            <h2 className="mb-2 text-sm font-semibold">{scope.kind === "store" ? "สาขา" : `สาขา (${scope.rows.length}) เรียงตามยังไม่ตอบ`}</h2>
+            <h2 className="mb-2 text-sm font-semibold">{scope.kind === "store" ? "สาขา" : `สาขา (${scope.rows.length}) เรียงตามช่องว่างถึงเป้าตอบใน 24 ชม.`}</h2>
             <StoreTable rows={scope.rows} />
           </section>
           <p data-v2-report-coverage className="text-xs text-[var(--app-text-secondary)]">
-            ความครบของข้อมูล: สาขาที่มีข้อมูลแชท {coverage?.withChats}/{coverage?.total}
+            ความครบของข้อมูล: {coverage ? coverageText({ currentLabel: periodLabel(data.frame.current), previousLabel: periodLabel(data.frame.previous), current: coverage, previous: previousCoverage(scope.rows), previousReason: data.frame.previousCollected ? null : "ระบบยังไม่ได้เก็บข้อมูลช่วงนี้" }) : ""}
             {data.placeholders.length > 0 && scope.kind === "network" ? ` · ไม่นับ ${data.placeholders.length} ร้านที่ยังไม่มี LINE OA` : ""}
             {data.previous.error ? ` · ช่วงเทียบ: ${data.previous.error}` : ""}
           </p>
@@ -220,7 +183,9 @@ function ReportBody() {
 
       <footer className="mt-8 border-t border-[var(--app-border)] pt-3 text-[11px] text-[var(--app-text-secondary)]">
         {data.frame.inProgress && <p data-v2-report-open-month className="font-medium text-[var(--app-text-primary)]">{OPEN_MONTH_NOTE}</p>}
-        <p>แชท ยังไม่ตอบ ตอบแล้ว: เหมือนหน้าแชทร้านค้าของเดือนเดียวกัน · ตอบใน 24 ชม.: เหมือนหน้าอัตราตอบกลับ 24 ชม. · อัตราจากแชทน้อยกว่า 10 แชทแสดงสีจางและไม่เทียบเป้า</p>
+        <p data-v2-report-how-counted>นับยังไง — ตอบแล้ว %: {KPI_HOW_COUNTED.replied}</p>
+        <p>นับยังไง — ตอบใน 24 ชม. %: {KPI_HOW_COUNTED.rate24}</p>
+        <p>ตัวเลขใต้อัตรา = เปลี่ยนกี่จุดจากช่วงเทียบ · จำนวนแชทและการเปลี่ยนแปลงไม่ใช้สี เพราะขึ้นลงตามจำนวนแชท · อัตราจากแชทน้อยกว่า 10 แชทแสดงสีจางและไม่เทียบเป้า</p>
         <p>พิมพ์เมื่อ {new Date(data.now).toLocaleString("th-TH-u-ca-gregory", { timeZone: "Asia/Bangkok", dateStyle: "medium", timeStyle: "short" })}</p>
       </footer>
     </div>

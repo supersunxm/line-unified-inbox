@@ -16,6 +16,36 @@ confirmed by the owner), **CANCELLED**.
 | 2026-10-07 | Which chats need a reply | Every customer message must be answered, stickers included. "ยังไม่ตอบ" is correct by definition. No "doesn't need a reply" logic exists or will be built. | DECIDED |
 | 2026-10-07 | Daily follow-up loop and "needs reply" investigation | Cancelled. The ตามวันนี้ list survives only inside the "ตอนนี้" tab, unchanged. | CANCELLED |
 
+## Owner decisions, 7 Oct 2026
+
+| Date | Item | Decision | Status |
+|---|---|---|---|
+| 2026-10-07 | Official KPIs | Two KPIs, each with its own target: (1) **ตอบแล้ว %** — conversation status in the month, the /chats definition; (2) **ตอบใน 24 ชม. %** — the /replymessage definition. | DECIDED (owner) |
+| 2026-10-07 | ตอบแล้ว % target | Not set yet: `REPLIED_RATE_TARGET = null` (`frontend/src/lib/v2/kpi.ts`). While null there is no target colour anywhere and the UI says "ยังไม่กำหนดเป้า". | DECIDED (owner) |
+| 2026-10-07 | ตอบใน 24 ชม. % target | 90% (`RATE24_TARGET`). | DECIDED (owner) |
+| 2026-10-07 | Backend work | Approved, additive only: month close (snapshots), tag-parser fixes + per-store tag coverage, a date range on the summary API, a per-store per-day 24h rate. Reply-state logic untouched. | DECIDED (owner) |
+| 2026-10-07 | Partner | Anchored to the Store ID in a mapping table, not parsed from names at read time. | DECIDED (owner) |
+| 2026-10-07 | Comparisons (A1) | The comparison that carries semantic colour is each KPI's change in **percentage points**. Counts (แชท, ยังไม่ตอบ) and their change stay visible but neutral: they move with chat volume (Oct 1–7 had 51% more chats than Sep 1–7). | DECIDED (owner) |
+| 2026-10-07 | Default sort (A1) | Partner table and store list: the 24-hour rate's gap to its target, worst first; low-sample rows last. Other sorts kept: ตอบแล้ว %, the 24-hour rate's drop in points, ยังไม่ตอบ. | DECIDED (owner) |
+| 2026-10-07 | Coverage line (A3) | States stores-with-chat-data for both compared periods, without inferring causes. | DECIDED (owner) |
+
+### Why ตอบใน 24 ชม. % can be higher than ตอบแล้ว %
+
+They measure different things (from the code):
+
+- **ตอบแล้ว %** (`bm-reply-status-summary`, `conversations.service.ts getBmReplyStatusSummary`): the unit is a
+  **conversation**, bucketed by the month of its **latest message** (`latestMessageAt`). It is "replied" when the
+  reply-state resolver says the **latest** customer message has a human reply **now**.
+- **ตอบใน 24 ชม. %** (`store-24h-response-summary`, `historical-timeline.service.ts replyAnalytics`, default mode
+  `CHAT_FIRST_REPLY`): the unit is a **chat with a customer message in the period**, bucketed by the date of the
+  customer's **first** message in the period. It counts "within 24h" when the first human reply after that first
+  message came within 24 hours.
+
+So a chat whose first message was answered quickly, and whose customer then wrote again and is still waiting,
+counts as "ตอบใน 24 ชม." and as "ยังไม่ตอบ" at the same time. The populations also differ (latest-message month vs
+first-customer-message date), so the two n's differ. UI sentence (`KPI_DIFFERENCE_NOTE`): "ตอบใน 24 ชม. ดูแค่ข้อความแรกของลูกค้าในช่วงนี้
+ส่วนตอบแล้ว % ดูข้อความล่าสุด แชทที่ตอบครั้งแรกทันแต่ลูกค้าทักมาใหม่แล้วยังไม่ได้ตอบ จึงนับเป็น “ตอบใน 24 ชม.” และ “ยังไม่ตอบ” พร้อมกัน"
+
 ## One definition, shared with /chats (Task 1)
 
 | Date | Item | Decision | Status |
@@ -52,9 +82,9 @@ confirmed by the owner), **CANCELLED**.
 | 2026-10-07 | Partner rule | Text after the last " By " in the store name (case-insensitive), trailing branch number stripped ("By TG 2" → TG), then looked up by compact key in `PARTNER_ALIASES` (`frontend/src/lib/v2/partners.ts`). Names without the suffix → "ไม่ระบุ partner", listed in the report. | DECIDED |
 | 2026-10-07 | Partner normalization map | OPPO, Com7, TG, IT City (IT CITY / IT City), Siam TV (Siam TV / SiamTV), LCB Mobile Supply, VTEC, Jaymart. Variants not in the map keep their own trimmed spelling. "JP" vs "JP Store" and "INTERCOM" vs "Inter Computer & IT" are **not** merged: they may be different companies. | ASSUMED (owner to confirm merges) |
 | 2026-10-07 | `MIN_RATE_SAMPLE` | 10 chats in the period. Below it a rate is muted, shows n, gets no target colour, is unranked and sorts after measured stores. Applies to ตอบแล้ว % (n = chats), ตอบใน 24 ชม. % (n = replyAnalytics total) and tag coverage. | DECIDED (default from brief) |
-| 2026-10-07 | Δ column | Change in ยังไม่ตอบ vs the comparison period. Rate deltas (points) are shown in the scorecard drawer. | ASSUMED |
+| 2026-10-07 | Δ column | Superseded by the owner decision above: Δ is shown under each KPI in points (coloured) and under counts (neutral). | SUPERSEDED |
 | 2026-10-07 | อันดับใน partner | Among the partner's stores with ≥ `MIN_RATE_SAMPLE` chats: highest ตอบแล้ว %, then highest 24h %, then fewest ยังไม่ตอบ, then name. Rank 1 = best. Stores in "ไม่ระบุ partner" are not ranked. | ASSUMED |
-| 2026-10-07 | Default sort | ยังไม่ตอบ, most first. Rate sorts put the lowest first. | DECIDED |
+| 2026-10-07 | Default sort | Superseded: the 24-hour rate gap to target (see owner decisions). | SUPERSEDED |
 | 2026-10-07 | "Stores with chat data N/M" | Stores with at least one chat in the selected period ÷ v2 stores. | ASSUMED |
 | 2026-10-07 | Removed from /v2/stores | "สาขาที่ต้องดู" KPI, the daily "ต้องดู" inclusion rule, per-row chips that repeat columns. Google Review column hidden while no store has a result for the month. | DECIDED |
 

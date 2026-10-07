@@ -124,7 +124,9 @@ test("low sample: rates are muted, unranked, and sorted after measured stores", 
   assert.deepEqual(sortMonthRows(rows, "reply").map((row) => row.storeId), ["s1", "s2", "s3"]);
   assert.deepEqual(sortMonthRows(rows, "rate24").map((row) => row.storeId), ["s1", "s2", "s3"]);
   assert.deepEqual(sortMonthRows(rows, "unreplied").map((row) => row.storeId), ["s1", "s2", "s3"], "ties by name");
-  assert.deepEqual(sortMonthRows(rows, "delta").map((row) => row.storeId), ["s1", "s3", "s2"]);
+  // delta = the 24-hour rate's change in points, biggest drop first; s3 has no comparable rate.
+  assert.deepEqual(sortMonthRows(rows, "delta").map((row) => row.storeId), ["s2", "s1", "s3"]);
+  assert.deepEqual(sortMonthRows(rows).map((row) => row.storeId), sortMonthRows(rows, "rate24").map((row) => row.storeId), "default = 24h gap to target");
 });
 
 test("rank within partner: best reply % first", () => {

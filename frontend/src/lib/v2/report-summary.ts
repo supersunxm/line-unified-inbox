@@ -1,6 +1,6 @@
 // The "คัดลอกสรุป" text: a short Thai plain-text summary to paste into LINE. Pure.
 
-import { RESPONSE_RATE_TARGET_PERCENT } from "./business-hours.ts";
+import { NO_TARGET_LABEL, RATE24_TARGET, REPLIED_RATE_TARGET } from "./kpi.ts";
 import type { GroupTotals, MonthStoreRow } from "./monthly-model.ts";
 import { formatValue, numericValue, type ValueState } from "./value-state.ts";
 
@@ -38,6 +38,8 @@ export function buildReportSummary(input: {
   const { totals } = input;
   const unrepliedDelta = signed(totals.unrepliedDelta);
   const rateDelta = signed(totals.rate24Delta, " จุด");
+  const repliedDelta = signed(totals.replyRateDelta, " จุด");
+  const target = (value: number | null) => (value === null ? NO_TARGET_LABEL : `เป้า ${value}%`);
   const top = input.stores
     .filter((row) => (numericValue(row.unreplied) ?? 0) > 0)
     .sort((a, b) => (numericValue(b.unreplied) ?? 0) - (numericValue(a.unreplied) ?? 0) || a.storeName.localeCompare(b.storeName, "th"))
@@ -46,7 +48,8 @@ export function buildReportSummary(input: {
     `สรุปเดือน ${input.monthLabel} · ${input.scopeLabel}`,
     `ช่วง: ${input.periodText}`,
     `แชท ${count(totals.chats)} · ยังไม่ตอบ ${count(totals.unreplied)}${unrepliedDelta ? ` (${unrepliedDelta})` : ""}`,
-    `ตอบแล้ว ${percent(totals.replyRate)} · ตอบใน 24 ชม. ${percent(totals.rate24)}${rateDelta ? ` (${rateDelta})` : ""} · เป้า ${RESPONSE_RATE_TARGET_PERCENT}%`,
+    `ตอบแล้ว ${percent(totals.replyRate)}${repliedDelta ? ` (${repliedDelta})` : ""} · ${target(REPLIED_RATE_TARGET)}`,
+    `ตอบใน 24 ชม. ${percent(totals.rate24)}${rateDelta ? ` (${rateDelta})` : ""} · ${target(RATE24_TARGET)}`,
     top.length > 0
       ? `ยังไม่ตอบมากสุด: ${top.map((row, index) => `${index + 1}) ${row.storeName} ${count(row.unreplied)} แชท`).join(" ")}`
       : "ไม่มีแชทที่ยังไม่ตอบ",

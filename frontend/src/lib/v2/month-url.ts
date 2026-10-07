@@ -21,7 +21,7 @@ export function withMonth(path: string, month: string): string {
   return `${path}${monthQuery(month)}`;
 }
 
-const SORTS: MonthSort[] = ["unreplied", "reply", "rate24", "delta"];
+const SORTS: MonthSort[] = ["rate24", "reply", "unreplied", "delta"];
 
 export type StoresUrlState = { month: string; partner: string | null; region: string | null; sort: MonthSort; store: string | null };
 
@@ -31,7 +31,7 @@ export function parseStoresUrl(params: Params, now: number = Date.now()): Stores
     month: parseV2Month(params.get("month"), now),
     partner: params.get("partner") || null,
     region: params.get("region") || null,
-    sort: SORTS.includes(sort as MonthSort) ? (sort as MonthSort) : "unreplied",
+    sort: SORTS.includes(sort as MonthSort) ? (sort as MonthSort) : "rate24",
     store: params.get("store") || null,
   };
 }
@@ -40,7 +40,7 @@ export function storesHref(state: Partial<StoresUrlState> & { month: string }): 
   return `/v2/stores${monthQuery(state.month, {
     partner: state.partner,
     region: state.region,
-    sort: state.sort && state.sort !== "unreplied" ? state.sort : null,
+    sort: state.sort && state.sort !== "rate24" ? state.sort : null,
     store: state.store,
   })}`;
 }
