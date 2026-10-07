@@ -2,7 +2,7 @@
 
 Audit date: 2026-10-07. Supported locales: Thai (`th`), English (`en`), Simplified Chinese (`zh`).
 
-Every route component below was reviewed against its direct-copy and locale-resource path. The global classified Thai AST sweep and route-scoped localization tests are the static evidence for the locale columns. Browser QA exercised every path at desktop width; all 19 routes that do not require an authenticated workspace were also exercised in all three locales at 375px mobile width. The remaining routes are marked `BLOCKED_AUTH` because this worktree has no local API/session or documented QA account.
+Every route component below was reviewed against its direct-copy and locale-resource path. The global classified Thai AST sweep and route-scoped localization tests are the static evidence for the locale columns. The 59 routes present before rebase were opened at desktop width; the 19 public routes were exercised in all three locales at 1440px desktop and 375×812 mobile. `/change-password`, added from latest `main`, was also checked in all locales at both sizes for localized form and generic API-error rendering. Its valid forced-reset session remains `BLOCKED_AUTH` because this worktree has no API/session or documented QA account.
 
 | Route | Source audit | TH keys | EN keys | ZH keys | Runtime QA |
 |---|---|---|---|---|---|
@@ -17,7 +17,7 @@ Every route component below was reviewed against its direct-copy and locale-reso
 | `/connect/tiktok` | PASS — `frontend/src/app/connect/tiktok/page.tsx`; classified scan + scoped resource tests | PASS | PASS | PASS | PASS — three-locale browser QA |
 | `/connect/tiktok/analytics` | PASS — `frontend/src/app/connect/tiktok/analytics/page.tsx`; classified scan + scoped resource tests | PASS | PASS | PASS | PASS — three-locale browser QA |
 | `/connect/tiktok/success` | PASS — `frontend/src/app/connect/tiktok/success/page.tsx`; classified scan + scoped resource tests | PASS | PASS | PASS | PASS — three-locale browser QA |
-| `/change-password` | PASS — `frontend/src/app/change-password/page.tsx`; route-owned TH/EN/ZH copy and password-policy regression tests | PASS | PASS | PASS | BLOCKED_AUTH — safe unauthenticated redirect to login can be checked; reset form requires a valid forced-reset session |
+| `/change-password` | PASS — `frontend/src/app/change-password/page.tsx`; route-owned TH/EN/ZH copy, localized generic API failures, and password-policy regression tests | PASS | PASS | PASS | BLOCKED_AUTH — fallback form rendering checked in all locales at desktop/mobile; valid forced-reset session requires the unavailable local API/session |
 | `/coupons` | PASS — `frontend/src/app/coupons/page.tsx`; classified scan + scoped resource tests | PASS | PASS | PASS | BLOCKED_AUTH — shared route gate; no supported local authenticated session |
 | `/dashboard` | PASS — `frontend/src/app/dashboard/page.tsx`; classified scan + scoped resource tests | PASS | PASS | PASS | BLOCKED_AUTH — shared route gate; no supported local authenticated session |
 | `/dashboard/message-traffic` | PASS — `frontend/src/app/dashboard/message-traffic/page.tsx`; classified scan + scoped resource tests | PASS | PASS | PASS | BLOCKED_AUTH — shared route gate; no supported local authenticated session |
@@ -67,7 +67,7 @@ Every route component below was reviewed against its direct-copy and locale-reso
 | `/v2/stores` | PASS — `frontend/src/app/v2/(shell)/stores/page.tsx`; classified scan + scoped resource tests | PASS | PASS | PASS | BLOCKED_AUTH — shared route gate; no supported local authenticated session |
 | `/welcome` | PASS — `frontend/src/app/welcome/page.tsx`; classified scan + scoped resource tests | PASS | PASS | PASS | BLOCKED_AUTH — shared route gate; no supported local authenticated session |
 
-`BLOCKED_AUTH` means route HTML/gate rendering was observed, but authenticated feature content was not treated as verified. No credentials were invented or entered. The isolated frontend has no backend on port 3001; API-dependent states therefore show fail-closed verification or an empty/error fallback.
+`BLOCKED_AUTH` means route HTML/gate rendering was observed, but authenticated feature content was not treated as verified. No credentials were invented or entered. The isolated frontend has no backend on port 3001; API-dependent states therefore show fail-closed verification or a localized empty/error fallback. `/change-password` displayed its localized generic failure copy after the API request failed; no password field was filled and no form was submitted.
 
 † `/friend-attribution` emits React minified hydration error 418 on the no-config state. The source route is unchanged from the branch base `de90d769`; its initializer reads `window.location.search` on the client while server rendering starts in `LOADING`. The route remains visually usable and its locale states were checked. This is a pre-existing issue, not introduced by localization.
 

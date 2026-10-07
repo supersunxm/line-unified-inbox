@@ -132,6 +132,7 @@ test("temporary-password sessions are routed to a dedicated recovery page", () =
   assert.match(loginPageCode, /mustChangePassword \? "\/change-password"/);
   assert.match(changePasswordPageCode, /api\.changePassword\(currentPassword, newPassword\)/);
   assert.match(changePasswordPageCode, /window\.location\.replace\(defaultRouteForUser\(user\)\)/);
+  assert.equal((changePasswordPageCode.match(/localizedPageError\(reason, t\.unable\)/g) ?? []).length, 2, "generic auth/API failures use the selected locale's recovery-page copy");
 });
 
 test("password recovery exposes visibility controls and the backend-aligned password rules", () => {

@@ -71,6 +71,13 @@ function passwordMeetsPolicy(password: string) {
   return password.length >= 8 && /\p{L}/u.test(password) && /[0-9]/.test(password);
 }
 
+function localizedPageError(reason: unknown, fallback: string) {
+  if (reason instanceof ApiError && (/^API request failed \(\d+\)$/.test(reason.message) || reason.message.startsWith("Unable to reach the data service."))) {
+    return fallback;
+  }
+  return reason instanceof Error ? reason.message : fallback;
+}
+
 function PasswordVisibilityIcon({ visible }: { visible: boolean }) {
   return visible ? (
     <svg viewBox="0 0 24 24" aria-hidden="true" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8">
@@ -165,7 +172,7 @@ export default function ChangePasswordPage() {
           window.location.replace("/login");
           return;
         }
-        setError(reason instanceof Error ? reason.message : t.unable);
+        setError(localizedPageError(reason, t.unable));
         setState("ready");
       });
     return () => { cancelled = true; };
@@ -194,7 +201,7 @@ export default function ChangePasswordPage() {
       setState("redirecting");
       window.location.replace(defaultRouteForUser(user));
     } catch (reason: unknown) {
-      setError(reason instanceof Error ? reason.message : t.unable);
+      setError(localizedPageError(reason, t.unable));
       setState("ready");
     }
   }

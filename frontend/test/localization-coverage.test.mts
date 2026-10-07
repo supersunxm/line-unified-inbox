@@ -22,6 +22,7 @@ import { couponPhrases } from "../src/app/coupons/coupons-i18n.ts";
 import { friendSourceLinksPhrases } from "../src/app/friend-source-links/friend-source-links-i18n.ts";
 import { mobileChatsPhrases, mobileMassMessagesPhrases, mobileMassMessagesTemplates, mobileStoresPhrases } from "../src/app/mobile-route-i18n.ts";
 import { registrationPhrases } from "../src/app/admin/registrations/registrations-i18n.ts";
+import { hqPermissionSummaryLabels, hqRegistrationText } from "../src/app/admin/registrations/hq/hq-registrations-i18n.ts";
 import { greetingManagementPhrases } from "../src/app/greeting-messages/greeting-management-i18n.ts";
 import { getGreetingDict } from "../src/app/greeting-messages/greeting-i18n.ts";
 import { monthlyOperationsReportPhrases } from "../src/app/monthly-operations-report/monthly-operations-report-i18n.ts";
@@ -467,6 +468,37 @@ test("admin, coupons, messaging, friend links, and greeting surfaces cover direc
     for (const language of locales) assert.ok(template[language].includes("{{value}}"));
   }
   assert.equal(new Set(monthlyOperationsReportPhrases.map((phrase) => normalizeUiText(phrase.th))).size, monthlyOperationsReportPhrases.length, "Monthly report sources must remain unique");
+});
+
+test("HQ account role and password-reset controls provide complete Thai, English, and Chinese copy", async () => {
+  const keys = Object.keys(hqRegistrationText.th).sort();
+  const permissionKeys = Object.keys(hqPermissionSummaryLabels.th).sort();
+  for (const language of locales) {
+    assert.deepEqual(Object.keys(hqRegistrationText[language]).sort(), keys, `${language} HQ registration keys`);
+    assert.deepEqual(Object.keys(hqPermissionSummaryLabels[language]).sort(), permissionKeys, `${language} HQ permission labels`);
+    const copy = hqRegistrationText[language];
+    const values = Object.values(copy).filter((value): value is string => typeof value === "string");
+    values.push(
+      copy.resetCompleted("Sam"),
+      copy.generatePassword("Sam"),
+      copy.roleUpdated("Sam"),
+      copy.deactivatedNotice("Sam"),
+      copy.reactivatedNotice("Sam"),
+      copy.requestFailed(403),
+      ...Object.values(hqPermissionSummaryLabels[language]),
+    );
+    for (const value of values) {
+      assert.ok(value.trim(), `${language} HQ copy must be present`);
+      if (language !== "th") assert.doesNotMatch(value, /[\u0e00-\u0e3e\u0e40-\u0e7e]/, `${language} HQ copy must not contain Thai text`);
+    }
+  }
+
+  const sourcePath = "../src/app/admin/registrations/hq/page.tsx";
+  const sourceFile = new URL(sourcePath, import.meta.url);
+  const { findHardcodedThaiUi } = await import("../scripts/audit-localization.mjs");
+  const source = readFileSync(sourceFile, "utf8");
+  assert.deepEqual(findHardcodedThaiUi(source, sourceFile.pathname), [], "HQ route has no unlocalized Thai UI literals");
+  assert.deepEqual(directUiStrings(source, sourceFile.pathname), [], "HQ route has no hard-coded English or Chinese UI copy");
 });
 
 test("store locator step labels are explicitly localized in all supported languages", () => {

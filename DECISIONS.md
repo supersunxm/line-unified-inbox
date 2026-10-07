@@ -3363,6 +3363,8 @@ Rationale:
 - A global exact-string observer could rewrite customer messages, OCR text, store names, or other Thai content that happens to match a short UI label.
 - Protected application views need route-specific contextual review and authenticated browser QA before a phrase can be marked covered.
 
+For latest-main routes added during integration, keep localization route-owned. HQ account-management labels derive from the current app language while permission booleans remain owned by the existing role policy. Generic password-reset network failures use localized fallback copy, while meaningful API-provided messages remain intact. This changes presentation only and avoids altering authentication or authorization behavior.
+
 ## 2026-10-07 — Public store-locator labels stay at the presentation boundary
 
 Decision: localize the locator's fixed step labels, region names, counts, and empty/error copy from route-owned locale resources. Keep the store API's province names, store names, search inputs, and analytics values unchanged.

@@ -1,3 +1,6 @@
+import { hqPermissionSummaryLabels } from "./hq-registrations-i18n.ts";
+import type { AppLanguage } from "../../../language-utils.ts";
+
 export type HqAccountRole = "ADMIN" | "ASSISTANT";
 
 export type HqAccount = {
@@ -20,17 +23,18 @@ export type HqAccount = {
   lastLoginAt: string | null;
 };
 
-export function hqPermissionSummary(account: HqAccount) {
+export function hqPermissionSummary(account: HqAccount, language: AppLanguage = "en") {
+  const labels = hqPermissionSummaryLabels[language];
   const admin = account.role === "ADMIN";
   return [
-    account.canAccessWeb && "Web",
-    account.canAccessMobile && "Mobile",
-    (admin || account.canAccessAllStores) && "All Stores",
-    admin && "Account Management",
-    (admin || account.canReply) && "Reply",
-    account.canAccessMainOa && "Main OA",
-    account.canAccessMainOa && account.canManageMainOa && "Main OA management",
-    admin && "Export / Download",
+    account.canAccessWeb && labels.web,
+    account.canAccessMobile && labels.mobile,
+    (admin || account.canAccessAllStores) && labels.allStores,
+    admin && labels.accountManagement,
+    (admin || account.canReply) && labels.reply,
+    account.canAccessMainOa && labels.mainOa,
+    account.canAccessMainOa && account.canManageMainOa && labels.manageMainOa,
+    admin && labels.export,
   ].filter(Boolean).join(" · ");
 }
 

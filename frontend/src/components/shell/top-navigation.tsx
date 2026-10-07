@@ -149,10 +149,10 @@ function MobileBottomNavigation({ authUser, currentSection, language, changeLang
   const [moreOpen, setMoreOpen] = useState(false);
   const secondaryActive = ["dashboard", "store-360", "stores", "admin-registrations", "purchase-analytics", "line-chat-health", "friend-source-links", "mass-messages", "broadcast", "coupons"].includes(currentSection);
   const labels = language === "th"
-    ? { home: "หน้าหลัก", dashboard: "แดชบอร์ด", chats: "แชทร้านค้า", insights: "เพื่อน", mainOa: "Main OA", more: "เพิ่มเติม", account: "บัญชี", profile: "โปรไฟล์", settings: "ตั้งค่า", traffic: "Message Traffic", store360: "Store 360", coupons: "คูปอง", stores: "จัดการร้านค้า", purchase: "ข้อมูลการซื้อ", friendLinks: "ลิงก์เพิ่มเพื่อน", mass: "ส่งข้อความ", broadcast: "Broadcast", approval: "อนุมัติ BM", richMenus: "จัดการ Rich Menu", autoResponses: "ข้อความตอบกลับอัตโนมัติ", greetingMessages: "ข้อความต้อนรับ", logout: "ออกจากระบบ", appearance: "รูปแบบการแสดงผล", language: "ภาษา" }
+    ? { home: "หน้าหลัก", dashboard: "แดชบอร์ด", chats: "แชทร้านค้า", insights: "เพื่อน", mainOa: "Main OA", more: "เพิ่มเติม", account: "บัญชี", profile: "โปรไฟล์", settings: "ตั้งค่า", traffic: "Message Traffic", store360: "Store 360", coupons: "คูปอง", stores: "จัดการร้านค้า", purchase: "ข้อมูลการซื้อ", friendLinks: "ลิงก์เพิ่มเพื่อน", mass: "ส่งข้อความ", broadcast: "Broadcast", approval: "อนุมัติ BM", richMenus: "จัดการ Rich Menu", autoResponses: "ข้อความตอบกลับอัตโนมัติ", greetingMessages: "ข้อความต้อนรับ", logout: "ออกจากระบบ", appearance: "รูปแบบการแสดงผล", language: "ภาษา", mobilePrimaryNavigation: "เมนูหลักบนมือถือ", noAuthorizedWorkspace: "ไม่มีพื้นที่ทำงานที่ได้รับอนุญาต", live: "ออนไลน์" }
     : language === "zh"
-      ? { home: "主页", dashboard: "仪表盘", chats: "门店聊天", insights: "关注者", mainOa: "Main OA", more: "更多", account: "账户", profile: "个人资料", settings: "设置", traffic: "消息流量", store360: "Store 360", coupons: "优惠券", stores: "门店管理", purchase: "购买洞察", friendLinks: "加好友链接", mass: "群发消息", broadcast: "Broadcast", approval: "BM 审批", richMenus: "Rich Menu 管理", autoResponses: "自动回复", greetingMessages: "欢迎消息", logout: "退出", appearance: "外观", language: "语言" }
-      : { home: "Main", dashboard: "Dashboard", chats: "Chats", insights: "Friends", mainOa: "Main OA", more: "More", account: "Account", profile: "Profile", settings: "Settings", traffic: "Message Traffic", store360: "Store 360", coupons: "Coupons", stores: "Stores", purchase: "Purchase", friendLinks: "Friend Links", mass: "Mass Message", broadcast: "Broadcast", approval: "BM Approval", richMenus: "Rich Menu Manager", autoResponses: "Auto-response", greetingMessages: "Greeting Messages", logout: "Logout", appearance: "Appearance", language: "Language" };
+      ? { home: "主页", dashboard: "仪表盘", chats: "门店聊天", insights: "关注者", mainOa: "Main OA", more: "更多", account: "账户", profile: "个人资料", settings: "设置", traffic: "消息流量", store360: "Store 360", coupons: "优惠券", stores: "门店管理", purchase: "购买洞察", friendLinks: "加好友链接", mass: "群发消息", broadcast: "Broadcast", approval: "BM 审批", richMenus: "Rich Menu 管理", autoResponses: "自动回复", greetingMessages: "欢迎消息", logout: "退出", appearance: "外观", language: "语言", mobilePrimaryNavigation: "移动端主导航", noAuthorizedWorkspace: "没有可访问的工作区", live: "实时" }
+      : { home: "Main", dashboard: "Dashboard", chats: "Chats", insights: "Friends", mainOa: "Main OA", more: "More", account: "Account", profile: "Profile", settings: "Settings", traffic: "Message Traffic", store360: "Store 360", coupons: "Coupons", stores: "Stores", purchase: "Purchase", friendLinks: "Friend Links", mass: "Mass Message", broadcast: "Broadcast", approval: "BM Approval", richMenus: "Rich Menu Manager", autoResponses: "Auto-response", greetingMessages: "Greeting Messages", logout: "Logout", appearance: "Appearance", language: "Language", mobilePrimaryNavigation: "Mobile primary navigation", noAuthorizedWorkspace: "No authorized workspace", live: "Live" };
 
   const itemClass = (active: boolean) => `${focusRing} flex min-h-[54px] min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-xl px-1 text-[10px] font-medium transition-colors ${active ? "text-[var(--app-accent)]" : "text-[var(--app-text-secondary)]"}`;
   const sheetLinkClass = `${focusRing} flex min-h-12 items-center justify-between rounded-xl px-3 text-sm font-medium text-[var(--app-text-primary)] hover:bg-[var(--app-surface-hover)]`;
@@ -213,7 +213,7 @@ function MobileBottomNavigation({ authUser, currentSection, language, changeLang
         </div>
       )}
 
-      <nav aria-label="Mobile primary navigation" className="fixed inset-x-0 bottom-0 z-[60] flex border-t border-[var(--app-border)] bg-[color:var(--app-surface)]/95 px-2 pt-1.5 pb-[max(0.35rem,env(safe-area-inset-bottom))] shadow-[0_-4px_16px_rgba(0,0,0,0.06)] backdrop-blur-xl md:hidden">
+      <nav aria-label={labels.mobilePrimaryNavigation} className="fixed inset-x-0 bottom-0 z-[60] flex border-t border-[var(--app-border)] bg-[color:var(--app-surface)]/95 px-2 pt-1.5 pb-[max(0.35rem,env(safe-area-inset-bottom))] shadow-[0_-4px_16px_rgba(0,0,0,0.06)] backdrop-blur-xl md:hidden">
         {can("home") && <Link href="/home" aria-current={currentSection === "home" ? "page" : undefined} className={itemClass(currentSection === "home")}><MobileNavIcon type="home" /><span>{labels.home}</span></Link>}
         {can("chats") && <Link href="/chats" aria-current={currentSection === "chats" ? "page" : undefined} className={itemClass(currentSection === "chats")}><MobileNavIcon type="chat" /><span>{labels.chats}</span></Link>}
         {can("follower-insights") && <Link href="/follower-insights" aria-current={currentSection === "follower-insights" ? "page" : undefined} className={itemClass(currentSection === "follower-insights")}><MobileNavIcon type="insights" /><span>{labels.insights}</span></Link>}
@@ -221,7 +221,7 @@ function MobileBottomNavigation({ authUser, currentSection, language, changeLang
         <button type="button" aria-expanded={moreOpen} onClick={() => setMoreOpen((open) => !open)} className={itemClass(moreOpen || secondaryActive || currentSection === "main-oa")}><MobileNavIcon type="more" /><span>{labels.more}</span></button>
       </nav>
 
-      {authUser && defaultRoute === "/login" && <span className="sr-only">No authorized workspace</span>}
+      {authUser && defaultRoute === "/login" && <span className="sr-only">{labels.noAuthorizedWorkspace}</span>}
     </>
   );
 }
@@ -270,7 +270,7 @@ export function TopNavigation(props: TopNavigationProps) {
           <ThemeToggleButton language={language} />
           {lastUpdatedAt && (
             <button type="button" aria-label={updatedLabel} title={updatedLabel} className={`${focusRing} hidden h-9 items-center gap-1.5 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] px-2.5 text-[11px] font-medium text-[var(--app-text-secondary)] hover:bg-[var(--app-surface-hover)] md:flex`}>
-              <span className="h-1.5 w-1.5 rounded-full bg-[var(--app-success)]" /><span>Live</span>
+              <span className="h-1.5 w-1.5 rounded-full bg-[var(--app-success)]" /><span>{sidebarLabels(language).live}</span>
             </button>
           )}
           {authUser && <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--app-accent)] text-[10px] font-bold text-white md:hidden">{authUser.displayName.charAt(0).toUpperCase()}</span>}

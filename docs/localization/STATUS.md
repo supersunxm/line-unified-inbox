@@ -26,7 +26,7 @@ The separate English/Chinese audit records 143 candidate occurrences, including 
 |---|---|---|---|---|---|---|---|
 | Google Review KPI and Review15 | Complete locale resources and regression tests | PASS | PASS | PASS | PASS | PASS | PASS for public Review15; KPI `BLOCKED_AUTH` |
 | Broadcast and mass messaging | Complete route and editor resources; parameter coverage tests | PASS | PASS | PASS | BLOCKED_AUTH | BLOCKED_AUTH | BLOCKED_AUTH |
-| Main OA, HQ, registrations, store management | Route-scoped resources and classified source checks | PASS | PASS | PASS | BLOCKED_AUTH | BLOCKED_AUTH | BLOCKED_AUTH |
+| Main OA, HQ, registrations, store management | Route-scoped resources and classified source checks; latest-main HQ account management has its own TH/EN/ZH dictionary | PASS | PASS | PASS | BLOCKED_AUTH | BLOCKED_AUTH | BLOCKED_AUTH |
 | Inbox, auto replies, greeting, rich messages and menus | Shared and feature dictionaries; editor and accessibility tests | PASS | PASS | PASS | BLOCKED_AUTH | BLOCKED_AUTH | BLOCKED_AUTH |
 | Dashboard, purchase analytics, followers and operations | Route dictionaries, dynamic-copy and output tests | PASS | PASS | PASS | BLOCKED_AUTH | BLOCKED_AUTH | BLOCKED_AUTH |
 | Coupons, friend-source links and downloads | Route resources and source tests | PASS | PASS | PASS | BLOCKED_AUTH for protected surfaces | BLOCKED_AUTH for protected surfaces | BLOCKED_AUTH for protected surfaces; public download pages PASS |
@@ -34,11 +34,12 @@ The separate English/Chinese audit records 143 candidate occurrences, including 
 | Public landing, store directory, profile and locator | Three-locale route resources and browser checks | PASS | PASS | PASS | PASS | PASS | PASS; API-backed store data unavailable in this worktree |
 | TikTok public integration and connection states | Three-locale route resources and browser checks | PASS | PASS | PASS | PASS | PASS | PASS; external OAuth was not started |
 | Login, registration, privacy and terms | Three-locale route copy and browser checks | PASS | PASS | PASS | PASS | PASS | PASS |
+| Forced password reset | Three-locale form, validation, visibility controls, and localized generic API failures | PASS | PASS | PASS | PASS — fallback rendering checked | PASS — fallback rendering checked | BLOCKED_AUTH — valid forced-reset session unavailable |
 | Shared shell, language picker, loading/error and message controls | Shared locale resources and component/source tests | PASS | PASS | PASS | PASS on accessible pages | PASS on accessible pages | Protected content `BLOCKED_AUTH` |
 
 ## Route and browser QA
 
-`ROUTE_COVERAGE.md` lists the 59 originally requested routes plus `/change-password`, added on the latest `origin/main`. All 60 paths were opened in a desktop route walk before the rebase. The 19 routes available without an authenticated workspace were then checked in all three locales at **1440px desktop** and **375×812 mobile**: 57 locale/route states per viewport. Every page rendered content; document and visible control bounds stayed within the viewport; locale state matched; no raw interpolation placeholders appeared. The mobile sweep found and fixed two store-locator leaks: Thai step labels and the API error sentence. Both now have regression coverage. Root/store search and Review15 input/count behavior were also checked across language changes. The new `/change-password` route will receive a safe unauthenticated redirect check after the rebase; the forced-reset form requires an authenticated server fixture.
+`ROUTE_COVERAGE.md` lists all 60 current routes, including `/change-password` from latest `origin/main`. The 59 routes present before rebase were walked at desktop size. The 19 public routes were checked in Thai, English, and Chinese at **1440px desktop** and **375×812 mobile**: 57 locale/route states per viewport. The new password-reset form was additionally checked in all three locales at both sizes, including the generic API-failure message; at 1440px the final Thai pass measured 1440px document/body width and had no console warnings or errors. The page showed the localized fallback while the isolated API on port 3001 was unavailable. No credentials were entered and no form was submitted. A valid forced-reset session could not be exercised, so authenticated recovery remains `BLOCKED_AUTH`.
 
 Protected-route source coverage is complete, but protected feature interiors were not visually inspected. This isolated worktree has no running API on port 3001 and no repository-supported local QA account, seeded session, or authenticated browser state. Protected routes fail closed or redirect to login; they are correctly recorded as `BLOCKED_AUTH`, not runtime PASS. No credentials or authentication bypass were used. Store directory/profile and store-locator data therefore show their localized empty/error states.
 
@@ -46,22 +47,22 @@ The only browser console error observed was React minified hydration error 418 o
 
 ## Regression checks
 
-- Frontend tests: **947/947 PASS** (final rerun recorded before delivery).
-- Localization coverage tests: **37/37 PASS**.
+- Frontend tests: **965/965 PASS** after rebase and latest-main localization follow-ups.
+- Localization coverage tests: **PASS** within the frontend suite; assertions cover HQ locale dictionaries and localized password-reset fallbacks.
 - Classified Thai AST audit: **PASS**, 908 current candidates; zero unclassified, zero unfixed.
-- Build: **PASS**, all 53 pages generated. Existing dynamic-font HTTP 400 and `metadataBase` warnings remain; the build completes successfully.
-- Full TypeScript baseline check: **50 errors / baseline 50**, no regression.
-- Focused changed-file ESLint: baseline 53 errors / 75 warnings; worktree 51 errors / 73 warnings, with no new per-file/severity/rule groups. Full lint remains nonzero on existing debt: baseline 70 errors / 103 warnings; worktree 68 errors / 101 warnings, with no new per-file/severity/rule groups.
+- Build: **PASS**, 54 pages generated for the current route set. Existing dynamic-font HTTP 400 and `metadataBase` warnings remain; the build completes successfully.
+- Full TypeScript baseline check: **49 errors / baseline 49**, no regression.
+- Focused lint on modified frontend source and test files: **0 errors / 0 warnings** in both latest-main baseline and current worktree. Full lint remains nonzero on inherited debt: latest-main baseline 64 errors / 103 warnings; worktree 62 errors / 101 warnings, with no new per-file/severity/rule groups.
 - `git diff --check`: **PASS**.
 - No TypeScript suppression or lint-rule disable was added.
 
 ## Business logic safety
 
-No KPI calculations, reply-status decisions, LINE messaging behavior, Live/Historical Mirror behavior, Google Review counting or validation, TikTok collection, authentication or permissions, backend APIs, or database schema were changed. V2 utilities only gained locale-aware presentation formatting; calculation and status rules remain intact. No migrations were added or run.
+No KPI calculations, reply-status decisions, LINE messaging behavior, Live/Historical Mirror behavior, Google Review counting or validation, TikTok collection, authentication flow or permissions, backend APIs, or database schema were changed. Latest-main HQ permission summaries only select localized labels from the existing role policy; password-reset changes only localize generic network/API fallback copy. V2 utilities only gained locale-aware presentation formatting; calculation and status rules remain intact. No migrations were added or run.
 
 ## Delivery
 
-No commit, push, pull request, CI run, merge, or deployment has occurred yet. The work remains on `codex/three-language-coverage`; it must first be reconciled with the latest `origin/main`, then the complete checks must pass on the reconciled branch before the authorized PR/CI/merge sequence.
+Rebased onto latest `origin/main` at `2effe3e9`; source follow-ups cover the new HQ account-management route and the password-reset API fallback. The branch is being finalized for the authorized commit, push, PR, CI, and merge sequence. No deployment has been performed.
 
 **SOURCE 3-LANGUAGE COVERAGE: PASS**
 

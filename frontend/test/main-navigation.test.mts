@@ -233,5 +233,5 @@ test('/v2/report: no params = this month\'s network report; "← กลับ" g
   assert.deepEqual(parseReportUrl(new URLSearchParams(""), Date.parse("2026-10-07T03:00:00Z")), { month: "2026-10", partner: null, store: null });
   const report = read("components/v2/month-report.tsx");
   assert.match(report, /if \(typeof window !== "undefined" && window\.history\.length > 1\) router\.back\(\);\n\s*else router\.push\("\/home"\);/);
-  assert.match(report, /<button type="button" data-report-back onClick=\{\(\) => goBack\(router\)\}[^>]*>← กลับ<\/button>/);
+  assert.match(report, /<button type="button" data-report-back onClick=\{\(\) => goBack\(router\)\}[^>]*>\{t\("reportBack"\)\}<\/button>/);
 });
