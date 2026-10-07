@@ -107,10 +107,11 @@ test("api.ts uses same-origin proxy in browser to guarantee cookie transmission 
   assert.match(apiCode, /setupStatus:\s*\(options\?:\s*ApiRequestOptions\)\s*=>\s*request[\s\S]*?"\/auth\/setup-status"[\s\S]*?cache:\s*"no-store"/);
 });
 
-test("ApplicationWorkspace implements single authority redirect logic without UI flicker or competing loops", () => {
-  const pageCode = readFileSync(new URL("../src/app/page.tsx", import.meta.url), "utf8");
 const loginPageCode = readFileSync(new URL("../src/app/login/page.tsx", import.meta.url), "utf8");
 const changePasswordPageCode = readFileSync(new URL("../src/app/change-password/page.tsx", import.meta.url), "utf8");
+
+test("ApplicationWorkspace implements single authority redirect logic without UI flicker or competing loops", () => {
+  const pageCode = readFileSync(new URL("../src/app/page.tsx", import.meta.url), "utf8");
 
   // 1. Imports and uses resolveAuthRedirect and getAuthState
   assert.match(pageCode, /import\s*\{[^}]*getAuthState[^}]*resolveAuthRedirect[^}]*\}\s*from\s*"@\/lib\/auth-session"/);
@@ -126,7 +127,6 @@ const changePasswordPageCode = readFileSync(new URL("../src/app/change-password/
   // 4. Render guards prevent login form flashing while on protected route awaiting redirect
   assert.match(pageCode, /window\.location\.pathname !== "\/login"[\s\S]*?Redirecting to login…/);
 });
-
 
 test("temporary-password sessions are routed to a dedicated recovery page", () => {
   assert.match(loginPageCode, /mustChangePassword \? "\/change-password"/);
