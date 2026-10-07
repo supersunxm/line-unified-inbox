@@ -182,6 +182,21 @@ test("new Thai public URL is primary while the old URL remains compatible", () =
   ]);
 });
 
+test("review15 header reuses the public OPPO Brand Shop branding contract", () => {
+  const checkerPath = path.join(
+    repoRoot,
+    "frontend/src/app/review15/review-15-checker.tsx",
+  );
+  const checkerSource = fs.readFileSync(checkerPath, "utf8");
+
+  assert.match(checkerSource, /import Link from "next\/link";/);
+  assert.match(checkerSource, /aria-label="OPPO Brand Shop Home"/);
+  assert.match(checkerSource, />\s*OPPO Brand Shop\s*</);
+  assert.match(checkerSource, />\s*ค้นหาสาขา & ช่องทางติดต่อ\s*</);
+  assert.doesNotMatch(checkerSource, /aria-label="OPPO Home"/);
+  assert.doesNotMatch(checkerSource, />\s*oppo\s*</);
+});
+
 test("public review checker uses Google Vision for image scanning", () => {
   const checkerPath = path.join(
     repoRoot,
