@@ -14,7 +14,6 @@ import type { ApiConversation, ApiStore, GoogleReviewKpiStoreItem } from "@/type
 import { comparisonLabel, monthWindow, parseV2Month, trendMonths, type MonthWindow } from "@/lib/v2/month";
 import {
   buildMonthStoreRows,
-  countConversations,
   dataCoverage,
   networkCounts,
   networkTotals,
@@ -38,8 +37,6 @@ import type { StorePartnerRow } from "@/lib/v2/partners";
 /** /conversations allows pageSize ≤ 100. */
 export const MONTH_PAGE_SIZE = 100;
 export const MONTH_CONCURRENCY = 5;
-/** Previous month, same days: at most this many pages (10,000 chats); beyond it the comparison is not shown. */
-export const PREVIOUS_PERIOD_MAX_PAGES = 100;
 /** One store's month in the scorecard drawer: at most this many pages (2,000 chats). */
 export const STORE_MONTH_MAX_PAGES = 20;
 
@@ -105,10 +102,21 @@ export async function fetchStorePartners(): Promise<StorePartnerRow[]> {
   return ((await response.json()) as { stores: StorePartnerRow[] }).stores;
 }
 
+/**
+ * /chats's month summary. {month} is the /chats call itself; {from, to} is the same endpoint and
+ * bucketing over Bangkok days (both inclusive) — used for the previous month's same days.
+ */
 async function loadSummary(key: string): Promise<MonthSummary> {
-  const { month } = JSON.parse(key) as { month: string };
-  const response = await api.bmReplyStatusSummary(month);
-  return { overview: response.overview, stores: response.stores };
+  const parsed = JSON.parse(key) as { month: string } | { from: string; to: string };
+  if ("month" in parsed) {
+    const response = await api.bmReplyStatusSummary(parsed.month);
+    return { overview: response.overview, stores: response.stores };
+  }
+  const params = new URLSearchParams({ from: parsed.from, to: parsed.to });
+  const response = await fetch(`/api-backend/conversations/bm-reply-status-summary?${params.toString()}`, { credentials: "include", cache: "no-store" });
+  if (!response.ok) throw new Error(`โหลดจำนวนแชทช่วงเทียบไม่สำเร็จ (${response.status})`);
+  const body = (await response.json()) as MonthSummary;
+  return { overview: body.overview, stores: body.stores };
 }
 
 export async function fetchRates(dateFrom: string, dateTo: string): Promise<RateResponse> {
@@ -128,19 +136,6 @@ type CountedConversation = { latestMessageAt: string; bmReplyStatus: string; eff
 
 function slim(conversation: ApiConversation): CountedConversation {
   return { latestMessageAt: conversation.latestMessageAt, bmReplyStatus: conversation.bmReplyStatus, effectiveReplyState: conversation.effectiveReplyState, store: conversation.store ? { id: conversation.store.id } : null };
-}
-
-/** The previous month from day 1, oldest first, until the cut: the /chats list call with sort=latest-asc. */
-async function loadPreviousDays(key: string): Promise<{ items: CountedConversation[]; truncated: boolean }> {
-  const { month, endMs } = JSON.parse(key) as { month: string; endMs: number };
-  const outcome = await fetchPagesUntil<ApiConversation>({
-    fetchPage: (page) => api.conversations({ month, sort: "latest-asc", pageSize: MONTH_PAGE_SIZE, page }),
-    pageSize: MONTH_PAGE_SIZE,
-    concurrency: MONTH_CONCURRENCY,
-    maxPages: PREVIOUS_PERIOD_MAX_PAGES,
-    pastCutoff: (last) => Date.parse(last.latestMessageAt) >= endMs,
-  });
-  return { items: outcome.items.map(slim), truncated: outcome.truncated };
 }
 
 async function loadGoogle(key: string): Promise<GoogleReviewKpiStoreItem[]> {
@@ -193,7 +188,7 @@ async function loadStoreMonth(key: string): Promise<StoreMonth> {
 
 // ---- Context ----
 
-export type PreviousSource = Source<{ network: ChatCounts; byStore: Map<string, ChatCounts> }> & { collected: boolean; truncated: boolean };
+export type PreviousSource = Source<{ network: ChatCounts; byStore: Map<string, ChatCounts> }> & { collected: boolean };
 
 export type V2MonthData = {
   month: string;
@@ -256,40 +251,28 @@ export function V2MonthDataProvider({ children }: { children: React.ReactNode })
     return { ...rawStores, data: rawStores.data.map((store) => ({ ...store, partner: byUuid.get(store.id) ?? null })) };
   }, [partnerMapping.data, rawStores]);
   const current = useKeyedSource("summary", JSON.stringify({ month }), nonce, loadSummary);
-  const wholePrevious = useKeyedSource("summary", frame.previousCollected && !frame.inProgress ? JSON.stringify({ month: frame.previous.month }) : null, nonce, loadSummary);
-  const previousDays = useKeyedSource("previous-days", frame.previousCollected && frame.inProgress ? JSON.stringify({ month: frame.previous.month, endMs: frame.previous.endMs }) : null, nonce, loadPreviousDays);
+  // Closed month: the whole previous month. Month in progress: the previous month's days 1–D
+  // through the same endpoint with from/to (server-side, same bucketing; no paging).
+  const previousSummary = useKeyedSource(
+    "summary",
+    !frame.previousCollected ? null : frame.inProgress ? JSON.stringify({ from: frame.previous.dateFrom, to: frame.previous.dateTo }) : JSON.stringify({ month: frame.previous.month }),
+    nonce,
+    loadSummary,
+  );
   const rates = useKeyedSource("rates", JSON.stringify({ dateFrom: frame.current.dateFrom, dateTo: frame.current.dateTo }), nonce, loadRates);
   const previousRates = useKeyedSource("rates", frame.previousCollected ? JSON.stringify({ dateFrom: frame.previous.dateFrom, dateTo: frame.previous.dateTo }) : null, nonce, loadRates);
   const google = useKeyedSource("google", JSON.stringify({ month }), nonce, loadGoogle);
 
   const value = useMemo<V2MonthData>(() => {
     const universe = stores.data ? v2Stores(stores.data, current.data) : { stores: [], placeholders: [] };
-    const storeIds = new Set((current.data?.stores ?? []).map((store) => store.storeId));
-    let previous: PreviousSource;
-    if (!frame.previousCollected) {
-      previous = { data: null, error: null, loading: false, collected: false, truncated: false };
-    } else if (!frame.inProgress) {
-      previous = {
-        data: wholePrevious.data ? { network: networkCounts(wholePrevious.data), byStore: storeCounts(wholePrevious.data) } : null,
-        error: wholePrevious.error,
-        loading: wholePrevious.loading,
+    const previous: PreviousSource = frame.previousCollected
+      ? {
+        data: previousSummary.data ? { network: networkCounts(previousSummary.data), byStore: storeCounts(previousSummary.data) } : null,
+        error: previousSummary.error,
+        loading: previousSummary.loading,
         collected: true,
-        truncated: false,
-      };
-    } else {
-      const truncated = Boolean(previousDays.data?.truncated);
-      previous = {
-        data: previousDays.data && current.data && !truncated
-          ? countConversations(previousDays.data.items, { startMs: frame.previous.startMs, endMs: frame.previous.endMs, storeIds })
-          : null,
-        error: truncated
-          ? `ช่วงเทียบมีแชทเกิน ${(PREVIOUS_PERIOD_MAX_PAGES * MONTH_PAGE_SIZE).toLocaleString("th-TH")} แชท จึงไม่แสดงการเทียบ`
-          : previousDays.error ?? (current.error && !current.data ? current.error : null),
-        loading: previousDays.loading || (!current.data && current.loading),
-        collected: true,
-        truncated,
-      };
-    }
+      }
+      : { data: null, error: null, loading: false, collected: false };
     const previousSource = { data: previous.data?.byStore ?? null, error: previous.error, loading: previous.loading, collected: previous.collected };
     const rows = buildMonthStoreRows({ stores: universe.stores, current, previous: previousSource, rates, previousRates: { ...previousRates, collected: frame.previousCollected } });
     const network = networkTotals({ current, previous: { data: previous.data?.network ?? null, error: previous.error, loading: previous.loading, collected: previous.collected }, rates, previousRates: { ...previousRates, collected: frame.previousCollected } });
@@ -317,7 +300,7 @@ export function V2MonthDataProvider({ children }: { children: React.ReactNode })
       nonce,
       refresh,
     };
-  }, [current, google, month, nonce, now, partnerMapping, previousDays, previousRates, rates, refresh, stores, wholePrevious, frame]);
+  }, [current, google, month, nonce, now, partnerMapping, previousSummary, previousRates, rates, refresh, stores, frame]);
 
   return <V2MonthContext.Provider value={value}>{children}</V2MonthContext.Provider>;
 }
@@ -336,4 +319,23 @@ export function useTrend(enabled: boolean): Source<TrendPoint[]> {
 export function useStoreMonth(storeId: string | null, month: string): Source<StoreMonth> {
   const { nonce } = useV2Month();
   return useKeyedSource("store-month", storeId ? JSON.stringify({ storeId, month }) : null, nonce, loadStoreMonth);
+}
+
+/** One day of one store's 24-hour rate: within24h (numerator) ÷ total (denominator). */
+export type DailyRate = { date: string; total: number; within24h: number };
+
+/** store-24h-response-summary with storeId: its `dates` array is that store's per-day breakdown. */
+async function loadStoreDailyRates(key: string): Promise<DailyRate[]> {
+  const { storeId, dateFrom, dateTo } = JSON.parse(key) as { storeId: string; dateFrom: string; dateTo: string };
+  const params = new URLSearchParams({ dateFrom, dateTo, storeId });
+  const response = await fetch(`/api-backend/dashboard/store-24h-response-summary?${params.toString()}`, { credentials: "include", cache: "no-store" });
+  if (!response.ok) throw new Error(`โหลดตอบใน 24 ชม. รายวันไม่สำเร็จ (${response.status})`);
+  const body = (await response.json()) as { dates?: DailyRate[] };
+  return (body.dates ?? []).map((day) => ({ date: day.date, total: day.total, within24h: day.within24h }));
+}
+
+/** One store's per-day 24-hour rate over the selected period (scorecard drawer). */
+export function useStoreDailyRates(storeId: string | null): Source<DailyRate[]> {
+  const { frame, nonce } = useV2Month();
+  return useKeyedSource("store-daily-rates", storeId ? JSON.stringify({ storeId, dateFrom: frame.current.dateFrom, dateTo: frame.current.dateTo }) : null, nonce, loadStoreDailyRates);
 }

@@ -82,9 +82,9 @@ export function buildSeed(now = Date.now()) {
   return { stores, conversations, now };
 }
 
-function summaryFor(seed, month) {
-  const start = monthStart(month);
-  const end = monthStart(nextMonth(month));
+function summaryFor(seed, month, range = null) {
+  const start = range ? Date.parse(`${range.from}T00:00:00+07:00`) : monthStart(month);
+  const end = range ? Date.parse(`${range.to}T00:00:00+07:00`) + DAY_MS : monthStart(nextMonth(month));
   const active = seed.stores.filter((store) => store.isActive);
   const rows = new Map(active.map((store) => [store.id, { total: 0, notReplied: 0, notifiedBm: 0, replied: 0, oldest: 0 }]));
   const overview = { total: 0, notReplied: 0, notifiedBm: 0, replied: 0 };
@@ -109,13 +109,13 @@ function summaryFor(seed, month) {
   };
 }
 
-function ratesFor(seed, dateFrom, dateTo) {
+function ratesFor(seed, dateFrom, dateTo, storeId = null) {
   const start = Date.parse(`${dateFrom}T00:00:00+07:00`);
   const end = Date.parse(`${dateTo}T00:00:00+07:00`) + DAY_MS;
   const byStore = new Map();
   for (const chat of seed.conversations) {
     const at = Date.parse(chat.latestMessageAt);
-    if (at < start || at >= end) continue;
+    if (at < start || at >= end || (storeId && chat.store.id !== storeId)) continue;
     const row = byStore.get(chat.store.id) ?? { storeId: chat.store.id, storeName: chat.store.name, total: 0, within24h: 0, over24h: 0, pending: 0 };
     row.total += 1;
     const hash = Number(chat.id.slice(5)) % 10;
@@ -124,7 +124,17 @@ function ratesFor(seed, dateFrom, dateTo) {
   }
   const stores = [...byStore.values()].map((row) => ({ ...row, responseRate24h: row.total ? Math.round((row.within24h / row.total) * 1000) / 10 : null }));
   const overview = stores.reduce((sum, row) => ({ storeCount: sum.storeCount + 1, total: sum.total + row.total, within24h: sum.within24h + row.within24h, over24h: sum.over24h + row.over24h, pending: sum.pending + row.pending }), { storeCount: 0, total: 0, within24h: 0, over24h: 0, pending: 0 });
-  return { dateFrom, dateTo, timezone: "Asia/Bangkok", overview: { ...overview, responseRate24h: overview.total ? Math.round((overview.within24h / overview.total) * 1000) / 10 : null }, stores, dates: [], months: [] };
+  const dates = new Map();
+  for (const chat of seed.conversations) {
+    const at = Date.parse(chat.latestMessageAt);
+    if (at < start || at >= end || (storeId && chat.store.id !== storeId)) continue;
+    const date = new Date(at + BANGKOK_OFFSET_MS).toISOString().slice(0, 10);
+    const day = dates.get(date) ?? { date, total: 0, within24h: 0 };
+    day.total += 1;
+    if (chat.effectiveReplyState === "REPLIED" && Number(chat.id.slice(5)) % 10 > 0) day.within24h += 1;
+    dates.set(date, day);
+  }
+  return { dateFrom, dateTo, timezone: "Asia/Bangkok", overview: { ...overview, responseRate24h: overview.total ? Math.round((overview.within24h / overview.total) * 1000) / 10 : null }, stores, dates: [...dates.values()].sort((a, b) => a.date.localeCompare(b.date)), months: [] };
 }
 
 function listFor(seed, params) {
@@ -156,10 +166,14 @@ export async function routeSeededApi(page, seed = buildSeed()) {
     if (path === "/stores") return json(route, seed.stores);
     if (path === "/v2/store-partners") return json(route, { stores: seed.stores.filter((store) => store.isActive).map((store) => ({ storeUuid: store.id, storeId: store.storeId ?? null, storeName: store.name, partner: store.partner ?? null, updatedAt: store.partner ? new Date(seed.now - 86_400_000).toISOString() : null, updatedByName: store.partner ? "system (seed)" : null })) });
     if (path === "/v2/store-partners/changes") return json(route, { changes: [] });
-    if (path === "/conversations/bm-reply-status-summary") return json(route, summaryFor(seed, url.searchParams.get("month") ?? bangkokMonth(seed.now)));
+    if (path === "/conversations/bm-reply-status-summary") {
+      const from = url.searchParams.get("from");
+      const to = url.searchParams.get("to");
+      return json(route, from && to ? summaryFor(seed, null, { from, to }) : summaryFor(seed, url.searchParams.get("month") ?? bangkokMonth(seed.now)));
+    }
     if (path === "/conversations") return json(route, listFor(seed, url.searchParams));
     if (/^\/conversations\/[^/]+\/messages$/.test(path)) return json(route, { items: [], total: 0, page: 1, pageSize: 30 });
-    if (path === "/dashboard/store-24h-response-summary") return json(route, ratesFor(seed, url.searchParams.get("dateFrom"), url.searchParams.get("dateTo")));
+    if (path === "/dashboard/store-24h-response-summary") return json(route, ratesFor(seed, url.searchParams.get("dateFrom"), url.searchParams.get("dateTo"), url.searchParams.get("storeId")));
     if (path === "/operations/line-chat-nickname/mirror-status") return json(route, { stores: seed.stores.map((store) => ({ storeId: store.id, enabled: true, status: "SUCCESS", lastSuccessfulSyncAt: new Date(seed.now - 3600_000).toISOString() })) });
     if (path === "/google-review-kpi") return json(route, { month: url.searchParams.get("month"), stores: seed.stores.map((store, index) => ({ id: store.id, storeId: store.code, name: store.name, code: store.code, region: store.region, province: store.area, googleMapsUrl: null, googleMapsName: null, hasGoogleMaps: true, kpiResult: index % 3 === 0 ? { id: `k${index}`, month: url.searchParams.get("month"), reviewsChecked: 10, reviewsWithPhoto: 4, photoReviewsInTargetMonth: 3, reviewsOver15ThaiWords: 3, qualifiedReviews: index % 6 === 0 ? 3 : 1, targetQualifiedReviews: 3, isPassed: index % 6 === 0 } : null })) });
     return json(route, {});

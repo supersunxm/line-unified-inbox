@@ -39,14 +39,19 @@ export class DashboardResponseBucketsController {
     });
   }
 
+  /**
+   * Optional storeId: one store's numbers, whose `dates` array is that store's per-day
+   * breakdown (total = denominator, within24h = numerator). replyAnalytics checks the store scope.
+   */
   @Get("store-24h-response-summary")
   async getStore24hResponseSummary(
     @Query("dateFrom") dateFrom?: string,
     @Query("dateTo") dateTo?: string,
+    @Query("storeId") storeId?: string,
     @Req() req?: AuthRequest,
   ) {
     const user = req?.user;
     if (!user) throw new ForbiddenException("Authentication required");
-    return this.historicalTimeline.replyAnalytics(user, { dateFrom, dateTo });
+    return this.historicalTimeline.replyAnalytics(user, { dateFrom, dateTo, ...(storeId?.trim() ? { storeId: storeId.trim() } : {}) });
   }
 }

@@ -5,10 +5,9 @@
 //   (the call /chats makes for its month view), turned into counts by effectiveSummaryCounts
 //   (network) and chatsStoreCounts (per store) from app/reply-state.ts — the functions /chats
 //   itself uses. A chat belongs to the month of its latest message (backend latestMessageAt).
-// - The previous month over the same days (month-to-date comparison) is not offered by that
-//   endpoint, so it is counted from GET /conversations?month=<previous>&sort=latest-asc, the
-//   /chats list call, with the same filters, cut at the same elapsed time, and classified by
-//   getEffectiveReplyState (also /chats's).
+// - The previous month over the same days (month-to-date comparison) comes from the same
+//   endpoint with from/to (Bangkok days 1–D, same latestMessageAt bucketing; backend parity test:
+//   a whole-month from/to equals month mode).
 // - The 24-hour reply rate comes from GET /dashboard/store-24h-response-summary (replyAnalytics),
 //   the source of /replymessage: within24h / total.
 // - Waiting time in monthly views is calendar time, /chats's oldestWaitingMinutes.
@@ -48,28 +47,6 @@ export type ConversationCountLike = {
   effectiveReplyState?: "REPLIED" | "NOT_REPLIED";
   store: { id: string } | null;
 };
-
-/**
- * Counts /conversations items whose latest message is in [startMs, endMs), per store and in
- * total, classified by /chats's getEffectiveReplyState. Only stores in `storeIds` count (the
- * summary's active-store scope; the list endpoint also returns inactive, non-archived stores).
- */
-export function countConversations(items: ConversationCountLike[], input: { startMs: number; endMs: number; storeIds: ReadonlySet<string> }): { network: ChatCounts; byStore: Map<string, ChatCounts> } {
-  const network: ChatCounts = { total: 0, notReplied: 0, replied: 0 };
-  const byStore = new Map<string, ChatCounts>();
-  for (const item of items) {
-    const at = Date.parse(item.latestMessageAt);
-    const storeId = item.store?.id;
-    if (!storeId || !input.storeIds.has(storeId) || !(at >= input.startMs && at < input.endMs)) continue;
-    const counts = byStore.get(storeId) ?? { total: 0, notReplied: 0, replied: 0 };
-    const replied = getEffectiveReplyState({ bmReplyStatus: item.bmReplyStatus as never, effectiveReplyState: item.effectiveReplyState }) === "REPLIED";
-    counts.total += 1;
-    network.total += 1;
-    if (replied) { counts.replied += 1; network.replied += 1; } else { counts.notReplied += 1; network.notReplied += 1; }
-    byStore.set(storeId, counts);
-  }
-  return { network, byStore };
-}
 
 /** 24-hour reply rate rows from replyAnalytics (store-24h-response-summary). */
 export type RateRow = { storeId: string; total: number; within24h: number; over24h?: number; pending?: number };
