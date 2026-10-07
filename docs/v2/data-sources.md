@@ -1,18 +1,40 @@
 # v2 data sources
 
-Inventory for `/v2` ("วันนี้"), `/v2/response` ("การตอบแชท"), and `/v2/stores` ("สาขา"). Every number in
-v2 comes from an endpoint that already exists; nothing here needs a backend
-change. Status values:
+Every v2 number comes from an endpoint that already exists; nothing here needs a backend
+change. Definitions and constants are in `decisions.md`. Status values:
 
 - **available**: an existing endpoint returns it directly.
 - **derivable**: computed in the browser from a bounded set of existing responses
   (stated bound in the row).
-- **MISSING**: no existing source. The UI shows "ยังไม่มีข้อมูลนี้" or omits the item.
+- **MISSING**: no existing source. The UI says why, or hides the item.
 
-Reply semantics are never re-derived in the frontend. "Waiting" means the
-backend's effective reply state is `NOT_REPLIED` (the reply-state resolver,
-exposed as `effectiveReplyState` and the `replyState=` filter). The 24-hour
-rate is the backend's `within24h / total` from `replyAnalytics`.
+## Monthly views: /v2 (ภาพรวมเดือน), /v2/stores (สาขา), scorecard drawer
+
+Selected with `?month=YYYY-MM` (default: the current Bangkok month). Loaded by
+`components/v2/v2-month-data.tsx`; shaped by `lib/v2/monthly-model.ts`.
+
+| Item | Source | Same as | Status |
+|---|---|---|---|
+| แชท / ยังไม่ตอบ / ตอบแล้ว, network | `api.bmReplyStatusSummary(month)` → `GET /conversations/bm-reply-status-summary?month=`; `overview.total` and `effectiveSummaryCounts(overview)` | `/chats` sidebar overview (same call, same function) | available |
+| แชท / ยังไม่ตอบ / ตอบแล้ว, per store | same response; `chatsStoreCounts(row)` | `/chats` sidebar store counts (same call, same function) | available |
+| ตอบแล้ว % | ตอบแล้ว ÷ แชท from the rows above | — | derivable |
+| Previous month, closed month | `bm-reply-status-summary?month=<previous>` | `/chats` with the previous month selected | available |
+| Previous month, same days (month in progress) | `api.conversations({ month: <previous>, sort: "latest-asc", pageSize: 100, page })` → `GET /conversations`, paged until the latest message passes the cut (same elapsed time), ≤ 5 requests at once, ≤ `PREVIOUS_PERIOD_MAX_PAGES` (100) pages; classified with `getEffectiveReplyState`; only stores in the summary | `/chats` list for that month | derivable (bounded; over the cap the comparison is not shown) |
+| ตอบใน 24 ชม. | `GET /dashboard/store-24h-response-summary?dateFrom&dateTo` (replyAnalytics), current period and comparison period; network = response `overview`; partner = Σwithin24h ÷ Σtotal | `/replymessage` | available |
+| Store list, location, placeholder signal | `api.stores()` → `GET /stores`: `name`, `region`, `area` (province), `_count.lineOfficialAccounts` | — | available |
+| Partner | store name suffix "By …" (`lib/v2/partners.ts`) | — | derivable |
+| อันดับใน partner | from the rows above (`rankWithinPartners`) | — | derivable |
+| รอนานสุด (calendar) | summary `oldestWaitingMinutes`, formatted with `/chats`'s `formatWaitingDuration` | `/chats` "Waiting 6วัน 10ชม." | available |
+| Google Review column | `GET /google-review-kpi?month=`; shown only when at least one store has a result | Google Review KPI page | available |
+| Trend (drawer) | `bm-reply-status-summary?month=` and `store-24h-response-summary` for each month from max(2026-09, month − 5) | — | available (from Sep 2026 only; the drawer says how many months exist) |
+| Daily breakdown (drawer) | `api.conversations({ storeId, month, sort: "latest-desc", pageSize: 100, page })`, ≤ `STORE_MONTH_MAX_PAGES` (20) pages; grouped by Bangkok day of latest message | `/chats` list for that store and month | derivable (bounded; the drawer says when it is cut) |
+| Tag coverage (drawer) | same pages; `nicknameDerivedMetadata` (backend Parser v3) | `/chats` "ONLINE" chips | derivable (lower bound) |
+| Tag coverage (store list, partner, network) | none | — | **MISSING**: needs a backend aggregate (`tag-analysis.md` §6) |
+| Links | `/chats?storeId=&month=` (and `&replyState=NOT_REPLIED`) via `/chats`'s `buildChatsHref`; `/store-360?storeId=`; LINE OA Manager from `conversation.store.lineManagerUrl` when `VALID` | — | available |
+
+## ตอนนี้ tab: /v2/response (live, business hours)
+
+Unchanged from before the monthly redesign. These sources load only while this tab is open.
 
 ## Endpoints used
 
@@ -28,7 +50,7 @@ rate is the backend's `within24h / total` from `replyAnalytics`.
 Not used: `GET /operations/line-chat-nickname/fleet-readiness`. It is the nickname feature's readiness (`READY` / `NEED_BOT_MAPPING` / `NEED_LOGIN` / `BLOCKED`), not chat collection. Using it marked 148 of 149 stores as "no data" on production.
 | `api.getGoogleReviewKpis({ month })` | `GET /google-review-kpi` | Per-store review KPI (`kpiResult.isPassed`, `qualifiedReviews`, `targetQualifiedReviews`) and StoreMaster `region`. |
 
-## Step 3: /v2/response
+### /v2/response details
 
 | Item | Source | Status |
 |---|---|---|
@@ -38,8 +60,8 @@ Not used: `GET /operations/line-chat-nickname/fleet-readiness`. It is the nickna
 | Wait in business minutes | `businessMinutesBetween(waitingSince, now)` in `lib/v2/business-hours.ts` | derivable |
 | "Has data" (chats are being collected) | `mirror-status`: the store has an OA with `enabled = true` and `lastSuccessfulSyncAt` within the last 24 hours. If mirror-status fails to load, the fallback is any conversation in the last 7 days (`store-24h-response-summary` `total > 0`), and the page says which source it used. | available |
 | "ไม่มีข้อมูล" stores | stores without data by the rule above | available |
-| "ตามวันนี้" (daily chase list) | per store, waiting chats whose customer message was sent since yesterday 10:00 Bangkok (`followTodayWindowStart`) and that have waited ≥ 60 business minutes; the top `FOLLOW_TODAY_LIMIT` (15) stores by that count, then longest such wait, then name. The sidebar badge, the tab count, the KPI and "วันนี้" item 1 all use this one selection (`selectFollowToday`). | derivable |
-| "รอนานสุด" | one value per store and scope (`displayedWait`): since yesterday 10:00 in the ตามวันนี้ tab, "วันนี้" item 1 and the top 5; the last 7 days in ทั้งหมด ("รอนานสุด (7 วัน)") | derivable |
+| "ตามวันนี้" (daily chase list) | per store, waiting chats whose customer message was sent since yesterday 10:00 Bangkok (`followTodayWindowStart`) and that have waited ≥ 60 business minutes; the top `FOLLOW_TODAY_LIMIT` (15) stores by that count, then longest such wait, then name. The sidebar badge, the tab count, the KPI and the ตอนนี้ tab badge use this one selection (`selectFollowToday`). | derivable |
+| "รอนานสุด" | one value per store and scope (`displayedWait`): since yesterday 10:00 in the ตามวันนี้ tab; the last 7 days in ทั้งหมด ("รอนานสุด (7 วัน)") | derivable |
 | "รอตอบ (ตั้งแต่เมื่อวาน)" | waiting chats whose customer message was sent since yesterday 10:00 | derivable |
 | "ค้างเกิน 7 วัน" (backlog) per store | summary waiting count − the store's waiting chats from the last 7 days; sort by age uses the summary's `oldestWaitingMinutes` | derivable |
 | ตอบใน 24 ชม. · 7 วัน, and the previous 7 days | `store-24h-response-summary` ×2 (`rangeForPreset("7d")` and the 7 days before), re-aggregated over stores with data as `Σwithin24h / Σtotal`, the backend's own overview formula | available |
@@ -51,34 +73,18 @@ Not used: `GET /operations/line-chat-nickname/fleet-readiness`. It is the nickna
 | Chat list and thread (read-only) | `conversations`, `conversationMessages` | available |
 | "บันทึกว่าตามแล้ว" | none | **MISSING** (needs a backend write). Not built; listed as a follow-up. |
 
-## Step 4: /v2 วันนี้
+## Removed (2026-10-07)
 
-| Item | Source | Status |
-|---|---|---|
-| 1. ตามวันนี้ | same selection as /v2/response; the top 3 are named with their counts | derivable |
-| 2. 24h rate below target (90%) or down vs last week; 3 biggest drops | `store-24h-response-summary` ×2 | available |
-| 3. Customer / product signals | `purchaseAnalytics` has record counts only: no target, no comparison period and no definition of "abnormal", and the counts depend on BM tagging habits | **MISSING**: omitted from the list |
-| 4. Google review stores below target | `getGoogleReviewKpis({ month: current })`, `kpiResult.isPassed === false` | available |
-| 5. Stores with no chat data | mirror-status (fallback: 7-day activity) | available |
-| Top 5 longest waits | waiting chats, one row per store (its longest recent wait and waiting count) | derivable |
-| This week vs last week (3 rows) | `store-24h-response-summary` overview fields `total`, `within24h` rate, `over24h + pending`, re-aggregated over stores with data | available |
-
-## Step 5: /v2/stores
-
-The store-health page does not add new data sources. It joins the same v2 store rows with the current-month Google Review KPI response.
-
-| Item | Source | Status |
-|---|---|---|
-| Store universe and location | same Store records used by /v2/response; region/province from `GET /stores` | available |
-| Has chat data / missing chat data | same Live Mirror freshness rule as /v2/response | available |
-| Needs attention | frontend grouping only: missing chat data, ตามวันนี้ count > 0, >7-day backlog, 24h rate below target, or current-month Google Review below its store target | derivable |
-| Waiting and >7-day backlog | same resolver-backed summary + recent waiting-chat split as /v2/response | available / derivable |
-| 24h rate and week-on-week delta | same 7-day and previous-7-day `store-24h-response-summary` calls | available |
-| Google Review status | current-month `getGoogleReviewKpis`; joined by `GoogleReviewKpiStoreItem.id = Store.id` (the backend emits `id: store.id`) | available |
-| Drill-down to response | `/v2/response?tab=all&store=<Store.id>` | available |
-| Drill-down to Store 360 | existing `/store-360?storeId=<Store.id>` | available |
+The former /v2 "วันนี้" attention list and the former /v2/stores health page (the
+"ต้องดู" rule, the "สาขาที่ต้องดู" KPI and per-row chips) were replaced by the monthly
+views above. Their sources were the ones listed for /v2/response.
 
 ## Known limits
+
+- A chat belongs to the month of its latest message (as in `/chats`). A chat that gets a
+  new message moves to the newer month, so a closed month can still change slightly until
+  monthly snapshots exist (Wave B). Reports of an open month say so.
+- The 24-hour rate counts customer messages, not chats, so its n differs from แชท.
 
 - The 7-day range includes today, as on the existing 24H Response Rate page.
   Chats from the last 24 hours can still be `pending`, which pulls the current
