@@ -12,7 +12,35 @@ const MIN_WORDS = 15;
 const MAX_CHARS = 500;
 const MAX_SCAN_IMAGES = 3;
 const MAX_IMAGE_BYTES = 12 * 1024 * 1024;
+const VISITOR_STORAGE_KEY = "lineoppo-review15-visitor-id-v1";
 type Mode = "text" | "image";
+
+type VisitorCountResponse = {
+  totalVisitors: number;
+  approximate: true;
+};
+
+function getOrCreateAnonymousVisitorId(): string | null {
+  try {
+    const existing = window.localStorage.getItem(VISITOR_STORAGE_KEY);
+    if (existing) return existing;
+
+    const visitorId = window.crypto.randomUUID();
+    window.localStorage.setItem(VISITOR_STORAGE_KEY, visitorId);
+    return visitorId;
+  } catch {
+    try {
+      const existing = window.sessionStorage.getItem(VISITOR_STORAGE_KEY);
+      if (existing) return existing;
+
+      const visitorId = window.crypto.randomUUID();
+      window.sessionStorage.setItem(VISITOR_STORAGE_KEY, visitorId);
+      return visitorId;
+    } catch {
+      return null;
+    }
+  }
+}
 
 type ScanImage = {
   id: string;
@@ -274,7 +302,42 @@ export function Review15Checker() {
   const [scanStatus, setScanStatus] = useState("");
   const [scanError, setScanError] = useState("");
   const [isScanning, setIsScanning] = useState(false);
+  const [visitorTotal, setVisitorTotal] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const recordVisitor = async () => {
+      const visitorId = getOrCreateAnonymousVisitorId();
+      if (!visitorId) return;
+
+      try {
+        const response = await fetch("/api-backend/review15/visitors", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({ visitorId }),
+        });
+
+        if (!response.ok) return;
+
+        const payload = (await response.json()) as VisitorCountResponse;
+        if (!cancelled && Number.isFinite(payload.totalVisitors)) {
+          setVisitorTotal(Math.max(0, payload.totalVisitors));
+        }
+      } catch {
+        // Visitor analytics must never block the checker.
+      }
+    };
+
+    void recordVisitor();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -533,6 +596,19 @@ export function Review15Checker() {
           <p className="mt-2 text-sm text-[var(--app-text-secondary)] sm:text-base">
             พิมพ์ข้อความ หรือสแกน Screenshot จาก Google Reviews
           </p>
+          {visitorTotal !== null && (
+            <div
+              className="mt-3 inline-flex flex-wrap items-center justify-center gap-x-2 gap-y-1 rounded-full border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-1.5 text-xs text-[var(--app-text-secondary)] shadow-sm"
+              title="นับแบบ anonymous ต่อ browser ไม่เก็บ IP และ refresh ไม่เพิ่มยอดซ้ำ"
+            >
+              <span>ผู้เข้าชมรวมโดยประมาณ</span>
+              <strong className="font-tabular text-[var(--app-accent)]">
+                {visitorTotal.toLocaleString("th-TH")}
+              </strong>
+              <span>คน</span>
+              <span className="text-[var(--app-text-tertiary)]">· ไม่ระบุตัวตน</span>
+            </div>
+          )}
         </div>
 
         <div className="mx-auto mt-6 grid max-w-xl grid-cols-2 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-1 shadow-sm">
