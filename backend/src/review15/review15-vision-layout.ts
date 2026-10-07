@@ -79,6 +79,8 @@ const THAI_REVIEW_META =
 const GOOGLE_UI =
   /(see\s+translation|translation\s*\(english\)|press\s+and\s+hold\s+to\s+react|อ่านเพิ่มเติม|ดูคำแปล|แสดงคำแปล|ถูกใจ|แชร์|ตอบกลับ|กดค้างเพื่อแสดงความรู้สึก)/i;
 
+const GOOGLE_STATUS_BADGE = /^(?:new|edited|updated)$/i;
+
 function paragraphText(paragraph: VisionParagraph): string {
   return (paragraph.words ?? [])
     .map((word) =>
@@ -163,6 +165,7 @@ function stripDateMarker(text: string): string {
     .replace(/[★☆⭐]+/gu, " ")
     .replace(ENGLISH_DATE, " ")
     .replace(THAI_DATE, " ")
+    .replace(/\bNEW\b/gi, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -171,6 +174,7 @@ function isNoise(text: string): boolean {
   const value = normalizeLine(text);
   if (!value) return true;
   if (GOOGLE_UI.test(value)) return true;
+  if (GOOGLE_STATUS_BADGE.test(value)) return true;
   if (looksLikeDateMetadata(value)) return true;
   if (isReviewMeta(value)) return true;
   if (/^[★☆⭐*\s]+$/u.test(value)) return true;
@@ -319,8 +323,8 @@ function extractCandidateAfterAnchor(
   const continuationGapLimit = Math.max(34, pageHeight * 0.028);
   const totalWindow =
     anchor.kind === "review-meta"
-      ? Math.max(150, pageHeight * 0.15)
-      : Math.max(120, pageHeight * 0.12);
+      ? Math.max(190, pageHeight * 0.22)
+      : Math.max(170, pageHeight * 0.2);
 
   let previousBottom = anchor.paragraph.bottom;
   let firstBodyTop: number | null = textParts.length
@@ -399,7 +403,7 @@ function extractCandidateAfterAnchor(
     collected.push(paragraph);
     previousBottom = Math.max(previousBottom, paragraph.bottom);
 
-    if (textParts.length >= 3) break;
+    if (textParts.join(" ").length >= 1200) break;
   }
 
   const text = textParts.join(" ").replace(/\s+/g, " ").trim();
@@ -459,6 +463,15 @@ function extractFromLayout(
   };
 }
 
+function looksLikePhotoOverlayText(text: string): boolean {
+  const value = normalizeLine(text);
+  if (!value || value.length > 48) return false;
+
+  return /^(?:oppo\b|reno\b|find\b|a\d{1,3}\b|promotion\b|โปรโมชั่น\b)/i.test(
+    value,
+  );
+}
+
 function extractFromPlainText(
   text?: string | null,
 ): ReviewVisionCandidate[] {
@@ -472,27 +485,53 @@ function extractFromPlainText(
 
   const results: ReviewVisionCandidate[] = [];
   let collecting = false;
+  let current: string[] = [];
+
+  const flush = () => {
+    const candidate = current.join(" ").replace(/\s+/g, " ").trim();
+    if (looksLikeReviewBody(candidate)) {
+      results.push({ text: candidate, confidence: null });
+    }
+    current = [];
+  };
 
   for (const line of lines) {
     if (isReviewMeta(line) || looksLikeDateMetadata(line)) {
+      if (current.length) flush();
       collecting = true;
+
+      const remainder = stripDateMarker(line);
+      if (looksLikeReviewBody(remainder)) {
+        current.push(remainder);
+      }
       continue;
     }
 
     if (GOOGLE_UI.test(line)) {
+      if (current.length) flush();
       collecting = false;
       continue;
     }
 
     if (!collecting || isNoise(line)) continue;
 
-    if (looksLikeReviewBody(line)) {
-      // No geometry is available here. Keep only the first plausible body line
-      // per anchor so text printed inside attached photos cannot inflate counts.
-      results.push({ text: line, confidence: null });
+    if (looksLikePhotoOverlayText(line) && current.length) {
+      flush();
       collecting = false;
+      continue;
+    }
+
+    if (looksLikeReviewBody(line)) {
+      current.push(line);
+
+      if (current.length >= 10 || current.join(" ").length >= 1200) {
+        flush();
+        collecting = false;
+      }
     }
   }
+
+  if (current.length) flush();
 
   return dedupeCandidates(results);
 }

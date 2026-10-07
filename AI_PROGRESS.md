@@ -6389,3 +6389,14 @@ Live worker continues independently at 146 configured unique active OA identitie
 - Preserved the Review 15-Word Checker label and all word-count/OCR behavior.
 - Added a regression test to prevent the old text-only logo from returning.
 - Verification status: code complete on `fix/review15-public-brand-header`; hosted CI pending before merge.
+
+## 2026-10-07 — Review15 image OCR multiline English repair
+
+- Production screenshot showed Google Vision detecting one review at high confidence while the Review15 result card rendered with no usable review text.
+- Hardened the Vision layout extractor for multiline English Google Reviews with date/status badges such as `15 hours ago NEW`.
+- Standalone `NEW` / status metadata is excluded from review bodies.
+- Removed the arbitrary three-paragraph review-body cap; bounded extraction now allows longer multiline bodies while retaining geometry/gap limits.
+- Plain-text fallback now preserves multiple review lines and stops at likely product-photo overlay text.
+- Frontend now drops blank OCR candidates and reports them as missing instead of rendering an empty review card.
+- Added regression fixtures matching the reported English review structure plus frontend blank-candidate coverage.
+- Verification status: implementation complete on `fix/review15-vision-english-multiline`; hosted CI pending.
