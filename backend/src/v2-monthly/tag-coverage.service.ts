@@ -4,7 +4,7 @@ import { resolveChatMonthRange } from "../chat-period";
 import { OperationsService } from "../operations/operations.service";
 import { PrismaService } from "../prisma.service";
 import { isMonth } from "./month-close-rules";
-import { NICKNAME_PARSER_V4_RULE_VERSION } from "./nickname-parser-v4";
+import { NICKNAME_PARSER_V4_RULE_VERSION, NICKNAME_PARSER_V4_VERSIONS } from "./nickname-parser-v4";
 
 export type TagTypeCounts = { online: number; source: number; product: number; film: number; payment: number; finance: number; period: number; date: number };
 
@@ -74,10 +74,14 @@ export class TagCoverageService {
     const tags = new Map<string, TagRow>();
     for (let index = 0; index < conversations.length; index += CHUNK) {
       const rows = await this.prisma.nicknameTagV4.findMany({
-        where: { parserVersion: NICKNAME_PARSER_V4_RULE_VERSION, conversationId: { in: conversations.slice(index, index + CHUNK).map((row) => row.id) } },
-        select: { conversationId: true, decision: true, customerType: true, source: true, productModelIds: true, services: true, paymentMethod: true, financeProvider: true, periodYear: true, eventDate: true },
+        where: { parserVersion: { in: [...NICKNAME_PARSER_V4_VERSIONS] }, conversationId: { in: conversations.slice(index, index + CHUNK).map((row) => row.id) } },
+        select: { conversationId: true, parserVersion: true, decision: true, customerType: true, source: true, productModelIds: true, services: true, paymentMethod: true, financeProvider: true, periodYear: true, eventDate: true },
       });
-      for (const row of rows) tags.set(row.conversationId, row);
+      // A chat's tags are those of the newest v4 version it has a row for (v4.1 over v4.0).
+      for (const row of rows) {
+        const current = tags.get(row.conversationId) as (TagRow & { parserVersion: string }) | undefined;
+        if (!current || NICKNAME_PARSER_V4_VERSIONS.indexOf(row.parserVersion as never) > NICKNAME_PARSER_V4_VERSIONS.indexOf(current.parserVersion as never)) tags.set(row.conversationId, row);
+      }
     }
     const byStore = new Map(stores.map((store) => [store.id, emptyCoverage()]));
     const network = emptyCoverage();
@@ -88,11 +92,11 @@ export class TagCoverageService {
       if (counts) addTag(counts, tag);
     }
     const lastRun = await this.prisma.nicknameTagRederiveRun.findFirst({
-      where: { parserVersion: NICKNAME_PARSER_V4_RULE_VERSION, finishedAt: { not: null } },
+      where: { parserVersion: { in: [...NICKNAME_PARSER_V4_VERSIONS] }, finishedAt: { not: null } },
       orderBy: { finishedAt: "desc" },
       select: { mode: true, finishedAt: true },
     });
-    const fullDone = await this.prisma.nicknameTagRederiveRun.count({ where: { parserVersion: NICKNAME_PARSER_V4_RULE_VERSION, mode: "FULL", finishedAt: { not: null } } });
+    const fullDone = await this.prisma.nicknameTagRederiveRun.count({ where: { parserVersion: { in: [...NICKNAME_PARSER_V4_VERSIONS] }, mode: "FULL", finishedAt: { not: null } } });
     return {
       month,
       parserVersion: NICKNAME_PARSER_V4_RULE_VERSION,
