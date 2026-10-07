@@ -3373,3 +3373,9 @@ Rationale:
 - Region identifiers have a finite canonical set and can be formatted for the current display language without changing the underlying filter or URL value.
 - Store/province names and visitor search text are data, not interface copy, so translating them would alter user-provided or business-supplied content.
 - The exact API error fallback must use the route dictionary because it is rendered from state rather than as a direct JSX text node.
+
+## 2026-10-07 — Authenticated localization QA fixes
+
+Decision: Use the shared `LanguageProvider` for the desktop coupon manager's app-shell language control. Its private component language state did not update or persist the selected app locale, while the surrounding localized boundary followed the shared locale. Keep locale-owned presentation strings in the existing dictionaries and preserve customer content, API data, and action behavior.
+
+For Google Review weekly periods, format only the localized week label and reuse the existing date range. Keep V2's A4/desktop-width report and other shared V2 mobile overflow unchanged because the same layout persists across Thai, English, and Chinese; record it as pre-existing instead of expanding this localization patch into a responsive redesign.

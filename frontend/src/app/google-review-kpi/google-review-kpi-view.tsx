@@ -20,6 +20,7 @@ import type {
 import type { Language } from "@/components/shell/top-navigation";
 import { LegacyI18nBoundary } from "../legacy-i18n-boundary";
 import { googleReviewKpiPhrases, googleReviewKpiText } from "./google-review-kpi-i18n";
+import { formatGoogleReviewWeeklyPeriodLabel } from "./weekly-period-label";
 
 function formatMonthLabel(monthStr: string, language: Language): string {
   const [yearStr, monthNumStr] = monthStr.split("-");
@@ -97,10 +98,10 @@ function buildGoogleMapsHandoffUrl(
 // Translations
 const translations = {
   th: {
-    title: "Google Maps Review KPI",
+    title: "KPI รีวิว Google Maps",
     subtitle: "นำเข้า ตรวจสอบ และดาวน์โหลด KPI รีวิวร้านค้าบน Google Maps รายเดือน จากผลการตรวจของ AI",
-    tabMonthly: "月度 KPI (Monthly KPI)",
-    tabWeeklyTopStore: "周度 Top 门店榜 (Weekly Top Store)",
+    tabMonthly: "KPI รายเดือน",
+    tabWeeklyTopStore: "ร้านยอดนิยมรายสัปดาห์",
     selectMonth: "เดือนข้อมูล",
     selectWeek: "เลือกสัปดาห์",
     weeklyTopStoreTitle: "ตารางอันดับรายสัปดาห์ — Top Store Google Review",
@@ -952,7 +953,7 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
                 >
                   {weeklyPeriods.map((p) => (
                     <option key={p.weekNumber} value={p.weekNumber} className="bg-[var(--app-surface)] text-[var(--app-text-primary)]">
-                      {p.label} {p.status === "CLOSED" ? "🔒 (CLOSED)" : "🟢 (OPEN)"}
+                      {formatGoogleReviewWeeklyPeriodLabel(p, language)} {p.status === "CLOSED" ? "🔒 (CLOSED)" : "🟢 (OPEN)"}
                     </option>
                   ))}
                 </select>

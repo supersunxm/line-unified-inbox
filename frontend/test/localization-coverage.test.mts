@@ -43,6 +43,34 @@ import { getMassMessagesText, translations as massMessageTranslations } from "..
 import { followerInsightsTranslations } from "../src/app/follower-insights/follower-insights-translations.ts";
 
 const locales: AppLanguage[] = ["th", "en", "zh"];
+
+test("mobile store archive labels are localized", () => {
+  const archiveLabel = mobileStoresPhrases.find((phrase) => phrase.en === "Archived" && phrase.zh === "已归档");
+  assert.deepEqual(archiveLabel, { th: "เก็บถาวร", en: "Archived", zh: "已归档" });
+});
+
+test("coupon page language control shares the saved app locale", () => {
+  const couponManager = readFileSync(new URL("../src/app/coupons/coupon-manager-aligned-view.tsx", import.meta.url), "utf8");
+  assert.match(couponManager, /const \{ language, setLanguage \} = useAppLanguage\(\)/);
+  assert.doesNotMatch(couponManager, /useState<Language>\("th"\)/);
+});
+
+test("message traffic title has Thai, English, and Chinese translations", () => {
+  const messageTraffic = readFileSync(new URL("../src/app/dashboard/message-traffic/message-traffic-view.tsx", import.meta.url), "utf8");
+  const mobileMessageTraffic = readFileSync(new URL("../src/app/dashboard/message-traffic/mobile-message-traffic-app.tsx", import.meta.url), "utf8");
+  assert.match(messageTraffic, /title: "วิเคราะห์ปริมาณข้อความ"/);
+  assert.match(messageTraffic, /title: "Message Traffic Analytics"/);
+  assert.match(messageTraffic, /title: "消息流量分析"/);
+  assert.match(mobileMessageTraffic, /eyebrow: "การวิเคราะห์ · ปริมาณข้อความ"/);
+  assert.match(mobileMessageTraffic, /title: "ปริมาณข้อความ"/);
+});
+
+test("download center page title is localized in Thai and Chinese", () => {
+  const downloadCenter = readFileSync(new URL("../src/app/download-center/page.tsx", import.meta.url), "utf8");
+  assert.match(downloadCenter, /th:\s*\{[\s\S]*?title: "ศูนย์ดาวน์โหลด"/);
+  assert.match(downloadCenter, /en:\s*\{[\s\S]*?title: "Download Center"/);
+  assert.match(downloadCenter, /zh:\s*\{[\s\S]*?title: "下载中心"/);
+});
 const placeholders = (value: string) => [...value.matchAll(/\{(\w+)\}/g)].map(match => match[1]).sort();
 
 function translationRecords(source: string, exportedName: string) {
@@ -373,6 +401,33 @@ test("Purchase analytics direct Thai copy is covered by the protected route reso
       if (language !== "th") assert.doesNotMatch(phrase[language], /[\u0e00-\u0e7f]/, `${language}:${phrase.key ?? phrase.th}`);
     }
   }
+  const desktopLabels = new Set([
+    "desktopCustomerPurchaseActivity",
+    "desktopProductsRecorded",
+    "desktopActiveStores",
+    "desktopCurrentFilteredView",
+    "desktopWithRecordedPurchases",
+    "desktopWithRecordedActivity",
+    "desktopChartPurchases",
+    "desktopChartProducts",
+    "desktopChartCustomers",
+    "desktopTopProductsDescription",
+    "desktopProductFamiliesDescription",
+    "desktopPurchaseChannelDescription",
+    "desktopPaymentMethodDescription",
+    "desktopTopStoresDescription",
+    "desktopTopVariantsDescription",
+    "desktopTopColorsDescription",
+    "desktopOthers",
+    "desktopBmRecordingActivityDescription",
+    "desktopHeaderDescription",
+  ]);
+  for (const key of desktopLabels) {
+    const phrase = purchaseAnalyticsPhrases.find((candidate) => candidate.key === key);
+    assert.ok(phrase, `Missing purchase analytics desktop label: ${key}`);
+    assert.doesNotMatch(phrase.th, /[A-Za-z]{3,}/, `Unexpected English in Thai label ${key}`);
+    assert.doesNotMatch(phrase.zh, /[A-Za-z]{3,}/, `Unexpected English in Chinese label ${key}`);
+  }
   const uncoveredEnglish: string[] = [];
   for (const relativePath of [
     "../src/app/admin/purchase-analytics/mobile-purchase-analytics-app.tsx",
@@ -388,6 +443,10 @@ test("Purchase analytics direct Thai copy is covered by the protected route reso
       if (!allLocaleSources.has(text) && !fixedTerms.has(text)) uncoveredEnglish.push(`${relativePath}: ${text}`);
     }
   }
+  const desktopSource = readFileSync(new URL("../src/app/admin/purchase-analytics/purchase-intelligence-dashboard.tsx", import.meta.url), "utf8");
+  assert.match(desktopSource, /const \{ language, setLanguage \} = useAppLanguage\(\)/);
+  assert.match(desktopSource, /language=\{language\} changeLanguage=\{setLanguage\}/);
+  assert.match(desktopSource, /UnifiedPeriodPicker[^\n]*language=\{language\}/);
   assert.deepEqual(uncoveredEnglish, [], `Uncovered purchase analytics EN/ZH UI:\n${uncoveredEnglish.join("\n")}`);
 });
 

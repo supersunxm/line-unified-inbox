@@ -95,6 +95,7 @@ export const mobileChatsTemplates: LegacyI18nTemplate[] = [
 ];
 
 export const mobileStoresPhrases: LegacyI18nPhrase[] = [
+  { th: "เก็บถาวร", en: "Archived", zh: "已归档" },
   { th: "เก็บถาวรแล้ว", en: "ARCHIVED", zh: "已归档" },
   { th: "ต้องตรวจสอบ", en: "ATTENTION", zh: "需关注" },
   { th: "เปิดใช้งาน", en: "ACTIVE", zh: "已启用" },

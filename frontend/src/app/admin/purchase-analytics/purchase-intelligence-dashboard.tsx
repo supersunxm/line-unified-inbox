@@ -220,7 +220,7 @@ function DistributionBar({ items, colors }: { items: Array<{ label: string; coun
 }
 
 export default function PurchaseIntelligenceDashboard() {
-  const { language } = useAppLanguage();
+  const { language, setLanguage } = useAppLanguage();
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [analytics, setAnalytics] = useState<PurchaseAnalyticsResponse | null>(null);
@@ -356,7 +356,7 @@ export default function PurchaseIntelligenceDashboard() {
   }, { cursor: 0, stops: [] });
 
   return (
-    <AppShell currentSection="purchase-analytics" authUser={authUser} text={{ appName: "OPPO LINE OA Monitor", appDescription: "LINE OA monitoring", language: "Language", loadingData: "Loading…", retry: "Retry", apiError: "Data service error" }} language="en" changeLanguage={() => undefined} searchText="" setSearchText={() => undefined} logout={logout}>
+    <AppShell currentSection="purchase-analytics" authUser={authUser} text={{ appName: "OPPO LINE OA Monitor", appDescription: "LINE OA monitoring", language: "Language", loadingData: "Loading…", retry: "Retry", apiError: "Data service error" }} language={language} changeLanguage={setLanguage} searchText="" setSearchText={() => undefined} logout={logout}>
       <PageContainer>
         <div className="mx-auto max-w-[1380px] space-y-4.5 pb-8">
           <PageHeader
@@ -368,7 +368,7 @@ export default function PurchaseIntelligenceDashboard() {
 
           <FilterBar>
             <div className="flex w-full flex-wrap items-center gap-3">
-              <UnifiedPeriodPicker dateFrom={from} dateTo={to} language="en" onApply={(start, end) => { setFrom(start); setTo(end); }} />
+              <UnifiedPeriodPicker dateFrom={from} dateTo={to} language={language} onApply={(start, end) => { setFrom(start); setTo(end); }} />
               {authUser.role === "ADMIN" ? <label className="flex min-w-64 flex-1 items-center gap-2 text-xs font-medium text-[var(--app-text-secondary)]"><span>Store</span><select value={storeId} onChange={(event) => setStoreId(event.target.value)} className="h-9 min-w-0 flex-1 rounded-lg border border-[var(--app-border)] bg-[var(--app-surface)] px-3 text-xs text-[var(--app-text-primary)] outline-none focus:border-[var(--app-accent)]"><option value="">All authorized stores</option>{stores.map((store) => <option key={store.id} value={store.id}>{store.name}{store.code ? ` (${store.code})` : ""}</option>)}</select></label> : null}
               <Button variant="primary" size="sm" onClick={() => void load(authUser)} disabled={loading}>Apply</Button>
             </div>

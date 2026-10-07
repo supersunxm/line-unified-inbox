@@ -30,3 +30,9 @@ test("dashboard translations cover dynamic durations and Thai month labels", () 
   assert.match(dashboardI18n, /8月\{\{value\}\}日/);
   assert.match(dashboardI18n, /Aug \{\{value\}\}/);
 });
+
+test("response analytics labels are translated for Thai", () => {
+  assert.match(dashboardI18n, /p\("การวิเคราะห์ผู้ตอบกลับ", "Responder analytics", "回复者分析"\)/);
+  assert.match(dashboardI18n, /p\("บัญชีพนักงานปัจจุบัน", "Current staff account", "当前员工账号"\)/);
+  assert.match(dashboardI18n, /p\("ไม่มีข้อมูลระบุตัวผู้ตอบกลับในช่วงเวลานี้"/);
+});
