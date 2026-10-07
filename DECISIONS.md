@@ -3285,3 +3285,14 @@ Contract:
 - V3 inserts Thai↔ASCII boundaries, protects verified lexical units as boundary anchors, and performs only explicit OPPO/model/connectivity splitting.
 - Every future exception requires an exact regression fixture with expected final tokens.
 - Browser/runtime tokenizer output loses to the explicit business fixture when they disagree.
+
+## 2026-10-07 — Review 15-word V4 compound policy
+
+Decision: treat `คำแนะนำ`, `ของแถม`, and `ใช้บริการ` as single business words in Review KPI counting.
+
+Rationale:
+- The second production audit showed all three were consistently split into two tokens by the runtime tokenizer.
+- In the review/KPI context they are stable lexical units and the split inflated the count from the intended 38 to 41 for the audited sentence.
+- The correction is narrowly scoped and backed by exact final-token regression fixtures.
+
+The existing rule remains: do not expand the protected lexicon speculatively. Add terms only from an audited disputed count with an explicit expected token list.
