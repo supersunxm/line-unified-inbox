@@ -197,6 +197,21 @@ test("review15 header reuses the public OPPO Brand Shop branding contract", () =
   assert.doesNotMatch(checkerSource, />\s*oppo\s*</);
 });
 
+test("review15 displays a privacy-safe approximate total visitor count", () => {
+  const checkerPath = path.join(
+    repoRoot,
+    "frontend/src/app/review15/review-15-checker.tsx",
+  );
+  const checkerSource = fs.readFileSync(checkerPath, "utf8");
+
+  assert.match(checkerSource, /lineoppo-review15-visitor-id-v1/);
+  assert.match(checkerSource, /window\.localStorage\.getItem/);
+  assert.match(checkerSource, /window\.crypto\.randomUUID\(\)/);
+  assert.match(checkerSource, /\/api-backend\/review15\/visitors/);
+  assert.match(checkerSource, /ผู้เข้าชมรวมโดยประมาณ/);
+  assert.match(checkerSource, /ไม่ระบุตัวตน/);
+});
+
 test("public review checker uses Google Vision for image scanning", () => {
   const checkerPath = path.join(
     repoRoot,

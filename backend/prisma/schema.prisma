@@ -2941,3 +2941,18 @@ model NicknameDerivedMetadataApplication {
   @@index([conversationId, appliedAt])
   @@index([manifestSha256])
 }
+
+/// Anonymous browser-level visitor record for public pages.
+/// The database stores only a SHA-256 digest of the client-generated UUID,
+/// never the raw browser identifier, IP address, or user-agent.
+model PublicPageVisitor {
+  id          String   @id @default(uuid())
+  pageKey     String
+  visitorHash String
+  firstSeenAt DateTime @default(now())
+  lastSeenAt  DateTime @updatedAt
+
+  @@unique([pageKey, visitorHash])
+  @@index([pageKey, firstSeenAt])
+}
+
