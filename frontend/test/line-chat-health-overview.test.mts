@@ -17,6 +17,7 @@ import {
   getLineChatUiHealth,
   summarizeLineChatUiHealth,
 } from "../src/app/operations/line-chat-health/line-chat-health-status.ts";
+import { getSessionConnection } from "../src/app/operations/line-chat-health/line-chat-core-health.ts";
 const now = Date.parse("2026-10-06T08:00:00Z");
 const session: LineChatOperationsSession = {
   id: "session",
@@ -133,7 +134,7 @@ function report(
     ...changes,
   };
 }
-test("six summaries count UI-ready sessions and stores from rows, not raw summary counters", () => {
+test("six summaries count connected sessions and UI-ready stores from rows, not raw counters", () => {
   const overview = buildLineChatOverview(report(), now);
   assert.deepEqual(
     overview.cards.map((card) => card.title),
@@ -146,10 +147,10 @@ test("six summaries count UI-ready sessions and stores from rows, not raw summar
       "Recent Issues",
     ],
   );
-  assert.equal(overview.cards[2].value, "1 / 1 ready");
+  assert.equal(overview.cards[2].value, "1 / 1 connected");
   assert.equal(overview.cards[3].value, "1 / 1 ready");
   assert.ok(overview.cards.every((card) => card.supporting.length <= 2));
-  assert.equal(overview.overall.status, "READY");
+  assert.equal(overview.overall.status, "OPERATIONAL");
   assert.deepEqual(overview.attention, []);
   assert.match(overview.emptyAttentionText, /healthy/);
 });
@@ -175,7 +176,7 @@ test("historical resolved failures never trigger attention or unhealthy summarie
   assert.equal(overview.activeIssueCount, 0);
   assert.equal(overview.currentIssues.length, 0);
   assert.equal(overview.historicalIssues.length, 1);
-  assert.equal(overview.overall.status, "READY");
+  assert.equal(overview.overall.status, "OPERATIONAL");
   assert.equal(overview.attention.length, 0);
 });
 for (const [name, changes, status] of [
@@ -185,7 +186,7 @@ for (const [name, changes, status] of [
     { healthStatus: "AUTH_REQUIRED", authRecoveryInProgress: true },
     "RECOVERING",
   ],
-  ["blocked", { status: "DISABLED" }, "BLOCKED"],
+  ["blocked", { status: "DISABLED" }, "DEGRADED"],
   [
     "degraded mirror",
     { liveMirror: { ...session.liveMirror!, browser: "STOPPED" } },
@@ -201,9 +202,12 @@ for (const [name, changes, status] of [
     assert.equal(overview.attention[0].health.status, status);
     assert.deepEqual(
       overview.attention[0].health,
-      getLineChatUiHealth({ kind: "session", session: changed }, now),
+      getSessionConnection(changed, now, undefined, report().timestamp),
     );
-    assert.equal(overview.overall.status, status);
+    assert.equal(
+      overview.overall.status,
+      name === "blocked" || name === "login" ? "BLOCKED" : status,
+    );
   });
 }
 test("pending mapping is current attention without changing store eligibility", () => {
@@ -240,7 +244,7 @@ test("blocked stores are grouped without altering PR1 readiness decisions", () =
     now,
   );
   assert.equal(overview.cards[3].value, "1 / 3 ready");
-  assert.equal(overview.overall.status, "BLOCKED");
+  assert.equal(overview.overall.status, "OPERATIONAL");
   assert.equal(overview.attention.length, 1);
   assert.match(overview.attention[0].title, /2 stores/);
   assert.match(overview.attention[0].health.recommendedAction, /access/);
@@ -267,12 +271,21 @@ test("only explicitly current actionable records count, without double counting 
   assert.equal(overview.currentIssues.length, 1);
   assert.equal(overview.historicalIssues.length, 1);
   assert.equal(overview.otherIssues.length, 2);
-  assert.equal(overview.overall.status, "DEGRADED");
+  assert.equal(overview.overall.status, "OPERATIONAL");
   assert.match(overview.attention[0].title, /4 current issues/);
 });
 test("unconfirmed status never gets a falsely healthy empty state", () => {
   const overview = buildLineChatOverview(
-    report({ sessions: [{ ...session, liveMirror: undefined }] }),
+    report({
+      sessions: [
+        {
+          ...session,
+          liveMirror: undefined,
+          healthLastHealthyAt: null,
+          healthLastCheckedAt: null,
+        },
+      ],
+    }),
     now,
   );
   assert.equal(overview.overall.status, "UNKNOWN");
@@ -328,14 +341,25 @@ const view = readFileSync(
   ),
   "utf8",
 );
-test("PR3 preserves the PR486 header, overview and session presentation exactly", () => {
-  const start = view.indexOf("        <PageHeader");
-  const end = view.indexOf("        {report && <LineChatStoreReadiness");
-  assert.ok(start >= 0 && end > start);
-  assert.equal(
-    createHash("sha256").update(view.slice(start, end)).digest("hex"),
-    "72363f2b00c5d8490d454b1159c5c2bd1e3b8cb3f54eeb5837126045d91c008d",
-  );
+test("PR4 preserves the PR3 store table and readiness/filter/coverage logic exactly", () => {
+  for (const [file, digest] of [
+    [
+      "line-chat-store-readiness.tsx",
+      "edec476c861b4c54e5d10c0177b11681938eb6ce7acb36c7c2cfd2930a0bdc43",
+    ],
+    [
+      "line-chat-store-readiness-model.ts",
+      "87831f05829727651f91337b39d9b9fb9ca92ce72325941bc4d69599ee9c3b59",
+    ],
+  ]) {
+    const source = readFileSync(
+      new URL(
+        `../src/app/operations/line-chat-health/${file}`,
+        import.meta.url,
+      ),
+    );
+    assert.equal(createHash("sha256").update(source).digest("hex"), digest);
+  }
 });
 test("refresh and all existing retry/recovery attachment controls are preserved", () => {
   assert.match(view, /onClick=\{\(\) => void load\(\)\}/);
@@ -353,7 +377,7 @@ test("refresh and all existing retry/recovery attachment controls are preserved"
       ),
       "utf8",
     );
-    assert.match(control, /element.dataset.sessionActions/);
-    assert.match(control, /if \(cardTarget\) return cardTarget/);
+    assert.match(control, /element.dataset.sessionSecondaryActions/);
+    assert.match(control, /data-session-secondary-actions/);
   }
 });

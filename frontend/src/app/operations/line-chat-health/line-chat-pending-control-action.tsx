@@ -70,7 +70,7 @@ type RunProgress = {
 };
 
 function findProfileBActionsTarget(): HTMLElement | null {
-  const cardTarget = Array.from(document.querySelectorAll<HTMLElement>("[data-session-actions]")).find(element => element.dataset.sessionActions === PROFILE_B_SESSION_KEY);
+  const cardTarget = Array.from(document.querySelectorAll<HTMLElement>("[data-session-secondary-actions]")).find(element => element.dataset.sessionSecondaryActions === PROFILE_B_SESSION_KEY);
   if (cardTarget) return cardTarget;
   for (const row of Array.from(document.querySelectorAll("tbody tr"))) {
     if (!row.textContent?.includes(PROFILE_B_SESSION_KEY)) continue;

@@ -3263,6 +3263,14 @@ Keep PR482's store adapter as the only human-readable status source. Filter chip
 
 Move raw states and blockers into an accessible read-only details panel using the existing Modal. Row actions open that panel for review, with links to existing store/OA setup, session controls and mapping backlog. Do not duplicate recovery actions or introduce writes. Trap keyboard focus while details are open; restore focus on ordinary close and defer session handoff focus until panel cleanup has completed. The available response contracts only include hasChatBotId and no store-specific last-check timestamp: explicitly report availability and use labeled assigned-session check time plus store audit time. Actual bot-ID exposure would require a separately scoped contract change. Preserve the PR486 overview exactly and defer mobile store cards to PR5.
 
+## 2026-10-07 — Core health is independent of store rollout
+
+Keep PR482's unified store readiness adapter and precedence unchanged. Core health, browser connections and mirror activity need distinct presentation states: incomplete store setup does not imply a broken LINE connection. Use existing persisted session checks and coordinator browser evidence rather than requiring optional mirror metrics absent from the current production response. A healthy check remains relevant for the backend's 30-minute freshness window; active work requires a fresh report and valid unexpired ownership evidence. Missing cycle telemetry stays unreported even when an active MIRROR_SYNC lease proves Running.
+
+Within connection health, recovery takes precedence over login and login over degraded evidence; disabled/configuration-blocked accounts remain explicitly actionable. All unavailable core connections can be Blocked; partial faults are Degraded. Historical resolved jobs never imply a current connection failure. The page clock ages evidence even when refresh fails, preventing indefinitely healthy stale snapshots.
+
+Share presentation observations between overview, session actions and assigned-session details. Read the existing manual-recovery endpoint on the normal health refresh cadence without changing recovery orchestration. Reject background reads older than a new operator request and retain in-flight client progress. Show only human stages supported by existing active/pending/login/validation/mirror signals, and keep raw metadata/history behind technical controls. No new backend contracts or invented stage transitions are needed.
+
 ## 2026-10-06 — Review 15-word counting V3
 
 Decision: keep `Intl.Segmenter("th")` as a fallback segmenter, but do not treat its output as the business source of truth for disputed review terms.
