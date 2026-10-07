@@ -71,7 +71,8 @@ export default function LoginPage() {
           const user = await api.me();
           if (cancelled) return;
           setState("redirecting");
-          window.location.replace(defaultRouteForUser(user as AuthUser));
+          const authUser = user as AuthUser;
+          window.location.replace(authUser.mustChangePassword ? "/change-password" : defaultRouteForUser(authUser));
         } catch (reason: unknown) {
           if (cancelled) return;
           if (reason instanceof ApiError && reason.status === 401) {
@@ -99,7 +100,8 @@ export default function LoginPage() {
       const user = await api.me();
       setPassword("");
       setState("redirecting");
-      window.location.replace(defaultRouteForUser(user as AuthUser));
+      const authUser = user as AuthUser;
+      window.location.replace(authUser.mustChangePassword ? "/change-password" : defaultRouteForUser(authUser));
     } catch (reason: unknown) {
       setError(reason instanceof Error ? reason.message : t.signInFailed);
       setSubmitting(false);
