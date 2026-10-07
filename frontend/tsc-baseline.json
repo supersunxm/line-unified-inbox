@@ -1,4 +1,4 @@
 {
   "comment": "Allowed number of `tsc --noEmit` errors. Lower it when you fix errors; never raise it. Checked by scripts/check-tsc-baseline.mjs (npm run typecheck:baseline) in the Frontend CI job.",
-  "errors": 50
+  "errors": 49
 }

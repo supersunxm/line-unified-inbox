@@ -8,7 +8,7 @@ import { api } from "@/lib/api";
 import type { BmReplyStatusSummaryResponse, DashboardAnalyticsResponse } from "@/types/api";
 
 type Language = "th" | "en" | "zh";
-type AuthUser = { id: string; email: string; displayName: string; role: "ADMIN" | "VIEWER" };
+type AuthUser = { id: string; email: string; displayName: string; role: "ADMIN" | "ASSISTANT" | "VIEWER" };
 type SystemStatus = Awaited<ReturnType<typeof api.systemStatus>>;
 type ExecutiveHealth = { connectedStoreCount: number; totalStoreCount: number };
 type Tone = "green" | "red" | "amber" | "purple" | "neutral";

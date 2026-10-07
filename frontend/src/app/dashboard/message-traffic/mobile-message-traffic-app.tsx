@@ -19,7 +19,7 @@ import {
   MobileSectionTabs,
 } from "@/components/mobile/adaptive-mobile";
 
-type AuthUser = { id: string; email: string; displayName: string; role: "ADMIN" | "VIEWER" };
+type AuthUser = { id: string; email: string; displayName: string; role: "ADMIN" | "ASSISTANT" | "VIEWER" };
 type HourBucket = { hour: number; count: number };
 type StoreTrafficRow = {
   rank: number;

@@ -1,5 +1,5 @@
 import { ConflictException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
-import { UserRole, UserStatus } from "@prisma/client";
+import { Prisma, UserRole, UserStatus } from "@prisma/client";
 import { randomInt } from "node:crypto";
 import { PrismaService } from "../prisma.service";
 import { PasswordService } from "./password.service";
@@ -16,15 +16,23 @@ export class HqRegistrationService {
     private readonly audit?: AuditLogService,
   ) {}
 
-  private hqIdentityWhere() {
+  private hqIdentityWhere(): Prisma.UserWhereInput {
     return {
-      role: UserRole.ADMIN,
+      role: { in: [UserRole.ADMIN, UserRole.ASSISTANT] },
       canAccessHq: true,
       canAccessAllStores: true,
-      canManageAccounts: true,
       username: null,
       employeeId: { not: null },
-    } as const;
+    };
+  }
+
+  private async lockActiveAdminSet(tx: Prisma.TransactionClient) {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended('line-inbox-active-admins', 0))`;
+  }
+
+  private async assertAnotherActiveAdmin(tx: Prisma.TransactionClient) {
+    const count = await tx.user.count({ where: { role: UserRole.ADMIN, status: UserStatus.ACTIVE, isActive: true } });
+    if (count <= 1) throw new ConflictException("At least one active administrator must remain");
   }
 
   private temporaryPassword() {
@@ -107,6 +115,7 @@ export class HqRegistrationService {
       },
       select: {
         id: true,
+        role: true,
         displayName: true,
         employeeId: true,
         email: true,
@@ -135,6 +144,35 @@ export class HqRegistrationService {
     if (!actor || actor.role !== UserRole.ADMIN || actor.status !== UserStatus.ACTIVE || !actor.isActive || !actor.canManageAccounts) {
       throw new ForbiddenException("Only an active full-access administrator can manage HQ accounts");
     }
+  }
+
+  async changeRole(userId: string, role: Extract<UserRole, "ADMIN" | "ASSISTANT">, actorUserId: string, ipAddress?: string, userAgent?: string) {
+    await this.assertApprover(actorUserId);
+    const result = await this.prisma.$transaction(async (tx) => {
+      await this.lockActiveAdminSet(tx);
+      const actor = await tx.user.findUnique({ where: { id: actorUserId }, select: { role: true, status: true, isActive: true, canManageAccounts: true } });
+      if (!actor || actor.role !== UserRole.ADMIN || actor.status !== UserStatus.ACTIVE || !actor.isActive || !actor.canManageAccounts) throw new ForbiddenException("Only an active administrator can change roles");
+      const current = await tx.user.findFirst({
+        where: { id: userId, ...this.hqIdentityWhere(), status: { in: [UserStatus.ACTIVE, UserStatus.SUSPENDED] } },
+        select: { id: true, role: true, status: true, isActive: true },
+      });
+      if (!current) throw new NotFoundException("HQ account not found");
+      if (current.role === role) return { userId, role, previousRole: role, changed: false };
+
+      if (current.role === UserRole.ADMIN && role === UserRole.ASSISTANT && current.isActive && current.status === UserStatus.ACTIVE) {
+        await this.assertAnotherActiveAdmin(tx);
+      }
+
+      const update = await tx.user.updateMany({
+        where: { id: userId, role: current.role },
+        data: { role, canManageAccounts: role === UserRole.ADMIN },
+      });
+      if (update.count !== 1) throw new ConflictException("HQ account changed while its role was being updated");
+      await tx.auditLog.create({ data: { actorUserId, action: "HQ_ACCOUNT_ROLE_CHANGED", targetUserId: userId, metadata: { previousRole: current.role, newRole: role }, ipAddress, userAgent } });
+      return { userId, role, previousRole: current.role, changed: true };
+    });
+
+    return { userId, role: result.role, changed: result.changed };
   }
 
   async approve(userId: string, actorUserId: string, ipAddress?: string, userAgent?: string) {
@@ -230,16 +268,26 @@ export class HqRegistrationService {
     if (userId === actorUserId) throw new ForbiddenException("You cannot deactivate your own HQ account");
     const user = await this.prisma.user.findFirst({
       where: { id: userId, ...this.hqIdentityWhere(), status: { in: [UserStatus.ACTIVE, UserStatus.SUSPENDED] } },
-      select: { id: true, status: true, isActive: true },
+      select: { id: true, role: true, status: true, isActive: true },
     });
     if (!user) throw new NotFoundException("HQ account not found");
     if (!user.isActive || user.status === UserStatus.SUSPENDED) return { userId: user.id, status: UserStatus.SUSPENDED, changed: false };
 
-    await this.prisma.$transaction([
-      this.prisma.user.update({ where: { id: user.id }, data: { isActive: false, status: UserStatus.SUSPENDED } }),
-      this.prisma.session.deleteMany({ where: { userId: user.id } }),
-      this.prisma.deviceToken.updateMany({ where: { userId: user.id, isActive: true }, data: { isActive: false, lastSeenAt: new Date() } }),
-    ]);
+    await this.prisma.$transaction(async (tx) => {
+      await this.lockActiveAdminSet(tx);
+      const actor = await tx.user.findUnique({ where: { id: actorUserId }, select: { role: true, status: true, isActive: true, canManageAccounts: true } });
+      if (!actor || actor.role !== UserRole.ADMIN || actor.status !== UserStatus.ACTIVE || !actor.isActive || !actor.canManageAccounts) throw new ForbiddenException("Only an active administrator can deactivate accounts");
+      if (user.role === UserRole.ADMIN) {
+        await this.assertAnotherActiveAdmin(tx);
+      }
+      const changed = await tx.user.updateMany({
+        where: { id: user.id, role: user.role, isActive: true, status: UserStatus.ACTIVE },
+        data: { isActive: false, status: UserStatus.SUSPENDED },
+      });
+      if (changed.count !== 1) throw new ConflictException("HQ account changed while it was being deactivated");
+      await tx.session.deleteMany({ where: { userId: user.id } });
+      await tx.deviceToken.updateMany({ where: { userId: user.id, isActive: true }, data: { isActive: false, lastSeenAt: new Date() } });
+    });
     await this.audit?.record({ actorUserId, action: "HQ_ACCOUNT_DEACTIVATED", targetUserId: user.id, ipAddress, userAgent });
     return { userId: user.id, status: UserStatus.SUSPENDED, changed: true };
   }
@@ -248,7 +296,7 @@ export class HqRegistrationService {
     await this.assertApprover(actorUserId);
     const user = await this.prisma.user.findFirst({
       where: { id: userId, ...this.hqIdentityWhere(), status: { in: [UserStatus.ACTIVE, UserStatus.SUSPENDED] } },
-      select: { id: true, status: true, isActive: true },
+      select: { id: true, role: true, status: true, isActive: true },
     });
     if (!user) throw new NotFoundException("HQ account not found");
     if (user.isActive && user.status === UserStatus.ACTIVE) return { userId: user.id, status: UserStatus.ACTIVE, changed: false };
@@ -262,7 +310,7 @@ export class HqRegistrationService {
         canAccessMobile: true,
         canAccessHq: true,
         canAccessAllStores: true,
-        canManageAccounts: true,
+        canManageAccounts: user.role === UserRole.ADMIN,
         canReply: true,
         canAccessMainOa: true,
         canManageMainOa: true,

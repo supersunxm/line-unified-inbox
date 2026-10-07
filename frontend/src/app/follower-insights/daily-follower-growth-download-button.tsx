@@ -1,4 +1,5 @@
 "use client";
+import { DownloadAction } from "@/lib/download-permission";
 
 import { useState } from "react";
 import type { Language } from "./follower-insights-translations";
@@ -46,7 +47,7 @@ export function DailyFollowerGrowthDownloadButton({
 
   return (
     <div className="relative">
-      <button
+      <DownloadAction><button
         type="button"
         onClick={() => void handleDownload()}
         disabled={disabled}
@@ -67,7 +68,7 @@ export function DailyFollowerGrowthDownloadButton({
           </svg>
         )}
         <span>{label}</span>
-      </button>
+      </button></DownloadAction>
       {error && (
         <div className="absolute right-0 top-full z-30 mt-1 w-64 rounded-lg border border-rose-500/30 bg-[var(--surface-elevated)] px-3 py-2 text-[11px] text-rose-600 shadow-lg dark:text-rose-400">
           {error}

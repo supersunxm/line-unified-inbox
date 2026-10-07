@@ -4,7 +4,7 @@ type Message = ApiConversation["messages"][number];
 
 export function isMessageTranslationEligible(
   message: Pick<Message, "direction" | "messageType" | "originalText">,
-  userRole: "ADMIN" | "VIEWER",
+  userRole: "ADMIN" | "ASSISTANT" | "VIEWER",
 ): boolean {
   return userRole === "ADMIN"
     && message.direction === "INBOUND"

@@ -42,7 +42,7 @@ function formatDate(value: string | null | undefined) {
 }
 
 export default function AdminRegistrationsPage() {
-  const [authUser, setAuthUser] = useState<{ id: string; email: string; displayName: string; role: "ADMIN" | "VIEWER" } | null>(null);
+  const [authUser, setAuthUser] = useState<{ id: string; email: string; displayName: string; role: "ADMIN" | "ASSISTANT" | "VIEWER" } | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>("pending");
   const [registrations, setRegistrations] = useState<PendingRegistration[]>([]);

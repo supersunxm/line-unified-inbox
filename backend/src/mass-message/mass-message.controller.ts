@@ -14,7 +14,7 @@ import {
 import { FileInterceptor } from "@nestjs/platform-express";
 import { UserRole } from "@prisma/client";
 import { AuthGuard, type AuthRequest } from "../auth/auth.guard";
-import { Roles } from "../auth/auth.decorators";
+import { OperationalRead, Roles } from "../auth/auth.decorators";
 import { MassMessageService } from "./mass-message.service";
 import { MassMessageAudienceType } from "./mass-message.types";
 import type {
@@ -58,6 +58,7 @@ export class MassMessageController {
     return this.service.createAndSend(body, req.user!);
   }
 
+  @OperationalRead()
   @Get(":id")
   async getCampaign(
     @Param("id") id: string,
@@ -66,6 +67,7 @@ export class MassMessageController {
     return this.service.getCampaign(id, req.user!);
   }
 
+  @OperationalRead()
   @Get()
   async listCampaigns(
     @Query("limit") limit = "20",

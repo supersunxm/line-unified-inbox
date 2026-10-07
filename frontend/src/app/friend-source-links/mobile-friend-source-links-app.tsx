@@ -17,7 +17,7 @@ import {
 import { api } from "@/lib/api";
 import type { FriendAttributionConfigDto, FriendSource, FriendSourceLink, FriendSourceLinksSummaryItem, LineOfficialAccountResponse } from "@/types/api";
 
-type AuthUser = { id: string; email: string; displayName: string; role: "ADMIN" | "VIEWER" };
+type AuthUser = { id: string; email: string; displayName: string; role: "ADMIN" | "ASSISTANT" | "VIEWER" };
 type Tab = "overview" | "links" | "stores" | "setup";
 const sourceLabel: Record<FriendSource, string> = { STORE_QR: "Store QR", TIKTOK: "TikTok", FACEBOOK: "Facebook", INSTAGRAM: "Instagram" };
 const inputClass = "w-full rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-3 text-[16px] outline-none focus:border-[var(--app-accent)]";

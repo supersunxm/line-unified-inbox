@@ -217,6 +217,7 @@ enum LineAccountType {
 
 enum UserRole {
   ADMIN
+  ASSISTANT
   VIEWER
 }
 

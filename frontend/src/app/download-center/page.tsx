@@ -1,4 +1,5 @@
 "use client";
+import { DownloadAction, authorizeDataDownload } from "@/lib/download-permission";
 
 import { UnifiedPeriodPicker } from "@/components/date-range/unified-period-picker";
 
@@ -161,12 +162,14 @@ export default function DownloadCenterPage() {
 
   const logout = async () => { await api.logout(); window.location.assign("/login"); };
   const downloadLine = async () => {
+    if (!(await authorizeDataDownload())) return;
     setLineDownloading(true); setError(null);
     try { await downloadDailyFollowerGrowthWorkbook({ dateFrom, dateTo, selectedLineOaIds: [], language }); }
     catch (reason) { setError(reason instanceof Error ? reason.message : t.error); }
     finally { setLineDownloading(false); }
   };
   const downloadStoreMaster = async () => {
+    if (!(await authorizeDataDownload())) return;
     setStoreDownloading(true); setError(null);
     try {
       const { blob, filename } = await api.exportLineOfficialAccounts({});
@@ -180,8 +183,8 @@ export default function DownloadCenterPage() {
       <PageHeader title={t.title} description={t.description} />
       {error && <div className="rounded-xl border border-[var(--app-danger)]/30 bg-[var(--app-danger-soft)] px-4 py-3 text-sm text-[var(--app-danger)]">{error}</div>}
       <section className="mt-6"><h2 className="mb-3 text-sm font-semibold text-[var(--app-text-secondary)]">{t.catalog}</h2><div className="grid gap-4 lg:grid-cols-2">
-        <DatasetCard title={t.lineTitle} description={t.lineDesc} purpose={t.linePurpose} output={t.lineOutput} href="/follower-insights" labels={t}><div className="mt-4 rounded-xl border border-[var(--app-border-subtle)] bg-[var(--app-surface-subtle)] p-3"><div className="min-w-0"><UnifiedPeriodPicker dateFrom={dateFrom} dateTo={dateTo} language={language} onApply={(start, end) => { setDateFrom(start); setDateTo(end); }} /></div><p className="mt-2 text-[11px] text-[var(--app-text-secondary)]">{t.allStoresNote}</p><Button variant="primary" disabled={lineDownloading || !dateFrom || !dateTo || dateTo < dateFrom} onClick={() => void downloadLine()} className="mt-3">↓ {lineDownloading ? t.preparing : t.download}</Button></div></DatasetCard>
-        <DatasetCard title={t.storeTitle} description={t.storeDesc} purpose={t.storePurpose} output={t.storeOutput} href="/storemanagement" labels={t}><Button variant="primary" disabled={storeDownloading} onClick={() => void downloadStoreMaster()} className="mt-4">↓ {storeDownloading ? t.exporting : t.download}</Button></DatasetCard>
+        <DatasetCard title={t.lineTitle} description={t.lineDesc} purpose={t.linePurpose} output={t.lineOutput} href="/follower-insights" labels={t}><div className="mt-4 rounded-xl border border-[var(--app-border-subtle)] bg-[var(--app-surface-subtle)] p-3"><div className="min-w-0"><UnifiedPeriodPicker dateFrom={dateFrom} dateTo={dateTo} language={language} onApply={(start, end) => { setDateFrom(start); setDateTo(end); }} /></div><p className="mt-2 text-[11px] text-[var(--app-text-secondary)]">{t.allStoresNote}</p><DownloadAction><Button variant="primary" disabled={lineDownloading || !dateFrom || !dateTo || dateTo < dateFrom} onClick={() => void downloadLine()} className="mt-3">↓ {lineDownloading ? t.preparing : t.download}</Button></DownloadAction></div></DatasetCard>
+        <DatasetCard title={t.storeTitle} description={t.storeDesc} purpose={t.storePurpose} output={t.storeOutput} href="/storemanagement" labels={t}><DownloadAction><Button variant="primary" disabled={storeDownloading} onClick={() => void downloadStoreMaster()} className="mt-4">↓ {storeDownloading ? t.exporting : t.download}</Button></DownloadAction></DatasetCard>
         <DatasetCard title={t.followerTitle} description={t.followerDesc} purpose={t.followerPurpose} href="/follower-insights" labels={t} />
         <DatasetCard title={t.purchaseTitle} description={t.purchaseDesc} purpose={t.purchasePurpose} href="/admin/purchase-analytics" labels={t} />
         <DatasetCard title={t.reviewTitle} description={t.reviewDesc} purpose={t.reviewPurpose} href="/google-review-kpi" labels={t} />

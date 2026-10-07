@@ -1,4 +1,5 @@
 "use client";
+import { DownloadAction, authorizeDataDownload } from "@/lib/download-permission";
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -236,7 +237,8 @@ export function TikTokPublicDashboard({ overview, stores }: Props) {
     };
   }, [stores]);
 
-  const handleDownloadCsv = () => {
+  const handleDownloadCsv = async () => {
+    if (!(await authorizeDataDownload())) return;
     const headers = ["Store", "TikTok", "Region", "Province", "Followers", "Likes", "Videos", "1D", "7D", "30D"];
     const rows = visibleStores.map((store) => [
       store.storeName,
@@ -542,7 +544,7 @@ export function TikTokPublicDashboard({ overview, stores }: Props) {
                 <span className="rounded-full bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-600 dark:bg-[var(--app-surface-subtle)] dark:text-[var(--app-text-secondary)]">
                   {number(visibleStores.length, locale)} {text.result}
                 </span>
-                <button
+                <DownloadAction><button
                   type="button"
                   onClick={handleDownloadCsv}
                   className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-[var(--app-border)] dark:bg-[var(--app-surface-subtle)] dark:text-[var(--app-text-primary)] dark:hover:bg-[var(--app-surface-hover)]"
@@ -551,7 +553,7 @@ export function TikTokPublicDashboard({ overview, stores }: Props) {
                     <path d="M12 3v11m0 0 4-4m-4 4-4-4M5 19h14" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                   {text.download}
-                </button>
+                </button></DownloadAction>
                 <button
                   type="button"
                   onClick={handleRefresh}

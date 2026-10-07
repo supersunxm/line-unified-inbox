@@ -1,3 +1,4 @@
+import { OperationalRead } from "../auth/auth.decorators";
 import {
   Body,
   Controller,
@@ -31,6 +32,7 @@ export class RichMessageController {
     private readonly storage: MediaStorageService,
   ) {}
 
+  @OperationalRead()
   @Get()
   list(
     @Query("search") search?: string,
@@ -93,6 +95,7 @@ export class RichMessageController {
     }
   }
 
+  @OperationalRead()
   @Get(":id")
   get(@Param("id") id: string) {
     return this.richMessages.get(id);

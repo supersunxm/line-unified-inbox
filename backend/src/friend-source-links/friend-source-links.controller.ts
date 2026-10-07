@@ -1,5 +1,5 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Query } from "@nestjs/common";
-import { Roles } from "../auth/auth.decorators";
+import { OperationalRead, Roles } from "../auth/auth.decorators";
 import { UpsertFriendAttributionConfigDto } from "./friend-attribution.dto";
 import { GenerateFriendSourceLinksDto, QueryFriendSourceLinksDto, UpdateFriendSourceLinkDto } from "./friend-source-links.dto";
 import { FriendSourceLinksService } from "./friend-source-links.service";
@@ -14,12 +14,14 @@ export class FriendSourceLinksController {
     return this.service.generateLinks(dto);
   }
 
+  @OperationalRead()
   @Get()
   @Roles("ADMIN")
   async list(@Query() query: QueryFriendSourceLinksDto) {
     return this.service.getLinks(query);
   }
 
+  @OperationalRead()
   @Get("summary")
   @Roles("ADMIN")
   async getSummary() {

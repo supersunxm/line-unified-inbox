@@ -1,4 +1,5 @@
 "use client";
+import { DownloadAction, authorizeDataDownload } from "@/lib/download-permission";
 
 import { UnifiedPeriodPicker } from "@/components/date-range/unified-period-picker";
 
@@ -19,7 +20,7 @@ import {
 import { api } from "@/lib/api";
 import type { ApiStore, PurchaseAnalyticsResponse } from "@/types/api";
 
-type AuthUser = { id: string; email: string; displayName: string; role: "ADMIN" | "VIEWER" };
+type AuthUser = { id: string; email: string; displayName: string; role: "ADMIN" | "ASSISTANT" | "VIEWER" };
 type MobileTab = "overview" | "products" | "stores" | "audience";
 type AudienceStatus = "PURCHASED" | "INTERESTED" | "ONLINE" | "NOT_SPECIFIED";
 type PurchaseAudienceItem = {
@@ -225,7 +226,8 @@ export function MobilePurchaseAnalyticsApp() {
     setDraftRequestId(null);
   };
 
-  const downloadAudience = () => {
+  const downloadAudience = async () => {
+    if (!(await authorizeDataDownload())) return;
     if (filteredAudience.length === 0) return;
     const blob = new Blob([exportAudienceCsv(filteredAudience)], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
@@ -422,7 +424,7 @@ function Audience({ user, audience, loading, error, onlyMessageable, selectedSta
       <button type="button" onClick={() => onMessageable(!onlyMessageable)} className={`flex w-full items-center justify-between rounded-xl border px-3 py-3 text-left ${onlyMessageable ? "border-[var(--app-accent)]/30 bg-[var(--app-accent)]/5" : "border-[var(--app-border)]"}`}><span><span className="block text-xs font-bold">เฉพาะลูกค้าที่ส่งข้อความได้</span><span className="mt-0.5 block text-[10px] text-[var(--app-text-tertiary)]">ต้องมี LINE User ID และ OA พร้อมใช้งาน</span></span><span className={`flex h-6 w-10 items-center rounded-full p-0.5 ${onlyMessageable ? "justify-end bg-[var(--app-accent)]" : "justify-start bg-[var(--app-border)]"}`}><span className="h-5 w-5 rounded-full bg-white" /></span></button>
     </MobileCard>
 
-    <div className="grid grid-cols-2 gap-2"><button type="button" disabled={filtered.length === 0} onClick={onDownload} className="min-h-11 rounded-xl border border-[var(--app-border)] text-xs font-bold disabled:opacity-35">ดาวน์โหลด CSV</button><button type="button" onClick={onReload} className="min-h-11 rounded-xl border border-[var(--app-border)] text-xs font-bold">รีเฟรช Audience</button></div>
+    <div className="grid grid-cols-2 gap-2"><DownloadAction><button type="button" disabled={filtered.length === 0} onClick={onDownload} className="min-h-11 rounded-xl border border-[var(--app-border)] text-xs font-bold disabled:opacity-35">ดาวน์โหลด CSV</button></DownloadAction><button type="button" onClick={onReload} className="min-h-11 rounded-xl border border-[var(--app-border)] text-xs font-bold">รีเฟรช Audience</button></div>
 
     {user.role === "ADMIN" && <MobileSection title="Broadcast Audience" description="สร้าง DRAFT recipient snapshot เท่านั้น — ยังไม่ส่งข้อความ"><MobileCard className="space-y-3"><p className="text-xs leading-5 text-[var(--app-text-secondary)]">ระบบจะบันทึก recipient snapshot แบบ idempotent เพื่อไปใช้ต่อใน Mass Message โดยยังไม่สร้าง delivery และไม่ส่งอะไรไป LINE</p>{draftError && <p className="rounded-xl bg-rose-500/10 p-3 text-[10px] text-rose-600">{draftError}</p>}{createdDraft ? <div className="rounded-xl bg-emerald-500/10 p-3"><p className="text-xs font-bold text-emerald-600 dark:text-emerald-400">สร้าง Draft แล้ว</p><div className="mt-2 grid grid-cols-3 gap-2"><MiniStat label="Recipients" value={createdDraft.recipientCount} /><MiniStat label="Stores" value={createdDraft.storeCount} /><MiniStat label="LINE OA" value={createdDraft.lineOaCount} /></div></div> : <button type="button" disabled={draftCreating || !onlyMessageable || selectedStatuses.size === 0 || filtered.length === 0} onClick={onCreateDraft} className="min-h-12 w-full rounded-xl bg-[var(--app-accent)] px-3 text-sm font-bold text-white disabled:opacity-35">{draftCreating ? "กำลังสร้าง Draft..." : `สร้าง Broadcast Draft (${filtered.length})`}</button>}</MobileCard></MobileSection>}
 

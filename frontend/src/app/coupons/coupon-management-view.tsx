@@ -16,7 +16,7 @@ import type {
 } from "@/types/coupons";
 
 type Language = "th" | "en" | "zh";
-type AuthUser = { id: string; email: string; displayName: string; role: "ADMIN" | "VIEWER" };
+type AuthUser = { id: string; email: string; displayName: string; role: "ADMIN" | "ASSISTANT" | "VIEWER" };
 type ViewMode = "create" | "campaigns" | "detail";
 
 const text = {

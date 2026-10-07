@@ -1,4 +1,5 @@
 "use client";
+import { DownloadAction, authorizeDataDownload } from "@/lib/download-permission";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent, KeyboardEvent } from "react";
@@ -1431,7 +1432,7 @@ export default function Home() {
   return <PublicLandingPage />;
 }
 
-type WorkspaceAuthUser = { id: string; email: string; displayName: string; role: "ADMIN" | "VIEWER"; permissions?: { canAccessMainOa?: boolean } };
+type WorkspaceAuthUser = { id: string; email: string; displayName: string; role: "ADMIN" | "ASSISTANT" | "VIEWER"; permissions?: { canAccessMainOa?: boolean } };
 
 /** `initialAuthUser` is the user AuthorizedSection already resolved; /login passes none and runs the full setup check. */
 export function ApplicationWorkspace({ initialSection, initialAuthUser }: { initialSection: PrimarySection; initialAuthUser?: WorkspaceAuthUser | null }) {
@@ -3005,6 +3006,7 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
   }
 
   async function exportLineOaCsv() {
+  if (!(await authorizeDataDownload())) return;
     if (lineOaExporting || authUser?.role !== "ADMIN") return;
     setLineOaExporting(true);
     setLineOaExportError(null);
@@ -3030,6 +3032,7 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
   }
 
   async function exportLineOaHandoverCsv() {
+  if (!(await authorizeDataDownload())) return;
     if (lineOaHandoverExporting || authUser?.role !== "ADMIN") return;
     if (!window.confirm(text.handoverExportWarning)) return;
     setLineOaHandoverExporting(true);
@@ -3508,7 +3511,7 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
                             >
                               {masterSyncing ? text.syncingMasterFile : text.syncMasterFile}
                             </Button>
-                            <Button
+                            <DownloadAction><Button
                               type="button"
                               variant="secondary"
                               size="sm"
@@ -3517,8 +3520,8 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
                               onClick={() => void exportLineOaCsv()}
                             >
                               {lineOaExporting ? text.exportingCsv : `↓ ${text.exportCsv}`}
-                            </Button>
-                            <Button
+                            </Button></DownloadAction>
+                            <DownloadAction><Button
                               type="button"
                               variant="secondary"
                               size="sm"
@@ -3528,7 +3531,7 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
                               data-testid="export-line-oa-handover-button"
                             >
                               {lineOaHandoverExporting ? text.exportingHandover : `↓ ${text.handoverExport}`}
-                            </Button>
+                            </Button></DownloadAction>
                           </>
                         )}
                         <Button

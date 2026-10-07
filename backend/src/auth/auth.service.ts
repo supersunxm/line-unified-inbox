@@ -16,7 +16,7 @@ type AuthUserSource = {
   id: string;
   email: string;
   displayName: string;
-  role: "ADMIN" | "VIEWER";
+  role: UserRole;
   isActive: boolean;
   canAccessWeb?: boolean;
   canAccessMobile?: boolean;

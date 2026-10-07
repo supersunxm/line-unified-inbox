@@ -1,4 +1,5 @@
 "use client";
+import { DownloadAction } from "@/lib/download-permission";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AuthorizedSection } from "../authorized-workspace";
@@ -461,14 +462,14 @@ function ReportContent() {
             >
               {auditing ? "กำลัง Audit…" : audit ? `Audit ${audit.checks.status}` : "Run KPI Audit"}
             </button>
-            <button
+            <DownloadAction><button
               type="button"
               onClick={() => void downloadXlsx()}
               disabled={downloading || loading || !report}
               className="h-10 rounded-xl bg-[var(--app-accent)] px-4 text-sm font-semibold text-white disabled:opacity-60"
             >
               {downloading ? "กำลังสร้าง Excel…" : "ดาวน์โหลด XLSX"}
-            </button>
+            </button></DownloadAction>
           </div>
         </div>
 

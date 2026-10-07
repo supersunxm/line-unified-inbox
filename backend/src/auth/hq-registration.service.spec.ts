@@ -77,10 +77,10 @@ void test("approved HQ listing is separated from legacy username admins", async 
 
   await service.approved();
 
-  assert.equal(where.role, UserRole.ADMIN);
+  assert.deepEqual(where.role, { in: [UserRole.ADMIN, UserRole.ASSISTANT] });
   assert.equal(where.canAccessHq, true);
   assert.equal(where.canAccessAllStores, true);
-  assert.equal(where.canManageAccounts, true);
+  assert.equal(where.canManageAccounts, undefined);
   assert.equal(where.username, null);
   assert.deepEqual(where.employeeId, { not: null });
 });
@@ -116,7 +116,7 @@ void test("resetting an active HQ password requires a change and revokes existin
   assert.equal(result.temporaryPassword, hashedPassword);
   assert.equal(result.temporaryPassword.length, 14);
   assert.equal(resetWhere.id, "hq-1");
-  assert.equal(resetWhere.role, UserRole.ADMIN);
+  assert.deepEqual(resetWhere.role, { in: [UserRole.ADMIN, UserRole.ASSISTANT] });
   assert.equal(resetWhere.status, UserStatus.ACTIVE);
   assert.equal(resetWhere.isActive, true);
   assert.equal(updateData.passwordHash, "new-hash");
@@ -131,12 +131,14 @@ void test("deactivating HQ revokes active sessions without requiring store membe
   const prisma: any = {
     user: {
       findUnique: async () => ({ role: UserRole.ADMIN, status: UserStatus.ACTIVE, isActive: true, canManageAccounts: true }),
-      findFirst: async () => ({ id: "hq-1", status: UserStatus.ACTIVE, isActive: true }),
-      update: async ({ data }: any) => { updates.push(data); return {}; },
+      findFirst: async () => ({ id: "hq-1", role: UserRole.ADMIN, status: UserStatus.ACTIVE, isActive: true }),
+      count: async () => 2,
+      updateMany: async ({ data }: { data: { isActive: boolean; status: string } }) => { updates.push(data); return { count: 1 }; },
     },
     session: { deleteMany: async () => ({ count: 2 }) },
     deviceToken: { updateMany: async () => ({ count: 1 }) },
-    $transaction: async (operations: Promise<unknown>[]) => Promise.all(operations),
+    $executeRaw: async () => 1,
+    $transaction: async (operation: (tx: unknown) => Promise<unknown>) => operation(prisma),
   };
   const service = new HqRegistrationService(prisma, {} as any);
 
@@ -153,7 +155,7 @@ void test("reactivating HQ restores every full-access grant", async () => {
   const prisma: any = {
     user: {
       findUnique: async () => ({ role: UserRole.ADMIN, status: UserStatus.ACTIVE, isActive: true, canManageAccounts: true }),
-      findFirst: async () => ({ id: "hq-1", status: UserStatus.SUSPENDED, isActive: false }),
+      findFirst: async () => ({ id: "hq-1", role: UserRole.ADMIN, status: UserStatus.SUSPENDED, isActive: false }),
       update: async ({ data }: any) => { updateData = data; return {}; },
     },
   };

@@ -3,7 +3,7 @@ import type { PrimarySection } from "@/app/primary-navigation";
 export type AuthorizationContext = {
   version: number;
   identity: {
-    platformRole: "ADMIN" | "VIEWER";
+    platformRole: "ADMIN" | "ASSISTANT" | "VIEWER";
     membershipRoles: string[];
   };
   platforms: {
@@ -21,6 +21,7 @@ export type AuthorizationContext = {
   };
   capabilities: {
     manageAccounts: boolean;
+    downloadData?: boolean;
     reply: boolean;
     accessMainOa: boolean;
     manageMainOa: boolean;
@@ -31,7 +32,7 @@ export type AuthUser = {
   id: string;
   email: string;
   displayName: string;
-  role: "ADMIN" | "VIEWER";
+  role: "ADMIN" | "ASSISTANT" | "VIEWER";
   mustChangePassword?: boolean;
   memberships?: Array<{ storeId: string; role: string }>;
   authorization?: AuthorizationContext;
@@ -77,6 +78,7 @@ export function authorizationFor(user: AuthUser): AuthorizationContext {
   };
   const capabilities = nested?.capabilities ?? {
     manageAccounts: nested?.canManageAccounts ?? isAdmin,
+    downloadData: isAdmin,
     reply: nested?.canReply ?? (isAdmin || storeIds.length > 0),
     accessMainOa: nested?.canAccessMainOa ?? false,
     manageMainOa: nested?.canManageMainOa ?? false,
@@ -92,11 +94,19 @@ export function authorizationFor(user: AuthUser): AuthorizationContext {
   };
 }
 
+export function canDownloadData(user: AuthUser | null | undefined) {
+  return !!user && !user.mustChangePassword && user.role === "ADMIN" && authorizationFor(user).capabilities.downloadData !== false;
+}
+
 function hasBackendAdminAccess(auth: AuthorizationContext) {
   // These features are still protected by @Roles(ADMIN) on the backend.
   // Keep that policy centralized here until the backend exposes dedicated
   // capabilities for them; do not let individual UI components re-invent it.
   return auth.workspaces.hq && auth.identity.platformRole === "ADMIN";
+}
+
+function hasHqOperationalRead(auth: AuthorizationContext) {
+  return hasBackendAdminAccess(auth) || (auth.identity.platformRole === "ASSISTANT" && auth.workspaces.hq && auth.scope.allStores);
 }
 
 export function canAccessPrimarySection(user: AuthUser, section: PrimarySection) {
@@ -116,7 +126,7 @@ export function canAccessPrimarySection(user: AuthUser, section: PrimarySection)
     case "rich-menus":
     case "auto-responses":
     case "greeting-messages":
-      return hasBackendAdminAccess(auth);
+      return hasHqOperationalRead(auth);
     case "google-review-kpi":
       return auth.workspaces.hq || auth.workspaces.store;
     case "admin-registrations":
@@ -135,11 +145,12 @@ export function canAccessPrimarySection(user: AuthUser, section: PrimarySection)
 export function canAccessWebTool(user: AuthUser, tool: "message-traffic" | "tiktok") {
   const auth = authorizationFor(user);
   if (tool === "message-traffic") return auth.workspaces.hq;
-  if (tool === "tiktok") return hasBackendAdminAccess(auth);
+  if (tool === "tiktok") return hasHqOperationalRead(auth);
   return false;
 }
 
 export function defaultRouteForUser(user: AuthUser) {
+  if (user.mustChangePassword) return "/change-password";
   const auth = authorizationFor(user);
   if (auth.workspaces.hq) return "/home";
   if (auth.workspaces.store) return "/chats";

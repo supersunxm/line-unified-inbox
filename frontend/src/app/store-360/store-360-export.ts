@@ -1,3 +1,4 @@
+import { authorizeDataDownload } from "../../lib/data-download-policy.ts";
 import { api } from "@/lib/api";
 
 export async function downloadStore360Export(options: {
@@ -5,6 +6,7 @@ export async function downloadStore360Export(options: {
   startDate: string;
   endDate: string;
 }) {
+  if (!(await authorizeDataDownload())) return;
   const { blob, filename } = await api.storeInsightsExport({
     storeIds: options.storeIds,
     startDate: options.startDate,

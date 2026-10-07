@@ -1,4 +1,5 @@
 "use client";
+import { DownloadAction, authorizeDataDownload } from "@/lib/download-permission";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { UnifiedPeriodPicker } from "@/components/date-range/unified-period-picker";
@@ -10,7 +11,7 @@ import { AUTH_UNAUTHORIZED_EVENT } from "@/lib/auth-session";
 import type { ApiStore, PurchaseAnalyticsResponse } from "@/types/api";
 import { formatDistributionLabel, prepareDistribution } from "./distribution-utils";
 
-type AuthUser = { id: string; email: string; displayName: string; role: "ADMIN" | "VIEWER" };
+type AuthUser = { id: string; email: string; displayName: string; role: "ADMIN" | "ASSISTANT" | "VIEWER" };
 type TrendMetric = "purchases" | "products" | "customers";
 type PurchaseAudienceItem = {
   customerId: string;
@@ -276,6 +277,7 @@ export default function PurchaseIntelligenceDashboard() {
   };
 
   const downloadAudience = async () => {
+    if (!(await authorizeDataDownload())) return;
     if (!audience?.audience.length) return;
     setExporting(true);
     try {
@@ -353,7 +355,7 @@ export default function PurchaseIntelligenceDashboard() {
             tag="Operations · Purchase Intelligence"
             title="Purchase Intelligence"
             description="Understand what customers are buying across all stores"
-            actions={<Button variant="secondary" size="sm" onClick={() => void downloadAudience()} disabled={!audience?.audience.length || exporting}>{exporting ? "Exporting…" : "Export audience"}</Button>}
+            actions={<DownloadAction><Button variant="secondary" size="sm" onClick={() => void downloadAudience()} disabled={!audience?.audience.length || exporting}>{exporting ? "Exporting…" : "Export audience"}</Button></DownloadAction>}
           />
 
           <FilterBar>
@@ -424,7 +426,7 @@ export default function PurchaseIntelligenceDashboard() {
 
             <div className="flex items-center justify-between gap-4 rounded-xl border border-emerald-100 bg-gradient-to-r from-emerald-50 to-green-50 px-5 py-4 text-xs text-emerald-900">
               <div className="flex min-w-0 items-center gap-3"><span className="text-lg">✦</span><p className="truncate"><span className="font-semibold">Insight:</span> {topFamily ? `${topFamily.label} accounts for ${Math.round(clamp(pct(topFamily.count, familyTotal)))}% of recorded products in this period.` : "Purchase insights will appear once product data is recorded."}</p></div>
-              <button type="button" onClick={() => void downloadAudience()} disabled={!audience?.audience.length || exporting} className="shrink-0 font-semibold text-emerald-700 disabled:opacity-50">Export full report</button>
+              <DownloadAction><button type="button" onClick={() => void downloadAudience()} disabled={!audience?.audience.length || exporting} className="shrink-0 font-semibold text-emerald-700 disabled:opacity-50">Export full report</button></DownloadAction>
             </div>
           </> : null}
         </div>

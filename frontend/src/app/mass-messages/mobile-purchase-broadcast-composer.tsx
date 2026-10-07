@@ -16,7 +16,7 @@ import {
 } from "@/components/mobile/adaptive-mobile";
 import { api } from "@/lib/api";
 
-type AuthUser = { id: string; email: string; displayName: string; role: "ADMIN" | "VIEWER" };
+type AuthUser = { id: string; email: string; displayName: string; role: "ADMIN" | "ASSISTANT" | "VIEWER" };
 type DraftTab = "content" | "audience" | "preview";
 type DraftMessage =
   | { type: "text"; text: string }

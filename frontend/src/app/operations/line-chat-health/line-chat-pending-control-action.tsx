@@ -1,4 +1,5 @@
 "use client";
+import { DownloadAction, authorizeDataDownload } from "@/lib/download-permission";
 
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
@@ -139,7 +140,8 @@ function csvCell(value: string | null | undefined) {
   return `"${safe.replace(/"/g, '""')}"`;
 }
 
-function downloadBlockedCustomersCsv(customers: BlockedCustomer[]) {
+async function downloadBlockedCustomersCsv(customers: BlockedCustomer[]) {
+  if (!(await authorizeDataDownload())) return;
   const headers = [
     "customer_name",
     "tagging_status",
@@ -391,9 +393,9 @@ export function LineChatPendingControlAction() {
                 <Button size="sm" variant="outline" onClick={() => setShowBlockedCustomers((value) => !value)}>
                   {showBlockedCustomers ? "ซ่อนรายชื่อ" : `ดูรายชื่อลูกค้าที่ติด Mapping (${runProgress.blockedCustomers?.length ?? 0})`}
                 </Button>
-                <Button size="sm" variant="outline" onClick={() => downloadBlockedCustomersCsv(runProgress.blockedCustomers ?? [])}>
+                <DownloadAction><Button size="sm" variant="outline" onClick={() => downloadBlockedCustomersCsv(runProgress.blockedCustomers ?? [])}>
                   ดาวน์โหลด CSV
-                </Button>
+                </Button></DownloadAction>
               </div>
               {showBlockedCustomers ? (
                 <div className="mt-2 max-h-64 space-y-2 overflow-auto pr-1">

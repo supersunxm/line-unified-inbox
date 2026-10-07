@@ -15,7 +15,7 @@ import { FileInterceptor } from "@nestjs/platform-express";
 import { memoryStorage } from "multer";
 import { GreetingTemplateStatus, UserRole } from "@prisma/client";
 import { AuthGuard, type AuthRequest } from "../auth/auth.guard";
-import { Roles } from "../auth/auth.decorators";
+import { OperationalRead, Roles } from "../auth/auth.decorators";
 import { GreetingMessageService } from "./greeting-message.service";
 import {
   CreateGreetingTemplateDto,
@@ -30,6 +30,7 @@ import {
 export class GreetingMessageController {
   constructor(private readonly greetingService: GreetingMessageService) {}
 
+  @OperationalRead()
   @Get()
   async listTemplates(
     @Query("status") status?: GreetingTemplateStatus,
@@ -60,6 +61,7 @@ export class GreetingMessageController {
     return this.greetingService.uploadMedia(file, req.user);
   }
 
+  @OperationalRead()
   @Get(":id")
   async getTemplate(@Param("id") id: string) {
     return this.greetingService.getTemplate(id);
@@ -89,6 +91,7 @@ export class GreetingMessageController {
     return this.greetingService.archiveTemplate(id, req.user);
   }
 
+  @OperationalRead()
   @Get(":id/readiness")
   async getReadiness(@Param("id") id: string) {
     return this.greetingService.getReadiness(id);

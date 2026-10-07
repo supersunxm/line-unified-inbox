@@ -12,7 +12,7 @@ import { LanguageControl, useAppLanguage } from "../language";
 
 type MobileUser = {
   displayName: string;
-  role: "ADMIN" | "VIEWER";
+  role: "ADMIN" | "ASSISTANT" | "VIEWER";
 };
 
 export function MobileDashboardApp() {

@@ -1,4 +1,5 @@
 "use client";
+import { DownloadAction, authorizeDataDownload } from "@/lib/download-permission";
 
 import { UnifiedPeriodPicker } from "@/components/date-range/unified-period-picker";
 
@@ -31,7 +32,7 @@ import { api } from "@/lib/api";
 import { AUTH_UNAUTHORIZED_EVENT } from "@/lib/auth-session";
 import type { ApiStore, PurchaseAnalyticsResponse } from "@/types/api";
 
-type AuthUser = { id: string; email: string; displayName: string; role: "ADMIN" | "VIEWER" };
+type AuthUser = { id: string; email: string; displayName: string; role: "ADMIN" | "ASSISTANT" | "VIEWER" };
 type AudienceStatus = "PURCHASED" | "INTERESTED" | "ONLINE" | "NOT_SPECIFIED";
 type PurchaseAudienceItem = {
   customerId: string;
@@ -308,7 +309,8 @@ export default function PurchaseAnalyticsPage() {
     }
   };
 
-  const downloadAudience = () => {
+  const downloadAudience = async () => {
+    if (!(await authorizeDataDownload())) return;
     if (filteredAudience.length === 0) return;
     const csv = exportAudienceCsv(filteredAudience);
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
@@ -698,14 +700,14 @@ export default function PurchaseAnalyticsPage() {
                   >
                     Cancel
                   </Button>
-                  <Button
+                  <DownloadAction><Button
                     variant="secondary"
                     size="md"
                     onClick={downloadAudience}
                     disabled={filteredAudience.length === 0}
                   >
                     Download CSV
-                  </Button>
+                  </Button></DownloadAction>
                   {authUser.role === "ADMIN" && (
                     <Button
                       variant="primary"

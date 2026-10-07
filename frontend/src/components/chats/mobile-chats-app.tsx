@@ -27,7 +27,7 @@ type AuthUser = {
   id: string;
   email: string;
   displayName: string;
-  role: "ADMIN" | "VIEWER";
+  role: "ADMIN" | "ASSISTANT" | "VIEWER";
 };
 
 type MobileView = "list" | "chat" | "info";

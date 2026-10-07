@@ -3,7 +3,7 @@ import type { Response } from "express";
 import { CreateLineOfficialAccountDto, ExportLineOfficialAccountsDto, UpdateLineOfficialAccountDto, UpdateLineOaStatusDto } from "./line-official-account.dto";
 import { LineOfficialAccountsService } from "./line-official-accounts.service";
 import { buildCanonicalLineOaCsv } from "./line-official-account-canonical-export";
-import { Roles } from "../auth/auth.decorators";
+import { RequireDownload, Roles } from "../auth/auth.decorators";
 import type { AuthRequest } from "../auth/auth.guard";
 
 @Controller("line-official-accounts")
@@ -11,6 +11,7 @@ export class LineOfficialAccountsController {
   constructor(private readonly service: LineOfficialAccountsService) {}
   @Get() list(@Query("showArchived") showArchived?: string) { return this.service.list(showArchived === "true"); }
   @Roles("ADMIN")
+  @RequireDownload()
   @Get("export.csv") async exportCsv(@Query() query: ExportLineOfficialAccountsDto, @Res() response: Response) {
     const items = await this.service.list(query.showArchived === "true");
     const result = buildCanonicalLineOaCsv(items, query);
@@ -20,6 +21,7 @@ export class LineOfficialAccountsController {
     response.send(result.csv);
   }
   @Roles("ADMIN")
+  @RequireDownload()
   @Get("handover.csv")
   async exportHandoverCsv(@Query() query: ExportLineOfficialAccountsDto, @Req() request: AuthRequest, @Res() response: Response) {
     const result = await this.service.exportHandoverCsv(query, request.user?.id);

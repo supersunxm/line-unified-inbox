@@ -16,7 +16,7 @@ import { RICH_MENU_I18N } from "./rich-menu-i18n";
 
 interface RichMenusViewProps {
   language?: Language;
-  userRole?: "ADMIN" | "VIEWER";
+  userRole?: "ADMIN" | "ASSISTANT" | "VIEWER";
 }
 
 const PRESET_DIMENSIONS: Record<RichMenuCanvasPreset, { width: number; height: number }> = {

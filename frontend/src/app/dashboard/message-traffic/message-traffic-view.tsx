@@ -27,7 +27,7 @@ import { UnifiedPeriodPicker as DateRangePicker } from "@/components/date-range/
 import { getBkkDateStr } from "../../follower-insights/follower-insights-utils";
 import { pickLanguageText, useAppLanguage, type AppLanguage } from "../../language";
 
-type AuthUser = { id: string; email: string; displayName: string; role: "ADMIN" | "VIEWER" };
+type AuthUser = { id: string; email: string; displayName: string; role: "ADMIN" | "ASSISTANT" | "VIEWER" };
 type HourBucket = { hour: number; count: number };
 type StoreTrafficRow = {
   rank: number;

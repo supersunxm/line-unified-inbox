@@ -28,7 +28,7 @@ import type {
   CouponStoreMode,
 } from "@/types/coupons";
 
-type AuthUser = { id: string; email: string; displayName: string; role: "ADMIN" | "VIEWER" };
+type AuthUser = { id: string; email: string; displayName: string; role: "ADMIN" | "ASSISTANT" | "VIEWER" };
 type ExecutionMode = "pilot" | "full";
 type AcquisitionType = "normal" | "lottery";
 type TopView = "create" | "history";
@@ -111,13 +111,14 @@ export function MobileCouponsApp() {
   const [actionLoading, setActionLoading] = useState(false);
 
   const isAdmin = user?.role === "ADMIN";
+  const canView = isAdmin || user?.role === "ASSISTANT";
   const pilot = executionMode === "pilot";
   const invalidatePreview = useCallback(() => setPreview(null), []);
 
   useEffect(() => {
     let active = true;
     void api.me()
-      .then((value) => { if (active) setUser(value); })
+      .then((value) => { if (active) { setUser(value); if (value.role === "ASSISTANT") setTopView("history"); } })
       .catch(() => { if (typeof window !== "undefined") window.location.replace("/login"); })
       .finally(() => { if (active) setAuthChecked(true); });
     return () => { active = false; };
@@ -264,7 +265,7 @@ export function MobileCouponsApp() {
   };
 
   const loadCampaigns = useCallback(async () => {
-    if (!isAdmin) return;
+    if (!canView) return;
     setCampaignsLoading(true);
     setError(null);
     try {
@@ -275,7 +276,13 @@ export function MobileCouponsApp() {
     } finally {
       setCampaignsLoading(false);
     }
-  }, [isAdmin]);
+  }, [canView]);
+
+  useEffect(() => {
+    if (user?.role !== "ASSISTANT") return;
+    const timer = window.setTimeout(() => void loadCampaigns(), 0);
+    return () => window.clearTimeout(timer);
+  }, [loadCampaigns, user?.role]);
 
   const switchTopView = (next: TopView) => {
     setDetail(null);
@@ -346,10 +353,10 @@ export function MobileCouponsApp() {
       <div className="space-y-4 px-4 py-4 pb-8">
         {error && <div className="rounded-2xl border border-rose-500/25 bg-rose-500/10 px-4 py-3 text-xs leading-5 text-rose-600 dark:text-rose-400">{error}</div>}
 
-        {!isAdmin ? (
+        {!canView ? (
           <MobileEmptyState title="ไม่มีสิทธิ์ใช้งาน" description="เมนูคูปองเปิดให้ผู้ดูแลระบบเท่านั้น" />
         ) : detail ? (
-          <CampaignDetail detail={detail} actionLoading={actionLoading} onBack={() => { setDetail(null); setTopView("history"); void loadCampaigns(); }} onRetry={retryFailed} onDiscontinue={discontinue} />
+          <CampaignDetail detail={detail} actionLoading={actionLoading} onBack={() => { setDetail(null); setTopView("history"); void loadCampaigns(); }} canManage={isAdmin} onRetry={retryFailed} onDiscontinue={discontinue} />
         ) : topView === "history" ? (
           <HistoryView campaigns={campaigns} loading={campaignsLoading || actionLoading} onRefresh={loadCampaigns} onOpen={openCampaign} />
         ) : (
@@ -561,7 +568,7 @@ function HistoryView({ campaigns, loading, onRefresh, onOpen }: { campaigns: Cou
   );
 }
 
-function CampaignDetail({ detail, actionLoading, onBack, onRetry, onDiscontinue }: { detail: CouponCampaignDetail; actionLoading: boolean; onBack: () => void; onRetry: () => void; onDiscontinue: () => void }) {
+function CampaignDetail({ detail, actionLoading, canManage, onBack, onRetry, onDiscontinue }: { detail: CouponCampaignDetail; actionLoading: boolean; canManage: boolean; onBack: () => void; onRetry: () => void; onDiscontinue: () => void }) {
   const failed = detail.summary.FAILED ?? 0;
   const success = detail.summary.SUCCESS ?? 0;
   const skipped = Object.entries(detail.summary).filter(([key]) => !["SUCCESS", "FAILED"].includes(key)).reduce((sum, [, value]) => sum + value, 0);
@@ -582,8 +589,8 @@ function CampaignDetail({ detail, actionLoading, onBack, onRetry, onDiscontinue 
       </MobileSection>
 
       <div className="grid grid-cols-2 gap-2">
-        <button type="button" disabled={actionLoading || failed <= 0} onClick={onRetry} className="min-h-12 rounded-xl border border-[var(--app-border)] text-xs font-bold disabled:opacity-35">Retry ร้านที่ล้มเหลว</button>
-        <button type="button" disabled={actionLoading || detail.campaign.status === "DISCONTINUED"} onClick={onDiscontinue} className="min-h-12 rounded-xl bg-rose-600 px-3 text-xs font-bold text-white disabled:opacity-35">ยกเลิกคูปอง</button>
+        {canManage && <button type="button" disabled={actionLoading || failed <= 0} onClick={onRetry} className="min-h-12 rounded-xl border border-[var(--app-border)] text-xs font-bold disabled:opacity-35">Retry ร้านที่ล้มเหลว</button>}
+        {canManage && <button type="button" disabled={actionLoading || detail.campaign.status === "DISCONTINUED"} onClick={onDiscontinue} className="min-h-12 rounded-xl bg-rose-600 px-3 text-xs font-bold text-white disabled:opacity-35">ยกเลิกคูปอง</button>}
       </div>
     </div>
   );

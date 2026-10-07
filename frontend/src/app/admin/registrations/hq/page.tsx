@@ -2,8 +2,10 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { AuthorizedSection } from "../../../authorized-workspace";
+import { AuthorizedSection, useAuthorizedUser } from "../../../authorized-workspace";
 import { InternalPageShell } from "@/components/shell/internal-page-shell";
+import { invalidateAuthUser, refreshAuthUser } from "@/lib/auth-user-store";
+import { hqPermissionSummary, saveHqAccountRole, type HqAccount, type HqAccountRole } from "./hq-account-model";
 
 type PendingHq = {
   id: string;
@@ -13,24 +15,7 @@ type PendingHq = {
   createdAt: string;
 };
 
-type ApprovedHq = {
-  id: string;
-  displayName: string;
-  employeeId: string | null;
-  email: string;
-  status: "ACTIVE" | "SUSPENDED";
-  isActive: boolean;
-  canAccessWeb: boolean;
-  canAccessMobile: boolean;
-  canAccessHq: boolean;
-  canAccessAllStores: boolean;
-  canManageAccounts: boolean;
-  canReply: boolean;
-  canAccessMainOa: boolean;
-  canManageMainOa: boolean;
-  createdAt: string;
-  lastLoginAt: string | null;
-};
+type ApprovedHq = HqAccount;
 
 type Tab = "pending" | "approved";
 
@@ -52,6 +37,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 function HqApprovalContent() {
+  const actor = useAuthorizedUser();
+  const [roleTarget, setRoleTarget] = useState<HqAccount | null>(null);
+  const [newRole, setNewRole] = useState<HqAccountRole>("ASSISTANT");
+  const [selfDemotionConfirmed, setSelfDemotionConfirmed] = useState(false);
+  const [roleError, setRoleError] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("pending");
   const [pending, setPending] = useState<PendingHq[]>([]);
   const [approved, setApproved] = useState<ApprovedHq[]>([]);
@@ -62,6 +52,35 @@ function HqApprovalContent() {
   const [passwordCopied, setPasswordCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+
+  const openRoleEditor = (account: HqAccount) => {
+    setRoleTarget(account);
+    setNewRole(account.role);
+    setSelfDemotionConfirmed(false);
+    setRoleError(null);
+    setNotice(null);
+  };
+
+  const saveRole = async () => {
+    if (!roleTarget || acting) return;
+    if (roleTarget.id === actor?.id && newRole === "ASSISTANT" && !selfDemotionConfirmed) return;
+    setActing(roleTarget.id);
+    setRoleError(null);
+    try {
+      const saved = await saveHqAccountRole(roleTarget, newRole, (id, role) => request<{ role: HqAccountRole }>(`/admin/registrations/hq-users/${id}/role`, { method: "PATCH", body: JSON.stringify({ role }) }));
+      setApproved((accounts) => accounts.map((account) => account.id === saved.id ? saved : account));
+      setNotice(`Role updated for ${saved.displayName}.`);
+      setRoleTarget(null);
+      if (saved.id === actor?.id) {
+        invalidateAuthUser();
+        await refreshAuthUser();
+      }
+    } catch (cause) {
+      setRoleError(cause instanceof Error ? cause.message : "Unable to change role");
+    } finally {
+      setActing(null);
+    }
+  };
 
   const loadPending = useCallback(async () => {
     const result = await request<{ registrations: PendingHq[] }>("/admin/registrations/hq-pending");
@@ -124,7 +143,7 @@ function HqApprovalContent() {
     setNotice(null);
     try {
       await request(`/admin/registrations/hq-users/${account.id}/${action}`, { method: "PATCH" });
-      setNotice(action === "deactivate" ? `${account.displayName} was deactivated.` : `${account.displayName} was reactivated with full HQ access.`);
+      setNotice(action === "deactivate" ? `${account.displayName} was deactivated.` : `${account.displayName} was reactivated.`);
       await load(false);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Account status change failed");
@@ -183,7 +202,7 @@ function HqApprovalContent() {
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-[var(--app-accent)]">Account Management</p>
             <h1 className="mt-1 text-2xl font-bold">HQ accounts</h1>
-            <p className="mt-1 text-sm text-[var(--app-text-secondary)]">Approve HQ requests and manage approved full-access HQ accounts.</p>
+            <p className="mt-1 text-sm text-[var(--app-text-secondary)]">Approve HQ requests and manage account roles.</p>
           </div>
           <div className="flex gap-2">
             <Link href="/admin/registrations" className="rounded-lg border border-[var(--app-border)] bg-[var(--app-surface)] px-4 py-2 text-sm font-medium">BM / PC accounts</Link>
@@ -240,21 +259,22 @@ function HqApprovalContent() {
                       <div className="flex flex-wrap items-center gap-2">
                         <h2 className="font-semibold">{account.displayName}</h2>
                         <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${active ? "bg-emerald-100 text-emerald-800" : "bg-slate-200 text-slate-700"}`}>{active ? "Active" : "Inactive"}</span>
-                        <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-800">HQ · Full access</span>
+                        <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-800">{account.role}</span>
                       </div>
                       <p className="mt-1 text-sm text-[var(--app-text-secondary)]">{account.email}</p>
                       <p className="text-sm text-[var(--app-text-secondary)]">Employee ID: {account.employeeId ?? "—"}</p>
-                      <p className="mt-2 text-xs text-[var(--app-text-secondary)]">Web + Mobile · All Stores · Account Management · Reply · Main OA</p>
+                      <p className="mt-2 max-w-xl text-xs leading-5 text-[var(--app-text-secondary)]">{hqPermissionSummary(account)}</p>
                       <p className="mt-1 text-xs text-[var(--app-text-secondary)]">Last login: {account.lastLoginAt ? new Date(account.lastLoginAt).toLocaleString() : "Never"}</p>
                     </div>
                     <div className="flex flex-wrap justify-end gap-2">
+                      <button type="button" disabled={acting !== null} onClick={() => openRoleEditor(account)} className="rounded-lg border border-[var(--app-border)] bg-[var(--app-surface)] px-4 py-2 text-sm font-medium disabled:opacity-50">Change role</button>
                       {active && (
                         <button disabled={acting === account.id} onClick={() => openResetPassword(account)} className="rounded-lg border border-[var(--app-border)] bg-[var(--app-surface)] px-4 py-2 text-sm font-medium text-[var(--app-text-primary)] disabled:opacity-50">Reset password</button>
                       )}
                       {active ? (
                         <button disabled={acting === account.id} onClick={() => void actLifecycle(account, "deactivate")} className="rounded-lg border border-red-300 px-4 py-2 text-sm font-medium text-red-700 disabled:opacity-50">Deactivate</button>
                       ) : (
-                        <button disabled={acting === account.id} onClick={() => void actLifecycle(account, "reactivate")} className="rounded-lg bg-[var(--app-accent)] px-4 py-2 text-sm font-medium text-white disabled:opacity-50">Reactivate full access</button>
+                        <button disabled={acting === account.id} onClick={() => void actLifecycle(account, "reactivate")} className="rounded-lg bg-[var(--app-accent)] px-4 py-2 text-sm font-medium text-white disabled:opacity-50">Reactivate</button>
                       )}
                     </div>
                   </div>
@@ -264,6 +284,22 @@ function HqApprovalContent() {
           </div>
         )}
       </div>
+
+      {roleTarget && <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-labelledby="hq-role-title">
+        <div className="max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-6 shadow-2xl">
+          <h2 id="hq-role-title" className="text-lg font-bold">Change role</h2>
+          <p className="mt-2 font-semibold">{roleTarget.displayName}</p>
+          <p className="break-all text-sm text-[var(--app-text-secondary)]">{roleTarget.email}</p>
+          <fieldset className="mt-5 space-y-3" disabled={acting !== null}>
+            <legend className="mb-2 text-sm font-semibold">Role</legend>
+            <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-[var(--app-border)] p-3"><input autoFocus type="radio" name="hq-role" value="ADMIN" checked={newRole === "ADMIN"} onChange={() => setNewRole("ADMIN")} className="mt-1" /><span><span className="block font-semibold">Administrator</span><span className="text-sm text-[var(--app-text-secondary)]">Administrative access. Export/download and account management allowed.</span></span></label>
+            <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-[var(--app-border)] p-3"><input type="radio" name="hq-role" value="ASSISTANT" checked={newRole === "ASSISTANT"} onChange={() => setNewRole("ASSISTANT")} className="mt-1" /><span><span className="block font-semibold">Assistant</span><span className="text-sm text-[var(--app-text-secondary)]">Operational access within the existing store scope. Export/download disabled. Cannot manage accounts or permissions.</span></span></label>
+          </fieldset>
+          {roleTarget.id === actor?.id && newRole === "ASSISTANT" && <label className="mt-4 flex items-start gap-2 text-sm text-amber-700"><input type="checkbox" checked={selfDemotionConfirmed} onChange={(event) => setSelfDemotionConfirmed(event.target.checked)} /><span>I understand that I will lose Account Management access.</span></label>}
+          {roleError && <p role="alert" className="mt-4 text-sm text-[var(--app-danger)]">{roleError}</p>}
+          <div className="mt-5 flex justify-end gap-2"><button type="button" disabled={acting !== null} onClick={() => setRoleTarget(null)} className="rounded-lg border border-[var(--app-border)] px-4 py-2 text-sm">Cancel</button><button type="button" disabled={acting !== null || (roleTarget.id === actor?.id && newRole === "ASSISTANT" && !selfDemotionConfirmed)} onClick={() => void saveRole()} className="rounded-lg bg-[var(--app-accent)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{acting ? "Saving…" : "Save changes"}</button></div>
+        </div>
+      </div>}
 
       {resetTarget && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-labelledby="hq-password-reset-title">

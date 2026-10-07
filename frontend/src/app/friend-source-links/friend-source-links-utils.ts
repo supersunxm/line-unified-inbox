@@ -174,7 +174,7 @@ export function evaluateApiError(
 /**
  * Evaluates user role access permission for Friend Source Links section.
  */
-export function canRoleAccessFriendSourceLinks(role?: "ADMIN" | "VIEWER" | string | null): boolean {
+export function canRoleAccessFriendSourceLinks(role?: "ADMIN" | "ASSISTANT" | "VIEWER" | string | null): boolean {
   return role === "ADMIN";
 }
 
