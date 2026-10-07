@@ -3320,3 +3320,16 @@ Rationale:
 - A fixed three-paragraph cap truncates valid reviews and status badges such as `NEW` can be mistaken for body text.
 - Structural boundaries (anchors, UI markers, geometry gaps, bounded total window) are safer than an arbitrary paragraph-count limit.
 - The frontend must never display an empty OCR candidate as if it were a successfully extracted review.
+
+## 2026-10-07 — Review15 visitor metric is anonymous browser-level uniqueness
+
+Decision: display an approximate total visitor count based on one anonymous browser identifier, not raw page views.
+
+Rationale:
+- A refresh counter would overstate people and be easy to inflate accidentally.
+- Login is inappropriate for the public Review15 tool.
+- A locally generated UUID gives a practical browser-level unique count without collecting IP addresses or user-agent fingerprints.
+- Only a page-scoped SHA-256 digest is persisted; the raw UUID remains in browser storage.
+- The metric is explicitly approximate because clearing storage, using another browser/device, or automated traffic can change the count.
+
+The counter starts at deployment of this feature; no historical visitor analytics existed to backfill earlier traffic.
