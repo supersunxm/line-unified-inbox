@@ -133,3 +133,16 @@ test("temporary-password sessions are routed to a dedicated recovery page", () =
   assert.match(changePasswordPageCode, /api\.changePassword\(currentPassword, newPassword\)/);
   assert.match(changePasswordPageCode, /window\.location\.replace\(defaultRouteForUser\(user\)\)/);
 });
+
+
+test("password recovery exposes visibility controls and the backend-aligned password rules", () => {
+  assert.match(changePasswordPageCode, /type={visible ? "text" : "password"}/);
+  assert.match(changePasswordPageCode, /aria-label={visible ? hidePasswordLabel : showPasswordLabel}/);
+  assert.match(changePasswordPageCode, /newPassword.length >= 8/);
+  assert.match(changePasswordPageCode, //\\p{L}/u.test(newPassword)/);
+  assert.match(changePasswordPageCode, //[0-9]/.test(newPassword)/);
+  assert.match(changePasswordPageCode, /rulesTitle/);
+  assert.match(changePasswordPageCode, /ruleLength/);
+  assert.match(changePasswordPageCode, /ruleLetter/);
+  assert.match(changePasswordPageCode, /ruleNumber/);
+});
