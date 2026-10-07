@@ -74,7 +74,7 @@ export const REVIEW15_EXAMPLES: readonly Review15Example[] = [
   {
     id: "exact-english-15",
     label: "ตัวอย่าง 15 คำ",
-    text: "staff give clear advice and good service with useful promotions for customers buying new phones today",
+    text: "staff give clear advice and good service with useful promotions for customers buying phones today",
   },
 ] as const;
 
