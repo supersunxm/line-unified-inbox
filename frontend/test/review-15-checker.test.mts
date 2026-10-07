@@ -299,6 +299,21 @@ test("image OCR never auto-passes before BM confirms recognized text", () => {
 });
 
 
+test("image scan UI never renders an empty OCR candidate as a review card", () => {
+  const checkerPath = path.join(
+    repoRoot,
+    "frontend/src/app/review15/review-15-checker.tsx",
+  );
+  const checkerSource = fs.readFileSync(checkerPath, "utf8");
+
+  assert.match(
+    checkerSource,
+    /payload\.candidates\.filter\([\s\S]*candidate\.text\.trim\(\)\.length > 0/,
+  );
+  assert.match(checkerSource, /droppedBlankCandidates/);
+  assert.match(checkerSource, /setScanMissingReviewCount\(missingReviewCount\)/);
+});
+
 test("image scan UI warns when estimated review cards exceed extracted bodies", () => {
   const checkerPath = path.join(
     repoRoot,
