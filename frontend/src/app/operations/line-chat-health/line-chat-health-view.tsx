@@ -22,12 +22,13 @@ import {
   BROWSER_BUSY_HELP_TEXT,
   BROWSER_STATUS_HELP_TEXT,
   getBrowserOperationLabel,
-  getOverallHealth,
   getLineChatWorkUiHealth,
 } from "./line-chat-health-status";
 import { buildLineChatOverview, sessionBrowserLabel, sessionWorkLabel } from "./line-chat-health-overview";
 import { LineChatHealthOverviewPanel } from "./line-chat-health-overview-panel";
 import { LineChatStoreReadiness } from "./line-chat-store-readiness";
+import { useLineChatHealthRuntime } from "./line-chat-health-runtime";
+import { getSessionConnection } from "./line-chat-core-health";
 import { LineChatUnresolvedBacklogModal } from "./line-chat-unresolved-backlog-modal";
 
 type FilterTab = "ALL" | "AUTO_FIXABLE" | "MANUAL_REVIEW" | "AUTHENTICATION" | "SYSTEM_ATTENTION";
@@ -157,6 +158,7 @@ function JobSummary({
 }
 
 export function LineChatHealthView() {
+  const { recovery, now, publishReport, publishRecovery } = useLineChatHealthRuntime();
   const { language, setLanguage } = useAppLanguage();
   const [user, setUser] = useState<AuthUser | null>(null);
   const [report, setReport] = useState<LineChatOperationsHealth | null>(null);
@@ -186,6 +188,7 @@ export function LineChatHealthView() {
       const [authUser, health] = await Promise.all([api.me(), api.lineChatOperationsHealth()]);
       setUser(authUser as AuthUser);
       setReport(health);
+      publishReport(health);
       setSelectedKey((current) => current ?? health.sessions[0]?.sessionKey ?? null);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Unable to load LINE Chat health.");
@@ -195,7 +198,7 @@ export function LineChatHealthView() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [publishReport]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -214,7 +217,7 @@ export function LineChatHealthView() {
     [report, selectedKey],
   );
 
-  const overview = useMemo(() => report ? buildLineChatOverview(report) : null, [report]);
+  const overview = report ? buildLineChatOverview(report, now, recovery) : null;
 
   const detailSession = useMemo(
     () => report?.sessions.find((item) => item.sessionKey === detailSessionKey) ?? null,
@@ -388,10 +391,12 @@ export function LineChatHealthView() {
 
   const executeTryRememberedLogin = async (sessionKey: string) => {
     setRecoveringKey(sessionKey);
+    publishRecovery(sessionKey, { stage: "REQUESTED", clientPending: true });
     setError(null);
     try {
       const result = await api.tryLineChatRememberedLogin(sessionKey);
       if (result.outcome === "RECOVERED_REMEMBERED_ACCOUNT") {
+        publishRecovery(sessionKey, { stage: "RESUMING", clientPending: true });
         setNotice(`Session ${sessionKey} successfully re-authenticated via remembered account.`);
       } else if (result.outcome === "MANUAL_REAUTH_REQUIRED") {
         setError(`Manual operator login required for ${sessionKey}: ${result.message}`);
@@ -403,6 +408,7 @@ export function LineChatHealthView() {
       setError(reason instanceof Error ? reason.message : "Failed to execute remembered login.");
     } finally {
       setRecoveringKey(null);
+      publishRecovery(sessionKey, undefined);
     }
   };
 
@@ -471,7 +477,14 @@ export function LineChatHealthView() {
                     <div><dt className="text-[var(--app-text-tertiary)]">Current work</dt><dd className="mt-1">{sessionWorkLabel(session)}</dd></div>
                   </dl>
                   <div className="space-y-2">
-                    <div data-session-actions={session.sessionKey} className="flex flex-wrap items-center gap-2">
+                    <div data-session-actions={session.sessionKey} data-session-recovery-primary={health.primaryAction === "RECONNECT" || health.primaryAction === "VIEW_RECOVERY"} className="flex flex-wrap items-center gap-2">
+                      {health.primaryAction === "REFRESH" && <Button size="sm" variant="outline" onClick={() => void load()}>Refresh status</Button>}
+                      {health.primaryAction === "INSPECT" && <Button size="sm" variant="outline" onClick={() => { setSelectedKey(session.sessionKey); setDiagnosticsOpen(true); }}>View technical details</Button>}
+                    </div>
+                    {health.primaryAction !== "INSPECT" && <Button size="sm" variant="ghost" onClick={() => { setSelectedKey(session.sessionKey); setDiagnosticsOpen(true); }}>View technical details</Button>}
+                    <details className="text-xs">
+                      <summary className="cursor-pointer text-[var(--app-text-tertiary)]">View technical actions</summary>
+                      <div data-session-secondary-actions={session.sessionKey} className="mt-2 flex flex-wrap items-center gap-2">
                       {(session.healthStatus === "AUTH_REQUIRED" || session.status === "AUTH_REQUIRED") && (
                         <Button
                           size="sm"
@@ -495,7 +508,7 @@ export function LineChatHealthView() {
                             openDetailModal(session);
                           }}
                         >
-                          View failed ({totalFailed})
+                          View job history ({totalFailed})
                         </Button>
                       )}
                       <Button
@@ -514,8 +527,8 @@ export function LineChatHealthView() {
                       >
                         Retry eligible
                       </Button>
-                    </div>
-                    <Button size="sm" variant="ghost" onClick={() => { setSelectedKey(session.sessionKey); setDiagnosticsOpen(true); }}>View technical details</Button>
+                      </div>
+                    </details>
                   </div>
                 </CardContent>
               </Card>;
@@ -623,8 +636,8 @@ export function LineChatHealthView() {
                   </div>
                   <div className="rounded-xl border border-[var(--app-border)] p-3">
                     <div className="text-xs text-[var(--app-text-tertiary)]">Health</div>
-                    <Badge variant={getOverallHealth(selected).tone} title={`${getOverallHealth(selected).reason} ${getOverallHealth(selected).recommendedAction}`} dot>
-                      {getOverallHealth(selected).label}
+                    <Badge variant={getSessionConnection(selected, now, recovery[selected.sessionKey], report?.timestamp).tone} title={getSessionConnection(selected, now, recovery[selected.sessionKey], report?.timestamp).reason} dot>
+                      {getSessionConnection(selected, now, recovery[selected.sessionKey], report?.timestamp).label}
                     </Badge>
                   </div>
                 </div>

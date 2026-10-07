@@ -8,14 +8,28 @@ import {
   summarizeLineChatUiHealth,
   type LineChatUiHealth,
 } from "./line-chat-health-status.ts";
+import {
+  getSessionConnection,
+  summarizeSessions,
+  getMirrorHealth,
+  getCoreHealth,
+  type RecoverySignals,
+  type SessionConnection,
+} from "./line-chat-core-health.ts";
 
 export function buildLineChatOverview(
   report: LineChatOperationsHealth,
   now = Date.now(),
+  recovery: RecoverySignals = {},
 ) {
   const sessions = report.sessions.map((session) => ({
     session,
-    health: getLineChatUiHealth({ kind: "session", session }, now),
+    health: getSessionConnection(
+      session,
+      now,
+      recovery[session.sessionKey],
+      report.timestamp,
+    ),
   }));
   const stores = report.fleetReadiness.stores.map((store) => ({
     store,
@@ -58,9 +72,7 @@ export function buildLineChatOverview(
       ),
     0,
   );
-  const sessionHealth = summarizeLineChatUiHealth(
-    sessions.map((item) => item.health),
-  );
+  const sessionHealth = summarizeSessions(sessions.map((item) => item.health));
   const storeHealth = summarizeLineChatUiHealth(
     stores.map((item) => item.health),
   );
@@ -69,16 +81,19 @@ export function buildLineChatOverview(
     0,
   );
   const issueHealth = getLineChatWorkUiHealth(0, activeIssueCount);
-  const overall = summarizeLineChatUiHealth([
-    sessionHealth,
-    storeHealth,
-    mappingHealth,
-    issueHealth,
-  ]);
+  const mirrorHealth = getMirrorHealth(
+    report,
+    sessions.map((item) => item.health),
+    now,
+  );
+  const overall = getCoreHealth(
+    sessions.map((item) => item.health),
+    mirrorHealth,
+  );
   const attention: Array<{
     id: string;
     title: string;
-    health: LineChatUiHealth;
+    health: LineChatUiHealth | SessionConnection;
     target: "session" | "mapping" | "store";
     sessionKey?: string;
   }> = [];
@@ -90,7 +105,7 @@ export function buildLineChatOverview(
       target: "mapping",
     });
   for (const { session, health } of sessions) {
-    if (health.status !== "READY" && health.status !== "UNKNOWN")
+    if (!["CONNECTED", "IN_USE", "UNKNOWN"].includes(health.status))
       attention.push({
         id: session.id,
         title: session.displayName,
@@ -135,21 +150,17 @@ export function buildLineChatOverview(
     },
     {
       title: "Live Mirror",
-      health: sessionHealth,
-      value: sessionHealth.label,
-      supporting: [
-        `${report.liveMirrorFleet?.configuredStores ?? "Unconfirmed"} configured stores`,
-        !report.liveMirrorFleet
-          ? "Fleet observation not confirmed"
-          : report.liveMirrorFleet.cycleRunning
-            ? "Sync cycle in progress"
-            : "Waiting for the next scheduled cycle",
-      ],
+      health: mirrorHealth,
+      value: mirrorHealth.label,
+      supporting:
+        mirrorHealth.status === "UNKNOWN"
+          ? [mirrorHealth.reason, mirrorHealth.supporting.join(" · ")]
+          : mirrorHealth.supporting,
     },
     {
       title: "LINE Sessions",
       health: sessionHealth,
-      value: `${sessions.filter((item) => item.health.status === "READY").length} / ${sessions.length} ready`,
+      value: `${sessions.filter((item) => ["CONNECTED", "IN_USE"].includes(item.health.status)).length} / ${sessions.length} connected`,
       supporting: [sessionHealth.label],
     },
     {
@@ -183,12 +194,13 @@ export function buildLineChatOverview(
     sessions,
     stores,
     overall,
+    mirrorHealth,
     currentIssues,
     historicalIssues,
     otherIssues,
     activeIssueCount,
     emptyAttentionText:
-      overall.status === "READY"
+      overall.status === "OPERATIONAL"
         ? "No attention needed. Connections and current work are healthy."
         : "No actionable items confirmed. Some status checks are still unknown.",
   };

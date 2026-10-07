@@ -2,7 +2,8 @@
 
 import { useEffect, useRef } from "react";
 import { Badge, Button, Modal } from "@/components/ui";
-import { getLineChatUiHealth } from "./line-chat-health-status";
+import { getSessionConnection } from "./line-chat-core-health";
+import { useLineChatHealthRuntime } from "./line-chat-health-runtime";
 import type { StoreRow } from "./line-chat-store-readiness-model";
 
 const date = (value: string | null) =>
@@ -56,8 +57,14 @@ export function LineChatStoreDetails({
   }, []);
 
   const { store, session, health } = row;
+  const runtime = useLineChatHealthRuntime();
   const sessionHealth = session
-    ? getLineChatUiHealth({ kind: "session", session })
+    ? getSessionConnection(
+        session,
+        runtime.now,
+        runtime.recovery[session.sessionKey],
+        runtime.report?.timestamp,
+      )
     : null;
   const fields = [
     ["Store name", store.storeName],
