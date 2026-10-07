@@ -6351,3 +6351,13 @@ Live worker continues independently at 146 configured unique active OA identitie
 - Browser: production-shaped 144-store fixture shows Operational / Running / 2 of 2 connected with 137 setup stores separately. Verified login/recovery precedence, Waiting for Mirror while mirror remains Running, Waiting for LINE login and noVNC popup, explicit stale healthy-check Unknown wording, refresh, store search/details, and pending-work start/pause. Desktop 1440px and tablet 834/768px have no horizontal page/main overflow; browser warnings/errors zero. Synthetic verification only; no production writes. Screenshots saved under /private/tmp/pr4-desktop-1440.jpg and /private/tmp/pr4-tablet-834.jpg.
 - Next: finish final diff review/local commit, then request explicit push permission under AGENTS.md. One PR; green CI required before merge commit, no protection bypass. PR5 mobile store cards remain deferred. Recovery phases only reflect available existing signals; unavailable finer backend phases are not invented.
 - Final review: current main unchanged at 57c2684e. Final production build and 862-test rerun pass; CI frontend regression lint passes with three pre-existing warnings in unchanged purchase-broadcast-composer.tsx. Registered frontend /api/health, API /health and affected page return 200; no startup errors. Exact final table widths match available widths at 834/768px. Temporary viewport restored and local synthetic/preview services stopped after verification. No push or PR creation before explicit approval.
+
+## 2026-10-06 — Review 15-word rule V3 audit repair
+
+- Production audit screenshot exposed three tokenizer failures after V2: `ใช้งาน` split to `ใช้ / งาน`, `แบตอึดกล้อง` fragmented into nonsensical pieces, and mixed Thai/product text `ซื้อOPPOReno14Pro5Gวันนี้` merged incorrectly.
+- Implemented `THAI_REVIEW_WORDS_V3` in the canonical counter only.
+- Added Thai↔ASCII script-boundary normalization, conservative lexical boundary anchors, and explicit OPPO/model/connectivity splitting.
+- Locked exact regression fixtures for the production failures and kept the public checker / Google Review compatibility contract.
+- Updated the public rule panel and added `docs/review15-word-count-rule-v3.md`.
+- No database migration and no change to non-word-count Google Review qualification conditions.
+- Verification status: implementation complete on `fix/review15-word-rule-v3`; CI and production verification pending before merge.

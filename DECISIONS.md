@@ -3270,3 +3270,18 @@ Keep PR482's unified store readiness adapter and precedence unchanged. Core heal
 Within connection health, recovery takes precedence over login and login over degraded evidence; disabled/configuration-blocked accounts remain explicitly actionable. All unavailable core connections can be Blocked; partial faults are Degraded. Historical resolved jobs never imply a current connection failure. The page clock ages evidence even when refresh fails, preventing indefinitely healthy stale snapshots.
 
 Share presentation observations between overview, session actions and assigned-session details. Read the existing manual-recovery endpoint on the normal health refresh cadence without changing recovery orchestration. Reject background reads older than a new operator request and retain in-flight client progress. Show only human stages supported by existing active/pending/login/validation/mirror signals, and keep raw metadata/history behind technical controls. No new backend contracts or invented stage transitions are needed.
+
+## 2026-10-06 — Review 15-word counting V3
+
+Decision: keep `Intl.Segmenter("th")` as a fallback segmenter, but do not treat its output as the business source of truth for disputed review terms.
+
+Rationale:
+- Real production audit showed deterministic bad segmentation for common review text and mixed Thai/product strings.
+- Replacing the tokenizer wholesale would create broader regression risk.
+- A conservative pre-segmentation layer can repair verified failures while preserving existing behavior elsewhere.
+
+Contract:
+- `frontend/src/lib/thai-word-counter.ts` remains the single canonical word-count implementation for both the public checker and Google Review KPI tooling.
+- V3 inserts Thai↔ASCII boundaries, protects verified lexical units as boundary anchors, and performs only explicit OPPO/model/connectivity splitting.
+- Every future exception requires an exact regression fixture with expected final tokens.
+- Browser/runtime tokenizer output loses to the explicit business fixture when they disagree.

@@ -30,8 +30,8 @@ test("canonical counter enforces the 14/15 boundary", () => {
   assert.ok(segmentThaiWords(example).count >= 15);
 });
 
-test("V2 protects business-approved Thai lexical units before Intl segmentation", () => {
-  assert.equal(WORD_COUNT_RULE_VERSION, "THAI_REVIEW_WORDS_V2");
+test("V3 protects business-approved Thai lexical units before Intl segmentation", () => {
+  assert.equal(WORD_COUNT_RULE_VERSION, "THAI_REVIEW_WORDS_V3");
 
   assert.deepEqual(segmentThaiWords("โปรโมชั่น").finalTokens, ["โปรโมชั่น"]);
   assert.equal(countThaiWords("โปรโมชั่น"), 1);
@@ -44,6 +44,40 @@ test("V2 protects business-approved Thai lexical units before Intl segmentation"
 
   assert.deepEqual(segmentThaiWords("โปรโมชั่นพิเศษ").finalTokens, ["โปรโมชั่น", "พิเศษ"]);
   assert.equal(countThaiWords("โปรโมชั่นพิเศษ"), 2);
+});
+
+test("V3 repairs the exact mixed-script and Thai-boundary failures found in production audit", () => {
+  assert.deepEqual(segmentThaiWords("ใช้งาน").finalTokens, ["ใช้งาน"]);
+  assert.equal(countThaiWords("ใช้งาน"), 1);
+
+  assert.deepEqual(
+    segmentThaiWords("แบตอึดกล้อง").finalTokens,
+    ["แบต", "อึด", "กล้อง"],
+  );
+  assert.equal(countThaiWords("แบตอึดกล้อง"), 3);
+
+  assert.deepEqual(
+    segmentThaiWords("ซื้อOPPOReno14Pro5Gวันนี้").finalTokens,
+    ["ซื้อ", "OPPO", "Reno14Pro", "5G", "วันนี้"],
+  );
+  assert.equal(countThaiWords("ซื้อOPPOReno14Pro5Gวันนี้"), 5);
+
+  assert.deepEqual(
+    segmentThaiWords("ซื้อOPPOReno14Pro5Gวันนี้ได้ของแถมเยอะมาก").finalTokens,
+    ["ซื้อ", "OPPO", "Reno14Pro", "5G", "วันนี้", "ได้", "ของ", "แถม", "เยอะ", "มาก"],
+  );
+
+  assert.deepEqual(
+    segmentThaiWords("สมาร์ทโฟนเครื่องนี้ใช้งานง่ายแบตอึดกล้องสวยชาร์จเร็ว").finalTokens,
+    ["สมาร์ทโฟน", "เครื่อง", "นี้", "ใช้งาน", "ง่าย", "แบต", "อึด", "กล้อง", "สวย", "ชาร์จ", "เร็ว"],
+  );
+});
+
+test("mixed-script boundaries do not change already-spaced product text", () => {
+  assert.deepEqual(
+    segmentThaiWords("ซื้อ OPPO Reno14Pro 5G วันนี้").finalTokens,
+    ["ซื้อ", "OPPO", "Reno14Pro", "5G", "วันนี้"],
+  );
 });
 
 test("protected words remain deterministic when repeated or mixed with normal text", () => {
