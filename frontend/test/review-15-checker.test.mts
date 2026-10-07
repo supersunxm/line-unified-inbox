@@ -30,8 +30,8 @@ test("canonical counter enforces the 14/15 boundary", () => {
   assert.ok(segmentThaiWords(example).count >= 15);
 });
 
-test("V3 protects business-approved Thai lexical units before Intl segmentation", () => {
-  assert.equal(WORD_COUNT_RULE_VERSION, "THAI_REVIEW_WORDS_V3");
+test("V4 protects business-approved Thai lexical units before Intl segmentation", () => {
+  assert.equal(WORD_COUNT_RULE_VERSION, "THAI_REVIEW_WORDS_V4");
 
   assert.deepEqual(segmentThaiWords("โปรโมชั่น").finalTokens, ["โปรโมชั่น"]);
   assert.equal(countThaiWords("โปรโมชั่น"), 1);
@@ -64,7 +64,7 @@ test("V3 repairs the exact mixed-script and Thai-boundary failures found in prod
 
   assert.deepEqual(
     segmentThaiWords("ซื้อOPPOReno14Pro5Gวันนี้ได้ของแถมเยอะมาก").finalTokens,
-    ["ซื้อ", "OPPO", "Reno14Pro", "5G", "วันนี้", "ได้", "ของ", "แถม", "เยอะ", "มาก"],
+    ["ซื้อ", "OPPO", "Reno14Pro", "5G", "วันนี้", "ได้", "ของแถม", "เยอะ", "มาก"],
   );
 
   assert.deepEqual(
@@ -78,6 +78,73 @@ test("mixed-script boundaries do not change already-spaced product text", () => 
     segmentThaiWords("ซื้อ OPPO Reno14Pro 5G วันนี้").finalTokens,
     ["ซื้อ", "OPPO", "Reno14Pro", "5G", "วันนี้"],
   );
+});
+
+test("V4 locks the three compounds found by the second production audit", () => {
+  assert.deepEqual(
+    segmentThaiWords("พนักงานให้คำแนะนำดีมาก").finalTokens,
+    ["พนักงาน", "ให้", "คำแนะนำ", "ดี", "มาก"],
+  );
+  assert.equal(countThaiWords("คำแนะนำ"), 1);
+
+  assert.deepEqual(
+    segmentThaiWords("ของแถมเยอะมาก").finalTokens,
+    ["ของแถม", "เยอะ", "มาก"],
+  );
+  assert.equal(countThaiWords("ของแถม"), 1);
+
+  assert.deepEqual(
+    segmentThaiWords("กลับมาใช้บริการอีก").finalTokens,
+    ["กลับ", "มา", "ใช้บริการ", "อีก"],
+  );
+  assert.equal(countThaiWords("ใช้บริการ"), 1);
+});
+
+test("V4 reproduces the full second-audit sentence as 38 business words", () => {
+  const audited =
+    "วันนี้มาซื้อOPPOReno14Pro5Gโปรโมชั่นดีมากพนักงานให้คำแนะนำละเอียดใช้งานง่ายสมาร์ทโฟนเครื่องนี้กล้องสวยแบตอึดชาร์จเร็วของแถมเยอะราคาคุ้มบริการดีมากประทับใจและจะกลับมาใช้บริการอีก";
+
+  assert.deepEqual(segmentThaiWords(audited).finalTokens, [
+    "วันนี้",
+    "มา",
+    "ซื้อ",
+    "OPPO",
+    "Reno14Pro",
+    "5G",
+    "โปรโมชั่น",
+    "ดี",
+    "มาก",
+    "พนักงาน",
+    "ให้",
+    "คำแนะนำ",
+    "ละเอียด",
+    "ใช้งาน",
+    "ง่าย",
+    "สมาร์ทโฟน",
+    "เครื่อง",
+    "นี้",
+    "กล้อง",
+    "สวย",
+    "แบต",
+    "อึด",
+    "ชาร์จ",
+    "เร็ว",
+    "ของแถม",
+    "เยอะ",
+    "ราคา",
+    "คุ้ม",
+    "บริการ",
+    "ดี",
+    "มาก",
+    "ประทับใจ",
+    "และ",
+    "จะ",
+    "กลับ",
+    "มา",
+    "ใช้บริการ",
+    "อีก",
+  ]);
+  assert.equal(countThaiWords(audited), 38);
 });
 
 test("protected words remain deterministic when repeated or mixed with normal text", () => {
