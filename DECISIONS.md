@@ -3262,3 +3262,18 @@ Session cards expose persisted display names, browser availability and current w
 Keep PR482's store adapter as the only human-readable status source. Filter chips count the complete received fleet and explicitly say so; search and toggles narrow visible rows without changing counts or backend state. Actionable-only includes known setup/login/blocked/degraded/recovering states, matching current attention; unconfirmed UNKNOWN is not a proven actionable issue. Pilot-only uses the backend currentlyPilotEligible flag, independently of connection readiness. Coverage labels preserve the API percentage and counts; only the visual progress bar is clamped to 0–100, and missing coverage remains unconfirmed.
 
 Move raw states and blockers into an accessible read-only details panel using the existing Modal. Row actions open that panel for review, with links to existing store/OA setup, session controls and mapping backlog. Do not duplicate recovery actions or introduce writes. Trap keyboard focus while details are open; restore focus on ordinary close and defer session handoff focus until panel cleanup has completed. The available response contracts only include hasChatBotId and no store-specific last-check timestamp: explicitly report availability and use labeled assigned-session check time plus store audit time. Actual bot-ID exposure would require a separately scoped contract change. Preserve the PR486 overview exactly and defer mobile store cards to PR5.
+
+## 2026-10-06 — Review 15-word counting V3
+
+Decision: keep `Intl.Segmenter("th")` as a fallback segmenter, but do not treat its output as the business source of truth for disputed review terms.
+
+Rationale:
+- Real production audit showed deterministic bad segmentation for common review text and mixed Thai/product strings.
+- Replacing the tokenizer wholesale would create broader regression risk.
+- A conservative pre-segmentation layer can repair verified failures while preserving existing behavior elsewhere.
+
+Contract:
+- `frontend/src/lib/thai-word-counter.ts` remains the single canonical word-count implementation for both the public checker and Google Review KPI tooling.
+- V3 inserts Thai↔ASCII boundaries, protects verified lexical units as boundary anchors, and performs only explicit OPPO/model/connectivity splitting.
+- Every future exception requires an exact regression fixture with expected final tokens.
+- Browser/runtime tokenizer output loses to the explicit business fixture when they disagree.

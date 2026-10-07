@@ -6339,3 +6339,13 @@ Live worker continues independently at 146 configured unique active OA identitie
 - Next: request explicit push permission for the verified local commit under AGENTS.md. One PR only; wait for green CI before normal merge commit; never bypass branch protection. Further presentation phases remain separate; full mobile store cards are deferred to PR5.
 - Final review: frontend CI regression lint passes with three pre-existing warnings in unchanged purchase-broadcast-composer.tsx; touched PR3 files have zero lint warnings/errors. Main is still ec5a51df. Diff has only the planned seven frontend/test files and two documentation files. Browser viewport restored after verification.
 - Delivery: screenshots/report prepared; local preview and synthetic API stopped after verification. No push or PR creation before the requested explicit approval.
+
+## 2026-10-06 — Review 15-word rule V3 audit repair
+
+- Production audit screenshot exposed three tokenizer failures after V2: `ใช้งาน` split to `ใช้ / งาน`, `แบตอึดกล้อง` fragmented into nonsensical pieces, and mixed Thai/product text `ซื้อOPPOReno14Pro5Gวันนี้` merged incorrectly.
+- Implemented `THAI_REVIEW_WORDS_V3` in the canonical counter only.
+- Added Thai↔ASCII script-boundary normalization, conservative lexical boundary anchors, and explicit OPPO/model/connectivity splitting.
+- Locked exact regression fixtures for the production failures and kept the public checker / Google Review compatibility contract.
+- Updated the public rule panel and added `docs/review15-word-count-rule-v3.md`.
+- No database migration and no change to non-word-count Google Review qualification conditions.
+- Verification status: implementation complete on `fix/review15-word-rule-v3`; CI and production verification pending before merge.
