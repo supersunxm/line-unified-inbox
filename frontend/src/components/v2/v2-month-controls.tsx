@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import React from "react";
-import { monthLongLabel, monthStatusLabel, periodLabel, selectableMonths } from "@/lib/v2/month";
+import { monthLongLabel, periodLabel, selectableMonths } from "@/lib/v2/month";
 import { coverageText, previousCoverage } from "@/lib/v2/monthly-model";
 import { withMonth } from "@/lib/v2/month-url";
 import { responseKpis } from "@/lib/v2/response-model";
@@ -77,7 +77,8 @@ export function DataLine() {
         previousReason: data.frame.previousCollected ? (data.previous.error ? "โหลดไม่สำเร็จ" : data.previous.loading ? "กำลังโหลด" : null) : "ระบบยังไม่ได้เก็บข้อมูลช่วงนี้",
       })
       : null,
-    monthStatusLabel(data.frame),
+    data.statusText,
+    data.closeError ? `ตรวจสถานะปิดเดือนไม่ได้ จึงแสดงตัวเลขสด: ${data.closeError}` : null,
     data.placeholders.length > 0 ? `ไม่นับ ${data.placeholders.length} ร้านที่ยังไม่มี LINE OA (${data.placeholders.map((store) => store.name).join(", ")})` : null,
     data.unattributed ? `แชท ${data.unattributed.toLocaleString("th-TH")} แชทไม่อยู่ในสาขาที่แสดง` : null,
   ].filter(Boolean);

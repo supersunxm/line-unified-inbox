@@ -2984,3 +2984,56 @@ model StorePartnerMappingChange {
   @@index([storeId, changedAt])
   @@index([source])
 }
+
+// v2 month close: one row per close of a month (revision 1 = first close; an admin re-close adds
+// revision 2, 3, … and keeps every earlier revision). Snapshot rows hang off a close.
+model MonthlyKpiClose {
+  id                String   @id @default(uuid())
+  month             String
+  revision          Int
+  closedBy          String
+  actorId           String?
+  actorName         String
+  reason            String?
+  backfill          Boolean  @default(false)
+  dueAt             DateTime
+  closedAt          DateTime @default(now())
+  definitionVersion String
+  storeCount        Int
+  chatsTotal        Int
+  chatsUnreplied    Int
+  chatsReplied      Int
+  rate24Total       Int
+  rate24Within      Int
+  snapshots         MonthlyStoreKpiSnapshot[]
+
+  @@unique([month, revision])
+  @@index([month])
+}
+
+// Per-store KPI values of a closed month, as computed at close time. Never updated.
+model MonthlyStoreKpiSnapshot {
+  id                   String   @id @default(uuid())
+  closeId              String
+  month                String
+  revision             Int
+  storeUuid            String
+  storeId              String?
+  storeName            String
+  chatsTotal           Int
+  chatsUnreplied       Int
+  chatsReplied         Int
+  oldestWaitingMinutes Int?
+  rate24Total          Int
+  rate24Within         Int
+  hasChatData          Boolean
+  rate24Measured       Boolean
+  replyStatusCovered   Boolean
+  computedAt           DateTime
+  definitionVersion    String
+  closedBy             String
+  close                MonthlyKpiClose @relation(fields: [closeId], references: [id], onDelete: Restrict)
+
+  @@unique([closeId, storeUuid])
+  @@index([month, revision])
+}

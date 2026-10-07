@@ -33,6 +33,7 @@ import {
 import { fetchPagesUntil } from "@/lib/v2/waiting-pages";
 import { storeManagerUrlOf } from "@/lib/v2/response-model";
 import type { StorePartnerRow } from "@/lib/v2/partners";
+import { closeStatusLabel, snapshotRates, snapshotSummary, type MonthCloseInfo, type MonthCloseResponse } from "@/lib/v2/month-close";
 
 /** /conversations allows pageSize ≤ 100. */
 export const MONTH_PAGE_SIZE = 100;
@@ -62,6 +63,9 @@ function shared<T>(fullKey: string, load: () => Promise<T>): Promise<T> {
 }
 
 const baseOf = (fullKey: string) => fullKey.slice(0, fullKey.lastIndexOf("#"));
+
+/** A source that is waiting on another (e.g. live data waits until the month's close is known). */
+const PENDING: Source<never> = { data: null, error: null, loading: true };
 
 /**
  * Loads `loader(key)` whenever key or the refresh nonce changes. While a refresh of the same key
@@ -143,11 +147,25 @@ async function loadGoogle(key: string): Promise<GoogleReviewKpiStoreItem[]> {
   return (await api.getGoogleReviewKpis({ month })).stores;
 }
 
+/** A month's close (GET /v2/month-close/:month): the snapshot when closed, close: null while open. */
+export async function fetchMonthClose(month: string): Promise<MonthCloseResponse> {
+  const response = await fetch(`/api-backend/v2/month-close/${encodeURIComponent(month)}`, { credentials: "include", cache: "no-store" });
+  if (!response.ok) throw new Error(`โหลดสถานะปิดเดือนไม่สำเร็จ (${response.status})`);
+  return (await response.json()) as MonthCloseResponse;
+}
+
+async function loadMonthClose(key: string): Promise<MonthCloseResponse> {
+  return fetchMonthClose((JSON.parse(key) as { month: string }).month);
+}
+
 export type TrendPoint = { month: string; dateFrom: string; dateTo: string; summary: MonthSummary | null; rates: RateResponse | null; error: string | null };
 
 async function loadTrend(key: string): Promise<TrendPoint[]> {
   const { points } = JSON.parse(key) as { points: Array<{ month: string; dateFrom: string; dateTo: string }> };
   return Promise.all(points.map(async (point) => {
+    // A closed month reads its snapshot; an open one reads live data.
+    const close = await fetchMonthClose(point.month).catch(() => null);
+    if (close?.close) return { ...point, summary: snapshotSummary(close), rates: snapshotRates(close), error: null };
     const [summary, rates] = await Promise.allSettled([
       shared(`summary:${JSON.stringify({ month: point.month })}#trend`, () => loadSummary(JSON.stringify({ month: point.month }))),
       fetchRates(point.dateFrom, point.dateTo),
@@ -196,6 +214,10 @@ export type V2MonthData = {
   frame: MonthWindow;
   /** "1–7 ต.ค. 2026 เทียบ 1–7 ก.ย. 2026". */
   periodText: string;
+  /** The month's close when closed (its snapshot is what every view shows), else null. */
+  close: MonthCloseInfo | null;
+  /** "ปิดเดือนแล้ว เมื่อ …" / "ปิดย้อนหลัง เมื่อ …" / "เดือนนี้ยังไม่ปิด …" / "สิ้นเดือนแล้ว รอปิดอัตโนมัติ …". */
+  statusText: string;
   stores: Source<StoreInfo[]>;
   /** The Store → partner mapping; when it fails every store reads "ไม่ระบุ partner" and the page says so. */
   partnerMapping: Source<StorePartnerRow[]>;
@@ -211,6 +233,8 @@ export type V2MonthData = {
   coverage: { withChats: number; total: number };
   /** Network chats not in any listed store (should be 0). */
   unattributed: number | null;
+  /** The close lookup failed: live numbers are shown instead. */
+  closeError: string | null;
   /** At least one store has a Google Review result for the month. */
   hasGoogleResults: boolean;
   coreLoading: boolean;
@@ -250,17 +274,27 @@ export function V2MonthDataProvider({ children }: { children: React.ReactNode })
     const byUuid = new Map((partnerMapping.data ?? []).map((row) => [row.storeUuid, row.partner]));
     return { ...rawStores, data: rawStores.data.map((store) => ({ ...store, partner: byUuid.get(store.id) ?? null })) };
   }, [partnerMapping.data, rawStores]);
-  const current = useKeyedSource("summary", JSON.stringify({ month }), nonce, loadSummary);
-  // Closed month: the whole previous month. Month in progress: the previous month's days 1–D
-  // through the same endpoint with from/to (server-side, same bucketing; no paging).
-  const previousSummary = useKeyedSource(
+  // Closed months read their snapshot; open months read live data. If the close lookup fails, live data is used.
+  const monthClose = useKeyedSource("month-close", JSON.stringify({ month }), nonce, loadMonthClose);
+  const previousClose = useKeyedSource("month-close", frame.previousCollected && !frame.inProgress ? JSON.stringify({ month: frame.previous.month }) : null, nonce, loadMonthClose);
+  const closeKnown = monthClose.data !== null || monthClose.error !== null;
+  const currentClosed = Boolean(monthClose.data?.close);
+  // The open month compares with the previous month's days 1–D (live, from/to); a closed month with the whole previous month.
+  const previousCloseKnown = frame.inProgress || !frame.previousCollected || previousClose.data !== null || previousClose.error !== null;
+  const previousClosed = !frame.inProgress && Boolean(previousClose.data?.close);
+  const liveCurrent = useKeyedSource("summary", closeKnown && !currentClosed ? JSON.stringify({ month }) : null, nonce, loadSummary);
+  const liveRates = useKeyedSource("rates", closeKnown && !currentClosed ? JSON.stringify({ dateFrom: frame.current.dateFrom, dateTo: frame.current.dateTo }) : null, nonce, loadRates);
+  const livePrevious = useKeyedSource(
     "summary",
-    !frame.previousCollected ? null : frame.inProgress ? JSON.stringify({ from: frame.previous.dateFrom, to: frame.previous.dateTo }) : JSON.stringify({ month: frame.previous.month }),
+    !frame.previousCollected || !previousCloseKnown || previousClosed ? null : frame.inProgress ? JSON.stringify({ from: frame.previous.dateFrom, to: frame.previous.dateTo }) : JSON.stringify({ month: frame.previous.month }),
     nonce,
     loadSummary,
   );
-  const rates = useKeyedSource("rates", JSON.stringify({ dateFrom: frame.current.dateFrom, dateTo: frame.current.dateTo }), nonce, loadRates);
-  const previousRates = useKeyedSource("rates", frame.previousCollected ? JSON.stringify({ dateFrom: frame.previous.dateFrom, dateTo: frame.previous.dateTo }) : null, nonce, loadRates);
+  const livePreviousRates = useKeyedSource("rates", frame.previousCollected && previousCloseKnown && !previousClosed ? JSON.stringify({ dateFrom: frame.previous.dateFrom, dateTo: frame.previous.dateTo }) : null, nonce, loadRates);
+  const current = useMemo<Source<MonthSummary>>(() => (currentClosed ? { data: snapshotSummary(monthClose.data!), error: null, loading: false } : closeKnown ? liveCurrent : PENDING), [closeKnown, currentClosed, liveCurrent, monthClose.data]);
+  const rates = useMemo<Source<RateResponse>>(() => (currentClosed ? { data: snapshotRates(monthClose.data!), error: null, loading: false } : closeKnown ? liveRates : PENDING), [closeKnown, currentClosed, liveRates, monthClose.data]);
+  const previousSummary = useMemo<Source<MonthSummary>>(() => (previousClosed ? { data: snapshotSummary(previousClose.data!), error: null, loading: false } : previousCloseKnown ? livePrevious : PENDING), [livePrevious, previousClose.data, previousCloseKnown, previousClosed]);
+  const previousRates = useMemo<Source<RateResponse>>(() => (previousClosed ? { data: snapshotRates(previousClose.data!), error: null, loading: false } : previousCloseKnown ? livePreviousRates : PENDING), [livePreviousRates, previousClose.data, previousCloseKnown, previousClosed]);
   const google = useKeyedSource("google", JSON.stringify({ month }), nonce, loadGoogle);
 
   const value = useMemo<V2MonthData>(() => {
@@ -281,6 +315,8 @@ export function V2MonthDataProvider({ children }: { children: React.ReactNode })
       now,
       frame,
       periodText: comparisonLabel(frame),
+      close: monthClose.data?.close ?? null,
+      statusText: closeStatusLabel(monthClose.data?.close ?? null, monthClose.data?.dueAt ?? null, frame),
       stores,
       partnerMapping,
       current,
@@ -297,10 +333,11 @@ export function V2MonthDataProvider({ children }: { children: React.ReactNode })
       hasGoogleResults: Boolean(google.data?.some((store) => store.kpiResult)),
       // Partner grouping waits for the mapping too, so rows never jump from "ไม่ระบุ" to a partner.
       coreLoading: (!stores.data && stores.loading) || (!current.data && current.loading) || (!partnerMapping.data && partnerMapping.loading),
+      closeError: monthClose.error,
       nonce,
       refresh,
     };
-  }, [current, google, month, nonce, now, partnerMapping, previousSummary, previousRates, rates, refresh, stores, frame]);
+  }, [current, google, month, nonce, now, partnerMapping, previousSummary, previousRates, rates, refresh, stores, frame, monthClose.data, monthClose.error]);
 
   return <V2MonthContext.Provider value={value}>{children}</V2MonthContext.Provider>;
 }

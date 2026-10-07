@@ -48,7 +48,7 @@ test("report page: no navigation chrome, A4 light, open-month footer", () => {
   assert.doesNotMatch(report, /V2Shell|V2Layout/);
   assert.match(report, /@page \{ size: A4; margin: 12mm; \}/);
   assert.match(report, /color-scheme: light;/);
-  assert.match(report, /\{data\.frame\.inProgress && <p data-v2-report-open-month[^>]*>\{OPEN_MONTH_NOTE\}<\/p>\}/);
+  assert.match(report, /\{!data\.close && <p data-v2-report-open-month[^>]*>\{OPEN_MONTH_NOTE\}<\/p>\}/, "shown until the month is closed");
   assert.equal(OPEN_MONTH_NOTE, "ตัวเลขเดือนที่ยังไม่ปิดอาจเปลี่ยนได้");
   assert.match(report, /data-v2-copy-summary/);
 });

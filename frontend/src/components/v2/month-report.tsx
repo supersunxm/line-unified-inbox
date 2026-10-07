@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import React, { Suspense, useMemo, useState } from "react";
 import { AuthorizedSection } from "@/app/authorized-workspace";
 import { KPI_DIFFERENCE_NOTE, KPI_HOW_COUNTED, RATE24_TARGET, REPLIED_RATE_TARGET } from "@/lib/v2/kpi";
-import { monthLongLabel, monthShortLabel, monthStatusLabel, periodLabel } from "@/lib/v2/month";
+import { monthLongLabel, monthShortLabel, periodLabel } from "@/lib/v2/month";
 import { parseReportUrl, storesHref } from "@/lib/v2/month-url";
 import { coverageText, dataCoverage, previousCoverage, sortMonthRows, type GroupTotals, type MonthStoreRow } from "@/lib/v2/monthly-model";
 import { buildReportSummary, OPEN_MONTH_NOTE } from "@/lib/v2/report-summary";
@@ -121,7 +121,7 @@ function ReportBody() {
     return { kind: "network" as const, label: "ทุกสาขา", totals: data.network, rows: sortMonthRows(data.rows, "rate24") };
   }, [data.network, data.partners, data.rows, request.partner, request.store]);
 
-  const summary = scope ? buildReportSummary({ monthLabel: monthShortLabel(data.month), periodText: data.periodText, scopeLabel: scope.label, totals: scope.totals, stores: scope.rows, inProgress: data.frame.inProgress }) : "";
+  const summary = scope ? buildReportSummary({ monthLabel: monthShortLabel(data.month), periodText: data.periodText, scopeLabel: scope.label, totals: scope.totals, stores: scope.rows, inProgress: !data.close }) : "";
   const coverage = scope ? dataCoverage(scope.rows) : null;
 
   const copy = async () => {
@@ -149,7 +149,7 @@ function ReportBody() {
       <header className="mb-5">
         <p className="text-xs text-[var(--app-text-secondary)]">OPPO LINE OA · รายงานเดือน</p>
         <h1 className="text-xl font-semibold">{monthLongLabel(data.month)} · {scope?.label ?? (request.partner ? `Partner ${request.partner}` : "สาขา")}</h1>
-        <p className="text-xs text-[var(--app-text-secondary)]">{data.periodText} · {monthStatusLabel(data.frame)}</p>
+        <p className="text-xs text-[var(--app-text-secondary)]">{data.periodText} · <span data-v2-close-status>{data.statusText}</span></p>
       </header>
 
       {data.coreLoading ? (
@@ -182,7 +182,7 @@ function ReportBody() {
       )}
 
       <footer className="mt-8 border-t border-[var(--app-border)] pt-3 text-[11px] text-[var(--app-text-secondary)]">
-        {data.frame.inProgress && <p data-v2-report-open-month className="font-medium text-[var(--app-text-primary)]">{OPEN_MONTH_NOTE}</p>}
+        {!data.close && <p data-v2-report-open-month className="font-medium text-[var(--app-text-primary)]">{OPEN_MONTH_NOTE}</p>}
         <p data-v2-report-how-counted>นับยังไง — ตอบแล้ว %: {KPI_HOW_COUNTED.replied}</p>
         <p>นับยังไง — ตอบใน 24 ชม. %: {KPI_HOW_COUNTED.rate24}</p>
         <p>ตัวเลขใต้อัตรา = เปลี่ยนกี่จุดจากช่วงเทียบ · จำนวนแชทและการเปลี่ยนแปลงไม่ใช้สี เพราะขึ้นลงตามจำนวนแชท · อัตราจากแชทน้อยกว่า 10 แชทแสดงสีจางและไม่เทียบเป้า</p>
