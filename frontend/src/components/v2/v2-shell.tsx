@@ -6,8 +6,10 @@ import React from "react";
 import { useThemeToggle } from "@/app/theme";
 import { api } from "@/lib/api";
 import { useAuthUserSnapshot } from "@/lib/auth-user-store";
-import { responseKpis } from "@/lib/v2/response-model";
+import { withMonth } from "@/lib/v2/month-url";
 import { useV2Data } from "./v2-data";
+import { MonthSelector } from "./v2-month-controls";
+import { useV2Month } from "./v2-month-data";
 
 const focusRing = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--app-accent)]/40";
 
@@ -29,7 +31,7 @@ function NavIcon({ name }: { name: IconName }) {
   );
 }
 
-type NavItem = { href: string; label: string; icon: IconName; badge?: number | null; active?: (path: string) => boolean };
+type NavItem = { href: string; label: string; icon: IconName; active?: (path: string) => boolean };
 
 function NavLink({ item, pathname }: { item: NavItem; pathname: string }) {
   const active = item.active ? item.active(pathname) : false;
@@ -41,16 +43,16 @@ function NavLink({ item, pathname }: { item: NavItem; pathname: string }) {
     >
       <NavIcon name={item.icon} />
       <span className="min-w-0 flex-1 truncate">{item.label}</span>
-      {item.badge ? (
-        <span data-v2-follow-up-badge className="min-w-6 rounded-full bg-[var(--app-danger-soft)] px-1.5 py-0.5 text-center text-xs font-semibold tabular-nums text-[var(--app-danger)]" aria-label={`${item.badge} ร้านต้องตามวันนี้`}>
-          {item.badge}
-        </span>
-      ) : null}
     </Link>
   );
 }
 
-export const V2_PAGE_TITLES: Record<string, string> = { "/v2": "วันนี้", "/v2/response": "การตอบแชท", "/v2/stores": "สาขา" };
+export const V2_PAGE_TITLES: Record<string, string> = { "/v2": "ภาพรวมเดือน", "/v2/response": "ตอนนี้", "/v2/stores": "สาขา" };
+
+/** Pages that show monthly numbers carry the month selector; "ตอนนี้" is live and has none. */
+export function isMonthlyPage(pathname: string): boolean {
+  return pathname === "/v2" || pathname.startsWith("/v2/stores");
+}
 
 function ThemeToggle() {
   const { shown, toggle } = useThemeToggle();
@@ -71,16 +73,15 @@ function ThemeToggle() {
 export function V2Shell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname() || "/v2";
   const data = useV2Data();
+  const monthData = useV2Month();
   const { user } = useAuthUserSnapshot();
-  // Same number as the ตามวันนี้ tab count, the KPI and the "วันนี้" item 1.
-  const followTodayStores = data.waiting.data ? responseKpis(data.storeRows).followTodayStores : null;
+  const monthly = isMonthlyPage(pathname);
 
   const mainItems: NavItem[] = [
-    { href: "/v2", label: "วันนี้", icon: "today", active: (path) => path === "/v2" },
-    { href: "/v2/response", label: "การตอบแชท", icon: "response", badge: followTodayStores, active: (path) => path.startsWith("/v2/response") },
+    { href: withMonth("/v2", monthData.month), label: "ภาพรวมเดือน", icon: "today", active: (path) => path === "/v2" || path.startsWith("/v2/response") },
+    { href: withMonth("/v2/stores", monthData.month), label: "สาขา", icon: "stores", active: (path) => path.startsWith("/v2/stores") },
     { href: "/admin/purchase-analytics", label: "ลูกค้าและการขาย", icon: "customers" },
     { href: "/follower-insights", label: "การเติบโต", icon: "growth" },
-    { href: "/v2/stores", label: "สาขา", icon: "stores", active: (path) => path.startsWith("/v2/stores") },
   ];
   const toolItems: NavItem[] = [
     { href: "/mass-messages", label: "ส่งข้อความ", icon: "send" },
@@ -112,7 +113,8 @@ export function V2Shell({ children }: { children: React.ReactNode }) {
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex h-14 shrink-0 items-center gap-3 border-b border-[var(--app-border)] bg-[var(--app-surface)] px-6">
           <div className="min-w-0 flex-1 truncate text-sm font-semibold">{title}</div>
-          <button type="button" onClick={data.refresh} className={`${focusRing} h-9 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] px-3 text-xs font-medium text-[var(--app-text-secondary)] hover:bg-[var(--app-surface-hover)]`}>
+          {monthly && <MonthSelector />}
+          <button type="button" onClick={() => { monthData.refresh(); if (data.active) data.refresh(); }} className={`${focusRing} h-9 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] px-3 text-xs font-medium text-[var(--app-text-secondary)] hover:bg-[var(--app-surface-hover)]`}>
             รีเฟรช
           </button>
           <ThemeToggle />

@@ -10,6 +10,7 @@ import { ALL_STORES, parseResponseUrl, responseUrlQuery, type ResponseUrlState, 
 import { ResponseChatView } from "./response-chat-view";
 import { ResponseKpis, ResponseStoresView } from "./response-stores-view";
 import { useV2Data, WAITING_MAX_PAGES, WAITING_PAGE_SIZE } from "./v2-data";
+import { OverviewTabs } from "./v2-month-controls";
 import { SourceNotice } from "./v2-ui";
 
 const TAB_LABELS: Record<StoreTab, string> = { "follow-today": "ตามวันนี้", all: "ทั้งหมด", "no-data": "ไม่มีข้อมูล" };
@@ -22,7 +23,7 @@ function Notices() {
   if (data.waiting.error) notices.push(`โหลดรายการแชทที่รอไม่สำเร็จ: ${data.waiting.error}`);
   if (data.waiting.data?.truncated) notices.push(`แชทที่รอใน ${RECENT_WAIT_WINDOW_DAYS} วันมีมากกว่า ${(WAITING_MAX_PAGES * WAITING_PAGE_SIZE).toLocaleString("th-TH")} แชท จึงวัดเวลารอจากแชทล่าสุดเท่านั้น จำนวนแชทที่รอยังนับครบจากระบบ`);
   if (data.mirror.error) notices.push(data.hasDataSource === "activity"
-    ? `โหลดสถานะการเก็บแชท (Live Mirror) ไม่สำเร็จ จึงนับร้านที่มีแชทใน 7 วันล่าสุดว่า "มีข้อมูล" แทน: ${data.mirror.error}`
+    ? `โหลดสถานะการเก็บแชทไม่สำเร็จ จึงนับร้านที่มีแชทใน 7 วันล่าสุดว่า "มีข้อมูล" แทน: ${data.mirror.error}`
     : `โหลดสถานะการเก็บแชทไม่สำเร็จ จึงยังแยกร้านที่ไม่มีข้อมูลไม่ได้: ${data.mirror.error}`);
   if (data.rates7d.error || data.ratesPrev7d.error) notices.push(`โหลดอัตราตอบใน 24 ชม. ไม่สำเร็จ: ${data.rates7d.error ?? data.ratesPrev7d.error}`);
   if (data.daily.error) notices.push(`โหลดแนวโน้มรายวันไม่สำเร็จ: ${data.daily.error}`);
@@ -92,10 +93,11 @@ export function ResponseView() {
   return (
     <div className={`flex h-full min-h-0 flex-col gap-4 px-6 py-5 ${state.view === "stores" ? "overflow-y-auto" : "overflow-hidden"}`}>
       <PageHeader
-        title="การตอบแชท"
-        description={`ลูกค้าที่รอคำตอบ นับเวลาเฉพาะช่วงเปิดร้าน 10:00–21:00 · ตามวันนี้ = ร้านที่ลูกค้ารอ ≥ ${FOLLOW_UP_THRESHOLD_MINUTES} นาทีตั้งแต่เมื่อวาน 10:00 มากที่สุด ${FOLLOW_TODAY_LIMIT} ร้าน · ร้านที่ไม่มีข้อมูลไม่นับในทุกตัวเลข`}
+        title="ตอนนี้"
+        description={<>ลูกค้าที่รอคำตอบตอนนี้ · <span data-v2-business-hours-label className="font-medium text-[var(--app-text-primary)]">นับเฉพาะเวลาเปิดร้าน</span> (10:00–21:00) · ตามวันนี้ = ร้านที่ลูกค้ารอ ≥ {FOLLOW_UP_THRESHOLD_MINUTES} นาทีตั้งแต่เมื่อวาน 10:00 มากที่สุด {FOLLOW_TODAY_LIMIT} ร้าน · ร้านที่ไม่มีข้อมูลไม่นับในทุกตัวเลข · ตัวเลขรายเดือนอยู่ที่แท็บ ภาพรวมเดือน</>}
         actions={
-          <div data-v2-view-switch className="text-[var(--app-text-primary)]">
+          <div data-v2-view-switch className="flex flex-wrap items-center gap-3 text-[var(--app-text-primary)]">
+            <OverviewTabs active="now" />
             <SegmentedControl<View>
               aria-label="มุมมอง"
               value={state.view}

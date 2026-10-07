@@ -3,6 +3,7 @@
 import React from "react";
 import { FOLLOW_UP_THRESHOLD_MINUTES, formatSentAt, formatWaitMinutes, waitSpansClosedHours } from "@/lib/v2/business-hours";
 import { thaiWeekday } from "@/lib/v2/date-ranges";
+import { formatValue, numericValue, valueReason, type ValueState } from "@/lib/v2/value-state";
 
 export const NO_DATA_TEXT = "ยังไม่มีข้อมูลนี้";
 
@@ -102,5 +103,45 @@ export function ManagerLink({ href, size = "md" }: { href: string | null; size?:
     >
       เปิดใน LINE OA Manager ↗
     </a>
+  );
+}
+
+/**
+ * A monthly number from its value state. "—" and muted values always carry their reason:
+ * as a tooltip and as screen-reader text. `showN` adds "(n=…)" for rates.
+ */
+export function StateValue({ state, format = "count", target, showN = false, className = "" }: { state: ValueState; format?: "count" | "percent"; target?: number; showN?: boolean; className?: string }) {
+  const formatted = formatValue(state, format);
+  const value = numericValue(state);
+  const belowTarget = target !== undefined && !formatted.muted && value !== null && value < target;
+  const n = "n" in state && typeof state.n === "number" ? state.n : null;
+  return (
+    <span data-v2-value-state={state.kind} title={formatted.reason ?? undefined} className={`whitespace-nowrap tabular-nums ${formatted.muted ? "text-[var(--app-text-secondary)]" : belowTarget ? "text-[var(--app-danger)]" : ""} ${className}`}>
+      {formatted.text}
+      {showN && n !== null && <span className="ml-1 text-xs font-normal text-[var(--app-text-secondary)]">(n={n.toLocaleString("th-TH")})</span>}
+      {formatted.reason && <span className="sr-only"> ({formatted.reason})</span>}
+    </span>
+  );
+}
+
+/**
+ * Change vs the comparison period. kind "count": "+3" / "−2" (ยังไม่ตอบ: up is worse).
+ * kind "points": "+1.2 จุด" / "−3.4 จุด" (a rate: down is worse).
+ */
+export function DeltaValue({ state, kind, worseWhen }: { state: ValueState; kind: "count" | "points"; worseWhen: "up" | "down" }) {
+  const reason = valueReason(state);
+  const value = numericValue(state);
+  if (value === null || state.kind === "loading") {
+    return <span data-v2-value-state={state.kind} title={reason ?? undefined} className="whitespace-nowrap text-xs text-[var(--app-text-secondary)]">—{reason && <span className="sr-only"> ({reason})</span>}</span>;
+  }
+  const muted = state.kind === "low-sample" || state.kind === "stale";
+  const worse = !muted && value !== 0 && (worseWhen === "up" ? value > 0 : value < 0);
+  const better = !muted && value !== 0 && !worse;
+  const text = value === 0 ? "เท่าเดิม" : `${value > 0 ? "+" : "−"}${kind === "points" ? Math.abs(value).toFixed(1) : Math.abs(value).toLocaleString("th-TH")}${kind === "points" ? " จุด" : ""}`;
+  return (
+    <span data-v2-value-state={state.kind} title={reason ?? undefined} className={`whitespace-nowrap text-xs font-medium tabular-nums ${worse ? "text-[var(--app-danger)]" : better ? "text-[var(--app-accent)]" : "text-[var(--app-text-secondary)]"}`}>
+      {text}
+      {reason && <span className="sr-only"> ({reason})</span>}
+    </span>
   );
 }

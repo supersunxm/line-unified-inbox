@@ -3,7 +3,6 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
   aggregateReplyRate,
-  biggestRateDrops,
   buildStoreRows,
   filterStoreRows,
   responseKpis,
@@ -11,7 +10,6 @@ import {
   sortWaitingChats,
   storesWithChatData,
   storesWithRecentActivity,
-  longestWaitPerStore,
   selectFollowToday,
   defaultSortForTab,
   type StoreRow,
@@ -23,7 +21,6 @@ import {
 } from "../src/lib/v2/response-model.ts";
 import { buildConversationList } from "../src/lib/v2/conversation-list.ts";
 import { fetchPagesUntil } from "../src/lib/v2/waiting-pages.ts";
-import { buildTodayItems } from "../src/lib/v2/today-model.ts";
 import { FOLLOW_TODAY_LIMIT } from "../src/lib/v2/business-hours.ts";
 import { ALL_STORES, parseResponseUrl, responseUrlQuery } from "../src/lib/v2/response-url.ts";
 
@@ -130,7 +127,7 @@ test("the 24-hour rate re-aggregates with the backend formula over stores with d
   assert.equal(aggregateReplyRate([], new Set()).rate, null);
 });
 
-test("week-on-week: deltas and the three biggest drops", () => {
+test("week-on-week: per-store deltas", () => {
   const rows = buildStoreRows({
     summaryStores: ["s1", "s2", "s3", "s4", "s5"].map((id) => summary(id, 0)),
     waitingChats: [],
@@ -140,8 +137,6 @@ test("week-on-week: deltas and the three biggest drops", () => {
     ratesPrev7d: [rate("s1", 9, 10), rate("s2", 9, 10), rate("s3", 8, 10), rate("s4", 10, 10), rate("s5", 10, 10)],
   });
   assert.equal(rows.find((row) => row.storeId === "s1")?.rateDelta, -40);
-  // s5 has the biggest drop but no data, so it is not named.
-  assert.deepEqual(biggestRateDrops(rows).map((row) => row.storeId), ["s1", "s4", "s2"]);
 });
 
 test("chat list: waiting first by longest wait, then replied by latest, limited to the chosen stores", () => {
@@ -203,24 +198,6 @@ test("7-day split: only waits within 7 days count for follow-up; older ones are 
   // "ค้างเกิน 7 วัน" links to tab=all sorted by age: the oldest backlog first.
   assert.deepEqual(sortStoreRows(rows, "age").map((row) => row.storeId), ["s1", "s2"]);
   assert.deepEqual(sortStoreRows(rows, "wait").map((row) => row.storeId), ["s1", "s2"]);
-});
-
-test("top 5 longest waits: one row per store, with its longest wait and waiting count", () => {
-  const chats = [
-    ["a1", "A", "2026-10-04T10:00:00"], ["a2", "A", "2026-10-04T10:30:00"], ["a3", "A", "2026-10-04T11:00:00"],
-    ["a4", "A", "2026-10-04T11:30:00"], ["a5", "A", "2026-10-04T12:00:00"], ["a6", "A", "2026-10-04T12:30:00"],
-    ["b1", "B", "2026-10-04T13:00:00"], ["c1", "C", "2026-10-04T14:00:00"],
-  ].map(([id, store, at]) => toWaitingChat(conversation(id, store, bkk(at)), NOW));
-  const rows = buildStoreRows({
-    summaryStores: [summary("A", 6), summary("B", 1), summary("C", 1), summary("D", 0)],
-    waitingChats: chats,
-    storesWithData: new Set(["A", "B", "C", "D"]),
-    now: NOW,
-    rates7d: [],
-    ratesPrev7d: [],
-  });
-  const top: StoreRow[] = longestWaitPerStore(rows, 5);
-  assert.deepEqual(top.map((row) => [row.storeId, row.longestChatId, row.recentWaitingCount]), [["A", "a1", 6], ["B", "b1", 1], ["C", "c1", 1]]);
 });
 
 test("paging stops at the 7-day cutoff and runs at most 5 requests at once", async () => {
@@ -327,7 +304,7 @@ test("ทั้งหมด sorts by recent count (default), longest wait, or 24
   assert.deepEqual(sortStoreRows(rows, "rate").map((row) => row.storeId), ["many", "few-long", "mid"]); // lowest first, no data last
 });
 
-test("consistency: sidebar badge = ตามวันนี้ tab count = KPI = วันนี้ item 1", () => {
+test("consistency: ตอนนี้ tab badge = ตามวันนี้ tab count = KPI", () => {
   const chats: ReturnType<typeof toWaitingChat>[] = [];
   const stores: SummaryStore[] = [];
   for (let index = 0; index < 20; index += 1) {
@@ -338,18 +315,15 @@ test("consistency: sidebar badge = ตามวันนี้ tab count = KPI =
   const rows = buildStoreRows({ summaryStores: stores, waitingChats: chats, storesWithData: new Set(stores.map((store) => store.storeId)), now: NOW, rates7d: [], ratesPrev7d: [] });
   const kpis = responseKpis(rows);
   const tabCount = filterStoreRows(rows, "follow-today").length;
-  const items = buildTodayItems({ storeRows: rows, waitingLoaded: true, hasDataLoaded: true, totals7d: null, totalsPrev7d: null, googleStores: [] });
-  const item = items.find((entry) => entry.id === "follow-today");
   assert.equal(kpis.followTodayStores, 15);
   assert.equal(tabCount, kpis.followTodayStores);
-  assert.equal(item?.problem, `${kpis.followTodayStores} ร้านต้องตามวันนี้`);
   assert.equal(kpis.followTodayCandidates, 20);
-  // The sidebar badge reads responseKpis(...).followTodayStores (v2-shell.tsx).
-  assert.match(readFileSync(new URL("../src/components/v2/v2-shell.tsx", import.meta.url), "utf8"), /responseKpis\(data\.storeRows\)\.followTodayStores/);
+  // The ตอนนี้ tab badge reads responseKpis(...).followTodayStores (v2-month-controls.tsx).
+  assert.match(readFileSync(new URL("../src/components/v2/v2-month-controls.tsx", import.meta.url), "utf8"), /responseKpis\(data\.storeRows\)\.followTodayStores/);
 });
 
-test("one store, one รอนานสุด: item 1, the ตามวันนี้ table and the top 5 agree (window), ทั้งหมด uses 7 days", async () => {
-  const { displayedWait, longestWaitPerStore: top5 } = await import("../src/lib/v2/response-model.ts");
+test("one store, one รอนานสุด: the ตามวันนี้ table uses the window, ทั้งหมด uses 7 days", async () => {
+  const { displayedWait } = await import("../src/lib/v2/response-model.ts");
   // Robinson Chonburi: a chat waiting since 4 days ago (7-day oldest) and one since yesterday evening.
   const rows = buildStoreRows({
     summaryStores: [summary("rob", 2), summary("other", 1)],
@@ -368,17 +342,10 @@ test("one store, one รอนานสุด: item 1, the ตามวันน
   assert.equal(windowWait.minutes, 27 + 300); // 20:33–21:00 yesterday + 10:00–15:00 today
   assert.equal(windowWait.chatId, "recent");
   assert.notEqual(displayedWait(rob, "7d").minutes, windowWait.minutes); // the 7-day oldest is longer
-  // Item 1 names the same minutes…
-  const item = buildTodayItems({ storeRows: rows, waitingLoaded: true, hasDataLoaded: true, totals7d: null, totalsPrev7d: null, googleStores: [] }).find((entry) => entry.id === "follow-today");
-  assert.match(item!.stores.find((store) => store.name === rob.storeName)!.detail, /รอนานสุด 5 ชม\. 27 นาที/);
-  // …the ตามวันนี้ table uses the window scope…
+  // The ตามวันนี้ table uses the window scope.
   const { waitScopeForTabSource } = { waitScopeForTabSource: readFileSync(new URL("../src/components/v2/response-stores-view.tsx", import.meta.url), "utf8") };
   assert.match(waitScopeForTabSource, /return tab === "follow-today" \? "window" : "7d";/);
   assert.match(waitScopeForTabSource, /<WaitLabel compact businessMinutes=\{displayedWait\(row, scope\)\.minutes\}/);
-  // …and the top 5 lists the store with the same wait and links to the same chat.
-  const top = top5(rows, 5).find((row) => row.storeId === "rob")!;
-  assert.deepEqual(displayedWait(top, "window"), windowWait);
-  assert.match(readFileSync(new URL("../src/components/v2/today-view.tsx", import.meta.url), "utf8"), /displayedWait\(row, "window"\)\.minutes/);
 });
 
 test("the focus-group summary row is not a store: dropped from every list and count", () => {

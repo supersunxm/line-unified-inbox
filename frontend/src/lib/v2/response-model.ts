@@ -316,22 +316,6 @@ export function sortStoreRows(rows: StoreRow[], sort: StoreSort = "wait"): Store
   return [...rows].sort(compare[sort]);
 }
 
-/** The longest waits for the "วันนี้" side list: one row per store, its longest wait since yesterday 10:00. */
-export function longestWaitPerStore(rows: StoreRow[], limit = 5): StoreRow[] {
-  return rows
-    .filter((row) => row.hasData && row.windowLongestMinutes !== null)
-    .sort((a, b) => (b.windowLongestMinutes ?? 0) - (a.windowLongestMinutes ?? 0) || b.sinceYesterdayCount - a.sinceYesterdayCount || a.storeName.localeCompare(b.storeName, "th"))
-    .slice(0, limit);
-}
-
-/** Stores with the biggest week-on-week drop in the 24-hour rate, biggest first. */
-export function biggestRateDrops(rows: StoreRow[], limit = 3): StoreRow[] {
-  return rows
-    .filter((row) => row.hasData && row.rateDelta !== null && row.rateDelta < 0)
-    .sort((a, b) => (a.rateDelta ?? 0) - (b.rateDelta ?? 0) || a.storeName.localeCompare(b.storeName, "th"))
-    .slice(0, limit);
-}
-
 /** Counts for the KPI strip, all over stores with data only. */
 export function responseKpis(rows: StoreRow[]) {
   const withData = rows.filter((row) => row.hasData);

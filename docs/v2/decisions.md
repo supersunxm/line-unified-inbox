@@ -38,7 +38,7 @@ confirmed by the owner), **CANCELLED**.
 | 2026-10-07 | Current month | Month-to-date (day 1 00:00 → now). | DECIDED |
 | 2026-10-07 | Comparison, current month | Previous month over the **same number of days** (1–7 Oct vs 1–7 Sep), never a whole month. Chat counts cut the previous month at the same elapsed time (7 Oct 14:30 ↔ 7 Sep 14:30); the 24h endpoint takes whole days, so it compares days 1–D. When the previous month is shorter than D days, it is used whole and the label says "ทั้งเดือน". | DECIDED |
 | 2026-10-07 | Comparison, closed month | Whole month vs whole previous month. | DECIDED |
-| 2026-10-07 | Previous-month counts for the same days | The summary endpoint only takes whole months, so these come from `GET /conversations?month=<previous>&sort=latest-asc&pageSize=100` (the `/chats` list call, same filters), paged until the cut, classified with `/chats`'s `getEffectiveReplyState`, and limited to the summary's active stores. Page cap `PREVIOUS_PERIOD_MAX_PAGES`; when hit, the comparison is shown as not available, never as a smaller number. | DECIDED |
+| 2026-10-07 | Previous-month counts for the same days | The summary endpoint only takes whole months, so these come from `GET /conversations?month=<previous>&sort=latest-asc&pageSize=100` (the `/chats` list call, same filters), paged until the cut, classified with `/chats`'s `getEffectiveReplyState`, and limited to the summary's active stores. Page cap `PREVIOUS_PERIOD_MAX_PAGES` = 100 (10,000 chats); when hit, the comparison is shown as not available, never as a smaller number. | DECIDED |
 | 2026-10-07 | September 2026 comparison | August 2026 is before reply-status coverage: shown as "ระบบยังไม่ได้เก็บข้อมูลช่วงนี้", never 0. | DECIDED |
 | 2026-10-07 | Period label | Every number states its period: "1–7 ต.ค. 2026 เทียบ 1–7 ก.ย. 2026", or "ทั้งเดือน ก.ย. 2026 เทียบ ทั้งเดือน ส.ค. 2026". Gregorian year, as `/chats`'s selector shows it. | DECIDED |
 
@@ -57,6 +57,15 @@ confirmed by the owner), **CANCELLED**.
 | 2026-10-07 | Default sort | ยังไม่ตอบ, most first. Rate sorts put the lowest first. | DECIDED |
 | 2026-10-07 | "Stores with chat data N/M" | Stores with at least one chat in the selected period ÷ v2 stores. | ASSUMED |
 | 2026-10-07 | Removed from /v2/stores | "สาขาที่ต้องดู" KPI, the daily "ต้องดู" inclusion rule, per-row chips that repeat columns. Google Review column hidden while no store has a result for the month. | DECIDED |
+
+## Views (Tasks 3, 4)
+
+| Date | Item | Decision | Status |
+|---|---|---|---|
+| 2026-10-07 | /v2 | "ภาพรวมเดือน": network KPIs with comparison, partner table (sorted by ยังไม่ตอบ, with an "ทุกสาขา" total row), top 10 stores by ยังไม่ตอบ (n and Δ) linking to the scorecard, data line. | DECIDED |
+| 2026-10-07 | "ตอนนี้" tab | `/v2/response`, unchanged ตามวันนี้ list and chat view, reached as the second tab of /v2. Its live sources load only while it is open. The sidebar item "การตอบแชท" is folded into "ภาพรวมเดือน". | DECIDED |
+| 2026-10-07 | Scorecard drawer limits | One store's month is read from at most `STORE_MONTH_MAX_PAGES` = 20 pages (2,000 chats); beyond it the drawer says the daily breakdown and tag coverage cover only the latest chats. | DECIDED |
+| 2026-10-07 | Trend | Up to 6 months, never before Sep 2026; the drawer states how many months exist. | DECIDED |
 
 ## Values (Task 8)
 

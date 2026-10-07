@@ -66,6 +66,8 @@ async function fetchMirrorStatus(): Promise<MirrorRow[]> {
 }
 
 export type V2Data = {
+  /** The live sources load only while the "ตอนนี้" tab (/v2/response) is open. */
+  active: boolean;
   now: number;
   summary: Source<SummaryStore[]>;
   mirror: Source<MirrorRow[]>;
@@ -116,7 +118,7 @@ function useSource<T>(): [Source<T>, (load: () => Promise<T>) => Promise<void>] 
   return [source, run];
 }
 
-export function V2DataProvider({ children }: { children: React.ReactNode }) {
+export function V2DataProvider({ children, active = true }: { children: React.ReactNode; active?: boolean }) {
   const [now, setNow] = useState(() => Date.now());
   const [summary, loadSummary] = useSource<SummaryStore[]>();
   const [mirror, loadMirror] = useSource<MirrorRow[]>();
@@ -155,6 +157,7 @@ export function V2DataProvider({ children }: { children: React.ReactNode }) {
   }, [loadDaily]);
 
   useEffect(() => {
+    if (!active) return;
     const first = window.setTimeout(refresh, 0);
     // Waits are shown in minutes: re-measure every minute, re-fetch every five.
     const tick = window.setInterval(() => setNow(Date.now()), 60_000);
@@ -164,7 +167,7 @@ export function V2DataProvider({ children }: { children: React.ReactNode }) {
       window.clearInterval(tick);
       window.clearInterval(reload);
     };
-  }, [refresh]);
+  }, [active, refresh]);
 
   const hasDataSource: V2Data["hasDataSource"] = mirror.data ? "mirror" : mirror.error && rates7d.data ? "activity" : null;
   const storesWithData = useMemo(
@@ -188,6 +191,7 @@ export function V2DataProvider({ children }: { children: React.ReactNode }) {
     });
     const included = new Set(storeRows.filter((row) => row.hasData).map((row) => row.storeId));
     return {
+      active,
       now,
       summary,
       mirror,
@@ -209,7 +213,7 @@ export function V2DataProvider({ children }: { children: React.ReactNode }) {
       refresh,
       requestDaily,
     };
-  }, [allWaitingChats, daily, dailyRanges, google, hasDataSource, locations, mirror, now, rates7d, ratesPrev7d, refresh, requestDaily, storesWithData, summary, waiting]);
+  }, [active, allWaitingChats, daily, dailyRanges, google, hasDataSource, locations, mirror, now, rates7d, ratesPrev7d, refresh, requestDaily, storesWithData, summary, waiting]);
 
   return <V2DataContext.Provider value={value}>{children}</V2DataContext.Provider>;
 }
