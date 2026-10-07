@@ -71,7 +71,12 @@ Gaps against the owner's description of the naming convention:
 - **Product + free text** (e.g. a product plus a store note) is held for review, so a name with
   any extra word loses all its tags.
 
-## 4. Proposed grammar
+> **Update 2026-10-07 (B3):** Parser v4 (`backend/src/v2-monthly/nickname-parser-v4.ts`) closes
+> the gaps above: Thai ฟิล์ม variants, any 20YY year, extra words keep the tags, platforms
+> anywhere. Decisions and the one deliberate difference from this proposal (two-digit years are
+> always 20YY, per the owner) are in `decisions.md` → "Tag parser v4 (B3)".
+
+## 4. Proposed grammar (implemented as Parser v4)
 
 A name is a sequence of whitespace- or separator-delimited tokens (separators: space, `,`,
 `;`, `+`, `|`, `-` between words). Tokens can appear in any order; unknown tokens are kept as

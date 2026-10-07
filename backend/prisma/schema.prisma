@@ -3037,3 +3037,51 @@ model MonthlyStoreKpiSnapshot {
   @@unique([closeId, storeUuid])
   @@index([month, revision])
 }
+
+// v2 (B3): Parser v4 tags per conversation, derived from the conversation's latest READ
+// NicknameSourceObservation. Derived data only — recomputable from the immutable observations;
+// the v3 tables (NicknameDerivedMetadataState/Application) are not touched. No foreign keys, so
+// no existing delete path changes. The nickname and its free text are never stored here.
+model NicknameTagV4 {
+  conversationId      String
+  parserVersion       String
+  storeId             String
+  sourceObservationId String
+  observedAt          DateTime
+  derivedAt           DateTime  @default(now())
+  decision            String
+  source              String?
+  customerType        String?
+  paymentMethod       String?
+  financeProvider     String?
+  services            String[]
+  productModelIds     String[]
+  periodYear          Int?
+  periodMonth         Int?
+  eventDate           DateTime? @db.Date
+  hasFreeText         Boolean   @default(false)
+  conflicts           String[]
+  ruleIds             String[]
+
+  @@id([conversationId, parserVersion])
+  @@index([parserVersion, storeId])
+}
+
+// v2 (B3): one row per re-derive run (full pass in bounded batches, or incremental), with
+// counts only. Kept for audit; never deleted.
+model NicknameTagRederiveRun {
+  id            String    @id @default(uuid())
+  parserVersion String
+  mode          String
+  trigger       String
+  actorName     String
+  reason        String?
+  startedAt     DateTime  @default(now())
+  finishedAt    DateTime?
+  cursor        String?
+  watermark     DateTime?
+  batches       Int       @default(0)
+  counts        Json
+
+  @@index([parserVersion, startedAt])
+}
