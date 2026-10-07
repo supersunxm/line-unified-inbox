@@ -1,10 +1,11 @@
 #!/usr/bin/env node
-// Dark-mode contrast audit of the real rendered v2 pages.
+// Dark-mode contrast audit of the real rendered v2 pages and of the main app's left sidebar.
 //
 //   npm run build && npx next start -p 3000      # in one terminal
 //   npm run audit:contrast                       # in another (BASE_URL to override)
 //
-// Manual, not in CI. Opens every v2 page (and the scorecard drawer) in headless Chromium with
+// Manual, not in CI. Opens every v2 page (and the scorecard drawer), and three main-app pages
+// measured inside the sidebar only (`scope`), in headless Chromium with
 // the app theme set to dark, answers every API call from scripts/v2-seed-api.mjs (synthetic,
 // deterministic data — no backend, no customer data), and checks each visible text node: its
 // computed colour against the nearest opaque background behind it (backgrounds and opacity
@@ -50,10 +51,15 @@ const PAGES = [
   { name: "ตอนนี้", path: "/v2/response" },
   { name: "ตอนนี้ · ทั้งหมด", path: "/v2/response?tab=all" },
   { name: "ตอนนี้ · หน้าแชท", path: "/v2/response?view=chat" },
+  // Main app pages: only the left sidebar is measured (scope), with every menu group opened.
+  { name: "อัตราตอบกลับ 24 ชม. · sidebar", path: "/replymessage", waitFor: "[data-app-sidebar] [data-nav-item]", scope: "[data-app-sidebar]" },
+  { name: "Google Review KPI · sidebar", path: "/google-review-kpi", waitFor: "[data-app-sidebar] [data-nav-item]", scope: "[data-app-sidebar]" },
+  { name: "Download Center · sidebar", path: "/download-center", waitFor: "[data-app-sidebar] [data-nav-item]", scope: "[data-app-sidebar]" },
 ];
 
 /** Runs in the page: every visible text node below MIN_RATIO, with what it was measured against. */
-function auditInPage(minRatio) {
+function auditInPage([minRatio, scope]) {
+  const root = (scope && document.querySelector(scope)) || document.body;
   const parse = (value) => {
     const match = /rgba?\(([^)]+)\)/.exec(value ?? "");
     if (!match) return null;
@@ -110,7 +116,7 @@ function auditInPage(minRatio) {
 
   const failures = [];
   let checked = 0;
-  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, { acceptNode: (node) => (node.nodeValue.trim() ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT) });
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, { acceptNode: (node) => (node.nodeValue.trim() ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT) });
   for (let node = walker.nextNode(); node; node = walker.nextNode()) {
     const element = node.parentElement;
     if (!element || ["SCRIPT", "STYLE", "NOSCRIPT", "OPTION", "TEXTAREA"].includes(element.tagName)) continue;
@@ -121,6 +127,8 @@ function auditInPage(minRatio) {
     if (element.closest("[aria-hidden='true'], .sr-only")) continue;
     const color = parse(style.color);
     if (!color) continue;
+    // Fully transparent text is not shown (e.g. the sidebar's "O" mark, replaced by the logo image).
+    if (color.a === 0) continue;
     const { background, opacity } = backgroundOf(element);
     const text = { ...color, a: color.a * opacity };
     const effective = over(text, background);
@@ -131,7 +139,7 @@ function auditInPage(minRatio) {
     }
   }
   // Form controls: a select shows its chosen option's text; an empty input shows its placeholder.
-  for (const element of document.querySelectorAll("select, input[placeholder], textarea[placeholder]")) {
+  for (const element of root.querySelectorAll("select, input[placeholder], textarea[placeholder]")) {
     const rect = element.getBoundingClientRect();
     if (rect.width <= 1 || rect.height <= 1 || element.closest("[aria-hidden='true']")) continue;
     const isSelect = element.tagName === "SELECT";
@@ -152,7 +160,13 @@ function auditInPage(minRatio) {
 const { chromium } = await loadPlaywright();
 const browser = await chromium.launch();
 const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, colorScheme: THEME === "dark" ? "dark" : "light" });
-await context.addInitScript((theme) => { try { localStorage.setItem("oppo-line-oa-theme", theme); } catch { /* storage blocked */ } }, THEME);
+await context.addInitScript((theme) => {
+  try {
+    localStorage.setItem("oppo-line-oa-theme", theme);
+    // Open every main-menu group so each sidebar item is measured.
+    localStorage.setItem("oppo-app-sidebar-groups", JSON.stringify({ monitoring: true, reports: true, messaging: true, "main-oa": true, system: true }));
+  } catch { /* storage blocked */ }
+}, THEME);
 const page = await context.newPage();
 const consoleErrors = [];
 page.on("console", (message) => { if (message.type() === "error") consoleErrors.push(message.text()); });
@@ -166,7 +180,7 @@ for (const entry of PAGES) {
   if (entry.waitFor) await page.waitForSelector(entry.waitFor, { timeout: 10_000 });
   await page.waitForTimeout(800);
   const theme = await page.evaluate(() => document.documentElement.dataset.theme);
-  const { checked, failures } = await page.evaluate(auditInPage, MIN_RATIO);
+  const { checked, failures } = await page.evaluate(auditInPage, [MIN_RATIO, entry.scope ?? null]);
   total += failures.length;
   report.push({ ...entry, theme, checked, failures });
 }

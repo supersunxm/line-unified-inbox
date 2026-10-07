@@ -4,7 +4,7 @@ import test from "node:test";
 
 const storesPageCode = readFileSync(new URL("../src/app/stores/page.tsx", import.meta.url), "utf8");
 const managementPageCode = readFileSync(new URL("../src/app/storemanagement/page.tsx", import.meta.url), "utf8");
-const sidebarCode = readFileSync(new URL("../src/components/shell/app-sidebar.tsx", import.meta.url), "utf8");
+const sidebarCode = readFileSync(new URL("../src/components/shell/navigation-config.ts", import.meta.url), "utf8");
 
 test("/stores remains a public Store Directory with no management redirect", () => {
   assert.match(storesPageCode, /PublicStoresDirectory/);
@@ -18,6 +18,6 @@ test("/storemanagement remains protected by the stores authorization section", (
 });
 
 test("sidebar exposes Store Directory and Store Management as separate routes", () => {
-  assert.match(sidebarCode, /href: "\/stores", label: t\.storeDirectory/);
-  assert.match(sidebarCode, /href: "\/storemanagement", label: t\.stores/);
+  assert.match(sidebarCode, /href: "\/stores", label: "storeDirectory"/);
+  assert.match(sidebarCode, /href: "\/storemanagement", label: "stores"/);
 });

@@ -113,9 +113,15 @@ test("changing Store or OA scope clears the exact deep-link selection before loa
 const topNavCode = readFileSync(new URL("../src/components/shell/top-navigation.tsx", import.meta.url), "utf8");
 
 test("application exposes primary routes with active navigation", () => {
-  for (const route of ["/dashboard", "/chats", "/stores", "/follower-insights", "/friend-source-links"]) {
+  // Bottom bar links stay literal; the More sheet renders the shared menu config.
+  for (const route of ["/chats", "/follower-insights"]) {
     assert.match(topNavCode, new RegExp(`href=\\"${route.replace("?", "\\?")}`));
   }
+  const navConfigCode = readFileSync(new URL("../src/components/shell/navigation-config.ts", import.meta.url), "utf8");
+  for (const route of ["/dashboard", "/chats", "/stores", "/follower-insights", "/friend-source-links"]) {
+    assert.match(navConfigCode, new RegExp(`href: "${route}"`));
+  }
+  assert.match(topNavCode, /visibleNavGroups\(authUser\)/);
   assert.match(topNavCode, /aria-current=\{currentSection === "chats" \? "page" : undefined\}/);
 });
 

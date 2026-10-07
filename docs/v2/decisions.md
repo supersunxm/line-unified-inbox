@@ -46,6 +46,19 @@ counts as "ตอบใน 24 ชม." and as "ยังไม่ตอบ" at t
 first-customer-message date), so the two n's differ. UI sentence (`KPI_DIFFERENCE_NOTE`): "ตอบใน 24 ชม. ดูแค่ข้อความแรกของลูกค้าในช่วงนี้
 ส่วนตอบแล้ว % ดูข้อความล่าสุด แชทที่ตอบครั้งแรกทันแต่ลูกค้าทักมาใหม่แล้วยังไม่ได้ตอบ จึงนับเป็น “ตอบใน 24 ชม.” และ “ยังไม่ตอบ” พร้อมกัน"
 
+## Main menu, layout "A" (owner decision 7 Oct 2026)
+
+| Date | Item | Decision | Status |
+|---|---|---|---|
+| 2026-10-07 | v2 workspace | Discontinued as a separate workspace. The "ลองเวอร์ชันใหม่ (v2)" link is removed; the monthly KPI report is reached from the main menu ("รายงาน KPI รายเดือน" → `/v2/report`, chip "ใหม่"). No v2 route, table or scheduler is deleted; month close keeps running. The previous `/v2/customers` brief is CANCELLED. | DECIDED (owner) |
+| 2026-10-07 | Menu source | One config, `frontend/src/components/shell/navigation-config.ts`, renders the desktop sidebar, its icon-only mode and the mobile "More" sheet. Every item keeps its href, active-route matcher and permission gate. | DECIDED |
+| 2026-10-07 | Groups | Top (หน้าหลัก, แชทร้านค้า + badge, อัตราตอบกลับ 24 ชม.) · ติดตามผล (open) · รายงาน (open) · ส่งข้อความถึงลูกค้า (closed) · Main OA (open) · จัดการระบบ (closed). Open/closed per group in localStorage `oppo-app-sidebar-groups` (defaults when unreadable); the group of the active route is always expanded. | DECIDED (owner) |
+| 2026-10-07 | TikTok Analytics | Not in the layout "A" list but kept, last in ติดตามผล with its existing gate, so no destination disappears. | ASSUMED |
+| 2026-10-07 | KPI report gate | `section: "dashboard"`, the gate of the report page itself (`AuthorizedSection section="dashboard"`); the old v2 link was shown to everyone and led to a page those users could not open. | DECIDED |
+| 2026-10-07 | Badge | แชทร้านค้า shows this month's ยังไม่ตอบ: `bm-reply-status-summary?month=<current Bangkok month>` → `effectiveSummaryCounts(overview).notReplied`, as `/chats`. Shared cache, at most one request per 5 minutes; hidden while loading, on error and at 0. | DECIDED |
+| 2026-10-07 | Mobile | The More sheet lists the same groups and items as the desktop sidebar (it used to list a shorter, hand-written set); the bottom bar is unchanged. | DECIDED |
+| 2026-10-07 | `/v2/report` back | "← กลับ" returns to the previous page, or `/home` when there is no history. | DECIDED |
+
 ## Store → partner mapping (B1)
 
 | Date | Item | Decision | Status |

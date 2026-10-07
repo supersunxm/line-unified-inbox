@@ -51,8 +51,9 @@ test("production chats route renders ContextSidebar and non-chats routes omit co
 
 test("sidebar links retain their canonical workspace destinations", () => {
   const routes = ["/home", "/dashboard", "/chats", "/follower-insights", "/stores", "/friend-source-links"];
+  const navConfigCode = readFileSync(new URL("../src/components/shell/navigation-config.ts", import.meta.url), "utf8");
   for (const route of routes) {
-    assert.match(sidebarCode, new RegExp(`href: "${route}"`));
+    assert.match(navConfigCode, new RegExp(`href: "${route}"`));
   }
 });
 

@@ -5,8 +5,10 @@ import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { ThemeControl, useThemeToggle } from "@/app/theme";
 import type { PrimarySection } from "@/app/primary-navigation";
-import { canAccessPrimarySection, canAccessWebTool, defaultRouteForUser, type AuthUser } from "@/lib/authorization";
-import { AppSidebar, sidebarLabels } from "./app-sidebar";
+import { canAccessPrimarySection, defaultRouteForUser, type AuthUser } from "@/lib/authorization";
+import { AppSidebar, NavBadge, NewChip, sidebarLabels } from "./app-sidebar";
+import { useChatsUnrepliedBadge } from "./chats-unreplied-badge";
+import { visibleNavGroups } from "./navigation-config";
 
 export type Language = "th" | "en" | "zh";
 
@@ -155,8 +157,10 @@ function MobileBottomNavigation({ authUser, currentSection, language, changeLang
   const itemClass = (active: boolean) => `${focusRing} flex min-h-[54px] min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-xl px-1 text-[10px] font-medium transition-colors ${active ? "text-[var(--app-accent)]" : "text-[var(--app-text-secondary)]"}`;
   const sheetLinkClass = `${focusRing} flex min-h-12 items-center justify-between rounded-xl px-3 text-sm font-medium text-[var(--app-text-primary)] hover:bg-[var(--app-surface-hover)]`;
   const can = (section: PrimarySection) => Boolean(authUser && canAccessPrimarySection(authUser, section));
-  const canTool = (tool: "message-traffic" | "tiktok") => Boolean(authUser && canAccessWebTool(authUser, tool));
   const defaultRoute = authUser ? defaultRouteForUser(authUser) : "/login";
+  const navLabels = sidebarLabels(language);
+  const navGroups = visibleNavGroups(authUser);
+  const badgeCount = useChatsUnrepliedBadge(moreOpen && can("chats"));
 
   return (
     <>
@@ -177,26 +181,22 @@ function MobileBottomNavigation({ authUser, currentSection, language, changeLang
             </div>
           )}
 
-          <div className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--app-text-tertiary)]">{labels.more}</div>
-          <div className="grid grid-cols-1 gap-1">
-            {can("dashboard") && <Link href="/dashboard" onClick={() => setMoreOpen(false)} className={sheetLinkClass}><span>{labels.dashboard}</span><span>›</span></Link>}
-            {can("store-360") && <Link href="/store-360" onClick={() => setMoreOpen(false)} className={sheetLinkClass}><span>{labels.store360}</span><span>›</span></Link>}
-            {canTool("message-traffic") && <Link href="/dashboard/message-traffic" onClick={() => setMoreOpen(false)} className={sheetLinkClass}><span>{labels.traffic}</span><span>›</span></Link>}
-            {can("coupons") && <Link href="/coupons" onClick={() => setMoreOpen(false)} className={sheetLinkClass}><span>{labels.coupons}</span><span>›</span></Link>}
-            {can("stores") && <Link href="/stores" onClick={() => setMoreOpen(false)} className={sheetLinkClass}><span>{labels.stores}</span><span>›</span></Link>}
-            {can("google-review-kpi") && <Link href="/google-review-kpi" onClick={() => setMoreOpen(false)} className={sheetLinkClass}><span>Google Review KPI</span><span>›</span></Link>}
-            {can("purchase-analytics") && <Link href="/admin/purchase-analytics" onClick={() => setMoreOpen(false)} className={sheetLinkClass}><span>{labels.purchase}</span><span>›</span></Link>}
-            {can("friend-source-links") && <Link href="/friend-source-links" onClick={() => setMoreOpen(false)} className={sheetLinkClass}><span>{labels.friendLinks}</span><span>›</span></Link>}
-            {can("mass-messages") && <Link href="/mass-messages" onClick={() => setMoreOpen(false)} className={sheetLinkClass}><span>{labels.mass}</span><span>›</span></Link>}
-            {can("broadcast") && <Link href="/broadcast" onClick={() => setMoreOpen(false)} className={sheetLinkClass}><span>{labels.broadcast}</span><span>›</span></Link>}
-            {can("rich-menus") && <Link href="/rich-menus" onClick={() => setMoreOpen(false)} className={sheetLinkClass}><span>{labels.richMenus}</span><span>›</span></Link>}
-            {can("auto-responses") && <Link href="/auto-responses" onClick={() => setMoreOpen(false)} className={sheetLinkClass}><span>{labels.autoResponses}</span><span>›</span></Link>}
-            {can("greeting-messages") && <Link href="/greeting-messages" onClick={() => setMoreOpen(false)} className={sheetLinkClass}><span>{labels.greetingMessages}</span><span>›</span></Link>}
-            {can("admin-registrations") && <Link href="/admin/registrations" onClick={() => setMoreOpen(false)} className={sheetLinkClass}><span>{labels.approval}</span><span>›</span></Link>}
-            {can("line-chat-health") && <Link href="/operations/line-chat-health" onClick={() => setMoreOpen(false)} className={sheetLinkClass}><span>LINE Chat Health</span><span>›</span></Link>}
-            {can("main-oa") && <Link href="/main-oa" onClick={() => setMoreOpen(false)} className={sheetLinkClass}><span>{labels.mainOa}</span><span>›</span></Link>}
-            {canTool("tiktok") && <Link href="/tiktok" onClick={() => setMoreOpen(false)} className={sheetLinkClass}><span>TikTok Analytics</span><span>›</span></Link>}
-          </div>
+          {/* Same groups, order, labels and gates as the desktop sidebar (navigation-config). */}
+          <nav aria-label={labels.more} data-mobile-more-menu>
+            {navGroups.map((group) => (
+              <div key={group.id} data-nav-group={group.id} className="mb-2">
+                {group.label && <div className="mb-1 mt-2 px-2 text-xs font-semibold text-[var(--app-text-secondary)]">{navLabels[group.label]}</div>}
+                <div className="grid grid-cols-1 gap-1">
+                  {group.items.map((item) => (
+                    <Link key={item.href} href={item.href} data-nav-item={item.href} onClick={() => setMoreOpen(false)} className={sheetLinkClass}>
+                      <span className="flex min-w-0 items-center gap-2"><span className="truncate">{navLabels[item.label]}</span>{item.isNew && <NewChip label={navLabels.newChip} />}</span>
+                      <span className="flex shrink-0 items-center gap-2">{item.badge === "chats-unreplied" && <NavBadge count={badgeCount} label={navLabels.unrepliedBadge} />}<span aria-hidden="true">›</span></span>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </nav>
 
           <div className="my-3 border-t border-[var(--app-border-subtle)]" />
           <div className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--app-text-tertiary)]">{labels.account}</div>

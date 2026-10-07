@@ -4,7 +4,7 @@ import test from "node:test";
 import { translations, getMassMessagesText } from "../src/app/mass-messages/mass-messages-translations.ts";
 
 const viewCode = readFileSync(new URL("../src/app/mass-messages/mass-messages-view.tsx", import.meta.url), "utf8");
-const sidebarCode = readFileSync(new URL("../src/components/shell/app-sidebar.tsx", import.meta.url), "utf8");
+const sidebarCode = readFileSync(new URL("../src/components/shell/navigation-config.ts", import.meta.url), "utf8");
 const pageCode = readFileSync(new URL("../src/app/page.tsx", import.meta.url), "utf8");
 const routePageCode = readFileSync(new URL("../src/app/mass-messages/page.tsx", import.meta.url), "utf8");
 
@@ -25,8 +25,8 @@ test("Mass Message translations exist with identical keys in Thai, English, and 
 });
 
 test("AppSidebar renders Mass Message through normalized section authorization", () => {
-  assert.match(sidebarCode, /\{ href: "\/mass-messages", label: t\.mass, icon: "broadcast", section: "mass-messages" \}/);
-  assert.match(sidebarCode, /canAccessPrimarySection\(authUser, item\.section\)/);
+  assert.match(sidebarCode, /\{ href: "\/mass-messages", label: "mass", icon: "broadcast", section: "mass-messages"/);
+  assert.match(sidebarCode, /canAccessPrimarySection\(user, item\.section\)/);
   assert.doesNotMatch(sidebarCode, /adminOnly:\s*true/);
 });
 

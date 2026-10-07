@@ -4,7 +4,7 @@ import test from "node:test";
 
 const pageCode = readFileSync(new URL("../src/app/replymessage/page.tsx", import.meta.url), "utf8");
 const panelCode = readFileSync(new URL("../src/app/dashboard/store-24h-response-panel.tsx", import.meta.url), "utf8");
-const sidebarCode = readFileSync(new URL("../src/components/shell/app-sidebar.tsx", import.meta.url), "utf8");
+const sidebarCode = readFileSync(new URL("../src/components/shell/navigation-config.ts", import.meta.url), "utf8");
 
 test("replymessage remains dashboard-authorized and opens the selected store chat", () => {
   assert.match(pageCode, /<AuthorizedSection section="dashboard">/);

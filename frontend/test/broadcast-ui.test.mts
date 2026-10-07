@@ -11,7 +11,7 @@ const routeCode = readFileSync(
   "utf8",
 );
 const sidebarCode = readFileSync(
-  new URL("../src/components/shell/app-sidebar.tsx", import.meta.url),
+  new URL("../src/components/shell/navigation-config.ts", import.meta.url),
   "utf8",
 );
 

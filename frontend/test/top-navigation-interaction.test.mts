@@ -18,13 +18,11 @@ test("TopNavigation renders destination links as native Next.js Link components"
     { name: "Broadcast", href: "/broadcast" },
   ];
 
+  // The mobile More sheet renders every config item as a <Link href={item.href}>.
+  const navConfigSource = readFileSync(new URL("../src/components/shell/navigation-config.ts", import.meta.url), "utf8");
+  assert.match(topNavSource, /<Link key=\{item\.href\} href=\{item\.href\}/);
   for (const item of expectedRoutes) {
-    const linkRegex = new RegExp(`<Link[^>]+href="${item.href}"`);
-    assert.match(
-      topNavSource,
-      linkRegex,
-      `Expected <Link> with href="${item.href}" for ${item.name}`
-    );
+    assert.match(navConfigSource, new RegExp(`href: "${item.href}"`), `Expected a menu item with href="${item.href}" for ${item.name}`);
   }
 });
 
@@ -48,10 +46,13 @@ test("TopNavigation layout prevents transparent search container from intercepti
 
 test("secondary links are rendered in the current sidebar and mobile More menu", () => {
   assert.match(topNavSource, /aria-expanded=\{moreOpen\}/);
+  const navConfigSource = readFileSync(new URL("../src/components/shell/navigation-config.ts", import.meta.url), "utf8");
   for (const href of ["/stores", "/admin/purchase-analytics", "/friend-source-links", "/mass-messages", "/broadcast"]) {
-    assert.match(sidebarSource, new RegExp(`href: "${href}"`));
-    assert.match(topNavSource, new RegExp(`href="${href}"`));
+    assert.match(navConfigSource, new RegExp(`href: "${href}"`));
   }
+  // Desktop and mobile both render the shared config.
+  assert.match(sidebarSource, /visibleNavGroups\(authUser\)/);
+  assert.match(topNavSource, /visibleNavGroups\(authUser\)/);
 });
 
 test("TopNavigation accessibility: focus rings, ARIA roles, and keyboard handlers are intact", () => {
@@ -70,5 +71,5 @@ test("TopNavigation accessibility: focus rings, ARIA roles, and keyboard handler
 
 test("Broadcast has a complete section label mapping and mobile More entry", () => {
   assert.match(topNavSource, /broadcast:\s*\["Broadcast",\s*"Broadcast",\s*"Broadcast"\]/);
-  assert.match(topNavSource, /can\("broadcast"\).*href="\/broadcast"/);
+  assert.match(readFileSync(new URL("../src/components/shell/navigation-config.ts", import.meta.url), "utf8"), /\{ href: "\/broadcast", label: "broadcast", icon: "broadcast", section: "broadcast"/);
 });

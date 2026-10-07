@@ -6,7 +6,7 @@ import { primaryNavigationState } from "../src/app/primary-navigation.ts";
 import type { AuthUser } from "../src/types/api.ts";
 
 const apiCode = readFileSync(new URL("../src/lib/api.ts", import.meta.url), "utf8");
-const appSidebarCode = readFileSync(new URL("../src/components/shell/app-sidebar.tsx", import.meta.url), "utf8");
+const appSidebarCode = readFileSync(new URL("../src/components/shell/navigation-config.ts", import.meta.url), "utf8");
 const topNavCode = readFileSync(new URL("../src/components/shell/top-navigation.tsx", import.meta.url), "utf8");
 const pageCode = readFileSync(new URL("../src/app/page.tsx", import.meta.url), "utf8");
 const kpiViewCode = readFileSync(new URL("../src/app/google-review-kpi/google-review-kpi-view.tsx", import.meta.url), "utf8");
