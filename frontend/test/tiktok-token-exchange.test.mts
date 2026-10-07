@@ -270,7 +270,8 @@ test("Security: Client Secret, tokens, and authorization code are strictly serve
 });
 
 test("TikTok is linked from current shell navigation without deep callback links", () => {
-  assert.match(topNavSource, /href="\/tiktok"/);
+  // Menu destinations come from the shared menu config (desktop and the mobile More sheet).
+  assert.match(readFileSync(new URL("../src/components/shell/navigation-config.ts", import.meta.url), "utf8"), /href: "\/tiktok"/);
   assert.doesNotMatch(topNavSource, /href="\/tiktok\/dashboard"/);
   assert.doesNotMatch(topNavSource, /href="\/tiktok\/callback"/);
 });

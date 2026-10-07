@@ -21,9 +21,11 @@ test("Main OA is integrated into the current sidebar shell and remains normalize
   assert.match(page, /authorization\.workspaces\.mainOa/);
   assert.match(page, /authorization\.capabilities\.accessMainOa/);
   assert.match(page, /defaultRouteForUser\(user\)/);
-  assert.match(sidebar, /href: "\/main-oa"/);
-  assert.match(sidebar, /section: "main-oa"/);
-  assert.match(sidebar, /canAccessPrimarySection\(authUser, item\.section\)/);
+  const navConfig = await readFile(new URL("../src/components/shell/navigation-config.ts", import.meta.url), "utf8");
+  assert.match(navConfig, /href: "\/main-oa"/);
+  assert.match(navConfig, /section: "main-oa"/);
+  assert.match(navConfig, /canAccessPrimarySection\(user, item\.section\)/);
+  assert.match(sidebar, /visibleNavGroups\(authUser\)/);
   assert.match(topNavigation, /<AppSidebar/);
   assert.doesNotMatch(topNavigation, /app-primary-nav/);
 });

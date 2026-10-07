@@ -109,8 +109,10 @@ const topNavCode = readFileSync(new URL("../src/components/shell/top-navigation.
 test("canRoleAccessFriendSourceLinks returns true for ADMIN role and navigation uses normalized section authorization", () => {
   assert.equal(canRoleAccessFriendSourceLinks("ADMIN"), true);
   assert.match(topNavCode, /canAccessPrimarySection\(authUser,\s*section\)/);
-  assert.match(topNavCode, /can\("friend-source-links"\)/);
-  assert.match(topNavCode, /href="\/friend-source-links"/);
+  // The mobile More sheet renders the shared menu config, gated per item by section.
+  const navConfigCode = readFileSync(new URL("../src/components/shell/navigation-config.ts", import.meta.url), "utf8");
+  assert.match(navConfigCode, /href: "\/friend-source-links", label: "friendLinks", icon: "friend", section: "friend-source-links"/);
+  assert.match(topNavCode, /visibleNavGroups\(authUser\)/);
 });
 
 // ──────────────────────────────────────────────────────────────────────

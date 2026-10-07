@@ -103,8 +103,10 @@ test("TopNavigation and AppSidebar contain Auto-response Manager routes and icon
     resolve(process.cwd(), "src/components/shell/app-sidebar.tsx"),
     "utf8",
   );
-  assert.match(appSidebarFile, /href:\s*"\/auto-responses"/);
-  assert.match(appSidebarFile, /section:\s*"auto-responses"/);
+  // Menu items live in the shared menu config (desktop, collapsed and mobile); icons stay in the sidebar.
+  const navConfigFile = readFileSync(resolve(process.cwd(), "src/components/shell/navigation-config.ts"), "utf8");
+  assert.match(navConfigFile, /href:\s*"\/auto-responses"/);
+  assert.match(navConfigFile, /section:\s*"auto-responses"/);
   assert.match(appSidebarFile, /name === "auto-response"/);
 });
 

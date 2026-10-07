@@ -5,6 +5,8 @@ import { primaryNavigationState } from "../src/app/primary-navigation.ts";
 
 const topNavCode = readFileSync(new URL("../src/components/shell/top-navigation.tsx", import.meta.url), "utf8");
 const appSidebarCode = readFileSync(new URL("../src/components/shell/app-sidebar.tsx", import.meta.url), "utf8");
+// Menu items (href, gate, active matcher) live in the one config the sidebar and mobile sheet render.
+const navConfigCode = readFileSync(new URL("../src/components/shell/navigation-config.ts", import.meta.url), "utf8");
 const contextSidebarCode = readFileSync(new URL("../src/components/shell/context-sidebar.tsx", import.meta.url), "utf8");
 const pageContainerCode = readFileSync(new URL("../src/components/shell/page-container.tsx", import.meta.url), "utf8");
 const appShellCode = readFileSync(new URL("../src/components/shell/app-shell.tsx", import.meta.url), "utf8");
@@ -24,7 +26,7 @@ test("AppSidebar renders primary navigation links with aria-current='page'", () 
     "/friend-source-links",
     "/broadcast",
   ]) {
-    assert.match(appSidebarCode, new RegExp(`href: "${route.replace("?", "\\?")}`));
+    assert.match(navConfigCode, new RegExp(`href: "${route.replace("?", "\\?")}`));
   }
   assert.match(appSidebarCode, /aria-current=\{active \?/);
   assert.match(topNavCode, /ThemeControl/);
@@ -175,8 +177,9 @@ test("TopNavigation search wrapper and controls do not expand invisibly or inter
     "/friend-source-links",
     "/broadcast",
   ]) {
-    assert.match(appSidebarCode, new RegExp(`href: "${href}"`));
+    assert.match(navConfigCode, new RegExp(`href: "${href}"`));
   }
+  assert.match(appSidebarCode, /<Link key=\{item\.href\} href=\{item\.href\}/);
 });
 
 test("/chats workspace enforces a single-screen layout with internal scrolling on all 3 panes", () => {

@@ -55,8 +55,9 @@ test("TopNavigation and AppSidebar contain Rich Menu Manager routes and icons", 
   assert.match(topNavFile, /"rich-menus":\s*\["จัดการ Rich Menu",\s*"Rich Menu Manager",\s*"Rich Menu 管理"\]/);
 
   const appSidebarFile = readFileSync(resolve(process.cwd(), "src/components/shell/app-sidebar.tsx"), "utf8");
-  assert.match(appSidebarFile, /href:\s*"\/rich-menus"/);
-  assert.match(appSidebarFile, /section:\s*"rich-menus"/);
+  const navConfigFile = readFileSync(resolve(process.cwd(), "src/components/shell/navigation-config.ts"), "utf8");
+  assert.match(navConfigFile, /href:\s*"\/rich-menus"/);
+  assert.match(navConfigFile, /section:\s*"rich-menus"/);
   assert.match(appSidebarFile, /name === "rich-menu"/);
 });
 

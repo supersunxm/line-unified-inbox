@@ -5,7 +5,7 @@ import { resolveTheme, toggledThemePreference } from "../src/app/theme-logic.ts"
 
 const read = (path: string) => readFileSync(new URL(path, import.meta.url), "utf8");
 const topNavigation = read("../src/components/shell/top-navigation.tsx");
-const sidebar = read("../src/components/shell/app-sidebar.tsx");
+const navConfig = read("../src/components/shell/navigation-config.ts");
 const theme = read("../src/app/theme.tsx");
 const internalShell = read("../src/components/shell/internal-page-shell.tsx");
 
@@ -57,6 +57,6 @@ test("internal pages without the shell now render inside InternalPageShell with 
   // /replymessage keeps its back-to-dashboard link.
   assert.match(read("../src/app/replymessage/page.tsx"), /href="\/dashboard"[\s\S]*?กลับแดชบอร์ด/);
   // Active items: pathname-based, with /rich-messages under Greeting Messages.
-  assert.match(sidebar, /section: "greeting-messages", active: \(path\) => path\.startsWith\("\/greeting-messages"\) \|\| path\.startsWith\("\/rich-messages"\)/);
+  assert.match(navConfig, /section: "greeting-messages", active: \(path\) => path\.startsWith\("\/greeting-messages"\) \|\| path\.startsWith\("\/rich-messages"\)/);
   assert.match(topNavigation, /if \(pathname\.startsWith\("\/replymessage"\)\) return navigationLabels\.replySla;/);
 });

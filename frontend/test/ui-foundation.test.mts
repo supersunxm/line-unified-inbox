@@ -110,8 +110,8 @@ test("public pages keep their own titles", () => {
 
 test("top-bar title follows the route when a page borrows another section", () => {
   const topNavigation = read("../src/components/shell/top-navigation.tsx");
-  const sidebar = read("../src/components/shell/app-sidebar.tsx");
-  assert.match(sidebar, /export function sidebarLabels\(language: Language\)/);
+  const navConfig = read("../src/components/shell/navigation-config.ts");
+  assert.match(navConfig, /export function sidebarLabels\(language: Language\)/);
   assert.match(topNavigation, /if \(pathname\.startsWith\("\/download-center"\)\) return navigationLabels\.downloadCenter;/);
   assert.match(topNavigation, /if \(pathname\.startsWith\("\/dashboard\/message-traffic"\)\) return navigationLabels\.traffic;/);
   assert.match(topNavigation, /\{pageLabel\(pathname, currentSection, language\)\}/);

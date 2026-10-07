@@ -25,10 +25,18 @@ test("v2 is isolated: nothing outside app/v2, lib/v2 and components/v2 imports v
   assert.deepEqual(offenders, []);
 });
 
-test("the only v2 entry point outside v2 is one link in the existing sidebar footer", () => {
+// Owner decision 2026-10-07: v2 is no longer a separate workspace. Its only entry point outside
+// v2 is the "รายงาน KPI รายเดือน" item of the main menu (/v2/report); the v2 link is gone.
+test("the only v2 entry point outside v2 is the monthly KPI report item of the main menu", () => {
   const sidebar = readFileSync(join(srcRoot, "components/shell/app-sidebar.tsx"), "utf8");
-  assert.equal(sidebar.match(/href="\/v2"/g)?.length, 1);
-  assert.match(sidebar, /<Link href="\/v2" data-v2-entry-link [^>]*>\{collapsed \? "v2" : "ลองเวอร์ชันใหม่ \(v2\)"\}<\/Link>/);
+  const topNavigation = readFileSync(join(srcRoot, "components/shell/top-navigation.tsx"), "utf8");
+  const navConfig = readFileSync(join(srcRoot, "components/shell/navigation-config.ts"), "utf8");
+  for (const source of [sidebar, topNavigation]) {
+    assert.doesNotMatch(source, /href="\/v2/);
+    assert.doesNotMatch(source, /data-v2-entry-link|ลองเวอร์ชันใหม่/);
+  }
+  assert.equal(navConfig.match(/href: "\/v2/g)?.length, 1);
+  assert.match(navConfig, /\{ href: "\/v2\/report", label: "monthlyKpiReport", icon: "kpi-report", section: "dashboard",[^}]*isNew: true/);
 });
 
 test("v2 never uses the nickname feature's fleet readiness as a has-data source", () => {

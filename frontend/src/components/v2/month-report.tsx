@@ -1,12 +1,11 @@
 "use client";
 
-import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import React, { Suspense, useMemo, useState } from "react";
 import { AuthorizedSection } from "@/app/authorized-workspace";
 import { KPI_DIFFERENCE_NOTE, KPI_HOW_COUNTED, RATE24_TARGET, REPLIED_RATE_TARGET } from "@/lib/v2/kpi";
 import { monthLongLabel, monthShortLabel, periodLabel } from "@/lib/v2/month";
-import { parseReportUrl, storesHref } from "@/lib/v2/month-url";
+import { parseReportUrl } from "@/lib/v2/month-url";
 import { coverageText, dataCoverage, previousCoverage, sortMonthRows, type GroupTotals, type MonthStoreRow } from "@/lib/v2/monthly-model";
 import { buildReportSummary, OPEN_MONTH_NOTE } from "@/lib/v2/report-summary";
 import { thaiLocationLabel } from "@/lib/v2/thai-geo";
@@ -102,7 +101,14 @@ function PartnerSummaryTable() {
   );
 }
 
+/** "← กลับ": the previous page, or /home when the report was opened without history (new tab, direct link). */
+export function goBack(router: { back: () => void; push: (href: string) => void }) {
+  if (typeof window !== "undefined" && window.history.length > 1) router.back();
+  else router.push("/home");
+}
+
 function ReportBody() {
+  const router = useRouter();
   const data = useV2Month();
   const params = useSearchParams();
   const request = parseReportUrl(params, data.now);
@@ -138,7 +144,7 @@ function ReportBody() {
     <div className="mx-auto max-w-[210mm] px-8 py-6 text-[var(--app-text-primary)]">
       <style>{REPORT_CSS}</style>
       <div className="v2-report-toolbar mb-6 flex flex-wrap items-center gap-2 border-b border-[var(--app-border)] pb-4 text-xs">
-        <Link href={storesHref({ month: data.month, partner: request.partner, store: request.store })} className="rounded-[var(--app-radius-md)] border border-[var(--app-border)] px-3 py-1.5 text-[var(--app-text-secondary)] hover:bg-[var(--app-surface-hover)]">← กลับ</Link>
+        <button type="button" data-report-back onClick={() => goBack(router)} className="rounded-[var(--app-radius-md)] border border-[var(--app-border)] px-3 py-1.5 text-[var(--app-text-secondary)] hover:bg-[var(--app-surface-hover)]">← กลับ</button>
         <span className="flex-1" />
         <button type="button" data-v2-copy-summary onClick={() => void copy()} disabled={!scope || data.coreLoading} className="rounded-[var(--app-radius-md)] border border-[var(--app-border)] px-3 py-1.5 font-medium text-[var(--app-accent)] hover:bg-[var(--app-accent-soft)] disabled:opacity-50">คัดลอกสรุป</button>
         <button type="button" onClick={() => window.print()} disabled={data.coreLoading} className="rounded-[var(--app-radius-md)] bg-[var(--app-accent)] px-3 py-1.5 font-medium text-white disabled:opacity-50">พิมพ์ / บันทึก PDF</button>
