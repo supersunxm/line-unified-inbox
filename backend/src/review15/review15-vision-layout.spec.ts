@@ -199,6 +199,96 @@ test("Vision recovers two Google review cards when one date OCR is imperfect", (
   );
 });
 
+test("Vision preserves the full multiline English review with a NEW badge", () => {
+  const expected =
+    "Very nice and polite employees, they speak very good English and now everything from the products in the store. Also help you to choose witch product is the best for you. I recommend this store to everyone who appreciates nice service. Will come back to this store!";
+
+  const annotation: VisionFullTextAnnotation = {
+    text: [
+      "marcel van oldenbeek",
+      "Local Guide · 25 reviews · 6 photos",
+      "★★★★★ 15 hours ago NEW",
+      "Very nice and polite employees, they speak very good",
+      "English and now everything from the products in the",
+      "store. Also help you to choose witch product is the",
+      "best for you. I recommend this store to everyone who",
+      "appreciates nice service. Will come back to this store!",
+    ].join("\n"),
+    pages: [
+      {
+        width: 705,
+        height: 900,
+        blocks: [
+          {
+            paragraphs: [
+              paragraph("marcel van oldenbeek", 70, 92),
+              paragraph("Local Guide · 25 reviews · 6 photos", 96, 118),
+              paragraph("★★★★★ 15 hours ago NEW", 126, 148),
+              paragraph(
+                "Very nice and polite employees, they speak very good",
+                158,
+                178,
+              ),
+              paragraph(
+                "English and now everything from the products in the",
+                180,
+                200,
+              ),
+              paragraph(
+                "store. Also help you to choose witch product is the",
+                202,
+                222,
+              ),
+              paragraph(
+                "best for you. I recommend this store to everyone who",
+                224,
+                244,
+              ),
+              paragraph(
+                "appreciates nice service. Will come back to this store!",
+                246,
+                266,
+              ),
+            ],
+          },
+        ],
+      },
+    ],
+  };
+
+  const analysis = analyzeReviewCandidatesFromVision(annotation);
+
+  assert.equal(analysis.estimatedReviewCount, 1);
+  assert.equal(analysis.candidates.length, 1);
+  assert.equal(analysis.candidates[0].text, expected);
+  assert.equal(analysis.candidates[0].text.includes("NEW"), false);
+  assert.ok((analysis.candidates[0].confidence ?? 0) > 0.9);
+});
+
+test("Vision plain-text fallback keeps multiline review body and stops at photo overlay", () => {
+  const annotation: VisionFullTextAnnotation = {
+    text: [
+      "Local Guide · 25 reviews · 6 photos",
+      "★★★★★ 15 hours ago NEW",
+      "Very nice and polite employees, they speak very good",
+      "English and now everything from the products in the store.",
+      "Will come back to this store!",
+      "OPPO Reno14 Pro",
+    ].join("\n"),
+    pages: [],
+  };
+
+  const candidates = extractReviewCandidatesFromVision(annotation);
+
+  assert.equal(candidates.length, 1);
+  assert.equal(
+    candidates[0].text,
+    "Very nice and polite employees, they speak very good English and now everything from the products in the store. Will come back to this store!",
+  );
+  assert.equal(candidates[0].text.includes("NEW"), false);
+  assert.equal(candidates[0].text.includes("OPPO Reno14 Pro"), false);
+});
+
 test("Vision reports a higher estimated card count when one body cannot be extracted", () => {
   const annotation: VisionFullTextAnnotation = {
     pages: [
