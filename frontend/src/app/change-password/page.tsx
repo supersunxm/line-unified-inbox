@@ -14,7 +14,12 @@ const translations = {
     currentPassword: "รหัสผ่านชั่วคราว",
     newPassword: "รหัสผ่านใหม่",
     confirmPassword: "ยืนยันรหัสผ่านใหม่",
-    requirements: "อย่างน้อย 8 ตัวอักษร และต้องมีตัวอักษรกับตัวเลขอย่างน้อยอย่างละ 1 ตัว",
+    rulesTitle: "รหัสผ่านใหม่ต้องมี",
+    ruleLength: "อย่างน้อย 8 ตัวอักษร",
+    ruleLetter: "ตัวอักษรอย่างน้อย 1 ตัว",
+    ruleNumber: "ตัวเลขอย่างน้อย 1 ตัว",
+    showPassword: "แสดงรหัสผ่าน",
+    hidePassword: "ซ่อนรหัสผ่าน",
     mismatch: "รหัสผ่านใหม่และการยืนยันไม่ตรงกัน",
     invalidPolicy: "รหัสผ่านใหม่ต้องมีอย่างน้อย 8 ตัวอักษร และมีทั้งตัวอักษรและตัวเลข",
     unable: "ไม่สามารถเปลี่ยนรหัสผ่านได้",
@@ -28,7 +33,12 @@ const translations = {
     currentPassword: "Temporary password",
     newPassword: "New password",
     confirmPassword: "Confirm new password",
-    requirements: "At least 8 characters with at least one letter and one number.",
+    rulesTitle: "Your new password must include",
+    ruleLength: "At least 8 characters",
+    ruleLetter: "At least 1 letter",
+    ruleNumber: "At least 1 number",
+    showPassword: "Show password",
+    hidePassword: "Hide password",
     mismatch: "The new password and confirmation do not match.",
     invalidPolicy: "The new password must be at least 8 characters and include a letter and a number.",
     unable: "Unable to change password",
@@ -42,7 +52,12 @@ const translations = {
     currentPassword: "临时密码",
     newPassword: "新密码",
     confirmPassword: "确认新密码",
-    requirements: "至少 8 个字符，并至少包含 1 个字母和 1 个数字。",
+    rulesTitle: "新密码必须包含",
+    ruleLength: "至少 8 个字符",
+    ruleLetter: "至少 1 个字母",
+    ruleNumber: "至少 1 个数字",
+    showPassword: "显示密码",
+    hidePassword: "隐藏密码",
     mismatch: "新密码与确认密码不一致。",
     invalidPolicy: "新密码至少需要 8 个字符，并同时包含字母和数字。",
     unable: "无法更改密码",
@@ -56,6 +71,67 @@ function passwordMeetsPolicy(password: string) {
   return password.length >= 8 && /\p{L}/u.test(password) && /[0-9]/.test(password);
 }
 
+function PasswordVisibilityIcon({ visible }: { visible: boolean }) {
+  return visible ? (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3 3l18 18M10.6 10.6a2 2 0 002.8 2.8M9.9 4.2A10.9 10.9 0 0112 4c5.2 0 8.5 4.2 9.5 6-.5.9-1.6 2.5-3.2 3.8M6.2 6.2C4.3 7.5 3.1 9.2 2.5 10c1 1.8 4.3 6 9.5 6 1 0 1.9-.2 2.7-.4" />
+    </svg>
+  ) : (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6z" />
+      <circle cx="12" cy="12" r="2.5" />
+    </svg>
+  );
+}
+
+function PasswordField({
+  id,
+  label,
+  value,
+  onChange,
+  autoComplete,
+  showPasswordLabel,
+  hidePasswordLabel,
+}: {
+  id: string;
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  autoComplete: "current-password" | "new-password";
+  showPasswordLabel: string;
+  hidePasswordLabel: string;
+}) {
+  const [visible, setVisible] = useState(false);
+
+  return (
+    <div>
+      <label htmlFor={id} className="block text-sm text-slate-700 dark:text-slate-200">
+        {label}
+      </label>
+      <div className="relative mt-1">
+        <input
+          id={id}
+          type={visible ? "text" : "password"}
+          required
+          autoComplete={autoComplete}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-3 pr-11 text-slate-950 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:focus:border-slate-500 dark:focus:ring-slate-800"
+        />
+        <button
+          type="button"
+          onClick={() => setVisible((current) => !current)}
+          aria-label={visible ? hidePasswordLabel : showPasswordLabel}
+          aria-pressed={visible}
+          className="absolute inset-y-0 right-0 flex w-10 items-center justify-center rounded-r-lg text-slate-500 transition hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-slate-400 dark:text-slate-400 dark:hover:text-white"
+        >
+          <PasswordVisibilityIcon visible={visible} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function ChangePasswordPage() {
   const { language } = useAppLanguage();
   const t = pickLanguageText(language, translations);
@@ -64,6 +140,12 @@ export default function ChangePasswordPage() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
   const [error, setError] = useState<string | null>(null);
+
+  const passwordRules = [
+    { label: t.ruleLength, met: newPassword.length >= 8 },
+    { label: t.ruleLetter, met: /\p{L}/u.test(newPassword) },
+    { label: t.ruleNumber, met: /[0-9]/.test(newPassword) },
+  ];
 
   useEffect(() => {
     let cancelled = false;
@@ -139,43 +221,61 @@ export default function ChangePasswordPage() {
           </p>
         )}
 
-        <label className="mt-5 block text-sm text-slate-700 dark:text-slate-200">
-          {t.currentPassword}
-          <input
-            type="password"
-            required
-            autoComplete="current-password"
+        <div className="mt-5">
+          <PasswordField
+            id="temporary-password"
+            label={t.currentPassword}
             value={currentPassword}
-            onChange={(event) => setCurrentPassword(event.target.value)}
-            className="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-slate-950 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
+            onChange={setCurrentPassword}
+            autoComplete="current-password"
+            showPasswordLabel={t.showPassword}
+            hidePasswordLabel={t.hidePassword}
           />
-        </label>
+        </div>
 
-        <label className="mt-4 block text-sm text-slate-700 dark:text-slate-200">
-          {t.newPassword}
-          <input
-            type="password"
-            required
-            autoComplete="new-password"
+        <div className="mt-4">
+          <PasswordField
+            id="new-password"
+            label={t.newPassword}
             value={newPassword}
-            onChange={(event) => setNewPassword(event.target.value)}
-            className="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-slate-950 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
-          />
-        </label>
-
-        <label className="mt-4 block text-sm text-slate-700 dark:text-slate-200">
-          {t.confirmPassword}
-          <input
-            type="password"
-            required
+            onChange={setNewPassword}
             autoComplete="new-password"
-            value={confirmation}
-            onChange={(event) => setConfirmation(event.target.value)}
-            className="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-slate-950 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
+            showPasswordLabel={t.showPassword}
+            hidePasswordLabel={t.hidePassword}
           />
-        </label>
+        </div>
 
-        <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">{t.requirements}</p>
+        <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-950/60" aria-live="polite">
+          <p className="text-xs font-semibold text-slate-700 dark:text-slate-200">{t.rulesTitle}</p>
+          <ul className="mt-2 space-y-1.5">
+            {passwordRules.map((rule) => (
+              <li
+                key={rule.label}
+                className={`flex items-center gap-2 text-xs ${rule.met ? "text-emerald-700 dark:text-emerald-400" : "text-slate-500 dark:text-slate-400"}`}
+              >
+                <span
+                  aria-hidden="true"
+                  className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border text-[10px] font-bold ${rule.met ? "border-emerald-600 bg-emerald-50 dark:border-emerald-500 dark:bg-emerald-950/40" : "border-slate-300 dark:border-slate-700"}`}
+                >
+                  {rule.met ? "✓" : ""}
+                </span>
+                <span>{rule.label}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <div className="mt-4">
+          <PasswordField
+            id="confirm-password"
+            label={t.confirmPassword}
+            value={confirmation}
+            onChange={setConfirmation}
+            autoComplete="new-password"
+            showPasswordLabel={t.showPassword}
+            hidePasswordLabel={t.hidePassword}
+          />
+        </div>
 
         <button
           disabled={state === "saving"}
