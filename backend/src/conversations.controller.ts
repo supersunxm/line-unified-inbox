@@ -171,7 +171,7 @@ export class ConversationsController {
   }
   @Get("bm-reply-status-summary") async bmReplyStatusSummary(@Query() query: ConversationSummaryQueryDto, @Req() req: AuthRequest) {
     const accessibleStoreIds = await this.storeAccess.accessibleStoreIds(req.user!);
-    return this.service.getBmReplyStatusSummary(accessibleStoreIds, query.month);
+    return this.service.getBmReplyStatusSummary(accessibleStoreIds, query.month, query.from || query.to ? { from: query.from, to: query.to } : undefined);
   }
   @Get("store-priority-summary") async storePrioritySummary(@Req() req: AuthRequest) {
     const accessibleStoreIds = await this.storeAccess.accessibleStoreIds(req.user!);

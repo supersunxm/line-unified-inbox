@@ -27,7 +27,7 @@ import { LineChatMessageSendQueueService } from "./line-chat/line-chat-message-s
 import { isLineChatMirrorOnlyStore } from "./line-chat/line-chat-pilot.constants";
 import { HISTORICAL_TIMELINE_START, mapHistoricalTimelineMessage } from "./historical-timeline.service";
 import { effectiveReplyStateWhere, resolveEffectiveReplyState } from "./reply-state-effective";
-import { CHAT_REPLY_STATUS_COVERAGE_START, isChatReplyStatusCovered, resolveChatMonthRange } from "./chat-period";
+import { CHAT_DATE_RANGE_MAX_DAYS, CHAT_REPLY_STATUS_COVERAGE_START, isChatReplyStatusCovered, resolveChatDateRange, resolveChatMonthRange } from "./chat-period";
 
 const conversationBaseInclude = {
   customer: true,
@@ -1577,8 +1577,13 @@ export class ConversationsService {
     return this.get(id);
   }
 
-  async getBmReplyStatusSummary(accessibleStoreIds: string[] | null | undefined, month?: string) {
+  async getBmReplyStatusSummary(accessibleStoreIds: string[] | null | undefined, month?: string, dateRange?: { from?: string; to?: string }) {
     if (accessibleStoreIds === undefined) throw new ForbiddenException("Store scope is required");
+    // Optional from/to (Asia/Bangkok, inclusive): the same latestMessageAt bucketing as month mode.
+    const customRange = dateRange ? resolveChatDateRange(dateRange.from, dateRange.to) : null;
+    if (dateRange && (month !== undefined || !customRange)) {
+      throw new BadRequestException(`Use either month or from/to (YYYY-MM-DD, from ≤ to, at most ${CHAT_DATE_RANGE_MAX_DAYS} days)`);
+    }
     const storeScope: Prisma.StoreWhereInput = {
       isActive: true,
       archivedAt: null,
@@ -1596,8 +1601,8 @@ export class ConversationsService {
     });
 
     const resetFilter = await this.operations.getOperationalConversationFilter();
-    const monthRange = resolveChatMonthRange(month);
-    const enforceReplyStatusCoverage = month !== undefined;
+    const monthRange = customRange ?? resolveChatMonthRange(month);
+    const enforceReplyStatusCoverage = month !== undefined || customRange !== null;
 
     const summaryRows = await this.prisma.conversation.findMany({
       where: {

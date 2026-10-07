@@ -10,7 +10,7 @@ import { dailyBreakdown, storeCounts, tagCoverage, type MonthStoreRow } from "@/
 import { thaiLocationLabel } from "@/lib/v2/thai-geo";
 import { countState, formatValue, numericValue, rateState } from "@/lib/v2/value-state";
 import { HowCounted, KpiCompareTable } from "./kpi-cards";
-import { useStoreMonth, useTrend, useV2Month } from "./v2-month-data";
+import { useStoreDailyRates, useStoreMonth, useTrend, useV2Month } from "./v2-month-data";
 import { ManagerLink, StateValue } from "./v2-ui";
 
 const cell = "px-3 py-2 text-xs whitespace-nowrap";
@@ -74,6 +74,7 @@ function Trend({ storeId }: { storeId: string }) {
 function DailyAndTags({ row }: { row: MonthStoreRow }) {
   const data = useV2Month();
   const storeMonth = useStoreMonth(row.storeId, data.month);
+  const dailyRates = useStoreDailyRates(row.storeId);
   if (!storeMonth.data) {
     const text = storeMonth.error ? `โหลดไม่สำเร็จ: ${storeMonth.error}` : "กำลังโหลด…";
     return (
@@ -85,6 +86,7 @@ function DailyAndTags({ row }: { row: MonthStoreRow }) {
   }
   const { items, truncated } = storeMonth.data;
   const days = dailyBreakdown(items, data.frame.current);
+  const rateByDay = new Map((dailyRates.data ?? []).map((day) => [day.date, day]));
   const max = Math.max(1, ...days.map((day) => day.chats));
   const coverage = tagCoverage(items);
   const listed = days.reduce((sum, day) => sum + day.chats, 0);
@@ -101,6 +103,7 @@ function DailyAndTags({ row }: { row: MonthStoreRow }) {
               <th scope="col" className={`${cell} font-medium`}><span className="sr-only">กราฟ</span></th>
               <th scope="col" className={`${cell} text-right font-medium`}>แชท</th>
               <th scope="col" className={`${cell} text-right font-medium`}>ยังไม่ตอบ</th>
+              <th scope="col" className={`${cell} text-right font-medium`} title="ตอบใน 24 ชม. ÷ แชทที่ลูกค้าทักวันนั้น">ตอบใน 24 ชม.</th>
             </tr>
           </thead>
           <tbody>
@@ -115,11 +118,12 @@ function DailyAndTags({ row }: { row: MonthStoreRow }) {
                 </td>
                 <td className="px-3 py-1 text-right text-xs tabular-nums">{day.chats}</td>
                 <td className={`px-3 py-1 text-right text-xs tabular-nums ${day.unreplied > 0 ? "font-semibold text-[var(--app-danger)]" : "text-[var(--app-text-secondary)]"}`}>{day.unreplied}</td>
+                <td className="px-3 py-1 text-right text-xs tabular-nums text-[var(--app-text-secondary)]">{dailyRates.data ? (rateByDay.get(day.day) ? `${rateByDay.get(day.day)!.within24h}/${rateByDay.get(day.day)!.total}` : "—") : dailyRates.error ? "!" : "…"}</td>
               </tr>
             ))}
           </tbody>
         </table>
-        <p className="text-xs text-[var(--app-text-secondary)]">แถบเขียว = ตอบแล้ว · แถบแดง = ยังไม่ตอบ</p>
+        <p className="text-xs text-[var(--app-text-secondary)]">แถบเขียว = ตอบแล้ว · แถบแดง = ยังไม่ตอบ (ตามวันของข้อความล่าสุด) · ตอบใน 24 ชม. = ตอบทัน ÷ แชทที่ลูกค้าทักวันนั้น (ตามวันที่ทักครั้งแรก){dailyRates.error ? ` · โหลดตอบใน 24 ชม. รายวันไม่สำเร็จ: ${dailyRates.error}` : ""}</p>
       </Section>
       <Section title="ความครบของแท็กชื่อลูกค้า" meta={`${coverage.chats.toLocaleString("th-TH")} แชท`}>
         <dl className="grid grid-cols-2 gap-3 text-xs">

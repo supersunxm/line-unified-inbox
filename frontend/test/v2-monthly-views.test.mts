@@ -35,8 +35,10 @@ test("links to /chats use /chats's own URL params (storeId, month, replyState)",
 
 test("data layer: monthly numbers come from the /chats and /replymessage endpoints", () => {
   const data = read("components/v2/v2-month-data.tsx");
-  assert.match(data, /api\.bmReplyStatusSummary\(month\)/, "/chats month view");
-  assert.match(data, /api\.conversations\(\{ month, sort: "latest-asc", pageSize: MONTH_PAGE_SIZE, page \}\)/, "/chats list call for the same-days comparison");
+  assert.match(data, /api\.bmReplyStatusSummary\(parsed\.month\)/, "/chats month view");
+  assert.match(data, /fetch\(`\/api-backend\/conversations\/bm-reply-status-summary\?\$\{params\.toString\(\)\}`/, "/chats summary endpoint with from/to for the same-days comparison");
+  assert.match(data, /frame\.inProgress \? JSON\.stringify\(\{ from: frame\.previous\.dateFrom, to: frame\.previous\.dateTo \}\)/);
+  assert.doesNotMatch(data, /sort: "latest-asc"/, "no client-side paging for the comparison");
   assert.match(data, /api\.conversations\(\{ storeId, month, sort: "latest-desc", pageSize: MONTH_PAGE_SIZE, page \}\)/, "/chats list call for one store's month");
   assert.match(data, /\/api-backend\/dashboard\/store-24h-response-summary\?/, "/replymessage source");
   assert.match(read("app/replymessage/../dashboard/store-24h-response-panel.tsx"), /\/api-backend\/dashboard\/store-24h-response-summary\?/);
@@ -84,4 +86,13 @@ test("no user-visible internal terms in v2 components", () => {
     const offenders = literals.map((text) => text.replace(/\$\{[^}]*\}/g, "")).filter((text) => /\bMirror\b|\b[Rr]esolver\b|\b[Ff]leet\b|NOTIFIED_BM/.test(text) && !/mirror-status|fleet-readiness/.test(text));
     assert.deepEqual(offenders, [], name);
   }
+});
+
+test("drawer: per-store per-day 24h rate from the /replymessage endpoint with storeId", () => {
+  const data = read("components/v2/v2-month-data.tsx");
+  assert.match(data, /new URLSearchParams\(\{ dateFrom, dateTo, storeId \}\)/);
+  assert.match(data, /\/api-backend\/dashboard\/store-24h-response-summary\?\$\{params\.toString\(\)\}/);
+  const drawer = read("components/v2/store-scorecard-drawer.tsx");
+  assert.match(drawer, /const dailyRates = useStoreDailyRates\(row\.storeId\);/);
+  assert.match(drawer, /rateByDay\.get\(day\.day\)!\.within24h\}\/\$\{rateByDay\.get\(day\.day\)!\.total\}/);
 });

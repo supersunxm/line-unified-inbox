@@ -5,7 +5,6 @@ import { chatsStoreCounts, effectiveSummaryCounts } from "../src/app/reply-state
 import { monthWindow } from "../src/lib/v2/month.ts";
 import {
   buildMonthStoreRows,
-  countConversations,
   dailyBreakdown,
   dataCoverage,
   filterMonthRows,
@@ -148,20 +147,6 @@ test("an uncollected previous month is never shown as zero", () => {
   assert.equal(rows[0].previousUnreplied.kind, "not-collected");
   assert.equal(rows[0].unrepliedDelta.kind, "not-collected");
   assert.equal(rows[0].previousRate24.kind, "failed");
-});
-
-test("same-days previous counts use /chats's reply-state rule and the period cut", () => {
-  const window = monthWindow("2026-10", bkk("2026-10-07T14:30:00"));
-  const items = [
-    { latestMessageAt: new Date(bkk("2026-09-01T00:00:00")).toISOString(), bmReplyStatus: "REPLIED", effectiveReplyState: "NOT_REPLIED" as const, store: { id: "s1" } },
-    { latestMessageAt: new Date(bkk("2026-09-07T14:29:59")).toISOString(), bmReplyStatus: "NOT_REPLIED", store: { id: "s1" } },
-    { latestMessageAt: new Date(bkk("2026-09-07T14:30:00")).toISOString(), bmReplyStatus: "REPLIED", store: { id: "s1" } },
-    { latestMessageAt: new Date(bkk("2026-09-03T10:00:00")).toISOString(), bmReplyStatus: "REPLIED", store: { id: "inactive" } },
-    { latestMessageAt: new Date(bkk("2026-09-03T10:00:00")).toISOString(), bmReplyStatus: "NOTIFIED_BM", effectiveReplyState: "REPLIED" as const, store: { id: "s2" } },
-  ];
-  const result = countConversations(items, { startMs: window.previous.startMs, endMs: window.previous.endMs, storeIds: new Set(["s1", "s2"]) });
-  assert.deepEqual(result.network, { total: 3, notReplied: 2, replied: 1 });
-  assert.deepEqual(result.byStore.get("s1"), { total: 2, notReplied: 2, replied: 0 });
 });
 
 test("store drawer: daily breakdown and tag coverage (lower bound, synthetic metadata)", () => {

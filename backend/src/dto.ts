@@ -21,6 +21,9 @@ export class ConversationQueryDto {
 
 export class ConversationSummaryQueryDto {
   @IsOptional() @Matches(/^(all|\d{4}-(0[1-9]|1[0-2]))$/) month?: string;
+  /** Optional Asia/Bangkok date range (both inclusive), same bucketing as month mode. Use instead of month. */
+  @IsOptional() @Matches(/^\d{4}-\d{2}-\d{2}$/) from?: string;
+  @IsOptional() @Matches(/^\d{4}-\d{2}-\d{2}$/) to?: string;
 }
 
 export class UpdateStatusDto {

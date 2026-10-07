@@ -19,7 +19,7 @@ Selected with `?month=YYYY-MM` (default: the current Bangkok month). Loaded by
 | แชท / ยังไม่ตอบ / ตอบแล้ว, per store | same response; `chatsStoreCounts(row)` | `/chats` sidebar store counts (same call, same function) | available |
 | ตอบแล้ว % | ตอบแล้ว ÷ แชท from the rows above | — | derivable |
 | Previous month, closed month | `bm-reply-status-summary?month=<previous>` | `/chats` with the previous month selected | available |
-| Previous month, same days (month in progress) | `api.conversations({ month: <previous>, sort: "latest-asc", pageSize: 100, page })` → `GET /conversations`, paged until the latest message passes the cut (same elapsed time), ≤ 5 requests at once, ≤ `PREVIOUS_PERIOD_MAX_PAGES` (100) pages; classified with `getEffectiveReplyState`; only stores in the summary | `/chats` list for that month | derivable (bounded; over the cap the comparison is not shown) |
+| Previous month, same days (month in progress) | `bm-reply-status-summary?from=<prev>-01&to=<prev>-DD` (Bangkok days 1–D, same bucketing as month mode) | `/chats` endpoint | available |
 | ตอบใน 24 ชม. | `GET /dashboard/store-24h-response-summary?dateFrom&dateTo` (replyAnalytics), current period and comparison period; network = response `overview`; partner = Σwithin24h ÷ Σtotal | `/replymessage` | available |
 | Store list, location, placeholder signal | `api.stores()` → `GET /stores`: `name`, `region`, `area` (province), `_count.lineOfficialAccounts` | — | available |
 | Partner | store name suffix "By …" (`lib/v2/partners.ts`) | — | derivable |
@@ -28,6 +28,7 @@ Selected with `?month=YYYY-MM` (default: the current Bangkok month). Loaded by
 | Google Review column | `GET /google-review-kpi?month=`; shown only when at least one store has a result | Google Review KPI page | available |
 | Trend (drawer) | `bm-reply-status-summary?month=` and `store-24h-response-summary` for each month from max(2026-09, month − 5) | — | available (from Sep 2026 only; the drawer says how many months exist) |
 | Daily breakdown (drawer) | `api.conversations({ storeId, month, sort: "latest-desc", pageSize: 100, page })`, ≤ `STORE_MONTH_MAX_PAGES` (20) pages; grouped by Bangkok day of latest message | `/chats` list for that store and month | derivable (bounded; the drawer says when it is cut) |
+| Daily 24h rate (drawer) | `store-24h-response-summary?dateFrom&dateTo&storeId=` → `dates[]` (within24h ÷ total per day of first customer message) | `/replymessage` endpoint | available |
 | Tag coverage (drawer) | same pages; `nicknameDerivedMetadata` (backend Parser v3) | `/chats` "ONLINE" chips | derivable (lower bound) |
 | Tag coverage (store list, partner, network) | none | — | **MISSING**: needs a backend aggregate (`tag-analysis.md` §6) |
 | Links | `/chats?storeId=&month=` (and `&replyState=NOT_REPLIED`) via `/chats`'s `buildChatsHref`; `/store-360?storeId=`; LINE OA Manager from `conversation.store.lineManagerUrl` when `VALID` | — | available |
