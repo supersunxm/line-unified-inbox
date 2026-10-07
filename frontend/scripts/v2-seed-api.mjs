@@ -17,7 +17,7 @@ function mulberry32(seed) {
   };
 }
 
-const PARTNERS = ["OPPO", "TG", "Com7", "IT CITY", "SiamTV", "Jaymart"];
+const PARTNERS = ["OPPO", "TG", "Com7", "IT City", "Siam TV", "Jaymart"];
 const REGIONS = [["Bangkok", "Bangkok"], ["Eastern", "Chonburi"], ["Northern", "Chiang Mai"], ["Northeastern", "Khon Kaen"], ["Southern", "Songkhla"], ["Central", "Nakhon Pathom"]];
 
 function monthStart(month) {
@@ -39,7 +39,7 @@ export function buildSeed(now = Date.now()) {
   for (let index = 0; index < 28; index += 1) {
     const partner = PARTNERS[index % PARTNERS.length];
     const [region, area] = REGIONS[index % REGIONS.length];
-    stores.push({ id: `store-${index + 1}`, name: `OBS Synthetic ${String(index + 1).padStart(2, "0")} By ${partner}${index % 7 === 3 ? " 2" : ""}`, code: `S${index + 1}`, region, area, isActive: true, archivedAt: null, _count: { conversations: 0, lineOfficialAccounts: 1 } });
+    stores.push({ id: `store-${index + 1}`, storeId: `9${String(index + 1).padStart(4, "0")}`, partner, name: `OBS Synthetic ${String(index + 1).padStart(2, "0")} By ${partner}${index % 7 === 3 ? " 2" : ""}`, code: `S${index + 1}`, region, area, isActive: true, archivedAt: null, _count: { conversations: 0, lineOfficialAccounts: 1 } });
   }
   stores.push({ id: "store-unmatched", name: "OBS Synthetic Stand Alone", code: "SX", region: "Central", area: "Ayutthaya", isActive: true, archivedAt: null, _count: { conversations: 0, lineOfficialAccounts: 1 } });
   stores.push({ id: "store-placeholder", name: "Synthetic placeholder", code: "SP", region: null, area: null, isActive: true, archivedAt: null, _count: { conversations: 0, lineOfficialAccounts: 0 } });
@@ -154,6 +154,8 @@ export async function routeSeededApi(page, seed = buildSeed()) {
     const url = new URL(route.request().url());
     const path = url.pathname.replace(/^\/api-backend/, "");
     if (path === "/stores") return json(route, seed.stores);
+    if (path === "/v2/store-partners") return json(route, { stores: seed.stores.filter((store) => store.isActive).map((store) => ({ storeUuid: store.id, storeId: store.storeId ?? null, storeName: store.name, partner: store.partner ?? null, updatedAt: store.partner ? new Date(seed.now - 86_400_000).toISOString() : null, updatedByName: store.partner ? "system (seed)" : null })) });
+    if (path === "/v2/store-partners/changes") return json(route, { changes: [] });
     if (path === "/conversations/bm-reply-status-summary") return json(route, summaryFor(seed, url.searchParams.get("month") ?? bangkokMonth(seed.now)));
     if (path === "/conversations") return json(route, listFor(seed, url.searchParams));
     if (/^\/conversations\/[^/]+\/messages$/.test(path)) return json(route, { items: [], total: 0, page: 1, pageSize: 30 });

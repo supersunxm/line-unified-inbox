@@ -21,6 +21,7 @@ import { OperationsModule } from "./operations/operations.module";
 import { MediaModule } from "./media/media.module";
 import { FollowerInsightsModule } from "./follower-insights/follower-insights.module";
 import { FriendSourceLinksModule } from "./friend-source-links/friend-source-links.module";
+import { V2MonthlyModule } from "./v2-monthly/v2-monthly.module";
 import { TranslationModule } from "./translation/translation.module";
 import { CustomerIntelligenceService } from "./customer-intelligence.service";
 import { DashboardAnalyticsService } from "./dashboard-analytics.service";
@@ -76,7 +77,7 @@ import { ReplyStateShadowService } from "./reply-state-shadow.service";
 import { Review15VisionModule } from "./review15/review15-vision.module";
 
 @Module({
-  imports: [PrismaModule, AuthModule, StoreInsightsModule, RealtimeModule, CredentialsModule, MediaModule, ClassificationModule, LineProfileModule, LineWebhookModule, LineOfficialAccountsModule, StoreMasterModule, FollowerInsightsModule, FriendSourceLinksModule, TranslationModule, OperationsModule, ExecutiveBriefModule, BiAssistantModule, ActionAgentModule, ImpactEngineModule, AiTelemetryModule, OperationalMemoryModule, MassMessageModule, CouponModule, TikTokModule, AppVersionModule, RichMenuModule, AutoResponseModule, GreetingMessageModule, RichMessageModule, LineChatModule, GoogleReviewKpiModule, Review15VisionModule, PublicStoresModule, MonthlyOperationsReportModule],
+  imports: [PrismaModule, AuthModule, StoreInsightsModule, RealtimeModule, CredentialsModule, MediaModule, ClassificationModule, LineProfileModule, LineWebhookModule, LineOfficialAccountsModule, StoreMasterModule, FollowerInsightsModule, FriendSourceLinksModule, TranslationModule, OperationsModule, ExecutiveBriefModule, BiAssistantModule, ActionAgentModule, ImpactEngineModule, AiTelemetryModule, OperationalMemoryModule, MassMessageModule, CouponModule, TikTokModule, AppVersionModule, RichMenuModule, AutoResponseModule, GreetingMessageModule, RichMessageModule, LineChatModule, GoogleReviewKpiModule, Review15VisionModule, PublicStoresModule, MonthlyOperationsReportModule, V2MonthlyModule],
   controllers: [HealthController, MainOaController, StoresController, ConversationsController, ActivityController, DashboardController, DashboardResponseBucketsController, MessageTrafficController, MetadataController, OperationsController, CustomersController, MobileConversationsController, MobileVideoController, MobileNotificationsController, MobileConfigController, MobileProductsController, MonthlySummaryController, PurchaseAnalyticsController, HistoricalTimelineController],
   providers: [ConversationsService, ReplyStateShadowService, HistoricalTimelineService, { provide: LineMessagingService, useClass: PilotAwareLineMessagingService }, DashboardAnalyticsService, DashboardExecutiveService, OperationReportService, CustomerIntelligenceService, RootCauseService, RecommendationService, MobileConversationsService, MobilePdfSendService, MobileVideoService, MobileNotificationsService, MobileConfigService, MonthlySummaryService, MonthlyFollowerSummaryService, PriorityService, PurchaseAnalyticsService, PurchaseBroadcastAudienceService, MessageTrafficService],
 })

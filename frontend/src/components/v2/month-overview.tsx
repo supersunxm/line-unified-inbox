@@ -110,6 +110,7 @@ export function MonthOverview() {
   const showSkeleton = useDeferredLoading(data.coreLoading);
   const failures = [
     data.stores.error && !data.stores.data && `รายชื่อสาขา: ${data.stores.error}`,
+    data.partnerMapping.error && !data.partnerMapping.data && `partner ของสาขา (ทุกสาขาแสดงเป็น "ไม่ระบุ partner"): ${data.partnerMapping.error}`,
     data.current.error && !data.current.data && `จำนวนแชท: ${data.current.error}`,
     data.previous.error && `ช่วงเทียบ: ${data.previous.error}`,
     data.rates.error && !data.rates.data && `ตอบใน 24 ชม.: ${data.rates.error}`,

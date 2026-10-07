@@ -53,7 +53,8 @@ const summary: MonthSummary = {
     { storeId: "c", storeName: "OBS C By Com7", total: 4, notReplied: 2, notifiedBm: 0, replied: 2 },
   ],
 };
-const stores = summary.stores.map((store) => ({ id: store.storeId, name: store.storeName, region: null, province: null, lineOaCount: 1 }));
+const PARTNERS: Record<string, string> = { a: "TG", b: "OPPO", c: "Com7" };
+const stores = summary.stores.map((store) => ({ id: store.storeId, name: store.storeName, region: null, province: null, lineOaCount: 1, partner: PARTNERS[store.storeId] }));
 const rates = { overview: { total: 75, within24h: 64 }, stores: [{ storeId: "a", total: 40, within24h: 38 }, { storeId: "b", total: 31, within24h: 24 }, { storeId: "c", total: 4, within24h: 2 }] };
 
 test("partner table: worst 24h gap to target first, low-sample partners last", () => {

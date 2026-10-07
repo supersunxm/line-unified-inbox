@@ -77,6 +77,7 @@ export function StoreScorecardView() {
       />
       <div className="space-y-4">
         <DataLine />
+        {data.partnerMapping.error && !data.partnerMapping.data && <SourceNotice>โหลด partner ของสาขาไม่สำเร็จ ทุกสาขาจึงแสดงเป็น &quot;ไม่ระบุ partner&quot;: {data.partnerMapping.error}</SourceNotice>}
         {(data.current.error || data.rates.error || data.previous.error) && (
           <SourceNotice>
             โหลดไม่สำเร็จ — {[data.current.error && `จำนวนแชท: ${data.current.error}`, data.rates.error && `ตอบใน 24 ชม.: ${data.rates.error}`, data.previous.error && `ช่วงเทียบ: ${data.previous.error}`].filter(Boolean).join(" · ")}

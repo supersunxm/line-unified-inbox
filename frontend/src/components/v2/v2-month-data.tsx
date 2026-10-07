@@ -33,6 +33,7 @@ import {
 } from "@/lib/v2/monthly-model";
 import { fetchPagesUntil } from "@/lib/v2/waiting-pages";
 import { storeManagerUrlOf } from "@/lib/v2/response-model";
+import type { StorePartnerRow } from "@/lib/v2/partners";
 
 /** /conversations allows pageSize ≤ 100. */
 export const MONTH_PAGE_SIZE = 100;
@@ -95,6 +96,13 @@ async function loadStores(): Promise<StoreInfo[]> {
     const row = store as ApiStore & { region?: string | null; area?: string | null };
     return { id: store.id, name: store.name, region: row.region ?? null, province: row.area ?? null, lineOaCount: store._count?.lineOfficialAccounts ?? null };
   });
+}
+
+/** Store → partner from the mapping keyed by Store ID (GET /v2/store-partners). */
+export async function fetchStorePartners(): Promise<StorePartnerRow[]> {
+  const response = await fetch("/api-backend/v2/store-partners", { credentials: "include", cache: "no-store" });
+  if (!response.ok) throw new Error(`โหลด partner ของสาขาไม่สำเร็จ (${response.status})`);
+  return ((await response.json()) as { stores: StorePartnerRow[] }).stores;
 }
 
 async function loadSummary(key: string): Promise<MonthSummary> {
@@ -194,6 +202,8 @@ export type V2MonthData = {
   /** "1–7 ต.ค. 2026 เทียบ 1–7 ก.ย. 2026". */
   periodText: string;
   stores: Source<StoreInfo[]>;
+  /** The Store → partner mapping; when it fails every store reads "ไม่ระบุ partner" and the page says so. */
+  partnerMapping: Source<StorePartnerRow[]>;
   current: Source<MonthSummary>;
   previous: PreviousSource;
   rates: Source<RateResponse>;
@@ -238,7 +248,13 @@ export function V2MonthDataProvider({ children }: { children: React.ReactNode })
   // A month-to-date frame is measured at "now", frozen until the next refresh so keys stay stable.
   const frame = useMemo(() => monthWindow(month, now), [month, now]);
 
-  const stores = useKeyedSource("stores", "all", nonce, loadStores);
+  const rawStores = useKeyedSource("stores", "all", nonce, loadStores);
+  const partnerMapping = useKeyedSource("partners", "all", nonce, fetchStorePartners);
+  const stores = useMemo<Source<StoreInfo[]>>(() => {
+    if (!rawStores.data) return rawStores;
+    const byUuid = new Map((partnerMapping.data ?? []).map((row) => [row.storeUuid, row.partner]));
+    return { ...rawStores, data: rawStores.data.map((store) => ({ ...store, partner: byUuid.get(store.id) ?? null })) };
+  }, [partnerMapping.data, rawStores]);
   const current = useKeyedSource("summary", JSON.stringify({ month }), nonce, loadSummary);
   const wholePrevious = useKeyedSource("summary", frame.previousCollected && !frame.inProgress ? JSON.stringify({ month: frame.previous.month }) : null, nonce, loadSummary);
   const previousDays = useKeyedSource("previous-days", frame.previousCollected && frame.inProgress ? JSON.stringify({ month: frame.previous.month, endMs: frame.previous.endMs }) : null, nonce, loadPreviousDays);
@@ -283,6 +299,7 @@ export function V2MonthDataProvider({ children }: { children: React.ReactNode })
       frame,
       periodText: comparisonLabel(frame),
       stores,
+      partnerMapping,
       current,
       previous,
       rates,
@@ -295,11 +312,12 @@ export function V2MonthDataProvider({ children }: { children: React.ReactNode })
       coverage: dataCoverage(rows),
       unattributed: stores.data && current.data ? unattributedChats(network.chats, rows) : null,
       hasGoogleResults: Boolean(google.data?.some((store) => store.kpiResult)),
-      coreLoading: (!stores.data && stores.loading) || (!current.data && current.loading),
+      // Partner grouping waits for the mapping too, so rows never jump from "ไม่ระบุ" to a partner.
+      coreLoading: (!stores.data && stores.loading) || (!current.data && current.loading) || (!partnerMapping.data && partnerMapping.loading),
       nonce,
       refresh,
     };
-  }, [current, google, month, nonce, now, previousDays, previousRates, rates, refresh, stores, wholePrevious, frame]);
+  }, [current, google, month, nonce, now, partnerMapping, previousDays, previousRates, rates, refresh, stores, wholePrevious, frame]);
 
   return <V2MonthContext.Provider value={value}>{children}</V2MonthContext.Provider>;
 }
