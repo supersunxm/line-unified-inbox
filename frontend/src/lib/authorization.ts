@@ -32,6 +32,7 @@ export type AuthUser = {
   email: string;
   displayName: string;
   role: "ADMIN" | "VIEWER";
+  mustChangePassword?: boolean;
   memberships?: Array<{ storeId: string; role: string }>;
   authorization?: AuthorizationContext;
   permissions?: {
