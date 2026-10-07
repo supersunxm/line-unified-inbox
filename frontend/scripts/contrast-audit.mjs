@@ -45,6 +45,7 @@ const PAGES = [
   { name: "สาขา", path: "/v2/stores" },
   { name: "สาขา + drawer", path: "/v2/stores?store=store-1", waitFor: "[data-v2-scorecard-drawer]" },
   { name: "สาขา + drawer (ตัวอย่างน้อย)", path: "/v2/stores?store=store-9", waitFor: "[data-v2-scorecard-drawer]" },
+  { name: "Partner ของสาขา", path: "/v2/admin/partners", waitFor: "[data-v2-partner-admin]" },
   { name: "ตอนนี้", path: "/v2/response" },
   { name: "ตอนนี้ · ทั้งหมด", path: "/v2/response?tab=all" },
   { name: "ตอนนี้ · หน้าแชท", path: "/v2/response?view=chat" },

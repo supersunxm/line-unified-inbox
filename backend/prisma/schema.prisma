@@ -2956,3 +2956,31 @@ model PublicPageVisitor {
   @@index([pageKey, firstSeenAt])
 }
 
+// v2: Store → partner (dealer), keyed by the canonical Store ID (StoreMaster.externalStoreId).
+// Not a foreign key: the Store ID is the business identifier and survives Store row changes.
+model StorePartnerMapping {
+  storeId       String   @id
+  partnerName   String?
+  updatedById   String?
+  updatedByName String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([partnerName])
+}
+
+// Append-only audit of every partner change (seed and admin edits): actor, time, before/after.
+model StorePartnerMappingChange {
+  id              String   @id @default(uuid())
+  storeId         String
+  previousPartner String?
+  partnerName     String?
+  source          String
+  actorId         String?
+  actorName       String
+  reason          String?
+  changedAt       DateTime @default(now())
+
+  @@index([storeId, changedAt])
+  @@index([source])
+}

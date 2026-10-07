@@ -14,7 +14,7 @@
 // - Waiting time in monthly views is calendar time, /chats's oldestWaitingMinutes.
 
 import { chatsStoreCounts, effectiveSummaryCounts, getEffectiveReplyState } from "../../app/reply-state.ts";
-import { partnerOf, UNMATCHED_PARTNER } from "./partners.ts";
+import { partnerOrUnmatched, UNMATCHED_PARTNER } from "./partners.ts";
 import { bangkokDay, periodDays, type MonthPeriod } from "./month.ts";
 import { countState, deltaState, MIN_RATE_SAMPLE, meetsSample, numericValue, rateState, type SourceStatus, type ValueState } from "./value-state.ts";
 
@@ -77,7 +77,15 @@ export type RateTotals = { total: number; within24h: number };
 export type RateResponse = { overview: RateTotals; stores: RateRow[] };
 
 /** A store as GET /stores returns it (Store.region, Store.area = province, _count.lineOfficialAccounts). */
-export type StoreInfo = { id: string; name: string; region: string | null; province: string | null; lineOaCount: number | null };
+export type StoreInfo = {
+  id: string;
+  name: string;
+  region: string | null;
+  province: string | null;
+  lineOaCount: number | null;
+  /** From the Store → partner mapping (GET /v2/store-partners); null/undefined → ไม่ระบุ partner. */
+  partner?: string | null;
+};
 
 /**
  * Placeholder stores ("xxx", "Waitng for new store") are excluded only by a StoreMaster/Store
@@ -161,7 +169,7 @@ export function buildMonthStoreRows(input: {
     return {
       storeId: store.id,
       storeName: store.name,
-      partner: partnerOf(store.name),
+      partner: partnerOrUnmatched(store.partner),
       region: store.region,
       province: store.province,
       chats: countState(counts?.total, currentStatus),

@@ -46,6 +46,17 @@ counts as "ตอบใน 24 ชม." and as "ยังไม่ตอบ" at t
 first-customer-message date), so the two n's differ. UI sentence (`KPI_DIFFERENCE_NOTE`): "ตอบใน 24 ชม. ดูแค่ข้อความแรกของลูกค้าในช่วงนี้
 ส่วนตอบแล้ว % ดูข้อความล่าสุด แชทที่ตอบครั้งแรกทันแต่ลูกค้าทักมาใหม่แล้วยังไม่ได้ตอบ จึงนับเป็น “ตอบใน 24 ชม.” และ “ยังไม่ตอบ” พร้อมกัน"
 
+## Store → partner mapping (B1)
+
+| Date | Item | Decision | Status |
+|---|---|---|---|
+| 2026-10-07 | Key | The canonical Store ID: `StoreMaster.externalStoreId` (the "Store ID" shown in the app; `docs/store-id-canonical-export-audit.md`). Not a foreign key, so the mapping survives Store row changes. Stores without a Store ID cannot be mapped and read "ไม่ระบุ partner"; the admin page lists them as "ไม่มี Store ID". | DECIDED |
+| 2026-10-07 | Tables | `StorePartnerMapping` (storeId PK, partnerName, updatedById, updatedByName, createdAt, updatedAt) and the append-only `StorePartnerMappingChange` (storeId, previousPartner, partnerName, source SEED/ADMIN, actorId, actorName, reason, changedAt). Migration `20261007150000_v2_store_partner_mapping`: two new tables only. | DECIDED |
+| 2026-10-07 | Seed | Once, in the background after the API starts (`StorePartnersService.onModuleInit`, advisory-locked, marker = any SEED change row), from the store-name "By <partner>" suffix with the normalization map. Never overwrites an existing row. Names without the suffix get no row. Admin re-trigger: `POST /v2/store-partners/seed` (idempotent: does nothing after the first run). | DECIDED |
+| 2026-10-07 | Ambiguous pairs | Seeded as separate partners for the owner to decide: **JP** vs **JP Store**, **INTERCOM** vs **Inter Computer & IT**. Merge by editing in "Partner ของสาขา". | DECIDED (owner to confirm) |
+| 2026-10-07 | Reads | v2 (all views, report) reads partner only from `GET /v2/store-partners` (scoped to the caller's stores). The frontend no longer parses names. If the mapping fails to load, every store reads "ไม่ระบุ partner" and the page says so. | DECIDED |
+| 2026-10-07 | Edits | `PUT /v2/store-partners/:storeId` ADMIN only; each change writes one audit row (actor, time, before/after, reason). Same value = no-op, no audit row. Admin UI: /v2/admin/partners "Partner ของสาขา" with a "ยังไม่ระบุ" filter and the last 50 changes. | DECIDED |
+
 ## One definition, shared with /chats (Task 1)
 
 | Date | Item | Decision | Status |
@@ -79,7 +90,7 @@ first-customer-message date), so the two n's differ. UI sentence (`KPI_DIFFERENC
 | 2026-10-07 | Store universe | `GET /stores` rows (active, non-archived Store records) that are also summary rows. The summary's synthetic "Focus group · 7 stores" row is never a store. | DECIDED |
 | 2026-10-07 | Placeholder stores ("xxx", "Waitng for new store") | Excluded only when a Store/StoreMaster signal says so: `_count.lineOfficialAccounts = 0` on `GET /stores` (no LINE OA, so no chats are possible). Names are never pattern-matched. Excluded stores are listed in the data line. A placeholder that has an OA stays in and is reported. | DECIDED |
 | 2026-10-07 | Partner field | Neither `Store` nor `StoreMaster` has a partner/dealer column (StoreMaster has `dashboardTier`, `kpiPlan`, `dashboardArea`, `bmName`). | VERIFIED |
-| 2026-10-07 | Partner rule | Text after the last " By " in the store name (case-insensitive), trailing branch number stripped ("By TG 2" → TG), then looked up by compact key in `PARTNER_ALIASES` (`frontend/src/lib/v2/partners.ts`). Names without the suffix → "ไม่ระบุ partner", listed in the report. | DECIDED |
+| 2026-10-07 | Partner rule | Superseded by the Store ID mapping (B1). The name rule now only seeds the mapping once (`backend/src/v2-monthly/partner-parse.ts`). | SUPERSEDED |
 | 2026-10-07 | Partner normalization map | OPPO, Com7, TG, IT City (IT CITY / IT City), Siam TV (Siam TV / SiamTV), LCB Mobile Supply, VTEC, Jaymart. Variants not in the map keep their own trimmed spelling. "JP" vs "JP Store" and "INTERCOM" vs "Inter Computer & IT" are **not** merged: they may be different companies. | ASSUMED (owner to confirm merges) |
 | 2026-10-07 | `MIN_RATE_SAMPLE` | 10 chats in the period. Below it a rate is muted, shows n, gets no target colour, is unranked and sorts after measured stores. Applies to ตอบแล้ว % (n = chats), ตอบใน 24 ชม. % (n = replyAnalytics total) and tag coverage. | DECIDED (default from brief) |
 | 2026-10-07 | Δ column | Superseded by the owner decision above: Δ is shown under each KPI in points (coloured) and under counts (neutral). | SUPERSEDED |

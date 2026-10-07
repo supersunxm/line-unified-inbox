@@ -47,7 +47,7 @@ function NavLink({ item, pathname }: { item: NavItem; pathname: string }) {
   );
 }
 
-export const V2_PAGE_TITLES: Record<string, string> = { "/v2": "ภาพรวมเดือน", "/v2/response": "ตอนนี้", "/v2/stores": "สาขา" };
+export const V2_PAGE_TITLES: Record<string, string> = { "/v2": "ภาพรวมเดือน", "/v2/response": "ตอนนี้", "/v2/stores": "สาขา", "/v2/admin/partners": "Partner ของสาขา" };
 
 /** Pages that show monthly numbers carry the month selector; "ตอนนี้" is live and has none. */
 export function isMonthlyPage(pathname: string): boolean {
@@ -87,6 +87,7 @@ export function V2Shell({ children }: { children: React.ReactNode }) {
     { href: "/mass-messages", label: "ส่งข้อความ", icon: "send" },
     { href: "/monthly-operations-report", label: "รายงาน", icon: "report" },
     { href: "/admin/registrations", label: "ผู้ดูแลระบบ", icon: "admin" },
+    { href: "/v2/admin/partners", label: "Partner ของสาขา", icon: "stores", active: (path) => path.startsWith("/v2/admin/partners") },
   ];
   const title = V2_PAGE_TITLES[pathname] ?? "OPPO LINE OA Monitor";
 

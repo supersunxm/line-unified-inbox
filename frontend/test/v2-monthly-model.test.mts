@@ -38,9 +38,9 @@ const summary: MonthSummary = {
   ],
 };
 const stores: StoreInfo[] = [
-  { id: "s1", name: "OBS Alpha By TG", region: "Eastern", province: "Chonburi", lineOaCount: 1 },
-  { id: "s2", name: "OBS Beta By TG 2", region: "Northern", province: "Chiang Mai", lineOaCount: 1 },
-  { id: "s3", name: "OBS Gamma By OPPO", region: "Eastern", province: "Rayong", lineOaCount: 2 },
+  { id: "s1", name: "OBS Alpha By TG", region: "Eastern", province: "Chonburi", lineOaCount: 1, partner: "TG" },
+  { id: "s2", name: "OBS Beta By TG 2", region: "Northern", province: "Chiang Mai", lineOaCount: 1, partner: "TG" },
+  { id: "s3", name: "OBS Gamma By OPPO", region: "Eastern", province: "Rayong", lineOaCount: 2, partner: "OPPO" },
   { id: "s4", name: "Placeholder", region: null, province: null, lineOaCount: 0 },
 ];
 const rates: RateResponse = { overview: { total: 50, within24h: 46 }, stores: [{ storeId: "s1", total: 30, within24h: 28 }, { storeId: "s2", total: 15, within24h: 14 }, { storeId: "s3", total: 5, within24h: 4 }] };
