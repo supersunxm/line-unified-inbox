@@ -1,5 +1,5 @@
 import type { ApiBmReplyStatus, ApiConversation, ApiCustomerEvent, ApiCustomerIntelligence, ApiFollowUpStatus, ApiPriority, ApiStore, ApiTopic, BackfillJobResponseDto, BmReplyStatusSummaryResponse, ProductCorrectionInsightResponse, NetworkAccuracyReport, ProductReviewQueueResponse, ApproveAliasResponse, RejectAliasResponse, TargetedReanalysisResponse, ConversationListResponse, ConversationMessagesResponse, HistoricalVirtualChatListResponse, CreateLineOaInput, DashboardAnalyticsResponse, FriendAttributionConfigDto, FriendAttributionSessionStatusResult, FriendSourceLink, FriendSourceLinksFilters, FriendSourceLinksGenerateResult, FriendSourceLinksSummaryItem, IdentifyFriendAttributionInput, IdentifyFriendAttributionResult, LineOfficialAccountResponse, LineOaCredentialHealth, LineOaTestResult, LineOaWebhookInfo, ProductMetadataResponse, ProductVariantMetadata, PurchaseAnalyticsResponse, SendConversationMessageResponse, StoreDeletionPreview, StoreMasterSuggestion, StorePrioritySummaryResponse, StoreRemovalResult, StoreInsightsSummary, StoreInsightsResponsePerformance, StoreInsightsResponder, StoreInsightsSales, StoreInsightsConversationResponse, StoreInsightsCustomerVoice, StoreInsightsCustomerVoiceDimension, StoreInsightsCustomerVoiceDrilldownResponse, StoreInsightsResponseCasesResponse, StoreInsightsResponseSegment, StoreInsightsResponseSort, SummaryDailyRow, ByStoreAccountRow, SyncBatchResult, UpdateCustomerSalesInfoInput, UpdateFriendshipStatusInput, UpdateFriendshipStatusResult, UpsertFriendAttributionConfigInput } from "@/types/api";
-import { AUTH_UNAUTHORIZED_EVENT } from "@/lib/auth-session";
+import { AUTH_UNAUTHORIZED_EVENT, redirectToPasswordChange, shouldRedirectToPasswordChange } from "@/lib/auth-session";
 import { authUserStore } from "@/lib/auth-user-store";
 import type { AuthUser } from "@/lib/authorization";
 import { API_BASE_URL } from "@/lib/runtime-config";
@@ -320,6 +320,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       details = { code: body.code, conflicts: body.conflicts };
     } catch { }
     const error = new ApiError(message, response.status, details);
+    if (typeof window !== "undefined" && shouldRedirectToPasswordChange(response.status, error.code, window.location.pathname)) {
+      redirectToPasswordChange();
+    }
     if (response.status === 401 && typeof window !== "undefined") {
       window.dispatchEvent(new CustomEvent(AUTH_UNAUTHORIZED_EVENT));
     }
@@ -395,7 +398,7 @@ function seedAuthUserStore(startedAtGeneration: number) {
 }
 
 export const api = {
-  login: (identifier: string, password: string) => withAuthUserReset(() => request<{ id: string; email: string; displayName: string; role: "ADMIN" | "VIEWER" }>("/auth/login", { method: "POST", body: JSON.stringify({ identifier, password }) })),
+  login: (identifier: string, password: string) => withAuthUserReset(() => request<AuthUser>("/auth/login", { method: "POST", body: JSON.stringify({ identifier, password }) })),
   setupStatus: (options?: ApiRequestOptions) =>
     request<{ firstAdminRequired: boolean; registrationAvailable: boolean; emailProviderConfigured: boolean; emailProviderMode: string }>(
       "/auth/setup-status",
@@ -406,7 +409,7 @@ export const api = {
   resendSetupOtp: (challengeId: string, language: "th" | "en" | "zh") => request<{ challengeId: string; maskedEmail: string; expiresInSeconds: number; resendAfterSeconds: number }>("/auth/setup/resend-otp", { method: "POST", body: JSON.stringify({ challengeId, language }) }),
   logout: () => withAuthUserReset(() => request<{ success: true }>("/auth/logout", { method: "POST" }), { endSession: true }),
   me: (options?: ApiRequestOptions) =>
-    request<{ id: string; email: string; displayName: string; role: "ADMIN" | "VIEWER"; permissions?: { canAccessMainOa: boolean; canManageMainOa: boolean } }>(
+    request<AuthUser>(
       "/auth/me",
       { ...options, cache: "no-store", headers: { "Cache-Control": "no-cache, no-store, must-revalidate" } },
     ).then(seedAuthUserStore(authUserStore.generation())),
@@ -424,7 +427,7 @@ export const api = {
   deactivateAccount: (userId: string) => request<{ userId: string; accountStatus: "ACTIVE" | "INACTIVE"; membershipStatus: "ACTIVE" | "INACTIVE"; changed: boolean }>(`/admin/registrations/users/${encodeURIComponent(userId)}/deactivate`, { method: "PATCH" }),
   reactivateAccount: (userId: string) => request<{ userId: string; accountStatus: "ACTIVE" | "INACTIVE"; membershipStatus: "ACTIVE" | "INACTIVE"; changed: boolean }>(`/admin/registrations/users/${encodeURIComponent(userId)}/reactivate`, { method: "PATCH" }),
   permanentlyDeleteAccount: (userId: string) => request<{ userId: string; accountStatus: "DELETED"; changed: boolean }>(`/admin/registrations/users/${encodeURIComponent(userId)}/permanent-delete`, { method: "POST" }),
-  changePassword: (currentPassword: string, newPassword: string) => request<{ success: true }>("/auth/change-password", { method: "POST", body: JSON.stringify({ currentPassword, newPassword }) }),
+  changePassword: (currentPassword: string, newPassword: string) => withAuthUserReset(() => request<{ success: true }>("/auth/change-password", { method: "POST", body: JSON.stringify({ currentPassword, newPassword }) })),
   purchaseAnalytics: (params?: { from?: string; to?: string; storeId?: string }) => {
     const query = new URLSearchParams();
     if (params?.from) query.set("from", params.from);
