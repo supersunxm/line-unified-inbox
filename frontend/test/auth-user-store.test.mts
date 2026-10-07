@@ -254,6 +254,7 @@ test("session-changing API calls reset the cache inside api.ts, not at call site
   assert.match(apiCode, /login: \([^)]*\) => withAuthUserReset\(/);
   assert.match(apiCode, /verifySetupOtp: \([^)]*\) => withAuthUserReset\(/);
   assert.match(apiCode, /logout: \(\) => withAuthUserReset\([\s\S]*?\{ endSession: true \}\)/);
+  assert.match(apiCode, /changePassword: \([^)]*\) => withAuthUserReset\(/);
   assert.match(apiCode, /reset\(\);\s*try \{\s*return await run\(\);\s*\} finally \{\s*reset\(\);/);
   assert.match(apiCode, /"\/auth\/me"[\s\S]*?\)\.then\(seedAuthUserStore\(authUserStore\.generation\(\)\)\)/);
   assert.match(apiCode, /authUserStore\.configure\(\(\) =>\s*request<AuthUser>\("\/auth\/me"/);
