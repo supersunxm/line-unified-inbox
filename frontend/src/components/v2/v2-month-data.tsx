@@ -34,6 +34,7 @@ import { fetchPagesUntil } from "@/lib/v2/waiting-pages";
 import { storeManagerUrlOf } from "@/lib/v2/response-model";
 import type { StorePartnerRow } from "@/lib/v2/partners";
 import { closeStatusLabel, snapshotRates, snapshotSummary, type MonthCloseInfo, type MonthCloseResponse } from "@/lib/v2/month-close";
+import { tagCoverageByStore, type TagCoverageCounts, type TagCoverageResponse } from "@/lib/v2/tag-coverage";
 
 /** /conversations allows pageSize ≤ 100. */
 export const MONTH_PAGE_SIZE = 100;
@@ -158,6 +159,14 @@ async function loadMonthClose(key: string): Promise<MonthCloseResponse> {
   return fetchMonthClose((JSON.parse(key) as { month: string }).month);
 }
 
+/** Tag coverage per store for a month (GET /v2/tag-coverage?month=). Live for every month. */
+async function loadTagCoverage(key: string): Promise<TagCoverageResponse> {
+  const { month } = JSON.parse(key) as { month: string };
+  const response = await fetch(`/api-backend/v2/tag-coverage?month=${encodeURIComponent(month)}`, { credentials: "include", cache: "no-store" });
+  if (!response.ok) throw new Error(`โหลดความครบของแท็กไม่สำเร็จ (${response.status})`);
+  return (await response.json()) as TagCoverageResponse;
+}
+
 export type TrendPoint = { month: string; dateFrom: string; dateTo: string; summary: MonthSummary | null; rates: RateResponse | null; error: string | null };
 
 async function loadTrend(key: string): Promise<TrendPoint[]> {
@@ -226,6 +235,9 @@ export type V2MonthData = {
   rates: Source<RateResponse>;
   previousRates: Source<RateResponse>;
   google: Source<GoogleReviewKpiStoreItem[]>;
+  /** Parser v4 tag coverage (counts only); not part of the month close, so live for every month. */
+  tagCoverage: Source<TagCoverageResponse>;
+  tagCoverageByStore: Map<string, TagCoverageCounts>;
   rows: MonthStoreRow[];
   placeholders: StoreInfo[];
   network: GroupTotals;
@@ -296,6 +308,7 @@ export function V2MonthDataProvider({ children }: { children: React.ReactNode })
   const previousSummary = useMemo<Source<MonthSummary>>(() => (previousClosed ? { data: snapshotSummary(previousClose.data!), error: null, loading: false } : previousCloseKnown ? livePrevious : PENDING), [livePrevious, previousClose.data, previousCloseKnown, previousClosed]);
   const previousRates = useMemo<Source<RateResponse>>(() => (previousClosed ? { data: snapshotRates(previousClose.data!), error: null, loading: false } : previousCloseKnown ? livePreviousRates : PENDING), [livePreviousRates, previousClose.data, previousCloseKnown, previousClosed]);
   const google = useKeyedSource("google", JSON.stringify({ month }), nonce, loadGoogle);
+  const tagCoverage = useKeyedSource("tag-coverage", JSON.stringify({ month }), nonce, loadTagCoverage);
 
   const value = useMemo<V2MonthData>(() => {
     const universe = stores.data ? v2Stores(stores.data, current.data) : { stores: [], placeholders: [] };
@@ -324,6 +337,8 @@ export function V2MonthDataProvider({ children }: { children: React.ReactNode })
       rates,
       previousRates,
       google,
+      tagCoverage,
+      tagCoverageByStore: tagCoverageByStore(tagCoverage.data),
       rows,
       placeholders: universe.placeholders,
       network,
@@ -337,7 +352,7 @@ export function V2MonthDataProvider({ children }: { children: React.ReactNode })
       nonce,
       refresh,
     };
-  }, [current, google, month, nonce, now, partnerMapping, previousSummary, previousRates, rates, refresh, stores, frame, monthClose.data, monthClose.error]);
+  }, [current, google, month, nonce, now, partnerMapping, previousSummary, previousRates, rates, refresh, stores, frame, monthClose.data, monthClose.error, tagCoverage]);
 
   return <V2MonthContext.Provider value={value}>{children}</V2MonthContext.Provider>;
 }

@@ -6,10 +6,11 @@ import { formatWaitingDuration } from "@/components/shell/store-priority-score";
 import { KPI_DIFFERENCE_NOTE, RATE24_TARGET } from "@/lib/v2/kpi";
 import { monthShortLabel, periodLabel } from "@/lib/v2/month";
 import { chatsHref, reportHref } from "@/lib/v2/month-url";
-import { dailyBreakdown, storeCounts, tagCoverage, type MonthStoreRow } from "@/lib/v2/monthly-model";
+import { dailyBreakdown, storeCounts, type MonthStoreRow } from "@/lib/v2/monthly-model";
 import { thaiLocationLabel } from "@/lib/v2/thai-geo";
 import { countState, formatValue, numericValue, rateState } from "@/lib/v2/value-state";
 import { HowCounted, KpiCompareTable } from "./kpi-cards";
+import { TagCoverageDetail } from "./tag-coverage";
 import { useStoreDailyRates, useStoreMonth, useTrend, useV2Month } from "./v2-month-data";
 import { ManagerLink, StateValue } from "./v2-ui";
 
@@ -80,7 +81,7 @@ function DailyAndTags({ row }: { row: MonthStoreRow }) {
     return (
       <>
         <Section title="รายวัน"><p className="text-xs text-[var(--app-text-secondary)]">{text}</p></Section>
-        <Section title="ความครบของแท็กชื่อลูกค้า"><p className="text-xs text-[var(--app-text-secondary)]">{text}</p></Section>
+        <Section title="ความครบของแท็กชื่อลูกค้า"><TagCoverageDetail counts={data.tagCoverageByStore.get(row.storeId)} /></Section>
       </>
     );
   }
@@ -88,7 +89,6 @@ function DailyAndTags({ row }: { row: MonthStoreRow }) {
   const days = dailyBreakdown(items, data.frame.current);
   const rateByDay = new Map((dailyRates.data ?? []).map((day) => [day.date, day]));
   const max = Math.max(1, ...days.map((day) => day.chats));
-  const coverage = tagCoverage(items);
   const listed = days.reduce((sum, day) => sum + day.chats, 0);
   const expected = numericValue(row.chats);
   return (
@@ -125,20 +125,8 @@ function DailyAndTags({ row }: { row: MonthStoreRow }) {
         </table>
         <p className="text-xs text-[var(--app-text-secondary)]">แถบเขียว = ตอบแล้ว · แถบแดง = ยังไม่ตอบ (ตามวันของข้อความล่าสุด) · ตอบใน 24 ชม. = ตอบทัน ÷ แชทที่ลูกค้าทักวันนั้น (ตามวันที่ทักครั้งแรก){dailyRates.error ? ` · โหลดตอบใน 24 ชม. รายวันไม่สำเร็จ: ${dailyRates.error}` : ""}</p>
       </Section>
-      <Section title="ความครบของแท็กชื่อลูกค้า" meta={`${coverage.chats.toLocaleString("th-TH")} แชท`}>
-        <dl className="grid grid-cols-2 gap-3 text-xs">
-          <div className="rounded-[var(--app-radius-md)] border border-[var(--app-border)] p-3">
-            <dt className="text-[var(--app-text-secondary)]">มีแท็กอย่างน้อย 1 อย่าง</dt>
-            <dd className="mt-1 text-lg font-semibold"><StateValue state={coverage.tagged} format="percent" showN /></dd>
-            <dd className="text-[var(--app-text-secondary)]">{coverage.taggedCount.toLocaleString("th-TH")} แชท</dd>
-          </div>
-          <div className="rounded-[var(--app-radius-md)] border border-[var(--app-border)] p-3">
-            <dt className="text-[var(--app-text-secondary)]">มีเดือนที่ซื้อ (MM/YY)</dt>
-            <dd className="mt-1 text-lg font-semibold"><StateValue state={coverage.withPeriod} format="percent" showN /></dd>
-            <dd className="text-[var(--app-text-secondary)]">{coverage.withPeriodCount.toLocaleString("th-TH")} แชท</dd>
-          </div>
-        </dl>
-        <p className="text-xs text-[var(--app-text-secondary)]">เป็นค่าต่ำสุด: แชทที่ระบบยังไม่ได้อ่านชื่อจาก LINE OA Manager นับเป็นไม่มีแท็ก</p>
+      <Section title="ความครบของแท็กชื่อลูกค้า" meta={periodLabel(data.frame.current)}>
+        <TagCoverageDetail counts={data.tagCoverageByStore.get(row.storeId)} />
       </Section>
       <ManagerLink href={storeMonth.data.managerUrl} />
     </>

@@ -166,6 +166,18 @@ export async function routeSeededApi(page, seed = buildSeed()) {
     if (path === "/stores") return json(route, seed.stores);
     if (path === "/v2/store-partners") return json(route, { stores: seed.stores.filter((store) => store.isActive).map((store) => ({ storeUuid: store.id, storeId: store.storeId ?? null, storeName: store.name, partner: store.partner ?? null, updatedAt: store.partner ? new Date(seed.now - 86_400_000).toISOString() : null, updatedByName: store.partner ? "system (seed)" : null })) });
     if (path === "/v2/store-partners/changes") return json(route, { changes: [] });
+    if (path === "/v2/tag-coverage") {
+      // Deterministic synthetic coverage: one store with no names read yet ("ยังไม่ได้อ่านชื่อ").
+      const summary = summaryFor(seed, url.searchParams.get("month") ?? bangkokMonth(seed.now));
+      const stores = summary.stores.filter((row) => row.storeId !== "focus-seven-store-group").map((row, index) => {
+        const read = index === 3 ? 0 : Math.round(row.total * (0.55 + (index % 5) * 0.08));
+        const tagged = Math.round(read * (0.4 + (index % 4) * 0.12));
+        const withPeriod = Math.round(tagged * 0.6);
+        return { storeUuid: row.storeId, storeId: null, total: row.total, read, tagged, withPeriod, byType: { online: Math.round(tagged * 0.5), source: Math.round(tagged * 0.1), product: Math.round(tagged * 0.7), film: Math.round(tagged * 0.3), payment: Math.round(tagged * 0.4), finance: Math.round(tagged * 0.2), period: withPeriod, date: Math.round(tagged * 0.05) } };
+      });
+      const network = stores.reduce((sum, row) => ({ total: sum.total + row.total, read: sum.read + row.read, tagged: sum.tagged + row.tagged, withPeriod: sum.withPeriod + row.withPeriod, byType: Object.fromEntries(Object.keys(sum.byType).map((key) => [key, sum.byType[key] + row.byType[key]])) }), { total: 0, read: 0, tagged: 0, withPeriod: 0, byType: { online: 0, source: 0, product: 0, film: 0, payment: 0, finance: 0, period: 0, date: 0 } });
+      return json(route, { month: summary.month ?? null, parserVersion: "nickname-parser-v4.0.0", rederiveComplete: true, updatedAt: new Date(seed.now - 600_000).toISOString(), network, stores });
+    }
     const closeMatch = /^\/v2\/month-close\/(\d{4}-\d{2})$/.exec(path);
     if (closeMatch) {
       // Synthetic: September 2026 is closed as a backfill; later months are open.

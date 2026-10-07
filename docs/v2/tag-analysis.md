@@ -131,7 +131,11 @@ same-store frequency check before being marked safe.
 - **Store list column and network/partner coverage**: **hidden**. Computing it client-side would
   mean paging every chat of the month for every store (thousands of requests' worth of data).
 
-### Backend endpoint needed (Wave B, needs approval)
+> **Update 2026-10-07 (B4):** built as `GET /v2/tag-coverage?month=` on Parser v4 tags; v2 shows
+> it in the store list, partner table and drawer, and says "ยังไม่ได้อ่านชื่อ" when no name was
+> read. The two bullets above describe the earlier state.
+
+### Backend endpoint (proposal as written before B4)
 
 `GET /conversations/name-tag-coverage?month=YYYY-MM` → per store:
 `{ storeId, chats, observed, tagged, withPurchaseMonth, bySource: {ONLINE, TikTok, …}, byService: {FILM_INSTALLATION}, byProductFamily: {…} }`

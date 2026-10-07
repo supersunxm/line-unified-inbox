@@ -83,6 +83,15 @@ first-customer-message date), so the two n's differ. UI sentence (`KPI_DIFFERENC
 | 2026-10-07 | Storage | New table `NicknameTagV4` (derived, recomputable, one row per conversation and parser version, from the conversation's latest READ observation of the same Store/OA/chat identity); no FKs. New table `NicknameTagRederiveRun` (counts only, audit). Migration `20261007170000_v2_nickname_tags_v4`: two new tables only. The v3 table could not take v4 rows without changing its CHECK (`parserVersion LIKE 'nickname-parser-v3.%'`), so a nullable column was not enough. Raw observations, v3 state and v3 receipts are only read. | DECIDED |
 | 2026-10-07 | Re-derive | Full pass in id order, 500 conversations per advisory-locked batch, ≤ 20 batches per call, resumable. Then incremental: conversations with READ observations newer than the watermark (15-minute re-read overlap), one audit row per Bangkok day. Runs by the existing in-process scheduler pattern every 10 minutes (first tick 90 s after start); disable with `V2_TAG_REDERIVE_SCHEDULER_DISABLED=true`. Admin: `POST /v2/tags/rederive` (start or continue a full pass, one bounded step), `GET /v2/tags/rederive-runs` (counts). Each tick logs `tag_rederive … counts={…}` (counts only). | DECIDED |
 
+## Tag coverage (B4)
+
+| Date | Item | Decision | Status |
+|---|---|---|---|
+| 2026-10-07 | Endpoint | `GET /v2/tag-coverage?month=YYYY-MM` (caller's stores, counts only): per store and network — chats (same set as the `/chats` month summary), names read (a Parser v4 row exists = the nickname was read at least once), ≥ 1 tag, valid MM/YY, and by type (product, MM/YY, Online, film, payment, finance, platform, date); plus whether the first full re-derive has finished and when tags were last updated. | DECIDED |
+| 2026-10-07 | Measure | "ความครบของแท็ก" = chats with ≥ 1 tag ÷ chats whose name was read, shown with "อ่านชื่อ r/n". A store with chats but no name read shows "ยังไม่ได้อ่านชื่อ", never 0%. Fewer than 10 read names: shown muted (low sample), as for rates. | DECIDED |
+| 2026-10-07 | Where | Store list column, partner table column (sum of its stores) and network row, and the drawer section (three cards + by-type table). The drawer no longer computes a client-side lower bound from Parser v3 chips. | DECIDED |
+| 2026-10-07 | Closed months | Tag coverage is live for every month: it is not part of the month-close snapshot (B2 fields are fixed by the owner's list). | DECIDED |
+
 ## One definition, shared with /chats (Task 1)
 
 | Date | Item | Decision | Status |

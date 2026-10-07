@@ -15,6 +15,7 @@ import { StoreScorecardDrawer } from "./store-scorecard-drawer";
 import { DataLine } from "./v2-month-controls";
 import { useV2Month } from "./v2-month-data";
 import { HowCounted } from "./kpi-cards";
+import { TagCoverageCell, useTagCoverageNote } from "./tag-coverage";
 import { CountCell, RateCell, SourceNotice, StateValue } from "./v2-ui";
 
 const SORT_LABELS: Array<[MonthSort, string]> = [
@@ -66,7 +67,8 @@ export function StoreScorecardView() {
   );
   const reviews = useMemo(() => new Map((data.google.data ?? []).map((store) => [store.id, store.kpiResult])), [data.google.data]);
   const openRow = state.store ? data.rows.find((row) => row.storeId === state.store) ?? null : null;
-  const columns = 6 + (data.hasGoogleResults ? 1 : 0);
+  const columns = 7 + (data.hasGoogleResults ? 1 : 0);
+  const tagNote = useTagCoverageNote();
 
   return (
     <div className="h-full overflow-y-auto px-6 py-5">
@@ -123,7 +125,7 @@ export function StoreScorecardView() {
             title="คะแนนสาขา"
             meta={`${rows.length} จาก ${data.rows.length} สาขา · ${data.periodText}`}
             bodyPadding="none"
-            footer={<span className="text-xs text-[var(--app-text-secondary)]">อัตราที่มาจากแชทน้อยกว่า {MIN_RATE_SAMPLE} แชทแสดงเป็นสีจาง ไม่เทียบเป้า และอยู่ท้ายเมื่อเรียงตามอัตรา · ความครบของแท็กชื่อลูกค้าดูได้ในรายละเอียดสาขา{data.hasGoogleResults ? "" : " · ยังไม่มีผล Google Review ของเดือนนี้ จึงไม่แสดงคอลัมน์"}</span>}
+            footer={<span className="text-xs text-[var(--app-text-secondary)]">อัตราที่มาจากแชทน้อยกว่า {MIN_RATE_SAMPLE} แชทแสดงเป็นสีจาง ไม่เทียบเป้า และอยู่ท้ายเมื่อเรียงตามอัตรา · ความครบของแท็ก = % ของชื่อลูกค้าที่อ่านแล้วที่มีแท็กอย่างน้อย 1 อย่าง{tagNote ? ` (${tagNote})` : ""}{data.hasGoogleResults ? "" : " · ยังไม่มีผล Google Review ของเดือนนี้ จึงไม่แสดงคอลัมน์"}</span>}
           >
             <div className="overflow-x-auto">
               <Table data-v2-scorecard-table>
@@ -136,6 +138,7 @@ export function StoreScorecardView() {
                     <TableHead scope="col" align="right">ตอบแล้ว %</TableHead>
                     <TableHead scope="col" align="right">ตอบใน 24 ชม. % (n)</TableHead>
                     <TableHead scope="col" align="right">อันดับใน partner</TableHead>
+                    <TableHead scope="col" align="right">ความครบของแท็ก</TableHead>
                     {data.hasGoogleResults && <TableHead scope="col">Google Review</TableHead>}
                   </tr>
                 </TableHeader>
@@ -162,6 +165,7 @@ export function StoreScorecardView() {
                         <TableCell align="right" numeric><RateCell value={row.replyRate} delta={row.replyRateDelta} target={REPLIED_RATE_TARGET} /></TableCell>
                         <TableCell align="right" numeric><RateCell value={row.rate24} delta={row.rate24Delta} target={RATE24_TARGET} showN /></TableCell>
                         <TableCell align="right"><PartnerRank row={row} /></TableCell>
+                        <TableCell align="right"><TagCoverageCell counts={data.tagCoverageByStore.get(row.storeId)} /></TableCell>
                         {data.hasGoogleResults && <TableCell><ReviewCell result={reviews.get(row.storeId) ?? null} /></TableCell>}
                       </TableRow>
                     );
