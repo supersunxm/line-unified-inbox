@@ -6361,3 +6361,13 @@ Live worker continues independently at 146 configured unique active OA identitie
 - Updated the public rule panel and added `docs/review15-word-count-rule-v3.md`.
 - No database migration and no change to non-word-count Google Review qualification conditions.
 - Verification status: implementation complete on `fix/review15-word-rule-v3`; CI and production verification pending before merge.
+
+## 2026-10-07 — Review 15-word rule V4 second-audit repair
+
+- Second production screenshot audit found three over-segmented compounds: `คำแนะนำ`, `ของแถม`, and `ใช้บริการ`.
+- Bumped canonical counter to `THAI_REVIEW_WORDS_V4` and added those terms to the protected lexicon.
+- Updated the V3 regression that previously expected `ของ / แถม`.
+- Added exact context fixtures plus the full audited sentence, now locked at 38 final business words.
+- Updated the public rule explanation and added `docs/review15-word-count-rule-v4.md`.
+- No database migration and no change to Google Review photo/month/edited qualification conditions.
+- Verification status: implementation complete on `fix/review15-word-rule-v4`; CI pending before merge.
