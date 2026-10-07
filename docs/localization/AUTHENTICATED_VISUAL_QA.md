@@ -36,7 +36,8 @@
 | Coupons | BLOCKED_SAFE_ACTION | BLOCKED_SAFE_ACTION | BLOCKED_SAFE_ACTION | BLOCKED_SAFE_ACTION | BLOCKED_SAFE_ACTION | BLOCKED_SAFE_ACTION | BLOCKED_SAFE_ACTION |
 | Friend-source pages | PASS | PASS | PASS | PASS | PASS | PASS | PASS |
 | Download Center | BLOCKED_SAFE_ACTION | BLOCKED_SAFE_ACTION | BLOCKED_SAFE_ACTION | BLOCKED_SAFE_ACTION | BLOCKED_SAFE_ACTION | BLOCKED_SAFE_ACTION | BLOCKED_SAFE_ACTION |
-| Login / auth pages | PASS | PASS | PASS | PASS | PASS | PASS | PASS |
+| Login page (visual only) | PASS | PASS | PASS | PASS | PASS | PASS | PASS |
+| Other authenticated auth pages beyond login | BLOCKED_SAFE_ACTION | BLOCKED_SAFE_ACTION | BLOCKED_SAFE_ACTION | BLOCKED_SAFE_ACTION | BLOCKED_SAFE_ACTION | BLOCKED_SAFE_ACTION | BLOCKED_SAFE_ACTION |
 | Forced password reset | BLOCKED_SAFE_ACTION | BLOCKED_SAFE_ACTION | BLOCKED_SAFE_ACTION | BLOCKED_SAFE_ACTION | BLOCKED_SAFE_ACTION | BLOCKED_SAFE_ACTION | BLOCKED_SAFE_ACTION |
 
 ## Language switching
@@ -44,7 +45,7 @@
 - The real application language selector was used in authenticated pages: Thai → English → Simplified Chinese → Thai.
 - Visible copy changed immediately; the current route remained open and no logout occurred.
 - In Inbox, the month query/filter and selected conversation query remained through switching. Refresh restored the saved locale.
-- Login-page switching also retained `/login`; no form was submitted.
+- Login-page switching also retained `/login`; no form was submitted and no input values were read. Other authentication flows were not opened.
 - Coupon desktop locale synchronization was defective on the deployed baseline and is fixed in PR #513; persistence and immediate switching there still require post-deployment verification.
 - Selected-store preservation was not established across the inspected routes.
 
