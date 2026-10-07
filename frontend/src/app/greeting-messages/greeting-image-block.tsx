@@ -181,7 +181,7 @@ export function GreetingImageBlock({
             <div className="relative w-28 h-28 shrink-0 rounded bg-gray-200 overflow-hidden border border-gray-300">
               <img
                 src={block.imageUrl || block.previewUrl || ""}
-                alt="Greeting block"
+                alt={t.greetingBlockAlt}
                 className="w-full h-full object-cover"
               />
             </div>

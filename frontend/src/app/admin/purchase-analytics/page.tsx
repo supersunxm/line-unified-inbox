@@ -5,20 +5,14 @@ import { AuthorizedSection } from "../../authorized-workspace";
 import { LegacyI18nBoundary } from "../../legacy-i18n-boundary";
 import { pickLanguageText, useAppLanguage } from "../../language";
 import PurchaseIntelligenceDashboard from "./purchase-intelligence-dashboard";
-import { purchaseAnalyticsPhrases, purchaseAnalyticsTemplates } from "./purchase-analytics-i18n";
+import { purchaseAnalyticsLoadingText, purchaseAnalyticsPhrases, purchaseAnalyticsTemplates } from "./purchase-analytics-i18n";
 import { MobilePurchaseAnalyticsApp } from "./mobile-purchase-analytics-app";
 
 type ViewportMode = "loading" | "mobile" | "desktop";
 
-const loadingText = {
-  th: { opening: "กำลังเปิดข้อมูลการซื้อ..." },
-  en: { opening: "Opening purchase intelligence..." },
-  zh: { opening: "正在打开购买数据分析..." },
-};
-
 export default function PurchaseAnalyticsPage() {
   const { language } = useAppLanguage();
-  const t = pickLanguageText(language, loadingText);
+  const t = pickLanguageText(language, purchaseAnalyticsLoadingText);
   const [mode, setMode] = useState<ViewportMode>("loading");
 
   useEffect(() => {

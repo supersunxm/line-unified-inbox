@@ -499,7 +499,7 @@ export function TrendChart({
                       </div>
                       {activeSelectedIds.length === 1 && row && (
                         <div className="mt-1 flex items-center justify-between gap-4 border-t border-[var(--border)] pt-1">
-                          <span className="text-[var(--muted)]">{language === "th" ? "เพิ่มขึ้นวันนี้" : "Daily change"}:</span>
+                          <span className="text-[var(--muted)]">{language === "th" ? "เพิ่มขึ้นวันนี้" : language === "zh" ? "每日变化" : "Daily change"}:</span>
                           <span className={dailyChangeClass(row.dailyIncrease)}>{formatSigned(row.dailyIncrease)}</span>
                         </div>
                       )}
@@ -546,14 +546,14 @@ export function TrendChart({
           <div className="flex flex-col gap-2 border-b border-[var(--border)] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h4 className="text-sm font-semibold text-[var(--foreground)]">
-                {language === "th" ? "การเปลี่ยนแปลงรายวันของสาขา" : "Store daily changes"}
+                {language === "th" ? "การเปลี่ยนแปลงรายวันของสาขา" : language === "zh" ? "门店每日变化" : "Store daily changes"}
               </h4>
               <p className="mt-0.5 text-xs text-[var(--muted)]">
                 {singleSelectedStore ? `${singleSelectedStore.storeName} · ${singleSelectedStore.accountName}` : activeSelectedIds[0]}
               </p>
             </div>
             <span className="w-fit rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-400">
-              {language === "th" ? `${singleStoreDailyRows.length} วัน` : `${singleStoreDailyRows.length} days`}
+              {language === "th" ? `${singleStoreDailyRows.length} วัน` : language === "zh" ? `${singleStoreDailyRows.length} 天` : `${singleStoreDailyRows.length} days`}
             </span>
           </div>
 
@@ -568,12 +568,12 @@ export function TrendChart({
               <table className="w-full min-w-[720px] text-left text-sm">
                 <thead className="sticky top-0 z-10 border-b border-[var(--border)] bg-[var(--surface-elevated)] text-xs text-[var(--muted)]">
                   <tr>
-                    <th className="px-4 py-3 font-medium">{language === "th" ? "วันที่" : "Date"}</th>
+                    <th className="px-4 py-3 font-medium">{language === "th" ? "วันที่" : language === "zh" ? "日期" : "Date"}</th>
                     <th className="px-4 py-3 text-right font-medium">{t.followers}</th>
-                    <th className="px-4 py-3 text-right font-medium">{language === "th" ? "เพิ่ม/ลดวันนี้" : "Daily change"}</th>
+                    <th className="px-4 py-3 text-right font-medium">{language === "th" ? "เพิ่ม/ลดวันนี้" : language === "zh" ? "每日增减" : "Daily change"}</th>
                     <th className="px-4 py-3 text-right font-medium">{t.targetedReach}</th>
                     <th className="px-4 py-3 text-right font-medium">{t.blocks}</th>
-                    <th className="px-4 py-3 text-center font-medium">{language === "th" ? "ข้อมูล" : "Data"}</th>
+                    <th className="px-4 py-3 text-center font-medium">{language === "th" ? "ข้อมูล" : language === "zh" ? "数据" : "Data"}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[var(--border)]">
@@ -589,11 +589,11 @@ export function TrendChart({
                         <td className="px-4 py-3 text-right tabular-nums">{row.blocks?.toLocaleString() ?? "—"}</td>
                         <td className="px-4 py-3 text-center">
                           {ready ? (
-                            <span className="inline-flex rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-xs font-medium text-emerald-700 dark:text-emerald-400">{language === "th" ? "ครบ" : "Ready"}</span>
+                            <span className="inline-flex rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-xs font-medium text-emerald-700 dark:text-emerald-400">{language === "th" ? "ครบ" : language === "zh" ? "完整" : "Ready"}</span>
                           ) : partial ? (
-                            <span className="inline-flex rounded-full bg-amber-500/10 px-2.5 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-400">{language === "th" ? "บางส่วน" : "Partial"}</span>
+                            <span className="inline-flex rounded-full bg-amber-500/10 px-2.5 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-400">{language === "th" ? "บางส่วน" : language === "zh" ? "部分" : "Partial"}</span>
                           ) : (
-                            <span className="inline-flex rounded-full bg-rose-500/10 px-2.5 py-0.5 text-xs font-medium text-rose-700 dark:text-rose-400">{language === "th" ? "ไม่มีข้อมูล" : "No data"}</span>
+                            <span className="inline-flex rounded-full bg-rose-500/10 px-2.5 py-0.5 text-xs font-medium text-rose-700 dark:text-rose-400">{language === "th" ? "ไม่มีข้อมูล" : language === "zh" ? "无数据" : "No data"}</span>
                           )}
                         </td>
                       </tr>
@@ -607,7 +607,9 @@ export function TrendChart({
           <div className="border-t border-[var(--border)] px-4 py-3 text-xs text-[var(--muted)]">
             {language === "th"
               ? "ค่าเพิ่ม/ลดใช้ข้อมูลรายวันจาก LINE OA โดยตรง หากวันใดไม่มีข้อมูล ระบบจะแสดง — และไม่คำนวณข้ามวัน"
-              : "Daily change uses LINE OA daily data directly. Missing dates show — and are not bridged across gaps."}
+              : language === "zh"
+                ? "每日增减直接使用 LINE OA 的每日数据。缺失日期显示为 —，不会跨日期补算。"
+                : "Daily change uses LINE OA daily data directly. Missing dates show — and are not bridged across gaps."}
           </div>
         </div>
       )}

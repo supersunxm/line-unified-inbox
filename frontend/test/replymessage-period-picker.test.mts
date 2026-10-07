@@ -11,8 +11,9 @@ test("replymessage remains dashboard-authorized and opens the selected store cha
   assert.match(pageCode, /window\.location\.href = `\/chats\?store=\$\{encodeURIComponent\(storeId\)\}`/);
 });
 
-test("24h response panel uses the shared Thai period picker and preserves API dates", () => {
-  assert.match(panelCode, /<UnifiedPeriodPicker[\s\S]*language="th"/);
+test("24h response panel uses the shared period picker in the selected language and preserves API dates", () => {
+  assert.match(panelCode, /const \{ language \} = useAppLanguage\(\);/);
+  assert.match(panelCode, /<UnifiedPeriodPicker[\s\S]*language=\{language\}/);
   assert.match(panelCode, /new URLSearchParams\(\{ dateFrom: range\.dateFrom, dateTo: range\.dateTo \}\)/);
   assert.match(panelCode, /\/dashboard\/store-24h-response-summary\?\$\{params\.toString\(\)\}/);
   assert.doesNotMatch(panelCode, /type="date"/);

@@ -3,12 +3,14 @@
 import { useEffect, useState } from "react";
 import { messageMediaUrl } from "@/lib/api";
 import type { ApiConversation } from "@/types/api";
+import { useAppLanguage } from "./language";
+import { getSharedUiText } from "./shared-ui-i18n";
 
 type Media = ApiConversation["messages"][number]["media"];
 
-function statusLabel(media: Media, unavailableLabel: string, errorLabel: string): string | null {
+function statusLabel(media: Media, unavailableLabel: string, errorLabel: string, preparingLabel: string): string | null {
   if (!media) return unavailableLabel;
-  if (media.processingStatus === "PENDING") return "กำลังเตรียมไฟล์...";
+  if (media.processingStatus === "PENDING") return preparingLabel;
   if (media.processingStatus === "FAILED") return errorLabel;
   if (media.processingStatus === "SKIPPED") return unavailableLabel;
   return null;
@@ -21,6 +23,8 @@ export function MessageVideo({
   messageId: string;
   media: Media;
 }) {
+  const { language } = useAppLanguage();
+  const text = getSharedUiText(language);
   const [source, setSource] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
 
@@ -46,10 +50,10 @@ export function MessageVideo({
   }, [media?.processingStatus, messageId]);
 
   const label = failed
-    ? "โหลดวิดีโอไม่สำเร็จ"
-    : statusLabel(media, "วิดีโอไม่ได้ถูกจัดเก็บ", "โหลดวิดีโอไม่สำเร็จ");
+    ? text.videoLoadFailed
+    : statusLabel(media, text.videoUnavailable, text.videoLoadFailed, text.preparingMedia);
   if (label) return <div className="message-image-placeholder">{label}</div>;
-  if (!source) return <div className="message-image-skeleton animate-pulse" aria-label="กำลังโหลดวิดีโอ" />;
+  if (!source) return <div className="message-image-skeleton animate-pulse" role="status" aria-label={text.loading} />;
 
   return (
     <video
@@ -71,9 +75,11 @@ export function MessageFileAttachment({
   media: Media;
   fileName: string | null;
 }) {
+  const { language } = useAppLanguage();
+  const text = getSharedUiText(language);
   const [downloading, setDownloading] = useState(false);
   const [failed, setFailed] = useState(false);
-  const label = statusLabel(media, "ไฟล์ไม่ได้ถูกจัดเก็บ", "โหลดไฟล์ไม่สำเร็จ");
+  const label = statusLabel(media, text.fileUnavailable, text.fileLoadFailed, text.preparingMedia);
 
   if (label) return <div className="message-image-placeholder">{label}</div>;
 
@@ -108,9 +114,9 @@ export function MessageFileAttachment({
     >
       <span aria-hidden>📎</span>
       <span className="min-w-0">
-        <span className="block truncate font-semibold">{fileName?.trim() || "ไฟล์แนบ"}</span>
+        <span className="block truncate font-semibold">{fileName?.trim() || text.attachment}</span>
         <span className="block text-xs opacity-70">
-          {failed ? "ดาวน์โหลดไม่สำเร็จ ลองอีกครั้ง" : downloading ? "กำลังดาวน์โหลด..." : "กดเพื่อดาวน์โหลด"}
+          {failed ? text.downloadRetry : downloading ? text.downloading : text.clickToDownload}
         </span>
       </span>
     </button>

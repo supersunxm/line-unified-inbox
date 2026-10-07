@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { LegacyI18nBoundary } from "../../legacy-i18n-boundary";
 import { TikTokCallbackStatus } from "./tiktok-callback-validator";
+import { tiktokCallbackPhrases } from "./tiktok-callback-i18n";
 
 interface TikTokCallbackViewProps {
   status: TikTokCallbackStatus;
@@ -10,6 +12,7 @@ interface TikTokCallbackViewProps {
 
 export function TikTokCallbackView({ status, errorMessage }: TikTokCallbackViewProps) {
   return (
+    <LegacyI18nBoundary phrases={tiktokCallbackPhrases} showControl={false}>
     <div className="flex min-h-screen flex-col bg-slate-50 text-slate-900 transition-colors duration-150 dark:bg-[#0b0d11] dark:text-slate-100">
       {/* Top Header Bar */}
       <header className="border-b border-slate-200 bg-white/90 backdrop-blur-md dark:border-slate-800 dark:bg-[#12151c]/90">
@@ -361,5 +364,6 @@ export function TikTokCallbackView({ status, errorMessage }: TikTokCallbackViewP
         <p>© {new Date().getFullYear()} OPPO Retail Operations. All rights reserved.</p>
       </footer>
     </div>
+    </LegacyI18nBoundary>
   );
 }

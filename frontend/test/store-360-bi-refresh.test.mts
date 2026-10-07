@@ -14,7 +14,7 @@ test("Store 360 Phase 1 uses the approved BI information hierarchy", () => {
   }
   assert.match(viewCode, /grid-cols-3/);
   assert.match(viewCode, /xl:grid-cols-6/);
-  const row3 = viewCode.indexOf("<BusinessPerformance summary={summary} /><CustomerVoicePanel");
+  const row3 = viewCode.indexOf("<BusinessPerformance summary={summary} language={language} /><CustomerVoicePanel");
   assert.ok(row3 >= 0 && row3 < viewCode.indexOf("<SalesPerformance summary={summary} />", row3), "Row 3 should place Sales Performance beside Business Performance and Customer Voice");
   const row4 = viewCode.indexOf("headingId=\"response-performance-title\"");
   assert.ok(row4 >= 0 && row4 < viewCode.indexOf("<ResponderList responders={responders}", row4) && row4 < viewCode.indexOf("<ConversationExplorer conversations=", row4), "Row 4 should keep response, team, and explorer together");

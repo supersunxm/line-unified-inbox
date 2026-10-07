@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import {
   BROWSER_BUSY_HELP_TEXT,
   BROWSER_STATUS_HELP_TEXT,
+  getBrowserStatusHelpText,
   getBrowserOperationLabel,
   getBrowserStateLabel,
   getBrowserStateTone,
@@ -164,7 +165,9 @@ test("LINE Chat health renders independent Session and Browser states with tempo
   assert.match(viewSource, /Browser state/);
   assert.match(viewSource, /sessionBrowserLabel\(session\)/);
   assert.match(viewSource, /browserState/);
-  assert.match(viewSource, /สถานะ Session แสดงการเชื่อมต่อ LINE/);
+  assert.match(viewSource, /getBrowserStatusHelpText\(language\)/);
+  assert.match(getBrowserStatusHelpText("en"), /Session status shows the LINE connection/);
+  assert.match(getBrowserStatusHelpText("zh"), /Session 状态表示 LINE 连接情况/);
   assert.equal(
     BROWSER_STATUS_HELP_TEXT,
     "สถานะ Session แสดงการเชื่อมต่อ LINE\nสถานะ Browser แสดงว่า Chromium Profile พร้อมรับงานใหม่หรือกำลังถูกใช้งาน",

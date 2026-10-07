@@ -12,6 +12,7 @@ const translations = {
     readOnlyNotice: "การเชื่อมต่อนี้เป็นแบบอ่านอย่างเดียว (Read-only) ระบบจะไม่โพสต์ แก้ไข หรือลบคอนเทนต์ใดๆ บน TikTok",
     displayName: "ชื่อบัญชี TikTok",
     linkedStore: "สาขาร้านค้าที่เชื่อมโยง",
+    linkedStatus: "เชื่อมโยงแล้ว",
     storeNotBound: "ยังไม่ได้เชื่อมโยงกับสาขา (Unassigned / Pending Store Association)",
     storeNotBoundDesc: "บัญชีได้รับการอนุญาตเรียบร้อยแล้ว โดยผู้ดูแลระบบหรือเจ้าหน้าที่สาขาสามารถทำการผูกบัญชีเข้ากับสาขาได้ในระบบจัดการ",
     followers: "ผู้ติดตาม",
@@ -31,6 +32,7 @@ const translations = {
     readOnlyNotice: "This connection is strictly read-only. The system will never post, edit, or delete any content on TikTok.",
     displayName: "TikTok Display Name",
     linkedStore: "Linked Store",
+    linkedStatus: "Linked",
     storeNotBound: "Unassigned / Pending Store Association",
     storeNotBoundDesc: "The TikTok account is successfully verified. Authorized staff can associate it with a store in the administration workspace.",
     followers: "Followers",
@@ -50,6 +52,7 @@ const translations = {
     readOnlyNotice: "此连接为严格只读模式。系统绝不会在 TikTok 上发布、修改或删除任何内容。",
     displayName: "TikTok 显示名称",
     linkedStore: "已关联门店",
+    linkedStatus: "已关联",
     storeNotBound: "待关联门店 (Unassigned / Pending Store Association)",
     storeNotBoundDesc: "该 TikTok 账户已成功验证。经授权的管理人员可以在后台将其与指定门店进行关联。",
     followers: "关注者",
@@ -215,7 +218,7 @@ export function TikTokConnectSuccessContent({
                     {storeName}
                   </span>
                   <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
-                    ✓ เชื่อมโยงแล้ว
+                    ✓ {t.linkedStatus}
                   </span>
                 </div>
               ) : (

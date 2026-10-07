@@ -2,6 +2,8 @@
 
 import { createContext, useContext, useEffect, useState, useSyncExternalStore } from "react";
 import type { ReactNode } from "react";
+import { useAppLanguage } from "./language";
+import { themeControlLabels } from "./theme-i18n";
 import {
   applyThemeToRoot,
   loadTheme,
@@ -92,6 +94,8 @@ export function useThemeToggle(): { shown: ResolvedTheme; toggle: () => void } {
 export function ThemeControl({ compact = false }: { compact?: boolean }) {
   const context = useContext(ThemeContext);
   if (!context) throw new Error("ThemeControl must be used inside ThemeProvider");
+  const { language } = useAppLanguage();
+  const text = themeControlLabels[language];
 
   const icons: Record<ThemePreference, string> = {
     light: "☀",
@@ -101,18 +105,18 @@ export function ThemeControl({ compact = false }: { compact?: boolean }) {
 
   return (
     <label className={`theme-control ${compact ? "theme-control--compact" : ""}`}>
-      <span className="sr-only">Theme</span>
+      <span className="sr-only">{text.theme}</span>
       <span aria-hidden="true" className="theme-control__icon">
         {icons[context.theme]}
       </span>
       <select
-        aria-label="Choose color theme"
+        aria-label={text.choose}
         value={context.theme}
         onChange={(event) => context.setTheme(event.target.value as ThemePreference)}
       >
-        <option value="light">Light</option>
-        <option value="dark">Dark</option>
-        <option value="system">System</option>
+        <option value="light">{text.light}</option>
+        <option value="dark">{text.dark}</option>
+        <option value="system">{text.system}</option>
       </select>
     </label>
   );

@@ -65,6 +65,7 @@ export type FollowerInsightsTranslations = {
   syncComplete: string;
   syncSummaryResult: (requested: number, succeeded: number, unready: number, failed: number, skipped: number) => string;
   syncingBtn: string;
+  syncErrorLabel: string;
   syncMissingBtnWithCount: (count: number) => string;
   contiguousMissingRanges: string;
   dayUnit: (count: number) => string;
@@ -109,6 +110,12 @@ export type FollowerInsightsTranslations = {
   backfillStatusCompleted: string;
   backfillStatusPartial: string;
   backfillStatusFailed: string;
+  backfillRangeLabel: string;
+  backfillDaysLabel: string;
+  backfillSucceededLabel: string;
+  backfillSkippedLabel: string;
+  backfillFailedLabel: string;
+  backfillDatesUpdated: (count: number) => string;
 };
 
 export const followerInsightsTranslations: Record<Language, FollowerInsightsTranslations> = {
@@ -179,6 +186,7 @@ export const followerInsightsTranslations: Record<Language, FollowerInsightsTran
     syncSummaryResult: (requested, succeeded, unready, failed, skipped) =>
       `คำขอ: ${requested} | สำเร็จ: ${succeeded} | ยังไม่พร้อม: ${unready} | ล้มเหลว: ${failed} | ข้าม: ${skipped}`,
     syncingBtn: "กำลังดึงข้อมูล...",
+    syncErrorLabel: "ซิงก์ข้อมูลไม่สำเร็จ:",
     syncMissingBtnWithCount: (count) => `ดึงข้อมูลวันที่ขาด (${count})`,
     contiguousMissingRanges: "ช่วงวันที่ขาดหายต่อเนื่อง",
     dayUnit: (count) => `${count} วัน`,
@@ -221,6 +229,12 @@ export const followerInsightsTranslations: Record<Language, FollowerInsightsTran
     backfillStatusCompleted: "ดึงข้อมูลย้อนหลังสำเร็จ",
     backfillStatusPartial: "ดึงข้อมูลย้อนหลังสำเร็จบางส่วน",
     backfillStatusFailed: "ดึงข้อมูลย้อนหลังไม่สำเร็จ คลิกเพื่อลองใหม่",
+    backfillRangeLabel: "ช่วงวันที่",
+    backfillDaysLabel: "จำนวนวัน",
+    backfillSucceededLabel: "สำเร็จ",
+    backfillSkippedLabel: "ข้าม",
+    backfillFailedLabel: "ไม่สำเร็จ",
+    backfillDatesUpdated: (count) => `อัปเดตข้อมูลแล้ว ${count} วัน`,
   },
   en: {
     followerInsightsTitle: "Friends",
@@ -289,6 +303,7 @@ export const followerInsightsTranslations: Record<Language, FollowerInsightsTran
     syncSummaryResult: (requested, succeeded, unready, failed, skipped) =>
       `Requested: ${requested} | Succeeded: ${succeeded} | Unready: ${unready} | Failed: ${failed} | Skipped: ${skipped}`,
     syncingBtn: "Syncing...",
+    syncErrorLabel: "Sync error:",
     syncMissingBtnWithCount: (count) => `Sync Missing Dates (${count})`,
     contiguousMissingRanges: "Contiguous Missing Ranges",
     dayUnit: (count) => `${count} day${count === 1 ? "" : "s"}`,
@@ -331,6 +346,12 @@ export const followerInsightsTranslations: Record<Language, FollowerInsightsTran
     backfillStatusCompleted: "Historical backfill completed.",
     backfillStatusPartial: "Historical backfill completed with some errors.",
     backfillStatusFailed: "Historical backfill failed. Click to retry.",
+    backfillRangeLabel: "Range",
+    backfillDaysLabel: "Days",
+    backfillSucceededLabel: "Succeeded",
+    backfillSkippedLabel: "Skipped",
+    backfillFailedLabel: "Failed",
+    backfillDatesUpdated: (count) => `${count} dates updated.`,
   },
   zh: {
     followerInsightsTitle: "关注者洞察",
@@ -399,6 +420,7 @@ export const followerInsightsTranslations: Record<Language, FollowerInsightsTran
     syncSummaryResult: (requested, succeeded, unready, failed, skipped) =>
       `请求: ${requested} | 成功: ${succeeded} | 未就绪: ${unready} | 失败: ${failed} | 跳过: ${skipped}`,
     syncingBtn: "同步中...",
+    syncErrorLabel: "同步错误：",
     syncMissingBtnWithCount: (count) => `同步缺失日期 (${count})`,
     contiguousMissingRanges: "连续缺失范围",
     dayUnit: (count) => `${count} 天`,
@@ -441,6 +463,12 @@ export const followerInsightsTranslations: Record<Language, FollowerInsightsTran
     backfillStatusCompleted: "历史数据回填完成。",
     backfillStatusPartial: "历史数据回填完成，但部分日期失败。",
     backfillStatusFailed: "历史数据回填失败，点击重试。",
+    backfillRangeLabel: "日期范围",
+    backfillDaysLabel: "天数",
+    backfillSucceededLabel: "成功",
+    backfillSkippedLabel: "已跳过",
+    backfillFailedLabel: "失败",
+    backfillDatesUpdated: (count) => `已更新 ${count} 天。`,
   },
 };
 

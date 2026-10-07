@@ -813,7 +813,7 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
               onClick={loadCapabilities}
               className="text-[11px] font-bold text-amber-900 dark:text-amber-100 underline hover:no-underline"
             >
-              Check Again
+              {t.checkAgain}
             </button>
           </div>
         )}
@@ -934,31 +934,31 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
             {/* Status Breakdown Pills */}
             <div className="flex flex-wrap gap-2 pt-1 text-[11px]">
               <span className="rounded bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 px-2.5 py-1 font-semibold">
-                ✓ Published: {activeJob.publishedCount}
+                ✓ {t.publishedLabel} {activeJob.publishedCount}
               </span>
               {activeJob.processingCount > 0 && (
                 <span className="rounded bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 px-2.5 py-1 font-semibold animate-pulse">
-                  ⚡ Processing: {activeJob.processingCount}
+                  ⚡ {t.processingLabel} {activeJob.processingCount}
                 </span>
               )}
               {activeJob.pendingCount > 0 && (
                 <span className="rounded bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 px-2.5 py-1 font-semibold">
-                  ⏳ Pending: {activeJob.pendingCount}
+                  ⏳ {t.pendingLabel} {activeJob.pendingCount}
                 </span>
               )}
               {activeJob.failedCount > 0 && (
                 <span className="rounded bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 px-2.5 py-1 font-semibold">
-                  ✖ Failed: {activeJob.failedCount}
+                  ✖ {t.failedLabel} {activeJob.failedCount}
                 </span>
               )}
               {activeJob.skippedCount > 0 && (
                 <span className="rounded bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 px-2.5 py-1 font-semibold">
-                  ⏭ Skipped: {activeJob.skippedCount}
+                  ⏭ {t.skippedLabel} {activeJob.skippedCount}
                 </span>
               )}
               {activeJob.cancelledCount > 0 && (
                 <span className="rounded bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 px-2.5 py-1 font-semibold">
-                  🚫 Cancelled: {activeJob.cancelledCount}
+                  🚫 {t.cancelledLabel} {activeJob.cancelledCount}
                 </span>
               )}
             </div>
@@ -1277,7 +1277,7 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
                               {letter}
                             </span>
                             <span className="text-xs font-bold text-gray-800 dark:text-gray-200">
-                              Area {letter} ({area.bounds.width} × {area.bounds.height} px)
+                              {t.areaLabel} {letter} ({area.bounds.width} × {area.bounds.height} px)
                             </span>
                           </div>
 
@@ -1384,12 +1384,12 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
                                     <span className="rounded bg-gray-200/60 dark:bg-gray-800 px-1.5 py-0.5 text-[10px] font-medium text-gray-600 dark:text-gray-400">
                                       {hasImage && "🖼 "}
                                       {firstText && "💬 "}
-                                      {messageCount} ข้อความ
+                                      {t.messageCount(messageCount)}
                                     </span>
                                   </div>
                                   {isInactive && (
                                     <p className="text-[10px] text-amber-600 dark:text-amber-400 font-semibold">
-                                      ⚠ ข้อความนี้ยังไม่ได้เปิดใช้งาน (ปุ่มนี้จะไม่ตอบกลับจนกว่าจะเปิดใช้งาน)
+                                      {t.inactiveMessageNotice}
                                     </p>
                                   )}
                                   <div>
@@ -1811,7 +1811,7 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
                                   {t.statusFailed}
                                 </span>
                                 {store.lastPublishErrorStage && (
-                                  <span className="text-[10px] text-rose-500">ขั้นตอน: {store.lastPublishErrorStage}</span>
+                                  <span className="text-[10px] text-rose-500">{t.stageLabel} {store.lastPublishErrorStage}</span>
                                 )}
                                 {store.lastPublishError && (
                                   <span
@@ -1840,7 +1840,7 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
                                   {t.statusSkipped}
                                 </span>
                                 {store.lastPublishErrorStage && (
-                                  <span className="text-[10px] text-amber-500">ขั้นตอน: {store.lastPublishErrorStage}</span>
+                                  <span className="text-[10px] text-amber-500">{t.stageLabel} {store.lastPublishErrorStage}</span>
                                 )}
                                 {store.lastPublishError && (
                                   <span
@@ -2090,7 +2090,7 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
                 </div>
 
                 <div className="text-gray-500 font-semibold pt-1">
-                  {`Target Stores (${publishTargetItems.length}):`}
+                  {`${RICH_MENU_I18N[language].targetStores} (${publishTargetItems.length}):`}
                 </div>
                 <div className="max-h-40 overflow-y-auto space-y-1.5 pr-1">
                   {publishTargetItems.map((store, idx) => (
@@ -2235,7 +2235,7 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
               )}
 
               <div className="rounded-lg border border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-950/30 p-3 text-amber-800 dark:text-amber-300 text-[11px] leading-relaxed">
-                <span className="font-semibold">💡 หมายเหตุ: </span>
+                <span className="font-semibold">{t.noteLabel} </span>
                 {t.clearDefaultOaManagerNotice}
               </div>
             </div>

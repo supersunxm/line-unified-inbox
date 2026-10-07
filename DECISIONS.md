@@ -3349,3 +3349,27 @@ Reuse ADMIN and preserve VIEWER store/BM/PC semantics; add ASSISTANT for HQ oper
 Role changes preserve unrelated persisted grants, passwords and sessions, and write the existing audit table atomically with the role update. A shared transaction advisory lock serializes final-admin demotion/deactivation checks; revalidate the actor under that lock to prevent a stale administrator request. Preserve the existing stronger self-deactivation prohibition.
 
 Separate business-data exports from inline message media, operational single-attachment handling and public APK installation assets. Preserve normal rendering and LINE recipients. Reviewed globally scoped operational reads are available to all-store HQ Assistant; administrator configuration/account mutations remain restricted. Do not claim visible browser data cannot be copied.
+
+## 2026-10-07 — Localization coverage boundary
+
+Reuse th/en/zh and LanguageProvider/pickLanguageText; keep routing and stored language behavior. Migrate new UI copy directly in React with complete feature dictionaries and parameterized sentences. Preserve Thai review examples, customer/OCR/store data and business-calculation inputs. Do not add a global DOM translation observer or infer translations for arbitrary backend text. Work from latest main in an isolated checkout to preserve unrelated local changes.
+
+## 2026-10-07 — Localization boundary scope
+
+Decision: use direct locale-aware React resources for Review15 and V2, and the existing phrase/template boundary only for bounded static public pages and TikTok connection copy. Do not create a product-wide DOM replacement map.
+
+Rationale:
+- Phrase boundaries can translate exact rendered copy without changing route/query behavior, which is useful for the existing public-page presentation.
+- A global exact-string observer could rewrite customer messages, OCR text, store names, or other Thai content that happens to match a short UI label.
+- Protected application views need route-specific contextual review and authenticated browser QA before a phrase can be marked covered.
+
+For latest-main routes added during integration, keep localization route-owned. HQ account-management labels derive from the current app language while permission booleans remain owned by the existing role policy. Generic password-reset network failures use localized fallback copy, while meaningful API-provided messages remain intact. This changes presentation only and avoids altering authentication or authorization behavior.
+
+## 2026-10-07 — Public store-locator labels stay at the presentation boundary
+
+Decision: localize the locator's fixed step labels, region names, counts, and empty/error copy from route-owned locale resources. Keep the store API's province names, store names, search inputs, and analytics values unchanged.
+
+Rationale:
+- Region identifiers have a finite canonical set and can be formatted for the current display language without changing the underlying filter or URL value.
+- Store/province names and visitor search text are data, not interface copy, so translating them would alter user-provided or business-supplied content.
+- The exact API error fallback must use the route dictionary because it is rendered from state rather than as a direct JSX text node.

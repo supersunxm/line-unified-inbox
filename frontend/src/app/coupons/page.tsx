@@ -40,7 +40,9 @@ export default function CouponsPage() {
           <MobileCouponsApp />
         </LegacyI18nBoundary>
       ) : (
-        <CouponManagerAlignedView />
+        <LegacyI18nBoundary phrases={couponPhrases} templates={couponTemplates}>
+          <CouponManagerAlignedView />
+        </LegacyI18nBoundary>
       )}
     </AuthorizedSection>
   );

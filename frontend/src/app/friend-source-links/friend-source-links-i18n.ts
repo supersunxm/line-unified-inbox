@@ -1,6 +1,20 @@
 import type { LegacyI18nPhrase, LegacyI18nTemplate } from "../legacy-i18n-boundary";
 
 export const friendSourceLinksPhrases: LegacyI18nPhrase[] = [
+  { th: "ลิงก์แหล่งที่มาของเพื่อน", en: "Friend Source Links", zh: "好友来源链接" },
+  { th: "ลิงก์แหล่งที่มา", en: "Source Links", zh: "来源链接" },
+  { th: "พร้อมใช้งาน", en: "READY", zh: "就绪" },
+  { th: "ยังไม่ได้ตั้งค่า", en: "SETUP", zh: "尚未设置" },
+  { th: "Channel:", en: "Channel:", zh: "渠道：" },
+  { th: "· LIFF:", en: "· LIFF:", zh: "· LIFF：" },
+  { th: "การเติบโต · ที่มาของเพื่อน", en: "Growth · Friend Attribution", zh: "增长 · 好友来源" },
+  { th: "ลิงก์", en: "Links", zh: "链接" },
+  { th: "ตั้งค่า", en: "Setup", zh: "设置" },
+  { th: "LINE Login Channel ID", en: "LINE Login Channel ID", zh: "LINE Login 渠道 ID" },
+  { th: "LIFF ID", en: "LIFF ID", zh: "LIFF ID" },
+  { th: "เปิด", en: "ON", zh: "开启" },
+  { th: "ปิด", en: "OFF", zh: "关闭" },
+  { th: "เปิดใช้งาน", en: "ACTIVE", zh: "已启用" },
   { th: "กำลังเปิด Friend Source Links...", en: "Opening Friend Source Links...", zh: "正在打开好友来源链接..." },
   { th: "ติดตามว่าเพื่อน LINE มาจาก Store QR, TikTok, Facebook หรือ Instagram", en: "Track whether LINE friends came from Store QR, TikTok, Facebook, or Instagram", zh: "追踪 LINE 好友来自门店二维码、TikTok、Facebook 还是 Instagram" },
   { th: "สร้าง", en: "Generate", zh: "生成" },
@@ -20,6 +34,8 @@ export const friendSourceLinksPhrases: LegacyI18nPhrase[] = [
   { th: "เลือก LINE OA อย่างน้อย 1 บัญชี", en: "Select at least 1 LINE OA", zh: "请至少选择 1 个 LINE OA" },
   { th: "สร้าง Source Links ไม่สำเร็จ", en: "Failed to generate Source Links", zh: "生成来源链接失败" },
   { th: "กรุณาใส่ Channel ID และ LIFF ID", en: "Enter Channel ID and LIFF ID", zh: "请输入 Channel ID 和 LIFF ID" },
+  { th: "เช่น 2007073384-AbCdEfGh", en: "e.g. 2007073384-AbCdEfGh", zh: "例如：2007073384-AbCdEfGh" },
+  { th: "ช่องทาง", en: "Channel", zh: "渠道" },
   { th: "บันทึก Attribution Setup ไม่สำเร็จ", en: "Failed to save Attribution Setup", zh: "保存归因设置失败" },
   { th: "ลบ config ไม่สำเร็จ", en: "Failed to delete config", zh: "删除配置失败" },
   { th: "Traffic by Source", en: "Traffic by Source", zh: "按来源流量" },
@@ -45,6 +61,9 @@ export const friendSourceLinksPhrases: LegacyI18nPhrase[] = [
   { th: "Store Attribution", en: "Store Attribution", zh: "门店归因" },
   { th: "Attribution Setup", en: "Attribution Setup", zh: "归因设置" },
   { th: "Unknown", en: "Unknown", zh: "未知" },
+  { th: "OPPO LINE OA · การตลาดและการติดตามเพื่อน", en: "OPPO LINE OA · Friend marketing and attribution", zh: "OPPO LINE OA · 好友营销与归因" },
+  { th: "ดาวน์โหลดลิงก์จากทุกร้านค้าในระบบ", en: "Download all links across all stores", zh: "下载系统中所有门店的链接" },
+  { th: "ดาวน์โหลดเฉพาะรายการที่ตรงกับตัวกรอง", en: "Download links matching active filters", zh: "仅下载符合当前筛选条件的链接" },
 ];
 
 export const friendSourceLinksTemplates: LegacyI18nTemplate[] = [

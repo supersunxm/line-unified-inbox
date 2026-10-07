@@ -1,3 +1,6 @@
+import { languageLocale, type AppLanguage } from "../../app/language-utils.ts";
+import { v2Text } from "./v2-translations.ts";
+
 // Closed months read their snapshot (GET /v2/month-close/:month); open months read live data.
 // Pure: node --test imports it directly.
 
@@ -61,7 +64,8 @@ export function snapshotRates(response: MonthCloseResponse): RateResponse {
   };
 }
 
-function bangkokDateTime(iso: string): string {
+function bangkokDateTime(iso: string, language: AppLanguage = "th"): string {
+  if (language !== "th") return new Intl.DateTimeFormat(languageLocale(language), { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Bangkok" }).format(new Date(iso));
   const local = new Date(Date.parse(iso) + 7 * 60 * 60 * 1000);
   const hh = String(local.getUTCHours()).padStart(2, "0");
   const mm = String(local.getUTCMinutes()).padStart(2, "0");
@@ -73,12 +77,14 @@ function bangkokDateTime(iso: string): string {
  * "ปิดใหม่ครั้งที่ 2 เมื่อ … โดย … (เหตุผล)", "เดือนนี้ยังไม่ปิด (ข้อมูลถึงวันที่ 7)",
  * or "สิ้นเดือนแล้ว รอปิดอัตโนมัติ 2 พ.ย. 2026 00:00".
  */
-export function closeStatusLabel(close: MonthCloseInfo | null, dueAt: string | null, frame: MonthWindow): string {
+export function closeStatusLabel(close: MonthCloseInfo | null, dueAt: string | null, frame: MonthWindow, language: AppLanguage = "th"): string {
+  const t = v2Text(language);
   if (close) {
-    if (close.revision > 1) return `ปิดใหม่ครั้งที่ ${close.revision} เมื่อ ${bangkokDateTime(close.closedAt)} โดย ${close.actorName}${close.reason ? ` (${close.reason})` : ""}`;
-    if (close.backfill) return `ปิดย้อนหลัง เมื่อ ${bangkokDateTime(close.closedAt)} (ตัวเลข ณ เวลาที่ปิด)`;
-    return `ปิดเดือนแล้ว เมื่อ ${bangkokDateTime(close.closedAt)}`;
+    const date = bangkokDateTime(close.closedAt, language);
+    if (close.revision > 1) return t("reclosed", { revision: close.revision, date, actor: close.actorName, reason: close.reason ? ` (${close.reason})` : "" });
+    if (close.backfill) return t("backfilledClose", { date });
+    return t("closedOn", { date });
   }
-  if (frame.inProgress) return `เดือนนี้ยังไม่ปิด (ข้อมูลถึงวันที่ ${frame.current.lastDay})`;
-  return dueAt ? `สิ้นเดือนแล้ว รอปิดอัตโนมัติ ${bangkokDateTime(dueAt)} · ตัวเลขยังเปลี่ยนได้` : "สิ้นเดือนแล้ว ยังไม่ปิด · ตัวเลขยังเปลี่ยนได้";
+  if (frame.inProgress) return t("openMonth", { day: frame.current.lastDay });
+  return dueAt ? t("autoClosePending", { date: bangkokDateTime(dueAt, language) }) : t("closePending");
 }

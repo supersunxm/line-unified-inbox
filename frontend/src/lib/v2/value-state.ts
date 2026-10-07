@@ -1,3 +1,6 @@
+import { languageLocale, type AppLanguage } from "../../app/language-utils.ts";
+import { v2Text } from "./v2-translations.ts";
+
 // What a v2 number is, so the UI never shows 0 for "unknown" and every "—" has a reason.
 // Pure: node --test imports it directly.
 
@@ -84,17 +87,19 @@ export function meetsSample(state: ValueState): boolean {
 }
 
 /** Why a value is not a plain number, or null when it is. */
-export function valueReason(state: ValueState): string | null {
+export function valueReason(state: ValueState, language: AppLanguage = "th"): string | null {
+  const t = v2Text(language);
+  const reasons = { "no-activity": t("noActivity"), "not-collected": t("notCollected"), failed: t("loadFailed"), "not-applicable": t("notApplicable"), "low-sample": t("lowSample", { count: MIN_RATE_SAMPLE }), stale: t("stale"), loading: t("loadingEllipsis") };
   if (state.kind === "value" || state.kind === "true-zero") return null;
-  if (state.kind === "failed" && state.error) return `${VALUE_REASONS.failed}: ${state.error}`;
+  if (state.kind === "failed" && state.error) return `${reasons.failed}: ${state.error}`;
   if (state.kind === "not-applicable" && state.why) return state.why;
-  if (state.kind === "low-sample") return `${VALUE_REASONS["low-sample"]} (n=${state.n})`;
-  return VALUE_REASONS[state.kind];
+  if (state.kind === "low-sample") return `${reasons["low-sample"]} (n=${state.n})`;
+  return reasons[state.kind];
 }
 
 export type FormattedValue = { text: string; reason: string | null; muted: boolean };
 
-const formatCount = (value: number) => value.toLocaleString("th-TH");
+const formatCount = (value: number, language: AppLanguage) => value.toLocaleString(languageLocale(language));
 const formatPercent = (value: number) => `${value.toFixed(1)}%`;
 
 /**
@@ -102,19 +107,19 @@ const formatPercent = (value: number) => `${value.toFixed(1)}%`;
  * renders "—" with its reason, except low-sample and stale values, which keep the number
  * muted with the reason alongside.
  */
-export function formatValue(state: ValueState, format: "count" | "percent" = "count"): FormattedValue {
-  const text = format === "percent" ? formatPercent : formatCount;
+export function formatValue(state: ValueState, format: "count" | "percent" = "count", language: AppLanguage = "th"): FormattedValue {
+  const text = format === "percent" ? formatPercent : (value: number) => formatCount(value, language);
   switch (state.kind) {
     case "value":
     case "true-zero":
       return { text: text(state.value), reason: null, muted: false };
     case "low-sample":
     case "stale":
-      return { text: text(state.value), reason: valueReason(state), muted: true };
+      return { text: text(state.value), reason: valueReason(state, language), muted: true };
     case "loading":
-      return { text: "…", reason: valueReason(state), muted: true };
+      return { text: "…", reason: valueReason(state, language), muted: true };
     default:
-      return { text: "—", reason: valueReason(state), muted: true };
+      return { text: "—", reason: valueReason(state, language), muted: true };
   }
 }
 

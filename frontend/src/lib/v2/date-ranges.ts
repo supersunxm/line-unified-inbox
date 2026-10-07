@@ -1,3 +1,5 @@
+import { languageLocale, type AppLanguage } from "../../app/language-utils.ts";
+
 // Bangkok date ranges for the 24-hour reply-rate calls. Same windows as the existing
 // 24H Response Rate page (rangeForPreset("7d"): the last 7 days including today).
 
@@ -35,7 +37,8 @@ export function sevenSingleDays(today: string): DateRange[] {
 const THAI_WEEKDAYS = ["อา.", "จ.", "อ.", "พ.", "พฤ.", "ศ.", "ส."];
 
 /** Short Thai weekday for a YYYY-MM-DD key, e.g. "พฤ.". */
-export function thaiWeekday(dateKey: string): string {
+export function thaiWeekday(dateKey: string, language: AppLanguage = "th"): string {
   const [year, month, day] = dateKey.split("-").map(Number);
-  return THAI_WEEKDAYS[new Date(Date.UTC(year, month - 1, day)).getUTCDay()];
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return language === "th" ? THAI_WEEKDAYS[date.getUTCDay()] : new Intl.DateTimeFormat(languageLocale(language), { weekday: "short", timeZone: "Asia/Bangkok" }).format(date);
 }

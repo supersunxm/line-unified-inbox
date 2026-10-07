@@ -55,8 +55,10 @@ const copy = {
     condition: "เงื่อนไขการใช้", stores: "ร้านค้า", all: "ทุกร้าน", selected: "เลือกร้าน", search: "ค้นหาร้าน",
     pilot: "Pilot mode: สร้างได้ครั้งละ 1 ร้านเท่านั้น", full: "Full mode: เลือกหลายร้านหรือทุกร้านได้",
     preview: "ตรวจสอบก่อนสร้าง", previewing: "กำลังตรวจสอบ...", save: "บันทึก / สร้างคูปอง", saving: "กำลังสร้าง...",
+    previewTitle: "ผลการตรวจสอบ", conditionExample: "เช่น ใช้เมื่อซื้อครบ ฿1,000",
     draft: "บันทึกร่าง", draftInfo: "Messaging API ไม่รองรับ Draft", ready: "พร้อมสร้าง", skipped: "ข้าม", total: "ทั้งหมด",
     readiness: "ความพร้อมของร้าน", previewRequired: "ต้อง Preview ล่าสุดก่อนสร้าง", history: "ประวัติคูปอง", noHistory: "ยังไม่มีคูปองที่สร้างจากระบบนี้",
+    campaign: "แคมเปญ", created: "วันที่สร้าง", status: "สถานะ",
     back: "กลับ", retry: "ลองร้านที่ล้มเหลวอีกครั้ง", discontinue: "ยกเลิกคูปอง", adminOnly: "เมนูนี้ใช้งานได้เฉพาะผู้ดูแลระบบ",
     probability: "โอกาสชนะ (%)", winnerLimit: "จำนวนผู้ชนะสูงสุด", clear: "ล้าง",
   },
@@ -73,8 +75,10 @@ const copy = {
     condition: "Conditions for use", stores: "Stores", all: "All Stores", selected: "Select Stores", search: "Search stores",
     pilot: "Pilot mode: exactly one store per campaign", full: "Full mode: multiple stores and All Stores are enabled",
     preview: "Preview before create", previewing: "Previewing...", save: "Save / Create coupon", saving: "Creating...",
+    previewTitle: "Preview", conditionExample: "For purchases of ฿1,000 or more",
     draft: "Save draft", draftInfo: "Drafts aren't supported by the Messaging API", ready: "Ready", skipped: "Skipped", total: "Total",
     readiness: "Store readiness", previewRequired: "Run a fresh preview before creating", history: "Coupon history", noHistory: "No coupon campaigns created from this system yet.",
+    campaign: "Campaign", created: "Created", status: "Status",
     back: "Back", retry: "Retry failed stores", discontinue: "Discontinue coupon", adminOnly: "This tool is available to administrators only.",
     probability: "Winning probability (%)", winnerLimit: "Maximum winners", clear: "Clear",
   },
@@ -91,8 +95,10 @@ const copy = {
     condition: "使用条件", stores: "门店", all: "所有门店", selected: "选择门店", search: "搜索门店",
     pilot: "Pilot 模式：每次只能选择 1 家门店", full: "Full 模式：可选择多家或所有门店",
     preview: "创建前预览", previewing: "检查中...", save: "保存 / 创建优惠券", saving: "创建中...",
+    previewTitle: "预览结果", conditionExample: "例如：消费满 ฿1,000 可用",
     draft: "保存草稿", draftInfo: "Messaging API 不支持草稿", ready: "可创建", skipped: "跳过", total: "总数",
     readiness: "门店准备情况", previewRequired: "创建前必须重新预览", history: "优惠券记录", noHistory: "尚未通过本系统创建优惠券。",
+    campaign: "活动", created: "创建时间", status: "状态",
     back: "返回", retry: "重试失败门店", discontinue: "停用优惠券", adminOnly: "此功能仅限管理员使用。",
     probability: "中奖概率 (%)", winnerLimit: "最多中奖人数", clear: "清除",
   },
@@ -284,7 +290,7 @@ export function CouponManagerAlignedView() {
   const discontinue = async () => { if (!detail) return; if (typeof window !== "undefined" && !window.confirm(`${t.discontinue}?\n${detail.campaign.title}`)) return; setActionLoading(true); setError(null); try { setDetail(await couponApi.discontinue(detail.campaign.id)); } catch (reason) { setError(reason instanceof Error ? reason.message : "Discontinue failed"); } finally { setActionLoading(false); } };
   const logout = async () => { try { await api.logout(); } finally { window.location.replace("/login"); } };
 
-  if (!authChecked) return <main className="app-shell flex min-h-screen items-center justify-center"><p className="app-muted text-sm">Loading…</p></main>;
+  if (!authChecked) return <main className="app-shell flex min-h-screen items-center justify-center"><p className="app-muted text-sm">Loading...</p></main>;
   if (!authUser) return null;
 
   const inputClass = "app-input mt-1.5 w-full rounded-[var(--app-radius-md)] border border-[var(--app-border)] bg-[var(--input-background)] px-3 py-2 text-xs text-[var(--app-text-primary)]";
@@ -439,7 +445,7 @@ export function CouponManagerAlignedView() {
                               setCouponTitle(e.target.value);
                               invalidatePreview();
                             }}
-                            placeholder="Ex: LINE friend exclusive coupon"
+                            placeholder="เช่น ส่วนลดพิเศษเพื่อน LINE"
                             className={inputClass}
                           />
                           <p className="app-muted mt-1 text-right text-[11px] font-tabular">
@@ -782,7 +788,7 @@ export function CouponManagerAlignedView() {
                               setUsageCondition(e.target.value);
                               invalidatePreview();
                             }}
-                            placeholder="Ex: Usable for payments of ฿1,000 or more"
+                            placeholder={t.conditionExample}
                             className={inputClass}
                           />
                           <p className="app-muted mt-1 text-right text-[11px] font-tabular">
@@ -869,7 +875,7 @@ export function CouponManagerAlignedView() {
                 <aside className="space-y-4 xl:sticky xl:top-20 xl:self-start">
                   <Card className="p-5">
                     <h3 className="font-bold text-xs uppercase tracking-wider text-[var(--app-text-primary)]">
-                      Preview
+                      {t.previewTitle}
                     </h3>
                     {preview ? (
                       <div className="mt-4 grid grid-cols-3 gap-2">
@@ -971,16 +977,16 @@ export function CouponManagerAlignedView() {
                   </Button>
                 </div>
                 {campaignsLoading ? (
-                  <p className="p-8 text-center text-xs text-[var(--app-text-secondary)]">Loading…</p>
+                  <p className="p-8 text-center text-xs text-[var(--app-text-secondary)]">Loading...</p>
                 ) : campaigns.length === 0 ? (
                   <TableEmptyState colSpan={3} message={t.noHistory} />
                 ) : (
                   <Table>
                     <TableHeader>
                       <tr>
-                        <TableHead>Campaign</TableHead>
-                        <TableHead>Created</TableHead>
-                        <TableHead align="right">Status</TableHead>
+                        <TableHead>{t.campaign}</TableHead>
+                        <TableHead>{t.created}</TableHead>
+                        <TableHead align="right">{t.status}</TableHead>
                       </tr>
                     </TableHeader>
                     <TableBody>
@@ -1069,7 +1075,7 @@ export function CouponManagerAlignedView() {
                         </Badge>
                         {store.lineCouponId && (
                           <code className="text-[11px] text-[var(--app-text-tertiary)] font-mono sm:col-span-3">
-                            Coupon ID: {store.lineCouponId}
+                            <span>Coupon ID</span>: {store.lineCouponId}
                           </code>
                         )}
                         {(store.errorMessage || store.skipReason) && (

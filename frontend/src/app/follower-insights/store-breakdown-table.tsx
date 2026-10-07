@@ -62,7 +62,7 @@ function calculatePct(numerator: number | null, denominator: number | null, deci
 function formatSelectedDate(value: string, language: Language) {
   const [year, month, day] = value.split("-").map(Number);
   if (!year || !month || !day) return value;
-  return new Intl.DateTimeFormat(language === "th" ? "th-TH" : "en-GB", {
+  return new Intl.DateTimeFormat(language === "th" ? "th-TH" : language === "zh" ? "zh-CN" : "en-GB", {
     day: "numeric",
     month: "short",
   }).format(new Date(Date.UTC(year, month - 1, day)));
@@ -182,6 +182,30 @@ function StoreBreakdownTableInner({
         noResults: "ไม่พบสาขาที่ตรงกับการค้นหาหรือตัวกรอง",
         showing: (start: number, end: number, total: number) => `แสดงรายที่ ${start} – ${end} จากทั้งหมด ${total} ร้าน`,
       }
+    : language === "zh"
+    ? {
+        title: "门店数据",
+        subtitle: "分析各门店 LINE OA 的增长、触达率和屏蔽率",
+        search: "搜索门店、LINE OA 或门店编号……",
+        all: "所有门店",
+        zero: "无增长（0）",
+        highBlock: "屏蔽率高（>10%）",
+        lowReach: "触达率低（<80%）",
+        highGrowth: "增长高（>5%）",
+        count: (shown: number, total: number) => `显示 ${shown} / ${total} 家门店`,
+        code: "编号",
+        store: "门店",
+        startFollowers: `期初 · ${startDateLabel}`,
+        endFollowers: `期末 · ${endDateLabel}`,
+        growth: "增长",
+        growthPct: "增长率",
+        reach: "触达",
+        reachPct: "触达率",
+        blocks: "屏蔽数",
+        blockPct: "屏蔽率",
+        noResults: "没有门店符合当前搜索或筛选条件",
+        showing: (start: number, end: number, total: number) => `显示第 ${start}–${end} 家，共 ${total} 家门店`,
+      }
     : {
         title: "Store performance",
         subtitle: "Growth, reach and block-rate performance for each LINE OA account",
@@ -268,7 +292,7 @@ function StoreBreakdownTableInner({
 
       const direction = sortDir === "asc" ? 1 : -1;
       if (typeof aValue === "string" && typeof bValue === "string") {
-        return direction * aValue.localeCompare(bValue, language === "th" ? "th" : "en");
+        return direction * aValue.localeCompare(bValue, language === "th" ? "th" : language === "zh" ? "zh" : "en");
       }
       return direction * (Number(aValue) - Number(bValue));
     });

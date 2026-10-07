@@ -1,5 +1,9 @@
 "use client";
 
+import { useAppLanguage } from "@/app/language";
+import { languageLocale, type AppLanguage } from "@/app/language-utils";
+import { v2Text } from "@/lib/v2/v2-translations";
+
 import React from "react";
 import { FOLLOW_UP_THRESHOLD_MINUTES, formatSentAt, formatWaitMinutes, waitSpansClosedHours } from "@/lib/v2/business-hours";
 import { thaiWeekday } from "@/lib/v2/date-ranges";
@@ -8,8 +12,8 @@ import { formatValue, numericValue, valueReason, type ValueState } from "@/lib/v
 export const NO_DATA_TEXT = "ยังไม่มีข้อมูลนี้";
 
 /** "ส่งเมื่อ เมื่อวาน 20:30 · นับเฉพาะเวลาเปิดร้าน" when business time differs from real time, else "ส่งเมื่อ …". */
-export function waitNote(waitingSince: string, now: number): string {
-  return `ส่งเมื่อ ${formatSentAt(waitingSince, now)}${waitSpansClosedHours(waitingSince, now) ? " · นับเฉพาะเวลาเปิดร้าน" : ""}`;
+export function waitNote(waitingSince: string, now: number, language: AppLanguage = "th"): string {
+  return v2Text(language)(waitSpansClosedHours(waitingSince, now) ? "sentBusiness" : "sentAt", { date: formatSentAt(waitingSince, now, language) });
 }
 
 /**
@@ -17,15 +21,16 @@ export function waitNote(waitingSince: string, now: number): string {
  * Compact (tables): the duration only, with the send time and the note in a tooltip.
  */
 export function WaitLabel({ businessMinutes, waitingSince, now, compact = false }: { businessMinutes: number | null; waitingSince: string | null; now: number; compact?: boolean }) {
+  const { language } = useAppLanguage();
   if (businessMinutes === null || !waitingSince) return <span className="text-[var(--app-text-tertiary)]">—</span>;
   const urgent = businessMinutes >= FOLLOW_UP_THRESHOLD_MINUTES;
   const differs = waitSpansClosedHours(waitingSince, now);
-  const duration = <span className={`whitespace-nowrap font-semibold tabular-nums ${urgent ? "text-[var(--app-danger)]" : "text-[var(--app-text-primary)]"}`}>{formatWaitMinutes(businessMinutes)}</span>;
-  if (compact) return <span title={waitNote(waitingSince, now)} data-v2-wait-note={waitNote(waitingSince, now)}>{duration}</span>;
+  const duration = <span className={`whitespace-nowrap font-semibold tabular-nums ${urgent ? "text-[var(--app-danger)]" : "text-[var(--app-text-primary)]"}`}>{formatWaitMinutes(businessMinutes, language)}</span>;
+  if (compact) return <span title={waitNote(waitingSince, now, language)} data-v2-wait-note={waitNote(waitingSince, now, language)}>{duration}</span>;
   return (
     <span className="inline-flex flex-col">
       {duration}
-      {differs && <span className="text-xs text-[var(--app-text-secondary)]">{waitNote(waitingSince, now)}</span>}
+      {differs && <span className="text-xs text-[var(--app-text-secondary)]">{waitNote(waitingSince, now, language)}</span>}
     </span>
   );
 }
@@ -36,23 +41,27 @@ export function formatRate(rate: number | null): string {
 
 /** "+1.2" / "−3.4" percentage points vs the previous week. */
 export function RateDelta({ delta }: { delta: number | null }) {
-  if (delta === null) return <span className="text-xs text-[var(--app-text-tertiary)]">ไม่มีข้อมูลสัปดาห์ก่อน</span>;
-  if (delta === 0) return <span className="text-xs text-[var(--app-text-secondary)]">เท่าเดิม</span>;
+  const { language } = useAppLanguage();
+  const t = v2Text(language);
+  if (delta === null) return <span className="text-xs text-[var(--app-text-tertiary)]">{t("noPreviousWeek")}</span>;
+  if (delta === 0) return <span className="text-xs text-[var(--app-text-secondary)]">{t("unchanged")}</span>;
   const down = delta < 0;
   return (
     <span className={`text-xs font-medium tabular-nums ${down ? "text-[var(--app-danger)]" : "text-[var(--app-success)]"}`}>
-      {down ? "−" : "+"}{Math.abs(delta).toFixed(1)} จุด
+      {t("points", { value: `${down ? "−" : "+"}${Math.abs(delta).toFixed(1)}` })}
     </span>
   );
 }
 
 /** Seven tiny bars of the daily 24-hour rate; a dash where a day had no chats. */
 export function MiniTrend({ values, loading }: { values: Array<number | null>; loading?: boolean }) {
+  const { language } = useAppLanguage();
+  const t = v2Text(language);
   if (loading && values.length === 0) return <span className="inline-block h-5 w-[70px] rounded bg-[var(--app-surface-subtle)]" aria-hidden="true" />;
   if (values.length === 0) return <span className="text-xs text-[var(--app-text-tertiary)]">—</span>;
-  const label = values.map((value) => (value === null ? "ไม่มีแชท" : `${value.toFixed(0)}%`)).join(", ");
+  const label = values.map((value) => (value === null ? t("noChats") : `${value.toFixed(0)}%`)).join(", ");
   return (
-    <span className="inline-flex h-6 items-end gap-[3px]" role="img" aria-label={`อัตราตอบใน 24 ชม. รายวัน: ${label}`}>
+    <span className="inline-flex h-6 items-end gap-[3px]" role="img" aria-label={t("dailyRate", { values: label })}>
       {values.map((value, index) => (
         <span
           key={index}
@@ -66,8 +75,10 @@ export function MiniTrend({ values, loading }: { values: Array<number | null>; l
 
 /** 7-day bar chart of the daily 24-hour rate with the target line. */
 export function DailyRateBars({ days, values, target, loading }: { days: string[]; values: Array<number | null>; target: number; loading: boolean }) {
+  const { language } = useAppLanguage();
+  const t = v2Text(language);
   if (loading && values.length === 0) return <div className="h-36 rounded-[var(--app-radius-md)] bg-[var(--app-surface-subtle)]" aria-hidden="true" />;
-  if (values.length === 0) return <p className="text-sm text-[var(--app-text-secondary)]">{NO_DATA_TEXT}</p>;
+  if (values.length === 0) return <p className="text-sm text-[var(--app-text-secondary)]">{t("noDataYet")}</p>;
   return (
     <div>
       <div className="relative flex h-32 items-end gap-2 border-b border-[var(--app-border)]">
@@ -80,9 +91,9 @@ export function DailyRateBars({ days, values, target, loading }: { days: string[
         ))}
       </div>
       <div className="mt-1 flex gap-2">
-        {days.map((day) => <div key={day} className="flex-1 text-center text-[11px] text-[var(--app-text-tertiary)]">{thaiWeekday(day)}</div>)}
+        {days.map((day) => <div key={day} className="flex-1 text-center text-[11px] text-[var(--app-text-tertiary)]">{thaiWeekday(day, language)}</div>)}
       </div>
-      <p className="mt-2 text-xs text-[var(--app-text-secondary)]">เส้นประ = เป้า {target}% · แท่งสีส้ม = ต่ำกว่าเป้า</p>
+      <p className="mt-2 text-xs text-[var(--app-text-secondary)]">{t("chartTarget", { target })}</p>
     </div>
   );
 }
@@ -93,6 +104,8 @@ export function SourceNotice({ children }: { children: React.ReactNode }) {
 }
 
 export function ManagerLink({ href, size = "md" }: { href: string | null; size?: "sm" | "md" }) {
+  const { language } = useAppLanguage();
+  const t = v2Text(language);
   if (!href) return null;
   return (
     <a
@@ -101,7 +114,7 @@ export function ManagerLink({ href, size = "md" }: { href: string | null; size?:
       rel="noreferrer"
       className={`inline-flex shrink-0 items-center gap-1 rounded-[var(--app-radius-md)] border border-[var(--app-border)] bg-[var(--app-surface)] font-medium text-[var(--app-accent)] hover:bg-[var(--app-accent-soft)] ${size === "sm" ? "px-2.5 py-1 text-xs" : "px-3 py-1.5 text-sm"}`}
     >
-      เปิดใน LINE OA Manager ↗
+      {t("managerLink")}
     </a>
   );
 }
@@ -111,14 +124,15 @@ export function ManagerLink({ href, size = "md" }: { href: string | null; size?:
  * as a tooltip and as screen-reader text. `showN` adds "(n=…)" for rates.
  */
 export function StateValue({ state, format = "count", target, showN = false, className = "" }: { state: ValueState; format?: "count" | "percent"; target?: number; showN?: boolean; className?: string }) {
-  const formatted = formatValue(state, format);
+  const { language } = useAppLanguage();
+  const formatted = formatValue(state, format, language);
   const value = numericValue(state);
   const belowTarget = target !== undefined && !formatted.muted && value !== null && value < target;
   const n = "n" in state && typeof state.n === "number" ? state.n : null;
   return (
     <span data-v2-value-state={state.kind} title={formatted.reason ?? undefined} className={`whitespace-nowrap tabular-nums ${formatted.muted ? "text-[var(--app-text-secondary)]" : belowTarget ? "text-[var(--app-danger)]" : ""} ${className}`}>
       {formatted.text}
-      {showN && n !== null && <span className="ml-1 text-xs font-normal text-[var(--app-text-secondary)]">(n={n.toLocaleString("th-TH")})</span>}
+      {showN && n !== null && <span className="ml-1 text-xs font-normal text-[var(--app-text-secondary)]">(n={n.toLocaleString(languageLocale(language))})</span>}
       {formatted.reason && <span className="sr-only"> ({formatted.reason})</span>}
     </span>
   );
@@ -129,7 +143,9 @@ export function StateValue({ state, format = "count", target, showN = false, cla
  * chat volume). kind "points": "+1.2 จุด" / "−3.4 จุด", coloured (a rate: down is worse).
  */
 export function DeltaValue({ state, kind, worseWhen }: { state: ValueState; kind: "count" | "points"; worseWhen: "up" | "down" }) {
-  const reason = valueReason(state);
+  const { language } = useAppLanguage();
+  const t = v2Text(language);
+  const reason = valueReason(state, language);
   const value = numericValue(state);
   if (value === null || state.kind === "loading") {
     return <span data-v2-value-state={state.kind} title={reason ?? undefined} className="whitespace-nowrap text-xs text-[var(--app-text-secondary)]">—{reason && <span className="sr-only"> ({reason})</span>}</span>;
@@ -138,7 +154,8 @@ export function DeltaValue({ state, kind, worseWhen }: { state: ValueState; kind
   const muted = kind === "count" || state.kind === "low-sample" || state.kind === "stale";
   const worse = !muted && value !== 0 && (worseWhen === "up" ? value > 0 : value < 0);
   const better = !muted && value !== 0 && !worse;
-  const text = value === 0 ? "เท่าเดิม" : `${value > 0 ? "+" : "−"}${kind === "points" ? Math.abs(value).toFixed(1) : Math.abs(value).toLocaleString("th-TH")}${kind === "points" ? " จุด" : ""}`;
+  const number = `${value > 0 ? "+" : "−"}${kind === "points" ? Math.abs(value).toFixed(1) : Math.abs(value).toLocaleString(languageLocale(language))}`;
+  const text = value === 0 ? t("unchanged") : kind === "points" ? t("points", { value: number }) : number;
   return (
     <span data-v2-value-state={state.kind} title={reason ?? undefined} className={`whitespace-nowrap text-xs font-medium tabular-nums ${worse ? "text-[var(--app-danger)]" : better ? "text-[var(--app-accent)] dark:text-[var(--app-success)]" : "text-[var(--app-text-secondary)]"}`}>
       {text}

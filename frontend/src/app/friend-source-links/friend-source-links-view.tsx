@@ -784,7 +784,7 @@ export function FriendSourceLinksView({
                               </div>
                               {isConfigured && cfg.liffId && (
                                 <p className="mt-0.5 font-mono text-[11px] text-[var(--app-text-tertiary)]">
-                                  Channel: {cfg.lineLoginChannelId || "-"} · LIFF: {cfg.liffId}
+                                  <span>Channel</span>: {cfg.lineLoginChannelId || "-"} · <span>LIFF</span>: {cfg.liffId}
                                 </p>
                               )}
                             </div>
@@ -864,7 +864,7 @@ export function FriendSourceLinksView({
                   type="text"
                   value={modalLiffId}
                   onChange={(e) => setModalLiffId(e.target.value)}
-                  placeholder="e.g. 2007073384-AbCdEfGh"
+                  placeholder="เช่น 2007073384-AbCdEfGh"
                   className="app-input mt-1 w-full rounded-[var(--app-radius-md)] border border-[var(--app-border)] bg-[var(--input-background)] px-3 py-2 text-xs text-[var(--app-text-primary)] outline-none focus:border-[var(--app-accent)]"
                 />
               </div>

@@ -28,6 +28,11 @@ import { getInclusiveCalendarDays } from "./follower-insights/follower-insights-
 import { FriendSourceLinksView } from "./friend-source-links/friend-source-links-view";
 import { MassMessagesView } from "./mass-messages/mass-messages-view";
 import { BroadcastView } from "./broadcast/broadcast-view";
+import { broadcastPhrases } from "./broadcast/broadcast-i18n";
+import { friendSourceLinksPhrases, friendSourceLinksTemplates } from "./friend-source-links/friend-source-links-i18n";
+import { mobileMassMessagesPhrases, mobileMassMessagesTemplates } from "./mobile-route-i18n";
+import { LegacyI18nBoundary } from "./legacy-i18n-boundary";
+import { MainPageI18nBoundary } from "./main-page-i18n-boundary";
 import { RichMenusView } from "./rich-menus/rich-menus-view";
 import { AutoResponsesView } from "./auto-responses/auto-responses-view";
 import { GreetingMessagesView } from "./greeting-messages/greeting-messages-view";
@@ -178,6 +183,10 @@ const translations = {
     language: "ภาษา",
 
     overview: "ภาพรวม",
+    conversationFilters: "ตัวกรองบทสนทนา",
+    storeBulkActions: "การดำเนินการหลายร้าน",
+    previousStoresPage: "หน้าร้านค้าก่อนหน้า",
+    nextStoresPage: "หน้าร้านค้าถัดไป",
     dashboard: "แดชบอร์ด",
     incoming: "ข้อความเข้าใหม่",
     customerIntelligence: "ข้อมูลเชิงลึกลูกค้า",
@@ -303,8 +312,22 @@ const translations = {
     bmReplyStatusChangedTo: "เปลี่ยนสถานะการตอบ BM เป็น",
     replyStatusCoverageNote: "สถานะตอบกลับนับตั้งแต่ ก.ย. 2026",
     notReplied: "ยังไม่ตอบ",
+    waitingStatusLabel: "กำลังรอ",
+    bulkActionsFor: "การดำเนินการสำหรับ {storeName}",
     notifiedBm: "แจ้ง BM แล้ว",
     replied: "ตอบแล้ว",
+    systemManagementTag: "OPPO LINE OA · การจัดการระบบ",
+    failedSend: "ส่งไม่สำเร็จ",
+    retrySending: "ลองส่งอีกครั้ง",
+    replyPlaceholder: "พิมพ์ข้อความตอบกลับลูกค้า...",
+    viewerReplyPlaceholder: "บัญชี Viewer อ่านได้อย่างเดียว",
+    sending: "กำลังส่ง...",
+    send: "ส่ง",
+    replyShortcutHint: "Enter เพื่อส่ง · Shift+Enter ขึ้นบรรทัดใหม่",
+    bulkRepliedPrompt: "คุณกำลังเปลี่ยน {count} บทสนทนาเป็น “ตอบแล้ว”",
+    markAllReplied: "🟢 ตอบแล้วทั้งหมด",
+    notifyBmAll: "🟣 แจ้ง BM ทั้งหมด",
+    resetAllNotReplied: "⚪ รีเซ็ตเป็นยังไม่ตอบ",
     noActivity: "ยังไม่มีประวัติ",
     messageReceivedActivity: "ได้รับข้อความลูกค้าใหม่",
     customerImage: "รูปภาพจากลูกค้า",
@@ -436,7 +459,7 @@ const translations = {
     systemSuggested: "ระบบแนะนำ",
     storeAlreadyExists: "ร้านค้านี้มีอยู่แล้ว",
     openExistingStore: "เปิดร้านค้าที่มีอยู่",
-    openLineManager: "เปิด LINE OA Manager",
+    openLineManager: "เปิดใน LINE OA Manager",
     openLineOa: "เปิดหน้า LINE OA",
     openGoogleMaps: "เปิด Google Maps",
     googleMapsNotConfigured: "ยังไม่ได้ตั้งค่า",
@@ -525,6 +548,10 @@ const translations = {
     language: "Language",
 
     overview: "Overview",
+    conversationFilters: "Conversation filters",
+    storeBulkActions: "Store bulk actions",
+    previousStoresPage: "Previous stores page",
+    nextStoresPage: "Next stores page",
     dashboard: "Dashboard",
     incoming: "Incoming",
     followUp: "Follow-up",
@@ -650,8 +677,22 @@ const translations = {
     bmReplyStatusChangedTo: "BM reply status changed to",
     replyStatusCoverageNote: "Reply status counted from Sep 2026",
     notReplied: "Not replied",
+    waitingStatusLabel: "Waiting",
+    bulkActionsFor: "Bulk actions for {storeName}",
     notifiedBm: "BM notified",
     replied: "Replied",
+    systemManagementTag: "OPPO LINE OA · System Management",
+    failedSend: "Send failed",
+    retrySending: "Retry send",
+    replyPlaceholder: "Type a reply to the customer...",
+    viewerReplyPlaceholder: "Viewer accounts have read-only access",
+    sending: "Sending...",
+    send: "Send",
+    replyShortcutHint: "Enter to send · Shift+Enter for a new line",
+    bulkRepliedPrompt: "You are changing {count} conversations to “Replied”",
+    markAllReplied: "🟢 Mark all as replied",
+    notifyBmAll: "🟣 Notify BM for all",
+    resetAllNotReplied: "⚪ Reset all to not replied",
     noActivity: "No activity yet",
     messageReceivedActivity: "New customer message received",
     customerImage: "Image from customer",
@@ -783,7 +824,7 @@ const translations = {
     systemSuggested: "System suggested",
     storeAlreadyExists: "This store already exists",
     openExistingStore: "Open existing store",
-    openLineManager: "Open LINE OA Manager",
+    openLineManager: "Open in LINE OA Manager",
     openLineOa: "Open LINE OA",
     openGoogleMaps: "Open Google Maps",
     googleMapsNotConfigured: "Not configured",
@@ -872,6 +913,10 @@ const translations = {
     language: "语言",
 
     overview: "总览",
+    conversationFilters: "对话筛选",
+    storeBulkActions: "门店批量操作",
+    previousStoresPage: "上一页门店",
+    nextStoresPage: "下一页门店",
     dashboard: "仪表板",
     incoming: "新消息",
     followUp: "待跟进",
@@ -995,8 +1040,22 @@ const translations = {
     bmReplyStatusChangedTo: "BM 回复状态已更改为",
     replyStatusCoverageNote: "回复状态从 2026 年 9 月起统计",
     notReplied: "尚未回复",
+    waitingStatusLabel: "等待中",
+    bulkActionsFor: "门店 {storeName} 的批量操作",
     notifiedBm: "已通知 BM",
     replied: "已回复",
+    systemManagementTag: "OPPO LINE OA · 系统管理",
+    failedSend: "发送失败",
+    retrySending: "重新发送",
+    replyPlaceholder: "输入要回复客户的内容...",
+    viewerReplyPlaceholder: "Viewer 账号仅可查看",
+    sending: "正在发送...",
+    send: "发送",
+    replyShortcutHint: "按 Enter 发送 · Shift+Enter 换行",
+    bulkRepliedPrompt: "您正在将 {count} 条对话更改为“已回复”",
+    markAllReplied: "🟢 全部标记为已回复",
+    notifyBmAll: "🟣 全部通知 BM",
+    resetAllNotReplied: "⚪ 全部重置为未回复",
     noActivity: "暂无操作记录",
     messageReceivedActivity: "收到新的客户消息",
     customerImage: "客户发送的图片",
@@ -1128,7 +1187,7 @@ const translations = {
     systemSuggested: "系统建议",
     storeAlreadyExists: "此门店已存在",
     openExistingStore: "打开现有门店",
-    openLineManager: "打开 LINE OA Manager",
+    openLineManager: "在 LINE OA Manager 中打开",
     openLineOa: "打开 LINE OA",
     openGoogleMaps: "打开 Google 地图",
     googleMapsNotConfigured: "未配置",
@@ -1435,7 +1494,7 @@ export default function Home() {
 type WorkspaceAuthUser = { id: string; email: string; displayName: string; role: "ADMIN" | "ASSISTANT" | "VIEWER"; permissions?: { canAccessMainOa?: boolean } };
 
 /** `initialAuthUser` is the user AuthorizedSection already resolved; /login passes none and runs the full setup check. */
-export function ApplicationWorkspace({ initialSection, initialAuthUser }: { initialSection: PrimarySection; initialAuthUser?: WorkspaceAuthUser | null }) {
+function ApplicationWorkspaceContent({ initialSection, initialAuthUser }: { initialSection: PrimarySection; initialAuthUser?: WorkspaceAuthUser | null }) {
   const { widths: chatPaneWidths, containerRef: chatContainerRef, resize: resizeChatPanes, reset: resetChatPanes } = useResizablePanes(initialSection === "chats");
   const [initialAuth] = useState(() => initialWorkspaceAuth(initialAuthUser));
   const [authUser, setAuthUser] = useState<WorkspaceAuthUser | null>(initialAuth.authUser);
@@ -3475,7 +3534,7 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
               <section className="app-content-section col-span-2 overflow-y-auto">
                 <div className="mx-auto max-w-7xl space-y-6">
                   <PageHeader
-                    tag="OPPO LINE OA · การจัดการระบบ"
+                    tag={text.systemManagementTag}
                     title={text.lineOaManagement}
                     description={text.lineOaDescription}
                     actions={
@@ -3884,7 +3943,7 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
                                   )}
                                   <span className="block text-xs text-[var(--app-text-tertiary)]">
                                     {[
-                                      account.store.storeId ?? account.store.externalStoreId ? `Store ID: ${account.store.storeId ?? account.store.externalStoreId}` : null,
+                                      account.store.storeId ?? account.store.externalStoreId ? `${text.storeIdLabel}: ${account.store.storeId ?? account.store.externalStoreId}` : null,
                                       account.store.province,
                                       account.store.region,
                                       account.store.lineId,
@@ -4282,7 +4341,7 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
                             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                           </svg>
-                          {followerInsightsTranslations[language]?.backfillStatusQueued || "Connected successfully. Historical follower data is being fetched."}
+                          {followerInsightsTranslations[language].backfillStatusQueued}
                         </h4>
 
                         {backfillJob ? (
@@ -4297,11 +4356,11 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
                                     : followerInsightsTranslations[language]?.backfillStatusQueued}
                             </p>
                             <p className="text-[var(--app-text-tertiary)] font-mono text-[11px]">
-                              Range: {backfillJob.dateFrom} ~ {backfillJob.dateTo} | Days: {backfillJob.totalDays} | Succeeded: {backfillJob.succeeded} | Skipped: {backfillJob.skipped} | Failed: {backfillJob.failed}
+                              {followerInsightsTranslations[language].backfillRangeLabel}: {backfillJob.dateFrom} ~ {backfillJob.dateTo} | {followerInsightsTranslations[language].backfillDaysLabel}: {backfillJob.totalDays} | {followerInsightsTranslations[language].backfillSucceededLabel}: {backfillJob.succeeded} | {followerInsightsTranslations[language].backfillSkippedLabel}: {backfillJob.skipped} | {followerInsightsTranslations[language].backfillFailedLabel}: {backfillJob.failed}
                             </p>
                             {backfillResult && (
                               <p className="mt-1 text-xs font-semibold text-[var(--app-success)]">
-                                ✓ {backfillResult.succeeded ?? 0} dates updated.
+                                ✓ {followerInsightsTranslations[language].backfillDatesUpdated(backfillResult.succeeded ?? 0)}
                               </p>
                             )}
                             {(backfillJob.status === "FAILED" || backfillJob.status === "COMPLETED_WITH_ERRORS") && (
@@ -4312,7 +4371,7 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
                                 }}
                                 className="mt-2 rounded-[var(--app-radius-sm)] bg-[var(--app-danger)] px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90 transition-opacity"
                               >
-                                {followerInsightsTranslations[language]?.backfillStatusFailed || "Historical backfill failed. Click to retry."}
+                                {followerInsightsTranslations[language].backfillStatusFailed}
                               </button>
                             )}
                           </div>
@@ -4424,7 +4483,7 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
                           }}
                         >
                           {backfillLoading
-                            ? (language === "th" ? "กำลังดึงข้อมูล..." : "Backfilling...")
+                            ? (language === "th" ? "กำลังดึงข้อมูล..." : language === "zh" ? "正在补全数据..." : "Backfilling...")
                             : (language === "th" ? "ยืนยันการดึงข้อมูลย้อนหลัง" : language === "zh" ? "确认补全历史数据" : "Confirm Historical Backfill")}
                         </Button>
                       </div>
@@ -4453,15 +4512,21 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
             </PageContainer>
           ) : initialSection === "friend-source-links" ? (
             <PageContainer variant="readable">
-              <FriendSourceLinksView language={language} userRole={authUser.role} />
+              <LegacyI18nBoundary phrases={friendSourceLinksPhrases} templates={friendSourceLinksTemplates} showControl={false}>
+                <FriendSourceLinksView language={language} userRole={authUser.role} />
+              </LegacyI18nBoundary>
             </PageContainer>
           ) : initialSection === "mass-messages" ? (
             <PageContainer variant="full">
-              <MassMessagesView language={language} userRole={authUser.role} />
+              <LegacyI18nBoundary phrases={mobileMassMessagesPhrases} templates={mobileMassMessagesTemplates} showControl={false}>
+                <MassMessagesView language={language} userRole={authUser.role} />
+              </LegacyI18nBoundary>
             </PageContainer>
           ) : initialSection === "broadcast" ? (
             <PageContainer variant="full">
-              <BroadcastView language={language} userRole={authUser.role} />
+              <LegacyI18nBoundary phrases={broadcastPhrases} showControl={false}>
+                <BroadcastView language={language} userRole={authUser.role} />
+              </LegacyI18nBoundary>
             </PageContainer>
           ) : initialSection === "rich-menus" ? (
             <PageContainer variant="full">
@@ -4898,9 +4963,9 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
                           type="button"
                           onClick={() => void openSelectedConversationInLineOa()}
                           className="app-button-primary inline-flex shrink-0 items-center gap-1.5 rounded-[var(--app-radius-sm)] bg-[var(--app-accent)] hover:bg-[var(--app-accent-hover)] text-white px-3 py-1.5 text-xs font-semibold shadow-[var(--app-shadow-card)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--app-accent)]/50"
-                          aria-label="เปิดใน LINE OA Manager"
+                          aria-label={text.openLineManager}
                         >
-                          เปิดใน LINE OA <span aria-hidden="true">↗</span>
+                          {text.openLineOa} <span aria-hidden="true">↗</span>
                         </button>
                       </div>
                     </header>
@@ -4968,7 +5033,7 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
                                     </p>
                                     {isFailed && (
                                       <div className="mt-2 flex items-center justify-between gap-2 border-t border-red-500/30 pt-1.5">
-                                        <span className="text-[10px] font-bold text-red-300">ส่งไม่สำเร็จ</span>
+                                      <span className="text-[10px] font-bold text-red-300">{text.failedSend}</span>
                                         {authUser?.role === "ADMIN" && (
                                           <button
                                             type="button"
@@ -4976,7 +5041,7 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
                                             onClick={() => void retryFailedMessage(message.id)}
                                             className="inline-flex items-center gap-1 rounded-full bg-red-600 px-2.5 py-0.5 text-[11px] font-bold text-white shadow-sm hover:bg-red-700 active:scale-95 disabled:opacity-50"
                                           >
-                                            {retryingMessageId === message.id ? "กำลังส่งอีกครั้ง..." : "↻ ลองส่งอีกครั้ง"}
+                                            {retryingMessageId === message.id ? text.sending : `↻ ${text.retrySending}`}
                                           </button>
                                         )}
                                       </div>
@@ -4996,8 +5061,8 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
                               disabled={replySending || authUser.role === "VIEWER"}
                               maxLength={5000}
                               rows={2}
-                              aria-label="พิมพ์ข้อความตอบกลับลูกค้า"
-                              placeholder={authUser.role === "VIEWER" ? "บัญชี Viewer อ่านได้อย่างเดียว" : "พิมพ์ข้อความตอบกลับลูกค้า..."}
+                              aria-label={text.replyPlaceholder}
+                              placeholder={authUser.role === "VIEWER" ? text.viewerReplyPlaceholder : text.replyPlaceholder}
                               onChange={(event) => {
                                 setReplyText(event.target.value);
                                 setReplyError(null);
@@ -5017,11 +5082,11 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
                               onClick={() => void sendReply()}
                               className="h-11 shrink-0 rounded-[var(--app-radius-md)] bg-[var(--app-accent)] hover:bg-[var(--app-accent-hover)] text-white px-4 text-xs font-semibold shadow-[var(--app-shadow-card)] transition-colors disabled:cursor-not-allowed disabled:opacity-50"
                             >
-                              {replySending ? "กำลังส่ง..." : "ส่ง"}
+                              {replySending ? text.sending : text.send}
                             </button>
                           </div>
                           {replyError && <p role="alert" className="mt-2 text-xs text-[var(--app-danger)]">{replyError}</p>}
-                          <p className="app-muted mt-1 text-right text-[10px] font-tabular text-[var(--app-text-tertiary)]">{replyText.length.toLocaleString()}/5,000 · Enter เพื่อส่ง · Shift+Enter ขึ้นบรรทัดใหม่</p>
+                          <p className="app-muted mt-1 text-right text-[10px] font-tabular text-[var(--app-text-tertiary)]">{replyText.length.toLocaleString(language)}/5,000 · {text.replyShortcutHint}</p>
                         </div>
                         <p data-line-oa-manager-notice className="shrink-0 flex items-start gap-2 border-t border-[var(--app-border-subtle)] bg-[var(--app-surface-subtle)]/50 px-4 py-1.5 text-xs text-[var(--app-text-tertiary)]"><span aria-hidden="true">ⓘ</span><span>{text.repliesMayNotAppear}</span></p>
                       </div>
@@ -5213,30 +5278,7 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
             </div>
 
             <div className="rounded-[var(--app-radius-md)] bg-[var(--app-surface-subtle)] border border-[var(--app-border)] p-4 text-xs text-[var(--app-text-primary)] leading-relaxed">
-              <p>
-                {language === "th" ? (
-                  <>
-                    คุณกำลังเปลี่ยน <strong>{bulkConfirmState.affectedCount}</strong> บทสนทนาเป็น{" "}
-                    <strong className="text-[var(--app-success)]">
-                      &ldquo;ตอบแล้ว&rdquo;
-                    </strong>
-                  </>
-                ) : language === "zh" ? (
-                  <>
-                    您正在将 <strong>{bulkConfirmState.affectedCount}</strong> 条对话更改为{" "}
-                    <strong className="text-[var(--app-success)]">
-                      &ldquo;已回复&rdquo;
-                    </strong>
-                  </>
-                ) : (
-                  <>
-                    You are changing <strong>{bulkConfirmState.affectedCount}</strong> conversations to{" "}
-                    <strong className="text-[var(--app-success)]">
-                      &ldquo;Replied&rdquo;
-                    </strong>
-                  </>
-                )}
-              </p>
+              <p>{text.bulkRepliedPrompt.replace("{count}", bulkConfirmState.affectedCount.toLocaleString(language))}</p>
             </div>
 
             <div className="flex items-center justify-end gap-3 pt-2">
@@ -5275,4 +5317,8 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
       )}
     </AppShell>
   );
+}
+
+export function ApplicationWorkspace(props: { initialSection: PrimarySection; initialAuthUser?: WorkspaceAuthUser | null }) {
+  return <MainPageI18nBoundary><ApplicationWorkspaceContent {...props} /></MainPageI18nBoundary>;
 }

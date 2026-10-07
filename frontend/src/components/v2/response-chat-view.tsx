@@ -1,5 +1,9 @@
 "use client";
 
+import { useAppLanguage } from "@/app/language";
+import { type AppLanguage } from "@/app/language-utils";
+import { v2Text } from "@/lib/v2/v2-translations";
+
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { getEffectiveReplyState } from "@/app/reply-state";
 import { mergeConversationMessagePages } from "@/app/conversation-message-pagination";
@@ -13,13 +17,16 @@ import { useV2Data } from "./v2-data";
 import { ManagerLink, SourceNotice, WaitLabel } from "./v2-ui";
 
 function StorePane({ rows, selected, onSelect }: { rows: StoreRow[]; selected: string; onSelect: (store: string) => void }) {
+  const { language } = useAppLanguage();
+  const t = v2Text(language);
+
   const itemClass = (active: boolean) => `flex w-full items-center justify-between gap-2 rounded-[var(--app-radius-md)] px-3 py-2 text-left text-sm ${active ? "bg-[var(--app-accent-soft)] font-semibold text-[var(--app-accent)]" : "text-[var(--app-text-primary)] hover:bg-[var(--app-surface-hover)]"}`;
   return (
-    <nav aria-label="ร้าน" className="flex min-h-0 flex-col border-r border-[var(--app-border)] bg-[var(--app-surface)]">
-      <div className="border-b border-[var(--app-border-subtle)] px-4 py-3 text-xs font-semibold text-[var(--app-text-secondary)]">ร้าน ({rows.length})</div>
+    <nav aria-label={t("store")} className="flex min-h-0 flex-col border-r border-[var(--app-border)] bg-[var(--app-surface)]">
+      <div className="border-b border-[var(--app-border-subtle)] px-4 py-3 text-xs font-semibold text-[var(--app-text-secondary)]">{t("storePaneCount", { count: rows.length })}</div>
       <div className="min-h-0 flex-1 space-y-0.5 overflow-y-auto p-2">
         <button type="button" onClick={() => onSelect(ALL_STORES)} aria-current={selected === ALL_STORES ? "true" : undefined} className={itemClass(selected === ALL_STORES)}>
-          <span className="text-[var(--app-text-primary)]">ทุกร้านในรายการนี้</span>
+          <span className="text-[var(--app-text-primary)]">{t("allListedStores")}</span>
         </button>
         {rows.map((row) => (
           <button key={row.storeId} type="button" data-v2-chat-store={row.storeId} onClick={() => onSelect(row.storeId)} aria-current={selected === row.storeId ? "true" : undefined} className={itemClass(selected === row.storeId)}>
@@ -37,12 +44,15 @@ function StorePane({ rows, selected, onSelect }: { rows: StoreRow[]; selected: s
 }
 
 function ConversationPane({ items, selected, onSelect, loading, error, showStore, now }: { items: ConversationListItem[]; selected: string | null; onSelect: (item: ConversationListItem) => void; loading: boolean; error: string | null; showStore: boolean; now: number }) {
+  const { language } = useAppLanguage();
+  const t = v2Text(language);
+
   return (
-    <section aria-label="แชท" className="flex min-h-0 flex-col border-r border-[var(--app-border)] bg-[var(--app-surface)]">
-      <div className="border-b border-[var(--app-border-subtle)] px-4 py-3 text-xs font-semibold text-[var(--app-text-secondary)]">แชท ({items.length}){loading ? " · กำลังโหลด…" : ""}</div>
-      {error && <div className="p-3"><SourceNotice>โหลดแชทล่าสุดไม่สำเร็จ: {error}</SourceNotice></div>}
+    <section aria-label={t("chats")} className="flex min-h-0 flex-col border-r border-[var(--app-border)] bg-[var(--app-surface)]">
+      <div className="border-b border-[var(--app-border-subtle)] px-4 py-3 text-xs font-semibold text-[var(--app-text-secondary)]">{t("chatPaneCount", { count: items.length, loading: loading ? ` · ${t("loadingEllipsis")}` : "" })}</div>
+      {error && <div className="p-3"><SourceNotice>{t("recentChatError", { error: error === "loadFailed" ? t("loadFailed") : error })}</SourceNotice></div>}
       <ul className="min-h-0 flex-1 divide-y divide-[var(--app-border-subtle)] overflow-y-auto">
-        {!loading && items.length === 0 && <li className="p-6 text-center text-sm text-[var(--app-text-secondary)]">ไม่มีแชทในรายการนี้</li>}
+        {!loading && items.length === 0 && <li className="p-6 text-center text-sm text-[var(--app-text-secondary)]">{t("noListedChats")}</li>}
         {items.map((item) => (
           <li key={item.id}>
             <button type="button" data-v2-conversation={item.id} onClick={() => onSelect(item)} aria-current={selected === item.id ? "true" : undefined} className={`flex w-full flex-col gap-1 px-4 py-3 text-left ${selected === item.id ? "bg-[var(--app-accent-soft)]" : "hover:bg-[var(--app-surface-hover)]"}`}>
@@ -50,14 +60,14 @@ function ConversationPane({ items, selected, onSelect, loading, error, showStore
                 <span className="min-w-0 truncate text-sm font-medium text-[var(--app-text-primary)]">{item.customerName}</span>
                 {item.kind === "waiting" ? (
                   <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${needsFollowUp(item.chat.businessMinutes) ? "bg-[var(--app-danger-soft)] text-[var(--app-danger)]" : "bg-[var(--app-warning-soft)] text-[var(--app-text-primary)]"}`}>
-                    รอ {formatWaitMinutes(item.chat.businessMinutes)}
+                    {t("waitingTime", { duration: formatWaitMinutes(item.chat.businessMinutes, language) })}
                   </span>
                 ) : (
-                  <span className="shrink-0 rounded-full bg-[var(--app-success-soft)] px-2 py-0.5 text-xs font-medium text-[var(--app-text-primary)]">ตอบแล้ว</span>
+                  <span className="shrink-0 rounded-full bg-[var(--app-success-soft)] px-2 py-0.5 text-xs font-medium text-[var(--app-text-primary)]">{t("replied")}</span>
                 )}
               </span>
               <span className="truncate text-xs text-[var(--app-text-secondary)]">
-                {showStore ? `${item.storeName} · ` : ""}{item.kind === "waiting" ? `ส่งเมื่อ ${formatSentAt(item.chat.waitingSince, now)}` : `ล่าสุด ${formatSentAt(item.latestMessageAt, now)}`}
+                {showStore ? `${item.storeName} · ` : ""}{item.kind === "waiting" ? t("sentAt", { date: formatSentAt(item.chat.waitingSince, now, language) }) : t("latestAt", { date: formatSentAt(item.latestMessageAt, now, language) })}
               </span>
             </button>
           </li>
@@ -67,15 +77,19 @@ function ConversationPane({ items, selected, onSelect, loading, error, showStore
   );
 }
 
-function messageText(message: ApiConversation["messages"][number]): React.ReactNode {
+function messageText(message: ApiConversation["messages"][number], language: AppLanguage): React.ReactNode {
+  const t = v2Text(language);
   if (message.messageType === "TEXT") return message.originalText;
-  if (message.messageType === "IMAGE" && message.media?.url) return <a href={message.media.url} target="_blank" rel="noreferrer" className="italic text-[var(--app-accent)] underline">[รูปภาพ] เปิดดู ↗</a>;
-  const labels: Record<string, string> = { IMAGE: "รูปภาพ", VIDEO: "วิดีโอ", AUDIO: "ข้อความเสียง", FILE: "ไฟล์", LOCATION: "ตำแหน่ง", STICKER: "สติกเกอร์", UNSUPPORTED: "ข้อความที่แสดงไม่ได้" };
+  if (message.messageType === "IMAGE" && message.media?.url) return <a href={message.media.url} target="_blank" rel="noreferrer" className="italic text-[var(--app-accent)] underline">{t("imageLink")}</a>;
+  const labels: Record<string, string> = { IMAGE: t("image"), VIDEO: t("video"), AUDIO: t("audio"), FILE: t("file"), LOCATION: t("location"), STICKER: t("sticker"), UNSUPPORTED: t("unsupported") };
   const extra = message.messageType === "STICKER" && message.sticker?.text ? ` ${message.sticker.text}` : message.fileName ? ` ${message.fileName}` : "";
   return <span className="italic text-[var(--app-text-secondary)]">[{labels[message.messageType] ?? message.messageType}]{extra}</span>;
 }
 
 function ThreadPane({ conversationId, now }: { conversationId: string | null; now: number }) {
+  const { language } = useAppLanguage();
+  const t = v2Text(language);
+
   // Results are kept with the id they belong to, so a new selection reads as "loading" without resetting state in the effect.
   const [loaded, setLoaded] = useState<{ id: string; conversation: ApiConversation | null; messages: ConversationMessagesResponse | null; error: string | null } | null>(null);
   const [loadingEarlier, setLoadingEarlier] = useState(false);
@@ -91,7 +105,7 @@ function ThreadPane({ conversationId, now }: { conversationId: string | null; no
         window.requestAnimationFrame(() => bottomRef.current?.scrollIntoView({ block: "end" }));
       })
       .catch((reason: unknown) => {
-        if (!controller.signal.aborted && !isAbortError(reason)) setLoaded({ id: conversationId, conversation: null, messages: null, error: reason instanceof Error ? reason.message : "โหลดแชทไม่สำเร็จ" });
+        if (!controller.signal.aborted && !isAbortError(reason)) setLoaded({ id: conversationId, conversation: null, messages: null, error: reason instanceof Error ? reason.message : "conversationLoad" });
       });
     return () => controller.abort();
   }, [conversationId]);
@@ -110,50 +124,50 @@ function ThreadPane({ conversationId, now }: { conversationId: string | null; no
         ? { ...previous, messages: { ...mergeConversationMessagePages(previous.messages, page), page: page.page, hasEarlier: page.hasEarlier } }
         : previous);
     } catch (reason) {
-      setLoaded((previous) => previous && previous.id === conversationId ? { ...previous, error: reason instanceof Error ? reason.message : "โหลดข้อความก่อนหน้าไม่สำเร็จ" } : previous);
+      setLoaded((previous) => previous && previous.id === conversationId ? { ...previous, error: reason instanceof Error ? reason.message : "earlierLoad" } : previous);
     } finally {
       setLoadingEarlier(false);
     }
   };
 
   if (!conversationId) {
-    return <section className="flex min-h-0 items-center justify-center bg-[var(--app-bg)] p-8 text-sm text-[var(--app-text-secondary)]">เลือกแชทเพื่อดูข้อความ</section>;
+    return <section className="flex min-h-0 items-center justify-center bg-[var(--app-bg)] p-8 text-sm text-[var(--app-text-secondary)]">{t("selectChat")}</section>;
   }
   const state = conversation ? getEffectiveReplyState(conversation) : null;
   const waiting = conversation && state === "NOT_REPLIED" ? toWaitingChat(conversation, now) : null;
   return (
-    <section aria-label="ข้อความ" className="flex min-h-0 flex-col bg-[var(--app-bg)]">
+    <section aria-label={t("messages")} className="flex min-h-0 flex-col bg-[var(--app-bg)]">
       <header className="flex items-center justify-between gap-3 border-b border-[var(--app-border)] bg-[var(--app-surface)] px-5 py-3">
         <div className="min-w-0">
-          <div className="truncate text-sm font-semibold">{conversation?.customer.displayName ?? "กำลังโหลด…"}</div>
+          <div className="truncate text-sm font-semibold">{conversation?.customer.displayName ?? t("loadingEllipsis")}</div>
           <div className="flex items-center gap-2 text-xs text-[var(--app-text-secondary)]">
             {conversation && <span className="truncate">{conversation.store.name}</span>}
-            {state === "REPLIED" && <span className="rounded-full bg-[var(--app-success-soft)] px-2 py-0.5 font-medium text-[var(--app-text-primary)]">ตอบแล้ว</span>}
-            {waiting && <span className="inline-flex items-center gap-1">รอ <WaitLabel businessMinutes={waiting.businessMinutes} waitingSince={waiting.waitingSince} now={now} /></span>}
+            {state === "REPLIED" && <span className="rounded-full bg-[var(--app-success-soft)] px-2 py-0.5 font-medium text-[var(--app-text-primary)]">{t("replied")}</span>}
+            {waiting && <span className="inline-flex items-center gap-1">{t("waitPrefix")}<WaitLabel businessMinutes={waiting.businessMinutes} waitingSince={waiting.waitingSince} now={now} /></span>}
           </div>
         </div>
         {conversation && <ManagerLink href={managerUrlOf(conversation)} size="sm" />}
       </header>
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-5 py-4">
-        {error && <SourceNotice>{error}</SourceNotice>}
+        {error && <SourceNotice>{error === "conversationLoad" || error === "earlierLoad" ? t(error) : error}</SourceNotice>}
         {messages?.hasEarlier && (
           <div className="text-center">
             <button type="button" onClick={() => void loadEarlier()} disabled={loadingEarlier} className="rounded-full border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-1 text-xs text-[var(--app-text-secondary)] hover:bg-[var(--app-surface-hover)] disabled:opacity-50">
-              {loadingEarlier ? "กำลังโหลด…" : "โหลดข้อความก่อนหน้า"}
+              {loadingEarlier ? t("loadingEllipsis") : t("earlierMessages")}
             </button>
           </div>
         )}
-        {!messages && !error && <p className="text-center text-sm text-[var(--app-text-secondary)]">กำลังโหลดข้อความ…</p>}
+        {!messages && !error && <p className="text-center text-sm text-[var(--app-text-secondary)]">{t("loadingMessages")}</p>}
         {messages?.items.map((message) => {
-          if (message.direction === "SYSTEM") return <p key={message.id} className="text-center text-xs text-[var(--app-text-tertiary)]">{messageText(message)}</p>;
+          if (message.direction === "SYSTEM") return <p key={message.id} className="text-center text-xs text-[var(--app-text-tertiary)]">{messageText(message, language)}</p>;
           const fromStore = message.direction === "OUTBOUND";
           return (
             <div key={message.id} data-v2-message={message.direction} className={`flex ${fromStore ? "justify-end" : "justify-start"}`}>
               <div className={`max-w-[75%] ${fromStore ? "items-end" : "items-start"} flex flex-col`}>
                 <div className={`whitespace-pre-wrap break-words rounded-2xl px-3.5 py-2 text-sm ${fromStore ? "rounded-br-md bg-[var(--app-accent-soft)] text-[var(--app-text-primary)]" : "rounded-bl-md border border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-text-primary)]"}`}>
-                  {messageText(message)}
+                  {messageText(message, language)}
                 </div>
-                <span className="mt-0.5 text-[11px] text-[var(--app-text-tertiary)]">{fromStore && message.sender?.displayName ? `${message.sender.displayName} · ` : ""}{formatSentAt(message.sentAt, now)}</span>
+                <span className="mt-0.5 text-[11px] text-[var(--app-text-tertiary)]">{fromStore && message.sender?.displayName ? `${message.sender.displayName} · ` : ""}{formatSentAt(message.sentAt, now, language)}</span>
               </div>
             </div>
           );
@@ -161,8 +175,7 @@ function ThreadPane({ conversationId, now }: { conversationId: string | null; no
         <div ref={bottomRef} />
       </div>
       <footer className="border-t border-[var(--app-border)] bg-[var(--app-surface)] px-5 py-2.5 text-center text-xs text-[var(--app-text-secondary)]">
-        ดูอย่างเดียว · ร้านตอบลูกค้าผ่าน LINE OA Manager
-      </footer>
+        {t("readOnly")}</footer>
     </section>
   );
 }
@@ -186,7 +199,7 @@ export function ResponseChatView({ rows, state, onSelectStore, onSelectConversat
     void api.conversations(params, { signal: controller.signal })
       .then((response) => { if (!controller.signal.aborted) setRecent({ key, items: response.items, error: null }); })
       .catch((reason: unknown) => {
-        if (!controller.signal.aborted && !isAbortError(reason)) setRecent({ key, items: [], error: reason instanceof Error ? reason.message : "โหลดไม่สำเร็จ" });
+        if (!controller.signal.aborted && !isAbortError(reason)) setRecent({ key, items: [], error: reason instanceof Error ? reason.message : "loadFailed" });
       });
     return () => controller.abort();
   }, [selectedStore]);

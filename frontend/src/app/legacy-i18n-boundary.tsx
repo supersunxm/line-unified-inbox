@@ -29,11 +29,14 @@ function preserveWhitespace(original: string, translated: string) {
   return `${leading}${translated}${trailing}`;
 }
 
+function normalizePhrase(value: string) {
+  return value.trim().replace(/\s+/g, " ");
+}
+
 function templateRegex(template: string) {
-  const escaped = template
-    .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-    .replace(/\\\{\\\{value\\\}\\\}/g, "([\\s\\S]+?)");
-  return new RegExp(`^${escaped}$`);
+  const parts = template.split("{{value}}");
+  const escape = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`^${parts.map(escape).join("([\\s\\S]+?)")}$`);
 }
 
 function normalizeYear(year: number) {
@@ -181,9 +184,9 @@ export function LegacyI18nBoundary({
   const phraseLookup = useMemo(() => {
     const map = new Map<string, LegacyI18nPhrase>();
     for (const phrase of phrases) {
-      map.set(phrase.th.trim(), phrase);
-      map.set(phrase.en.trim(), phrase);
-      map.set(phrase.zh.trim(), phrase);
+      map.set(normalizePhrase(phrase.th), phrase);
+      map.set(normalizePhrase(phrase.en), phrase);
+      map.set(normalizePhrase(phrase.zh), phrase);
     }
     return map;
   }, [phrases]);
@@ -197,7 +200,7 @@ export function LegacyI18nBoundary({
     const translateValue = (value: string) => {
       const trimmed = value.trim();
       if (!trimmed) return value;
-      const direct = phraseLookup.get(trimmed);
+      const direct = phraseLookup.get(normalizePhrase(trimmed));
       if (direct) return preserveWhitespace(value, direct[language]);
       for (const template of templates) {
         for (const sourceLanguage of ["th", "en", "zh"] as AppLanguage[]) {

@@ -967,7 +967,7 @@ export function AutoResponsesView({ language, userRole }: AutoResponsesViewProps
                       </p>
                     </div>
                     <span className="rounded-lg bg-[var(--app-surface)] px-2 py-1 text-[10px] font-semibold text-[var(--app-text-secondary)] border border-[var(--app-border)]">
-                      {m.areaCount} {m.areaCount === 1 ? "button" : "buttons"}
+                      {m.areaCount} {m.areaCount === 1 ? t.buttonSingular : t.buttonPlural}
                     </span>
                   </div>
                 ))

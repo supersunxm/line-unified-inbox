@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { richMessageApi, type RichMessage } from "../rich-messages/rich-message-api";
+import { useAppLanguage } from "../language";
+import { richMessagesText } from "../rich-messages/rich-messages-i18n";
 
 export type GreetingRichMessageBlockValue = {
   id: string;
@@ -33,6 +35,8 @@ export function GreetingRichMessageBlock({
   onMoveUp,
   onMoveDown,
 }: Props) {
+  const { language } = useAppLanguage();
+  const t = richMessagesText[language];
   const [items, setItems] = useState<RichMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -41,10 +45,10 @@ export function GreetingRichMessageBlock({
     let cancelled = false;
     void richMessageApi.list(false)
       .then((data) => { if (!cancelled) setItems(data); })
-      .catch((reason) => { if (!cancelled) setError(reason instanceof Error ? reason.message : "โหลด Rich Message ไม่สำเร็จ"); })
+      .catch((reason) => { if (!cancelled) setError(reason instanceof Error ? reason.message : t.loadFailed); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, []);
+  }, [t.loadFailed]);
 
   const selected = items.find((item) => item.id === block.richMessageId) || null;
   const previewUrl = selected?.previewUrl || selected?.imageUrl || block.previewUrl;
@@ -54,7 +58,7 @@ export function GreetingRichMessageBlock({
       <div className="flex items-center justify-between border-b border-[var(--app-border)] bg-[#f4f5f7] px-3 py-2 text-xs">
         <div className="flex items-center gap-2 font-medium text-[var(--app-text-primary)]">
           <span className="inline-flex h-6 min-w-6 items-center justify-center rounded border border-gray-200 bg-white px-1 text-[10px] font-bold">RM</span>
-          <span>Rich Message {index + 1}</span>
+          <span>{t.featureName} {index + 1}</span>
         </div>
         <div className="flex items-center gap-1">
           <button type="button" onClick={onMoveUp} disabled={disabled || index === 0} className="flex h-6 w-6 items-center justify-center rounded text-gray-600 hover:bg-gray-200 disabled:opacity-30">▲</button>
@@ -66,10 +70,10 @@ export function GreetingRichMessageBlock({
       <div className="p-4">
         <div className="grid gap-4 sm:grid-cols-[140px_minmax(0,1fr)]">
           <div className="overflow-hidden rounded-lg border border-gray-200 bg-gray-50">
-            {previewUrl ? <img src={previewUrl} alt="" className="aspect-square h-full w-full object-cover" /> : <div className="flex aspect-square items-center justify-center px-3 text-center text-xs text-gray-400">เลือก Rich Message</div>}
+            {previewUrl ? <img src={previewUrl} alt="" className="aspect-square h-full w-full object-cover" /> : <div className="flex aspect-square items-center justify-center px-3 text-center text-xs text-gray-400">{t.chooseRichMessage}</div>}
           </div>
           <div>
-            <label className="text-xs font-semibold text-gray-700">เลือกจากคลัง Rich Message</label>
+          <label className="text-xs font-semibold text-gray-700">{t.selectFromLibrary}</label>
             <select
               value={block.richMessageId}
               disabled={disabled || loading}
@@ -85,12 +89,12 @@ export function GreetingRichMessageBlock({
               }}
               className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-[#06c755]"
             >
-              <option value="">{loading ? "กำลังโหลด…" : "— เลือก Rich Message —"}</option>
+              <option value="">{loading ? t.loading : t.chooseOption}</option>
               {items.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
             </select>
-            {selected && <div className="mt-2 rounded-lg bg-gray-50 p-2.5 text-xs text-gray-600"><div className="font-semibold text-gray-800">{selected.name}</div><div className="mt-1">{selected.actions.length} จุดกด · {selected.baseWidth}×{selected.baseHeight}</div><div className="mt-1 truncate">Alt: {selected.altText}</div></div>}
+            {selected && <div className="mt-2 rounded-lg bg-gray-50 p-2.5 text-xs text-gray-600"><div className="font-semibold text-gray-800">{selected.name}</div><div className="mt-1">{selected.actions.length} {t.tapArea} · {selected.baseWidth}×{selected.baseHeight}</div><div className="mt-1 truncate">{t.altText}: {selected.altText}</div></div>}
             {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
-            <a href="/rich-messages" target="_blank" rel="noreferrer" className="mt-3 inline-flex text-xs font-semibold text-[#06a947] hover:underline">จัดการคลัง Rich Message ↗</a>
+            <a href="/rich-messages" target="_blank" rel="noreferrer" className="mt-3 inline-flex text-xs font-semibold text-[#06a947] hover:underline">{t.manageLibrary}</a>
           </div>
         </div>
       </div>

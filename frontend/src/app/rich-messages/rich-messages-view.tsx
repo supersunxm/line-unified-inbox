@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { richMessageApi, type RichMessage, type RichMessageAction } from "./rich-message-api";
+import { useAppLanguage } from "../language";
+import { richMessagesText } from "./rich-messages-i18n";
 
 type ActionPatch = Omit<Partial<RichMessageAction>, "area"> & {
   area?: Partial<RichMessageAction["area"]>;
@@ -15,6 +17,8 @@ const blankAction = (height = 1040): RichMessageAction => ({
 });
 
 export function RichMessagesView() {
+  const { language } = useAppLanguage();
+  const t = richMessagesText[language];
   const [items, setItems] = useState<RichMessage[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [name, setName] = useState("");
@@ -36,18 +40,18 @@ export function RichMessagesView() {
     [items, selectedId],
   );
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     try {
       setItems(await richMessageApi.list(true));
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "โหลด Rich Message ไม่สำเร็จ");
+      setError(reason instanceof Error ? reason.message : t.loadFailed);
     } finally {
       setLoading(false);
     }
-  };
+  }, [t.loadFailed]);
 
-  useEffect(() => { void load(); }, []);
+  useEffect(() => { void load(); }, [load]);
 
   const reset = () => {
     setSelectedId(null);
@@ -102,7 +106,7 @@ export function RichMessagesView() {
           : current);
       }
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "อัปโหลดรูปไม่สำเร็จ");
+      setError(reason instanceof Error ? reason.message : t.uploadFailed);
     } finally {
       setUploading(false);
     }
@@ -110,7 +114,7 @@ export function RichMessagesView() {
 
   const save = async () => {
     if (!name.trim() || !altText.trim() || !mediaObjectKey) {
-      setError("กรอกชื่อ Alt text และอัปโหลดรูปให้ครบ");
+      setError(t.requiredFields);
       return;
     }
     setSaving(true);
@@ -132,9 +136,9 @@ export function RichMessagesView() {
         : await richMessageApi.create(payload);
       await load();
       select(saved);
-      setSuccess(selectedId ? "บันทึก Rich Message แล้ว" : "สร้าง Rich Message แล้ว");
+      setSuccess(selectedId ? t.saved : t.created);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "บันทึก Rich Message ไม่สำเร็จ");
+      setError(reason instanceof Error ? reason.message : t.saveFailed);
     } finally {
       setSaving(false);
     }
@@ -146,12 +150,12 @@ export function RichMessagesView() {
         <header className="mb-5 flex flex-wrap items-center justify-between gap-3">
           <div>
             <div className="text-xs font-medium uppercase tracking-wide text-[var(--app-text-secondary)]">LINE OA</div>
-            <h1 className="text-2xl font-semibold">Rich Message</h1>
-            <p className="mt-1 text-sm text-[var(--app-text-secondary)]">สร้างครั้งเดียว แล้วนำกลับไปใช้ใน Greeting Message ได้หลายเทมเพลต</p>
+            <h1 className="text-2xl font-semibold">{t.featureName}</h1>
+            <p className="mt-1 text-sm text-[var(--app-text-secondary)]">{t.reuseHint}</p>
           </div>
           <div className="flex gap-2">
-            <a href="/greeting-messages" className="rounded-lg border border-[var(--app-border)] bg-white px-4 py-2 text-sm">← Greeting Message</a>
-            <button type="button" onClick={reset} className="rounded-lg bg-[#06c755] px-4 py-2 text-sm font-semibold text-white dark:bg-[var(--app-accent)]">+ สร้างใหม่</button>
+            <a href="/greeting-messages" className="rounded-lg border border-[var(--app-border)] bg-white px-4 py-2 text-sm">{t.backToGreeting}</a>
+            <button type="button" onClick={reset} className="rounded-lg bg-[#06c755] px-4 py-2 text-sm font-semibold text-white dark:bg-[var(--app-accent)]">{t.createNew}</button>
           </div>
         </header>
 
@@ -161,10 +165,10 @@ export function RichMessagesView() {
         <div className="grid gap-5 lg:grid-cols-[320px_minmax(0,1fr)]">
           <aside className="rounded-xl border border-[var(--app-border)] bg-white p-3 shadow-sm">
             <div className="mb-2 flex items-center justify-between px-1">
-              <h2 className="font-semibold">คลัง Rich Message</h2>
+              <h2 className="font-semibold">{t.library}</h2>
               <span className="text-xs text-gray-500">{items.length}</span>
             </div>
-            {loading ? <div className="p-4 text-sm text-gray-500">กำลังโหลด…</div> : (
+            {loading ? <div className="p-4 text-sm text-gray-500">{t.loading}</div> : (
               <div className="space-y-2">
                 {items.map((item) => (
                   <button key={item.id} type="button" onClick={() => select(item)} className={`w-full rounded-lg border p-2 text-left ${selectedId === item.id ? "border-[#06c755] bg-emerald-50" : "border-gray-200 hover:bg-gray-50"}`}>
@@ -172,13 +176,13 @@ export function RichMessagesView() {
                       <img src={item.previewUrl || item.imageUrl} alt="" className="h-16 w-16 rounded-md border object-cover" />
                       <div className="min-w-0 flex-1">
                         <div className="truncate text-sm font-semibold">{item.name}</div>
-                        <div className="mt-1 text-xs text-gray-500">{item.actions.length} จุดกด · {item.baseWidth}×{item.baseHeight}</div>
-                        <div className={`mt-1 text-xs font-medium ${item.isActive ? "text-emerald-600" : "text-gray-400"}`}>{item.isActive ? "ใช้งานได้" : "ปิดใช้งาน"}</div>
+                        <div className="mt-1 text-xs text-gray-500">{item.actions.length} {t.tapArea} · {item.baseWidth}×{item.baseHeight}</div>
+                        <div className={`mt-1 text-xs font-medium ${item.isActive ? "text-emerald-600" : "text-gray-400"}`}>{item.isActive ? t.active : t.inactive}</div>
                       </div>
                     </div>
                   </button>
                 ))}
-                {!items.length && <div className="p-4 text-center text-sm text-gray-500">ยังไม่มี Rich Message</div>}
+                {!items.length && <div className="p-4 text-center text-sm text-gray-500">{t.empty}</div>}
               </div>
             )}
           </aside>
@@ -187,31 +191,31 @@ export function RichMessagesView() {
             <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
               <div className="space-y-5">
                 <div className="grid gap-4 md:grid-cols-2">
-                  <label className="text-sm font-medium">ชื่อ Rich Message<input value={name} onChange={(e) => setName(e.target.value)} placeholder="เช่น A7 Pro Promotion" className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2.5 font-normal outline-none focus:border-[#06c755]" /></label>
-                  <label className="text-sm font-medium">Alt text<input value={altText} maxLength={400} onChange={(e) => setAltText(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2.5 font-normal outline-none focus:border-[#06c755]" /></label>
+                  <label className="text-sm font-medium">{t.name}<input value={name} onChange={(e) => setName(e.target.value)} placeholder={t.namePlaceholder} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2.5 font-normal outline-none focus:border-[#06c755]" /></label>
+                  <label className="text-sm font-medium">{t.altText}<input value={altText} maxLength={400} onChange={(e) => setAltText(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2.5 font-normal outline-none focus:border-[#06c755]" /></label>
                 </div>
-                <label className="block text-sm font-medium">คำอธิบาย<textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} className="mt-1 w-full resize-none rounded-lg border border-gray-300 px-3 py-2.5 font-normal outline-none focus:border-[#06c755]" /></label>
+                <label className="block text-sm font-medium">{t.description}<textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} className="mt-1 w-full resize-none rounded-lg border border-gray-300 px-3 py-2.5 font-normal outline-none focus:border-[#06c755]" /></label>
 
                 <div>
-                  <div className="mb-2 flex items-center justify-between"><span className="text-sm font-medium">รูป Rich Message</span><span className="text-xs text-gray-500">ฐานกว้าง 1040 px</span></div>
+                  <div className="mb-2 flex items-center justify-between"><span className="text-sm font-medium">{t.image}</span><span className="text-xs text-gray-500">{t.baseWidth}</span></div>
                   <label className="flex cursor-pointer items-center justify-center rounded-lg border border-dashed border-gray-300 bg-gray-50 px-4 py-5 text-sm text-gray-600 hover:border-[#06c755]">
-                    {uploading ? "กำลังอัปโหลด…" : previewUrl ? "เปลี่ยนรูป" : "อัปโหลด JPG / PNG"}
+                    {uploading ? t.uploading : previewUrl ? t.changeImage : t.uploadImage}
                     <input type="file" accept="image/jpeg,image/png" className="hidden" disabled={uploading} onChange={(e) => void handleImage(e.target.files?.[0])} />
                   </label>
                 </div>
 
                 <div>
                   <div className="mb-2 flex items-center justify-between">
-                    <div><h3 className="text-sm font-semibold">พื้นที่กด</h3><p className="text-xs text-gray-500">URI = เปิดลิงก์, MESSAGE = ส่งข้อความกลับเข้าแชท</p></div>
-                    <button type="button" onClick={() => setActions((current) => [...current, blankAction(baseHeight)])} className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium">+ เพิ่มพื้นที่</button>
+                    <div><h3 className="text-sm font-semibold">{t.tapArea}</h3><p className="text-xs text-gray-500">{t.tapAreaHint}</p></div>
+                    <button type="button" onClick={() => setActions((current) => [...current, blankAction(baseHeight)])} className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium">{t.addArea}</button>
                   </div>
                   <div className="space-y-3">
                     {actions.map((action, index) => (
                       <div key={action.id} className="rounded-lg border border-gray-200 p-3">
-                        <div className="mb-3 flex items-center justify-between"><span className="text-sm font-semibold">พื้นที่ {index + 1}</span><button type="button" disabled={actions.length === 1} onClick={() => setActions((current) => current.filter((_, i) => i !== index))} className="text-xs text-red-600 disabled:opacity-30">ลบ</button></div>
+                        <div className="mb-3 flex items-center justify-between"><span className="text-sm font-semibold">{t.area} {index + 1}</span><button type="button" disabled={actions.length === 1} onClick={() => setActions((current) => current.filter((_, i) => i !== index))} className="text-xs text-red-600 disabled:opacity-30">{t.delete}</button></div>
                         <div className="grid gap-2 md:grid-cols-[130px_minmax(0,1fr)]">
                           <select value={action.type} onChange={(e) => updateAction(index, { type: e.target.value as "URI" | "MESSAGE" })} className="rounded-lg border border-gray-300 px-2 py-2 text-sm"><option value="URI">URI</option><option value="MESSAGE">MESSAGE</option></select>
-                          <input value={action.value} onChange={(e) => updateAction(index, { value: e.target.value })} placeholder={action.type === "URI" ? "https://..." : "ข้อความที่จะส่ง"} className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+                          <input value={action.value} onChange={(e) => updateAction(index, { value: e.target.value })} placeholder={action.type === "URI" ? "https://..." : t.messagePlaceholder} className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
                         </div>
                         <div className="mt-2 grid grid-cols-4 gap-2">
                           {(["x", "y", "width", "height"] as const).map((key) => (
@@ -226,14 +230,14 @@ export function RichMessagesView() {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2 border-t pt-4">
-                  <button type="button" disabled={saving || uploading} onClick={() => void save()} className="rounded-lg bg-[#06c755] px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50 dark:bg-[var(--app-accent)]">{saving ? "กำลังบันทึก…" : selectedId ? "บันทึกการแก้ไข" : "สร้าง Rich Message"}</button>
-                  {selected && <button type="button" onClick={async () => { await richMessageApi.setActive(selected.id, !selected.isActive); await load(); }} className="rounded-lg border border-gray-300 px-4 py-2.5 text-sm">{selected.isActive ? "ปิดใช้งาน" : "เปิดใช้งาน"}</button>}
+                  <button type="button" disabled={saving || uploading} onClick={() => void save()} className="rounded-lg bg-[#06c755] px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50 dark:bg-[var(--app-accent)]">{saving ? t.saving : selectedId ? t.saveChanges : t.create}</button>
+                  {selected && <button type="button" onClick={async () => { await richMessageApi.setActive(selected.id, !selected.isActive); await load(); }} className="rounded-lg border border-gray-300 px-4 py-2.5 text-sm">{selected.isActive ? t.deactivate : t.activate}</button>}
                 </div>
               </div>
 
               <aside>
                 <div className="sticky top-5 rounded-xl bg-[#eef1f4] p-4 dark:bg-[var(--app-surface-subtle)]">
-                  <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-500">Preview</div>
+                  <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-500">{t.preview}</div>
                   <div className="overflow-hidden rounded-xl bg-white shadow-sm">
                     {previewUrl ? (
                       <div className="relative">
@@ -244,9 +248,9 @@ export function RichMessagesView() {
                           </div>
                         ))}
                       </div>
-                    ) : <div className="flex aspect-square items-center justify-center text-sm text-gray-400">อัปโหลดรูปเพื่อดูตัวอย่าง</div>}
+                    ) : <div className="flex aspect-square items-center justify-center text-sm text-gray-400">{t.uploadToPreview}</div>}
                   </div>
-                  <p className="mt-3 text-xs leading-5 text-gray-500">LINE จะโหลดรูปตามขนาดอุปกรณ์อัตโนมัติ ระบบสร้าง 240 / 300 / 460 / 700 / 1040 px จากไฟล์ต้นฉบับเดียว</p>
+                  <p className="mt-3 text-xs leading-5 text-gray-500">{t.imageSizingHint}</p>
                 </div>
               </aside>
             </div>

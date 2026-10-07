@@ -46,6 +46,7 @@ const LABELS = {
     affectedStoresTitle: "สาขาที่ได้รับผลกระทบ (Affected Stores)",
     recommendationTitle: "ข้อเสนอแนะการปฏิบัติการ (Recommended Action)",
     confidence: "ระดับความเชื่อมั่น",
+    intentLabel: "เจตนาคำถาม:",
     loadingText: "กำลังประมวลผลคำตอบและวิเคราะห์ข้อมูล...",
   },
   en: {
@@ -59,6 +60,7 @@ const LABELS = {
     affectedStoresTitle: "Affected Stores",
     recommendationTitle: "Recommended Action",
     confidence: "Confidence Score",
+    intentLabel: "Intent:",
     loadingText: "Analyzing operational telemetry & synthesizing answer...",
   },
   zh: {
@@ -72,6 +74,7 @@ const LABELS = {
     affectedStoresTitle: "受影响门店",
     recommendationTitle: "建议采取的操作",
     confidence: "AI 置信度",
+    intentLabel: "问题意图：",
     loadingText: "正在分析运营数据并生成解答...",
   },
 };
@@ -192,7 +195,7 @@ export function AiBiAssistantPanel({ initialAnswer, period, language }: AiBiAssi
               Question: &ldquo;{answer.question}&rdquo;
             </span>
             <span className="px-2 py-0.5 rounded bg-teal-500/20 text-teal-700 dark:text-teal-300 font-bold uppercase text-[10px]">
-              Intent: {answer.intent}
+              {t.intentLabel} {answer.intent}
             </span>
           </div>
 

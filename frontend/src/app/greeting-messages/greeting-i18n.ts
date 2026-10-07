@@ -1,5 +1,8 @@
 export type GreetingDict = {
   title: string;
+  overviewTab: string;
+  builderTab: string;
+  manageRichMessageLibrary: string;
   subtitle: string;
   duplicationWarning: string;
   createTemplateButton: string;
@@ -152,6 +155,9 @@ export type GreetingDict = {
 
   // Live Mobile Preview
   previewTitle: string;
+  tips: string;
+  previewImageAlt: string;
+  greetingBlockAlt: string;
   previewStoreSelector: string;
   previewCustomerNameLabel: string;
   previewCustomerNamePlaceholder: string;
@@ -164,6 +170,9 @@ export type GreetingDict = {
 
 const th: GreetingDict = {
   title: "ข้อความต้อนรับ",
+  overviewTab: "ภาพรวม",
+  builderTab: "Builder",
+  manageRichMessageLibrary: "จัดการคลัง Rich Message ↗",
   subtitle: "สร้างข้อความที่ส่งอัตโนมัติเมื่อลูกค้าเพิ่ม LINE OA เป็นเพื่อน",
   duplicationWarning: "⚠️ เพื่อป้องกันข้อความส่งซ้ำซ้อน กรุณาปิดข้อความทักทาย (Greeting Message) ใน LINE Official Account Manager ก่อนเปิดใช้งานเทมเพลตที่นี่",
   createTemplateButton: "สร้างเทมเพลตข้อความต้อนรับ",
@@ -312,6 +321,9 @@ const th: GreetingDict = {
   saveAssignmentsSuccess: (count) => `บันทึกการผูกข้อความต้อนรับกับ ${count} สาขาเรียบร้อยแล้ว`,
 
   previewTitle: "Preview",
+  tips: "ⓘ คำแนะนำ",
+  previewImageAlt: "ภาพตัวอย่าง",
+  greetingBlockAlt: "บล็อกข้อความต้อนรับ",
   previewStoreSelector: "ร้านตัวอย่าง:",
   previewCustomerNameLabel: "ชื่อผู้ใช้ตัวอย่าง:",
   previewCustomerNamePlaceholder: "เช่น คุณสมชาย",
@@ -324,6 +336,9 @@ const th: GreetingDict = {
 
 const en: GreetingDict = {
   title: "Greeting message",
+  overviewTab: "Overview",
+  builderTab: "Builder",
+  manageRichMessageLibrary: "Manage Rich Message library ↗",
   subtitle: "This message will be sent automatically to users when they add you as a friend.",
   duplicationWarning: "⚠️ To prevent duplicate greeting messages, please disable native Greeting Messages in LINE Official Account Manager before activating templates here.",
   createTemplateButton: "Create Greeting Template",
@@ -472,6 +487,9 @@ const en: GreetingDict = {
   saveAssignmentsSuccess: (count) => `Successfully assigned greeting message to ${count} stores`,
 
   previewTitle: "Preview",
+  tips: "ⓘ Tips",
+  previewImageAlt: "Preview image",
+  greetingBlockAlt: "Greeting block",
   previewStoreSelector: "Sample store:",
   previewCustomerNameLabel: "Sample user:",
   previewCustomerNamePlaceholder: "e.g. Somchai",
@@ -484,6 +502,9 @@ const en: GreetingDict = {
 
 const zh: GreetingDict = {
   title: "问候消息",
+  overviewTab: "概览",
+  builderTab: "编辑器",
+  manageRichMessageLibrary: "管理富媒体消息库 ↗",
   subtitle: "当用户添加您为好友时自动发送此消息。",
   duplicationWarning: "⚠️ 为防止重复发送问候消息，在此处启用模板前，请关闭 LINE 官方账号管理器中的原生问候消息。",
   createTemplateButton: "创建问候模板",
@@ -632,6 +653,9 @@ const zh: GreetingDict = {
   saveAssignmentsSuccess: (count) => `已成功将问候消息关联至 ${count} 家门店`,
 
   previewTitle: "Preview",
+  tips: "ⓘ 提示",
+  previewImageAlt: "图片预览",
+  greetingBlockAlt: "欢迎消息内容块",
   previewStoreSelector: "示例门店:",
   previewCustomerNameLabel: "示例用户:",
   previewCustomerNamePlaceholder: "例如：张三",

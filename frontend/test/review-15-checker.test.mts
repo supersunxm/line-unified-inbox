@@ -1,3 +1,4 @@
+import { review15Text } from "../src/app/review15/review-15-translations.ts";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -190,9 +191,9 @@ test("review15 header reuses the public OPPO Brand Shop branding contract", () =
   const checkerSource = fs.readFileSync(checkerPath, "utf8");
 
   assert.match(checkerSource, /import Link from "next\/link";/);
-  assert.match(checkerSource, /aria-label="OPPO Brand Shop Home"/);
+  assert.match(checkerSource, /aria-label=\{t\("home"\)\}/);
   assert.match(checkerSource, />\s*OPPO Brand Shop\s*</);
-  assert.match(checkerSource, />\s*ค้นหาสาขา & ช่องทางติดต่อ\s*</);
+  assert.match(checkerSource, /t\("stores"\)/);
   assert.doesNotMatch(checkerSource, /aria-label="OPPO Home"/);
   assert.doesNotMatch(checkerSource, />\s*oppo\s*</);
 });
@@ -208,8 +209,8 @@ test("review15 displays a privacy-safe approximate total visitor count", () => {
   assert.match(checkerSource, /window\.localStorage\.getItem/);
   assert.match(checkerSource, /window\.crypto\.randomUUID\(\)/);
   assert.match(checkerSource, /\/api-backend\/review15\/visitors/);
-  assert.match(checkerSource, /ผู้เข้าชมรวมโดยประมาณ/);
-  assert.match(checkerSource, /ไม่ระบุตัวตน/);
+  assert.match(checkerSource, /t\("visitors"\)/);
+  assert.match(checkerSource, /t\("anonymous"\)/);
 });
 
 test("public review checker uses Google Vision for image scanning", () => {
@@ -220,11 +221,11 @@ test("public review checker uses Google Vision for image scanning", () => {
   const checkerSource = fs.readFileSync(checkerPath, "utf8");
 
   assert.match(checkerSource, /segmentThaiWords/);
-  assert.match(checkerSource, /สแกนจากภาพ/);
+  assert.match(checkerSource, /t\("imageMode"\)/);
   assert.match(checkerSource, /\/api-backend\/review15\/scan/);
   assert.match(checkerSource, /Google Vision OCR/);
-  assert.match(checkerSource, /กฎการนับคำ/);
-  assert.match(checkerSource, /ไม่บันทึกไฟล์ภาพลงฐานข้อมูล/);
+  assert.match(checkerSource, /t\("rules"\)/);
+  assert.match(checkerSource, /t\("ocrPrivacy"\)/);
   assert.doesNotMatch(checkerSource, /tesseract\.js/);
   assert.doesNotMatch(checkerSource, /window\.Tesseract/);
 });
@@ -308,8 +309,8 @@ test("image OCR never auto-passes before BM confirms recognized text", () => {
 
   assert.match(checkerSource, /confirmed:\s*boolean/);
   assert.match(checkerSource, /confirmed:\s*false/);
-  assert.match(checkerSource, /ยืนยันข้อความนี้และนับคำ/);
-  assert.match(checkerSource, /ระบบจะยังไม่ตัดสินผ่าน 15 คำ/);
+  assert.match(checkerSource, /t\("confirm"\)/);
+  assert.match(checkerSource, /t\("confirmHelp"\)/);
   assert.match(checkerSource, /candidate\.confirmed/);
 });
 
@@ -338,8 +339,8 @@ test("image scan UI warns when estimated review cards exceed extracted bodies", 
 
   assert.match(checkerSource, /estimatedReviewCount:\s*number/);
   assert.match(checkerSource, /missingReviewCount:\s*number/);
-  assert.match(checkerSource, /อาจมีรีวิวตกหล่น/);
-  assert.match(checkerSource, /แยกข้อความได้/);
+  assert.match(checkerSource, /t\("missingWarning"/);
+  assert.match(checkerSource, /t\("extracted"/);
 });
 
 test("the random sample button offers diverse examples and avoids the current text", async () => {
@@ -389,6 +390,14 @@ test("the random sample button offers diverse examples and avoids the current te
     /import \{ pickRandomReview15Example, REVIEW15_EXAMPLES \} from "\.\/review-15-example";/,
   );
   assert.match(checker, /pickRandomReview15Example\(text\)\.text/);
-  assert.match(checker, /สุ่มข้อความตัวอย่าง/);
-  assert.match(checker, /กดซ้ำเพื่อสุ่มข้อความใหม่/);
+  assert.match(checker, /t\("random"\)/);
+  assert.match(checker, /t\("exampleCount"/);
 });
+
+ test("localized review copy preserves the Thai instructions", () => {
+ const t = review15Text("th");
+ assert.equal(t("random"), "สุ่มข้อความตัวอย่าง");
+ assert.match(t("missingWarning", { total: 5, count: 3 }), /อาจมีรีวิวตกหล่น/);
+ assert.match(t("confirmHelp"), /ระบบจะยังไม่ตัดสินผ่าน 15 คำ/);
+ assert.match(t("ocrPrivacy"), /ไม่บันทึกไฟล์ภาพลงฐานข้อมูล/);
+ });

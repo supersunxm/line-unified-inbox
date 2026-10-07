@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { api, ApiError } from "@/lib/api";
 import type { ApiConversation, ApiCustomerSalesInformation, UpdateCustomerSalesInfoInput } from "@/types/api";
+import { getCustomerSalesTagEditorText } from "./customer-sales-tag-editor-i18n";
 
 export interface CustomerSalesTagEditorProps {
   conversationId: string;
@@ -27,6 +28,7 @@ export function CustomerSalesTagEditor({
   onSaved,
   language = "th",
 }: CustomerSalesTagEditorProps) {
+  const t = getCustomerSalesTagEditorText(language);
   const [prevKey, setPrevKey] = useState("");
   const [status, setStatus] = useState<SalesStatusOption>("");
   const [paymentMethod, setPaymentMethod] = useState<PaymentOption>("CASH");
@@ -72,7 +74,7 @@ export function CustomerSalesTagEditor({
         if (!normalizedBrand) {
           setFeedback({
             type: "error",
-            message: language === "th" ? "กรุณาเลือกหรือระบุยี่ห้อโทรศัพท์ก่อนบันทึก" : "Select or enter a phone brand before saving.",
+            message: t.chooseBrandBeforeSave,
           });
           setIsSaving(false);
           return;
@@ -85,7 +87,7 @@ export function CustomerSalesTagEditor({
         if (!normalizedSource) {
           setFeedback({
             type: "error",
-            message: language === "th" ? "กรุณาเลือกหรือระบุแหล่งที่มาออนไลน์ก่อนบันทึก" : language === "zh" ? "保存前请选择或输入线上来源。" : "Select or enter an online source before saving.",
+            message: t.chooseSourceBeforeSave,
           });
           setIsSaving(false);
           return;
@@ -112,11 +114,7 @@ export function CustomerSalesTagEditor({
       setFeedback({
         type: "success",
         message:
-          language === "th"
-            ? "บันทึกแท็กการขายสำเร็จ (คิวซิงค์ชื่อ LINE OA ถูกส่งแล้ว)"
-            : language === "zh"
-              ? "销售标签保存成功（LINE OA 昵称同步已入队）"
-              : "Sales tag saved successfully (LINE OA nickname sync queued)",
+          t.saveSuccess,
       });
       onSaved?.(updated);
     } catch (err) {
@@ -125,7 +123,7 @@ export function CustomerSalesTagEditor({
           ? err.message
           : err instanceof Error
             ? err.message
-            : "Failed to update sales tag";
+            : t.saveFailed;
       setFeedback({ type: "error", message });
     } finally {
       setIsSaving(false);
@@ -140,7 +138,7 @@ export function CustomerSalesTagEditor({
     >
       <div className="mb-2.5 flex items-center justify-between">
         <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--app-text-primary)]">
-          🏷️ {language === "th" ? "แท็กการขาย (Customer Sales)" : language === "zh" ? "客户销售标签" : "Sales Tag"}
+          🏷️ {t.title}
         </h3>
         {salesInfo?.status && (
           <span
@@ -164,10 +162,10 @@ export function CustomerSalesTagEditor({
       <div className="grid grid-cols-4 gap-1.5 mb-3" data-sales-status-options>
         {(
           [
-            ["ONLINE", "Online", "bg-blue-600 hover:bg-blue-700 text-white"],
-            ["INTERESTED", "Interested", "bg-amber-600 hover:bg-amber-700 text-white"],
-            ["PURCHASED", "Purchased", "bg-emerald-600 hover:bg-emerald-700 text-white"],
-            ["FILM", "Film", "bg-violet-600 hover:bg-violet-700 text-white"],
+            ["ONLINE", t.online, "bg-blue-600 hover:bg-blue-700 text-white"],
+            ["INTERESTED", t.interested, "bg-amber-600 hover:bg-amber-700 text-white"],
+            ["PURCHASED", t.purchased, "bg-emerald-600 hover:bg-emerald-700 text-white"],
+            ["FILM", t.film, "bg-violet-600 hover:bg-violet-700 text-white"],
           ] as const
         ).map(([value, label, activeClasses]) => {
           const isSelected = status === value;
@@ -200,13 +198,13 @@ export function CustomerSalesTagEditor({
           {/* Payment Method */}
           <div>
             <label className="block text-[11px] font-semibold text-[var(--app-text-secondary)] mb-1">
-              {language === "th" ? "วิธีชำระเงิน" : "Payment Method"}
+              {t.paymentMethod}
             </label>
             <div className="flex gap-2" data-payment-method-options>
               {(
                 [
-                  ["CASH", language === "th" ? "เงินสด (Cash)" : "Cash"],
-                  ["INSTALLMENT", language === "th" ? "ผ่อนชำระ (Installment)" : "Installment"],
+                  ["CASH", t.cash],
+                  ["INSTALLMENT", t.installment],
                 ] as const
               ).map(([val, label]) => (
                 <label
@@ -236,7 +234,7 @@ export function CustomerSalesTagEditor({
           {/* Product Model Selector */}
           <div>
             <label className="block text-[11px] font-semibold text-[var(--app-text-secondary)] mb-1">
-              {language === "th" ? "รุ่นสมาร์ทโฟนที่ซื้อ" : "Purchased Model"}
+              {t.purchasedModel}
             </label>
             {availableProductModels.length > 0 ? (
               <select
@@ -251,7 +249,7 @@ export function CustomerSalesTagEditor({
                 }}
                 className="w-full rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface)] px-2.5 py-1 text-xs text-[var(--app-text-primary)] outline-none focus:ring-1 focus:ring-[var(--app-accent)] disabled:opacity-50"
               >
-                <option value="">{language === "th" ? "-- เลือกรุ่นสมาร์ทโฟน --" : "-- Select Model --"}</option>
+                <option value="">{t.selectModel}</option>
                 {availableProductModels.map((model) => (
                   <option key={model.id} value={model.id}>
                     {model.name}
@@ -262,7 +260,7 @@ export function CustomerSalesTagEditor({
               <input
                 type="text"
                 data-custom-product-input
-                placeholder={language === "th" ? "ระบุรุ่น เช่น Find X9, Reno 14" : "e.g. Find X9, Reno 14"}
+                placeholder={t.customModelPlaceholder}
                 value={customModelName}
                 disabled={disabled || isSaving}
                 onChange={(e) => setCustomModelName(e.target.value)}
@@ -276,7 +274,7 @@ export function CustomerSalesTagEditor({
       {status === "ONLINE" && (
         <div data-online-source-fields className="mb-3 space-y-2.5 rounded-[var(--app-radius-md)] bg-[var(--app-surface-subtle)] p-2.5 border border-[var(--app-border-subtle)]">
           <label className="block text-[11px] font-semibold text-[var(--app-text-secondary)] mb-1">
-            {language === "th" ? "แหล่งที่มาออนไลน์" : language === "zh" ? "线上来源" : "Online Source"}
+            {t.onlineSource}
           </label>
           <select
             data-online-source-select
@@ -285,14 +283,14 @@ export function CustomerSalesTagEditor({
             onChange={(e) => setOnlineSource(e.target.value === "Other" ? "" : e.target.value)}
             className="w-full rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface)] px-2.5 py-1 text-xs text-[var(--app-text-primary)] outline-none focus:ring-1 focus:ring-[var(--app-accent)] disabled:opacity-50"
           >
-            <option value="">{language === "th" ? "-- เลือกแหล่งที่มา --" : language === "zh" ? "-- 选择来源 --" : "-- Select Source --"}</option>
+            <option value="">{t.selectSource}</option>
             {onlineSourceOptions.map((source) => <option key={source} value={source}>{source}</option>)}
           </select>
           {(!onlineSourceOptions.includes(onlineSource as (typeof onlineSourceOptions)[number]) || onlineSource === "") && (
             <input
               type="text"
               data-custom-online-source-input
-              placeholder={language === "th" ? "ระบุแหล่งที่มาอื่น" : language === "zh" ? "输入其他来源" : "Enter another source"}
+              placeholder={t.otherSourcePlaceholder}
               value={onlineSource}
               disabled={disabled || isSaving}
               onChange={(e) => setOnlineSource(e.target.value)}
@@ -305,7 +303,7 @@ export function CustomerSalesTagEditor({
       {status === "FILM" && (
         <div data-film-fields className="mb-3 space-y-2.5 rounded-[var(--app-radius-md)] bg-[var(--app-surface-subtle)] p-2.5 border border-[var(--app-border-subtle)]">
           <label className="block text-[11px] font-semibold text-[var(--app-text-secondary)] mb-1">
-            {language === "th" ? "ยี่ห้อโทรศัพท์" : language === "zh" ? "手机品牌" : "Phone Brand"}
+            {t.phoneBrand}
           </label>
           <select
             data-film-brand-select
@@ -314,14 +312,14 @@ export function CustomerSalesTagEditor({
             onChange={(e) => setFilmBrand(e.target.value === "Other" ? "" : e.target.value)}
             className="w-full rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface)] px-2.5 py-1 text-xs text-[var(--app-text-primary)] outline-none focus:ring-1 focus:ring-[var(--app-accent)] disabled:opacity-50"
           >
-            <option value="">{language === "th" ? "-- เลือกยี่ห้อ --" : language === "zh" ? "-- 选择品牌 --" : "-- Select Brand --"}</option>
+            <option value="">{t.selectBrand}</option>
             {filmBrandOptions.map((brand) => <option key={brand} value={brand}>{brand}</option>)}
           </select>
           {(!filmBrandOptions.includes(filmBrand as (typeof filmBrandOptions)[number]) || filmBrand === "") && (
             <input
               type="text"
               data-custom-film-brand-input
-              placeholder={language === "th" ? "ระบุยี่ห้ออื่น" : language === "zh" ? "输入其他品牌" : "Enter another brand"}
+              placeholder={t.otherBrandPlaceholder}
               value={filmBrand}
               disabled={disabled || isSaving}
               onChange={(e) => setFilmBrand(e.target.value)}
@@ -342,10 +340,10 @@ export function CustomerSalesTagEditor({
         {isSaving ? (
           <>
             <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-white border-t-transparent" />
-            <span>{language === "th" ? "กำลังบันทึก..." : "Saving..."}</span>
+            <span>{t.saving}</span>
           </>
         ) : (
-          <span>{language === "th" ? "บันทึกแท็กการขาย" : "Save Sales Tag"}</span>
+          <span>{t.save}</span>
         )}
       </button>
 

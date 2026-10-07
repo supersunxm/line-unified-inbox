@@ -1,6 +1,8 @@
 import type { CSSProperties } from "react";
 import type { Metadata } from "next";
+import { LegacyI18nBoundary } from "../legacy-i18n-boundary";
 import { StoreLocatorApp } from "./store-locator-app";
+import { storeLocatorPhrases, storeLocatorTemplates } from "./store-locator-i18n";
 
 export const metadata: Metadata = {
   title: {
@@ -43,7 +45,9 @@ const STORE_LOCATOR_LIGHT_THEME = {
 export default function StoreLocatorPage() {
   return (
     <div style={STORE_LOCATOR_LIGHT_THEME} className="min-h-screen bg-[#f5f5f7] text-[#1d1d1f] [color-scheme:light]">
-      <StoreLocatorApp />
+      <LegacyI18nBoundary phrases={storeLocatorPhrases} templates={storeLocatorTemplates}>
+        <StoreLocatorApp />
+      </LegacyI18nBoundary>
     </div>
   );
 }

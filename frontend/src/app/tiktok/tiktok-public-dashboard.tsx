@@ -8,6 +8,7 @@ import { PageContainer } from "@/components/shell";
 import { useAppLanguage } from "../language";
 import type { TikTokPublicDashboardOverview, TikTokPublicDashboardStore } from "./tiktok-public-api";
 import { formatDashboardTimestamp } from "./tiktok-public-timestamp";
+import { tiktokDashboardText } from "./tiktok-dashboard-i18n";
 
 type Props = {
   overview: TikTokPublicDashboardOverview;
@@ -237,9 +238,11 @@ export function TikTokPublicDashboard({ overview, stores }: Props) {
     };
   }, [stores]);
 
+  const text = tiktokDashboardText[language];
+
   const handleDownloadCsv = async () => {
     if (!(await authorizeDataDownload())) return;
-    const headers = ["Store", "TikTok", "Region", "Province", "Followers", "Likes", "Videos", "1D", "7D", "30D"];
+    const headers = [text.store, text.tiktok, text.region, text.province, text.followers, text.likesShort, text.videosShort, text.csvDaily, text.csvSevenDay, text.csvThirtyDay];
     const rows = visibleStores.map((store) => [
       store.storeName,
       `@${store.username}`,
@@ -262,118 +265,6 @@ export function TikTokPublicDashboard({ overview, stores }: Props) {
     anchor.click();
     anchor.remove();
     URL.revokeObjectURL(url);
-  };
-
-  const text = language === "th" ? {
-    eyebrow: "OPPO RETAIL",
-    title: "TikTok Analytics",
-    subtitle: "ติดตามการเติบโตของ TikTok แต่ละสาขา ด้วยข้อมูลจริงจาก Public Profile",
-    tracked: "จำนวนสาขา TikTok",
-    followers: "ผู้ติดตามรวม",
-    likes: "ยอดไลก์รวม",
-    videos: "จำนวนวิดีโอรวม",
-    content: "คอนเทนต์",
-    likesShort: "ไลก์",
-    videosShort: "วิดีโอ",
-    exact: "ข้อมูลจริงจาก Public Profile",
-    ranking: "Top 5 ผู้ติดตามสูงสุด",
-    rankingSub: "สาขาที่มีฐานผู้ติดตามสูงสุด",
-    growthRanking: "Top 5 เติบโตเร็วสุด",
-    growthRankingSub: "เรียงตามผู้ติดตามที่เพิ่มขึ้นใน 7 วัน",
-    attention: "ร้านที่น่าจับตามอง",
-    attentionSub: "สัญญาณที่ควรตรวจสอบก่อนเป็นอันดับแรก",
-    dailyDeclineLabel: "ผู้ติดตามลดลงวันนี้",
-    weeklyDeclineLabel: "ผู้ติดตามลดลงใน 7 วัน",
-    weeklyFlatLabel: "ไม่มีการเติบโตใน 7 วัน",
-    viewAll: "ดูทั้งหมด",
-    dailyOverview: "การเติบโตผู้ติดตามรายวัน",
-    dailyOverviewSub: "เทียบ Snapshot ล่าสุดกับ Snapshot ของวันก่อนหน้า",
-    gainers: "เพิ่มขึ้น",
-    losers: "ลดลง",
-    flat: "คงที่",
-    missing: "ยังไม่มี Baseline",
-    storePerformance: "รายชื่อสาขาทั้งหมด",
-    storePerformanceSub: "ค้นหา กรอง และเปรียบเทียบการเติบโตของแต่ละสาขา",
-    search: "ค้นหาชื่อสาขา, @username หรือจังหวัด...",
-    allRegions: "ทุกภูมิภาค",
-    allProvinces: "ทุกจังหวัด",
-    sortBy: "เรียงตาม",
-    followerSort: "ผู้ติดตามสูงสุด",
-    growth1dSort: "การเติบโต 1 วัน",
-    growthSort: "การเติบโต 7 วัน",
-    growth30dSort: "การเติบโต 30 วัน",
-    storeNameSort: "ชื่อสาขา (ก-ฮ)",
-    likesSort: "ยอดไลก์",
-    videosSort: "จำนวนวิดีโอ",
-    store: "สาขา",
-    tiktok: "TikTok",
-    growthColumn: "การเติบโต",
-    growthPeriod: "ช่วงเวลา",
-    daily: "การเติบโต (1 วัน)",
-    seven: "การเติบโต (7 วัน)",
-    thirty: "การเติบโต (30 วัน)",
-    noData: "ไม่พบข้อมูลสาขาตามเงื่อนไขที่เลือก",
-    open: "ดูรายละเอียด",
-    download: "ดาวน์โหลดข้อมูล",
-    refresh: "รีเฟรชข้อมูล",
-    result: "สาขาที่แสดง",
-    followersWord: "ผู้ติดตาม",
-    baselineCoverage: "สาขามีข้อมูลวันก่อนหน้าสำหรับเปรียบเทียบ",
-  } : {
-    eyebrow: "OPPO RETAIL",
-    title: "TikTok Analytics",
-    subtitle: "Track store-level TikTok growth using exact public profile metrics.",
-    tracked: "TikTok stores",
-    followers: "Total followers",
-    likes: "Total likes",
-    videos: "Total videos",
-    content: "Content",
-    likesShort: "likes",
-    videosShort: "videos",
-    exact: "Exact public profile data",
-    ranking: "Top 5 by followers",
-    rankingSub: "Stores with the largest follower base",
-    growthRanking: "Top 5 fastest growth",
-    growthRankingSub: "Ranked by follower gain over 7 days",
-    attention: "Needs attention",
-    attentionSub: "Signals worth checking first",
-    dailyDeclineLabel: "Followers declined today",
-    weeklyDeclineLabel: "Followers declined in 7 days",
-    weeklyFlatLabel: "No follower growth in 7 days",
-    viewAll: "View all",
-    dailyOverview: "Daily follower growth",
-    dailyOverviewSub: "Latest snapshot compared with the previous daily snapshot",
-    gainers: "Gained",
-    losers: "Declined",
-    flat: "No change",
-    missing: "No baseline",
-    storePerformance: "All stores",
-    storePerformanceSub: "Search, filter and compare store growth",
-    search: "Search store, @username or province...",
-    allRegions: "All regions",
-    allProvinces: "All provinces",
-    sortBy: "Sort by",
-    followerSort: "Most followers",
-    growth1dSort: "1D growth",
-    growthSort: "7D growth",
-    growth30dSort: "30D growth",
-    storeNameSort: "Store name (A-Z)",
-    likesSort: "Likes",
-    videosSort: "Videos",
-    store: "Store",
-    tiktok: "TikTok",
-    growthColumn: "Growth",
-    growthPeriod: "Period",
-    daily: "1D growth",
-    seven: "7D growth",
-    thirty: "30D growth",
-    noData: "No stores match the selected filters",
-    open: "View details",
-    download: "Download data",
-    refresh: "Refresh",
-    result: "stores shown",
-    followersWord: "followers",
-    baselineCoverage: "stores have a previous-day baseline",
   };
 
   const dailyGrowthText = dailySummary.comparable > 0
@@ -409,7 +300,7 @@ export function TikTokPublicDashboard({ overview, stores }: Props) {
               </span>
             )}
             <span className="rounded-xl bg-slate-50 px-3 py-2 font-semibold text-slate-700 dark:bg-[var(--app-surface-subtle)] dark:text-[var(--app-text-primary)]">
-              {number(overview.trackedStores, locale)} stores
+              {number(overview.trackedStores, locale)} {text.trackedUnit}
             </span>
             <button
               onClick={handleRefresh}
@@ -430,7 +321,7 @@ export function TikTokPublicDashboard({ overview, stores }: Props) {
             icon="stores"
             label={text.tracked}
             value={number(overview.trackedStores, locale)}
-            detail="StoreMaster coverage"
+            detail={text.storeMasterCoverage}
           />
           <MetricCard
             icon="followers"
@@ -443,13 +334,13 @@ export function TikTokPublicDashboard({ overview, stores }: Props) {
             icon="likes"
             label={text.likes}
             value={number(overview.totalLikes, locale)}
-            detail={`${compact(overview.totalLikes, locale)} likes`}
+            detail={`${compact(overview.totalLikes, locale)} ${text.likesUnit}`}
           />
           <MetricCard
             icon="videos"
             label={text.videos}
             value={number(overview.totalVideos, locale)}
-            detail="Public profile total"
+            detail={text.publicProfileTotal}
           />
         </section>
 

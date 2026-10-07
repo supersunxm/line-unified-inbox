@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { LanguageControl } from "../../language";
+import { TikTokPublicI18nBoundary } from "../../tiktok-public-i18n";
 import { isTikTokPublicConnectEnabled } from "../../tiktok/connect/tiktok-oauth";
 
 export const dynamic = "force-dynamic";
@@ -15,10 +17,11 @@ export default function TikTokConnectPage() {
   const isConfigured = Boolean(process.env.TIKTOK_CLIENT_KEY?.trim());
 
   return (
+    <TikTokPublicI18nBoundary>
     <div className="min-h-screen bg-[var(--app-bg,#0b0d11)] text-[var(--app-text-primary,#f8fafc)] flex flex-col justify-between antialiased selection:bg-[var(--app-accent-soft,rgba(31,107,74,0.15))] selection:text-[var(--app-accent,#1f6b4a)]">
       {/* Header */}
       <header className="sticky top-0 z-30 border-b border-[var(--app-border,#1e2430)] bg-[var(--app-surface,#12151c)]/90 backdrop-blur-md">
-        <div className="mx-auto flex h-16 max-w-4xl items-center justify-between px-4 sm:px-6">
+        <div className="mx-auto flex min-h-16 max-w-4xl flex-wrap items-center justify-between gap-2 px-4 py-2 sm:px-6">
           <Link href="/" className="flex items-center gap-2.5 group">
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--app-accent,#1f6b4a)] text-white font-bold text-lg shadow-sm group-hover:scale-105 transition">
               O
@@ -35,6 +38,7 @@ export default function TikTokConnectPage() {
             >
               ← สาขาทั้งหมด
             </Link>
+            <LanguageControl />
           </div>
         </div>
       </header>
@@ -217,5 +221,6 @@ export default function TikTokConnectPage() {
         <p>© {new Date().getFullYear()} OPPO Brand Shop · lineoppo.click · สงวนลิขสิทธิ์</p>
       </footer>
     </div>
+    </TikTokPublicI18nBoundary>
   );
 }

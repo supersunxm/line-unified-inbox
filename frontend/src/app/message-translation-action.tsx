@@ -4,6 +4,8 @@ import { useState } from "react";
 import { api, TranslationFeedbackIssueCategory } from "@/lib/api";
 import type { ApiConversation } from "@/types/api";
 import { isMessageTranslationEligible } from "./message-translation";
+import { useAppLanguage } from "./language";
+import { messageTranslationText } from "./message-translation-i18n";
 
 type Message = ApiConversation["messages"][number];
 type TranslationState =
@@ -12,12 +14,6 @@ type TranslationState =
   | { status: "success"; translatedText: string }
   | { status: "error" };
 type FeedbackState = "idle" | "choosing-reason" | "submitting" | "submitted" | "error";
-
-const incorrectReasons: Array<{ value: TranslationFeedbackIssueCategory; label: string }> = [
-  { value: "meaning_issue", label: "Meaning issue" },
-  { value: "terminology_issue", label: "Terminology issue" },
-  { value: "other", label: "Other" },
-];
 
 export function MessageTranslationAction({
   message,
@@ -28,9 +24,16 @@ export function MessageTranslationAction({
   userRole: "ADMIN" | "ASSISTANT" | "VIEWER";
   onTranslated: (translatedText: string) => void;
 }) {
+  const { language } = useAppLanguage();
+  const text = messageTranslationText[language];
   const [state, setState] = useState<TranslationState>({ status: "idle" });
   const [feedbackState, setFeedbackState] = useState<FeedbackState>("idle");
   const [incorrectReason, setIncorrectReason] = useState<TranslationFeedbackIssueCategory | null>(null);
+  const incorrectReasons: Array<{ value: TranslationFeedbackIssueCategory; label: string }> = [
+    { value: "meaning_issue", label: text.meaningIssue },
+    { value: "terminology_issue", label: text.terminologyIssue },
+    { value: "other", label: text.other },
+  ];
 
   if (!isMessageTranslationEligible(message, userRole)) return null;
 
@@ -72,9 +75,9 @@ export function MessageTranslationAction({
           disabled={state.status === "loading"}
           onClick={() => void translate()}
           className="rounded px-1 py-0.5 text-xs font-semibold text-blue-700 underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-wait disabled:text-slate-500 dark:text-blue-300"
-          aria-label="Translate message to English"
+          aria-label={text.translateToEnglish}
         >
-          {state.status === "loading" ? "Translating..." : "Translate"}
+          {state.status === "loading" ? text.translating : text.translate}
         </button>
       )}
       <div aria-live="polite">
@@ -82,16 +85,16 @@ export function MessageTranslationAction({
           <div>
             <div className="rounded-lg bg-blue-50 px-2.5 py-2 text-left dark:bg-blue-950/50">
               <p className="text-[10px] font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">
-                AI Translation · English
+                {text.translationTitle}
               </p>
               <p className="mt-1 whitespace-pre-wrap text-sm text-slate-800 dark:text-slate-100">
                 {state.translatedText}
               </p>
             </div>
             {feedbackState === "submitted" ? (
-              <p className="mt-2 text-xs font-medium text-green-700 dark:text-green-300" role="status">Feedback recorded</p>
+            <p className="mt-2 text-xs font-medium text-green-700 dark:text-green-300" role="status">{text.feedbackRecorded}</p>
             ) : (
-              <div className="mt-2 text-left" aria-label="Rate translation quality">
+              <div className="mt-2 text-left" aria-label={text.rateTranslationQuality}>
                 <div className="flex flex-wrap gap-2">
                   <button
                     type="button"
@@ -99,7 +102,7 @@ export function MessageTranslationAction({
                     onClick={() => void submitFeedback("HELPFUL")}
                     className="rounded-full border border-green-300 px-2.5 py-1 text-xs font-semibold text-green-700 hover:bg-green-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500 disabled:opacity-50 dark:border-green-800 dark:text-green-300 dark:hover:bg-green-950/50"
                   >
-                    Helpful 👍
+                    {text.helpful}
                   </button>
                   <button
                     type="button"
@@ -107,12 +110,12 @@ export function MessageTranslationAction({
                     onClick={() => setFeedbackState("choosing-reason")}
                     className="rounded-full border border-red-300 px-2.5 py-1 text-xs font-semibold text-red-700 hover:bg-red-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 disabled:opacity-50 dark:border-red-800 dark:text-red-300 dark:hover:bg-red-950/50"
                   >
-                    Incorrect 👎
+                    {text.incorrect}
                   </button>
                 </div>
                 {(feedbackState === "choosing-reason" || (feedbackState === "error" && incorrectReason)) && (
                   <fieldset className="mt-2">
-                    <legend className="text-xs font-medium text-slate-600 dark:text-slate-300">What was incorrect?</legend>
+                    <legend className="text-xs font-medium text-slate-600 dark:text-slate-300">{text.whatWasIncorrect}</legend>
                     <div className="mt-1 flex flex-wrap gap-2">
                       {incorrectReasons.map((reason) => (
                         <label key={reason.value} className="flex cursor-pointer items-center gap-1 text-xs">
@@ -133,19 +136,19 @@ export function MessageTranslationAction({
                       onClick={() => incorrectReason && void submitFeedback("INCORRECT", incorrectReason)}
                       className="mt-2 rounded bg-slate-800 px-2.5 py-1 text-xs font-semibold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:opacity-50 dark:bg-slate-200 dark:text-slate-900"
                     >
-                      Submit feedback
+                      {text.submitFeedback}
                     </button>
                   </fieldset>
                 )}
-                {feedbackState === "submitting" && <p className="mt-1 text-xs text-slate-500" role="status">Submitting feedback...</p>}
-                {feedbackState === "error" && <p className="mt-1 text-xs text-red-700 dark:text-red-300" role="alert">Unable to submit feedback</p>}
+                {feedbackState === "submitting" && <p className="mt-1 text-xs text-slate-500" role="status">{text.submittingFeedback}</p>}
+                {feedbackState === "error" && <p className="mt-1 text-xs text-red-700 dark:text-red-300" role="alert">{text.unableToSubmitFeedback}</p>}
               </div>
             )}
           </div>
         )}
         {state.status === "error" && (
           <p role="alert" className="mt-1 text-xs text-red-700 dark:text-red-300">
-            Translation unavailable
+            {text.translationUnavailable}
           </p>
         )}
       </div>

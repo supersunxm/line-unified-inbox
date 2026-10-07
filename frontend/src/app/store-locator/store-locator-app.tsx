@@ -16,8 +16,9 @@ import {
   STORE_LOCATOR_REGION_ORDER,
 } from "./store-locator-utils";
 import { trackStoreLocatorEvent } from "./store-locator-analytics";
-
-const STEPS = ["ภูมิภาค", "จังหวัด", "สาขา"] as const;
+import { storeLocatorStepLabels } from "./store-locator-i18n";
+import { formatPublicRegion } from "@/lib/public-regions";
+import { useAppLanguage } from "../language";
 
 function SearchIcon() {
   return (
@@ -43,17 +44,18 @@ function LineIcon() {
   );
 }
 
-function StepIndicator({ currentStep }: { currentStep: number }) {
+function StepIndicator({ currentStep, language }: { currentStep: number; language: "th" | "en" | "zh" }) {
+  const steps = storeLocatorStepLabels[language];
   return (
-    <ol className="mx-auto flex max-w-md items-start justify-between" aria-label="ขั้นตอนค้นหาสาขา">
-      {STEPS.map((step, index) => {
+    <ol className="mx-auto flex max-w-md items-start justify-between" aria-label={language === "th" ? "ขั้นตอนค้นหาสาขา" : language === "zh" ? "门店搜索步骤" : "Store search steps"}>
+      {steps.map((step, index) => {
         const stepNumber = index + 1;
         const completed = stepNumber < currentStep;
         const active = stepNumber === currentStep;
 
         return (
           <li key={step} className="relative flex min-w-0 flex-1 flex-col items-center gap-2 text-center">
-            {index < STEPS.length - 1 && (
+            {index < steps.length - 1 && (
               <span
                 aria-hidden="true"
                 className={`absolute left-1/2 top-4 h-px w-full ${completed ? "bg-[var(--app-accent)]" : "bg-[var(--app-border)]"}`}
@@ -102,7 +104,7 @@ function EmptyState({ title, description }: { title: string; description: string
   );
 }
 
-function StoreCard({ store, onLineOaClick }: { store: PublicStoreDto; onLineOaClick: (store: PublicStoreDto) => void }) {
+function StoreCard({ store, language, onLineOaClick }: { store: PublicStoreDto; language: "th" | "en" | "zh"; onLineOaClick: (store: PublicStoreDto) => void }) {
   const region = getStoreLocatorRegion(store.region);
   const lineUrl = getSafeStoreLocatorLineUrl(store.line?.url);
 
@@ -118,7 +120,7 @@ function StoreCard({ store, onLineOaClick }: { store: PublicStoreDto; onLineOaCl
           </h3>
           <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs leading-relaxed text-[var(--app-text-secondary)]">
             {store.province && <span>📍 {store.province}</span>}
-            {region && <span>{region}</span>}
+          {region && <span>{formatPublicRegion(region, language)}</span>}
           </div>
         </div>
       </div>
@@ -159,6 +161,8 @@ function StoreCard({ store, onLineOaClick }: { store: PublicStoreDto; onLineOaCl
 }
 
 export function StoreLocatorApp() {
+  const { language } = useAppLanguage();
+  const numberLocale = language === "th" ? "th-TH" : language === "zh" ? "zh-CN" : "en-US";
   const [stores, setStores] = useState<PublicStoreDto[]>([]);
   const [selectedRegion, setSelectedRegion] = useState<string | null>(null);
   const [selectedProvince, setSelectedProvince] = useState<string | null>(null);
@@ -308,7 +312,7 @@ export function StoreLocatorApp() {
         </section>
 
         <section className="mt-6 px-1">
-          <StepIndicator currentStep={currentStep} />
+          <StepIndicator currentStep={currentStep} language={language} />
         </section>
 
         {selectedRegion && !hasSearch && (
@@ -320,7 +324,7 @@ export function StoreLocatorApp() {
               onClick={() => setSelectedProvince(null)}
               className={`min-h-[40px] font-semibold ${selectedProvince ? "text-[var(--app-accent)]" : "text-[var(--app-text-primary)]"}`}
             >
-              {selectedRegion}
+              {formatPublicRegion(selectedRegion, language)}
             </button>
             {selectedProvince && (
               <>
@@ -359,7 +363,7 @@ export function StoreLocatorApp() {
                 <h2 id="region-heading" className="text-lg font-black">เลือกภูมิภาค</h2>
                 <p className="mt-1 text-xs text-[var(--app-text-secondary)]">เลือกพื้นที่เพื่อดูจังหวัดที่มีสาขา</p>
               </div>
-              <span className="text-xs text-[var(--app-text-tertiary)]">{stores.length.toLocaleString("th-TH")} สาขา</span>
+              <span className="text-xs text-[var(--app-text-tertiary)]">{stores.length.toLocaleString(numberLocale)} สาขา</span>
             </div>
             <div className="grid grid-cols-2 gap-3">
               {STORE_LOCATOR_REGION_ORDER.map((region) => {
@@ -374,9 +378,9 @@ export function StoreLocatorApp() {
                     className="flex min-h-[104px] flex-col items-start justify-between rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4 text-left shadow-[var(--app-shadow-card)] transition hover:border-[var(--app-accent)] hover:bg-[var(--app-accent-soft)] disabled:cursor-not-allowed disabled:opacity-45"
                     data-testid={`store-locator-region-${region}`}
                   >
-                    <span className="text-sm font-bold leading-snug">{region}</span>
+                    <span className="text-sm font-bold leading-snug">{formatPublicRegion(region, language)}</span>
                     <span className="flex w-full items-center justify-between text-xs text-[var(--app-text-secondary)]">
-                      {count > 0 ? `${count.toLocaleString("th-TH")} สาขา` : "ยังไม่มีสาขา"}
+                      {count > 0 ? `${count.toLocaleString(numberLocale)} สาขา` : "ยังไม่มีสาขา"}
                       {available && <ChevronIcon />}
                     </span>
                   </button>
@@ -390,7 +394,7 @@ export function StoreLocatorApp() {
           <section className="mt-6" aria-labelledby="province-heading">
             <div className="mb-3">
               <h2 id="province-heading" className="text-lg font-black">เลือกจังหวัด</h2>
-              <p className="mt-1 text-xs text-[var(--app-text-secondary)]">จังหวัดที่มีสาขาใน{selectedRegion}</p>
+              <p className="mt-1 text-xs text-[var(--app-text-secondary)]">จังหวัดที่มีสาขาใน{formatPublicRegion(selectedRegion, language)}</p>
             </div>
             <div className="space-y-3">
               {provinces.map((province) => {
@@ -405,7 +409,7 @@ export function StoreLocatorApp() {
                     className="flex min-h-[68px] w-full items-center justify-between rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] px-4 py-3 text-left shadow-[var(--app-shadow-card)] transition hover:border-[var(--app-accent)] hover:bg-[var(--app-accent-soft)]"
                   >
                     <span className="text-base font-bold">{province}</span>
-                    <span className="flex items-center gap-2 text-xs text-[var(--app-text-secondary)]">{count.toLocaleString("th-TH")} สาขา <ChevronIcon /></span>
+                    <span className="flex items-center gap-2 text-xs text-[var(--app-text-secondary)]">{count.toLocaleString(numberLocale)} สาขา <ChevronIcon /></span>
                   </button>
                 );
               })}
@@ -418,14 +422,14 @@ export function StoreLocatorApp() {
             <div className="mb-3 flex items-end justify-between gap-3">
               <div>
                 <h2 id="store-heading" className="text-lg font-black">{showSearchResults ? "ผลการค้นหา" : "เลือกสาขา"}</h2>
-                <p className="mt-1 text-xs text-[var(--app-text-secondary)]">{searchResults.length.toLocaleString("th-TH")} สาขา</p>
+                <p className="mt-1 text-xs text-[var(--app-text-secondary)]">{searchResults.length.toLocaleString(numberLocale)} สาขา</p>
               </div>
               {selectedProvince && <button type="button" onClick={() => setSelectedProvince(null)} className="min-h-[40px] text-xs font-bold text-[var(--app-accent)]">เปลี่ยนจังหวัด</button>}
             </div>
 
             {searchResults.length > 0 ? (
               <div className="space-y-3">
-                {searchResults.map((store) => <StoreCard key={store.id || store.slug} store={store} onLineOaClick={selectStore} />)}
+                {searchResults.map((store) => <StoreCard key={store.id || store.slug} store={store} language={language} onLineOaClick={selectStore} />)}
               </div>
             ) : (
               <EmptyState title="ไม่พบสาขาที่ค้นหา" description="ลองค้นหาด้วยชื่อจังหวัด ชื่อร้าน หรือชื่อห้างอื่น" />

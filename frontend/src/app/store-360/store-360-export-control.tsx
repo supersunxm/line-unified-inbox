@@ -35,9 +35,27 @@ export function Store360ExportControl({ stores, selectedStoreId, startDate, endD
         download: "ดาวน์โหลดข้อมูล",
         downloading: "กำลังสร้างไฟล์...",
         noStores: "ไม่พบสาขา",
+        currentStore: "สาขาที่กำลังดู",
         selectStore: "เลือกอย่างน้อย 1 สาขา",
         tooMany: `เลือกได้สูงสุด ${MAX_STORES} สาขาต่อไฟล์`,
         failed: "สร้างไฟล์ไม่สำเร็จ",
+      }
+    : language === "zh" ? {
+        button: "导出数据",
+        title: "导出 Store 360 数据",
+        description: "选择要导出 Store 360 当前日期范围内数据的门店。",
+        stores: "门店",
+        search: "搜索门店...",
+        selected: (count: number) => `已选择 ${count} 家门店`,
+        limit: `每个文件最多选择 ${MAX_STORES} 家门店`,
+        cancel: "取消",
+        download: "导出数据",
+        downloading: "正在准备文件...",
+        noStores: "未找到门店",
+        currentStore: "当前查看的门店",
+        selectStore: "请至少选择一家门店",
+        tooMany: `每个文件最多选择 ${MAX_STORES} 家门店`,
+        failed: "导出失败",
       }
     : {
         button: "Export Data",
@@ -51,6 +69,7 @@ export function Store360ExportControl({ stores, selectedStoreId, startDate, endD
         download: "Export Data",
         downloading: "Preparing file...",
         noStores: "No stores found",
+        currentStore: "Currently selected",
         selectStore: "Select at least one store",
         tooMany: `Up to ${MAX_STORES} stores per file`,
         failed: "Export failed",
@@ -131,7 +150,7 @@ export function Store360ExportControl({ stores, selectedStoreId, startDate, endD
                     <input type="checkbox" checked={selectedIds.includes(store.id)} onChange={() => toggleStore(store.id)} disabled={downloading} className="h-4 w-4" />
                     <span className="min-w-0 text-sm text-[var(--app-text-primary)]">
                       <span className="font-medium">{store.code || store.storeId ? `${store.code || store.storeId} ` : ""}{store.name}</span>
-                      <span className="block truncate text-xs text-[var(--app-text-tertiary)]">{store.id === selectedStoreId ? (language === "th" ? "สาขาที่กำลังดู" : "Currently selected") : ""}</span>
+                      <span className="block truncate text-xs text-[var(--app-text-tertiary)]">{store.id === selectedStoreId ? text.currentStore : ""}</span>
                     </span>
                   </label>
                 ))

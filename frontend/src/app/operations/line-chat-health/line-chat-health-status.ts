@@ -1,4 +1,5 @@
 import type { LineChatBrowserState, LineChatFleetReadinessStore, LineChatOperationsSession } from "@/lib/api";
+import type { AppLanguage } from "../../language-utils";
 
 export type LineChatUiStatus = "READY" | "NEED_SETUP" | "LOGIN_REQUIRED" | "DEGRADED" | "BLOCKED" | "RECOVERING" | "UNKNOWN";
 
@@ -51,6 +52,29 @@ const BROWSER_OPERATION_LABELS: Record<string, string> = {
 export const BROWSER_STATUS_HELP_TEXT =
   "สถานะ Session แสดงการเชื่อมต่อ LINE\nสถานะ Browser แสดงว่า Chromium Profile พร้อมรับงานใหม่หรือกำลังถูกใช้งาน";
 export const BROWSER_BUSY_HELP_TEXT = "เป็นสถานะชั่วคราว ระบบจะรอและลองใหม่อัตโนมัติ";
+
+const browserHelpText: Record<AppLanguage, { status: string; busy: string }> = {
+  th: {
+    status: "สถานะ Session แสดงการเชื่อมต่อ LINE\nสถานะ Browser แสดงว่า Chromium Profile พร้อมรับงานใหม่หรือกำลังถูกใช้งาน",
+    busy: "เป็นสถานะชั่วคราว ระบบจะรอและลองใหม่อัตโนมัติ",
+  },
+  en: {
+    status: "Session status shows the LINE connection.\nBrowser status shows whether the Chromium profile is ready for new work or currently in use.",
+    busy: "This is a temporary state. The system will wait and retry automatically.",
+  },
+  zh: {
+    status: "Session 状态表示 LINE 连接情况。\nBrowser 状态表示 Chromium 配置文件是否已准备好接收新任务，或正在使用中。",
+    busy: "这是临时状态。系统将等待并自动重试。",
+  },
+};
+
+export function getBrowserStatusHelpText(language: AppLanguage) {
+  return browserHelpText[language].status;
+}
+
+export function getBrowserBusyHelpText(language: AppLanguage) {
+  return browserHelpText[language].busy;
+}
 
 export function getBrowserStateLabel(state: LineChatBrowserState): string {
   return BROWSER_STATE_LABELS[state];

@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useEffect } from "react";
 import { PageContainer } from "@/components/shell";
+import { LegacyI18nBoundary } from "../legacy-i18n-boundary";
+import { tiktokCallbackPhrases } from "./callback/tiktok-callback-i18n";
 
 export default function TikTokError({
   error,
@@ -18,6 +20,7 @@ export default function TikTokError({
   const isAuthError = error.message === "UNAUTHORIZED";
 
   return (
+    <LegacyI18nBoundary phrases={tiktokCallbackPhrases} showControl={false}>
     <PageContainer variant="wide">
       <div className="flex min-h-[400px] flex-col items-center justify-center text-center">
         <div className="rounded-full bg-rose-50 p-4 text-rose-600 dark:bg-rose-500/10 dark:text-rose-400">
@@ -52,5 +55,6 @@ export default function TikTokError({
         </div>
       </div>
     </PageContainer>
+    </LegacyI18nBoundary>
   );
 }

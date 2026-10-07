@@ -585,7 +585,7 @@ function CampaignDetail({ detail, actionLoading, canManage, onBack, onRetry, onD
       </MobileSection>
 
       <MobileSection title="สถานะรายร้าน" description={`${detail.stores.length} ร้าน`}>
-        <div className="space-y-2.5">{detail.stores.map((store) => <MobileListCard key={store.id} title={store.storeName} subtitle={store.lineOaName ?? "ไม่มี LINE OA"} trailing={<StatusPill status={store.status} />}>{store.lineCouponId && <p className="break-all text-[10px] text-[var(--app-text-tertiary)]">Coupon ID: {store.lineCouponId}</p>}{(store.errorMessage || store.skipReason) && <p className="mt-1 text-[10px] leading-4 text-rose-600 dark:text-rose-400">{store.errorMessage ?? store.skipReason}</p>}</MobileListCard>)}</div>
+        <div className="space-y-2.5">{detail.stores.map((store) => <MobileListCard key={store.id} title={store.storeName} subtitle={store.lineOaName ?? "ไม่มี LINE OA"} trailing={<StatusPill status={store.status} />}>{store.lineCouponId && <p className="break-all text-[10px] text-[var(--app-text-tertiary)]"><span>Coupon ID</span>: {store.lineCouponId}</p>}{(store.errorMessage || store.skipReason) && <p className="mt-1 text-[10px] leading-4 text-rose-600 dark:text-rose-400">{store.errorMessage ?? store.skipReason}</p>}</MobileListCard>)}</div>
       </MobileSection>
 
       <div className="grid grid-cols-2 gap-2">

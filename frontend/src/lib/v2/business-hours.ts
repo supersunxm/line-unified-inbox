@@ -1,3 +1,6 @@
+import { languageLocale, type AppLanguage } from "../../app/language-utils.ts";
+import { v2Text } from "./v2-translations.ts";
+
 // Store opening hours and the follow-up rules for v2. One place for every constant.
 // Kept free of React so node --test can import it.
 
@@ -85,12 +88,13 @@ export function needsFollowUp(businessMinutes: number): boolean {
 }
 
 /** "45 นาที", "2 ชม. 5 นาที", "13 ชม." (business time). */
-export function formatWaitMinutes(minutes: number): string {
+export function formatWaitMinutes(minutes: number, language: AppLanguage = "th"): string {
   const safe = Math.max(0, Math.floor(minutes));
-  if (safe < 60) return `${safe} นาที`;
+  if (safe < 60) return v2Text(language)("waitMinutes", { minutes: safe });
   const hours = Math.floor(safe / 60);
   const rest = safe % 60;
-  return rest === 0 ? `${hours} ชม.` : `${hours} ชม. ${rest} นาที`;
+  if (language === "th" && rest === 0) return `${hours} ชม.`;
+  return v2Text(language)("waitHours", { hours, minutes: rest });
 }
 
 function bangkokDayKey(ms: number): number {
@@ -105,12 +109,13 @@ function bangkokClock(ms: number): string {
 const THAI_MONTHS = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
 
 /** "วันนี้ 14:05", "เมื่อวาน 20:30" or "3 ต.ค. 09:12", in Bangkok time. */
-export function formatSentAt(sentAt: Date | number | string, now: Date | number | string = Date.now()): string {
+export function formatSentAt(sentAt: Date | number | string, now: Date | number | string = Date.now(), language: AppLanguage = "th"): string {
   const ms = toMs(sentAt);
   const dayDiff = bangkokDayKey(toMs(now)) - bangkokDayKey(ms);
   const clock = bangkokClock(ms);
-  if (dayDiff === 0) return `วันนี้ ${clock}`;
-  if (dayDiff === 1) return `เมื่อวาน ${clock}`;
+  if (dayDiff === 0) return language === "th" ? `วันนี้ ${clock}` : language === "zh" ? `今天${clock}` : `Today ${clock}`;
+  if (dayDiff === 1) return v2Text(language)("yesterdayTime", { time: clock });
+  if (language !== "th") return new Intl.DateTimeFormat(languageLocale(language), { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "Asia/Bangkok" }).format(new Date(ms));
   const local = new Date(ms + BANGKOK_OFFSET_MS);
   return `${local.getUTCDate()} ${THAI_MONTHS[local.getUTCMonth()]} ${clock}`;
 }

@@ -1,6 +1,47 @@
 import type { LegacyI18nPhrase, LegacyI18nTemplate } from "../../legacy-i18n-boundary";
+import type { AppLanguage } from "../../language-utils";
 
-export const purchaseAnalyticsPhrases: LegacyI18nPhrase[] = [
+type KeyedPhrase = LegacyI18nPhrase & { key?: string };
+
+const purchaseAnalyticsOpeningPhrase: KeyedPhrase = {
+  key: "opening",
+  th: "กำลังเปิดข้อมูลการซื้อ...",
+  en: "Opening purchase intelligence...",
+  zh: "正在打开购买数据分析...",
+};
+
+export const purchaseAnalyticsLoadingText = {
+  th: { opening: purchaseAnalyticsOpeningPhrase.th },
+  en: { opening: purchaseAnalyticsOpeningPhrase.en },
+  zh: { opening: purchaseAnalyticsOpeningPhrase.zh },
+} as const;
+
+export const purchaseAnalyticsInsightText: Record<AppLanguage, (productFamily: string, sharePercent: number) => string> = {
+  th: (productFamily, sharePercent) => `${productFamily} คิดเป็น ${sharePercent}% ของสินค้าที่บันทึกในช่วงเวลานี้`,
+  en: (productFamily, sharePercent) => `${productFamily} accounts for ${sharePercent}% of recorded products in this period.`,
+  zh: (productFamily, sharePercent) => `${productFamily} 占本期已记录商品的 ${sharePercent}%。`,
+};
+
+export const purchaseAnalyticsInsightLabel: Record<AppLanguage, string> = {
+  th: "ข้อมูลเชิงลึก:",
+  en: "Insight:",
+  zh: "洞察：",
+};
+
+export const purchaseAnalyticsInsightEmptyText: Record<AppLanguage, string> = {
+  th: "ข้อมูลเชิงลึกการซื้อจะแสดงเมื่อมีการบันทึกข้อมูลสินค้า",
+  en: "Purchase insights will appear once product data is recorded.",
+  zh: "记录商品数据后将显示购买洞察。",
+};
+
+export const purchaseAnalyticsExportReportText: Record<AppLanguage, string> = {
+  th: "ส่งออกรายงานฉบับเต็ม",
+  en: "Export full report",
+  zh: "导出完整报告",
+};
+
+export const purchaseAnalyticsPhrases: KeyedPhrase[] = [
+  purchaseAnalyticsOpeningPhrase,
   { th: "ข้อมูลการซื้อ", en: "Purchase Intelligence", zh: "购买数据分析" },
   { th: "วิเคราะห์สินค้าที่ซื้อ ร้านค้า และกลุ่มลูกค้าจากข้อมูลที่บันทึกแล้ว", en: "Verified Purchase Records and Recorded Purchase Information.", zh: "分析已记录的购买商品、门店和客户群。" },
   { th: "ฝ่ายปฏิบัติการ · ข้อมูลการซื้อ", en: "Operations · Purchase Intelligence", zh: "运营 · 购买数据分析" },
@@ -75,6 +116,7 @@ export const purchaseAnalyticsPhrases: LegacyI18nPhrase[] = [
   { th: "ยกเลิก", en: "Cancel", zh: "取消" },
   { th: "ดาวน์โหลด CSV", en: "Download CSV", zh: "下载 CSV" },
   { th: "กำลังสร้าง Draft…", en: "Creating draft…", zh: "正在创建草稿…" },
+  { th: "กำลังสร้าง Draft...", en: "Creating draft...", zh: "正在创建草稿..." },
   { th: "สร้าง Draft แล้ว", en: "Draft created", zh: "草稿已创建" },
   { th: "สร้าง Broadcast Audience", en: "Create Broadcast Audience", zh: "创建群发客户群" },
   { th: "รีเฟรช Audience", en: "Refresh Audience", zh: "刷新客户群" },
@@ -91,6 +133,34 @@ export const purchaseAnalyticsPhrases: LegacyI18nPhrase[] = [
   { th: "เรียงตามจำนวน Purchase Record", en: "Sorted by Purchase Record count", zh: "按购买记录数量排序" },
   { th: "ไม่มี Store ID", en: "No Store ID", zh: "无 Store ID" },
   { th: "ลูกค้า/แชท", en: "Customers / chats", zh: "客户 / 聊天" },
+  { key: "showMore", th: "แสดงเพิ่มอีก", en: "Show", zh: "再显示" },
+  { key: "peopleUnit", th: "คน", en: "more", zh: "人" },
+  { key: "noProducts", th: "ยังไม่มีข้อมูลสินค้า", en: "No product data yet", zh: "暂无商品数据" },
+  { key: "filteredCustomersHint", th: "ลองเปลี่ยน status หรือปิด Only messageable", en: "Try changing the status or turning off Only messageable", zh: "尝试更改状态或关闭“仅可发送消息的客户”" },
+  { key: "desktopShowLess", th: "แสดงน้อยลง", en: "Show less", zh: "收起" },
+  { key: "desktopViewAll", th: "ดูทั้งหมด", en: "View all", zh: "查看全部" },
+  { key: "desktopNoTrendData", th: "ไม่มีข้อมูลแนวโน้มตามตัวกรองที่เลือก", en: "No trend data for the selected filters.", zh: "所选筛选条件没有趋势数据。" },
+  { key: "desktopNoRecordedInfo", th: "ยังไม่มีข้อมูลที่บันทึกไว้", en: "No recorded information yet.", zh: "尚无已记录的信息。" },
+  { key: "desktopNotRecorded", th: "ไม่ได้บันทึก ·", en: "Not recorded ·", zh: "未记录 ·" },
+  { key: "desktopPercentOfRecords", th: "% ของรายการ", en: "% of records", zh: "% 的记录" },
+  { key: "desktopExporting", th: "กำลังส่งออก…", en: "Exporting…", zh: "正在导出…" },
+  { key: "desktopStore", th: "ร้านค้า", en: "Store", zh: "门店" },
+  { key: "desktopOverview", th: "ภาพรวมข้อมูลการซื้อ", en: "Purchase overview", zh: "购买概览" },
+  { key: "desktopTrend", th: "แนวโน้มการซื้อ", en: "Purchase Trend", zh: "购买趋势" },
+  { key: "desktopTopProducts", th: "สินค้ายอดนิยม", en: "Top Products", zh: "热门商品" },
+  { key: "desktopProductFamilies", th: "กลุ่มผลิตภัณฑ์", en: "Product Families", zh: "产品类别" },
+  { key: "desktopPurchaseChannel", th: "ช่องทางการซื้อ", en: "Purchase Channel", zh: "购买渠道" },
+  { key: "desktopPaymentMethod", th: "วิธีชำระเงิน", en: "Payment Method", zh: "付款方式" },
+  { key: "desktopTopStores", th: "ร้านค้ายอดนิยม", en: "Top Stores", zh: "热门门店" },
+  { key: "desktopPurchases", th: "การซื้อ", en: "Purchases", zh: "购买次数" },
+  { key: "desktopShare", th: "สัดส่วน", en: "Share", zh: "占比" },
+  { key: "desktopTopVariants", th: "รุ่นย่อยยอดนิยม", en: "Top Variants", zh: "热门型号" },
+  { key: "desktopTopColors", th: "สียอดนิยม", en: "Top Colors", zh: "热门颜色" },
+  { key: "desktopBmName", th: "ชื่อ BM", en: "BM Name", zh: "BM 姓名" },
+  { key: "desktopLastActivity", th: "กิจกรรมล่าสุด", en: "Last Activity", zh: "最近活动" },
+  { key: "desktopInsight", th: "ข้อมูลเชิงลึก:", en: "Insight:", zh: "洞察：" },
+  { key: "desktopInsightsEmpty", th: "ข้อมูลเชิงลึกการซื้อจะแสดงเมื่อมีการบันทึกข้อมูลสินค้า", en: "Purchase insights will appear once product data is recorded.", zh: "记录商品数据后将显示购买洞察。" },
+  { key: "desktopExportReport", th: "ส่งออกรายงานฉบับเต็ม", en: "Export full report", zh: "导出完整报告" },
 ];
 
 export const purchaseAnalyticsTemplates: LegacyI18nTemplate[] = [

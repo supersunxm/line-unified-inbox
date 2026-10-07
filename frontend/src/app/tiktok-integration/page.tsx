@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { LanguageControl } from "../language";
+import { TikTokPublicI18nBoundary } from "../tiktok-public-i18n";
 
 export const metadata: Metadata = {
   title: {
@@ -10,10 +12,11 @@ export const metadata: Metadata = {
 
 export default function TikTokIntegrationPage() {
   return (
+    <TikTokPublicI18nBoundary>
     <div className="min-h-screen bg-[var(--app-bg,#0b0d11)] text-[var(--app-text-primary,#f8fafc)] flex flex-col justify-between antialiased selection:bg-[var(--app-accent-soft,rgba(31,107,74,0.15))] selection:text-[var(--app-accent,#1f6b4a)]">
       {/* Navigation Header */}
       <header className="sticky top-0 z-30 border-b border-[var(--app-border,#1e2430)] bg-[var(--app-surface,#12151c)]/90 backdrop-blur-md">
-        <div className="mx-auto flex h-16 max-w-5xl items-center justify-between px-4 sm:px-6 lg:px-8">
+        <div className="mx-auto flex min-h-16 max-w-5xl flex-wrap items-center justify-between gap-2 px-4 py-2 sm:px-6 lg:px-8">
           <Link href="/" className="flex items-center gap-2.5 group">
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--app-accent,#1f6b4a)] text-white font-bold text-lg shadow-sm group-hover:scale-105 transition">
               O
@@ -23,7 +26,7 @@ export default function TikTokIntegrationPage() {
               <span className="text-[11px] text-[var(--app-text-tertiary,#94a3b8)] leading-tight">TikTok Integration</span>
             </div>
           </Link>
-          <nav className="flex items-center gap-4 text-xs">
+          <nav className="flex flex-wrap items-center gap-3 text-xs">
             <Link
               href="/stores"
               className="text-[var(--app-text-secondary,#cbd5e1)] hover:text-[var(--app-accent,#1f6b4a)] transition"
@@ -36,6 +39,7 @@ export default function TikTokIntegrationPage() {
             >
               เชื่อมต่อ TikTok
             </Link>
+            <LanguageControl />
           </nav>
         </div>
       </header>
@@ -64,11 +68,11 @@ export default function TikTokIntegrationPage() {
                 1
               </div>
               <h2 className="text-lg sm:text-xl font-bold text-[var(--app-text-primary,#f8fafc)]">
-                การทำงานของระบบ (What the Integration Does)
+                การทำงานของระบบ
               </h2>
             </div>
             <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4 text-sm text-emerald-200 leading-relaxed font-medium">
-              &ldquo;เจ้าของบัญชี TikTok ของ OPPO Brand Shop สามารถเชื่อมต่อบัญชีเพื่อแสดงข้อมูลโปรไฟล์และสถิติพื้นฐานของบัญชีบนแพลตฟอร์ม&rdquo;
+              “เจ้าของบัญชี TikTok ของ OPPO Brand Shop สามารถเชื่อมต่อบัญชีเพื่อแสดงข้อมูลโปรไฟล์และสถิติพื้นฐานของบัญชีบนแพลตฟอร์ม”
             </div>
             <p className="mt-4 text-sm leading-relaxed text-[var(--app-text-secondary,#cbd5e1)]">
               การเชื่อมต่อดำเนินการผ่าน <strong>TikTok Login Kit (Web OAuth 2.0)</strong> อย่างเป็นทางการ
@@ -83,7 +87,7 @@ export default function TikTokIntegrationPage() {
                 2
               </div>
               <h2 className="text-lg sm:text-xl font-bold text-[var(--app-text-primary,#f8fafc)]">
-                ข้อมูลที่เข้าถึง (Data Accessed)
+                ข้อมูลที่เข้าถึง
               </h2>
             </div>
             <p className="text-sm text-[var(--app-text-secondary,#cbd5e1)] mb-4">
@@ -123,7 +127,7 @@ export default function TikTokIntegrationPage() {
                 3
               </div>
               <h2 className="text-lg sm:text-xl font-bold text-[var(--app-text-primary,#f8fafc)]">
-                วัตถุประสงค์ (Purpose)
+                วัตถุประสงค์
               </h2>
             </div>
             <ul className="space-y-3 text-sm text-[var(--app-text-secondary,#cbd5e1)] leading-relaxed">
@@ -155,7 +159,7 @@ export default function TikTokIntegrationPage() {
                 ✕
               </div>
               <h2 className="text-lg sm:text-xl font-bold text-rose-300">
-                ขอบเขตความปลอดภัยและสิ่งที่เราไม่ทำ (Strict Boundaries)
+                ขอบเขตความปลอดภัยและสิ่งที่เราไม่ทำ
               </h2>
             </div>
             <p className="text-sm text-rose-200/90 mb-4 font-medium">
@@ -247,5 +251,6 @@ export default function TikTokIntegrationPage() {
         <p>© {new Date().getFullYear()} OPPO Brand Shop Directory · lineoppo.click · สงวนลิขสิทธิ์</p>
       </footer>
     </div>
+    </TikTokPublicI18nBoundary>
   );
 }

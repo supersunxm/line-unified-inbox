@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import { LanguageControl, useAppLanguage } from "../language";
+import { PublicStoreI18nBoundary } from "../public-store-i18n";
 import { fetchPublicStores } from "@/lib/public-stores-api";
 import {
   normalizePublicRegion,
@@ -15,6 +17,7 @@ import {
 } from "@/lib/public-stores-api";
 
 export function PublicStoresDirectory() {
+  const { language } = useAppLanguage();
   const searchParams = useSearchParams();
   const pathname = usePathname();
 
@@ -28,6 +31,17 @@ export function PublicStoresDirectory() {
   const [searchQuery, setSearchQuery] = useState(() => searchParams.get("q") ?? "");
   const [selectedRegion, setSelectedRegion] = useState(() => searchParams.get("region") ?? "ALL");
   const [selectedProvince, setSelectedProvince] = useState(() => searchParams.get("province") ?? "ALL");
+
+  useEffect(() => {
+    const metadata = {
+      th: { title: "ค้นหา OPPO Brand Shop | ทำเนียบสาขา", description: "ค้นหา OPPO Brand Shop และช่องทางติดต่อของสาขา" },
+      en: { title: "Find an OPPO Brand Shop | Store Directory", description: "Find OPPO Brand Shop locations and store contact details." },
+      zh: { title: "查找 OPPO Brand Shop | 门店目录", description: "查找 OPPO Brand Shop 门店和联系方式。" },
+    }[language];
+    document.title = metadata.title;
+    const description = document.querySelector<HTMLMetaElement>('meta[name="description"]');
+    description?.setAttribute("content", metadata.description);
+  }, [language]);
 
   // Sync URL search parameters when filters change
   useEffect(() => {
@@ -59,9 +73,9 @@ export function PublicStoresDirectory() {
         setRegions(res.filters.regions);
         setLoading(false);
       })
-      .catch((err) => {
+      .catch(() => {
         if (cancelled) return;
-        setError(err instanceof Error ? err.message : "เกิดข้อผิดพลาดในการโหลดข้อมูลร้านค้า");
+        setError("เกิดข้อผิดพลาดในการโหลดข้อมูลร้านค้า");
         setLoading(false);
       });
 
@@ -121,10 +135,11 @@ export function PublicStoresDirectory() {
   };
 
   return (
+    <PublicStoreI18nBoundary>
     <div className="min-h-screen bg-[var(--app-bg)] text-[var(--app-text-primary)] antialiased flex flex-col">
       {/* Public Header */}
       <header className="sticky top-0 z-30 border-b border-[var(--app-border)] bg-[var(--app-surface)]/95 backdrop-blur-md">
-        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6 lg:px-8">
+        <div className="mx-auto flex min-h-16 max-w-6xl flex-wrap items-center justify-between gap-2 px-4 py-2 sm:flex-nowrap sm:px-6 sm:py-0 lg:px-8">
           <Link
             href="/"
             className="flex items-center gap-2.5 transition-opacity hover:opacity-90"
@@ -143,7 +158,7 @@ export function PublicStoresDirectory() {
             </div>
           </Link>
 
-          <nav className="flex items-center gap-2 sm:gap-3" aria-label="Main Navigation">
+          <nav className="flex flex-wrap items-center justify-end gap-2 sm:gap-3" aria-label="Main Navigation">
             <Link
               href="/"
               className="text-xs sm:text-sm font-medium text-[var(--app-text-secondary)] hover:text-[var(--app-accent)] transition"
@@ -157,6 +172,7 @@ export function PublicStoresDirectory() {
               <span className="sm:hidden">สำหรับพนักงาน</span>
               <span className="hidden sm:inline">เข้าสู่ระบบสำหรับพนักงาน</span>
             </Link>
+            <LanguageControl className="shrink-0" />
           </nav>
         </div>
       </header>
@@ -230,7 +246,7 @@ export function PublicStoresDirectory() {
                       : "bg-[var(--app-surface-subtle)] border border-[var(--app-border)] text-[var(--app-text-secondary)] hover:bg-[var(--app-surface-hover)]"
                   }`}
                 >
-                  {region}
+                  {formatPublicRegion(region, language)}
                 </button>
               );
             })}
@@ -345,7 +361,7 @@ export function PublicStoresDirectory() {
                         )}
                         {store.region && (
                           <span className="inline-flex items-center rounded-md bg-[var(--app-accent-soft)] px-2 py-0.5 text-[11px] font-semibold text-[var(--app-accent)]">
-                            {formatPublicRegion(store.region)}
+                      {formatPublicRegion(store.region, language)}
                           </span>
                         )}
                       </div>
@@ -426,7 +442,7 @@ export function PublicStoresDirectory() {
       {/* Public Footer */}
       <footer className="border-t border-[var(--app-border)] bg-[var(--app-surface)] py-6 text-center text-xs text-[var(--app-text-tertiary)]">
         <div className="mx-auto max-w-6xl px-4 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <p>© {new Date().getFullYear()} OPPO Brand Shop Directory · Thailand</p>
+          <p>{`© ${new Date().getFullYear()} OPPO Brand Shop Directory · Thailand`}</p>
           <div className="flex items-center gap-4">
             <Link href="/tiktok-integration" className="hover:underline">
               การเชื่อมต่อ TikTok
@@ -444,5 +460,6 @@ export function PublicStoresDirectory() {
         </div>
       </footer>
     </div>
+    </PublicStoreI18nBoundary>
   );
 }

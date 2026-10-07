@@ -10,16 +10,16 @@ export function DownloadHistoryContent({ releases }: { releases: AndroidRelease[
   const locale = localeFor(language);
   const formatter = new Intl.DateTimeFormat(locale, { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
   const text = pickLanguageText(language, {
-    th: { title: "ประวัติเวอร์ชัน", description: "ประวัติ OPPO LINE OA Chat สำหรับ Android ที่เผยแพร่ผ่าน lineoppo.click", back: "กลับหน้าดาวน์โหลด", version: "เวอร์ชัน", latest: "ล่าสุด", released: "เผยแพร่", download: "ดาวน์โหลด", notice: "ทุก Android release ใหม่ต้องอัปเดต version/build, วันที่เผยแพร่, APK ล่าสุด และรายการประวัติเวอร์ชันก่อนถือว่า release เสร็จสมบูรณ์" },
-    en: { title: "Version history", description: "Android release history for OPPO LINE OA Chat published through lineoppo.click", back: "Back to download", version: "Version", latest: "Latest", released: "Released", download: "Download", notice: "Every new Android release must update the version/build, release date, latest APK, and version history before the release is considered complete." },
-    zh: { title: "版本历史", description: "通过 lineoppo.click 发布的 OPPO LINE OA Chat Android 版本历史", back: "返回下载页面", version: "版本", latest: "最新", released: "发布日期", download: "下载", notice: "每次新的 Android 发布都必须更新版本/build、发布日期、最新 APK 和版本历史，才视为发布完成。" },
+    th: { androidApp: "แอป Android", title: "ประวัติเวอร์ชัน", description: "ประวัติ OPPO LINE OA Chat สำหรับ Android ที่เผยแพร่ผ่าน lineoppo.click", back: "กลับหน้าดาวน์โหลด", version: "เวอร์ชัน", latest: "ล่าสุด", released: "เผยแพร่", download: "ดาวน์โหลด", notice: "ทุก Android release ใหม่ต้องอัปเดต version/build, วันที่เผยแพร่, APK ล่าสุด และรายการประวัติเวอร์ชันก่อนถือว่า release เสร็จสมบูรณ์" },
+    en: { androidApp: "Android app", title: "Version history", description: "Android release history for OPPO LINE OA Chat published through lineoppo.click", back: "Back to download", version: "Version", latest: "Latest", released: "Released", download: "Download", notice: "Every new Android release must update the version/build, release date, latest APK, and version history before the release is considered complete." },
+    zh: { androidApp: "Android 应用", title: "版本历史", description: "通过 lineoppo.click 发布的 OPPO LINE OA Chat Android 版本历史", back: "返回下载页面", version: "版本", latest: "最新", released: "发布日期", download: "下载", notice: "每次新的 Android 发布都必须更新版本/build、发布日期、最新 APK 和版本历史，才视为发布完成。" },
   });
 
   return (
     <main className="min-h-screen bg-slate-50 px-4 py-8 text-slate-900 sm:px-6 dark:bg-[#0b0d11] dark:text-slate-100">
       <div className="mx-auto w-full max-w-2xl space-y-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="min-w-0 flex-1"><p className="text-xs font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">Android App</p><h1 className="mt-1 text-2xl font-bold">{text.title}</h1><p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{text.description}</p></div>
+          <div className="min-w-0 flex-1"><p className="text-xs font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">{text.androidApp}</p><h1 className="mt-1 text-2xl font-bold">{text.title}</h1><p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{text.description}</p></div>
           <LanguageControl />
         </div>
         <Link href="/download" className="inline-flex rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800">← {text.back}</Link>

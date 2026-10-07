@@ -1,3 +1,6 @@
+import { type AppLanguage } from "../../app/language-utils.ts";
+import { v2Text } from "./v2-translations.ts";
+
 // The two official v2 KPIs and their targets (owner decision, 7 Oct 2026). Pure.
 //   ตอบแล้ว %      — conversation status in the month, the /chats definition. Target not set yet.
 //   ตอบใน 24 ชม. % — the /replymessage definition. Target 90%.
@@ -43,10 +46,11 @@ export function targetState(value: ValueState, target: number | null): TargetSta
 }
 
 /** "เป้า 90% · ต่ำกว่าเป้า 11.3 จุด" / "เป้า 90% · ถึงเป้า" / "ยังไม่กำหนดเป้า". */
-export function targetLabel(state: TargetState, target: number | null): string {
-  if (target === null || state.kind === "no-target") return NO_TARGET_LABEL;
-  if (state.kind === "below") return `เป้า ${target}% · ต่ำกว่าเป้า ${state.gap.toFixed(1)} จุด`;
-  if (state.kind === "met") return `เป้า ${target}% · ถึงเป้า`;
-  if (state.kind === "low-sample") return `เป้า ${target}% · แชทน้อยเกินกว่าจะเทียบ`;
-  return `เป้า ${target}%`;
+export function targetLabel(state: TargetState, target: number | null, language: AppLanguage = "th"): string {
+  const t = v2Text(language);
+  if (target === null || state.kind === "no-target") return t("noTarget");
+  if (state.kind === "below") return t("targetBelow", { target, gap: state.gap.toFixed(1) });
+  if (state.kind === "met") return t("targetMet", { target });
+  if (state.kind === "low-sample") return t("targetSmallSample", { target });
+  return t("targetOnly", { target });
 }

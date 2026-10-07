@@ -14,6 +14,7 @@ const LABELS = {
     title: "ข้อมูลความต้องการและความสนใจลูกค้า",
     subtitle: "สัดส่วนสินค้าที่ลูกค้ากล่าวถึงและหัวข้อคำถามหลักในการสนทนา",
     productsTitle: "สินค้าที่ลูกค้าพูดถึง",
+    productsSubtitle: "อันดับอุปกรณ์ที่ลูกค้าสอบถามสูงสุดในช่วงเวลาที่เลือก",
     topicsTitle: "หัวข้อที่ลูกค้าสอบถาม",
     mentions: "การพูดถึง",
     signals: "สัญญาณ",
@@ -30,6 +31,7 @@ const LABELS = {
     title: "Customer Demand & Product Interest",
     subtitle: "Breakdown of customer-mentioned products and primary inquiry topics",
     productsTitle: "Products Customers Mention",
+    productsSubtitle: "Ranked devices by customer mentions in selected period",
     topicsTitle: "Customer Inquiry Topics",
     mentions: "mentions",
     signals: "signals",
@@ -46,6 +48,7 @@ const LABELS = {
     title: "客户需求与产品关注分析",
     subtitle: "客户提及的主要产品细分及核心咨询主题分布",
     productsTitle: "客户提及产品",
+    productsSubtitle: "按所选时段内客户提及次数排列的设备",
     topicsTitle: "客户咨询主题",
     mentions: "提及量",
     signals: "信号",
@@ -101,7 +104,7 @@ export function CustomerDemandSignals({ correlations, language }: CustomerDemand
                 {t.productsTitle}
               </h3>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                {language === "th" ? "อันดับอุปกรณ์ที่ลูกค้าสอบถามสูงสุดในช่วงเวลาที่เลือก" : "Ranked devices by customer mentions in selected period"}
+                {t.productsSubtitle}
               </p>
             </div>
             <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border border-purple-200/50 dark:border-purple-800/40 font-tabular">
@@ -193,4 +196,3 @@ export function CustomerDemandSignals({ correlations, language }: CustomerDemand
     </section>
   );
 }
-

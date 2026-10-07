@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { LanguageControl, useAppLanguage } from "../../language";
+import { PublicStoreI18nBoundary } from "../../public-store-i18n";
 import {
   fetchPublicStoreByIdentifier,
   type PublicStoreDto,
@@ -14,6 +16,7 @@ interface Props {
 }
 
 export function PublicStoreProfile({ identifier, initialStore }: Props) {
+  const { language } = useAppLanguage();
   const [store, setStore] = useState<PublicStoreDto | null>(initialStore ?? null);
   const [loading, setLoading] = useState(!initialStore);
   const [copiedLineId, setCopiedLineId] = useState(false);
@@ -43,6 +46,17 @@ export function PublicStoreProfile({ identifier, initialStore }: Props) {
     };
   }, [identifier, initialStore]);
 
+  useEffect(() => {
+    const copy = {
+      th: { title: "ค้นหา OPPO Brand Shop | Store Directory", description: "ค้นหาข้อมูลสาขาและช่องทางติดต่อ OPPO Brand Shop" },
+      en: { title: "Find an OPPO Brand Shop | Store Directory", description: "Find OPPO Brand Shop locations and contact details." },
+      zh: { title: "查找 OPPO Brand Shop | 门店目录", description: "查找 OPPO Brand Shop 门店和联系方式。" },
+    }[language];
+    document.title = store?.name ? `${store.name} | OPPO Brand Shop` : copy.title;
+    const description = document.querySelector<HTMLMetaElement>('meta[name="description"]');
+    description?.setAttribute("content", store?.name ? `${store.name} · ${copy.description}` : copy.description);
+  }, [language, store]);
+
   const copyLineId = async (basicId: string) => {
     try {
       await navigator.clipboard.writeText(basicId);
@@ -54,10 +68,11 @@ export function PublicStoreProfile({ identifier, initialStore }: Props) {
   };
 
   return (
+    <PublicStoreI18nBoundary>
     <div className="min-h-screen bg-[var(--app-bg)] text-[var(--app-text-primary)] antialiased flex flex-col">
       {/* Public Header */}
       <header className="sticky top-0 z-30 border-b border-[var(--app-border)] bg-[var(--app-surface)]/95 backdrop-blur-md">
-        <div className="mx-auto flex h-16 max-w-4xl items-center justify-between px-4 sm:px-6">
+        <div className="mx-auto flex min-h-16 max-w-4xl flex-wrap items-center justify-between gap-2 px-4 py-2 sm:flex-nowrap sm:px-6 sm:py-0">
           <div className="flex items-center gap-3">
             <Link
               href="/"
@@ -80,13 +95,16 @@ export function PublicStoreProfile({ identifier, initialStore }: Props) {
             </Link>
           </div>
 
-          <Link
-            href="/login"
-            className="inline-flex items-center rounded-lg border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-1.5 text-xs font-medium text-[var(--app-text-secondary)] transition hover:bg-[var(--app-surface-hover)] hover:text-[var(--app-text-primary)] whitespace-nowrap"
-          >
-            <span className="sm:hidden">สำหรับพนักงาน</span>
-            <span className="hidden sm:inline">เข้าสู่ระบบสำหรับพนักงาน</span>
-          </Link>
+          <nav className="flex flex-wrap items-center justify-end gap-2">
+            <Link
+              href="/login"
+              className="inline-flex items-center rounded-lg border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-1.5 text-xs font-medium text-[var(--app-text-secondary)] transition hover:bg-[var(--app-surface-hover)] hover:text-[var(--app-text-primary)] whitespace-nowrap"
+            >
+              <span className="sm:hidden">สำหรับพนักงาน</span>
+              <span className="hidden sm:inline">เข้าสู่ระบบสำหรับพนักงาน</span>
+            </Link>
+            <LanguageControl className="shrink-0" />
+          </nav>
         </div>
       </header>
 
@@ -136,7 +154,7 @@ export function PublicStoreProfile({ identifier, initialStore }: Props) {
                   )}
                   {store.region && (
                     <span className="inline-flex items-center rounded-md bg-[var(--app-accent-soft)] px-2.5 py-1 text-xs font-semibold text-[var(--app-accent)]">
-                      {formatPublicRegion(store.region)}
+                      {formatPublicRegion(store.region, language)}
                     </span>
                   )}
                 </div>
@@ -220,7 +238,7 @@ export function PublicStoreProfile({ identifier, initialStore }: Props) {
                       </span>
                       <div>
                         <h2 className="text-sm font-bold text-[var(--app-text-primary)]">
-                          TikTok Official
+                          <span>TikTok</span> <span>บัญชีทางการ</span>
                         </h2>
                         <span className="text-[11px] text-[var(--app-text-secondary)]">
                           ชมคลิปโปรโมชั่น รีวิวมือถือรุ่นใหม่
@@ -294,7 +312,7 @@ export function PublicStoreProfile({ identifier, initialStore }: Props) {
       {/* Public Footer */}
       <footer className="border-t border-[var(--app-border)] bg-[var(--app-surface)] py-6 text-center text-xs text-[var(--app-text-tertiary)]">
         <div className="mx-auto max-w-4xl px-4 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <p>© {new Date().getFullYear()} OPPO Brand Shop Directory · Thailand</p>
+          <p>{`© ${new Date().getFullYear()} OPPO Brand Shop Directory · Thailand`}</p>
           <div className="flex items-center gap-4">
             <Link href="/" className="hover:underline">
               หน้าแรก
@@ -318,5 +336,6 @@ export function PublicStoreProfile({ identifier, initialStore }: Props) {
         </div>
       </footer>
     </div>
+    </PublicStoreI18nBoundary>
   );
 }

@@ -39,9 +39,9 @@ test("every view says how each KPI is counted, and why 24h can be higher", () =>
   assert.match(KPI_DIFFERENCE_NOTE, /ตอบใน 24 ชม\.” และ “ยังไม่ตอบ” พร้อมกัน/);
   assert.match(read("components/v2/kpi-cards.tsx"), /<details data-v2-how-counted=\{kpi\}/, "a disclosure, not a tooltip");
   assert.match(read("components/v2/month-overview.tsx"), /<TwoKpiCards totals=\{data\.network\} frame=\{data\.frame\} \/>/);
-  assert.match(read("components/v2/store-scorecard-view.tsx"), /<HowCounted kpi="replied" \/>[\s\S]*<HowCounted kpi="rate24" \/>[\s\S]*\{KPI_DIFFERENCE_NOTE\}/);
-  assert.match(read("components/v2/store-scorecard-drawer.tsx"), /<KpiCompareTable totals=\{row\} frame=\{data\.frame\} \/>[\s\S]*\{KPI_DIFFERENCE_NOTE\}/);
-  assert.match(read("components/v2/month-report.tsx"), /\{KPI_HOW_COUNTED\.replied\}[\s\S]*\{KPI_HOW_COUNTED\.rate24\}/);
+  assert.match(read("components/v2/store-scorecard-view.tsx"), /<HowCounted kpi="replied" \/>[\s\S]*<HowCounted kpi="rate24" \/>[\s\S]*t\("kpiDifference"\)/);
+  assert.match(read("components/v2/store-scorecard-drawer.tsx"), /<KpiCompareTable totals=\{row\} frame=\{data\.frame\} \/>[\s\S]*t\("kpiDifference"\)/);
+  assert.match(read("components/v2/month-report.tsx"), /t\("howReplied"\)[\s\S]*t\("howRate24"\)/);
 });
 
 // Synthetic fixtures only.

@@ -2,6 +2,8 @@
 
 import React from "react";
 import { Button } from "./button";
+import { useAppLanguage } from "@/app/language";
+import { getSharedUiText } from "@/app/shared-ui-i18n";
 
 export interface ErrorStateProps {
   title?: string;
@@ -11,11 +13,13 @@ export interface ErrorStateProps {
 }
 
 export function ErrorState({
-  title = "เกิดข้อผิดพลาดในการโหลดข้อมูล",
+  title,
   message,
   onRetry,
   className = "",
 }: ErrorStateProps) {
+  const { language } = useAppLanguage();
+  const text = getSharedUiText(language);
   return (
     <div
       role="alert"
@@ -37,7 +41,7 @@ export function ErrorState({
           />
         </svg>
         <div>
-          <span className="font-semibold">{title}: </span>
+          <span className="font-semibold">{title ?? text.errorTitle}: </span>
           <span className="opacity-90">{message}</span>
         </div>
       </div>
@@ -48,7 +52,7 @@ export function ErrorState({
           onClick={onRetry}
           className="shrink-0 self-end sm:self-center border-[var(--app-danger)]/30 text-[color-mix(in_srgb,var(--app-danger)_70%,var(--app-text-primary))] hover:bg-[var(--app-danger)] hover:text-white"
         >
-          ลองใหม่อีกครั้ง
+          {text.retry}
         </Button>
       )}
     </div>

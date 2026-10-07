@@ -647,7 +647,7 @@ export function GreetingMessagesView({
                 {t.headerTitle}
               </h1>
               <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs text-gray-500 bg-gray-100 rounded border border-gray-200 cursor-default">
-                ⓘ Tips
+                {t.tips}
               </span>
             </div>
             <p className="mt-1 text-xs text-gray-600">
@@ -930,7 +930,7 @@ export function GreetingMessagesView({
                               {imgUrl ? (
                                 <img
                                   src={imgUrl}
-                                  alt="Preview image"
+                                  alt={t.previewImageAlt}
                                   className="w-full h-auto max-h-[160px] object-cover"
                                 />
                               ) : (
@@ -1165,7 +1165,7 @@ export function GreetingMessagesView({
                           statusBadge = (
                             <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
                               <span className="w-1.5 h-1.5 rounded-full bg-[#06c755]"></span>
-                              ใช้งานอยู่
+                              {t.statusActive}
                             </span>
                           );
                           statusText = `${currentTemplate.name} · v${currentTemplate.version}`;
@@ -1173,7 +1173,7 @@ export function GreetingMessagesView({
                           statusBadge = (
                             <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-200">
                               <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
-                              ผูกเทมเพลตแล้ว แต่ยังเป็นแบบร่าง
+                              {t.assignedDraftNotice}
                             </span>
                           );
                           statusText = `${currentTemplate.name} · v${currentTemplate.version}`;
@@ -1181,7 +1181,7 @@ export function GreetingMessagesView({
                           statusBadge = (
                             <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-700 border border-gray-200">
                               <span className="w-1.5 h-1.5 rounded-full bg-gray-400"></span>
-                              ปิดใช้งาน
+                              {t.statusInactive}
                             </span>
                           );
                           statusText = `${currentTemplate.name} · v${currentTemplate.version}`;
@@ -1197,7 +1197,7 @@ export function GreetingMessagesView({
                                   : "bg-gray-100 text-gray-700 border border-gray-200"
                               }`}
                             >
-                              {otherTemplate.status === "ACTIVE" ? "● ใช้งานอยู่" : "○ ปิดใช้งาน"}
+                              {otherTemplate.status === "ACTIVE" ? t.statusActive : t.statusInactive}
                             </span>
                           );
                           statusText = `${otherTemplate.name} · v${otherTemplate.version}`;

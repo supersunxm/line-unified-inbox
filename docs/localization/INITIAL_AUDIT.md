@@ -1,0 +1,316 @@
+# Three-language localization audit — 2026-10-07
+
+> This file records the baseline inventory. The current worktree scan, completed features, runtime evidence, and outstanding classifications are tracked in [STATUS.md](./STATUS.md).
+
+Baseline: origin/main de90d769. Isolated branch: codex/three-language-coverage.
+
+Supported locales: th (Thai), en (English), zh (Simplified Chinese). LanguageProvider/useAppLanguage persist oppo-line-oa-language and legacy workspace preferences. Routes do not contain locale prefixes; language switching updates state. Feature dictionaries use language-keyed records and pickLanguageText; some legacy routes use scoped LegacyI18nBoundary phrase/template resources. No second framework will be introduced.
+
+Inventory: 59 page routes, 403 TypeScript/TSX source files; 6085 Thai literal/text nodes in 224 files. Counts include dictionaries, data, regexes and examples and are not counts of untranslated UI.
+
+## Findings by feature
+
+- V2: shell/navigation, monthly overview, response store/chat views, scorecards, partner administration, charts, report and model-generated descriptions bypass localization. No feature dictionary currently covers these. Thai month labels are fixed.
+- Review15: manual checker, OCR controls/status/errors, explanatory rules and accessibility labels are hardcoded Thai; OCR confidence is hardcoded English. Thai review/token examples must preserve their content because they demonstrate Thai word-count rules.
+- Monthly operations report: labels, coverage descriptions, audit/export states and errors are hardcoded Thai/English.
+- Dashboard: many existing phrases are covered by dashboard-legacy-i18n; newer executive components and dynamic sentences need coverage checks.
+- Chat/inbox/BM review: large existing th/en/zh dictionary plus legacy/mobile phrases; setup/password/verification errors and some newer customer metadata labels bypass dictionaries.
+- Google Review KPI: existing three-language dictionary; newer validation, evidence and review state copy requires checking.
+- Broadcast: existing language prop; period options and some new helper/validation text remain fixed English/Thai.
+- Store360, followers, TikTok, store management, public/auth/admin and messaging tools: established dictionaries and inline three-locale records coexist with hardcoded copy; all remain in final audit scope.
+- Shared skeleton/loading/error/table components contain Thai defaults.
+
+## Keys and backend text
+
+Extracted 2,560 complete three-locale string records, with 1,977 distinct Thai source phrases. Source-key collisions exist for common short labels; reuse must follow feature context, rather than assuming identical Thai means identical meaning. V2/review15/monthly-report inventory has 549 source texts absent from extracted records, including metadata, geographical data and sentence fragments that require classification. New keys must be semantic and full dynamic sentences parameterized.
+
+Backend-provided error.message, analytics descriptions, store names, customer messages, OCR text and evidence are displayed in several screens. User/database content must remain unchanged. Generic UI errors can use a localized status/fallback where the API has no stable error code; arbitrary backend content cannot safely be translated by phrase guessing. No API/schema changes planned.
+
+## Routes checked
+
+- frontend/src/app/admin/purchase-analytics/page.tsx
+- frontend/src/app/admin/registrations/hq/page.tsx
+- frontend/src/app/admin/registrations/page.tsx
+- frontend/src/app/admin/stores/page.tsx
+- frontend/src/app/auto-responses/page.tsx
+- frontend/src/app/broadcast/page.tsx
+- frontend/src/app/chats/page.tsx
+- frontend/src/app/connect/tiktok/analytics/page.tsx
+- frontend/src/app/connect/tiktok/page.tsx
+- frontend/src/app/connect/tiktok/success/page.tsx
+- frontend/src/app/coupons/page.tsx
+- frontend/src/app/dashboard/message-traffic/page.tsx
+- frontend/src/app/dashboard/page.tsx
+- frontend/src/app/download-center/page.tsx
+- frontend/src/app/download/history/page.tsx
+- frontend/src/app/download/page.tsx
+- frontend/src/app/follower-insights/page.tsx
+- frontend/src/app/friend-attribution/page.tsx
+- frontend/src/app/friend-source-links/page.tsx
+- frontend/src/app/google-review-kpi/page.tsx
+- frontend/src/app/greeting-messages/manage/page.tsx
+- frontend/src/app/greeting-messages/page.tsx
+- frontend/src/app/home/page.tsx
+- frontend/src/app/login/page.tsx
+- frontend/src/app/main-oa/page.tsx
+- frontend/src/app/mass-messages/drafts/[campaignId]/page.tsx
+- frontend/src/app/mass-messages/page.tsx
+- frontend/src/app/monthly-operations-report/page.tsx
+- frontend/src/app/operations/line-chat-health/page.tsx
+- frontend/src/app/page.tsx
+- frontend/src/app/privacy/page.tsx
+- frontend/src/app/register/page.tsx
+- frontend/src/app/replymessage/page.tsx
+- frontend/src/app/review15/page.tsx
+- frontend/src/app/rich-menus/overview/page.tsx
+- frontend/src/app/rich-menus/page.tsx
+- frontend/src/app/rich-messages/page.tsx
+- frontend/src/app/store-360/customer-voice/page.tsx
+- frontend/src/app/store-360/page.tsx
+- frontend/src/app/store-360/response/page.tsx
+- frontend/src/app/store-locator/page.tsx
+- frontend/src/app/storemanagement/page.tsx
+- frontend/src/app/stores/[identifier]/page.tsx
+- frontend/src/app/stores/page.tsx
+- frontend/src/app/terms/page.tsx
+- frontend/src/app/tiktok-integration/page.tsx
+- frontend/src/app/tiktok/callback/result/page.tsx
+- frontend/src/app/tiktok/connect/error/page.tsx
+- frontend/src/app/tiktok/connect/success/page.tsx
+- frontend/src/app/tiktok/dashboard/[accountId]/page.tsx
+- frontend/src/app/tiktok/dashboard/page.tsx
+- frontend/src/app/tiktok/page.tsx
+- frontend/src/app/tiktok/stores/[storeMasterId]/page.tsx
+- frontend/src/app/v2/(shell)/admin/partners/page.tsx
+- frontend/src/app/v2/(shell)/page.tsx
+- frontend/src/app/v2/(shell)/response/page.tsx
+- frontend/src/app/v2/(shell)/stores/page.tsx
+- frontend/src/app/v2/report/page.tsx
+- frontend/src/app/welcome/page.tsx
+
+## Files containing Thai (classification pending)
+
+- frontend/src/app/admin/purchase-analytics/layout.tsx: 1 text nodes
+- frontend/src/app/admin/purchase-analytics/mobile-purchase-analytics-app.tsx: 73 text nodes
+- frontend/src/app/admin/purchase-analytics/page.tsx: 1 text nodes
+- frontend/src/app/admin/purchase-analytics/purchase-analytics-i18n.ts: 94 text nodes
+- frontend/src/app/admin/registrations/layout.tsx: 1 text nodes
+- frontend/src/app/admin/registrations/mobile-admin-registrations-app.tsx: 45 text nodes
+- frontend/src/app/admin/registrations/page.tsx: 1 text nodes
+- frontend/src/app/admin/registrations/registrations-i18n.ts: 101 text nodes
+- frontend/src/app/admin/stores/layout.tsx: 1 text nodes
+- frontend/src/app/admin/stores/page.tsx: 1 text nodes
+- frontend/src/app/authorized-workspace.tsx: 3 text nodes
+- frontend/src/app/auto-responses/auto-response-i18n.ts: 107 text nodes
+- frontend/src/app/auto-responses/auto-response-preview-stream.tsx: 1 text nodes
+- frontend/src/app/auto-responses/auto-response-rich-message-block.tsx: 7 text nodes
+- frontend/src/app/auto-responses/auto-responses-view.tsx: 2 text nodes
+- frontend/src/app/auto-responses/layout.tsx: 1 text nodes
+- frontend/src/app/broadcast/broadcast-view.tsx: 39 text nodes
+- frontend/src/app/chat-period.ts: 1 text nodes
+- frontend/src/app/chats-pagination-utils.ts: 11 text nodes
+- frontend/src/app/chats/layout.tsx: 1 text nodes
+- frontend/src/app/chats/page.tsx: 9 text nodes
+- frontend/src/app/components/customer/customer-signals.tsx: 12 text nodes
+- frontend/src/app/connect/tiktok/analytics/store-owner-analytics.tsx: 25 text nodes
+- frontend/src/app/connect/tiktok/page.tsx: 37 text nodes
+- frontend/src/app/connect/tiktok/success/store-binding-success.tsx: 25 text nodes
+- frontend/src/app/coupons/coupon-management-view.tsx: 46 text nodes
+- frontend/src/app/coupons/coupon-manager-aligned-view.tsx: 72 text nodes
+- frontend/src/app/coupons/coupons-i18n.ts: 92 text nodes
+- frontend/src/app/coupons/layout.tsx: 1 text nodes
+- frontend/src/app/coupons/mobile-coupons-app.tsx: 152 text nodes
+- frontend/src/app/coupons/page.tsx: 1 text nodes
+- frontend/src/app/customer-sales-tag-editor.tsx: 18 text nodes
+- frontend/src/app/dashboard/action-status.tsx: 6 text nodes
+- frontend/src/app/dashboard/admin-activity-history.tsx: 8 text nodes
+- frontend/src/app/dashboard/ai-action-center.tsx: 18 text nodes
+- frontend/src/app/dashboard/ai-bi-assistant.tsx: 16 text nodes
+- frontend/src/app/dashboard/ai-executive-daily-brief.tsx: 13 text nodes
+- frontend/src/app/dashboard/ai-impact-dashboard.tsx: 12 text nodes
+- frontend/src/app/dashboard/ai-insight-card.tsx: 7 text nodes
+- frontend/src/app/dashboard/ai-operational-memory.tsx: 11 text nodes
+- frontend/src/app/dashboard/ai-root-cause-analysis.tsx: 8 text nodes
+- frontend/src/app/dashboard/best-practice-card.tsx: 5 text nodes
+- frontend/src/app/dashboard/customer-demand-signals.tsx: 14 text nodes
+- frontend/src/app/dashboard/dashboard-data-quality.tsx: 8 text nodes
+- frontend/src/app/dashboard/dashboard-legacy-i18n.ts: 109 text nodes
+- frontend/src/app/dashboard/dashboard-transformers.ts: 89 text nodes
+- frontend/src/app/dashboard/dashboard-view.tsx: 44 text nodes
+- frontend/src/app/dashboard/executive-dashboard-base.tsx: 83 text nodes
+- frontend/src/app/dashboard/executive-hero.tsx: 31 text nodes
+- frontend/src/app/dashboard/executive-store-peer-panel.tsx: 20 text nodes
+- frontend/src/app/dashboard/follower-growth.tsx: 11 text nodes
+- frontend/src/app/dashboard/improvement-card.tsx: 6 text nodes
+- frontend/src/app/dashboard/layout.tsx: 1 text nodes
+- frontend/src/app/dashboard/message-overview.tsx: 6 text nodes
+- frontend/src/app/dashboard/message-traffic/message-traffic-view.tsx: 40 text nodes
+- frontend/src/app/dashboard/message-traffic/mobile-message-traffic-app.tsx: 41 text nodes
+- frontend/src/app/dashboard/message-traffic/page.tsx: 1 text nodes
+- frontend/src/app/dashboard/need-action-queue.tsx: 9 text nodes
+- frontend/src/app/dashboard/network-health-banner.tsx: 2 text nodes
+- frontend/src/app/dashboard/operation-efficiency.tsx: 6 text nodes
+- frontend/src/app/dashboard/operation-health-score.tsx: 7 text nodes
+- frontend/src/app/dashboard/page.tsx: 1 text nodes
+- frontend/src/app/dashboard/peak-hour-analysis.tsx: 5 text nodes
+- frontend/src/app/dashboard/product-interest.tsx: 3 text nodes
+- frontend/src/app/dashboard/response-rate-card.tsx: 10 text nodes
+- frontend/src/app/dashboard/sla-risk-prediction.tsx: 2 text nodes
+- frontend/src/app/dashboard/store-24h-response-panel.tsx: 35 text nodes
+- frontend/src/app/dashboard/store-performance-overview.tsx: 12 text nodes
+- frontend/src/app/dashboard/store-performance-table.tsx: 23 text nodes
+- frontend/src/app/dashboard/store-quick-view-drawer.tsx: 19 text nodes
+- frontend/src/app/dashboard/today-action-center.tsx: 14 text nodes
+- frontend/src/app/dashboard/topic-analysis.tsx: 4 text nodes
+- frontend/src/app/download-center/page.tsx: 26 text nodes
+- frontend/src/app/download/download-content.tsx: 17 text nodes
+- frontend/src/app/download/history/history-content.tsx: 8 text nodes
+- frontend/src/app/download/releases.ts: 181 text nodes
+- frontend/src/app/follower-insights/daily-follower-growth-download-button.tsx: 6 text nodes
+- frontend/src/app/follower-insights/daily-follower-growth-export-control.tsx: 15 text nodes
+- frontend/src/app/follower-insights/daily-follower-growth-export.ts: 2 text nodes
+- frontend/src/app/follower-insights/daily-summary-table.tsx: 2 text nodes
+- frontend/src/app/follower-insights/follower-insights-translations.ts: 128 text nodes
+- frontend/src/app/follower-insights/follower-insights-utils.ts: 16 text nodes
+- frontend/src/app/follower-insights/follower-insights-view.tsx: 2 text nodes
+- frontend/src/app/follower-insights/layout.tsx: 1 text nodes
+- frontend/src/app/follower-insights/mobile-follower-insights-app.tsx: 39 text nodes
+- frontend/src/app/follower-insights/page.tsx: 1 text nodes
+- frontend/src/app/follower-insights/store-analytics-overview.tsx: 24 text nodes
+- frontend/src/app/follower-insights/store-breakdown-table.tsx: 24 text nodes
+- frontend/src/app/follower-insights/trend-chart.tsx: 10 text nodes
+- frontend/src/app/friend-attribution-bootstrap/route.ts: 2 text nodes
+- frontend/src/app/friend-attribution/friend-attribution-translations.ts: 38 text nodes
+- frontend/src/app/friend-source-links/friend-source-links-i18n.ts: 36 text nodes
+- frontend/src/app/friend-source-links/friend-source-links-translations.ts: 133 text nodes
+- frontend/src/app/friend-source-links/friend-source-links-view.tsx: 3 text nodes
+- frontend/src/app/friend-source-links/layout.tsx: 1 text nodes
+- frontend/src/app/friend-source-links/mobile-friend-source-links-app.tsx: 37 text nodes
+- frontend/src/app/friend-source-links/page.tsx: 1 text nodes
+- frontend/src/app/google-review-kpi/google-review-kpi-view.tsx: 262 text nodes
+- frontend/src/app/greeting-messages/greeting-i18n.ts: 144 text nodes
+- frontend/src/app/greeting-messages/greeting-management-view.tsx: 53 text nodes
+- frontend/src/app/greeting-messages/greeting-message-builder.tsx: 1 text nodes
+- frontend/src/app/greeting-messages/greeting-messages-view.tsx: 58 text nodes
+- frontend/src/app/greeting-messages/greeting-mode-nav.tsx: 1 text nodes
+- frontend/src/app/greeting-messages/greeting-rich-message-block.tsx: 7 text nodes
+- frontend/src/app/greeting-messages/layout.tsx: 1 text nodes
+- frontend/src/app/greeting-messages/page.tsx: 1 text nodes
+- frontend/src/app/home/layout.tsx: 1 text nodes
+- frontend/src/app/home/page.tsx: 41 text nodes
+- frontend/src/app/language.tsx: 2 text nodes
+- frontend/src/app/layout.tsx: 2 text nodes
+- frontend/src/app/legacy-i18n-boundary.tsx: 21 text nodes
+- frontend/src/app/login/page.tsx: 10 text nodes
+- frontend/src/app/main-oa/page.tsx: 29 text nodes
+- frontend/src/app/mass-messages/drafts/[campaignId]/draft-responsive.tsx: 1 text nodes
+- frontend/src/app/mass-messages/layout.tsx: 1 text nodes
+- frontend/src/app/mass-messages/mass-messages-translations.ts: 105 text nodes
+- frontend/src/app/mass-messages/mass-messages-view.tsx: 11 text nodes
+- frontend/src/app/mass-messages/mobile-mass-messages-app.tsx: 87 text nodes
+- frontend/src/app/mass-messages/mobile-purchase-broadcast-composer.tsx: 31 text nodes
+- frontend/src/app/mass-messages/page.tsx: 1 text nodes
+- frontend/src/app/mass-messages/purchase-broadcast-draft-banner.tsx: 6 text nodes
+- frontend/src/app/message-media.tsx: 11 text nodes
+- frontend/src/app/message-sticker.tsx: 1 text nodes
+- frontend/src/app/mobile-route-i18n.ts: 177 text nodes
+- frontend/src/app/monthly-operations-report/layout.tsx: 1 text nodes
+- frontend/src/app/monthly-operations-report/page.tsx: 44 text nodes
+- frontend/src/app/nickname-derived-metadata-card.tsx: 15 text nodes
+- frontend/src/app/nickname-source-badge.ts: 1 text nodes
+- frontend/src/app/operations/line-chat-health/line-chat-health-status.ts: 11 text nodes
+- frontend/src/app/operations/line-chat-health/line-chat-health-view.tsx: 3 text nodes
+- frontend/src/app/operations/line-chat-health/line-chat-pending-control-action.tsx: 18 text nodes
+- frontend/src/app/page.tsx: 383 text nodes
+- frontend/src/app/privacy/privacy-content.tsx: 83 text nodes
+- frontend/src/app/public-landing-page.tsx: 44 text nodes
+- frontend/src/app/register/page.tsx: 35 text nodes
+- frontend/src/app/relative-time.ts: 8 text nodes
+- frontend/src/app/replymessage/layout.tsx: 1 text nodes
+- frontend/src/app/replymessage/page.tsx: 4 text nodes
+- frontend/src/app/review15/opengraph-image.tsx: 27 text nodes
+- frontend/src/app/review15/page.tsx: 5 text nodes
+- frontend/src/app/review15/review-15-checker.tsx: 101 text nodes
+- frontend/src/app/review15/review-15-example.ts: 21 text nodes
+- frontend/src/app/rich-menus/layout.tsx: 1 text nodes
+- frontend/src/app/rich-menus/overview/rich-menu-overview-view.tsx: 23 text nodes
+- frontend/src/app/rich-menus/page.tsx: 1 text nodes
+- frontend/src/app/rich-menus/rich-menu-i18n.ts: 184 text nodes
+- frontend/src/app/rich-menus/rich-menus-view.tsx: 27 text nodes
+- frontend/src/app/rich-messages/rich-messages-view.tsx: 37 text nodes
+- frontend/src/app/store-360/customer-voice/customer-voice-view.tsx: 1 text nodes
+- frontend/src/app/store-360/response/response-view.tsx: 1 text nodes
+- frontend/src/app/store-360/store-360-export-control.tsx: 18 text nodes
+- frontend/src/app/store-360/store-360-view.tsx: 2 text nodes
+- frontend/src/app/store-locator/page.tsx: 2 text nodes
+- frontend/src/app/store-locator/store-locator-app.tsx: 41 text nodes
+- frontend/src/app/store-locator/store-locator-utils.ts: 12 text nodes
+- frontend/src/app/storemanagement/layout.tsx: 1 text nodes
+- frontend/src/app/storemanagement/page.tsx: 1 text nodes
+- frontend/src/app/stores/[identifier]/page.tsx: 6 text nodes
+- frontend/src/app/stores/[identifier]/public-store-profile.tsx: 26 text nodes
+- frontend/src/app/stores/mobile-stores-app.tsx: 62 text nodes
+- frontend/src/app/stores/page.tsx: 2 text nodes
+- frontend/src/app/stores/public-stores-directory.tsx: 31 text nodes
+- frontend/src/app/terms/terms-content.tsx: 55 text nodes
+- frontend/src/app/tiktok-integration/page.tsx: 50 text nodes
+- frontend/src/app/tiktok/connect/error/error-content.tsx: 20 text nodes
+- frontend/src/app/tiktok/connect/success/success-content.tsx: 18 text nodes
+- frontend/src/app/tiktok/dashboard/tiktok-dashboard-translations.ts: 66 text nodes
+- frontend/src/app/tiktok/tiktok-overview-translations.ts: 63 text nodes
+- frontend/src/app/tiktok/tiktok-public-dashboard.tsx: 51 text nodes
+- frontend/src/app/tiktok/tiktok-public-store-detail.tsx: 12 text nodes
+- frontend/src/app/tiktok/tiktok-public-timestamp.ts: 2 text nodes
+- frontend/src/app/v2/(shell)/admin/partners/page.tsx: 1 text nodes
+- frontend/src/app/v2/(shell)/page.tsx: 1 text nodes
+- frontend/src/app/v2/(shell)/response/page.tsx: 1 text nodes
+- frontend/src/app/v2/(shell)/stores/page.tsx: 1 text nodes
+- frontend/src/app/v2/layout.tsx: 1 text nodes
+- frontend/src/app/v2/report/page.tsx: 1 text nodes
+- frontend/src/app/welcome/page.tsx: 11 text nodes
+- frontend/src/components/chats/mobile-chats-app.tsx: 94 text nodes
+- frontend/src/components/chats/mobile-chats-controller.tsx: 4 text nodes
+- frontend/src/components/chats/store-chats-overflow-menu.tsx: 2 text nodes
+- frontend/src/components/mobile/adaptive-mobile.tsx: 9 text nodes
+- frontend/src/components/shell/app-shell.tsx: 6 text nodes
+- frontend/src/components/shell/app-sidebar.tsx: 29 text nodes
+- frontend/src/components/shell/context-sidebar.tsx: 13 text nodes
+- frontend/src/components/shell/store-priority-score.ts: 7 text nodes
+- frontend/src/components/shell/top-navigation.tsx: 37 text nodes
+- frontend/src/components/ui/error-state.tsx: 2 text nodes
+- frontend/src/components/ui/input.tsx: 1 text nodes
+- frontend/src/components/ui/kpi-strip-skeleton.tsx: 1 text nodes
+- frontend/src/components/ui/list-row-skeleton.tsx: 1 text nodes
+- frontend/src/components/ui/loading-state.tsx: 2 text nodes
+- frontend/src/components/ui/section-card-skeleton.tsx: 1 text nodes
+- frontend/src/components/ui/table.tsx: 1 text nodes
+- frontend/src/components/ui/workspace-skeleton.tsx: 1 text nodes
+- frontend/src/components/v2/kpi-cards.tsx: 13 text nodes
+- frontend/src/components/v2/month-overview.tsx: 31 text nodes
+- frontend/src/components/v2/month-report.tsx: 37 text nodes
+- frontend/src/components/v2/response-chat-view.tsx: 32 text nodes
+- frontend/src/components/v2/response-stores-view.tsx: 61 text nodes
+- frontend/src/components/v2/response-view.tsx: 34 text nodes
+- frontend/src/components/v2/store-partners-admin.tsx: 32 text nodes
+- frontend/src/components/v2/store-scorecard-drawer.tsx: 42 text nodes
+- frontend/src/components/v2/store-scorecard-view.tsx: 46 text nodes
+- frontend/src/components/v2/tag-coverage.tsx: 27 text nodes
+- frontend/src/components/v2/v2-data.tsx: 3 text nodes
+- frontend/src/components/v2/v2-month-controls.tsx: 14 text nodes
+- frontend/src/components/v2/v2-month-data.tsx: 7 text nodes
+- frontend/src/components/v2/v2-shell.tsx: 20 text nodes
+- frontend/src/components/v2/v2-ui.tsx: 13 text nodes
+- frontend/src/lib/focus-store-group.ts: 2 text nodes
+- frontend/src/lib/public-regions.ts: 26 text nodes
+- frontend/src/lib/thai-word-counter.ts: 36 text nodes
+- frontend/src/lib/v2/business-hours.ts: 18 text nodes
+- frontend/src/lib/v2/date-ranges.ts: 7 text nodes
+- frontend/src/lib/v2/kpi.ts: 12 text nodes
+- frontend/src/lib/v2/month-close.ts: 10 text nodes
+- frontend/src/lib/v2/month.ts: 28 text nodes
+- frontend/src/lib/v2/monthly-model.ts: 6 text nodes
+- frontend/src/lib/v2/partners.ts: 1 text nodes
+- frontend/src/lib/v2/report-summary.ts: 14 text nodes
+- frontend/src/lib/v2/tag-coverage.ts: 8 text nodes
+- frontend/src/lib/v2/thai-geo.ts: 87 text nodes
+- frontend/src/lib/v2/value-state.ts: 8 text nodes

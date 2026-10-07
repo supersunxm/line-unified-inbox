@@ -31,7 +31,7 @@ test("partner coverage sums its stores", () => {
 });
 
 test("store list, partner table and drawer read the backend coverage (Parser v4)", () => {
-  assert.match(read("components/v2/store-scorecard-view.tsx"), /<TableHead scope="col" align="right">ความครบของแท็ก<\/TableHead>[\s\S]*<TagCoverageCell counts=\{data\.tagCoverageByStore\.get\(row\.storeId\)\} \/>/);
+  assert.match(read("components/v2/store-scorecard-view.tsx"), /<TableHead scope="col" align="right">\{t\("tagCoverageLabel"\)\}<\/TableHead>[\s\S]*<TagCoverageCell counts=\{data\.tagCoverageByStore\.get\(row\.storeId\)\} \/>/);
   assert.match(read("components/v2/month-overview.tsx"), /<TagCoverageCell counts=\{sumTagCoverage\(row\.storeIds\.map\(\(id\) => data\.tagCoverageByStore\.get\(id\)\)\)\} \/>[\s\S]*<TagCoverageCell counts=\{data\.tagCoverage\.data\?\.network\} \/>/);
   const drawer = read("components/v2/store-scorecard-drawer.tsx");
   assert.match(drawer, /<TagCoverageDetail counts=\{data\.tagCoverageByStore\.get\(row\.storeId\)\} \/>/);
