@@ -342,14 +342,53 @@ test("image scan UI warns when estimated review cards exceed extracted bodies", 
   assert.match(checkerSource, /แยกข้อความได้/);
 });
 
-test("the 'ใช้ข้อความตัวอย่าง' button uses a defined sample that passes the 15-word rule", async () => {
-  // #445 deleted EXAMPLE_TEXT but kept the button, so clicking it threw a ReferenceError.
-  const { REVIEW15_EXAMPLE_TEXT } = await import("../src/app/review15/review-15-example.ts");
+test("the random sample button offers diverse examples and avoids the current text", async () => {
+  const {
+    REVIEW15_EXAMPLES,
+    REVIEW15_EXAMPLE_TEXT,
+    pickRandomReview15Example,
+  } = await import("../src/app/review15/review-15-example.ts");
+
   assert.equal(REVIEW15_EXAMPLE_TEXT, example);
-  assert.ok(countThaiWords(REVIEW15_EXAMPLE_TEXT) >= 15);
-  const checker = fs.readFileSync(path.join(repoRoot, "frontend/src/app/review15/review-15-checker.tsx"), "utf8");
-  assert.match(checker, /import \{ REVIEW15_EXAMPLE_TEXT \} from "\.\/review-15-example";/);
-  assert.match(checker, /onClick=\{\(\) => onTextChange\(REVIEW15_EXAMPLE_TEXT\)\}[\s\S]{0,300}ใช้ข้อความตัวอย่าง/);
-  // Every identifier the button path uses must be defined: no bare EXAMPLE_TEXT left.
-  assert.doesNotMatch(checker, /(?<![\w_])EXAMPLE_TEXT(?![\w_])/);
+  assert.ok(REVIEW15_EXAMPLES.length >= 10);
+  assert.equal(
+    new Set(REVIEW15_EXAMPLES.map((item) => item.id)).size,
+    REVIEW15_EXAMPLES.length,
+  );
+  assert.equal(
+    new Set(REVIEW15_EXAMPLES.map((item) => item.text)).size,
+    REVIEW15_EXAMPLES.length,
+  );
+  assert.ok(REVIEW15_EXAMPLES.every((item) => item.text.length <= 500));
+
+  const counts = REVIEW15_EXAMPLES.map((item) => countThaiWords(item.text));
+  assert.ok(counts.some((count) => count < 15));
+  assert.ok(counts.some((count) => count >= 15));
+
+  const exactFifteen = REVIEW15_EXAMPLES.find(
+    (item) => item.id === "exact-english-15",
+  );
+  assert.ok(exactFifteen);
+  assert.equal(countThaiWords(exactFifteen.text), 15);
+
+  const current = REVIEW15_EXAMPLES[0];
+  assert.notEqual(
+    pickRandomReview15Example(current.text, () => 0).text,
+    current.text,
+  );
+  assert.ok(
+    REVIEW15_EXAMPLES.includes(pickRandomReview15Example("", () => 0.999999)),
+  );
+
+  const checker = fs.readFileSync(
+    path.join(repoRoot, "frontend/src/app/review15/review-15-checker.tsx"),
+    "utf8",
+  );
+  assert.match(
+    checker,
+    /import \{ pickRandomReview15Example, REVIEW15_EXAMPLES \} from "\.\/review-15-example";/,
+  );
+  assert.match(checker, /pickRandomReview15Example\(text\)\.text/);
+  assert.match(checker, /สุ่มข้อความตัวอย่าง/);
+  assert.match(checker, /กดซ้ำเพื่อสุ่มข้อความใหม่/);
 });
