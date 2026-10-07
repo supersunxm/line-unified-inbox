@@ -6381,3 +6381,11 @@ Live worker continues independently at 146 configured unique active OA identitie
 - Broad-suite diagnosis: npm test has 21 failures and four database-gated skips both here and on untouched current main, with identical failing test titles (hotfix 2586 pass versus main 2582). No new failure titles; unrelated broad-suite failures are not represented as green or changed in this isolated hotfix.
 - Runtime: actual built Nest backend starts without startup warnings/errors on standard free port 3001; /health 200 and protected operations/coupons/broadcast preview 401. Fresh local verification databases migrated; existing databases preserved. Built scheduler, real probe/health recorder and real PostgreSQL leases, with synthetic diagnostics and separate temporary profile directories, confirm idle-profile timestamps advance during Mirror while busy-profile checked/healthy/next timestamps remain unchanged; cooldown defers. No production operations performed for this hotfix.
 - Next: finish diff review/local commit, request explicit push permission under AGENTS.md, open one PR, require all fresh CI green and normal merge commit without branch-protection bypass. PR5 remains deferred.
+
+## 2026-10-07 — Review15 public header brand alignment
+
+- Replaced the Review15 page's text-only `oppo` link with the same public OPPO Brand Shop branding contract used by the store directory.
+- Reused `aria-label="OPPO Brand Shop Home"` so the shared `public-branding.css` applies `/images/LOGO_OBS.png` consistently.
+- Preserved the Review 15-Word Checker label and all word-count/OCR behavior.
+- Added a regression test to prevent the old text-only logo from returning.
+- Verification status: code complete on `fix/review15-public-brand-header`; hosted CI pending before merge.

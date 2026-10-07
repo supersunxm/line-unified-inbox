@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   segmentThaiWords,
@@ -486,13 +487,23 @@ export function Review15Checker() {
     <main className="min-h-screen bg-[var(--app-bg)] text-[var(--app-text-primary)]">
       <header className="border-b border-[var(--app-border)] bg-[var(--app-surface)]">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6 lg:px-8">
-          <a
+          <Link
             href="/"
-            className="text-[27px] font-bold tracking-[-0.075em]"
-            aria-label="OPPO Home"
+            className="flex items-center gap-2.5 transition-opacity hover:opacity-90"
+            aria-label="OPPO Brand Shop Home"
           >
-            oppo
-          </a>
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[var(--app-accent)] text-sm font-bold text-white shadow-sm">
+              O
+            </span>
+            <div className="flex flex-col">
+              <span className="text-sm font-bold leading-tight tracking-tight sm:text-base">
+                OPPO Brand Shop
+              </span>
+              <span className="text-[11px] font-medium text-[var(--app-text-secondary)]">
+                ค้นหาสาขา & ช่องทางติดต่อ
+              </span>
+            </div>
+          </Link>
           <span className="hidden text-sm font-medium text-[var(--app-text-secondary)] sm:block">
             Review 15-Word Checker
           </span>
