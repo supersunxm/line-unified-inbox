@@ -211,7 +211,7 @@ test("the global 401 redirect only fires for an expired session on a protected p
   assert.equal(shouldRedirectOnUnauthorized("/storemanagement", true), true);
   assert.equal(shouldRedirectOnUnauthorized("/download-center", true), true);
   assert.equal(shouldRedirectOnUnauthorized("/chats", false), false, "never seen a session: leave the page alone");
-  for (const publicPath of ["/", "/login", "/register", "/privacy", "/terms", "/download", "/download/history", "/stores", "/stores/profile", "/store-locator", "/friend-attribution", "/f/abc"]) {
+  for (const publicPath of ["/", "/login", "/change-password", "/register", "/privacy", "/terms", "/download", "/download/history", "/stores", "/stores/profile", "/store-locator", "/friend-attribution", "/f/abc"]) {
     assert.equal(isPublicPath(publicPath), true, publicPath);
     assert.equal(shouldRedirectOnUnauthorized(publicPath, true), false, publicPath);
   }
@@ -254,6 +254,7 @@ test("session-changing API calls reset the cache inside api.ts, not at call site
   assert.match(apiCode, /login: \([^)]*\) => withAuthUserReset\(/);
   assert.match(apiCode, /verifySetupOtp: \([^)]*\) => withAuthUserReset\(/);
   assert.match(apiCode, /logout: \(\) => withAuthUserReset\([\s\S]*?\{ endSession: true \}\)/);
+  assert.match(apiCode, /changePassword: \([^)]*\) => withAuthUserReset\(/);
   assert.match(apiCode, /reset\(\);\s*try \{\s*return await run\(\);\s*\} finally \{\s*reset\(\);/);
   assert.match(apiCode, /"\/auth\/me"[\s\S]*?\)\.then\(seedAuthUserStore\(authUserStore\.generation\(\)\)\)/);
   assert.match(apiCode, /authUserStore\.configure\(\(\) =>\s*request<AuthUser>\("\/auth\/me"/);
@@ -278,7 +279,8 @@ test("AuthorizedSection reads the shared store and blocks on a skeleton, never f
   assert.match(gateCode, /<ShellSkeleton placeholders=\{showSkeleton\}>\s*\{showSkeleton && <WorkspaceSkeleton label=\{t\.checking\} \/>\}/);
   assert.match(gateCode, /beginLoginRedirect\(\);\s*window\.location\.replace\("\/login"\);/);
   // Children (and therefore every data fetch) only render once an allowed user exists.
-  assert.match(gateCode, /const allowed = user !== null && canAccessPrimarySection\(user, section\);/);
+  assert.match(gateCode, /const allowed = user !== null && !requiresPasswordChange && canAccessPrimarySection\(user, section\);/);
+  assert.match(gateCode, /if \(requiresPasswordChange\) redirectToPasswordChange\(\);/);
   assert.match(gateCode, /if \(!allowed \|\| showSkeleton\) \{[\s\S]*?<ShellSkeleton placeholders=\{showSkeleton\}>/);
   assert.match(gateCode, /<AuthorizedUserContext\.Provider value=\{user\}>\{children\}<\/AuthorizedUserContext\.Provider>/);
 });

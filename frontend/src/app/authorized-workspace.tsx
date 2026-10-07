@@ -6,7 +6,7 @@ import type { PrimarySection } from "./primary-navigation";
 import { ApplicationWorkspace } from "./page";
 import { ApiError } from "@/lib/api";
 import { canAccessPrimarySection, defaultRouteForUser, type AuthUser } from "@/lib/authorization";
-import { beginLoginRedirect, isLoginRedirectStarted } from "@/lib/auth-session";
+import { beginLoginRedirect, isLoginRedirectStarted, redirectToPasswordChange } from "@/lib/auth-session";
 import { authUserStore, getAuthUser, useAuthUserSnapshot } from "@/lib/auth-user-store";
 import { ShellSkeleton } from "@/components/shell/shell-skeleton";
 import { WorkspaceSkeleton } from "@/components/ui/workspace-skeleton";
@@ -47,8 +47,9 @@ export function AuthorizedSection({ section, children }: { section: PrimarySecti
   const [blockedVersion] = useState(() => (authUserStore.peekUsable() ? null : authUserStore.getSnapshot().version));
   const [error, setError] = useState<string | null>(null);
   const user = snapshot.user && snapshot.version !== blockedVersion ? snapshot.user : null;
-  const allowed = user !== null && canAccessPrimarySection(user, section);
-  const deniedUser = user !== null && !allowed ? user : null;
+  const requiresPasswordChange = user?.mustChangePassword === true;
+  const allowed = user !== null && !requiresPasswordChange && canAccessPrimarySection(user, section);
+  const deniedUser = user !== null && !requiresPasswordChange && !allowed ? user : null;
   // A cache hit is allowed on the first render, so no skeleton ever shows. A real
   // wait shows the bare frame for 200ms, then the skeleton for at least 400ms.
   const showSkeleton = useDeferredLoading(!allowed && !error);
@@ -67,6 +68,10 @@ export function AuthorizedSection({ section, children }: { section: PrimarySecti
       });
     return () => { cancelled = true; };
   }, [section, t.unable]);
+
+  useEffect(() => {
+    if (requiresPasswordChange) redirectToPasswordChange();
+  }, [requiresPasswordChange]);
 
   // Runs for the first answer and for any background revalidation that changes access.
   useEffect(() => {

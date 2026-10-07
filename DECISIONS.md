@@ -3333,3 +3333,10 @@ Rationale:
 - The metric is explicitly approximate because clearing storage, using another browser/device, or automated traffic can change the count.
 
 The counter starts at deployment of this feature; no historical visitor analytics existed to backfill earlier traffic.
+## 2026-10-07 — Forced password reset recovery is an explicit auth state
+
+**Decision:** Treat `mustChangePassword` / `PASSWORD_CHANGE_REQUIRED` as a first-class authentication state instead of a generic API failure. A signed-in user in this state is routed to `/change-password`, and protected workspace children do not render until the password is changed.
+
+**Rationale:** The backend intentionally permits only `GET /auth/me`, `POST /auth/change-password`, and logout while the flag is set. Opening Dashboard first causes legitimate 403 responses to look like a data-service outage. Routing before protected data fetches makes frontend behavior match the backend contract.
+
+**401 handling exception:** `/change-password` is excluded from the global 401-to-login listener because an incorrect current/temporary password is also returned as 401. The recovery page independently checks `/auth/me` and redirects truly unauthenticated users to `/login`.
