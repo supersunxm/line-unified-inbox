@@ -6,6 +6,7 @@ import {
   resolveAuthRedirect,
   routeAfterLogin,
   shouldRedirectToLogin,
+  shouldRedirectToPasswordChange,
 } from "../src/lib/auth-session.ts";
 import { createAuthRewrite, createBackendRewrite } from "../next.config.ts";
 
@@ -70,6 +71,13 @@ test("shouldRedirectToLogin triggers only on 401 outside /login", () => {
   assert.equal(shouldRedirectToLogin(403, "/dashboard"), false);
 });
 
+test("forced password change redirects only for the dedicated 403 code", () => {
+  assert.equal(shouldRedirectToPasswordChange(403, "PASSWORD_CHANGE_REQUIRED", "/dashboard"), true);
+  assert.equal(shouldRedirectToPasswordChange(403, "PASSWORD_CHANGE_REQUIRED", "/change-password"), false);
+  assert.equal(shouldRedirectToPasswordChange(403, "INSUFFICIENT_PERMISSIONS", "/dashboard"), false);
+  assert.equal(shouldRedirectToPasswordChange(401, "PASSWORD_CHANGE_REQUIRED", "/dashboard"), false);
+});
+
 test("Next.js rewrite configuration includes same-origin backend and auth proxies", () => {
   const nextConfigCode = readFileSync(new URL("../next.config.ts", import.meta.url), "utf8");
 
@@ -101,6 +109,8 @@ test("api.ts uses same-origin proxy in browser to guarantee cookie transmission 
 
 test("ApplicationWorkspace implements single authority redirect logic without UI flicker or competing loops", () => {
   const pageCode = readFileSync(new URL("../src/app/page.tsx", import.meta.url), "utf8");
+const loginPageCode = readFileSync(new URL("../src/app/login/page.tsx", import.meta.url), "utf8");
+const changePasswordPageCode = readFileSync(new URL("../src/app/change-password/page.tsx", import.meta.url), "utf8");
 
   // 1. Imports and uses resolveAuthRedirect and getAuthState
   assert.match(pageCode, /import\s*\{[^}]*getAuthState[^}]*resolveAuthRedirect[^}]*\}\s*from\s*"@\/lib\/auth-session"/);
@@ -115,4 +125,11 @@ test("ApplicationWorkspace implements single authority redirect logic without UI
 
   // 4. Render guards prevent login form flashing while on protected route awaiting redirect
   assert.match(pageCode, /window\.location\.pathname !== "\/login"[\s\S]*?Redirecting to login…/);
+});
+
+
+test("temporary-password sessions are routed to a dedicated recovery page", () => {
+  assert.match(loginPageCode, /mustChangePassword \? "\/change-password"/);
+  assert.match(changePasswordPageCode, /api\.changePassword\(currentPassword, newPassword\)/);
+  assert.match(changePasswordPageCode, /window\.location\.replace\(defaultRouteForUser\(user\)\)/);
 });
