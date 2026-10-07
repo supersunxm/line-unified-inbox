@@ -175,12 +175,43 @@ test("busy shared profile does not advance next-check timestamp", async () => {
   assert.equal(fixture.updates.length, 0);
 });
 
-test("health scheduler skips all profile work while a Mirror fleet cycle is active", async () => {
+test("active Mirror fleet cycle allows a due idle session probe", async () => {
   const fixture = makeFixture({ mirrorCycleActive: true, sessionId: "session-1", oaId: "oa-1" });
+  const result = await fixture.service.runTick(new Date("2026-09-04T00:00:00.000Z"));
+  assert.equal(result, "SESSION");
+  assert.deepEqual(fixture.calls, [
+    "nickname-count", "session-find", "session-probe:session-1:SCHEDULED", "session-update",
+  ]);
+  assert.equal(fixture.updates.length, 1);
+  assert.equal(fixture.updates[0].id, "session-1");
+});
+
+test("active Mirror with a busy target profile does not advance its health schedule", async () => {
+  const fixture = makeFixture({
+    mirrorCycleActive: true, sessionId: "session-1", sessionOutcome: "SKIPPED_BUSY",
+  });
+  assert.equal(await fixture.service.runTick(), "SESSION");
+  assert.deepEqual(fixture.calls, ["nickname-count", "session-find", "session-probe:session-1:SCHEDULED"]);
+  assert.deepEqual(fixture.updates, []);
+});
+
+test("Mirror cooldown still defers all health work even during an active fleet cycle", async () => {
+  const fixture = makeFixture({
+    mirrorCycleActive: true, mirrorCooldownActive: true, sessionId: "session-1", oaId: "oa-1",
+  });
   const result = await fixture.service.runTick(new Date("2026-09-04T00:00:00.000Z"));
   assert.equal(result, "IDLE");
   assert.deepEqual(fixture.calls, []);
   assert.equal(fixture.updates.length, 0);
+});
+
+test("nickname backlog still takes priority during an active Mirror fleet cycle", async () => {
+  const fixture = makeFixture({
+    mirrorCycleActive: true, nicknameBacklog: 1, sessionId: "session-1", oaId: "oa-1",
+  });
+  assert.equal(await fixture.service.runTick(), "SKIPPED_NICKNAME");
+  assert.deepEqual(fixture.calls, ["nickname-count"]);
+  assert.deepEqual(fixture.updates, []);
 });
 
 test("idle scheduler performs no probe or mutation", async () => {
@@ -280,4 +311,3 @@ test("kill switch ON: scheduler executes automatic recovery for eligible session
     else process.env.LINE_CHAT_AUTO_AUTH_RECOVERY_ENABLED = previous;
   }
 });
-

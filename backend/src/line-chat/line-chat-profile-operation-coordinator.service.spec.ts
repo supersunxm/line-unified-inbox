@@ -4,6 +4,7 @@ import { LineChatNicknameSyncJobStatus, LineChatSessionStatus } from "@prisma/cl
 import {
   LineChatProfileOperationCoordinator,
   PROFILE_OPERATION_LEASE_DURATION_MS,
+  type LineChatProfileOperationKind,
 } from "./line-chat-profile-operation-coordinator.service";
 import { LineChatNicknameWorkerService } from "./line-chat-nickname-worker.service";
 
@@ -11,7 +12,7 @@ type LeaseRow = {
   id: string;
   sessionId: string;
   ownerToken: string;
-  operationKind: "NICKNAME_UPDATE";
+  operationKind: LineChatProfileOperationKind;
   acquiredAt: Date;
   leaseUntil: Date;
 };
@@ -75,7 +76,7 @@ function createFakePrisma() {
           id: `lease-${++sequence}`,
           sessionId,
           ownerToken,
-          operationKind: "NICKNAME_UPDATE",
+          operationKind: values[3] as LineChatProfileOperationKind,
           acquiredAt: databaseNow(),
           leaseUntil: new Date(clock.nowMs + PROFILE_OPERATION_LEASE_DURATION_MS),
         };
@@ -159,6 +160,48 @@ test("coordinator blocks concurrent operations for the same session", async () =
   releaseFirst();
   const firstResult = await first;
   assert.equal(firstResult.acquired, true);
+});
+
+test("Mirror ownership blocks same-profile health locally and across workers while another profile can probe", async () => {
+  const prisma = createFakePrisma();
+  const mirrorCoordinator = new LineChatProfileOperationCoordinator(prisma as never);
+  const healthCoordinator = new LineChatProfileOperationCoordinator(prisma as never);
+  let releaseMirror!: () => void;
+  let mirrorStarted!: () => void;
+  const held = new Promise<void>((resolve) => { releaseMirror = resolve; });
+  const started = new Promise<void>((resolve) => { mirrorStarted = resolve; });
+  const mirror = mirrorCoordinator.withProfileOperation(
+    { sessionId: "profile-b", operationKind: "MIRROR_SYNC" },
+    async () => { mirrorStarted(); await held; },
+  );
+  let busyProfileDiagnostics = 0;
+  try {
+    await started;
+    for (const coordinator of [mirrorCoordinator, healthCoordinator]) {
+      const result = await coordinator.withProfileOperation(
+        { sessionId: "profile-b", operationKind: "HEALTH_SESSION" },
+        async () => { busyProfileDiagnostics += 1; },
+      );
+      assert.equal(result.acquired, false);
+      if (!result.acquired) assert.equal(result.holderOperationKind, "MIRROR_SYNC");
+    }
+    const idle = await healthCoordinator.withProfileOperation(
+      { sessionId: "account-1", operationKind: "HEALTH_SESSION" },
+      async () => {
+        assert.equal(prisma.leases.size, 2);
+        assert.equal(prisma.leases.get("profile-b")?.operationKind, "MIRROR_SYNC");
+        assert.equal(prisma.leases.get("account-1")?.operationKind, "HEALTH_SESSION");
+        return "CONNECTED";
+      },
+    );
+    assert.equal(idle.acquired, true);
+    assert.equal(busyProfileDiagnostics, 0);
+    assert.equal(prisma.leases.size, 1);
+  } finally {
+    releaseMirror();
+    await mirror;
+  }
+  assert.equal(prisma.leases.size, 0);
 });
 
 test("contention logs correlate acquisition, busy owner, release, and durations without secrets", async () => {
