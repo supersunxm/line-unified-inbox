@@ -1,3 +1,12 @@
+# 2026-10-07: v2 monthly store-performance program (frontend only)
+
+- Current task: turn v2 into a monthly accountability tool that agrees with Store Chats (/chats). Brief replaced the earlier daily follow-up "Wave 1".
+- Merged: #496 (month windows, partners, value states, /chats-shared counts; docs/v2 decisions, terminology, tag analysis), #497 (ภาพรวมเดือน, store scorecard + drawer, month selector, ตอนนี้ tab). Open: #498 (/v2/report + คัดลอกสรุป), then the contrast audit PR.
+- One definition with /chats: monthly counts come from bm-reply-status-summary?month= through effectiveSummaryCounts / chatsStoreCounts (the functions /chats uses); the same-days comparison uses the /chats list call; the 24h rate uses /replymessage's store-24h-response-summary. Locked by tests.
+- Checks per PR: frontend tests, lint (70 errors / 103 warnings, unchanged baseline), typecheck baseline 50, build, headless rendering against a seeded synthetic API (no console errors). Dark-mode contrast: 0 text nodes below 3:1 before and after (docs/v2/contrast-audit.md).
+- Blockers: no production access in this session, so real-data parity with /chats, tag-token counts and print-from-production are NOT VERIFIED. Backend endpoints for Wave B are listed in docs/v2/tag-analysis.md and decisions.md.
+- Next: owner review of ASSUMED items in docs/v2/decisions.md (business hours, partner merges, Δ column, rank rule).
+
 # 2026-10-06: Store Chats month selector UX fix and All archive mode hardening
 
 - Current task: fix Store Chats month-selector UX (Problem 1: fresh navigation opening current Bangkok month vs deep link/refresh preservation; Problem 2: "All" archive mode showing operational Not Replied / Replied counts and filters with Sep 2026 coverage note).
