@@ -1,12 +1,13 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import React, { useCallback, useMemo, useState } from "react";
 import { PageHeader } from "@/components/shell/page-header";
 import { SearchInput, SectionCard, SectionCardSkeleton, Table, TableBody, TableCell, TableEmptyState, TableHead, TableHeader, TableRow, useDeferredLoading } from "@/components/ui";
 import { RESPONSE_RATE_TARGET_PERCENT } from "@/lib/v2/business-hours";
 import { monthLongLabel } from "@/lib/v2/month";
-import { parseStoresUrl, storesHref, type StoresUrlState } from "@/lib/v2/month-url";
+import { parseStoresUrl, reportHref, storesHref, type StoresUrlState } from "@/lib/v2/month-url";
 import { filterMonthRows, MIN_RATE_SAMPLE, sortMonthRows, type MonthSort, type MonthStoreRow } from "@/lib/v2/monthly-model";
 import { sortPartnerNames, UNMATCHED_PARTNER } from "@/lib/v2/partners";
 import { thaiLocationLabel, thaiRegion } from "@/lib/v2/thai-geo";
@@ -68,7 +69,11 @@ export function StoreScorecardView() {
 
   return (
     <div className="h-full overflow-y-auto px-6 py-5">
-      <PageHeader title={`สาขา · ${monthLongLabel(data.month)}`} description={`คะแนนรายเดือนของแต่ละสาขา · ${data.periodText} · คลิกชื่อสาขาเพื่อดูรายละเอียด`} />
+      <PageHeader
+        title={`สาขา · ${monthLongLabel(data.month)}`}
+        description={`คะแนนรายเดือนของแต่ละสาขา · ${data.periodText} · คลิกชื่อสาขาเพื่อดูรายละเอียด`}
+        actions={<Link href={reportHref({ month: data.month, partner: state.partner, store: null })} target="_blank" className="rounded-[var(--app-radius-md)] border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-1.5 text-sm font-medium text-[var(--app-accent)] hover:bg-[var(--app-accent-soft)]">รายงานเดือน{state.partner ? ` · ${state.partner}` : ""} ↗</Link>}
+      />
       <div className="space-y-4">
         <DataLine />
         {(data.current.error || data.rates.error || data.previous.error) && (

@@ -6,7 +6,7 @@ import { PageHeader } from "@/components/shell/page-header";
 import { KpiStrip, KpiStripSkeleton, SectionCard, SectionCardSkeleton, Table, TableBody, TableCell, TableEmptyState, TableHead, TableHeader, TableRow, useDeferredLoading } from "@/components/ui";
 import { RESPONSE_RATE_TARGET_PERCENT } from "@/lib/v2/business-hours";
 import { monthLongLabel, periodLabel } from "@/lib/v2/month";
-import { storesHref } from "@/lib/v2/month-url";
+import { reportHref, storesHref } from "@/lib/v2/month-url";
 import { topUnreplied, type GroupTotals } from "@/lib/v2/monthly-model";
 import { formatValue, numericValue, type ValueState } from "@/lib/v2/value-state";
 import { DataLine, OverviewTabs } from "./v2-month-controls";
@@ -86,11 +86,12 @@ function PartnerTable() {
               <TableHead scope="col" align="right">เทียบเดือนก่อน</TableHead>
               <TableHead scope="col" align="right">ตอบแล้ว %</TableHead>
               <TableHead scope="col" align="right">ตอบใน 24 ชม.</TableHead>
+              <TableHead scope="col"><span className="sr-only">รายงาน</span></TableHead>
             </tr>
           </TableHeader>
           <TableBody>
             {data.partners.length === 0 ? (
-              <TableEmptyState colSpan={7} message="ยังไม่มีสาขา" />
+              <TableEmptyState colSpan={8} message="ยังไม่มีสาขา" />
             ) : data.partners.map((row) => (
               <TableRow key={row.partner} data-v2-partner={row.partner}>
                 <TableCell className="font-medium">
@@ -102,6 +103,9 @@ function PartnerTable() {
                 <TableCell align="right"><DeltaValue state={row.unrepliedDelta} kind="count" worseWhen="up" /></TableCell>
                 <TableCell align="right" numeric><StateValue state={row.replyRate} format="percent" /></TableCell>
                 <TableCell align="right" numeric><StateValue state={row.rate24} format="percent" target={RESPONSE_RATE_TARGET_PERCENT} /></TableCell>
+                <TableCell>
+                  <Link href={reportHref({ month: data.month, partner: row.partner, store: null })} target="_blank" className="whitespace-nowrap text-xs font-medium text-[var(--app-accent)] hover:underline">รายงาน ↗<span className="sr-only"> {row.partner}</span></Link>
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>
@@ -115,6 +119,9 @@ function PartnerTable() {
                 <td className="px-4 py-3 text-right"><DeltaValue state={data.network.unrepliedDelta} kind="count" worseWhen="up" /></td>
                 <td className="px-4 py-3 text-right"><StateValue state={data.network.replyRate} format="percent" /></td>
                 <td className="px-4 py-3 text-right"><StateValue state={data.network.rate24} format="percent" target={RESPONSE_RATE_TARGET_PERCENT} /></td>
+                <td className="px-4 py-3">
+                  <Link href={reportHref({ month: data.month, partner: null, store: null })} target="_blank" className="whitespace-nowrap text-xs font-medium text-[var(--app-accent)] hover:underline">รายงาน ↗<span className="sr-only"> ทุกสาขา</span></Link>
+                </td>
               </tr>
             </tfoot>
           )}
