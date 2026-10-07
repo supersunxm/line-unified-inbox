@@ -6,7 +6,7 @@ import {
   segmentThaiWords,
   WORD_COUNT_RULE_VERSION,
 } from "@/lib/thai-word-counter";
-import { REVIEW15_EXAMPLE_TEXT } from "./review-15-example";
+import { pickRandomReview15Example, REVIEW15_EXAMPLES } from "./review-15-example";
 
 const MIN_WORDS = 15;
 const MAX_CHARS = 500;
@@ -197,12 +197,17 @@ function ManualChecker({
             </button>
             <button
               type="button"
-              onClick={() => onTextChange(REVIEW15_EXAMPLE_TEXT)}
+              onClick={() =>
+                onTextChange(pickRandomReview15Example(text).text)
+              }
               className="min-h-11 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-subtle)] px-4 py-2.5 text-sm font-semibold transition hover:bg-[var(--app-surface-hover)]"
             >
-              ใช้ข้อความตัวอย่าง
+              สุ่มข้อความตัวอย่าง
             </button>
           </div>
+          <p className="mt-2 text-[11px] text-[var(--app-text-tertiary)]">
+            มีตัวอย่าง {REVIEW15_EXAMPLES.length} รูปแบบ · กดซ้ำเพื่อสุ่มข้อความใหม่
+          </p>
         </section>
 
         <section
