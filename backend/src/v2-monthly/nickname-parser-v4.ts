@@ -18,9 +18,18 @@ import type { SourceTag } from "../line-chat/nickname-source-contract";
  * - Products: the same safe catalog aliases as v3 (tag-analysis.md §5), matched on the longest
  *   run of words in the leftover text; more than one product can be read.
  *
+ * v4.1 (owner decision 2026-10-07, Buddhist-era years): a two-digit year is read against "now" in
+ * Asia/Bangkok — within [current CE year − 5, + 1] it is CE 20YY; within [current BE year − 5, + 1]
+ * it is BE 25YY − 543 (so "09/69" is September 2026, not 2069); anything else is an invalid
+ * date-like word. Single-digit months ("9/69") are read. Four-digit years are unchanged.
+ *
  * Pure function; it never returns the nickname or the free text, only whether there was any.
  */
-export const NICKNAME_PARSER_V4_RULE_VERSION = "nickname-parser-v4.0.0";
+export const NICKNAME_PARSER_V4_RULE_VERSION = "nickname-parser-v4.1.0";
+/** The previous v4 rules (two-digit years always 20YY). Its rows are kept, never deleted. */
+export const NICKNAME_PARSER_V4_0_RULE_VERSION = "nickname-parser-v4.0.0";
+/** Every v4 version, oldest first: a chat's tags are those of the newest version it has a row for. */
+export const NICKNAME_PARSER_V4_VERSIONS = [NICKNAME_PARSER_V4_0_RULE_VERSION, NICKNAME_PARSER_V4_RULE_VERSION] as const;
 
 export type ParserV4Decision = "TAGGED" | "NO_SIGNAL" | "UNREADABLE";
 export type ParserV4Period = { year: number; month: number };
@@ -84,10 +93,41 @@ function isUnreadable(value: string): boolean {
   });
 }
 
-/** Two digits → 20YY; four digits → Gregorian 1900–2199 or Buddhist 2400–2699 (−543). */
-export function yearV4(token: string): number | null {
+/** The calendar year in Asia/Bangkok (UTC+7, no daylight saving). */
+export function bangkokYear(now: Date): number {
+  return new Date(now.getTime() + 7 * 60 * 60 * 1000).getUTCFullYear();
+}
+
+/**
+ * The two-digit year windows around "now": CE [year − 5, year + 1] and BE [year + 543 − 5,
+ * year + 543 + 1], as sets of the last two digits. They must not overlap, or a two-digit year
+ * would be ambiguous (true for any year this side of the 2400s; checked, not assumed).
+ */
+export function twoDigitYearWindows(now: Date): { ce: Map<number, number>; be: Map<number, number> } {
+  const year = bangkokYear(now);
+  const ce = new Map<number, number>();
+  const be = new Map<number, number>();
+  for (let offset = -5; offset <= 1; offset++) {
+    ce.set((year + offset) % 100, year + offset);
+    be.set((year + 543 + offset) % 100, year + offset);
+  }
+  for (const yy of ce.keys()) {
+    if (be.has(yy)) throw new Error(`TWO_DIGIT_YEAR_WINDOWS_OVERLAP ${year}`);
+  }
+  return { ce, be };
+}
+
+/**
+ * Two digits → CE or BE by the windows above (else null); four digits → Gregorian 1900–2199 or
+ * Buddhist 2400–2699 (−543).
+ */
+export function yearV4(token: string, now: Date = new Date()): number | null {
   if (!/^\d+$/u.test(token)) return null;
-  if (token.length === 2) return 2000 + Number(token);
+  if (token.length === 2) {
+    const { ce, be } = twoDigitYearWindows(now);
+    const yy = Number(token);
+    return ce.get(yy) ?? be.get(yy) ?? null;
+  }
   if (token.length !== 4) return null;
   const year = Number(token);
   if (year >= 1900 && year <= 2199) return year;
@@ -96,18 +136,18 @@ export function yearV4(token: string): number | null {
 }
 
 /** MM/YY, M/YY, MM/YYYY, or DD/MM/YY(YY). Null when it is not a real month or date. */
-export function parseDateTokenV4(first: string, second: string, third?: string): { period: ParserV4Period } | { date: ParserV4Date } | null {
+export function parseDateTokenV4(first: string, second: string, third?: string, now: Date = new Date()): { period: ParserV4Period } | { date: ParserV4Date } | null {
   if (third === undefined) {
     if (first.length > 2) return null;
     const month = Number(first);
-    const year = yearV4(second);
+    const year = yearV4(second, now);
     if (year === null || month < 1 || month > 12) return null;
     return { period: { year, month } };
   }
   if (first.length > 2 || second.length > 2) return null;
   const day = Number(first);
   const month = Number(second);
-  const year = yearV4(third);
+  const year = yearV4(third, now);
   if (year === null || month < 1 || month > 12 || day < 1) return null;
   const candidate = new Date(Date.UTC(year, month - 1, day));
   if (candidate.getUTCFullYear() !== year || candidate.getUTCMonth() !== month - 1 || candidate.getUTCDate() !== day) return null;
@@ -150,6 +190,8 @@ export function parseNicknameV4(
   nickname: string | null,
   readable: boolean,
   resolveProduct: (text: string) => ParserV3ProductResolution = () => ({ kind: "NO_MATCH" }),
+  /** Reference time for two-digit years (Asia/Bangkok). */
+  now: Date = new Date(),
 ): ParserV4Result {
   const empty: ParserV4Values = { source: null, customerType: null, financeProvider: null, paymentMethod: null, services: [], period: null, date: null, products: [] };
   const input = nickname ?? "";
@@ -187,7 +229,7 @@ export function parseNicknameV4(
   NUMERIC_DATE.lastIndex = 0;
   let dateMatch: RegExpExecArray | null;
   while ((dateMatch = NUMERIC_DATE.exec(value)) !== null) {
-    const parsed = parseDateTokenV4(dateMatch[1], dateMatch[2], dateMatch[3]);
+    const parsed = parseDateTokenV4(dateMatch[1], dateMatch[2], dateMatch[3], now);
     if (!parsed) {
       // Not a real month or date: left in the text as a word, never a reason to drop other tags.
       invalidDateTokens++;

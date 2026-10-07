@@ -2,7 +2,7 @@ import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from "@nestjs/commo
 import { Prisma, PrismaClient } from "@prisma/client";
 import { buildNicknameV3ProductResolver } from "../line-chat/nickname-parser-v3-products";
 import { PrismaService } from "../prisma.service";
-import { NICKNAME_PARSER_V4_RULE_VERSION, parseNicknameV4, type ParserV4Result } from "./nickname-parser-v4";
+import { NICKNAME_PARSER_V4_0_RULE_VERSION, NICKNAME_PARSER_V4_RULE_VERSION, NICKNAME_PARSER_V4_VERSIONS, parseNicknameV4, type ParserV4Result } from "./nickname-parser-v4";
 
 /** Serialises re-derive batches across processes (pg_advisory_xact_lock key). */
 const TAG_REDERIVE_LOCK_KEY = 732_017_003;
@@ -24,6 +24,12 @@ export const TAG_REDERIVE_CHECK_INTERVAL_MS = 10 * 60 * 1000;
 
 export const MODE_FULL = "FULL";
 export const MODE_INCREMENTAL = "INCREMENTAL";
+/**
+ * v4.0 → v4.1 (Buddhist-era years): re-derives only the chats whose v4.0 row has a purchase month,
+ * in bounded batches, writing v4.1 rows. The v4.0 rows are kept.
+ */
+export const MODE_UPGRADE = "UPGRADE";
+const ALL_V4_VERSIONS = [...NICKNAME_PARSER_V4_VERSIONS];
 
 type Db = PrismaService | PrismaClient;
 type Tx = Prisma.TransactionClient;
@@ -46,6 +52,11 @@ export type RederiveCounts = {
   v3Tagged: number;
   gainedVsV3: number;
   lostVsV3: number;
+  /** Upgrade runs only: the chat's purchase month in the previous version vs now. */
+  previousWithPeriod: number;
+  periodUnchanged: number;
+  periodChanged: number;
+  periodRemoved: number;
 };
 
 export function emptyCounts(): RederiveCounts {
@@ -54,6 +65,7 @@ export function emptyCounts(): RederiveCounts {
     withPeriod: 0, withFreeText: 0, withConflicts: 0, invalidDateTokens: 0,
     byType: { online: 0, source: 0, product: 0, film: 0, payment: 0, finance: 0, period: 0, date: 0 },
     v3Tagged: 0, gainedVsV3: 0, lostVsV3: 0,
+    previousWithPeriod: 0, periodUnchanged: 0, periodChanged: 0, periodRemoved: 0,
   };
 }
 
@@ -120,7 +132,7 @@ function tally(counts: RederiveCounts, parsed: ParserV4Result) {
  * Re-derives one batch inside an advisory-locked transaction. Reads observations and the v3 state
  * (for the comparison counts only); writes only NicknameTagV4 rows of the v4 version.
  */
-export async function rederiveBatch(db: Db, selection: { afterId: string | null } | { ids: string[] }, resolveProduct: ProductResolver) {
+export async function rederiveBatch(db: Db, selection: { afterId: string | null } | { ids: string[] }, resolveProduct: ProductResolver, options: { compareWith?: string; now?: Date } = {}) {
   return (db as PrismaClient).$transaction(async (tx) => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(${TAG_REDERIVE_LOCK_KEY})`;
     const counts = emptyCounts();
@@ -131,6 +143,9 @@ export async function rederiveBatch(db: Db, selection: { afterId: string | null 
       tx.nicknameDerivedMetadataState.findMany({ where: { conversationId: { in: ids } }, select: { conversationId: true } }),
     ]);
     const existingObservation = new Map(existing.map((row) => [row.conversationId, row.sourceObservationId]));
+    const previous = options.compareWith && ids.length > 0
+      ? new Map((await tx.nicknameTagV4.findMany({ where: { conversationId: { in: ids }, parserVersion: options.compareWith }, select: { conversationId: true, periodYear: true, periodMonth: true } })).map((row) => [row.conversationId, row]))
+      : null;
     const v3Tagged = new Set(v3.map((row) => row.conversationId));
     for (const row of rows) {
       counts.conversations++;
@@ -140,8 +155,16 @@ export async function rederiveBatch(db: Db, selection: { afterId: string | null 
         continue;
       }
       counts.withReadNickname++;
-      const parsed = parseNicknameV4(row.nickname, true, resolveProduct);
+      const parsed = parseNicknameV4(row.nickname, true, resolveProduct, options.now);
       tally(counts, parsed);
+      const before = previous?.get(row.conversationId);
+      if (before && before.periodYear !== null) {
+        counts.previousWithPeriod++;
+        const after = parsed.values.period;
+        if (!after) counts.periodRemoved++;
+        else if (after.year === before.periodYear && after.month === before.periodMonth) counts.periodUnchanged++;
+        else counts.periodChanged++;
+      }
       if (parsed.decision === "TAGGED" && !v3Tagged.has(row.conversationId)) counts.gainedVsV3++;
       if (parsed.decision !== "TAGGED" && v3Tagged.has(row.conversationId)) counts.lostVsV3++;
       if (existingObservation.get(row.conversationId) === row.observationId) {
@@ -187,6 +210,16 @@ async function loadResolver(db: Db): Promise<ProductResolver> {
   return buildNicknameV3ProductResolver(models, aliases).resolveProduct;
 }
 
+type RunLike = { parserVersion: string; finishedAt: Date | null } | null;
+
+/** What the scheduler does next (pure, for tests). */
+export function nextRederiveStep(input: { openFull: RunLike; lastFinishedFull: RunLike; latestUpgrade: RunLike }): "continue-full" | "start-full" | "upgrade" | "incremental" {
+  if (input.openFull) return "continue-full";
+  if (!input.lastFinishedFull) return "start-full";
+  if (input.lastFinishedFull.parserVersion !== NICKNAME_PARSER_V4_RULE_VERSION && !input.latestUpgrade?.finishedAt) return "upgrade";
+  return "incremental";
+}
+
 const bangkokDay = (date: Date) => new Date(date.getTime() + 7 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
 /**
@@ -199,7 +232,7 @@ export class NicknameTagsV4Service {
   constructor(private readonly prisma: PrismaService) {}
 
   async runs(limit = 50) {
-    return this.prisma.nicknameTagRederiveRun.findMany({ where: { parserVersion: NICKNAME_PARSER_V4_RULE_VERSION }, orderBy: { startedAt: "desc" }, take: Math.min(Math.max(limit, 1), 200) });
+    return this.prisma.nicknameTagRederiveRun.findMany({ where: { parserVersion: { in: ALL_V4_VERSIONS } }, orderBy: { startedAt: "desc" }, take: Math.min(Math.max(limit, 1), 200) });
   }
 
   /** Starts a full re-derive unless one is already in progress (then that one continues). */
@@ -211,16 +244,71 @@ export class NicknameTagsV4Service {
     });
   }
 
-  /** One bounded step: continue an open full run, start the first one, or run an incremental pass. */
+  /**
+   * One bounded step: continue an open full run, start the first one, finish the v4.0 → v4.1
+   * upgrade of chats with a purchase month, or run an incremental pass.
+   */
   async step(maxBatches = TAG_REDERIVE_MAX_BATCHES_PER_CALL, now = new Date()) {
     const openFull = await this.prisma.nicknameTagRederiveRun.findFirst({ where: { parserVersion: NICKNAME_PARSER_V4_RULE_VERSION, mode: MODE_FULL, finishedAt: null }, orderBy: { startedAt: "desc" } });
     if (openFull) return this.continueFull(openFull.id, maxBatches);
-    const lastFull = await this.prisma.nicknameTagRederiveRun.findFirst({ where: { parserVersion: NICKNAME_PARSER_V4_RULE_VERSION, mode: MODE_FULL }, orderBy: { startedAt: "desc" } });
-    if (!lastFull) {
+    // A full pass of any v4 version is the baseline; v4.1 does not re-read every chat.
+    const lastFull = await this.prisma.nicknameTagRederiveRun.findFirst({ where: { parserVersion: { in: ALL_V4_VERSIONS }, mode: MODE_FULL, finishedAt: { not: null } }, orderBy: { startedAt: "desc" } });
+    const latestUpgrade = await this.prisma.nicknameTagRederiveRun.findFirst({ where: { parserVersion: NICKNAME_PARSER_V4_RULE_VERSION, mode: MODE_UPGRADE }, orderBy: { startedAt: "desc" } });
+    const next = nextRederiveStep({ openFull: null, lastFinishedFull: lastFull, latestUpgrade });
+    if (next === "start-full" || !lastFull) {
       const run = await this.startFull({ trigger: "SYSTEM", actorName: "system" });
       return this.continueFull(run.id, maxBatches);
     }
+    if (next === "upgrade") {
+      const run = latestUpgrade ?? await this.startUpgrade({ trigger: "SYSTEM", actorName: "system" });
+      return this.continueUpgrade(run.id, maxBatches, now);
+    }
     return this.incremental(lastFull.startedAt, now);
+  }
+
+  /** Starts a v4.0 → v4.1 upgrade run unless one is in progress (then that one continues). */
+  async startUpgrade(input: { trigger: "SYSTEM" | "ADMIN"; actorName: string; reason?: string | null }) {
+    const open = await this.prisma.nicknameTagRederiveRun.findFirst({ where: { parserVersion: NICKNAME_PARSER_V4_RULE_VERSION, mode: MODE_UPGRADE, finishedAt: null }, orderBy: { startedAt: "desc" } });
+    if (open) return open;
+    return this.prisma.nicknameTagRederiveRun.create({
+      data: { parserVersion: NICKNAME_PARSER_V4_RULE_VERSION, mode: MODE_UPGRADE, trigger: input.trigger, actorName: input.actorName, reason: input.reason?.trim() || "Buddhist-era years (v4.1): chats with a v4.0 purchase month", counts: emptyCounts() },
+    });
+  }
+
+  /**
+   * v4.0 → v4.1: the chats whose v4.0 row has a purchase month (and no v4.1 row yet), in id order,
+   * ≤ maxBatches batches of 500 per call, resumable. Writes v4.1 rows; v4.0 rows stay.
+   */
+  async continueUpgrade(runId: string, maxBatches = TAG_REDERIVE_MAX_BATCHES_PER_CALL, now = new Date()) {
+    let run = await this.prisma.nicknameTagRederiveRun.findUniqueOrThrow({ where: { id: runId } });
+    if (run.finishedAt) return run;
+    const resolveProduct = await loadResolver(this.prisma);
+    for (let index = 0; index < maxBatches && !run.finishedAt; index++) {
+      const ids = (await this.prisma.$queryRaw<Array<{ conversationId: string }>>(Prisma.sql`
+        SELECT t."conversationId"
+        FROM "NicknameTagV4" t
+        WHERE t."parserVersion" = ${NICKNAME_PARSER_V4_0_RULE_VERSION}
+          AND t."periodYear" IS NOT NULL
+          AND t."conversationId" > ${run.cursor ?? ""}
+          AND NOT EXISTS (
+            SELECT 1 FROM "NicknameTagV4" n
+            WHERE n."conversationId" = t."conversationId" AND n."parserVersion" = ${NICKNAME_PARSER_V4_RULE_VERSION}
+          )
+        ORDER BY t."conversationId"
+        LIMIT ${TAG_REDERIVE_BATCH_SIZE}
+      `)).map((row) => row.conversationId);
+      const batch = await rederiveBatch(this.prisma, { ids }, resolveProduct, { compareWith: NICKNAME_PARSER_V4_0_RULE_VERSION, now });
+      run = await this.prisma.nicknameTagRederiveRun.update({
+        where: { id: run.id },
+        data: {
+          cursor: ids.at(-1) ?? run.cursor,
+          batches: run.batches + 1,
+          counts: addCounts(readCounts(run.counts), batch.counts),
+          finishedAt: ids.length < TAG_REDERIVE_BATCH_SIZE ? new Date() : null,
+        },
+      });
+    }
+    return run;
   }
 
   async continueFull(runId: string, maxBatches = TAG_REDERIVE_MAX_BATCHES_PER_CALL) {
@@ -244,7 +332,8 @@ export class NicknameTagsV4Service {
 
   /** Conversations whose identity has READ observations after the watermark. */
   async incremental(fullStartedAt: Date, now = new Date()) {
-    const latest = await this.prisma.nicknameTagRederiveRun.findFirst({ where: { parserVersion: NICKNAME_PARSER_V4_RULE_VERSION, mode: MODE_INCREMENTAL }, orderBy: { startedAt: "desc" } });
+    // The watermark carries over from the previous version's incremental runs.
+    const latest = await this.prisma.nicknameTagRederiveRun.findFirst({ where: { parserVersion: { in: ALL_V4_VERSIONS }, mode: MODE_INCREMENTAL }, orderBy: { startedAt: "desc" } });
     let afterAt = latest?.watermark ? new Date(latest.watermark.getTime() - INCREMENTAL_OVERLAP_MS) : new Date(fullStartedAt.getTime() - FULL_RUN_OVERLAP_MS);
     let afterId = "";
     const observations: Array<{ id: string; observedAt: Date; lineOfficialAccountId: string; lineChatUserId: string }> = [];
@@ -279,7 +368,7 @@ export class NicknameTagsV4Service {
       batches++;
     }
     const last = observations.at(-1)!;
-    const sameDay = latest && bangkokDay(latest.startedAt) === bangkokDay(now);
+    const sameDay = latest && latest.parserVersion === NICKNAME_PARSER_V4_RULE_VERSION && bangkokDay(latest.startedAt) === bangkokDay(now);
     const data = { watermark: latest?.watermark && latest.watermark > last.observedAt ? latest.watermark : last.observedAt, cursor: last.id, finishedAt: now };
     if (latest && sameDay) {
       return this.prisma.nicknameTagRederiveRun.update({
