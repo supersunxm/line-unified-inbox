@@ -21,3 +21,10 @@ export class CloseMonthDto {
   @MaxLength(500)
   reason?: string;
 }
+
+export class RederiveTagsDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  reason?: string;
+}

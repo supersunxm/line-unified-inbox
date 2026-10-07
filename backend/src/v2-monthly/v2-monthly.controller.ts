@@ -4,12 +4,18 @@ import type { AuthRequest } from "../auth/auth.guard";
 import { StoreAccessService } from "../auth/store-access.service";
 import { CLOSED_BY_ADMIN, MonthCloseService } from "./month-close.service";
 import { closeDueAt, isMonth, MONTH_CLOSE_GRACE_DAYS } from "./month-close-rules";
+import { NicknameTagsV4Service } from "./nickname-tags-v4.service";
 import { StorePartnersService } from "./store-partners.service";
-import { CloseMonthDto, SetStorePartnerDto } from "./v2-monthly.dto";
+import { CloseMonthDto, RederiveTagsDto, SetStorePartnerDto } from "./v2-monthly.dto";
 
 @Controller("v2")
 export class V2MonthlyController {
-  constructor(private readonly partners: StorePartnersService, private readonly monthClose: MonthCloseService, private readonly storeAccess: StoreAccessService) {}
+  constructor(
+    private readonly partners: StorePartnersService,
+    private readonly monthClose: MonthCloseService,
+    private readonly tags: NicknameTagsV4Service,
+    private readonly storeAccess: StoreAccessService,
+  ) {}
 
   private async scope(req: AuthRequest) {
     if (!req.user) throw new ForbiddenException("Authentication required");
@@ -66,5 +72,24 @@ export class V2MonthlyController {
   async closeMonth(@Param("month") month: string, @Body() body: CloseMonthDto, @Req() req: AuthRequest) {
     const user = req.user!;
     return this.monthClose.close(month, { closedBy: CLOSED_BY_ADMIN, actorId: user.id, actorName: user.displayName || user.email, reason: body.reason ?? null });
+  }
+
+  /** Parser v4 re-derive runs (counts only), newest first. */
+  @Get("tags/rederive-runs")
+  @Roles("ADMIN")
+  async tagRederiveRuns(@Query("limit") limit?: string) {
+    return { runs: await this.tags.runs(Number(limit) || 50) };
+  }
+
+  /**
+   * Starts a full Parser v4 re-derive (or continues the one in progress) and runs one bounded
+   * step (≤ 20 batches of 500 conversations). Idempotent; the scheduler continues it.
+   */
+  @Post("tags/rederive")
+  @Roles("ADMIN")
+  async rederiveTags(@Body() body: RederiveTagsDto, @Req() req: AuthRequest) {
+    const user = req.user!;
+    const run = await this.tags.startFull({ trigger: "ADMIN", actorName: user.displayName || user.email, reason: body.reason ?? null });
+    return this.tags.continueFull(run.id);
   }
 }
