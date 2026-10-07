@@ -31,8 +31,7 @@ Selected with `?month=YYYY-MM` (default: the current Bangkok month). Loaded by
 | Trend (drawer) | `bm-reply-status-summary?month=` and `store-24h-response-summary` for each month from max(2026-09, month − 5) | — | available (from Sep 2026 only; the drawer says how many months exist) |
 | Daily breakdown (drawer) | `api.conversations({ storeId, month, sort: "latest-desc", pageSize: 100, page })`, ≤ `STORE_MONTH_MAX_PAGES` (20) pages; grouped by Bangkok day of latest message | `/chats` list for that store and month | derivable (bounded; the drawer says when it is cut) |
 | Daily 24h rate (drawer) | `store-24h-response-summary?dateFrom&dateTo&storeId=` → `dates[]` (within24h ÷ total per day of first customer message) | `/replymessage` endpoint | available |
-| Tag coverage (drawer) | same pages; `nicknameDerivedMetadata` (backend Parser v3) | `/chats` "ONLINE" chips | derivable (lower bound) |
-| Tag coverage (store list, partner, network) | none | — | **MISSING**: needs a backend aggregate (`tag-analysis.md` §6) |
+| Tag coverage (store list column, partner table, drawer) | `GET /v2/tag-coverage?month=` → per store: chats, names read, ≥ 1 tag, valid MM/YY, by tag type (Parser v4, `NicknameTagV4`); same chats as the `/chats` month summary; partner = sum of its stores | — | available (live for every month; not part of the month close) |
 | Links | `/chats?storeId=&month=` (and `&replyState=NOT_REPLIED`) via `/chats`'s `buildChatsHref`; `/store-360?storeId=`; LINE OA Manager from `conversation.store.lineManagerUrl` when `VALID` | — | available |
 
 ## Monthly report: /v2/report

@@ -414,31 +414,6 @@ export function dailyBreakdown(items: StoreMonthConversation[], period: MonthPer
   return [...days.values()];
 }
 
-/** A chat carries at least one recognised name tag (the backend Parser v3's derived metadata). */
-export function hasNameTag(metadata: NicknameMetadataLike): boolean {
-  if (!metadata) return false;
-  return Boolean(metadata.source || metadata.customerType || metadata.product || metadata.paymentMethod || metadata.financeProvider || metadata.service || metadata.period || metadata.eventDate);
-}
-
-export type TagCoverage = { chats: number; tagged: ValueState; withPeriod: ValueState; taggedCount: number; withPeriodCount: number };
-
-/**
- * ความครบของแท็กชื่อลูกค้า for one store's chats in a period: share with ≥ 1 tag, and share
- * with a valid MM/YY purchase month. A lower bound: chats whose nickname was never read have
- * no metadata and count as untagged.
- */
-export function tagCoverage(items: StoreMonthConversation[]): TagCoverage {
-  const taggedCount = items.filter((item) => hasNameTag(item.nicknameDerivedMetadata)).length;
-  const withPeriodCount = items.filter((item) => Boolean(item.nicknameDerivedMetadata?.period)).length;
-  return {
-    chats: items.length,
-    taggedCount,
-    withPeriodCount,
-    tagged: rateState(taggedCount, items.length),
-    withPeriod: rateState(withPeriodCount, items.length),
-  };
-}
-
 /**
  * "สาขาที่มีข้อมูลแชท 1–7 ต.ค. 2026 134 ร้าน · 1–7 ก.ย. 2026 139 ร้าน (จาก 150 ร้าน)".
  * Both compared periods are stated; no cause is inferred.

@@ -11,7 +11,6 @@ import {
   networkTotals,
   partnerRows,
   sortMonthRows,
-  tagCoverage,
   topUnreplied,
   unattributedChats,
   v2Stores,
@@ -162,9 +161,4 @@ test("store drawer: daily breakdown and tag coverage (lower bound, synthetic met
     { day: "2026-10-02", chats: 0, unreplied: 0 },
     { day: "2026-10-03", chats: 1, unreplied: 1 },
   ]);
-  const coverage = tagCoverage(items);
-  assert.equal(coverage.taggedCount, 2);
-  assert.equal(coverage.withPeriodCount, 1);
-  assert.equal(coverage.tagged.kind, "low-sample");
-  assert.equal(tagCoverage([]).tagged.kind, "no-activity");
 });

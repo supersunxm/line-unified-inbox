@@ -8,8 +8,10 @@ import { RATE24_TARGET, REPLIED_RATE_TARGET } from "@/lib/v2/kpi";
 import { monthLongLabel, periodLabel } from "@/lib/v2/month";
 import { reportHref, storesHref } from "@/lib/v2/month-url";
 import { topUnreplied } from "@/lib/v2/monthly-model";
+import { sumTagCoverage } from "@/lib/v2/tag-coverage";
 import { numericValue } from "@/lib/v2/value-state";
 import { TwoKpiCards, VolumeLine } from "./kpi-cards";
+import { TagCoverageCell } from "./tag-coverage";
 import { DataLine, OverviewTabs } from "./v2-month-controls";
 import { useV2Month } from "./v2-month-data";
 import { CountCell, DeltaValue, RateCell, SourceNotice, StateValue } from "./v2-ui";
@@ -28,12 +30,13 @@ function PartnerTable() {
               <TableHead scope="col" align="right">ยังไม่ตอบ</TableHead>
               <TableHead scope="col" align="right">ตอบแล้ว %</TableHead>
               <TableHead scope="col" align="right">ตอบใน 24 ชม. %</TableHead>
+              <TableHead scope="col" align="right">ความครบของแท็ก</TableHead>
               <TableHead scope="col"><span className="sr-only">รายงาน</span></TableHead>
             </tr>
           </TableHeader>
           <TableBody>
             {data.partners.length === 0 ? (
-              <TableEmptyState colSpan={7} message="ยังไม่มีสาขา" />
+              <TableEmptyState colSpan={8} message="ยังไม่มีสาขา" />
             ) : data.partners.map((row) => (
               <TableRow key={row.partner} data-v2-partner={row.partner}>
                 <TableCell className="font-medium">
@@ -44,6 +47,7 @@ function PartnerTable() {
                 <TableCell align="right" numeric><CountCell value={row.unreplied} delta={row.unrepliedDelta} /></TableCell>
                 <TableCell align="right" numeric><RateCell value={row.replyRate} delta={row.replyRateDelta} target={REPLIED_RATE_TARGET} /></TableCell>
                 <TableCell align="right" numeric><RateCell value={row.rate24} delta={row.rate24Delta} target={RATE24_TARGET} /></TableCell>
+                <TableCell align="right"><TagCoverageCell counts={sumTagCoverage(row.storeIds.map((id) => data.tagCoverageByStore.get(id)))} /></TableCell>
                 <TableCell>
                   <Link href={reportHref({ month: data.month, partner: row.partner, store: null })} target="_blank" className="whitespace-nowrap text-xs font-medium text-[var(--app-accent)] hover:underline">รายงาน ↗<span className="sr-only"> {row.partner}</span></Link>
                 </TableCell>
@@ -59,6 +63,7 @@ function PartnerTable() {
                 <td className="px-4 py-3 text-right"><CountCell value={data.network.unreplied} delta={data.network.unrepliedDelta} /></td>
                 <td className="px-4 py-3 text-right"><RateCell value={data.network.replyRate} delta={data.network.replyRateDelta} target={REPLIED_RATE_TARGET} /></td>
                 <td className="px-4 py-3 text-right"><RateCell value={data.network.rate24} delta={data.network.rate24Delta} target={RATE24_TARGET} /></td>
+                <td className="px-4 py-3 text-right"><TagCoverageCell counts={data.tagCoverage.data?.network} /></td>
                 <td className="px-4 py-3">
                   <Link href={reportHref({ month: data.month, partner: null, store: null })} target="_blank" className="whitespace-nowrap text-xs font-medium text-[var(--app-accent)] hover:underline">รายงาน ↗<span className="sr-only"> ทุกสาขา</span></Link>
                 </td>

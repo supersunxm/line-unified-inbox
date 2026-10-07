@@ -6,6 +6,7 @@ import { CLOSED_BY_ADMIN, MonthCloseService } from "./month-close.service";
 import { closeDueAt, isMonth, MONTH_CLOSE_GRACE_DAYS } from "./month-close-rules";
 import { NicknameTagsV4Service } from "./nickname-tags-v4.service";
 import { StorePartnersService } from "./store-partners.service";
+import { TagCoverageService } from "./tag-coverage.service";
 import { CloseMonthDto, RederiveTagsDto, SetStorePartnerDto } from "./v2-monthly.dto";
 
 @Controller("v2")
@@ -14,6 +15,7 @@ export class V2MonthlyController {
     private readonly partners: StorePartnersService,
     private readonly monthClose: MonthCloseService,
     private readonly tags: NicknameTagsV4Service,
+    private readonly tagCoverage: TagCoverageService,
     private readonly storeAccess: StoreAccessService,
   ) {}
 
@@ -72,6 +74,15 @@ export class V2MonthlyController {
   async closeMonth(@Param("month") month: string, @Body() body: CloseMonthDto, @Req() req: AuthRequest) {
     const user = req.user!;
     return this.monthClose.close(month, { closedBy: CLOSED_BY_ADMIN, actorId: user.id, actorName: user.displayName || user.email, reason: body.reason ?? null });
+  }
+
+  /**
+   * Tag coverage per store for a month (counts only, the caller's stores): chats, chats whose
+   * nickname was read, with ≥ 1 tag, with a valid MM/YY, and by tag type. Same chats as /chats.
+   */
+  @Get("tag-coverage")
+  async tagCoverageByStore(@Query("month") month: string, @Req() req: AuthRequest) {
+    return this.tagCoverage.coverage(month, await this.scope(req));
   }
 
   /** Parser v4 re-derive runs (counts only), newest first. */
