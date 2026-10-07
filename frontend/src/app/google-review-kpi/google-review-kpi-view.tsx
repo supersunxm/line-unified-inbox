@@ -18,6 +18,8 @@ import type {
   GoogleReviewImportPreviewResponse,
 } from "@/types/api";
 import type { Language } from "@/components/shell/top-navigation";
+import { LegacyI18nBoundary } from "../legacy-i18n-boundary";
+import { googleReviewKpiPhrases, googleReviewKpiText } from "./google-review-kpi-i18n";
 
 function formatMonthLabel(monthStr: string, language: Language): string {
   const [yearStr, monthNumStr] = monthStr.split("-");
@@ -145,13 +147,13 @@ const translations = {
     statusBelowTarget: "ยังไม่ถึงเป้า",
     statusMissingMaps: "ไม่มีลิงก์ Google Maps",
     storeName: "ชื่อร้านค้า",
-    storeId: "Store ID",
+    storeId: "รหัสสาขา",
     regionProvince: "ภูมิภาค / จังหวัด",
     googleMaps: "Google Maps",
     reviewsChecked: "ตรวจพบ",
     withPhoto: "มีรูป",
     over15Words: "ไทย ≥15 คำ",
-    qualified: "Qualified",
+    qualified: "ผ่านเกณฑ์",
     target: "เป้าหมาย",
     lastChecked: "อัปเดตล่าสุด",
     status: "สถานะ",
@@ -309,7 +311,7 @@ const translations = {
     statusBelowTarget: "未达标",
     statusMissingMaps: "缺少地图链接",
     storeName: "门店名称",
-    storeId: "Store ID",
+    storeId: "门店 ID",
     regionProvince: "区域 / 省份",
     googleMaps: "Google Maps",
     reviewsChecked: "已查评价",
@@ -862,6 +864,7 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
   };
 
   return (
+    <LegacyI18nBoundary phrases={googleReviewKpiPhrases} showControl={false}>
     <div
       aria-label="Google Maps Review KPI Checker"
       data-testid="Google Maps Review KPI Checker"
@@ -1095,7 +1098,7 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
                 <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
                 </svg>
-                + นำเข้าผลลัพธ์
+                + {t.importJson}
               </button>
 
               {/* Secondary: Paste JSON */}
@@ -1107,7 +1110,7 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
                 }}
                 className="flex items-center gap-1.5 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-2 text-xs font-semibold text-[var(--app-text-primary)] hover:bg-[var(--app-surface-hover)] transition-colors shadow-xs"
               >
-                <span>📋 วาง JSON</span>
+                <span>📋 {t.pasteJsonBtn}</span>
               </button>
 
               {/* Download Dropdown */}
@@ -1121,7 +1124,7 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
                   <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                   </svg>
-                  <span>📥 ดาวน์โหลดข้อมูล</span>
+                  <span>📥 {t.downloadBtn}</span>
                   <span className="text-[10px] opacity-60">▼</span>
                 </button></DownloadAction>
 
@@ -1204,14 +1207,14 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
                   ระบบนี้ใช้สำหรับรับผลลัพธ์การตรวจ KPI จาก AI Audit ภายนอก
                 </p>
                 <p className="text-xs text-blue-700 dark:text-blue-300 opacity-90">
-                  เมื่อนำเข้าข้อมูลแล้ว ระบบจะแสดงผลสรุป KPI รายเดือน และจัดเก็บข้อมูลล่าสุดของแต่ละร้าน
+                  {t.extensionGuide}
                 </p>
               </div>
             </div>
 
             <div className="flex items-center gap-3 shrink-0">
               <span className="rounded-xl bg-white/80 dark:bg-blue-900/50 border border-blue-200 dark:border-blue-700/50 px-3 py-1.5 text-[11px] font-medium text-blue-900 dark:text-[var(--app-text-primary)] shadow-xs">
-                เกณฑ์ Qualified: รูปภาพลูกค้า + รูปอยู่ในเดือนเป้าหมาย + ข้อความภาษาไทย ≥ 15 คำ
+                {t.targetExplanation}
               </span>
               <button
                 type="button"
@@ -1232,7 +1235,7 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-bold text-[var(--app-text-primary)]">ข้อมูลนำเข้าล่าสุด</span>
                     <span className="rounded-full bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300 text-[10px] font-black px-2.5 py-0.5 border border-purple-300 dark:border-purple-700/50">
-                      GAP FILL
+                      {googleReviewKpiText(language, "gapFillType")}
                     </span>
                   </div>
                   <span className="text-[11px] text-[var(--app-text-tertiary)]">2026-09</span>
@@ -1245,7 +1248,7 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
                   </div>
                   <div className="flex items-center justify-between text-[var(--app-text-secondary)]">
                     <span>ประเภทการนำเข้า:</span>
-                    <span className="font-semibold text-purple-600 dark:text-purple-400">GAP FILL</span>
+                    <span className="font-semibold text-purple-600 dark:text-purple-400">{googleReviewKpiText(language, "gapFillType")}</span>
                   </div>
                   <div className="flex items-center justify-between text-[var(--app-text-secondary)]">
                     <span>แหล่งที่มา:</span>
@@ -1298,7 +1301,7 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
                 <div className="my-1 text-2xl font-black text-[var(--app-text-primary)]">
                   {summary?.storesWithGoogleMaps || summary?.totalStores || 150}
                 </div>
-                <div className="text-[10px] text-[var(--app-text-tertiary)]">ร้านที่มี Google Maps</div>
+                <div className="text-[10px] text-[var(--app-text-tertiary)]">{t.storesWithMaps}</div>
               </div>
 
               <div className="rounded-2xl bg-[var(--app-surface)] border border-[var(--app-border)] p-4 shadow-sm flex flex-col justify-between">
@@ -1420,13 +1423,13 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
                 <thead>
                   <tr className="border-b border-[var(--app-border)] bg-[var(--app-surface-subtle)] text-[11px] font-semibold text-[var(--app-text-secondary)]">
                     <th className="py-2.5 px-3">วันที่ / เวลา</th>
-                    <th className="py-2.5 px-3">เดือน</th>
+                    <th className="py-2.5 px-3">{t.selectMonth}</th>
                     <th className="py-2.5 px-3">ประเภท</th>
                     <th className="py-2.5 px-3">แหล่งที่มา</th>
                     <th className="py-2.5 px-3 text-center">ร้านที่เปลี่ยน</th>
                     <th className="py-2.5 px-3 text-right">Review Delta</th>
                     <th className="py-2.5 px-3 text-right">Qualified Delta</th>
-                    <th className="py-2.5 px-3 text-center">สถานะ</th>
+                    <th className="py-2.5 px-3 text-center">{t.status}</th>
                     <th className="py-2.5 px-3">รายละเอียด</th>
                   </tr>
                 </thead>
@@ -1436,7 +1439,7 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
                     <td className="py-3 px-3">2026-09</td>
                     <td className="py-3 px-3">
                       <span className="rounded-full bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300 text-[10px] font-bold px-2 py-0.5 border border-purple-200">
-                        GAP FILL
+                        {googleReviewKpiText(language, "gapFillType")}
                       </span>
                     </td>
                     <td className="py-3 px-3 text-[var(--app-text-secondary)]">AI Audit / Antigravity</td>
@@ -1457,7 +1460,7 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
                     <td className="py-3 px-3">2026-09</td>
                     <td className="py-3 px-3">
                       <span className="rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 text-[10px] font-bold px-2 py-0.5 border border-blue-200">
-                        FULL MONTH
+                        {googleReviewKpiText(language, "fullMonthType")}
                       </span>
                     </td>
                     <td className="py-3 px-3 text-[var(--app-text-secondary)]">AI Audit / Antigravity</td>
@@ -1478,7 +1481,7 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
                     <td className="py-3 px-3 text-[var(--app-text-tertiary)]">2026-09</td>
                     <td className="py-3 px-3">
                       <span className="rounded-full bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 text-[10px] font-bold px-2 py-0.5">
-                        INTERIM
+                        {googleReviewKpiText(language, "interimType")}
                       </span>
                     </td>
                     <td className="py-3 px-3 text-[var(--app-text-tertiary)]">Chrome Runner (Legacy)</td>
@@ -1551,7 +1554,7 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
                   onChange={(e) => setRegionFilter(e.target.value)}
                   className="h-10 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-subtle)] px-3 text-xs text-[var(--app-text-primary)] focus:outline-none"
                 >
-                  <option value="ALL">ทุกภูมิภาค</option>
+                  <option value="ALL">{t.allRegions}</option>
                   {uniqueRegions.map((r) => (
                     <option key={r} value={r}>{r}</option>
                   ))}
@@ -1563,9 +1566,9 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
                   onChange={(e) => setStatusFilter(e.target.value)}
                   className="h-10 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-subtle)] px-3 text-xs text-[var(--app-text-primary)] focus:outline-none"
                 >
-                  <option value="ALL">ทุกสถานะ</option>
-                  <option value="PASSED">ผ่านเกณฑ์เป้าหมาย</option>
-                  <option value="BELOW_TARGET">ยังไม่ถึงเป้า</option>
+                  <option value="ALL">{t.allStatuses}</option>
+                  <option value="PASSED">{t.passed}</option>
+                  <option value="BELOW_TARGET">{t.belowTarget}</option>
                   <option value="NEEDS_ATTENTION">Needs Attention (6)</option>
                   <option value="GAP_FILL">อัปเดตจาก Gap Fill (18)</option>
                   <option value="NO_DATA">ไม่มีข้อมูล KPI</option>
@@ -1578,9 +1581,9 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
                   className="h-10 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-subtle)] px-3 text-xs text-[var(--app-text-primary)] focus:outline-none"
                 >
                   <option value="ALL">Import Type ทั้งหมด</option>
-                  <option value="GAP_FILL">GAP FILL</option>
-                  <option value="FULL_MONTH">FULL MONTH</option>
-                  <option value="MANUAL">MANUAL</option>
+                  <option value="GAP_FILL">{googleReviewKpiText(language, "gapFillType")}</option>
+                  <option value="FULL_MONTH">{googleReviewKpiText(language, "fullMonthType")}</option>
+                  <option value="MANUAL">{googleReviewKpiText(language, "manualType")}</option>
                 </select>
 
                 {/* Quick Table Downloads */}
@@ -1589,7 +1592,7 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
                   onClick={() => handleDownloadCsv(true)}
                   className="h-10 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-subtle)] px-3 text-xs font-semibold text-[var(--app-text-primary)] hover:bg-[var(--app-surface-hover)] transition-colors flex items-center gap-1.5 shadow-xs"
                 >
-                  📥 ดาวน์โหลด CSV
+                  📥 {t.downloadCsv}
                 </button></DownloadAction>
                 <DownloadAction><button
                   type="button"
@@ -1611,11 +1614,11 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
               ) : error ? (
                 <div className="py-16 text-center text-rose-500 text-xs">
                   <p className="font-semibold">{error}</p>
-                  <button onClick={() => loadData(selectedMonth)} className="mt-2 underline text-xs">ลองใหม่อีกครั้ง</button>
+                  <button onClick={() => loadData(selectedMonth)} className="mt-2 underline text-xs">{googleReviewKpiText(language, "retryLoad")}</button>
                 </div>
               ) : filteredStores.length === 0 ? (
                 <div className="py-20 text-center text-[var(--app-text-tertiary)] text-xs">
-                  ไม่พบร้านค้าที่ตรงกับเงื่อนไขการค้นหา
+                  {googleReviewKpiText(language, "noSearchResults")}
                 </div>
               ) : (
                 <div className="overflow-x-auto">
@@ -1625,7 +1628,7 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
                         <th className="py-3 px-3 text-center w-10">✓</th>
                         <th className="py-3 px-4">{t.storeName}</th>
                         <th className="py-3 px-3">{t.storeId}</th>
-                        <th className="py-3 px-3">จังหวัด</th>
+                        <th className="py-3 px-3">{googleReviewKpiText(language, "provinceColumn")}</th>
                         <th className="py-3 px-3">{t.googleMaps}</th>
                         <th
                           className="py-3 px-3 text-center cursor-pointer hover:bg-[var(--app-surface-hover)] select-none transition-colors"
@@ -1766,11 +1769,11 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
                             <td className="py-3 px-3 text-center">
                               {store.latestImportType === "GAP_FILL" ? (
                                 <span className="inline-flex items-center gap-1 rounded-full bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300 px-2 py-0.5 text-[10px] font-bold border border-purple-200">
-                                  GAP FILL {store.latestImportDelta?.qualifiedReviews ? `+${store.latestImportDelta.qualifiedReviews}` : "+2"}
+                                  {googleReviewKpiText(language, "gapFillType")} {store.latestImportDelta?.qualifiedReviews ? `+${store.latestImportDelta.qualifiedReviews}` : "+2"}
                                 </span>
                               ) : store.latestImportType === "FULL_MONTH" ? (
                                 <span className="inline-flex items-center rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 px-2 py-0.5 text-[10px] font-bold border border-blue-200">
-                                  FULL MONTH
+                                  {googleReviewKpiText(language, "fullMonthType")}
                                 </span>
                               ) : (
                                 <span className="text-[10px] text-[var(--app-text-tertiary)]">—</span>
@@ -1819,7 +1822,7 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-mono font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950 px-2 py-0.5 rounded-md border border-emerald-200 dark:border-emerald-800">
-                      {selectedStoreForDrawer.storeId || selectedStoreForDrawer.code || "NO_CODE"}
+                      {selectedStoreForDrawer.storeId || selectedStoreForDrawer.code || googleReviewKpiText(language, "noCode")}
                     </span>
                     <span className="text-xs text-[var(--app-text-tertiary)]">
                       {selectedStoreForDrawer.province || selectedStoreForDrawer.region || ""}
@@ -2007,7 +2010,7 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
                         </span>
                       </div>
                       <div className="bg-white/80 dark:bg-purple-950/40 p-2 rounded-xl border border-purple-200 dark:border-purple-800/40 flex items-center justify-between">
-                        <span className="text-[var(--app-text-tertiary)]">ไทย ≥15 คำ</span>
+                        <span className="text-[var(--app-text-tertiary)]">{t.over15Words}</span>
                         <span className="font-mono font-bold text-[var(--app-text-primary)]">
                           +{selectedStoreForDrawer.latestImportDelta?.reviewsOver15ThaiWords || 2}
                         </span>
@@ -2031,23 +2034,23 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
                         <span className="absolute -left-[19px] top-1 h-2.5 w-2.5 rounded-full bg-emerald-500" />
                         <div className="flex items-center justify-between">
                           <span className="font-bold text-[var(--app-text-primary)]">
-                            {h.type === "GAP_FILL" ? "Gap Fill Delta Apply" : "Full Fleet Audit"}
+                            {googleReviewKpiText(language, h.type === "GAP_FILL" ? "gapFillDeltaApply" : "fullFleetAudit")}
                           </span>
                           <span className="font-mono text-[10px] text-[var(--app-text-tertiary)]">{h.date}</span>
                         </div>
                         <div className="text-[11px] text-[var(--app-text-secondary)]">
-                          Qualified: <strong>{h.qualified}</strong> {h.delta ? `(+${h.delta})` : ""} · โดย {h.user || "System"}
+                          {googleReviewKpiText(language, "qualifiedColon")} <strong>{h.qualified}</strong> {h.delta ? `(+${h.delta})` : ""} · โดย {h.user || googleReviewKpiText(language, "systemLabel")}
                         </div>
                       </div>
                     )) || (
                       <div className="relative space-y-0.5">
                         <span className="absolute -left-[19px] top-1 h-2.5 w-2.5 rounded-full bg-emerald-500" />
                         <div className="flex items-center justify-between">
-                          <span className="font-bold text-[var(--app-text-primary)]">Full Fleet Audit</span>
+                          <span className="font-bold text-[var(--app-text-primary)]">{googleReviewKpiText(language, "fullFleetAudit")}</span>
                           <span className="font-mono text-[10px] text-[var(--app-text-tertiary)]">30 ก.ย. 2569</span>
                         </div>
                         <div className="text-[11px] text-[var(--app-text-secondary)]">
-                          Qualified: <strong>{selectedStoreForDrawer.kpiResult?.qualifiedReviews ?? 0}</strong>
+                          {googleReviewKpiText(language, "qualifiedColon")} <strong>{selectedStoreForDrawer.kpiResult?.qualifiedReviews ?? 0}</strong>
                         </div>
                       </div>
                     )}
@@ -2129,7 +2132,7 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
                 <div className="flex items-start gap-2.5">
                   <span className="font-bold text-emerald-600 dark:text-emerald-400">5.</span>
                   <div>
-                    <strong className="text-[var(--app-text-primary)]">Zero October Leakage:</strong> รีวิวที่มี timestamp เข้าเดือนตุลาคมจะถูกคัดออก 100% ไม่นับรวมในเดือนกันยายน
+                    <strong className="text-[var(--app-text-primary)]">{googleReviewKpiText(language, "zeroOctoberLeakage")}</strong> รีวิวที่มี timestamp เข้าเดือนตุลาคมจะถูกคัดออก 100% ไม่นับรวมในเดือนกันยายน
                   </div>
                 </div>
               </div>
@@ -2155,7 +2158,7 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
             <div className="flex items-center justify-between border-b border-[var(--app-border)] pb-3">
               <div>
                 <h2 className="text-base font-bold text-[var(--app-text-primary)]">
-                  {importModalStep === 1 ? "นำเข้าผลลัพธ์ AI Audit" : "ตรวจสอบความถูกต้องก่อนบันทึก (Import Preview)"}
+                  {googleReviewKpiText(language, importModalStep === 1 ? "importAiAuditTitle" : "importPreviewTitle")}
                 </h2>
                 <p className="text-xs text-[var(--app-text-tertiary)]">
                   เดือนเป้าหมาย: {formatMonthLabel(selectedMonth, language)} ({selectedMonth})
@@ -2259,7 +2262,7 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
                       onClick={() => setImportModalOpen(false)}
                       className="rounded-xl border border-[var(--app-border)] px-4 py-2 text-xs font-semibold text-[var(--app-text-secondary)] hover:bg-[var(--app-surface-hover)]"
                     >
-                      ยกเลิก
+                      {t.cancel}
                     </button>
                     <button
                       type="button"
@@ -2405,7 +2408,7 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
                 onClick={() => setPasteJsonModalOpen(false)}
                 className="rounded-xl border border-[var(--app-border)] px-4 py-2 text-xs font-semibold text-[var(--app-text-secondary)] hover:bg-[var(--app-surface-hover)]"
               >
-                ยกเลิก
+                {t.cancel}
               </button>
               <button
                 type="button"
@@ -2435,7 +2438,7 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
             </div>
             <form onSubmit={handleSaveResult} className="space-y-4 text-xs">
               <div>
-                <label className="block font-medium text-[var(--app-text-secondary)] mb-1">Store ID *</label>
+                <label className="block font-medium text-[var(--app-text-secondary)] mb-1">{googleReviewKpiText(language, "storeIdRequired")}</label>
                 <input
                   type="text"
                   required
@@ -2455,7 +2458,7 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
                   />
                 </div>
                 <div>
-                  <label className="block font-bold text-emerald-600 mb-1">Qualified Reviews *</label>
+                  <label className="block font-bold text-emerald-600 mb-1">{googleReviewKpiText(language, "qualifiedReviewsRequired")}</label>
                   <input
                     type="number"
                     value={formQualifiedReviews}
@@ -2466,10 +2469,10 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
               </div>
               <div className="flex justify-end gap-2 pt-2">
                 <button type="button" onClick={() => setModalOpen(false)} className="rounded-xl border border-[var(--app-border)] px-4 py-2">
-                  ยกเลิก
+                  {t.cancel}
                 </button>
                 <button type="submit" disabled={submitting} className="rounded-xl bg-emerald-600 px-4 py-2 font-bold text-white hover:bg-emerald-500">
-                  {submitting ? "กำลังบันทึก..." : "บันทึกผล"}
+                  {submitting ? googleReviewKpiText(language, "savingToSystem") : googleReviewKpiText(language, "saveResult")}
                 </button>
               </div>
             </form>
@@ -2477,5 +2480,6 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
         </div>
       )}
     </div>
+    </LegacyI18nBoundary>
   );
 }

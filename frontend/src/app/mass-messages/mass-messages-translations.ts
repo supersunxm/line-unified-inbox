@@ -9,6 +9,7 @@ export type MassMessagesText = {
   
   // Section 1: Stores
   sectionStoresTitle: string;
+  sectionStoresDescription: string;
   storeModeAll: string;
   storeModeAllDesc: string;
   storeModeSelected: string;
@@ -17,9 +18,11 @@ export type MassMessagesText = {
   deselectAllStores: string;
   selectedStoresCount: (count: number, total: number) => string;
   noStoresFound: string;
+  loadingStoresLabel: string;
 
   // Section 2: Audience
   sectionAudienceTitle: string;
+  sectionAudienceDescription: string;
   audienceAllKnown: string;
   audienceAllKnownDesc: string;
   audienceNotReplied: string;
@@ -31,6 +34,8 @@ export type MassMessagesText = {
 
   // Section 3: Message & Media
   sectionMessageTitle: string;
+  sectionMessageDescription: string;
+  campaignTitlePlaceholder: string;
   messagePlaceholder: string;
   characterCount: (current: number, max: number) => string;
   messagePreviewTitle: string;
@@ -108,6 +113,7 @@ export type MassMessagesText = {
   metricSkipped: string;
   
   storeDeliveryTableTitle: string;
+  storeDeliveryTableDescription: string;
   storeNameCol: string;
   recipientsCol: string;
   statusCol: string;
@@ -123,6 +129,19 @@ export type MassMessagesText = {
   viewHistoryButton: string;
   historyTitle: string;
   noCampaignHistory: string;
+  historyDateColumn: string;
+  historyCampaignColumn: string;
+  historyAudienceColumn: string;
+  historyStoresColumn: string;
+  historyAcceptedEstimateColumn: string;
+  historyActionColumn: string;
+  campaignIdLabel: string;
+  imageLabel: string;
+  viewDetailsLabel: string;
+  backToComposeButton: string;
+  historyDescription: string;
+  loadingHistoryLabel: string;
+  emptyHistoryDescription: string;
 };
 
 export const translations: Record<Language, MassMessagesText> = {
@@ -134,6 +153,7 @@ export const translations: Record<Language, MassMessagesText> = {
     accessRestrictedDesc: "หน้านี้สงวนไว้สำหรับผู้ดูแลระบบ (ADMIN) เท่านั้น",
 
     sectionStoresTitle: "1. ร้านค้าที่ต้องการส่ง",
+    sectionStoresDescription: "เลือกสาขาที่จะส่งข้อความบรอดแคสต์",
     storeModeAll: "ร้านค้าทั้งหมดที่พร้อมใช้งาน",
     storeModeAllDesc: "ระบบจะตรวจสอบร้านค้าที่เชื่อมต่อ LINE OA และมีโทเคนถูกต้องโดยอัตโนมัติ",
     storeModeSelected: "เลือกร้านค้า",
@@ -142,8 +162,10 @@ export const translations: Record<Language, MassMessagesText> = {
     deselectAllStores: "ยกเลิกทั้งหมด",
     selectedStoresCount: (count, total) => `เลือกแล้ว ${count} จาก ${total} ร้าน`,
     noStoresFound: "ไม่พบร้านค้าที่ตรงกับคำค้นหา",
+    loadingStoresLabel: "กำลังโหลดร้านค้า...",
 
     sectionAudienceTitle: "2. กลุ่มลูกค้าเป้าหมาย",
+    sectionAudienceDescription: "เลือกกลุ่มเป้าหมายผู้รับข้อความ",
     audienceAllKnown: "ลูกค้าทั้งหมดในระบบ",
     audienceAllKnownDesc: "เฉพาะลูกค้าที่เคยมีข้อมูลเข้ามาในระบบผ่าน LINE OA (ไม่ใช่เพื่อน LINE ทั้งหมด)",
     audienceNotReplied: "ยังไม่ตอบ",
@@ -154,6 +176,8 @@ export const translations: Record<Language, MassMessagesText> = {
     audienceRepliedDesc: "ลูกค้าที่มีการตอบกลับข้อความแล้ว",
 
     sectionMessageTitle: "3. ข้อความที่ต้องการส่ง",
+    sectionMessageDescription: "เขียนข้อความและแนบรูปภาพสำหรับส่งถึงลูกค้า",
+    campaignTitlePlaceholder: "ชื่อแคมเปญ (สำหรับอ้างอิงภายใน, ไม่บังคับ)...",
     messagePlaceholder: "พิมพ์ข้อความที่ต้องการส่งถึงลูกค้า...",
     characterCount: (current, max) => `${current.toLocaleString()} / ${max.toLocaleString()} ตัวอักษร`,
     messagePreviewTitle: "ตัวอย่างข้อความ",
@@ -228,6 +252,7 @@ export const translations: Record<Language, MassMessagesText> = {
     metricSkipped: "ร้านค้าที่ข้าม",
 
     storeDeliveryTableTitle: "รายละเอียดการส่งตามรายร้าน",
+    storeDeliveryTableDescription: "รายละเอียดสถานะการส่งรายสาขา",
     storeNameCol: "ร้านค้า",
     recipientsCol: "จำนวนผู้รับ",
     statusCol: "สถานะ",
@@ -243,6 +268,19 @@ export const translations: Record<Language, MassMessagesText> = {
     viewHistoryButton: "ประวัติการส่ง",
     historyTitle: "ประวัติการส่งข้อความ",
     noCampaignHistory: "ยังไม่มีประวัติการส่งข้อความ",
+    historyDateColumn: "วันที่",
+    historyCampaignColumn: "แคมเปญ",
+    historyAudienceColumn: "กลุ่มผู้รับ",
+    historyStoresColumn: "ร้าน",
+    historyAcceptedEstimateColumn: "รับแล้ว / ประมาณ",
+    historyActionColumn: "การดำเนินการ",
+    campaignIdLabel: "รหัสแคมเปญ",
+    imageLabel: "แนบรูปภาพ",
+    viewDetailsLabel: "ดูรายละเอียด",
+    backToComposeButton: "กลับไปหน้าสร้างข้อความ",
+    historyDescription: "ประวัติการส่งข้อความบรอดแคสต์ทั้งหมด",
+    loadingHistoryLabel: "กำลังโหลดประวัติแคมเปญ...",
+    emptyHistoryDescription: "ยังไม่มีประวัติการส่งข้อความบรอดแคสต์ในระบบ",
   },
   en: {
     pageTitle: "Mass Message",
@@ -252,6 +290,7 @@ export const translations: Record<Language, MassMessagesText> = {
     accessRestrictedDesc: "This workspace is restricted to ADMIN users only.",
 
     sectionStoresTitle: "1. Target Stores",
+    sectionStoresDescription: "Select stores for the broadcast",
     storeModeAll: "All Eligible Stores",
     storeModeAllDesc: "Automatically includes all stores with active, valid LINE OA connections",
     storeModeSelected: "Selected Stores",
@@ -260,8 +299,10 @@ export const translations: Record<Language, MassMessagesText> = {
     deselectAllStores: "Deselect All",
     selectedStoresCount: (count, total) => `${count} of ${total} stores selected`,
     noStoresFound: "No stores match your search query",
+    loadingStoresLabel: "Loading stores...",
 
     sectionAudienceTitle: "2. Target Customer Audience",
+    sectionAudienceDescription: "Select the message recipients",
     audienceAllKnown: "All Known Customers",
     audienceAllKnownDesc: "Only customers already stored in our system from LINE OA conversations (not all LINE friends)",
     audienceNotReplied: "Not Replied",
@@ -272,6 +313,8 @@ export const translations: Record<Language, MassMessagesText> = {
     audienceRepliedDesc: "Customers who have received replies",
 
     sectionMessageTitle: "3. Message Content",
+    sectionMessageDescription: "Write a message and attach an image for customers",
+    campaignTitlePlaceholder: "Campaign name (for internal reference, optional)...",
     messagePlaceholder: "Type your broadcast message...",
     characterCount: (current, max) => `${current.toLocaleString()} / ${max.toLocaleString()} characters`,
     messagePreviewTitle: "Message Preview",
@@ -346,6 +389,7 @@ export const translations: Record<Language, MassMessagesText> = {
     metricSkipped: "Skipped Stores",
 
     storeDeliveryTableTitle: "Per-Store Delivery Status",
+    storeDeliveryTableDescription: "Delivery status by store",
     storeNameCol: "Store",
     recipientsCol: "Recipients",
     statusCol: "Status",
@@ -361,6 +405,19 @@ export const translations: Record<Language, MassMessagesText> = {
     viewHistoryButton: "Campaign History",
     historyTitle: "Campaign History",
     noCampaignHistory: "No campaign history found",
+    historyDateColumn: "Date",
+    historyCampaignColumn: "Campaign",
+    historyAudienceColumn: "Audience",
+    historyStoresColumn: "Stores",
+    historyAcceptedEstimateColumn: "Accepted / Est.",
+    historyActionColumn: "Action",
+    campaignIdLabel: "Campaign ID",
+    imageLabel: "Image",
+    viewDetailsLabel: "View",
+    backToComposeButton: "Back to message builder",
+    historyDescription: "All broadcast delivery history",
+    loadingHistoryLabel: "Loading campaign history...",
+    emptyHistoryDescription: "There is no broadcast delivery history yet",
   },
   zh: {
     pageTitle: "群发消息",
@@ -370,6 +427,7 @@ export const translations: Record<Language, MassMessagesText> = {
     accessRestrictedDesc: "此工作区仅供 ADMIN 管理员访问。",
 
     sectionStoresTitle: "1. 目标门店",
+    sectionStoresDescription: "选择要发送群发消息的门店",
     storeModeAll: "所有符合条件的门店",
     storeModeAllDesc: "自动包含所有已连接有效 LINE OA 的门店",
     storeModeSelected: "选择指定门店",
@@ -378,8 +436,10 @@ export const translations: Record<Language, MassMessagesText> = {
     deselectAllStores: "取消全选",
     selectedStoresCount: (count, total) => `已选择 ${count} / ${total} 家门店`,
     noStoresFound: "未找到符合条件的门店",
+    loadingStoresLabel: "正在加载门店...",
 
     sectionAudienceTitle: "2. 目标客户群体",
+    sectionAudienceDescription: "选择消息接收对象",
     audienceAllKnown: "系统中所有已知客户",
     audienceAllKnownDesc: "仅限系统中已有聊天记录的客户（非 LINE 全部好友）",
     audienceNotReplied: "未回复",
@@ -390,6 +450,8 @@ export const translations: Record<Language, MassMessagesText> = {
     audienceRepliedDesc: "已完成回复的客户",
 
     sectionMessageTitle: "3. 消息内容",
+    sectionMessageDescription: "撰写消息并附上要发送给客户的图片",
+    campaignTitlePlaceholder: "活动名称（供内部参考，可选）...",
     messagePlaceholder: "输入要群发的消息内容...",
     characterCount: (current, max) => `${current.toLocaleString()} / ${max.toLocaleString()} 字符`,
     messagePreviewTitle: "消息预览",
@@ -464,6 +526,7 @@ export const translations: Record<Language, MassMessagesText> = {
     metricSkipped: "已跳过门店",
 
     storeDeliveryTableTitle: "各门店发送明细",
+    storeDeliveryTableDescription: "各门店发送状态详情",
     storeNameCol: "门店",
     recipientsCol: "接收人数",
     statusCol: "状态",
@@ -479,6 +542,19 @@ export const translations: Record<Language, MassMessagesText> = {
     viewHistoryButton: "发送历史",
     historyTitle: "群发历史记录",
     noCampaignHistory: "暂无群发历史记录",
+    historyDateColumn: "日期",
+    historyCampaignColumn: "活动",
+    historyAudienceColumn: "客户群",
+    historyStoresColumn: "门店",
+    historyAcceptedEstimateColumn: "已接收 / 预计",
+    historyActionColumn: "操作",
+    campaignIdLabel: "活动 ID",
+    imageLabel: "图片",
+    viewDetailsLabel: "查看详情",
+    backToComposeButton: "返回消息创建页",
+    historyDescription: "全部群发消息记录",
+    loadingHistoryLabel: "正在加载活动记录...",
+    emptyHistoryDescription: "暂无群发消息记录",
   },
 };
 

@@ -364,7 +364,7 @@ test("the focus-group summary row is not a store: dropped from every list and co
 test("detail panel lists since-yesterday chats first and older ones in a collapsed section", () => {
   const source = readFileSync(new URL("../src/components/v2/response-stores-view.tsx", import.meta.url), "utf8");
   assert.match(source, /const recentChats = chats\.filter\(\(chat\) => Date\.parse\(chat\.waitingSince\) >= windowStart\);/);
-  assert.match(source, /<details data-v2-older-chats[\s\S]*?เก่ากว่าเมื่อวาน \(\{olderChats\.length\}\)/);
+  assert.match(source, /<details data-v2-older-chats[\s\S]*?t\("olderChats", \{ count: olderChats\.length \}\)/);
   // Table cells show only the duration; the send time is in the tooltip.
-  assert.match(readFileSync(new URL("../src/components/v2/v2-ui.tsx", import.meta.url), "utf8"), /if \(compact\) return <span title=\{waitNote\(waitingSince, now\)\}/);
+  assert.match(readFileSync(new URL("../src/components/v2/v2-ui.tsx", import.meta.url), "utf8"), /if \(compact\) return <span title=\{waitNote\(waitingSince, now, language\)\}/);
 });

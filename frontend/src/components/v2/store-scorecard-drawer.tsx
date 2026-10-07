@@ -2,17 +2,20 @@
 
 import Link from "next/link";
 import React, { useEffect, useRef } from "react";
+import { useAppLanguage } from "@/app/language";
+import { languageLocale } from "@/app/language-utils";
 import { formatWaitingDuration } from "@/components/shell/store-priority-score";
-import { KPI_DIFFERENCE_NOTE, RATE24_TARGET } from "@/lib/v2/kpi";
+import { RATE24_TARGET } from "@/lib/v2/kpi";
 import { monthShortLabel, periodLabel } from "@/lib/v2/month";
 import { chatsHref, reportHref } from "@/lib/v2/month-url";
 import { dailyBreakdown, storeCounts, type MonthStoreRow } from "@/lib/v2/monthly-model";
 import { thaiLocationLabel } from "@/lib/v2/thai-geo";
-import { countState, formatValue, numericValue, rateState } from "@/lib/v2/value-state";
+import { countState, numericValue, rateState } from "@/lib/v2/value-state";
 import { HowCounted, KpiCompareTable } from "./kpi-cards";
 import { TagCoverageDetail } from "./tag-coverage";
 import { useStoreDailyRates, useStoreMonth, useTrend, useV2Month } from "./v2-month-data";
 import { ManagerLink, StateValue } from "./v2-ui";
+import { v2Text } from "@/lib/v2/v2-translations";
 
 const cell = "px-3 py-2 text-xs whitespace-nowrap";
 
@@ -29,8 +32,10 @@ function Section({ title, meta, children }: { title: string; meta?: React.ReactN
 }
 
 function Trend({ storeId }: { storeId: string }) {
+  const { language } = useAppLanguage();
+  const t = v2Text(language);
   const trend = useTrend(true);
-  if (!trend.data) return <p className="text-xs text-[var(--app-text-secondary)]">{trend.error ? `โหลดไม่สำเร็จ: ${trend.error}` : "กำลังโหลด…"}</p>;
+  if (!trend.data) return <p className="text-xs text-[var(--app-text-secondary)]">{trend.error ? t("unableToLoadDataWithError", { error: trend.error }) : t("loadingEllipsis")}</p>;
   const points = trend.data.map((point) => {
     const counts = point.summary ? storeCounts(point.summary).get(storeId) ?? { total: 0, notReplied: 0, replied: 0 } : null;
     const rate = point.rates ? point.rates.stores.find((entry) => entry.storeId === storeId) ?? { total: 0, within24h: 0 } : null;
@@ -48,17 +53,17 @@ function Trend({ storeId }: { storeId: string }) {
       <table data-v2-drawer-trend className="w-full text-left">
         <thead className="text-[11px] text-[var(--app-text-secondary)]">
           <tr className="border-b border-[var(--app-border)]">
-            <th scope="col" className={`${cell} font-medium`}>เดือน</th>
-            <th scope="col" className={`${cell} text-right font-medium`}>แชท</th>
-            <th scope="col" className={`${cell} text-right font-medium`}>ยังไม่ตอบ</th>
-            <th scope="col" className={`${cell} text-right font-medium`}>ตอบแล้ว %</th>
-            <th scope="col" className={`${cell} text-right font-medium`}>ตอบใน 24 ชม.</th>
+            <th scope="col" className={`${cell} font-medium`}>{t("monthColumn")}</th>
+            <th scope="col" className={`${cell} text-right font-medium`}>{t("chats")}</th>
+            <th scope="col" className={`${cell} text-right font-medium`}>{t("unanswered")}</th>
+            <th scope="col" className={`${cell} text-right font-medium`}>{t("repliedRate")}</th>
+            <th scope="col" className={`${cell} text-right font-medium`}>{t("rate24Label")}</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-[var(--app-border-subtle)]">
           {points.map((point) => (
             <tr key={point.month}>
-              <th scope="row" className={`${cell} font-medium`}>{monthShortLabel(point.month)}</th>
+              <th scope="row" className={`${cell} font-medium`}>{monthShortLabel(point.month, language)}</th>
               <td className={`${cell} text-right`}><StateValue state={point.chats} /></td>
               <td className={`${cell} text-right`}><StateValue state={point.unreplied} /></td>
               <td className={`${cell} text-right`}><StateValue state={point.replyRate} format="percent" /></td>
@@ -67,21 +72,23 @@ function Trend({ storeId }: { storeId: string }) {
           ))}
         </tbody>
       </table>
-      {points.length < 6 && <p className="text-xs text-[var(--app-text-secondary)]">มีข้อมูลสถานะการตอบตั้งแต่ ก.ย. 2026 จึงแสดง {points.length} เดือน (ยังไม่ครบ 6 เดือน)</p>}
+      {points.length < 6 && <p className="text-xs text-[var(--app-text-secondary)]">{t("responseStatusCoverage", { month: monthShortLabel("2026-09", language), count: points.length })}</p>}
     </>
   );
 }
 
 function DailyAndTags({ row }: { row: MonthStoreRow }) {
+  const { language } = useAppLanguage();
+  const t = v2Text(language);
   const data = useV2Month();
   const storeMonth = useStoreMonth(row.storeId, data.month);
   const dailyRates = useStoreDailyRates(row.storeId);
   if (!storeMonth.data) {
-    const text = storeMonth.error ? `โหลดไม่สำเร็จ: ${storeMonth.error}` : "กำลังโหลด…";
+    const text = storeMonth.error ? t("unableToLoadDataWithError", { error: storeMonth.error }) : t("loadingEllipsis");
     return (
       <>
-        <Section title="รายวัน"><p className="text-xs text-[var(--app-text-secondary)]">{text}</p></Section>
-        <Section title="ความครบของแท็กชื่อลูกค้า"><TagCoverageDetail counts={data.tagCoverageByStore.get(row.storeId)} /></Section>
+        <Section title={t("daily")}><p className="text-xs text-[var(--app-text-secondary)]">{text}</p></Section>
+        <Section title={t("tagCoverage")}><TagCoverageDetail counts={data.tagCoverageByStore.get(row.storeId)} /></Section>
       </>
     );
   }
@@ -93,17 +100,17 @@ function DailyAndTags({ row }: { row: MonthStoreRow }) {
   const expected = numericValue(row.chats);
   return (
     <>
-      <Section title="รายวัน" meta={`ตามวันของข้อความล่าสุด · ${periodLabel(data.frame.current)}`}>
-        {truncated && <p className="text-xs text-[var(--app-text-secondary)]">แสดงเฉพาะ {items.length.toLocaleString("th-TH")} แชทล่าสุด จาก {storeMonth.data.total.toLocaleString("th-TH")} แชท</p>}
-        {!truncated && expected !== null && listed !== expected && <p className="text-xs text-[var(--app-text-secondary)]">รายวันรวม {listed.toLocaleString("th-TH")} แชท ต่างจากยอดเดือน {expected.toLocaleString("th-TH")} เพราะโหลดคนละเวลา กดรีเฟรชเพื่อให้ตรงกัน</p>}
+      <Section title={t("daily")} meta={t("lastMessageDay", { period: periodLabel(data.frame.current, language) })}>
+        {truncated && <p className="text-xs text-[var(--app-text-secondary)]">{t("latestChatsTruncated", { shown: items.length.toLocaleString(languageLocale(language)), total: storeMonth.data.total.toLocaleString(languageLocale(language)) })}</p>}
+        {!truncated && expected !== null && listed !== expected && <p className="text-xs text-[var(--app-text-secondary)]">{t("dailyCountMismatch", { listed: listed.toLocaleString(languageLocale(language)), expected: expected.toLocaleString(languageLocale(language)) })}</p>}
         <table data-v2-drawer-daily className="w-full text-left">
           <thead className="text-[11px] text-[var(--app-text-secondary)]">
             <tr className="border-b border-[var(--app-border)]">
-              <th scope="col" className={`${cell} font-medium`}>วันที่</th>
-              <th scope="col" className={`${cell} font-medium`}><span className="sr-only">กราฟ</span></th>
-              <th scope="col" className={`${cell} text-right font-medium`}>แชท</th>
-              <th scope="col" className={`${cell} text-right font-medium`}>ยังไม่ตอบ</th>
-              <th scope="col" className={`${cell} text-right font-medium`} title="ตอบใน 24 ชม. ÷ แชทที่ลูกค้าทักวันนั้น">ตอบใน 24 ชม.</th>
+              <th scope="col" className={`${cell} font-medium`}>{t("date")}</th>
+              <th scope="col" className={`${cell} font-medium`}><span className="sr-only">{t("chartDescription")}</span></th>
+              <th scope="col" className={`${cell} text-right font-medium`}>{t("chats")}</th>
+              <th scope="col" className={`${cell} text-right font-medium`}>{t("unanswered")}</th>
+              <th scope="col" className={`${cell} text-right font-medium`} title={t("rate24PerFirstChat")}>{t("rate24Label")}</th>
             </tr>
           </thead>
           <tbody>
@@ -123,9 +130,9 @@ function DailyAndTags({ row }: { row: MonthStoreRow }) {
             ))}
           </tbody>
         </table>
-        <p className="text-xs text-[var(--app-text-secondary)]">แถบเขียว = ตอบแล้ว · แถบแดง = ยังไม่ตอบ (ตามวันของข้อความล่าสุด) · ตอบใน 24 ชม. = ตอบทัน ÷ แชทที่ลูกค้าทักวันนั้น (ตามวันที่ทักครั้งแรก){dailyRates.error ? ` · โหลดตอบใน 24 ชม. รายวันไม่สำเร็จ: ${dailyRates.error}` : ""}</p>
+        <p className="text-xs text-[var(--app-text-secondary)]">{t("dailyBarsExplanation", { error: dailyRates.error ? t("dailyRateLoadError", { error: dailyRates.error }) : "" })}</p>
       </Section>
-      <Section title="ความครบของแท็กชื่อลูกค้า" meta={periodLabel(data.frame.current)}>
+      <Section title={t("tagCoverage")} meta={periodLabel(data.frame.current, language)}>
         <TagCoverageDetail counts={data.tagCoverageByStore.get(row.storeId)} />
       </Section>
       <ManagerLink href={storeMonth.data.managerUrl} />
@@ -135,6 +142,8 @@ function DailyAndTags({ row }: { row: MonthStoreRow }) {
 
 /** Store scorecard: the month's KPIs vs the comparison period and target, trend, daily, tags, links. */
 export function StoreScorecardDrawer({ row, onClose }: { row: MonthStoreRow; onClose: () => void }) {
+  const { language } = useAppLanguage();
+  const t = v2Text(language);
   const data = useV2Month();
   const closeRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
@@ -144,7 +153,7 @@ export function StoreScorecardDrawer({ row, onClose }: { row: MonthStoreRow; onC
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose, row.storeId]);
   const location = thaiLocationLabel(row.region, row.province);
-  const waiting = row.oldestWaitingMinutes ? formatWaitingDuration(row.oldestWaitingMinutes) : null;
+  const waiting = row.oldestWaitingMinutes ? formatWaitingDuration(row.oldestWaitingMinutes, language) : null;
   const titleId = `v2-drawer-${row.storeId}`;
 
   return (
@@ -153,30 +162,30 @@ export function StoreScorecardDrawer({ row, onClose }: { row: MonthStoreRow; onC
         <header className="flex items-start gap-3 border-b border-[var(--app-border-subtle)] p-5">
           <div className="min-w-0 flex-1">
             <h2 id={titleId} className="text-base font-semibold">{row.storeName}</h2>
-            <p className="text-xs text-[var(--app-text-secondary)]">{[`Partner: ${row.partner}`, location].filter(Boolean).join(" · ")}</p>
+            <p className="text-xs text-[var(--app-text-secondary)]">{[t("partnerNamed", { partner: row.partner }), location].filter(Boolean).join(" · ")}</p>
             <p className="mt-1 text-xs text-[var(--app-text-secondary)]">{data.periodText}</p>
           </div>
-          <button ref={closeRef} type="button" onClick={onClose} aria-label="ปิดรายละเอียดสาขา" className="rounded-[var(--app-radius-md)] border border-[var(--app-border)] px-2.5 py-1 text-xs text-[var(--app-text-secondary)] hover:bg-[var(--app-surface-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--app-accent)]/40">ปิด</button>
+          <button ref={closeRef} type="button" onClick={onClose} aria-label={t("closeStoreDetails")} className="rounded-[var(--app-radius-md)] border border-[var(--app-border)] px-2.5 py-1 text-xs text-[var(--app-text-secondary)] hover:bg-[var(--app-surface-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--app-accent)]/40">{t("close")}</button>
         </header>
         <div className="min-h-0 flex-1 space-y-6 overflow-y-auto p-5">
-          <Section title="ตัวชี้วัดเดือนนี้">
+          <Section title={t("monthlyKpis")}>
             <KpiCompareTable totals={row} frame={data.frame} />
-            <p className="text-xs text-[var(--app-text-secondary)]">{KPI_DIFFERENCE_NOTE}</p>
+            <p className="text-xs text-[var(--app-text-secondary)]">{t("kpiDifference")}</p>
             <div className="grid grid-cols-2 gap-3"><HowCounted kpi="replied" /><HowCounted kpi="rate24" /></div>
             <p className="text-xs text-[var(--app-text-secondary)]">
-              {waiting ? <>แชทที่ยังไม่ตอบที่ค้างนานสุด: <span className="font-medium text-[var(--app-text-primary)]">{waiting}</span> (นับเวลาจริง เหมือนหน้าแชทร้านค้า)</> : formatValue(row.unreplied).text === "0" ? "ไม่มีแชทที่ยังไม่ตอบในเดือนนี้" : null}
+              {waiting ? t("longestUnanswered", { duration: waiting }) : numericValue(row.unreplied) === 0 ? t("noUnansweredThisMonth") : null}
             </p>
           </Section>
-          <Section title="แนวโน้มรายเดือน" meta="สูงสุด 6 เดือน">
+          <Section title={t("monthlyTrend")} meta={t("upToMonths", { count: 6 })}>
             <Trend storeId={row.storeId} />
           </Section>
           <DailyAndTags row={row} />
-          <Section title="ไปต่อ">
+          <Section title={t("nextSteps")}>
             <div className="flex flex-wrap gap-2 text-xs">
-              <Link href={chatsHref({ storeId: row.storeId, month: data.month })} className="rounded-[var(--app-radius-md)] border border-[var(--app-border)] px-3 py-1.5 font-medium text-[var(--app-accent)] hover:bg-[var(--app-accent-soft)]">แชทเดือนนี้ในหน้าแชทร้านค้า →</Link>
-              <Link href={chatsHref({ storeId: row.storeId, month: data.month, unrepliedOnly: true })} className="rounded-[var(--app-radius-md)] border border-[var(--app-border)] px-3 py-1.5 font-medium text-[var(--app-accent)] hover:bg-[var(--app-accent-soft)]">เฉพาะยังไม่ตอบ →</Link>
-              <Link href={reportHref({ month: data.month, partner: null, store: row.storeId })} target="_blank" className="rounded-[var(--app-radius-md)] border border-[var(--app-border)] px-3 py-1.5 font-medium text-[var(--app-text-secondary)] hover:bg-[var(--app-surface-hover)]">รายงานสาขา ↗</Link>
-              <Link href={`/store-360?storeId=${encodeURIComponent(row.storeId)}`} className="rounded-[var(--app-radius-md)] border border-[var(--app-border)] px-3 py-1.5 font-medium text-[var(--app-text-secondary)] hover:bg-[var(--app-surface-hover)]">Store 360 →</Link>
+              <Link href={chatsHref({ storeId: row.storeId, month: data.month })} className="rounded-[var(--app-radius-md)] border border-[var(--app-border)] px-3 py-1.5 font-medium text-[var(--app-accent)] hover:bg-[var(--app-accent-soft)]">{t("storeChatsThisMonth")}</Link>
+              <Link href={chatsHref({ storeId: row.storeId, month: data.month, unrepliedOnly: true })} className="rounded-[var(--app-radius-md)] border border-[var(--app-border)] px-3 py-1.5 font-medium text-[var(--app-accent)] hover:bg-[var(--app-accent-soft)]">{t("unansweredOnly")}</Link>
+              <Link href={reportHref({ month: data.month, partner: null, store: row.storeId })} target="_blank" className="rounded-[var(--app-radius-md)] border border-[var(--app-border)] px-3 py-1.5 font-medium text-[var(--app-text-secondary)] hover:bg-[var(--app-surface-hover)]">{t("storeReport")}</Link>
+              <Link href={`/store-360?storeId=${encodeURIComponent(row.storeId)}`} className="rounded-[var(--app-radius-md)] border border-[var(--app-border)] px-3 py-1.5 font-medium text-[var(--app-text-secondary)] hover:bg-[var(--app-surface-hover)]">{t("store360")}</Link>
             </div>
           </Section>
         </div>

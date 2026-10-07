@@ -85,11 +85,11 @@ function DailySummaryTableInner({
             <table className="w-full text-left text-sm min-w-max">
               <thead className="bg-[var(--surface-elevated)] text-xs text-[var(--muted)] border-b border-[var(--border)]">
                 <tr>
-                  <th className="px-4 py-3 font-medium">{language === "th" ? "วันที่" : "Date"}</th>
+                  <th className="px-4 py-3 font-medium">{language === "th" ? "วันที่" : language === "zh" ? "日期" : "Date"}</th>
                   <th className="px-4 py-3 font-medium text-right">{t.followers}</th>
                   <th className="px-4 py-3 font-medium text-right">{t.dailyIncrease}</th>
                   <th className="px-4 py-3 font-medium text-center">{t.ready}</th>
-                  <th className="px-4 py-3 font-medium text-center">{language === "th" ? "สถานะข้อมูล" : "Data Status"}</th>
+                  <th className="px-4 py-3 font-medium text-center">{language === "th" ? "สถานะข้อมูล" : language === "zh" ? "数据状态" : "Data Status"}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--border)] text-[var(--foreground)]">

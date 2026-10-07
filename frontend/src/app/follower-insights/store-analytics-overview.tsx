@@ -78,7 +78,7 @@ function ReachDistribution({ rows, language }: { rows: MetricRow[]; language: La
   }, [validRows]);
   const max = Math.max(1, ...buckets.map((bucket) => bucket.count));
   if (validRows.length === 0) {
-    return <div className="flex h-[260px] items-center justify-center text-sm text-[var(--app-text-secondary)]">{language === "th" ? "ไม่มีข้อมูล Reach ในช่วงที่เลือก" : "No reach data for this period"}</div>;
+    return <div className="flex h-[260px] items-center justify-center text-sm text-[var(--app-text-secondary)]">{language === "th" ? "ไม่มีข้อมูล Reach ในช่วงที่เลือก" : language === "zh" ? "所选时间段内没有触达数据" : "No reach data for this period"}</div>;
   }
   return (
     <div className="flex h-[260px] items-end justify-around gap-3 pt-5">
@@ -154,8 +154,8 @@ export function StoreAnalyticsOverview({ storeData, endpointsUsable, language = 
   const topGrowthPct = useMemo(() => rows.filter((row): row is MetricRow & { growthPct: number } => row.growthPct !== null && row.growthPct > 0).sort((a, b) => b.growthPct - a.growthPct).slice(0, 12).map((row) => ({ label: row.store, value: row.growthPct, display: `${row.growthPct.toFixed(2)}%` })), [rows]);
   const topBlockPct = useMemo(() => rows.filter((row): row is MetricRow & { blockPct: number } => row.blockPct !== null && row.blockPct > 0).sort((a, b) => b.blockPct - a.blockPct).slice(0, 12).map((row) => ({ label: row.store, value: row.blockPct, display: `${row.blockPct.toFixed(1)}%` })), [rows]);
 
-  const th = language === "th";
-  const noComparable = th ? "ไม่มีข้อมูลเปรียบเทียบในช่วงที่เลือก" : "No comparable data for this period";
+  const choose = (thai: string, english: string, chinese: string) => language === "th" ? thai : language === "zh" ? chinese : english;
+  const noComparable = choose("ไม่มีข้อมูลเปรียบเทียบในช่วงที่เลือก", "No comparable data for this period", "所选时间段内没有可比较的数据");
   const growthValue = totals.growthPct === null ? "—" : `${totals.growth > 0 ? "+" : ""}${totals.growth.toLocaleString()}`;
   const growthPctValue = totals.growthPct === null ? "—" : `${totals.growthPct.toFixed(2)}%`;
   const reachValue = totals.reachPct === null ? "—" : `${totals.reachPct.toFixed(1)}%`;
@@ -167,43 +167,43 @@ export function StoreAnalyticsOverview({ storeData, endpointsUsable, language = 
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
-        <MetricCard label={th ? "ผู้ติดตามรวม" : "Total followers"} value={totals.followers.toLocaleString()} detail={th ? `${rows.length} LINE OA ที่มีข้อมูล` : `${rows.length} LINE OA accounts with data`} />
-        <MetricCard label={th ? "เพิ่มขึ้นในช่วง" : "Period growth"} value={growthValue} detail={th ? `เทียบได้ ${totals.comparableCoverage}/${rows.length} สาขา` : `Comparable ${totals.comparableCoverage}/${rows.length} stores`} tone={growthTone} />
-        <MetricCard label={th ? "อัตราการเติบโต" : "Growth rate"} value={growthPctValue} detail={th ? `${totals.zeroGrowth} สาขาไม่เติบโต · เฉพาะสาขาที่เทียบได้` : `${totals.zeroGrowth} no-growth stores · comparable only`} tone={growthTone} />
-        <MetricCard label={th ? "อัตราการเข้าถึง" : "Reach rate"} value={reachValue} detail={th ? `${totals.lowReach} สาขาต่ำกว่า 80% · มีข้อมูล ${totals.reachCoverage}/${rows.length}` : `${totals.lowReach} below 80% · coverage ${totals.reachCoverage}/${rows.length}`} tone={reachTone} />
-        <MetricCard label={th ? "อัตราบล็อก" : "Block rate"} value={blockValue} detail={th ? `${totals.highBlock} สาขาสูงกว่า 10% · มีข้อมูล ${totals.blockCoverage}/${rows.length}` : `${totals.highBlock} above 10% · coverage ${totals.blockCoverage}/${rows.length}`} tone={blockTone} />
+        <MetricCard label={choose("ผู้ติดตามรวม", "Total followers", "关注者总数")} value={totals.followers.toLocaleString()} detail={choose(`${rows.length} LINE OA ที่มีข้อมูล`, `${rows.length} LINE OA accounts with data`, `${rows.length} 个 LINE OA 账号有数据`)} />
+        <MetricCard label={choose("เพิ่มขึ้นในช่วง", "Period growth", "期间增长")} value={growthValue} detail={choose(`เทียบได้ ${totals.comparableCoverage}/${rows.length} สาขา`, `Comparable ${totals.comparableCoverage}/${rows.length} stores`, `可比较 ${totals.comparableCoverage}/${rows.length} 家门店`)} tone={growthTone} />
+        <MetricCard label={choose("อัตราการเติบโต", "Growth rate", "增长率")} value={growthPctValue} detail={choose(`${totals.zeroGrowth} สาขาไม่เติบโต · เฉพาะสาขาที่เทียบได้`, `${totals.zeroGrowth} no-growth stores · comparable only`, `${totals.zeroGrowth} 家门店无增长 · 仅统计可比较门店`)} tone={growthTone} />
+        <MetricCard label={choose("อัตราการเข้าถึง", "Reach rate", "触达率")} value={reachValue} detail={choose(`${totals.lowReach} สาขาต่ำกว่า 80% · มีข้อมูล ${totals.reachCoverage}/${rows.length}`, `${totals.lowReach} below 80% · coverage ${totals.reachCoverage}/${rows.length}`, `${totals.lowReach} 家门店低于 80% · 数据覆盖 ${totals.reachCoverage}/${rows.length}`)} tone={reachTone} />
+        <MetricCard label={choose("อัตราบล็อก", "Block rate", "屏蔽率")} value={blockValue} detail={choose(`${totals.highBlock} สาขาสูงกว่า 10% · มีข้อมูล ${totals.blockCoverage}/${rows.length}`, `${totals.highBlock} above 10% · coverage ${totals.blockCoverage}/${rows.length}`, `${totals.highBlock} 家门店高于 10% · 数据覆盖 ${totals.blockCoverage}/${rows.length}`)} tone={blockTone} />
       </div>
 
       <div className="flex items-center justify-between gap-3 px-1 pt-1">
         <div>
-          <h3 className="text-[15px] font-semibold text-[var(--app-text-primary)]">{th ? "Performance Analytics" : "Performance analytics"}</h3>
-          <p className="mt-0.5 text-xs text-[var(--app-text-secondary)]">{th ? "ดูสาขาที่เติบโตดี การกระจาย Reach และความเสี่ยงจาก Block" : "Growth leaders, reach distribution and block-rate risk"}</p>
+          <h3 className="text-[15px] font-semibold text-[var(--app-text-primary)]">{choose("วิเคราะห์ประสิทธิภาพ", "Performance analytics", "表现分析")}</h3>
+          <p className="mt-0.5 text-xs text-[var(--app-text-secondary)]">{choose("ดูสาขาที่เติบโตดี การกระจาย Reach และความเสี่ยงจาก Block", "Growth leaders, reach distribution and block-rate risk", "查看增长领先门店、触达分布和屏蔽率风险")}</p>
         </div>
         <button type="button" onClick={() => setShowAllCharts((value) => !value)} className="shrink-0 rounded-lg border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-1.5 text-xs font-semibold text-[var(--app-text-secondary)] hover:border-[var(--app-accent)] hover:text-[var(--app-accent)]">
-          {showAllCharts ? (th ? "ย่อกราฟ" : "Collapse") : (th ? "แสดงกราฟ" : "Show charts")}
+          {showAllCharts ? choose("ย่อกราฟ", "Collapse", "收起图表") : choose("แสดงกราฟ", "Show charts", "显示图表")}
         </button>
       </div>
 
       {showAllCharts && (
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.3fr_1fr]">
           <div className="rounded-[18px] border border-[var(--app-border)] bg-[var(--app-surface)] p-5 shadow-xs">
-            <h4 className="text-[15px] font-semibold text-[var(--app-text-primary)]">{th ? "Top สาขา — ผู้ติดตามเพิ่มขึ้น" : "Top stores — follower growth"}</h4>
-            <p className="mt-1 mb-5 text-xs text-[var(--app-text-secondary)]">{th ? "เรียงตามจำนวนผู้ติดตามที่เพิ่มขึ้นสูงสุด เฉพาะสาขาที่มี baseline ครบ" : "Highest absolute growth among stores with a valid baseline"}</p>
+            <h4 className="text-[15px] font-semibold text-[var(--app-text-primary)]">{choose("สาขาที่เพิ่มผู้ติดตามสูงสุด", "Top stores — follower growth", "关注者增长最多的门店")}</h4>
+            <p className="mt-1 mb-5 text-xs text-[var(--app-text-secondary)]">{choose("เรียงตามจำนวนผู้ติดตามที่เพิ่มขึ้นสูงสุด เฉพาะสาขาที่มี baseline ครบ", "Highest absolute growth among stores with a valid baseline", "按关注者绝对增长量排序，仅统计基线完整的门店")}</p>
             <HorizontalBars data={topGrowth} tone="green" emptyText={noComparable} />
           </div>
           <div className="rounded-[18px] border border-[var(--app-border)] bg-[var(--app-surface)] p-5 shadow-xs">
-            <h4 className="text-[15px] font-semibold text-[var(--app-text-primary)]">{th ? "การกระจายอัตราการเข้าถึง" : "Reach-rate distribution"}</h4>
-            <p className="mt-1 text-xs text-[var(--app-text-secondary)]">{th ? "จำนวนสาขาในแต่ละช่วง % Reach (เฉพาะสาขาที่มีข้อมูล)" : "Stores in each reach bucket (available data only)"}</p>
+            <h4 className="text-[15px] font-semibold text-[var(--app-text-primary)]">{choose("การกระจายอัตราการเข้าถึง", "Reach-rate distribution", "触达率分布")}</h4>
+            <p className="mt-1 text-xs text-[var(--app-text-secondary)]">{choose("จำนวนสาขาในแต่ละช่วง % Reach (เฉพาะสาขาที่มีข้อมูล)", "Stores in each reach bucket (available data only)", "各触达率区间的门店数量（仅统计有数据的门店）")}</p>
             <ReachDistribution rows={rows} language={language} />
           </div>
           <div className="rounded-[18px] border border-[var(--app-border)] bg-[var(--app-surface)] p-5 shadow-xs">
-            <h4 className="text-[15px] font-semibold text-[var(--app-text-primary)]">{th ? "Top สาขา — อัตราการเติบโต" : "Top stores — growth rate"}</h4>
-            <p className="mt-1 mb-5 text-xs text-[var(--app-text-secondary)]">{th ? "วัดเทียบกับฐานผู้ติดตามต้นช่วง เฉพาะสาขาที่เปรียบเทียบได้" : "Growth relative to the starting base for comparable stores"}</p>
+            <h4 className="text-[15px] font-semibold text-[var(--app-text-primary)]">{choose("สาขาที่มีอัตราการเติบโตสูงสุด", "Top stores — growth rate", "增长率最高的门店")}</h4>
+            <p className="mt-1 mb-5 text-xs text-[var(--app-text-secondary)]">{choose("วัดเทียบกับฐานผู้ติดตามต้นช่วง เฉพาะสาขาที่เปรียบเทียบได้", "Growth relative to the starting base for comparable stores", "以期初关注者为基数计算，仅统计可比较门店")}</p>
             <HorizontalBars data={topGrowthPct} tone="green" emptyText={noComparable} />
           </div>
           <div className="rounded-[18px] border border-[var(--app-border)] bg-[var(--app-surface)] p-5 shadow-xs">
-            <h4 className="text-[15px] font-semibold text-[var(--app-text-primary)]">{th ? "Top สาขา — อัตราบล็อกสูงสุด" : "Highest block-rate stores"}</h4>
-            <p className="mt-1 mb-5 text-xs text-[var(--app-text-secondary)]">{th ? "หา LINE OA ที่ควรทบทวนเนื้อหาหรือความถี่การส่ง (เฉพาะสาขาที่มีข้อมูล)" : "Accounts that may need content or frequency review (available data only)"}</p>
+            <h4 className="text-[15px] font-semibold text-[var(--app-text-primary)]">{choose("สาขาที่มีอัตราบล็อกสูงสุด", "Highest block-rate stores", "门店屏蔽率最高")}</h4>
+            <p className="mt-1 mb-5 text-xs text-[var(--app-text-secondary)]">{choose("ค้นหา LINE OA ที่ควรทบทวนเนื้อหาหรือความถี่การส่ง (เฉพาะสาขาที่มีข้อมูล)", "Accounts that may need content or frequency review (available data only)", "找出可能需要复查内容或发送频率的账号（仅统计有数据的门店）")}</p>
             <HorizontalBars data={topBlockPct} tone="red" emptyText={noComparable} />
           </div>
         </div>

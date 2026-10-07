@@ -236,7 +236,7 @@ export function GreetingMessageBuilder({
             <button type="button" onClick={handleAddImage} className="w-full text-left px-3 py-2 hover:bg-gray-100 flex items-center gap-2 text-gray-800"><span>🖼️</span><span>{t.image}</span></button>
             <button type="button" onClick={handleAddRichMessage} className="w-full text-left px-3 py-2 hover:bg-gray-100 flex items-center gap-2 text-gray-800"><span className="inline-flex h-5 min-w-5 items-center justify-center rounded border border-gray-300 px-1 text-[9px] font-bold">RM</span><span>Rich Message</span></button>
             <div className="my-1 border-t border-gray-100" />
-            <a href="/rich-messages" target="_blank" rel="noreferrer" className="block px-3 py-2 font-medium text-[#06a947] hover:bg-emerald-50">จัดการคลัง Rich Message ↗</a>
+            <a href="/rich-messages" target="_blank" rel="noreferrer" className="block px-3 py-2 font-medium text-[#06a947] hover:bg-emerald-50">{t.manageRichMessageLibrary}</a>
           </div>
         )}
       </div>

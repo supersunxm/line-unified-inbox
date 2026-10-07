@@ -123,7 +123,7 @@ export function ContextSidebar({
           </label>
         </div>
 
-        <nav aria-label="Conversation filters" className="space-y-0.5">
+        <nav aria-label={text.conversationFilters} className="space-y-0.5">
           <button
             type="button"
             onClick={() => selectSidebarView("all")}
@@ -234,10 +234,10 @@ export function ContextSidebar({
           >
             <span className="min-w-0 flex-1 truncate font-medium">{text.allStores || "ร้านค้าทั้งหมด"}</span>
             <div className="ml-2 flex items-center gap-1 shrink-0 font-tabular">
-              <span className="rounded-[var(--app-radius-xs)] bg-[var(--app-danger-soft)] text-[var(--app-danger)] px-1.5 py-0.5 text-[10px] font-medium" title="Not Replied">
+              <span className="rounded-[var(--app-radius-xs)] bg-[var(--app-danger-soft)] text-[var(--app-danger)] px-1.5 py-0.5 text-[10px] font-medium" title={text.notReplied}>
                 {overview.notReplied}
               </span>
-              <span className="rounded-[var(--app-radius-xs)] bg-[var(--app-success-soft)] text-[var(--app-success)] px-1.5 py-0.5 text-[10px] font-medium" title="Replied">
+              <span className="rounded-[var(--app-radius-xs)] bg-[var(--app-success-soft)] text-[var(--app-success)] px-1.5 py-0.5 text-[10px] font-medium" title={text.replied}>
                 {overview.replied}
               </span>
             </div>
@@ -271,10 +271,10 @@ export function ContextSidebar({
                       {getStoreDisplayName(store.name)}
                     </span>
                     <div className="ml-2 flex items-center gap-1 shrink-0 font-tabular">
-                      <span className="rounded-[var(--app-radius-xs)] bg-[var(--app-danger-soft)] text-[var(--app-danger)] px-1.5 py-0.5 text-[10px] font-medium" title="Not Replied">
+                      <span className="rounded-[var(--app-radius-xs)] bg-[var(--app-danger-soft)] text-[var(--app-danger)] px-1.5 py-0.5 text-[10px] font-medium" title={text.notReplied}>
                         {counts.notReplied}
                       </span>
-                      <span className="rounded-[var(--app-radius-xs)] bg-[var(--app-success-soft)] text-[var(--app-success)] px-1.5 py-0.5 text-[10px] font-medium" title="Replied">
+                      <span className="rounded-[var(--app-radius-xs)] bg-[var(--app-success-soft)] text-[var(--app-success)] px-1.5 py-0.5 text-[10px] font-medium" title={text.replied}>
                         {counts.replied}
                       </span>
                     </div>
@@ -292,7 +292,7 @@ export function ContextSidebar({
                         {riskVariant === "danger" ? "🔥" : "⏱"}
                       </span>
                       <span>
-                        Waiting {formatWaitingDuration(waitingMins)}
+                        {text.waitingStatusLabel} {formatWaitingDuration(waitingMins)}
                       </span>
                     </div>
                   )}
@@ -306,8 +306,8 @@ export function ContextSidebar({
                         e.stopPropagation();
                         setActiveMenuStoreId(isMenuOpen ? null : store.id);
                       }}
-                      title="Store bulk actions"
-                      aria-label={`Bulk actions for ${getStoreDisplayName(store.name)}`}
+                      title={text.storeBulkActions}
+                      aria-label={text.bulkActionsFor.replace("{storeName}", getStoreDisplayName(store.name))}
                       className="opacity-0 group-hover:opacity-100 focus:opacity-100 rounded px-1 py-0.5 text-xs text-[var(--app-text-tertiary)] hover:text-[var(--app-text-primary)] bg-[var(--app-surface)]/90 backdrop-blur-xs border border-[var(--app-border)] shadow-2xs transition-opacity"
                     >
                       ⋯
@@ -337,7 +337,7 @@ export function ContextSidebar({
                           }}
                           className="w-full text-left px-3 py-1.5 hover:bg-[var(--app-success-soft)] text-[var(--app-success)] disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-between text-xs transition-colors"
                         >
-                          <span>🟢 ตอบแล้วทั้งหมด</span>
+                          <span>{text.markAllReplied}</span>
                           <span className="font-semibold font-tabular">({pendingCount})</span>
                         </button>
 
@@ -356,7 +356,7 @@ export function ContextSidebar({
                           }}
                           className="w-full text-left px-3 py-1.5 hover:bg-[#f3e8ff] dark:hover:bg-[#2b1c40]/60 text-[#8e44ec] dark:text-[#d8b4fe] disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-between text-xs transition-colors"
                         >
-                          <span>🟣 แจ้ง BM ทั้งหมด</span>
+                          <span>{text.notifyBmAll}</span>
                           <span className="font-semibold font-tabular">({counts.notReplied})</span>
                         </button>
 
@@ -375,7 +375,7 @@ export function ContextSidebar({
                           }}
                           className="w-full text-left px-3 py-1.5 hover:bg-[var(--app-surface-hover)] text-[var(--app-text-secondary)] disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-between text-xs transition-colors"
                         >
-                          <span>⚪ รีเซ็ตเป็นยังไม่ตอบ</span>
+                          <span>{text.resetAllNotReplied}</span>
                           <span className="font-semibold font-tabular">({counts.notifiedBm + counts.replied})</span>
                         </button>
                       </div>
@@ -393,7 +393,7 @@ export function ContextSidebar({
                 disabled={safeStorePage <= 1}
                 onClick={() => setStorePage((p) => Math.max(1, p - 1))}
                 className="rounded-[var(--app-radius-sm)] px-2 py-0.5 border border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-text-primary)] disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[var(--app-surface-hover)] text-xs"
-                aria-label="Previous stores page"
+                aria-label={text.previousStoresPage}
               >
                 ‹
               </button>
@@ -405,7 +405,7 @@ export function ContextSidebar({
                 disabled={safeStorePage >= totalStorePages}
                 onClick={() => setStorePage((p) => Math.min(totalStorePages, p + 1))}
                 className="rounded-[var(--app-radius-sm)] px-2 py-0.5 border border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-text-primary)] disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[var(--app-surface-hover)] text-xs"
-                aria-label="Next stores page"
+                aria-label={text.nextStoresPage}
               >
                 ›
               </button>

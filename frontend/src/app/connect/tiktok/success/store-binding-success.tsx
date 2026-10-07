@@ -45,6 +45,8 @@ const copy = {
   th: {
     title: "TikTok เชื่อมต่อสำเร็จ",
     subtitle: "บัญชีของคุณเชื่อมต่อกับ OPPO Brand Shop แล้ว",
+    storeIdLabel: "รหัสสาขา:",
+    associationError: "อัปเดตการเชื่อมโยงสาขาไม่สำเร็จ โปรดลองอีกครั้ง",
     followers: "ผู้ติดตาม",
     following: "กำลังติดตาม",
     likes: "ยอดถูกใจทั้งหมด",
@@ -72,6 +74,8 @@ const copy = {
   en: {
     title: "TikTok Connected Successfully",
     subtitle: "Your account is now connected to OPPO Brand Shop",
+    storeIdLabel: "Store ID:",
+    associationError: "Unable to update store association. Please try again.",
     followers: "Followers",
     following: "Following",
     likes: "Total Likes",
@@ -99,6 +103,8 @@ const copy = {
   zh: {
     title: "TikTok 连接成功",
     subtitle: "您的账户已连接到 OPPO Brand Shop",
+    storeIdLabel: "门店 ID：",
+    associationError: "无法更新门店关联，请重试。",
     followers: "关注者",
     following: "正在关注",
     likes: "总点赞",
@@ -125,12 +131,12 @@ const copy = {
   },
 };
 
-function StoreCard({ store }: { store: StoreSummary }) {
+function StoreCard({ store, storeIdLabel }: { store: StoreSummary; storeIdLabel: string }) {
   return (
     <div className="min-w-0">
       <p className="truncate text-sm font-semibold text-slate-900 dark:text-white">{store.storeName}</p>
       <div className="mt-1 flex flex-wrap gap-x-2 gap-y-1 text-[11px] text-slate-500 dark:text-slate-400">
-        {store.externalStoreId && <span>Store ID: {store.externalStoreId}</span>}
+        {store.externalStoreId && <span>{storeIdLabel} {store.externalStoreId}</span>}
         {store.province && <span>{store.province}</span>}
         {store.tiktokUsername && <span>@{store.tiktokUsername.replace(/^@+/, "")}</span>}
       </div>
@@ -301,14 +307,14 @@ export function StoreBindingSuccess({
             ) : context?.pendingRequest ? (
               <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-900/50 dark:bg-amber-950/20">
                 <p className="text-sm font-bold text-amber-800 dark:text-amber-300">{t.pendingTitle}</p>
-                {context.pendingRequest.store && <div className="mt-2"><StoreCard store={context.pendingRequest.store} /></div>}
+                {context.pendingRequest.store && <div className="mt-2"><StoreCard store={context.pendingRequest.store} storeIdLabel={t.storeIdLabel} /></div>}
                 <p className="mt-2 text-xs text-amber-700/80 dark:text-amber-300/80">{t.pendingDesc}</p>
               </div>
             ) : context?.currentStore && !chooserOpen ? (
               <div className="mt-3">
                 <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-900/50 dark:bg-emerald-950/20">
                   <p className="mb-2 text-xs font-semibold text-emerald-700 dark:text-emerald-300">✓ {t.connected}</p>
-                  <StoreCard store={context.currentStore} />
+                  <StoreCard store={context.currentStore} storeIdLabel={t.storeIdLabel} />
                 </div>
                 <div className="mt-3 grid gap-2 sm:grid-cols-2">
                   <Link href="/connect/tiktok/analytics" className="inline-flex items-center justify-center rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-semibold text-white hover:bg-slate-800 dark:bg-[var(--app-accent)] dark:hover:bg-[var(--app-accent-hover)]">{t.viewAnalytics}</Link>
@@ -318,7 +324,7 @@ export function StoreBindingSuccess({
             ) : context?.suggestedStore && !chooserOpen ? (
               <div className="mt-3">
                 <p className="mb-2 text-xs text-slate-500 dark:text-slate-400">{t.found}</p>
-                <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-900/50 dark:bg-emerald-950/20"><StoreCard store={context.suggestedStore} /></div>
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-900/50 dark:bg-emerald-950/20"><StoreCard store={context.suggestedStore} storeIdLabel={t.storeIdLabel} /></div>
                 <div className="mt-3 grid gap-2 sm:grid-cols-2">
                   <button type="button" disabled={Boolean(savingStoreId)} onClick={() => void confirmStore(context.suggestedStore!)} className="rounded-xl bg-[var(--app-accent)] px-4 py-2.5 text-xs font-semibold text-white hover:bg-[var(--app-accent-hover)] disabled:opacity-50">{savingStoreId ? t.saving : t.confirm}</button>
                   <button type="button" onClick={() => setChooserOpen(true)} className="rounded-xl border border-slate-300 px-4 py-2.5 text-xs font-semibold hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800">{t.chooseOther}</button>
@@ -331,7 +337,7 @@ export function StoreBindingSuccess({
                 <div className="mt-2 max-h-72 space-y-2 overflow-y-auto">
                   {(context?.options || []).map((store) => (
                     <div key={store.id} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 p-3 dark:border-slate-800">
-                      <StoreCard store={store} />
+                      <StoreCard store={store} storeIdLabel={t.storeIdLabel} />
                       <button type="button" disabled={Boolean(savingStoreId)} onClick={() => void requestStore(store)} className="shrink-0 rounded-lg bg-slate-900 px-3 py-2 text-[11px] font-semibold text-white disabled:opacity-50 dark:bg-[var(--app-accent)]">{savingStoreId === store.id ? t.saving : t.request}</button>
                     </div>
                   ))}
@@ -341,7 +347,7 @@ export function StoreBindingSuccess({
               </div>
             )}
 
-            {error && <p className="mt-3 text-xs font-medium text-red-600">Unable to update store association. Please try again.</p>}
+            {error && <p className="mt-3 text-xs font-medium text-red-600">{t.associationError}</p>}
             <p className="mt-3 text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">{t.hqReview}</p>
           </div>
 

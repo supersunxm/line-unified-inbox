@@ -1,10 +1,13 @@
 "use client";
 
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useSyncExternalStore, type ReactNode } from "react";
 
-export type AppLanguage = "th" | "en" | "zh";
+import type { AppLanguage } from "./language-utils";
+export { pickLanguageText } from "./language-utils";
+export type { AppLanguage } from "./language-utils";
 
 const LANGUAGE_STORAGE_KEY = "oppo-line-oa-language";
+let transientLanguage: AppLanguage | null = null;
 const LEGACY_UI_PREFERENCES_KEY = "oppo-line-oa-monitor-ui-preferences";
 
 function isLanguage(value: unknown): value is AppLanguage {
@@ -24,6 +27,7 @@ function readLegacyWorkspaceLanguage(): AppLanguage | null {
 
 function readInitialLanguage(): AppLanguage {
   if (typeof window === "undefined") return "th";
+  if (transientLanguage) return transientLanguage;
   try {
     const saved = window.localStorage.getItem(LANGUAGE_STORAGE_KEY);
     if (isLanguage(saved)) return saved;
@@ -48,7 +52,8 @@ function persistLanguage(language: AppLanguage) {
       window.localStorage.setItem(LEGACY_UI_PREFERENCES_KEY, JSON.stringify({ ...legacy, language }));
     }
   } catch {
-    // Storage can be unavailable in privacy-restricted browsers.
+    // Keep switching available when browser storage is restricted.
+    transientLanguage = language;
   }
 }
 
@@ -59,32 +64,39 @@ type LanguageContextValue = {
 
 const LanguageContext = createContext<LanguageContextValue | null>(null);
 
+const LANGUAGE_CHANGE_EVENT = "oppo-line-oa-language-change";
+
+function subscribeLanguage(onChange: () => void) {
+  const syncFromWorkspace = () => {
+    const legacyLanguage = readLegacyWorkspaceLanguage();
+    if (!transientLanguage && legacyLanguage && legacyLanguage !== readInitialLanguage()) persistLanguage(legacyLanguage);
+    onChange();
+  };
+  const timer = window.setInterval(syncFromWorkspace, 500);
+  window.addEventListener("focus", syncFromWorkspace);
+  window.addEventListener("storage", syncFromWorkspace);
+  window.addEventListener(LANGUAGE_CHANGE_EVENT, onChange);
+  return () => {
+    window.clearInterval(timer);
+    window.removeEventListener("focus", syncFromWorkspace);
+    window.removeEventListener("storage", syncFromWorkspace);
+    window.removeEventListener(LANGUAGE_CHANGE_EVENT, onChange);
+  };
+}
+
+function setStoredLanguage(language: AppLanguage) {
+  persistLanguage(language);
+  window.dispatchEvent(new Event(LANGUAGE_CHANGE_EVENT));
+}
+
 export function LanguageProvider({ children }: { children: ReactNode }) {
-  const [language, setLanguage] = useState<AppLanguage>("th");
+  const language = useSyncExternalStore(subscribeLanguage, readInitialLanguage, () => "th" as AppLanguage);
 
   useEffect(() => {
-    setLanguage(readInitialLanguage());
-  }, []);
-
-  useEffect(() => {
-    persistLanguage(language);
     document.documentElement.lang = language === "zh" ? "zh-CN" : language;
   }, [language]);
 
-  useEffect(() => {
-    const syncFromWorkspace = () => {
-      const workspaceLanguage = readLegacyWorkspaceLanguage();
-      if (workspaceLanguage) setLanguage((current) => current === workspaceLanguage ? current : workspaceLanguage);
-    };
-    const timer = window.setInterval(syncFromWorkspace, 500);
-    window.addEventListener("focus", syncFromWorkspace);
-    return () => {
-      window.clearInterval(timer);
-      window.removeEventListener("focus", syncFromWorkspace);
-    };
-  }, []);
-
-  const value = useMemo(() => ({ language, setLanguage }), [language]);
+  const value = useMemo(() => ({ language, setLanguage: setStoredLanguage }), [language]);
   return <LanguageContext.Provider value={value}>{children}</LanguageContext.Provider>;
 }
 
@@ -111,8 +123,4 @@ export function LanguageControl({ className = "" }: { className?: string }) {
       ))}
     </div>
   );
-}
-
-export function pickLanguageText<T>(language: AppLanguage, translations: Record<AppLanguage, T>): T {
-  return translations[language];
 }

@@ -38,13 +38,13 @@ export function DailyFollowerGrowthExportControl({ language = "en" }: { language
         setStores(Array.from(map.values()).sort((a, b) => a.storeName.localeCompare(b.storeName)));
       })
       .catch((err) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : "Unable to load stores");
+        if (!cancelled) setError(err instanceof Error ? err.message : language === "th" ? "โหลดสาขาไม่สำเร็จ" : language === "zh" ? "门店加载失败" : "Unable to load stores");
       })
       .finally(() => {
         if (!cancelled) setLoadingStores(false);
       });
     return () => { cancelled = true; };
-  }, [open, dateFrom, dateTo]);
+  }, [open, dateFrom, dateTo, language]);
 
   const filteredStores = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -74,6 +74,26 @@ export function DailyFollowerGrowthExportControl({ language = "en" }: { language
         download: "ดาวน์โหลด Excel",
         downloading: "กำลังสร้างไฟล์...",
         loading: "กำลังโหลดสาขา...",
+        errorLoadingStores: "โหลดสาขาไม่สำเร็จ",
+        exportFailed: "สร้างไฟล์ไม่สำเร็จ",
+      }
+    : language === "zh"
+    ? {
+        button: "下载 LINE OA 每日数据",
+        title: "下载 LINE OA 每日关注者增长",
+        desc: "选择日期范围和门店。每个单元格表示该日关注者的增减数量。",
+        from: "开始日期",
+        to: "结束日期",
+        stores: "门店",
+        all: "所有门店",
+        search: "搜索门店……",
+        selected: (count: number) => count ? `已选择 ${count} 家门店` : "未选择门店 = 所有门店",
+        cancel: "取消",
+        download: "下载 Excel",
+        downloading: "正在准备文件……",
+        loading: "正在加载门店……",
+        errorLoadingStores: "门店加载失败",
+        exportFailed: "文件生成失败",
       }
     : {
         button: "Download Daily LINE OA",
@@ -89,6 +109,8 @@ export function DailyFollowerGrowthExportControl({ language = "en" }: { language
         download: "Download Excel",
         downloading: "Preparing file...",
         loading: "Loading stores...",
+        errorLoadingStores: "Unable to load stores",
+        exportFailed: "Export failed",
       };
 
   const handleDownload = async () => {
@@ -98,7 +120,7 @@ export function DailyFollowerGrowthExportControl({ language = "en" }: { language
       await downloadDailyFollowerGrowthWorkbook({ dateFrom, dateTo, selectedLineOaIds: selectedIds, language });
       setOpen(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Export failed");
+      setError(err instanceof Error ? err.message : text.exportFailed);
     } finally {
       setDownloading(false);
     }

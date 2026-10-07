@@ -19,8 +19,8 @@ import {
 import type { AuthUser } from "@/lib/authorization";
 import { useAppLanguage } from "../../language";
 import {
-  BROWSER_BUSY_HELP_TEXT,
-  BROWSER_STATUS_HELP_TEXT,
+  getBrowserBusyHelpText,
+  getBrowserStatusHelpText,
   getBrowserOperationLabel,
   getLineChatWorkUiHealth,
 } from "./line-chat-health-status";
@@ -86,23 +86,25 @@ const isRetryEligible = (failure: LineChatSafeJobFailure): boolean =>
 const failureStateLabel = (failure: LineChatSafeJobFailure): string =>
   failure.resolutionState === "ACTIVE" ? actionLabel(failure.recommendedAction) : "Historical / resolved";
 
-function BrowserStatus({ session }: { session: LineChatOperationsSession }) {
+function BrowserStatus({ session, language }: { session: LineChatOperationsSession; language: "th" | "en" | "zh" }) {
   const operationLabel = getBrowserOperationLabel(session.browserOperationKind);
   const isBusy = session.browserState === "BUSY";
+  const statusHelp = getBrowserStatusHelpText(language);
+  const busyHelp = getBrowserBusyHelpText(language);
 
   return (
     <div
       className="space-y-1"
-      title={isBusy ? `${BROWSER_STATUS_HELP_TEXT}\n${BROWSER_BUSY_HELP_TEXT}` : BROWSER_STATUS_HELP_TEXT}
+      title={isBusy ? `${statusHelp}\n${busyHelp}` : statusHelp}
     >
-      <div className="text-xs text-[var(--app-text-tertiary)]">Browser</div>
+      <div className="text-xs text-[var(--app-text-tertiary)]">{language === "th" ? "เบราว์เซอร์" : language === "zh" ? "浏览器" : "Browser"}</div>
       <Badge variant={session.liveMirror?.browser === "RUNNING" ? "success" : session.liveMirror?.browser === "START_FAILED" ? "danger" : "neutral"} dot>
         {session.liveMirror?.browser ?? "UNKNOWN"}
       </Badge>
       {operationLabel && <div className="text-xs text-[var(--app-text-secondary)]">{operationLabel}</div>}
-      {isBusy && <div className="text-[11px] text-[var(--app-text-tertiary)]">{BROWSER_BUSY_HELP_TEXT}</div>}
+      {isBusy && <div className="text-[11px] text-[var(--app-text-tertiary)]">{busyHelp}</div>}
       {isBusy && session.browserBusyUntil && (
-        <div className="text-[11px] text-[var(--app-text-tertiary)]">ถึง {formatDate(session.browserBusyUntil)}</div>
+        <div className="text-[11px] text-[var(--app-text-tertiary)]">{language === "th" ? "ถึง" : language === "zh" ? "截至" : "Until"} {formatDate(session.browserBusyUntil)}</div>
       )}
     </div>
   );
@@ -610,11 +612,10 @@ export function LineChatHealthView() {
             <summary className="cursor-pointer text-sm font-medium">Technical diagnostics — {selected.displayName}</summary>
         <div
           role="note"
-          title={BROWSER_STATUS_HELP_TEXT}
+          title={getBrowserStatusHelpText(language)}
           className="rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-subtle)] p-3 text-xs text-[var(--app-text-secondary)]"
         >
-          <div>สถานะ Session แสดงการเชื่อมต่อ LINE</div>
-          <div>สถานะ Browser แสดงว่า Chromium Profile พร้อมรับงานใหม่หรือกำลังถูกใช้งาน</div>
+          {getBrowserStatusHelpText(language).split("\n").map((label) => <div key={label}>{label}</div>)}
         </div>
           <section aria-label={`${selected.sessionKey} details`} className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
             <Card>
@@ -632,7 +633,7 @@ export function LineChatHealthView() {
                     <div className="mt-1 text-[11px] text-[var(--app-text-tertiary)]">Lifecycle: {selected.status}</div>
                   </div>
                   <div className="rounded-xl border border-[var(--app-border)] p-3">
-                    <BrowserStatus session={selected} />
+                    <BrowserStatus session={selected} language={language} />
                   </div>
                   <div className="rounded-xl border border-[var(--app-border)] p-3">
                     <div className="text-xs text-[var(--app-text-tertiary)]">Health</div>

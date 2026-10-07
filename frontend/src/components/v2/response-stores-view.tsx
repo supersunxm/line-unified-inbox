@@ -1,5 +1,9 @@
 "use client";
 
+import { useAppLanguage } from "@/app/language";
+import { languageLocale } from "@/app/language-utils";
+import { v2Text } from "@/lib/v2/v2-translations";
+
 import Link from "next/link";
 import React, { useEffect, useMemo, useState } from "react";
 import { KpiStrip, SectionCard, Table, TableBody, TableCell, TableEmptyState, TableHead, TableHeader, TableRow } from "@/components/ui";
@@ -9,9 +13,12 @@ import { displayedWait, locationLabel, rateDelta, responseKpis, storeManagerUrlO
 import { responseHref, type ResponseUrlState } from "@/lib/v2/response-url";
 import { useV2Data } from "./v2-data";
 import type { WaitingChat } from "@/lib/v2/response-model";
-import { DailyRateBars, ManagerLink, MiniTrend, NO_DATA_TEXT, RateDelta, WaitLabel, formatRate } from "./v2-ui";
+import { DailyRateBars, ManagerLink, MiniTrend, RateDelta, WaitLabel, formatRate } from "./v2-ui";
 
 export function ResponseKpis() {
+  const { language } = useAppLanguage();
+  const t = v2Text(language);
+
   const data = useV2Data();
   const kpis = responseKpis(data.storeRows);
   const rate = data.totals7d?.rate ?? null;
@@ -23,55 +30,48 @@ export function ResponseKpis() {
       items={[
         {
           id: "follow-today",
-          label: "ร้านที่ต้องตามวันนี้",
-          value: data.waiting.data ? kpis.followTodayStores.toLocaleString("th-TH") : null,
+          label: t("followStores"),
+          value: data.waiting.data ? kpis.followTodayStores.toLocaleString(languageLocale(language)) : null,
           subtext: data.waiting.data
-            ? `จาก ${kpis.followTodayCandidates} ร้านที่มีลูกค้ารอ ≥ ${FOLLOW_UP_THRESHOLD_MINUTES} นาทีตั้งแต่เมื่อวาน 10:00 · แสดงสูงสุด ${FOLLOW_TODAY_LIMIT} ร้าน`
-            : NO_DATA_TEXT,
+            ? t("followCandidates", { count: kpis.followTodayCandidates, minutes: FOLLOW_UP_THRESHOLD_MINUTES, limit: FOLLOW_TODAY_LIMIT })
+            : t("noDataYet"),
         },
         {
           id: "waiting",
-          label: "แชทที่รอคำตอบ",
-          value: kpis.waitingChats.toLocaleString("th-TH"),
-          subtext: `ใน ${kpis.waitingStores} ร้าน จาก ${kpis.storesWithData} ร้านที่มีข้อมูล`,
+          label: t("waitingChats"),
+          value: kpis.waitingChats.toLocaleString(languageLocale(language)),
+          subtext: t("waitingCoverage", { count: kpis.waitingStores, total: kpis.storesWithData }),
         },
         {
           id: "old-backlog",
-          label: `ค้างเกิน ${RECENT_WAIT_WINDOW_DAYS} วัน`,
-          value: data.waiting.data ? kpis.oldBacklogChats.toLocaleString("th-TH") : null,
+          label: t("backlogDays", { days: RECENT_WAIT_WINDOW_DAYS }),
+          value: data.waiting.data ? kpis.oldBacklogChats.toLocaleString(languageLocale(language)) : null,
           subtext: data.waiting.data ? (
             <>
-              ใน {kpis.oldBacklogStores} ร้าน · ไม่นับใน &quot;ตามวันนี้&quot; ·{" "}
-              <Link href={responseHref({ tab: "all", sort: "age" })} className="font-medium text-[var(--app-accent)] hover:underline">ดูเรียงตามอายุ</Link>
+              {t("oldBacklogStores", { count: kpis.oldBacklogStores })} ·{" "}
+              <Link href={responseHref({ tab: "all", sort: "age" })} className="font-medium text-[var(--app-accent)] hover:underline">{t("viewAge")}</Link>
             </>
-          ) : NO_DATA_TEXT,
+          ) : t("noDataYet"),
         },
         {
           id: "rate",
-          label: "ตอบใน 24 ชม. · 7 วัน",
+          label: t("weekRate"),
           value: formatRate(rate) === "—" ? null : formatRate(rate),
           subtext: rate === null
-            ? NO_DATA_TEXT
-            : `เป้า ${RESPONSE_RATE_TARGET_PERCENT}% · 7 วันก่อนหน้า ${formatRate(previous)}${delta === null ? "" : ` (${delta >= 0 ? "+" : "−"}${Math.abs(delta).toFixed(1)} จุด)`}`,
+            ? t("noDataYet")
+            : t("rateComparison", { target: RESPONSE_RATE_TARGET_PERCENT, previous: formatRate(previous), change: delta === null ? "" : ` (${t("points", { value: `${delta >= 0 ? "+" : "−"}${Math.abs(delta).toFixed(1)}` })})` }),
         },
         {
           id: "no-data",
-          label: "ร้านที่ไม่มีข้อมูล",
-          value: data.storesWithData ? kpis.noDataStores.toLocaleString("th-TH") : null,
-          subtext: data.storesWithData ? `จาก ${kpis.totalStores} ร้าน · ระบบไม่ได้เก็บแชท ไม่นับในตัวเลขอื่น` : NO_DATA_TEXT,
+          label: t("noDataStores"),
+          value: data.storesWithData ? kpis.noDataStores.toLocaleString(languageLocale(language)) : null,
+          subtext: data.storesWithData ? t("noDataCoverage", { count: kpis.totalStores }) : t("noDataYet"),
         },
       ]}
     />
   );
 }
 
-const TABLE_TITLES: Record<StoreSort, string> = {
-  follow: "ร้านที่ต้องตามวันนี้ (แชทเกินเกณฑ์มากสุดก่อน)",
-  recent: "ร้านเรียงตามแชทที่รอตั้งแต่เมื่อวาน",
-  wait: "ร้านเรียงตามเวลารอนานสุด",
-  rate: "ร้านเรียงตามอัตราตอบใน 24 ชม. (ต่ำสุดก่อน)",
-  age: "ร้านเรียงตามแชทที่ค้างนานสุด",
-};
 
 /** ตามวันนี้ measures waits since yesterday 10:00; every other tab uses the last 7 days. */
 export function waitScopeForTab(tab: ResponseUrlState["tab"]): WaitScope {
@@ -79,24 +79,35 @@ export function waitScopeForTab(tab: ResponseUrlState["tab"]): WaitScope {
 }
 
 function StoreTable({ rows, selectedStoreId, onSelect, tab, sort }: { rows: StoreRow[]; selectedStoreId: string | null; onSelect: (storeId: string) => void; tab: ResponseUrlState["tab"]; sort: StoreSort | null }) {
+  const { language } = useAppLanguage();
+  const t = v2Text(language);
+
+const TABLE_TITLES: Record<StoreSort, string> = {
+  follow: t("tableFollow"),
+  recent: t("tableRecent"),
+  wait: t("tableWait"),
+  rate: t("tableRate"),
+  age: t("tableAge"),
+};
+
   const scope = waitScopeForTab(tab);
   const data = useV2Data();
   const trendLoading = data.daily.loading && !data.daily.data;
   const emptyMessage = tab === "follow-today"
-    ? `ไม่มีร้านที่ลูกค้ารอเกิน ${FOLLOW_UP_THRESHOLD_MINUTES} นาทีตั้งแต่เมื่อวาน 10:00`
-    : tab === "no-data" ? "ทุกร้านมีข้อมูลแชท" : "ไม่มีร้านที่มีข้อมูล";
+    ? t("noOverdueStores", { minutes: FOLLOW_UP_THRESHOLD_MINUTES })
+    : tab === "no-data" ? t("allHaveData") : t("noneHaveData");
   return (
-    <SectionCard title={TABLE_TITLES[sort ?? "recent"]} meta={`${rows.length} ร้าน`} bodyPadding="none">
+    <SectionCard title={TABLE_TITLES[sort ?? "recent"]} meta={t("storeCount", { count: rows.length })} bodyPadding="none">
       <div className="overflow-x-auto">
         <Table>
           <TableHeader>
             <tr>
-              <TableHead>ร้าน</TableHead>
-              <TableHead align="right">รอตอบ</TableHead>
-              <TableHead align="right">รอตอบ (ตั้งแต่เมื่อวาน)</TableHead>
-              <TableHead>{scope === "window" ? "รอนานสุด (ตั้งแต่เมื่อวาน)" : "รอนานสุด (7 วัน)"}</TableHead>
-              <TableHead>ตอบใน 24 ชม. (7 วัน)</TableHead>
-              <TableHead>แนวโน้ม 7 วัน</TableHead>
+              <TableHead>{t("store")}</TableHead>
+              <TableHead align="right">{t("waiting")}</TableHead>
+              <TableHead align="right">{t("waitingYesterday")}</TableHead>
+              <TableHead>{scope === "window" ? t("waitYesterday") : t("waitWeek")}</TableHead>
+              <TableHead>{t("rateWeek")}</TableHead>
+              <TableHead>{t("trendWeek")}</TableHead>
             </tr>
           </TableHeader>
           <TableBody>
@@ -113,18 +124,18 @@ function StoreTable({ rows, selectedStoreId, onSelect, tab, sort }: { rows: Stor
                     <span className="block truncate text-[var(--app-text-primary)]">{row.storeName}</span>
                   </button>
                   {!row.hasData ? (
-                    <div className="text-xs text-[var(--app-text-secondary)]">ระบบไม่ได้เก็บแชทของร้านนี้</div>
+                    <div className="text-xs text-[var(--app-text-secondary)]">{t("notCollectingStore")}</div>
                   ) : locationLabel(row) ? (
                     <div title={locationLabel(row) ?? undefined} className="truncate text-xs text-[var(--app-text-secondary)]">{locationLabel(row)}</div>
                   ) : null}
                 </TableCell>
                 <TableCell align="right" numeric>
-                  {row.hasData ? row.waitingCount.toLocaleString("th-TH") : "—"}
-                  {row.hasData && row.oldWaitingCount > 0 && <div className="whitespace-nowrap text-xs font-normal text-[var(--app-text-secondary)]">ค้างเกิน {RECENT_WAIT_WINDOW_DAYS} วัน {row.oldWaitingCount}</div>}
+                  {row.hasData ? row.waitingCount.toLocaleString(languageLocale(language)) : "—"}
+                  {row.hasData && row.oldWaitingCount > 0 && <div className="whitespace-nowrap text-xs font-normal text-[var(--app-text-secondary)]">{t("oldCount", { days: RECENT_WAIT_WINDOW_DAYS, count: row.oldWaitingCount })}</div>}
                 </TableCell>
                 <TableCell align="right" numeric data-v2-since-yesterday={row.storeId}>
-                  {row.hasData ? row.sinceYesterdayCount.toLocaleString("th-TH") : "—"}
-                  {row.hasData && row.followTodayCount > 0 && <div className="whitespace-nowrap text-xs font-normal text-[var(--app-danger)]">เกิน {FOLLOW_UP_THRESHOLD_MINUTES} นาที {row.followTodayCount}</div>}
+                  {row.hasData ? row.sinceYesterdayCount.toLocaleString(languageLocale(language)) : "—"}
+                  {row.hasData && row.followTodayCount > 0 && <div className="whitespace-nowrap text-xs font-normal text-[var(--app-danger)]">{t("overdueCount", { minutes: FOLLOW_UP_THRESHOLD_MINUTES, count: row.followTodayCount })}</div>}
                 </TableCell>
                 <TableCell>{row.hasData ? <WaitLabel compact businessMinutes={displayedWait(row, scope).minutes} waitingSince={displayedWait(row, scope).waitingSince} now={data.now} /> : "—"}</TableCell>
                 <TableCell>
@@ -177,6 +188,9 @@ function WaitingChatList({ chats, storeId, now, onOpenConversation }: { chats: W
 }
 
 function StoreDetail({ row, scope, onOpenConversation }: { row: StoreRow | null; scope: WaitScope; onOpenConversation: (storeId: string, conversationId: string) => void }) {
+  const { language } = useAppLanguage();
+  const t = v2Text(language);
+
   const data = useV2Data();
   const managerUrl = useStoreManagerUrl(row);
   const chats = useMemo(() => (row ? data.waitingChats.filter((chat) => chat.storeId === row.storeId) : []), [data.waitingChats, row]);
@@ -186,8 +200,8 @@ function StoreDetail({ row, scope, onOpenConversation }: { row: StoreRow | null;
   const olderChats = chats.filter((chat) => Date.parse(chat.waitingSince) < windowStart);
   if (!row) {
     return (
-      <SectionCard title="รายละเอียดร้าน">
-        <p className="text-sm text-[var(--app-text-secondary)]">เลือกร้านจากตารางเพื่อดูแชทที่รอและแนวโน้ม 7 วัน</p>
+      <SectionCard title={t("storeDetails")}>
+        <p className="text-sm text-[var(--app-text-secondary)]">{t("selectStoreHelp")}</p>
       </SectionCard>
     );
   }
@@ -195,42 +209,42 @@ function StoreDetail({ row, scope, onOpenConversation }: { row: StoreRow | null;
     <SectionCard title={row.storeName} meta={locationLabel(row) ?? undefined}>
       <div className="space-y-5">
         {managerUrl && <ManagerLink href={managerUrl} />}
-        {!row.hasData && <p className="text-sm text-[var(--app-text-secondary)]">ระบบไม่ได้เก็บแชทของร้านนี้ จึงไม่นับในตัวเลขใด ๆ ดูสถานะที่ LINE Chat Health</p>}
+        {!row.hasData && <p className="text-sm text-[var(--app-text-secondary)]">{t("notCollectingHelp")}</p>}
         <dl className="grid grid-cols-3 gap-3">
           <div className="rounded-[var(--app-radius-md)] bg-[var(--app-surface-subtle)] p-3">
-            <dt className="text-xs text-[var(--app-text-secondary)]">รอตอบ</dt>
+            <dt className="text-xs text-[var(--app-text-secondary)]">{t("waiting")}</dt>
             <dd className="mt-1 text-xl font-semibold tabular-nums">{row.hasData ? row.waitingCount : "—"}</dd>
           </div>
           <div className="rounded-[var(--app-radius-md)] bg-[var(--app-surface-subtle)] p-3">
-            <dt className="text-xs text-[var(--app-text-secondary)]">{scope === "window" ? "รอนานสุด (ตั้งแต่เมื่อวาน)" : "รอนานสุด (7 วัน)"}</dt>
-            <dd className="mt-1 text-xl font-semibold tabular-nums">{row.hasData && displayedWait(row, scope).minutes !== null ? formatWaitMinutes(displayedWait(row, scope).minutes ?? 0) : "—"}</dd>
+            <dt className="text-xs text-[var(--app-text-secondary)]">{scope === "window" ? t("waitYesterday") : t("waitWeek")}</dt>
+            <dd className="mt-1 text-xl font-semibold tabular-nums">{row.hasData && displayedWait(row, scope).minutes !== null ? formatWaitMinutes(displayedWait(row, scope).minutes ?? 0, language) : "—"}</dd>
           </div>
           <div className="rounded-[var(--app-radius-md)] bg-[var(--app-surface-subtle)] p-3">
-            <dt className="text-xs text-[var(--app-text-secondary)]">ตอบใน 24 ชม.</dt>
+            <dt className="text-xs text-[var(--app-text-secondary)]">{t("rate24Label")}</dt>
             <dd className="mt-1 text-xl font-semibold tabular-nums">{row.hasData ? formatRate(row.rate7d) : "—"}</dd>
             {row.hasData && <dd><RateDelta delta={row.rateDelta} /></dd>}
           </div>
         </dl>
         {row.hasData && (
           <div>
-            <h3 className="mb-2 text-sm font-semibold">ตอบใน 24 ชม. รายวัน</h3>
+            <h3 className="mb-2 text-sm font-semibold">{t("dailyRateTitle")}</h3>
             <DailyRateBars days={data.dailyDays} values={row.trend} target={RESPONSE_RATE_TARGET_PERCENT} loading={data.daily.loading && !data.daily.data} />
           </div>
         )}
         {row.hasData && (
           <div>
-            <h3 className="mb-2 text-sm font-semibold">แชทที่รอคำตอบ ({RECENT_WAIT_WINDOW_DAYS} วันล่าสุด)</h3>
-            {row.oldWaitingCount > 0 && <p className="mb-2 text-xs text-[var(--app-text-secondary)]">และค้างเกิน {RECENT_WAIT_WINDOW_DAYS} วันอีก {row.oldWaitingCount} แชท (ไม่นับใน &quot;ตามวันนี้&quot;)</p>}
+            <h3 className="mb-2 text-sm font-semibold">{t("waitingDays", { days: RECENT_WAIT_WINDOW_DAYS })}</h3>
+            {row.oldWaitingCount > 0 && <p className="mb-2 text-xs text-[var(--app-text-secondary)]">{t("additionalBacklog", { days: RECENT_WAIT_WINDOW_DAYS, count: row.oldWaitingCount })}</p>}
             {chats.length === 0 ? (
-              <p className="text-sm text-[var(--app-text-secondary)]">{row.waitingCount > 0 ? `ไม่มีแชทที่รอภายใน ${RECENT_WAIT_WINDOW_DAYS} วัน` : "ไม่มีแชทที่รอคำตอบ"}</p>
+              <p className="text-sm text-[var(--app-text-secondary)]">{row.waitingCount > 0 ? t("noWaitingDays", { days: RECENT_WAIT_WINDOW_DAYS }) : t("noWaiting")}</p>
             ) : (
               <>
                 {recentChats.length > 0
                   ? <WaitingChatList chats={recentChats} storeId={row.storeId} now={data.now} onOpenConversation={onOpenConversation} />
-                  : <p className="text-sm text-[var(--app-text-secondary)]">ไม่มีแชทที่รอตั้งแต่เมื่อวาน 10:00</p>}
+                  : <p className="text-sm text-[var(--app-text-secondary)]">{t("noWaitingYesterday")}</p>}
                 {olderChats.length > 0 && (
                   <details data-v2-older-chats className="mt-2 rounded-[var(--app-radius-md)] border border-[var(--app-border-subtle)]">
-                    <summary className="cursor-pointer px-3 py-2 text-sm font-medium text-[var(--app-text-secondary)]">เก่ากว่าเมื่อวาน ({olderChats.length})</summary>
+                    <summary className="cursor-pointer px-3 py-2 text-sm font-medium text-[var(--app-text-secondary)]">{t("olderChats", { count: olderChats.length })}</summary>
                     <div className="px-3"><WaitingChatList chats={olderChats} storeId={row.storeId} now={data.now} onOpenConversation={onOpenConversation} /></div>
                   </details>
                 )}

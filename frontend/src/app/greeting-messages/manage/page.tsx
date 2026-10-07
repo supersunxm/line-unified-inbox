@@ -1,7 +1,9 @@
 "use client";
 
 import { AuthorizedWorkspace } from "../../authorized-workspace";
+import { LegacyI18nBoundary } from "../../legacy-i18n-boundary";
 import { GreetingManagementView } from "../greeting-management-view";
+import { greetingManagementPhrases } from "../greeting-management-i18n";
 
 export default function GreetingManagementPage() {
   return (
@@ -13,7 +15,9 @@ export default function GreetingManagementPage() {
 
       {/* Management content overlays only the workspace content area; the canonical app navigation remains visible. */}
       <div className="greeting-manage-overlay">
-        <GreetingManagementView />
+        <LegacyI18nBoundary phrases={greetingManagementPhrases} showControl={false}>
+          <GreetingManagementView />
+        </LegacyI18nBoundary>
       </div>
 
       <style jsx global>{`

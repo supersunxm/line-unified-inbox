@@ -128,10 +128,7 @@ test("application exposes primary routes with active navigation", () => {
 test("dashboard links to filtered workspaces while root remains public", () => {
   const dashboardCode = readFileSync(new URL("../src/app/dashboard/executive-dashboard-v2.tsx", import.meta.url), "utf8");
   assert.match(dashboardCode, /onOpenStore/);
-  const home = page.slice(
-    page.indexOf("export default function Home"),
-    page.indexOf("export function ApplicationWorkspace"),
-  );
+  const home = page.match(/export default function Home\(\) \{\n  return <PublicLandingPage \/>;\n\}/)?.[0] ?? "";
   assert.match(home, /PublicLandingPage/);
   assert.doesNotMatch(home, /window\.location\.replace/);
 });

@@ -3,6 +3,7 @@ import { DownloadAction } from "@/lib/download-permission";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AuthorizedSection } from "../authorized-workspace";
+import { useAppLanguage } from "../language";
 import { InternalPageShell } from "@/components/shell/internal-page-shell";
 
 type FollowerCoverage = "complete" | "partial" | "missing";
@@ -213,8 +214,9 @@ function currentBangkokMonth() {
   return `${year}-${month}`;
 }
 
-function formatNumber(value: number | null) {
-  return value === null ? "—" : new Intl.NumberFormat("th-TH").format(value);
+function formatNumber(value: number | null, language: "th" | "en" | "zh") {
+  const locale = language === "th" ? "th-TH" : language === "zh" ? "zh-CN" : "en-US";
+  return value === null ? "—" : new Intl.NumberFormat(locale).format(value);
 }
 
 function formatRate(value: number | null) {
@@ -252,6 +254,8 @@ function MetricCard({ label, value, detail }: { label: string; value: string; de
 }
 
 function ReportContent() {
+  const { language } = useAppLanguage();
+  const formatReportNumber = (value: number | null) => formatNumber(value, language);
   const [month, setMonth] = useState(currentBangkokMonth);
   const [report, setReport] = useState<MonthlyOperationsReport | null>(null);
   const [loading, setLoading] = useState(true);
@@ -460,7 +464,7 @@ function ReportContent() {
               disabled={auditing || loading || !report}
               className="h-10 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] px-4 text-sm font-semibold text-[var(--app-text-primary)] disabled:opacity-60"
             >
-              {auditing ? "กำลัง Audit…" : audit ? `Audit ${audit.checks.status}` : "Run KPI Audit"}
+              {auditing ? "กำลัง Audit…" : audit ? <>Audit: {audit.checks.status}</> : "Run KPI Audit"}
             </button>
             <DownloadAction><button
               type="button"
@@ -487,23 +491,23 @@ function ReportContent() {
         {report ? (
           <>
             <section className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              <MetricCard label="ร้านในรายงาน" value={formatNumber(report.scope.stores)} detail={`${formatNumber(report.scope.lineAccounts)} LINE OA`} />
-              <MetricCard label="ข้อความลูกค้าเดือนนี้" value={formatNumber(report.totals.inboundMessages)} detail={`ตั้งแต่ ${report.period.start} ถึง ${report.period.through}`} />
+              <MetricCard label="ร้านในรายงาน" value={formatReportNumber(report.scope.stores)} detail={`${formatReportNumber(report.scope.lineAccounts)} LINE OA`} />
+              <MetricCard label="ข้อความลูกค้าเดือนนี้" value={formatReportNumber(report.totals.inboundMessages)} detail={`ตั้งแต่ ${report.period.start} ถึง ${report.period.through}`} />
               <MetricCard
                 label="ตอบภายใน 24 ชม."
                 value={formatRate(report.totals.replyRateWithin24h)}
-                detail={`${formatNumber(report.totals.repliedWithin24h)} / ${formatNumber(report.totals.responseCycles)} response cycles · KPI through ${report.period.replyKpiThrough ?? "—"}`}
+                detail={`${formatReportNumber(report.totals.repliedWithin24h)} / ${formatReportNumber(report.totals.responseCycles)} response cycles · KPI through ${report.period.replyKpiThrough ?? "—"}`}
               />
-              <MetricCard label="Follower Growth" value={formatNumber(report.totals.monthFollowerGrowth)} detail={`ช่วง 20 เป็นต้นมา ${formatNumber(report.totals.focusFollowerGrowth)}`} />
+              <MetricCard label="Follower Growth" value={formatReportNumber(report.totals.monthFollowerGrowth)} detail={`ช่วง 20 เป็นต้นมา ${formatReportNumber(report.totals.focusFollowerGrowth)}`} />
             </section>
 
             <section className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              <MetricCard label="Follower snapshot ครบ" value={formatNumber(report.scope.followerComplete)} />
-              <MetricCard label="Follower snapshot บางส่วน" value={formatNumber(report.scope.followerPartial)} />
-              <MetricCard label="Follower snapshot ไม่มี" value={formatNumber(report.scope.followerMissing)} />
-              <MetricCard label="Reply KPI coverage ครบ" value={formatNumber(report.scope.replyComplete)} detail="รวมใน official 24h KPI" />
-              <MetricCard label="Reply KPI coverage บางส่วน" value={formatNumber(report.scope.replyPartial)} detail="แสดง N/A ใน official KPI" />
-              <MetricCard label="Reply KPI ยังไม่ครอบคลุม" value={formatNumber(report.scope.replyNotCovered)} detail="แสดง N/A ไม่ใช่ 0%" />
+              <MetricCard label="Follower snapshot ครบ" value={formatReportNumber(report.scope.followerComplete)} />
+              <MetricCard label="Follower snapshot บางส่วน" value={formatReportNumber(report.scope.followerPartial)} />
+              <MetricCard label="Follower snapshot ไม่มี" value={formatReportNumber(report.scope.followerMissing)} />
+              <MetricCard label="Reply KPI coverage ครบ" value={formatReportNumber(report.scope.replyComplete)} detail="รวมใน official 24h KPI" />
+              <MetricCard label="Reply KPI coverage บางส่วน" value={formatReportNumber(report.scope.replyPartial)} detail="แสดง N/A ใน official KPI" />
+              <MetricCard label="Reply KPI ยังไม่ครอบคลุม" value={formatReportNumber(report.scope.replyNotCovered)} detail="แสดง N/A ไม่ใช่ 0%" />
             </section>
 
             <section className="mt-5 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4 shadow-[var(--app-shadow-sm)]">
@@ -552,18 +556,18 @@ function ReportContent() {
                           <div className="text-xs text-[var(--app-text-tertiary)]">{store.region ?? "—"}</div>
                         </td>
                         <td className="px-3 py-3">{store.bmName ?? "—"}</td>
-                        <td className="px-3 py-3 text-right">{formatNumber(store.followers.monthStart)}</td>
-                        <td className="px-3 py-3 text-right">{formatNumber(store.followers.periodEnd)}</td>
-                        <td className="px-3 py-3 text-right">{formatNumber(store.followers.monthGrowth)}</td>
-                        <td className="px-3 py-3 text-right">{formatNumber(store.chat.inboundMessages)}</td>
+                        <td className="px-3 py-3 text-right">{formatReportNumber(store.followers.monthStart)}</td>
+                        <td className="px-3 py-3 text-right">{formatReportNumber(store.followers.periodEnd)}</td>
+                        <td className="px-3 py-3 text-right">{formatReportNumber(store.followers.monthGrowth)}</td>
+                        <td className="px-3 py-3 text-right">{formatReportNumber(store.chat.inboundMessages)}</td>
                         <td className="px-3 py-3 text-right">
-                          {store.chat.replyCoverage === "complete" ? formatNumber(store.chat.repliedWithin24h) : "N/A"}
+                          {store.chat.replyCoverage === "complete" ? formatReportNumber(store.chat.repliedWithin24h) : "N/A"}
                         </td>
                         <td className="px-3 py-3 text-right">{store.chat.replyCoverage === "complete" ? formatRate(store.chat.replyRateWithin24h) : "N/A"}</td>
                         <td className="px-3 py-3">
                           <ReplyCoverageBadge value={store.chat.replyCoverage} />
                           <div className="mt-1 text-[11px] text-[var(--app-text-tertiary)]">
-                            Historical timeline: {formatNumber(store.chat.coveredResponseCycles)} response cycles
+                            Historical timeline: {formatReportNumber(store.chat.coveredResponseCycles)} response cycles
                           </div>
                           {store.chat.replyCoverage !== "complete" && store.chat.observedReplyRateWithin24h !== null ? (
                             <div className="mt-1 text-[11px] text-[var(--app-text-tertiary)]">
@@ -612,7 +616,7 @@ function ReportContent() {
               {audit ? (
                 <>
                   <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                    <MetricCard label="Stores Audited" value={formatNumber(audit.storesAudited)} detail={`high ${audit.selection.high} · mid ${audit.selection.mid} · low ${audit.selection.low} · zero ${audit.selection.zero}`} />
+                    <MetricCard label="Stores Audited" value={formatReportNumber(audit.storesAudited)} detail={`high ${audit.selection.high} · mid ${audit.selection.mid} · low ${audit.selection.low} · zero ${audit.selection.zero}`} />
                     <MetricCard label="Aggregate Match" value={`${audit.checks.aggregateMatches}/${audit.checks.total}`} />
                     <MetricCard label="Cycle Structure Valid" value={`${audit.checks.sampledCyclesValid}/${audit.checks.total}`} />
                     <MetricCard label="KPI Through" value={audit.kpiThrough} />
@@ -685,8 +689,8 @@ function ReportContent() {
               {zeroForensics ? (
                 <>
                   <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                    <MetricCard label="Zero-Rate Stores" value={formatNumber(zeroForensics.zeroRateStoresInFleet)} />
-                    <MetricCard label="Stores Audited" value={formatNumber(zeroForensics.storesAudited)} />
+                    <MetricCard label="Zero-Rate Stores" value={formatReportNumber(zeroForensics.zeroRateStoresInFleet)} />
+                    <MetricCard label="Stores Audited" value={formatReportNumber(zeroForensics.storesAudited)} />
                     <MetricCard label="KPI Through" value={zeroForensics.kpiThrough} />
                     <MetricCard
                       label="Top Causes"

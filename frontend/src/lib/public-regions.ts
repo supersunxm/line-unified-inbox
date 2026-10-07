@@ -25,6 +25,15 @@ export const PUBLIC_REGION_MAP: Record<string, string> = {
   "ภาคตะวันตก": "ภาคตะวันตก",
 };
 
+const PUBLIC_REGION_LABELS: Record<string, { th: string; en: string; zh: string }> = {
+  "ภาคกลาง": { th: "ภาคกลาง", en: "Central Thailand", zh: "泰国中部" },
+  "ภาคเหนือ": { th: "ภาคเหนือ", en: "Northern Thailand", zh: "泰国北部" },
+  "ภาคตะวันออกเฉียงเหนือ": { th: "ภาคตะวันออกเฉียงเหนือ", en: "Northeastern Thailand", zh: "泰国东北部" },
+  "ภาคใต้": { th: "ภาคใต้", en: "Southern Thailand", zh: "泰国南部" },
+  "ภาคตะวันออก": { th: "ภาคตะวันออก", en: "Eastern Thailand", zh: "泰国东部" },
+  "ภาคตะวันตก": { th: "ภาคตะวันตก", en: "Western Thailand", zh: "泰国西部" },
+};
+
 /**
  * Standard customer-facing display order for Thai geographical regions.
  */
@@ -52,9 +61,10 @@ export function normalizePublicRegion(raw: string | null | undefined): string | 
  * Format region for public customer display on store cards and profiles.
  * Returns a non-empty string or fallback empty string.
  */
-export function formatPublicRegion(raw: string | null | undefined): string {
+export function formatPublicRegion(raw: string | null | undefined, language: "th" | "en" | "zh" = "th"): string {
   if (!raw) return "";
-  return normalizePublicRegion(raw) ?? raw.trim();
+  const normalized = normalizePublicRegion(raw);
+  return normalized ? PUBLIC_REGION_LABELS[normalized]?.[language] ?? normalized : raw.trim();
 }
 
 /**

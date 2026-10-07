@@ -428,7 +428,7 @@ export function MassMessagesView({
                 size="sm"
                 onClick={handleOpenHistory}
               >
-                {t.viewHistoryButton}
+                {t.backToComposeButton}
               </Button>
             )}
             {isAdmin && viewMode === "history" && (
@@ -437,7 +437,7 @@ export function MassMessagesView({
                 size="sm"
                 onClick={() => setViewMode("compose")}
               >
-                กลับไปหน้าสร้างข้อความ
+                {t.viewHistoryButton}
               </Button>
             )}
           </div>
@@ -454,7 +454,7 @@ export function MassMessagesView({
               <Card>
                 <CardHeader>
                   <CardTitle>{t.sectionStoresTitle}</CardTitle>
-                  <CardDescription>เลือกสาขาที่จะส่งข้อความบรอดแคสต์</CardDescription>
+                  <CardDescription>{t.sectionStoresDescription}</CardDescription>
                 </CardHeader>
 
                 <CardContent className="space-y-3">
@@ -542,7 +542,7 @@ export function MassMessagesView({
                           <div className="max-h-48 overflow-y-auto rounded-[var(--app-radius-md)] border border-[var(--app-border)] divide-y divide-[var(--app-border-subtle)] bg-[var(--app-surface)]">
                             {filteredStores.length === 0 ? (
                               <p className="p-3 text-center text-xs text-[var(--app-text-tertiary)]">
-                                {storesLoading ? "Loading stores..." : t.noStoresFound}
+                                {storesLoading ? t.loadingStoresLabel : t.noStoresFound}
                               </p>
                             ) : (
                               filteredStores.map((store) => {
@@ -587,7 +587,7 @@ export function MassMessagesView({
               <Card>
                 <CardHeader>
                   <CardTitle>{t.sectionAudienceTitle}</CardTitle>
-                  <CardDescription>เลือกกลุ่มเป้าหมายผู้รับข้อความ</CardDescription>
+                  <CardDescription>{t.sectionAudienceDescription}</CardDescription>
                 </CardHeader>
 
                 <CardContent>
@@ -652,7 +652,7 @@ export function MassMessagesView({
                   <div className="flex items-center justify-between">
                     <div>
                       <CardTitle>{t.sectionMessageTitle}</CardTitle>
-                      <CardDescription>เขียนข้อความและแนบรูปภาพสำหรับส่งถึงลูกค้า</CardDescription>
+                      <CardDescription>{t.sectionMessageDescription}</CardDescription>
                     </div>
                     <span className="text-[11px] font-mono text-[var(--app-text-secondary)]">
                       {t.characterCount(messageText.length, MAX_MESSAGE_LENGTH)}
@@ -665,7 +665,7 @@ export function MassMessagesView({
                     type="text"
                     value={campaignTitle}
                     onChange={(e) => setCampaignTitle(e.target.value)}
-                    placeholder="ชื่อแคมเปญ (สำหรับอ้างอิงภายใน, ไม่บังคับ)..."
+                    placeholder={t.campaignTitlePlaceholder}
                     className="h-9 w-full"
                   />
 
@@ -948,7 +948,7 @@ export function MassMessagesView({
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 w-full">
                       <div>
                         <div className="flex items-center gap-2">
-                          <span className="text-[11px] font-mono text-[var(--app-text-tertiary)]">ID: {activeCampaign.id}</span>
+                          <span className="text-[11px] font-mono text-[var(--app-text-tertiary)]"><span>{t.campaignIdLabel}</span>: {activeCampaign.id}</span>
                           {activeCampaign.messagePayload?.messages?.some((m) => m.type === "image") && (
                             <Badge size="sm" variant="accent">
                               {t.imageAttachedBadge}
@@ -1088,7 +1088,7 @@ export function MassMessagesView({
                 <Card>
                   <CardHeader>
                     <CardTitle>{t.storeDeliveryTableTitle}</CardTitle>
-                    <CardDescription>รายละเอียดสถานะการส่งรายสาขา</CardDescription>
+                    <CardDescription>{t.storeDeliveryTableDescription}</CardDescription>
                   </CardHeader>
 
                   <CardContent>
@@ -1169,29 +1169,29 @@ export function MassMessagesView({
           <Card className="max-w-5xl mx-auto">
             <CardHeader>
               <CardTitle>{t.historyTitle}</CardTitle>
-              <CardDescription>ประวัติการส่งข้อความบรอดแคสต์ทั้งหมด</CardDescription>
+              <CardDescription>{t.historyDescription}</CardDescription>
             </CardHeader>
 
             <CardContent>
               {historyLoading ? (
-                <LoadingState message="กำลังโหลดประวัติแคมเปญ..." />
+                <LoadingState message={t.loadingHistoryLabel} />
               ) : historyItems.length === 0 ? (
                 <EmptyState
                   title={t.noCampaignHistory}
-                  description="ยังไม่มีประวัติการส่งข้อความบรอดแคสต์ในระบบ"
+                  description={t.emptyHistoryDescription}
                 />
               ) : (
                 <TableContainer>
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Date</TableHead>
-                        <TableHead>Campaign</TableHead>
-                        <TableHead>Audience</TableHead>
-                        <TableHead align="right">Stores</TableHead>
-                        <TableHead align="right">Accepted / Est.</TableHead>
+                        <TableHead>{t.historyDateColumn}</TableHead>
+                        <TableHead>{t.historyCampaignColumn}</TableHead>
+                        <TableHead>{t.historyAudienceColumn}</TableHead>
+                        <TableHead align="right">{t.historyStoresColumn}</TableHead>
+                        <TableHead align="right">{t.historyAcceptedEstimateColumn}</TableHead>
                         <TableHead>Status</TableHead>
-                        <TableHead align="right">Action</TableHead>
+                        <TableHead align="right">{t.historyActionColumn}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -1208,7 +1208,7 @@ export function MassMessagesView({
                               <span>{item.title || "Mass Message"}</span>
                               {item.messagePayload?.messages?.some((m) => m.type === "image") && (
                                 <Badge size="sm" variant="accent">
-                                  IMG
+                                  {t.imageLabel}
                                 </Badge>
                               )}
                             </div>
@@ -1244,7 +1244,7 @@ export function MassMessagesView({
                                 setViewMode("progress");
                               }}
                             >
-                              View
+                              {t.viewDetailsLabel}
                             </Button>
                           </TableCell>
                         </TableRow>

@@ -250,6 +250,14 @@ export default function GreetingMessagesPage() {
           grid-row: 1;
         }
 
+        html[lang="en"] #greeting-store-targeting th:nth-child(2)::before {
+          content: "Store ID";
+        }
+
+        html[lang="zh-CN"] #greeting-store-targeting th:nth-child(2)::before {
+          content: "门店 ID";
+        }
+
         #greeting-store-targeting tbody tr {
           transition: background-color 120ms ease !important;
         }

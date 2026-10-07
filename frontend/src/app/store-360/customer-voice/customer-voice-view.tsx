@@ -634,7 +634,7 @@ export function CustomerVoiceDrilldownView() {
               </p>
               <p className="mt-1 text-xs text-[var(--app-text-tertiary)]">
                 {from} → {to} ·{" "}
-                {language === "th" ? "เวลา Bangkok" : "Bangkok time"}
+                {language === "th" ? "เวลา Bangkok" : language === "zh" ? "曼谷时间" : "Bangkok time"}
               </p>
             </div>
           </header>

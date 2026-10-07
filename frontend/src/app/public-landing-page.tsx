@@ -5,8 +5,11 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { fetchPublicStores, type PublicStoreDto } from "@/lib/public-stores-api";
 import { formatPublicRegion } from "@/lib/public-regions";
+import { LanguageControl, useAppLanguage } from "./language";
+import { PublicLandingI18nBoundary } from "./public-landing-i18n";
 
 export function PublicLandingPage() {
+  const { language } = useAppLanguage();
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
   const [featuredStores, setFeaturedStores] = useState<PublicStoreDto[]>([]);
@@ -31,6 +34,26 @@ export function PublicLandingPage() {
     };
   }, []);
 
+  useEffect(() => {
+    const metadata = {
+      th: {
+        title: "ค้นหา OPPO Brand Shop | Store Directory",
+        description: "ค้นหา OPPO Brand Shop และช่องทางติดต่อของสาขาทั่วประเทศไทย",
+      },
+      en: {
+        title: "Find an OPPO Brand Shop | Store Directory",
+        description: "Find OPPO Brand Shop locations and store contact details across Thailand.",
+      },
+      zh: {
+        title: "查找 OPPO Brand Shop | 门店目录",
+        description: "查找泰国各地的 OPPO Brand Shop 门店和联系方式。",
+      },
+    }[language];
+    document.title = metadata.title;
+    const description = document.querySelector<HTMLMetaElement>('meta[name="description"]');
+    description?.setAttribute("content", metadata.description);
+  }, [language]);
+
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const query = searchQuery.trim();
@@ -52,10 +75,11 @@ export function PublicLandingPage() {
   ];
 
   return (
+    <PublicLandingI18nBoundary>
     <div className="min-h-screen bg-[var(--app-bg)] text-[var(--app-text-primary)] antialiased flex flex-col selection:bg-[var(--app-accent-soft)] selection:text-[var(--app-accent)]">
       {/* Navigation Header */}
       <header className="sticky top-0 z-30 border-b border-[var(--app-border)] bg-[var(--app-surface)]/90 backdrop-blur-md">
-        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6 lg:px-8">
+        <div className="mx-auto flex min-h-16 max-w-6xl flex-wrap items-center justify-between gap-2 px-4 py-2 sm:flex-nowrap sm:px-6 sm:py-0 lg:px-8">
           <Link
             href="/"
             className="flex items-center gap-3 transition hover:opacity-90"
@@ -74,7 +98,7 @@ export function PublicLandingPage() {
             </div>
           </Link>
 
-          <nav className="flex items-center gap-2 sm:gap-4" aria-label="Customer Navigation">
+          <nav className="flex flex-wrap items-center justify-end gap-2 sm:gap-4" aria-label="Customer Navigation">
             <Link
               href="/stores"
               className="text-xs sm:text-sm font-medium text-[var(--app-text-secondary)] hover:text-[var(--app-accent)] transition"
@@ -88,6 +112,7 @@ export function PublicLandingPage() {
               <span className="sm:hidden">สำหรับพนักงาน</span>
               <span className="hidden sm:inline">เข้าสู่ระบบสำหรับพนักงาน</span>
             </Link>
+            <LanguageControl className="shrink-0" />
           </nav>
         </div>
       </header>
@@ -286,7 +311,7 @@ export function PublicLandingPage() {
                       )}
                       {store.region && (
                         <span className="inline-flex items-center rounded-md bg-[var(--app-accent-soft)] px-2 py-0.5 text-[11px] font-semibold text-[var(--app-accent)]">
-                          {formatPublicRegion(store.region)}
+                          {formatPublicRegion(store.region, language)}
                         </span>
                       )}
                     </div>
@@ -368,11 +393,12 @@ export function PublicLandingPage() {
             </nav>
           </div>
           <div className="mt-4 pt-4 border-t border-[var(--app-border)] text-center sm:text-left text-[11px] text-[var(--app-text-tertiary)] flex flex-col sm:flex-row justify-between items-center gap-2">
-            <p>© {new Date().getFullYear()} OPPO Brand Shop Directory · lineoppo.click</p>
+            <p>{`© ${new Date().getFullYear()} OPPO Brand Shop Directory · lineoppo.click`}</p>
             <p>ค้นหาข้อมูลสาขาและช่องทางติดต่อ OPPO Brand Shop ทั่วประเทศไทย</p>
           </div>
         </div>
       </footer>
     </div>
+    </PublicLandingI18nBoundary>
   );
 }

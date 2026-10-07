@@ -7,6 +7,7 @@ const read = (path: string) => readFileSync(new URL(path, import.meta.url), "utf
 const topNavigation = read("../src/components/shell/top-navigation.tsx");
 const navConfig = read("../src/components/shell/navigation-config.ts");
 const theme = read("../src/app/theme.tsx");
+const themeI18n = read("../src/app/theme-i18n.ts");
 const internalShell = read("../src/components/shell/internal-page-shell.tsx");
 
 test("one click switches to the opposite of the theme on screen, including from system", () => {
@@ -20,8 +21,12 @@ test("one click switches to the opposite of the theme on screen, including from 
 test("the toggle reads the shown theme from <html data-theme> and saves through the existing setTheme", () => {
   assert.match(theme, /observer\.observe\(document\.documentElement, \{ attributes: true, attributeFilter: \["data-theme"\] \}\);/);
   assert.match(theme, /return \{ shown, toggle: \(\) => context\.setTheme\(toggledThemePreference\(shown\)\) \};/);
-  // The existing select control is unchanged.
-  assert.match(theme, /<option value="light">Light<\/option>\s*<option value="dark">Dark<\/option>\s*<option value="system">System<\/option>/);
+  // Select options are localized through the active app language.
+  assert.match(theme, /const text = themeControlLabels\[language\];/);
+  assert.match(theme, /<option value="light">\{text\.light\}<\/option>\s*<option value="dark">\{text\.dark\}<\/option>\s*<option value="system">\{text\.system\}<\/option>/);
+  for (const label of ["light: \"สว่าง\"", "light: \"Light\"", "light: \"浅色\"", "system: \"ตามระบบ\"", "system: \"System\"", "system: \"跟随系统\""]) {
+    assert.ok(themeI18n.includes(label), `missing localized theme label ${label}`);
+  }
   assert.match(topNavigation, /<ThemeControl \/>/);
 });
 

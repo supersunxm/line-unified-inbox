@@ -1,6 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
+import { LanguageControl, useAppLanguage } from "../language";
+import { review15Text, type Review15Key } from "./review-15-translations";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   segmentThaiWords,
@@ -8,6 +11,10 @@ import {
 } from "@/lib/thai-word-counter";
 import { pickRandomReview15Example, REVIEW15_EXAMPLES } from "./review-15-example";
 
+type ScanNotice = { key: Review15Key; values?: Record<string, string | number> };
+class ReviewScanError extends Error {
+  constructor(readonly key: Review15Key) { super(key); }
+}
 const MIN_WORDS = 15;
 const MAX_CHARS = 500;
 const MAX_SCAN_IMAGES = 3;
@@ -52,6 +59,7 @@ type ScanCandidate = {
   id: string;
   text: string;
   sourceName: string;
+  imageIndex: number;
   confirmed: boolean;
   confidence: number | null;
 };
@@ -72,9 +80,9 @@ async function optimizeImageForOcr(file: File): Promise<Blob> {
   const imageUrl = URL.createObjectURL(file);
   try {
     const image = await new Promise<HTMLImageElement>((resolve, reject) => {
-      const element = new Image();
+      const element = new window.Image();
       element.onload = () => resolve(element);
-      element.onerror = () => reject(new Error("อ่านไฟล์ภาพไม่สำเร็จ"));
+      element.onerror = () => reject(new ReviewScanError("fileReadError"));
       element.src = imageUrl;
     });
 
@@ -156,6 +164,8 @@ function ManualChecker({
   text: string;
   onTextChange: (value: string) => void;
 }) {
+  const { language } = useAppLanguage();
+  const t = review15Text(language);
   const result = useMemo(() => segmentThaiWords(text), [text]);
   const count = result.count;
   const passed = count >= MIN_WORDS;
@@ -164,11 +174,10 @@ function ManualChecker({
 
   return (
     <>
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.55fr)_minmax(280px,0.75fr)] lg:items-stretch">
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.55fr)_minmax(280px,0.75fr)] xl:items-stretch">
         <section className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4 shadow-[var(--app-shadow-card)] sm:p-5">
           <label htmlFor="review-text" className="mb-2 block text-sm font-semibold">
-            ข้อความรีวิวลูกค้า
-          </label>
+            {t("reviewText")}</label>
           <div className="relative">
             <textarea
               id="review-text"
@@ -178,7 +187,7 @@ function ManualChecker({
               autoCorrect="off"
               spellCheck={false}
               onChange={(event) => onTextChange(event.target.value)}
-              placeholder="วางข้อความรีวิวที่นี่..."
+              placeholder={t("placeholder")}
               className="min-h-44 w-full resize-y rounded-xl border border-[var(--app-border-strong)] bg-[var(--input-background)] px-4 py-3 pb-8 text-base leading-7 outline-none transition focus:border-[var(--app-accent)] focus:ring-2 focus:ring-[var(--app-accent)]/15 sm:min-h-52"
             />
             <span className="pointer-events-none absolute bottom-3 right-3 text-[11px] font-medium text-[var(--app-text-tertiary)]">
@@ -193,8 +202,7 @@ function ManualChecker({
               disabled={!text}
               className="min-h-11 rounded-xl bg-[var(--app-accent)] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[var(--app-accent-hover)] disabled:opacity-45"
             >
-              ล้างข้อความ
-            </button>
+              {t("clear")}</button>
             <button
               type="button"
               onClick={() =>
@@ -202,11 +210,10 @@ function ManualChecker({
               }
               className="min-h-11 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-subtle)] px-4 py-2.5 text-sm font-semibold transition hover:bg-[var(--app-surface-hover)]"
             >
-              สุ่มข้อความตัวอย่าง
-            </button>
+              {t("random")}</button>
           </div>
           <p className="mt-2 text-[11px] text-[var(--app-text-tertiary)]">
-            มีตัวอย่าง {REVIEW15_EXAMPLES.length} รูปแบบ · กดซ้ำเพื่อสุ่มข้อความใหม่
+            {t("exampleCount", { count: REVIEW15_EXAMPLES.length })}
           </p>
         </section>
 
@@ -233,30 +240,26 @@ function ManualChecker({
           >
             {count}
             <span className="ml-1 text-2xl font-semibold sm:text-3xl">
-              / {MIN_WORDS} คำ
+              {t("wordTarget", { count: MIN_WORDS })}
             </span>
           </div>
 
           {!hasText ? (
             <p className="mt-4 text-sm font-medium text-[var(--app-text-secondary)]">
-              วางข้อความเพื่อเริ่มตรวจ
-            </p>
+              {t("start")}</p>
           ) : passed ? (
             <>
               <div className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-[var(--app-success)]/12 px-3 py-1.5 text-sm font-semibold text-[var(--app-accent)]">
                 <CheckIcon />
-                ครบ 15 คำแล้ว
-              </div>
+                {t("passed")}</div>
               <p className="mt-3 text-sm font-semibold text-[var(--app-accent)]">
-                ข้อความนี้ผ่านเกณฑ์จำนวนคำ
-              </p>
+                {t("passDescription")}</p>
             </>
           ) : (
             <>
               <div className="mt-4 rounded-full bg-[var(--app-warning)]/12 px-3 py-1.5 text-sm font-semibold text-[var(--app-warning)]">
-                ยังไม่ครบ 15 คำ
-              </div>
-              <p className="mt-3 text-sm font-semibold">ขาดอีก {remaining} คำ</p>
+                {t("notPassed")}</div>
+              <p className="mt-3 text-sm font-semibold">{t("remaining", { count: remaining })}</p>
             </>
           )}
         </section>
@@ -265,13 +268,11 @@ function ManualChecker({
       <section className="mt-4 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4 shadow-[var(--app-shadow-card)] sm:p-5">
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-sm font-bold">
-            คำที่ระบบนับ
-            {hasText ? " (" + count + " คำ)" : ""}
+            {t("countedWords")}{hasText ? t("wordCount", { count }) : ""}
           </h2>
           {hasText && (
             <span className="text-xs font-medium text-[var(--app-text-secondary)]">
-              ตามกฎ Review KPI
-            </span>
+              {t("accordingToRules")}</span>
           )}
         </div>
 
@@ -288,8 +289,7 @@ function ManualChecker({
           </div>
         ) : (
           <p className="mt-3 text-sm text-[var(--app-text-tertiary)]">
-            คำที่ผ่านกฎการนับจะแสดงที่นี่
-          </p>
+            {t("tokensEmpty")}</p>
         )}
       </section>
     </>
@@ -297,6 +297,8 @@ function ManualChecker({
 }
 
 export function Review15Checker() {
+  const { language } = useAppLanguage();
+  const t = review15Text(language);
   const [mode, setMode] = useState<Mode>("text");
   const [text, setText] = useState("");
   const [scanImages, setScanImages] = useState<ScanImage[]>([]);
@@ -304,11 +306,15 @@ export function Review15Checker() {
   const [scanEstimatedReviewCount, setScanEstimatedReviewCount] = useState(0);
   const [scanMissingReviewCount, setScanMissingReviewCount] = useState(0);
   const [scanProgress, setScanProgress] = useState(0);
-  const [scanStatus, setScanStatus] = useState("");
-  const [scanError, setScanError] = useState("");
+  const [scanStatus, setScanStatus] = useState<ScanNotice | null>(null);
+  const [scanError, setScanError] = useState<ScanNotice | null>(null);
   const [isScanning, setIsScanning] = useState(false);
   const [visitorTotal, setVisitorTotal] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    document.title = `${review15Text(language)("title")} | OPPO Brand Shop`;
+  }, [language]);
 
   useEffect(() => {
     let cancelled = false;
@@ -373,8 +379,8 @@ export function Review15Checker() {
     setScanEstimatedReviewCount(0);
     setScanMissingReviewCount(0);
     setScanProgress(0);
-    setScanStatus("");
-    setScanError("");
+    setScanStatus(null);
+    setScanError(null);
   };
 
   const handleFileSelection = (files: FileList | null) => {
@@ -386,7 +392,7 @@ export function Review15Checker() {
     );
 
     if (valid.length === 0) {
-      setScanError("กรุณาเลือกไฟล์ภาพ JPG / PNG ขนาดไม่เกิน 12 MB");
+      setScanError({ key: "invalidImage" });
       replaceScanImages([]);
       return;
     }
@@ -394,9 +400,9 @@ export function Review15Checker() {
     replaceScanImages(valid);
 
     if (selected.length > MAX_SCAN_IMAGES) {
-      setScanError("สแกนได้ครั้งละไม่เกิน 3 ภาพ ระบบเลือก 3 ภาพแรกให้แล้ว");
+      setScanError({ key: "imageLimit" });
     } else if (valid.length !== selected.length) {
-      setScanError("มีบางไฟล์ที่ไม่ใช่ภาพหรือมีขนาดเกิน 12 MB จึงไม่ได้ถูกเลือก");
+      setScanError({ key: "imagesSkipped" });
     }
   };
 
@@ -404,12 +410,12 @@ export function Review15Checker() {
     if (scanImages.length === 0 || isScanning) return;
 
     setIsScanning(true);
-    setScanError("");
+    setScanError(null);
     setScanCandidates([]);
     setScanEstimatedReviewCount(0);
     setScanMissingReviewCount(0);
     setScanProgress(8);
-    setScanStatus("กำลังเตรียมภาพ...");
+    setScanStatus({ key: "preparing" });
 
     try {
       const formData = new FormData();
@@ -420,7 +426,7 @@ export function Review15Checker() {
           Math.round(10 + ((index + 1) / scanImages.length) * 25),
         );
         setScanStatus(
-          "กำลังเตรียมภาพ " + (index + 1) + " จาก " + scanImages.length,
+          { key: "preparingImage", values: { index: index + 1, total: scanImages.length } },
         );
 
         const optimized = await optimizeImageForOcr(image.file);
@@ -432,7 +438,7 @@ export function Review15Checker() {
       }
 
       setScanProgress(45);
-      setScanStatus("กำลังส่งภาพไปวิเคราะห์...");
+      setScanStatus({ key: "sending" });
 
       const response = await fetch("/api-backend/review15/scan", {
         method: "POST",
@@ -440,36 +446,13 @@ export function Review15Checker() {
       });
 
       if (!response.ok) {
-        let message = "";
-        try {
-          const errorBody = (await response.json()) as {
-            message?: string | string[];
-          };
-          message = Array.isArray(errorBody.message)
-            ? errorBody.message.join(" ")
-            : errorBody.message ?? "";
-        } catch {
-          // Fall through to the status-based message below.
-        }
-
-        if (response.status === 429) {
-          throw new Error(
-            "สแกนถี่เกินไป กรุณารอสักครู่แล้วลองใหม่",
-          );
-        }
-
-        if (response.status === 503) {
-          throw new Error(
-            message ||
-              "ระบบ Google Vision ยังไม่พร้อมใช้งาน กรุณาลองใหม่ภายหลัง",
-          );
-        }
-
-        throw new Error(message || "อ่านภาพไม่สำเร็จ");
+        if (response.status === 429) throw new ReviewScanError("rateLimit");
+        if (response.status === 503) throw new ReviewScanError("unavailable");
+        throw new ReviewScanError("imageReadError");
       }
 
       setScanProgress(78);
-      setScanStatus("กำลังแยกเฉพาะข้อความรีวิว...");
+      setScanStatus({ key: "extracting" });
 
       const payload = (await response.json()) as VisionScanResponse;
       const usableCandidates = payload.candidates.filter(
@@ -487,9 +470,8 @@ export function Review15Checker() {
             "-" +
             Date.now(),
           text: candidate.text.trim(),
-          sourceName:
-            scanImages[candidate.imageIndex]?.file.name ||
-            "ภาพ " + (candidate.imageIndex + 1),
+          sourceName: scanImages[candidate.imageIndex]?.file.name ?? "",
+          imageIndex: candidate.imageIndex,
           confirmed: false,
           confidence: candidate.confidence,
         }),
@@ -510,29 +492,23 @@ export function Review15Checker() {
       if (nextCandidates.length > 0) {
         if (missingReviewCount > 0) {
           setScanStatus(
-            "แยกข้อความได้ " +
-              nextCandidates.length +
-              " จากประมาณ " +
-              estimatedReviewCount +
-              " รีวิว",
+            { key: "extracted", values: { count: nextCandidates.length, total: estimatedReviewCount } },
           );
         } else {
-          setScanStatus("ตรวจพบ " + nextCandidates.length + " รีวิว");
+          setScanStatus({ key: "detected", values: { count: nextCandidates.length } });
         }
       } else {
-        setScanStatus("ยังไม่พบข้อความรีวิวที่ชัดเจน");
+        setScanStatus({ key: "noneDetected" });
         setScanError(
-          "ระบบอ่านภาพแล้ว แต่ยังแยกข้อความรีวิวไม่ได้ ลองใช้ Screenshot ที่เห็นชื่อผู้รีวิว ดาว วันที่ และข้อความรีวิวครบในจอ",
+          { key: "noneHelp" },
         );
       }
     } catch (error) {
       console.error("Review image Vision scan failed", error);
       setScanProgress(0);
-      setScanStatus("");
+      setScanStatus(null);
       setScanError(
-        error instanceof Error
-          ? error.message
-          : "สแกนภาพไม่สำเร็จ กรุณาลองใหม่",
+        { key: error instanceof ReviewScanError ? error.key : "scanError" },
       );
     } finally {
       setIsScanning(false);
@@ -557,7 +533,7 @@ export function Review15Checker() {
     );
   };
 
-  const useCandidateInManualMode = (value: string) => {
+  const openCandidateInManualMode = (value: string) => {
     setText(value.slice(0, MAX_CHARS));
     setMode("text");
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -566,11 +542,11 @@ export function Review15Checker() {
   return (
     <main className="min-h-screen bg-[var(--app-bg)] text-[var(--app-text-primary)]">
       <header className="border-b border-[var(--app-border)] bg-[var(--app-surface)]">
-        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6 lg:px-8">
+        <div className="mx-auto flex min-h-16 max-w-6xl flex-wrap items-center justify-between gap-2 px-4 py-2 sm:px-6 lg:px-8">
           <Link
             href="/"
-            className="flex items-center gap-2.5 transition-opacity hover:opacity-90"
-            aria-label="OPPO Brand Shop Home"
+            className="flex min-w-0 items-center gap-2.5 transition-opacity hover:opacity-90"
+            aria-label={t("home")}
           >
             <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[var(--app-accent)] text-sm font-bold text-white shadow-sm">
               O
@@ -579,13 +555,13 @@ export function Review15Checker() {
               <span className="text-sm font-bold leading-tight tracking-tight sm:text-base">
                 OPPO Brand Shop
               </span>
-              <span className="text-[11px] font-medium text-[var(--app-text-secondary)]">
-                ค้นหาสาขา & ช่องทางติดต่อ
-              </span>
+              <span className="truncate text-[11px] font-medium text-[var(--app-text-secondary)]">
+                {t("stores")}</span>
             </div>
           </Link>
-          <span className="hidden text-sm font-medium text-[var(--app-text-secondary)] sm:block">
-            Review 15-Word Checker
+          <LanguageControl />
+          <span className="hidden min-w-0 truncate text-sm font-medium text-[var(--app-text-secondary)] xl:block">
+            {t("title")}
           </span>
         </div>
       </header>
@@ -596,22 +572,20 @@ export function Review15Checker() {
             <ChatIcon />
           </div>
           <h1 className="text-2xl font-bold tracking-tight sm:text-4xl">
-            ตรวจสอบรีวิว 15 คำ
-          </h1>
+            {t("title")}</h1>
           <p className="mt-2 text-sm text-[var(--app-text-secondary)] sm:text-base">
-            พิมพ์ข้อความ หรือสแกน Screenshot จาก Google Reviews
-          </p>
+            {t("subtitle")}</p>
           {visitorTotal !== null && (
             <div
               className="mt-3 inline-flex flex-wrap items-center justify-center gap-x-2 gap-y-1 rounded-full border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-1.5 text-xs text-[var(--app-text-secondary)] shadow-sm"
-              title="นับแบบ anonymous ต่อ browser ไม่เก็บ IP และ refresh ไม่เพิ่มยอดซ้ำ"
+              title={t("visitorPrivacy")}
             >
-              <span>ผู้เข้าชมรวมโดยประมาณ</span>
+              <span>{t("visitors")}</span>
               <strong className="font-tabular text-[var(--app-accent)]">
-                {visitorTotal.toLocaleString("th-TH")}
+                {visitorTotal.toLocaleString(language === "zh" ? "zh-CN" : language === "th" ? "th-TH" : "en-US")}
               </strong>
-              <span>คน</span>
-              <span className="text-[var(--app-text-tertiary)]">· ไม่ระบุตัวตน</span>
+              <span>{t("people")}</span>
+              <span className="text-[var(--app-text-tertiary)]">{t("anonymous")}</span>
             </div>
           )}
         </div>
@@ -627,8 +601,7 @@ export function Review15Checker() {
                 : "text-[var(--app-text-secondary)]",
             ].join(" ")}
           >
-            พิมพ์ข้อความ
-          </button>
+            {t("manualMode")}</button>
           <button
             type="button"
             onClick={() => setMode("image")}
@@ -639,8 +612,7 @@ export function Review15Checker() {
                 : "text-[var(--app-text-secondary)]",
             ].join(" ")}
           >
-            สแกนจากภาพ
-          </button>
+            {t("imageMode")}</button>
         </div>
 
         <div className="mt-5 lg:mt-7">
@@ -654,10 +626,9 @@ export function Review15Checker() {
                     <CameraIcon />
                   </div>
                   <div>
-                    <h2 className="font-bold">สแกนข้อความจากภาพรีวิว</h2>
+                    <h2 className="font-bold">{t("scanTitle")}</h2>
                     <p className="mt-1 text-xs leading-5 text-[var(--app-text-secondary)] sm:text-sm">
-                      รองรับ Screenshot ที่มีหลายรีวิวในภาพเดียว และเลือกได้สูงสุด 3 ภาพต่อครั้ง
-                    </p>
+                      {t("scanHelp")}</p>
                   </div>
                 </div>
 
@@ -677,11 +648,9 @@ export function Review15Checker() {
                   className="mt-4 flex min-h-28 w-full flex-col items-center justify-center rounded-2xl border-2 border-dashed border-[var(--app-border-strong)] bg-[var(--app-surface-subtle)] px-4 py-5 text-center transition hover:border-[var(--app-accent)] disabled:opacity-50"
                 >
                   <span className="text-sm font-bold text-[var(--app-accent)]">
-                    เลือกรูป / ถ่ายภาพ
-                  </span>
+                    {t("chooseImage")}</span>
                   <span className="mt-1 text-xs text-[var(--app-text-secondary)]">
-                    JPG, PNG • ไม่เกิน 12 MB ต่อภาพ
-                  </span>
+                    {t("imageFormats")}</span>
                 </button>
 
                 {scanImages.length > 0 && (
@@ -692,7 +661,10 @@ export function Review15Checker() {
                           key={image.id}
                           className="overflow-hidden rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-subtle)]"
                         >
-                          <img
+                          <Image
+                            unoptimized
+                            width={300}
+                            height={400}
                             src={image.previewUrl}
                             alt={image.file.name}
                             className="aspect-[3/4] w-full object-cover object-top"
@@ -707,7 +679,7 @@ export function Review15Checker() {
                       disabled={isScanning}
                       className="mt-4 min-h-12 w-full rounded-xl bg-[var(--app-accent)] px-4 py-3 text-sm font-bold text-white transition hover:bg-[var(--app-accent-hover)] disabled:opacity-55"
                     >
-                      {isScanning ? "กำลังสแกน..." : "สแกนข้อความรีวิว"}
+                      {isScanning ? t("scanning") : t("scan")}
                     </button>
                   </>
                 )}
@@ -715,7 +687,7 @@ export function Review15Checker() {
                 {(isScanning || scanProgress > 0) && (
                   <div className="mt-4" aria-live="polite">
                     <div className="flex items-center justify-between text-xs font-medium">
-                      <span>{scanStatus || "กำลังเตรียม..."}</span>
+                      <span>{scanStatus ? t(scanStatus.key, scanStatus.values) : t("preparingShort")}</span>
                       <span>{scanProgress}%</span>
                     </div>
                     <div className="mt-2 h-2 overflow-hidden rounded-full bg-[var(--app-surface-subtle)]">
@@ -729,7 +701,7 @@ export function Review15Checker() {
 
                 {scanError && (
                   <div className="mt-4 rounded-xl border border-[var(--app-warning)]/25 bg-[var(--app-warning-soft)] px-3 py-2.5 text-xs leading-5">
-                    {scanError}
+                    {t(scanError.key, scanError.values)}
                   </div>
                 )}
 
@@ -737,9 +709,7 @@ export function Review15Checker() {
                   <strong className="text-[var(--app-accent)]">
                     Google Vision OCR:
                   </strong>{" "}
-                  ภาพจะถูกส่งแบบชั่วคราวผ่าน server ของ lineoppo.click ไปยัง Google Cloud Vision
-                  เพื่ออ่านข้อความและตำแหน่งของข้อความ ระบบหน้านี้ไม่บันทึกไฟล์ภาพลงฐานข้อมูล
-                </div>
+                  {t("ocrPrivacy")}</div>
               </section>
 
               {scannedResults.length > 0 && (
@@ -748,24 +718,17 @@ export function Review15Checker() {
                     <div>
                       <h2 className="font-bold">
                         {scanMissingReviewCount > 0
-                          ? "แยกข้อความได้ " +
-                            scannedResults.length +
-                            " จากประมาณ " +
-                            scanEstimatedReviewCount +
-                            " รีวิว"
-                          : "พบ " + scannedResults.length + " รีวิว"}
+                          ? t("extracted", { count: scannedResults.length, total: scanEstimatedReviewCount })
+                          : t("found", { count: scannedResults.length })}
                       </h2>
                       <p className="mt-1 text-xs text-[var(--app-text-secondary)]">
-                        ตรวจข้อความที่ OCR อ่านได้ก่อนใช้ผลนับคำ
-                      </p>
+                        {t("checkOcr")}</p>
                     </div>
                   </div>
 
                   {scanMissingReviewCount > 0 && (
                     <div className="mb-3 rounded-xl border border-[var(--app-warning)]/30 bg-[var(--app-warning-soft)] px-3 py-2.5 text-xs leading-5">
-                      ระบบเห็นโครงสร้างรีวิวประมาณ {scanEstimatedReviewCount} รีวิว
-                      แต่แยกข้อความได้ {scannedResults.length} รีวิว
-                      อาจมีรีวิวตกหล่น กรุณาตรวจภาพต้นฉบับก่อนใช้ผล
+                      {t("missingWarning", { total: scanEstimatedReviewCount, count: scannedResults.length })}
                     </div>
                   )}
 
@@ -788,14 +751,14 @@ export function Review15Checker() {
                           <div className="flex items-start justify-between gap-3">
                             <div>
                               <p className="text-sm font-bold">
-                                รีวิว {index + 1}
+                                {t("reviewNumber", { index: index + 1 })}
                               </p>
                               <p className="mt-0.5 max-w-[220px] truncate text-[11px] text-[var(--app-text-tertiary)]">
-                                {candidate.sourceName}
+                                {candidate.sourceName || t("imageName", { index: candidate.imageIndex + 1 })}
                               </p>
                               {typeof candidate.confidence === "number" && (
                                 <p className="mt-0.5 text-[10px] text-[var(--app-text-tertiary)]">
-                                  OCR confidence {Math.round(candidate.confidence * 100)}%
+                                  {t("confidence", { percent: Math.round(candidate.confidence * 100) })}
                                 </p>
                               )}
                             </div>
@@ -810,8 +773,8 @@ export function Review15Checker() {
                               ].join(" ")}
                             >
                               {candidate.confirmed
-                                ? count + " / " + MIN_WORDS + " คำ"
-                                : "รอตรวจข้อความ"}
+                                ? t("confirmedCount", { count, minimum: MIN_WORDS })
+                                : t("awaitingCheck")}
                             </div>
                           </div>
 
@@ -822,7 +785,7 @@ export function Review15Checker() {
                             }
                             rows={4}
                             className="mt-3 w-full resize-y rounded-xl border border-[var(--app-border-strong)] bg-[var(--input-background)] px-3 py-2.5 text-sm leading-6 outline-none focus:border-[var(--app-accent)]"
-                            aria-label={"ข้อความรีวิว " + (index + 1)}
+                            aria-label={t("reviewLabel", { index: index + 1 })}
                           />
 
                           <div className="mt-3 flex flex-wrap gap-2">
@@ -832,8 +795,7 @@ export function Review15Checker() {
                                 onClick={() => confirmCandidate(candidate.id)}
                                 className="rounded-full bg-[var(--app-accent)] px-3 py-1.5 text-xs font-semibold text-white"
                               >
-                                ยืนยันข้อความนี้และนับคำ
-                              </button>
+                                {t("confirm")}</button>
                             ) : (
                               <span
                                 className={[
@@ -844,26 +806,23 @@ export function Review15Checker() {
                                 ].join(" ")}
                               >
                                 {passed
-                                  ? "ครบ 15 คำแล้ว"
-                                  : "ขาดอีก " + remaining + " คำ"}
+                                  ? t("passed")
+                                  : t("remaining", { count: remaining })}
                               </span>
                             )}
                             <button
                               type="button"
                               onClick={() =>
-                                useCandidateInManualMode(candidate.text)
+                                openCandidateInManualMode(candidate.text)
                               }
                               className="rounded-full border border-[var(--app-border)] px-3 py-1 text-xs font-semibold"
                             >
-                              เปิดในโหมดพิมพ์
-                            </button>
+                              {t("openManual")}</button>
                           </div>
 
                           {!candidate.confirmed && (
                             <p className="mt-2 text-[11px] leading-5 text-[var(--app-warning)]">
-                              ระบบใช้ตำแหน่งข้อความจาก Google Vision เพื่อแยกรีวิวออกจากรูปสินค้า
-                              แต่ยังต้องตรวจ/แก้ข้อความก่อนยืนยัน ระบบจะยังไม่ตัดสินผ่าน 15 คำ
-                            </p>
+                              {t("confirmHelp")}</p>
                           )}
 
                           {candidate.confirmed &&
@@ -893,100 +852,78 @@ export function Review15Checker() {
         </div>
 
         <section className="mt-5 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4 shadow-[var(--app-shadow-card)] sm:p-5">
-          <h2 className="text-sm font-bold">กฎการนับคำ</h2>
+          <h2 className="text-sm font-bold">{t("rules")}</h2>
           <p className="mt-1 text-xs leading-5 text-[var(--app-text-secondary)]">
-            หน้าเช็กนี้ใช้ตัวนับคำชุดเดียวกับ Google Review KPI · {WORD_COUNT_RULE_VERSION}
+            {t("sameCounter", { version: WORD_COUNT_RULE_VERSION })}
           </p>
 
           <div className="mt-3 grid gap-2 text-xs leading-5 sm:grid-cols-2">
             <div className="rounded-xl bg-[var(--app-surface-subtle)] p-3">
-              <strong>15 คำขึ้นไป = ผ่าน</strong>
+              <strong>{t("minimumRule")}</strong>
               <p className="mt-1 text-[var(--app-text-secondary)]">
-                14 คำยังไม่ผ่าน และคำที่ซ้ำกันยังนับทุกครั้ง
-              </p>
+                {t("repeatRule")}</p>
             </div>
             <div className="rounded-xl bg-[var(--app-surface-subtle)] p-3">
-              <strong>ตัดคำภาษาไทยอัตโนมัติ</strong>
+              <strong>{t("thaiSegmentation")}</strong>
               <p className="mt-1 text-[var(--app-text-secondary)]">
-                ไม่ได้นับจากจำนวนช่องว่างในประโยค
-              </p>
+                {t("notSpaces")}</p>
             </div>
           </div>
 
           <details className="mt-3 rounded-xl border border-[var(--app-border)] p-3 text-xs leading-6">
             <summary className="cursor-pointer font-semibold">
-              ดูรายละเอียดกฎทั้งหมด
-            </summary>
+              {t("allRules")}</summary>
             <ul className="mt-2 list-disc space-y-1 pl-5 text-[var(--app-text-secondary)]">
               <li>
-                ไม่นับช่องว่าง เครื่องหมายวรรคตอน Emoji สัญลักษณ์ และตัวเลขล้วน
-              </li>
+                {t("ignoreRule")}</li>
               <li>
-                คำอังกฤษหรือชื่อแบรนด์ที่มีตัวอักษร เช่น OPPO, Reno และ 5G
-                สามารถนับเป็นคำได้
-              </li>
+                {t("brandRule")}</li>
               <li>
-                คำศัพท์ที่ล็อกตามกฎ เช่น โปรโมชั่น, คำแนะนำ, ของแถม, ใช้บริการ,
-                สมาร์ทโฟน, ใช้งาน และ วันนี้ จะไม่ถูกตัวตัดคำของ browser แยกเป็นเศษคำ
-              </li>
+                {t("lockedRule")}</li>
               <li>
-                ข้อความไทยที่ติดกับชื่อรุ่น เช่น ซื้อOPPOReno14Pro5Gวันนี้
-                จะแยกขอบเขตเป็น ซื้อ / OPPO / Reno14Pro / 5G / วันนี้ ก่อนนับ
-              </li>
+                {t("modelRule")}</li>
               <li>
-                คำนำหน้า การ, ความ, น่า, ผู้, นัก, ชาว, ช่าง จะรวมกับคำถัดไปเป็น 1 คำ
-              </li>
+                {t("prefixRule")}</li>
               <li>
-                คำประสมที่กำหนดไว้ เช่น โรงพยาบาล, เครื่องใช้, แม่บ้าน,
-                ท่องเที่ยว และต่างชาติ นับเป็น 1 คำ
-              </li>
+                {t("compoundRule")}</li>
               <li>
-                ข้อความ UI ของ Google เช่น See translation, Like, Share, More,
-                อ่านเพิ่มเติม และดูคำแปล ไม่นับ
-              </li>
+                {t("googleUiRule")}</li>
               <li>
-                เมื่อสแกนจากภาพ ระบบพยายามตัดชื่อผู้รีวิว จำนวนรีวิว ดาว
-                และวันที่ออกก่อน แล้วให้ BM ตรวจแก้ข้อความ OCR ได้ก่อนนับ
-              </li>
+                {t("ocrRule")}</li>
             </ul>
 
             <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
               <div className="rounded-lg bg-[var(--app-accent-soft)] px-3 py-2">
                 <strong>ดี มาก ดี มาก</strong>
-                <div className="text-[var(--app-text-secondary)]">= 4 คำ</div>
+                <div className="text-[var(--app-text-secondary)]">{t("equalsWords", { count: 4 })}</div>
               </div>
               <div className="rounded-lg bg-[var(--app-accent-soft)] px-3 py-2">
                 <strong>ความ + สะอาด</strong>
                 <div className="text-[var(--app-text-secondary)]">
-                  = ความสะอาด 1 คำ
-                </div>
+                  {t("compoundExample")}</div>
               </div>
               <div className="rounded-lg bg-[var(--app-accent-soft)] px-3 py-2">
                 <strong>โปรโมชั่น</strong>
-                <div className="text-[var(--app-text-secondary)]">= 1 คำ</div>
+                <div className="text-[var(--app-text-secondary)]">{t("equalsWords", { count: 1 })}</div>
               </div>
               <div className="rounded-lg bg-[var(--app-accent-soft)] px-3 py-2">
                 <strong>OPPO Reno 5G</strong>
-                <div className="text-[var(--app-text-secondary)]">= 3 คำ</div>
+                <div className="text-[var(--app-text-secondary)]">{t("equalsWords", { count: 3 })}</div>
               </div>
             </div>
           </details>
         </section>
 
         <aside className="mt-4 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface-subtle)] p-4 text-xs leading-6 text-[var(--app-text-secondary)] sm:p-5">
-          <p className="font-semibold text-[var(--app-text-primary)]">หมายเหตุ KPI</p>
+          <p className="font-semibold text-[var(--app-text-primary)]">{t("kpiNote")}</p>
           <ul className="mt-1 list-disc pl-5">
-            <li>เครื่องมือนี้ตรวจเฉพาะจำนวนคำในข้อความรีวิว</li>
+            <li>{t("onlyWords")}</li>
             <li>
-              การผ่าน KPI จริงยังต้องผ่านเงื่อนไขภาพ เดือนของภาพ และกฎ Review KPI อื่น ๆ
-            </li>
+              {t("otherRequirements")}</li>
             <li>
-              ผลจาก Google Vision ควรตรวจข้อความก่อนยืนยัน เพราะภาพเบลอ
-              ข้อความถูกบัง หรือ layout ผิดปกติยังทำให้อ่านคลาดเคลื่อนได้
-            </li>
+              {t("ocrAccuracy")}</li>
             <li>
-              ภาพถูกส่งเพื่อ OCR แบบชั่วคราวและไม่ถูกบันทึกลงฐานข้อมูลของหน้านี้
-            </li>
+              {t("temporaryImages")}</li>
           </ul>
         </aside>
       </section>

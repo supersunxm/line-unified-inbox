@@ -9,7 +9,14 @@ import { Button, Card, LoadingState } from "@/components/ui";
 import { api } from "@/lib/api";
 import { AUTH_UNAUTHORIZED_EVENT } from "@/lib/auth-session";
 import type { ApiStore, PurchaseAnalyticsResponse } from "@/types/api";
+import { useAppLanguage } from "../../language";
 import { formatDistributionLabel, prepareDistribution } from "./distribution-utils";
+import {
+  purchaseAnalyticsExportReportText,
+  purchaseAnalyticsInsightEmptyText,
+  purchaseAnalyticsInsightLabel,
+  purchaseAnalyticsInsightText,
+} from "./purchase-analytics-i18n";
 
 type AuthUser = { id: string; email: string; displayName: string; role: "ADMIN" | "ASSISTANT" | "VIEWER" };
 type TrendMetric = "purchases" | "products" | "customers";
@@ -213,6 +220,7 @@ function DistributionBar({ items, colors }: { items: Array<{ label: string; coun
 }
 
 export default function PurchaseIntelligenceDashboard() {
+  const { language } = useAppLanguage();
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [analytics, setAnalytics] = useState<PurchaseAnalyticsResponse | null>(null);
@@ -425,8 +433,8 @@ export default function PurchaseIntelligenceDashboard() {
             </div>
 
             <div className="flex items-center justify-between gap-4 rounded-xl border border-emerald-100 bg-gradient-to-r from-emerald-50 to-green-50 px-5 py-4 text-xs text-emerald-900">
-              <div className="flex min-w-0 items-center gap-3"><span className="text-lg">✦</span><p className="truncate"><span className="font-semibold">Insight:</span> {topFamily ? `${topFamily.label} accounts for ${Math.round(clamp(pct(topFamily.count, familyTotal)))}% of recorded products in this period.` : "Purchase insights will appear once product data is recorded."}</p></div>
-              <DownloadAction><button type="button" onClick={() => void downloadAudience()} disabled={!audience?.audience.length || exporting} className="shrink-0 font-semibold text-emerald-700 disabled:opacity-50">Export full report</button></DownloadAction>
+              <div className="flex min-w-0 items-center gap-3"><span className="text-lg">✦</span><p className="truncate"><span className="font-semibold">{purchaseAnalyticsInsightLabel[language]}</span> {topFamily ? purchaseAnalyticsInsightText[language](topFamily.label, Math.round(clamp(pct(topFamily.count, familyTotal)))) : purchaseAnalyticsInsightEmptyText[language]}</p></div>
+              <DownloadAction><button type="button" onClick={() => void downloadAudience()} disabled={!audience?.audience.length || exporting} className="shrink-0 font-semibold text-emerald-700 disabled:opacity-50">{purchaseAnalyticsExportReportText[language]}</button></DownloadAction>
             </div>
           </> : null}
         </div>

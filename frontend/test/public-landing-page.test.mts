@@ -7,10 +7,7 @@ function source(path: string) {
 }
 
 const pageSource = source("../src/app/page.tsx");
-const homeSource = pageSource.slice(
-  pageSource.indexOf("export default function Home"),
-  pageSource.indexOf("export function ApplicationWorkspace"),
-);
+const homeSource = pageSource.match(/export default function Home\(\) \{\n  return <PublicLandingPage \/>;\n\}/)?.[0] ?? "";
 const landingSource = source("../src/app/public-landing-page.tsx");
 const loginSource = source("../src/app/login/page.tsx");
 const authorizedWorkspaceSource = source("../src/app/authorized-workspace.tsx");

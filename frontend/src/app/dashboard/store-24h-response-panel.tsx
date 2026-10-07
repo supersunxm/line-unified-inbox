@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { isAbortError } from "@/lib/api";
 import { UnifiedPeriodPicker } from "@/components/date-range/unified-period-picker";
 import { rangeForPreset, type DashboardDateRange } from "./dashboard-date-range";
+import { useAppLanguage } from "../language";
 
 type Store24hRow = {
   storeId: string;
@@ -63,6 +64,7 @@ function toneClass(value: number | null) {
 }
 
 export function Store24hResponsePanel({ getStoreDisplayName, onOpenStore }: Props) {
+  const { language } = useAppLanguage();
   const [range, setRange] = useState<DashboardDateRange>(() => rangeForPreset("7d"));
   const [data, setData] = useState<Store24hResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -197,7 +199,7 @@ export function Store24hResponsePanel({ getStoreDisplayName, onOpenStore }: Prop
           <UnifiedPeriodPicker
             dateFrom={range.dateFrom}
             dateTo={range.dateTo}
-            language="th"
+            language={language}
             onApply={(dateFrom, dateTo) => setRange({ dateFrom, dateTo })}
           />
         </div>

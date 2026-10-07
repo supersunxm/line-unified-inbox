@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { richMessageApi, type RichMessage } from "../rich-messages/rich-message-api";
+import { useAppLanguage } from "../language";
+import { richMessagesText } from "../rich-messages/rich-messages-i18n";
 
 export type AutoResponseRichMessageBlockValue = {
   id: string;
@@ -33,6 +35,8 @@ export function AutoResponseRichMessageBlock({
   onMoveUp,
   onMoveDown,
 }: Props) {
+  const { language } = useAppLanguage();
+  const t = richMessagesText[language];
   const [items, setItems] = useState<RichMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -42,11 +46,11 @@ export function AutoResponseRichMessageBlock({
     void richMessageApi.list(false)
       .then((data) => { if (!cancelled) setItems(data); })
       .catch((reason) => {
-        if (!cancelled) setError(reason instanceof Error ? reason.message : "โหลด Rich Message ไม่สำเร็จ");
+        if (!cancelled) setError(reason instanceof Error ? reason.message : t.loadFailed);
       })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, []);
+  }, [t.loadFailed]);
 
   const selected = items.find((item) => item.id === block.richMessageId) || null;
   const previewUrl = selected?.previewUrl || selected?.imageUrl || block.previewUrl;
@@ -56,12 +60,12 @@ export function AutoResponseRichMessageBlock({
       <div className="mb-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[var(--app-accent)]/10 text-[10px] font-bold text-[var(--app-accent)]">RM</span>
-          <span className="text-xs font-bold uppercase tracking-wider text-[var(--app-text-secondary)]">Rich Message</span>
+          <span className="text-xs font-bold uppercase tracking-wider text-[var(--app-text-secondary)]">{t.featureName}</span>
         </div>
         <div className="flex items-center gap-1">
           <button type="button" onClick={onMoveUp} disabled={disabled || index === 0} className="flex h-7 w-7 items-center justify-center rounded-lg border border-[var(--app-border)] bg-[var(--app-bg)] text-xs text-[var(--app-text-primary)] hover:bg-[var(--app-surface-hover)] disabled:opacity-30">↑</button>
           <button type="button" onClick={onMoveDown} disabled={disabled || index === totalBlocks - 1} className="flex h-7 w-7 items-center justify-center rounded-lg border border-[var(--app-border)] bg-[var(--app-bg)] text-xs text-[var(--app-text-primary)] hover:bg-[var(--app-surface-hover)] disabled:opacity-30">↓</button>
-          <button type="button" onClick={onDelete} disabled={disabled} className="ml-1 flex h-7 items-center justify-center rounded-lg border border-red-500/20 bg-red-500/10 px-2 text-xs font-semibold text-red-500 hover:bg-red-500/20 disabled:opacity-30">Delete</button>
+          <button type="button" onClick={onDelete} disabled={disabled} className="ml-1 flex h-7 items-center justify-center rounded-lg border border-red-500/20 bg-red-500/10 px-2 text-xs font-semibold text-red-500 hover:bg-red-500/20 disabled:opacity-30">{t.delete}</button>
         </div>
       </div>
 
@@ -71,12 +75,12 @@ export function AutoResponseRichMessageBlock({
             // eslint-disable-next-line @next/next/no-img-element
             <img src={previewUrl} alt="" className="aspect-square h-full w-full object-cover" />
           ) : (
-            <div className="flex aspect-square items-center justify-center px-3 text-center text-xs text-[var(--app-text-tertiary)]">เลือก Rich Message</div>
+            <div className="flex aspect-square items-center justify-center px-3 text-center text-xs text-[var(--app-text-tertiary)]">{t.chooseRichMessage}</div>
           )}
         </div>
 
         <div className="min-w-0">
-          <label className="text-xs font-semibold text-[var(--app-text-secondary)]">เลือกจากคลัง Rich Message</label>
+          <label className="text-xs font-semibold text-[var(--app-text-secondary)]">{t.selectFromLibrary}</label>
           <select
             value={block.richMessageId}
             disabled={disabled || loading}
@@ -92,19 +96,19 @@ export function AutoResponseRichMessageBlock({
             }}
             className="mt-1 w-full rounded-xl border border-[var(--app-border)] bg-[var(--app-bg)] px-3 py-2.5 text-sm text-[var(--app-text-primary)] outline-none focus:border-[var(--app-accent)]"
           >
-            <option value="">{loading ? "กำลังโหลด…" : "— เลือก Rich Message —"}</option>
+            <option value="">{loading ? t.loading : t.chooseOption}</option>
             {items.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
           </select>
 
           {selected && (
             <div className="mt-2 rounded-xl bg-[var(--app-bg)] p-2.5 text-xs text-[var(--app-text-secondary)]">
               <div className="font-semibold text-[var(--app-text-primary)]">{selected.name}</div>
-              <div className="mt-1">{selected.actions.length} จุดกด · {selected.baseWidth}×{selected.baseHeight}</div>
-              <div className="mt-1 truncate">Alt: {selected.altText}</div>
+              <div className="mt-1">{selected.actions.length} {t.tapArea} · {selected.baseWidth}×{selected.baseHeight}</div>
+              <div className="mt-1 truncate">{t.altText}: {selected.altText}</div>
             </div>
           )}
           {error && <p className="mt-2 text-xs text-red-500">{error}</p>}
-          <a href="/rich-messages" target="_blank" rel="noreferrer" className="mt-3 inline-flex text-xs font-semibold text-[var(--app-accent)] hover:underline">จัดการคลัง Rich Message ↗</a>
+          <a href="/rich-messages" target="_blank" rel="noreferrer" className="mt-3 inline-flex text-xs font-semibold text-[var(--app-accent)] hover:underline">{t.manageLibrary}</a>
         </div>
       </div>
     </div>

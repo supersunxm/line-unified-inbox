@@ -4,6 +4,8 @@ import { DownloadAction, authorizeDataDownload } from "@/lib/download-permission
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { Button } from "@/components/ui";
+import { useAppLanguage } from "../../language";
+import { getLineChatPendingControlText } from "./line-chat-pending-control-i18n";
 
 const PROFILE_B_SESSION_KEY = "profile-b";
 const RUN_STORAGE_KEY = "line-chat:nickname-run:profile-b";
@@ -105,32 +107,33 @@ function saveStoredRun(run: StoredRun | null) {
   else window.localStorage.removeItem(RUN_STORAGE_KEY);
 }
 
-function formatTime(value: string) {
-  return new Date(value).toLocaleString();
+function formatTime(value: string, language: "th" | "en" | "zh") {
+  const locale = language === "th" ? "th-TH" : language === "zh" ? "zh-CN" : "en-US";
+  return new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
 }
 
-function blockedReasonLabel(reason: string) {
-  if (reason === "RESOLVE_NO_MATCH") return "ไม่พบคู่ใน LINE";
-  if (reason === "RESOLVE_AMBIGUOUS") return "พบหลายรายการ";
-  if (reason === "RESOLVE_CONFLICT") return "ข้อมูล Mapping ขัดแย้ง";
+function blockedReasonLabel(reason: string, text: ReturnType<typeof getLineChatPendingControlText>) {
+  if (reason === "RESOLVE_NO_MATCH") return text.noMatch;
+  if (reason === "RESOLVE_AMBIGUOUS") return text.ambiguous;
+  if (reason === "RESOLVE_CONFLICT") return text.conflict;
   return reason;
 }
 
-function paymentLabel(paymentMethod: string | null) {
-  if (paymentMethod === "CASH") return "สด";
-  if (paymentMethod === "INSTALLMENT") return "ผ่อน";
-  if (paymentMethod === "CREDIT_CARD") return "บัตรเครดิต";
-  if (paymentMethod === "UFUND") return "Ufund";
-  if (paymentMethod === "SG_FINANCE") return "SG";
-  if (paymentMethod === "OTHER") return "อื่น ๆ";
+function paymentLabel(paymentMethod: string | null, text: ReturnType<typeof getLineChatPendingControlText>) {
+  if (paymentMethod === "CASH") return text.cash;
+  if (paymentMethod === "INSTALLMENT") return text.installment;
+  if (paymentMethod === "CREDIT_CARD") return text.creditCard;
+  if (paymentMethod === "UFUND") return text.ufund;
+  if (paymentMethod === "SG_FINANCE") return text.sgFinance;
+  if (paymentMethod === "OTHER") return text.other;
   return null;
 }
 
-function salesStatusLabel(status: string | null) {
-  if (status === "PURCHASED") return "ซื้อแล้ว";
-  if (status === "ONLINE") return "ออนไลน์";
-  if (status === "INTERESTED") return "สนใจ";
-  if (status === "FILM") return "ฟิล์ม";
+function salesStatusLabel(status: string | null, text: ReturnType<typeof getLineChatPendingControlText>) {
+  if (status === "PURCHASED") return text.purchased;
+  if (status === "ONLINE") return text.online;
+  if (status === "INTERESTED") return text.interested;
+  if (status === "FILM") return text.film;
   return status;
 }
 
@@ -179,6 +182,8 @@ async function downloadBlockedCustomersCsv(customers: BlockedCustomer[]) {
 }
 
 export function LineChatPendingControlAction() {
+  const { language } = useAppLanguage();
+  const text = getLineChatPendingControlText(language);
   const [target, setTarget] = useState<HTMLElement | null>(null);
   const [paused, setPaused] = useState(false);
   const [pausedPending, setPausedPending] = useState(0);
@@ -312,9 +317,7 @@ export function LineChatPendingControlAction() {
     setShowBlockedCustomers(false);
   };
 
-  const title = paused
-    ? `Start a tracked nickname-change run for ${pausedPending} paused jobs. Chat work keeps higher priority.`
-    : "Pause background nickname jobs. A currently running job is allowed to finish.";
+  const title = paused ? text.startNicknameRunTitle : text.pauseNicknameRunTitle;
 
   const actionPortal = target ? createPortal(
     <>
@@ -329,7 +332,7 @@ export function LineChatPendingControlAction() {
           void toggle();
         }}
       >
-        {loading ? "Working..." : paused ? `Start Nickname Run${pausedPending ? ` (${pausedPending})` : ""}` : "Pause Nickname Run"}
+        {loading ? "Working..." : paused ? <>{text.startNicknameRun}{pausedPending ? ` (${pausedPending})` : ""}</> : "Pause Nickname Run"}
       </Button>
       {paused && running > 0 ? (
         <span className="max-w-44 text-xs text-[var(--app-warning)]" title="The current running job will finish; no paused pending job is eligible to start.">
@@ -337,7 +340,7 @@ export function LineChatPendingControlAction() {
         </span>
       ) : null}
       {activeRun ? (
-        <span className="max-w-52 text-xs text-[var(--app-success)]" title={`Tracked run started ${formatTime(activeRun.startedAt)}`}>
+        <span className="max-w-52 text-xs text-[var(--app-success)]" title={text.trackedRunTitle}>
           Tracking {activeRun.jobIds.length} jobs
         </span>
       ) : null}
@@ -355,7 +358,7 @@ export function LineChatPendingControlAction() {
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="text-sm font-semibold">Current nickname run</div>
-          <div className="mt-0.5 text-xs text-[var(--app-text-tertiary)]">Profile B · started {formatTime(activeRun.startedAt)}</div>
+          <div className="mt-0.5 text-xs text-[var(--app-text-tertiary)]">Profile B · started {formatTime(activeRun.startedAt, language)}</div>
         </div>
         <button type="button" className="text-xs text-[var(--app-text-tertiary)] hover:text-[var(--app-text)]" onClick={closeRun}>
           Close
@@ -394,31 +397,31 @@ export function LineChatPendingControlAction() {
                   {showBlockedCustomers ? "ซ่อนรายชื่อ" : `ดูรายชื่อลูกค้าที่ติด Mapping (${runProgress.blockedCustomers?.length ?? 0})`}
                 </Button>
                 <DownloadAction><Button size="sm" variant="outline" onClick={() => downloadBlockedCustomersCsv(runProgress.blockedCustomers ?? [])}>
-                  ดาวน์โหลด CSV
+                  {text.downloadCsv}
                 </Button></DownloadAction>
               </div>
               {showBlockedCustomers ? (
                 <div className="mt-2 max-h-64 space-y-2 overflow-auto pr-1">
                   {runProgress.blockedCustomers?.map((customer) => {
-                    const status = salesStatusLabel(customer.customerSalesStatus);
-                    const payment = paymentLabel(customer.paymentMethod);
+                    const status = salesStatusLabel(customer.customerSalesStatus, text);
+                    const payment = paymentLabel(customer.paymentMethod, text);
                     return (
                       <div key={`${customer.jobId}:${customer.conversationId}`} className="rounded-lg border border-[var(--app-border)] p-2.5 text-xs">
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0 font-medium text-[var(--app-text)]">{customer.customerName?.trim() || "ไม่พบชื่อลูกค้า"}</div>
                           <span className="shrink-0 rounded-full bg-[var(--app-warning-soft)] px-2 py-0.5 text-[10px] text-[var(--app-warning)]">
-                            {blockedReasonLabel(customer.reason)}
+                            {blockedReasonLabel(customer.reason, text)}
                           </span>
                         </div>
                         {customer.productSummary ? <div className="mt-1 break-words text-[var(--app-text-secondary)]">{customer.productSummary}</div> : null}
                         {status || payment || customer.salesRecordedAt ? (
                           <div className="mt-1 text-[11px] text-[var(--app-text-tertiary)]">
-                            {[status, payment, customer.salesRecordedAt ? formatTime(customer.salesRecordedAt) : null].filter(Boolean).join(" · ")}
+                            {[status, payment, customer.salesRecordedAt ? formatTime(customer.salesRecordedAt, language) : null].filter(Boolean).join(" · ")}
                           </div>
                         ) : null}
                         <div className="mt-1.5 flex items-center justify-between gap-2 text-[11px] text-[var(--app-text-tertiary)]">
-                          <span>{customer.latestMessageAt ? `แชทล่าสุด ${formatTime(customer.latestMessageAt)}` : "ไม่มีเวลาแชทล่าสุด"}</span>
-                          <a href={`/chats?conversationId=${encodeURIComponent(customer.conversationId)}`} className="shrink-0 text-[var(--app-accent)] hover:underline">เปิดแชท</a>
+                          <span>{customer.latestMessageAt ? <>{text.latestChat} {formatTime(customer.latestMessageAt, language)}</> : "No recent chat time"}</span>
+                          <a href={`/chats?conversationId=${encodeURIComponent(customer.conversationId)}`} className="shrink-0 text-[var(--app-accent)] hover:underline">{text.openChat}</a>
                         </div>
                       </div>
                     );
@@ -451,7 +454,7 @@ export function LineChatPendingControlAction() {
 
           {runProgress.superseded > 0 || runProgress.missing > 0 ? (
             <div className="text-xs text-[var(--app-text-secondary)]">
-              Superseded: {runProgress.superseded}{runProgress.missing > 0 ? ` · Missing: ${runProgress.missing}` : ""}
+              Superseded: {runProgress.superseded}{runProgress.missing > 0 ? <> {text.missingLabel} {runProgress.missing}</> : ""}
             </div>
           ) : null}
 
@@ -470,7 +473,7 @@ export function LineChatPendingControlAction() {
                       </div>
                       <div className="mt-1 break-words text-[var(--app-text-secondary)]">{failure.error ?? "No error detail recorded."}</div>
                       <div className="mt-1 flex items-center justify-between text-[var(--app-text-tertiary)]">
-                        <span>{formatTime(failure.updatedAt)}</span>
+                        <span>{formatTime(failure.updatedAt, language)}</span>
                         {failure.conversationId ? <a href={`/chats?conversationId=${encodeURIComponent(failure.conversationId)}`} className="text-[var(--app-accent)] hover:underline">Open chat</a> : null}
                       </div>
                     </div>
@@ -480,7 +483,7 @@ export function LineChatPendingControlAction() {
             </div>
           ) : null}
 
-          <div className="text-[11px] text-[var(--app-text-tertiary)]">Last checked {formatTime(runProgress.checkedAt)} · updates every 3 seconds</div>
+          <div className="text-[11px] text-[var(--app-text-tertiary)]">Last checked {formatTime(runProgress.checkedAt, language)} · updates every 3 seconds</div>
         </div>
       ) : (
         <div className="mt-4 text-sm text-[var(--app-text-secondary)]">Loading run progress…</div>

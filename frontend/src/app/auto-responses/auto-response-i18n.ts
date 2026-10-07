@@ -15,6 +15,8 @@ export type AutoResponseDict = {
   statusArchived: string;
   versionLabel: (v: number) => string;
   usageLabel: (count: number) => string;
+  buttonSingular: string;
+  buttonPlural: string;
   emptyList: string;
   emptyListDesc: string;
 
@@ -66,6 +68,9 @@ export type AutoResponseDict = {
   previewStoreSelect: string;
   previewResolvedTitle: string;
   previewBubbleHeader: string;
+  richMessageFallback: string;
+  richMessageLineInteraction: string;
+  previewImageAlt: string;
   previewReady: string;
   previewBlocked: string;
   previewNoStore: string;
@@ -134,6 +139,8 @@ export const autoResponseI18n: Record<"th" | "en" | "zh", AutoResponseDict> = {
     statusArchived: "เก็บถาวร",
     versionLabel: (v) => `v${v}`,
     usageLabel: (count) => `ใช้ใน Rich Menu ${count} เทมเพลต`,
+    buttonSingular: "ปุ่ม",
+    buttonPlural: "ปุ่ม",
     emptyList: "ไม่พบข้อความตอบกลับอัตโนมัติ",
     emptyListDesc: "กดปุ่ม 'สร้างข้อความตอบกลับ' เพื่อเริ่มต้นสร้างข้อความแรก",
 
@@ -184,6 +191,9 @@ export const autoResponseI18n: Record<"th" | "en" | "zh", AutoResponseDict> = {
     previewStoreSelect: "เลือกร้านค้า",
     previewResolvedTitle: "ข้อความที่ลูกค้าจะได้รับ",
     previewBubbleHeader: "จำลองมุมมองลูกค้าบน LINE",
+    richMessageFallback: "Rich Message",
+    richMessageLineInteraction: "Rich Message · กดได้ใน LINE",
+    previewImageAlt: "ตัวอย่างรูปภาพข้อความตอบกลับอัตโนมัติ",
     previewReady: "พร้อมใช้งาน",
     previewBlocked: "ไม่พร้อมใช้งาน",
     previewNoStore: "ไม่มีข้อมูลสาขาสำหรับการแสดงตัวอย่าง",
@@ -253,6 +263,8 @@ export const autoResponseI18n: Record<"th" | "en" | "zh", AutoResponseDict> = {
     statusArchived: "Archived",
     versionLabel: (v) => `v${v}`,
     usageLabel: (count) => `Used in ${count} Rich Menu template${count === 1 ? "" : "s"}`,
+    buttonSingular: "button",
+    buttonPlural: "buttons",
     emptyList: "No auto-response rules found",
     emptyListDesc: "Click 'Create Auto-response' to start building your first response.",
 
@@ -303,6 +315,9 @@ export const autoResponseI18n: Record<"th" | "en" | "zh", AutoResponseDict> = {
     previewStoreSelect: "Select Store",
     previewResolvedTitle: "Customer Chat Preview",
     previewBubbleHeader: "LINE Customer View Simulation",
+    richMessageFallback: "Rich Message",
+    richMessageLineInteraction: "Rich Message · Interactive in LINE",
+    previewImageAlt: "Auto-response image preview",
     previewReady: "Ready",
     previewBlocked: "Not Ready",
     previewNoStore: "No store data available for preview",
@@ -372,6 +387,8 @@ export const autoResponseI18n: Record<"th" | "en" | "zh", AutoResponseDict> = {
     statusArchived: "已归档",
     versionLabel: (v) => `v${v}`,
     usageLabel: (count) => `已在 ${count} 个 Rich Menu 模板中使用`,
+    buttonSingular: "个按钮",
+    buttonPlural: "个按钮",
     emptyList: "未找到自动回复规则",
     emptyListDesc: "点击“新建自动回复”开始创建第一条规则。",
 
@@ -422,6 +439,9 @@ export const autoResponseI18n: Record<"th" | "en" | "zh", AutoResponseDict> = {
     previewStoreSelect: "选择门店",
     previewResolvedTitle: "客户收到的消息",
     previewBubbleHeader: "LINE 客户端效果模拟",
+    richMessageFallback: "富媒体消息",
+    richMessageLineInteraction: "富媒体消息 · 可在 LINE 中点击互动",
+    previewImageAlt: "自动回复图片预览",
     previewReady: "已就绪",
     previewBlocked: "未就绪",
     previewNoStore: "暂无门店数据可供预览",

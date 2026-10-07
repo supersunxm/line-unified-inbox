@@ -1,6 +1,7 @@
 import type { LegacyI18nPhrase, LegacyI18nTemplate } from "../../legacy-i18n-boundary";
 
 export const registrationPhrases: LegacyI18nPhrase[] = [
+  { th: "กำลังเปิด Account Management...", en: "Opening Account Management...", zh: "正在打开账户管理..." },
   { th: "กำลังเปิดการจัดการบัญชี...", en: "Opening Account Management...", zh: "正在打开账户管理..." },
   { th: "การดูแลระบบ", en: "Administration", zh: "系统管理" },
   { th: "การดูแลระบบ · การจัดการบัญชี", en: "Administration · Account Management", zh: "系统管理 · 账户管理" },
@@ -36,6 +37,8 @@ export const registrationPhrases: LegacyI18nPhrase[] = [
   { th: "ร้านค้า", en: "Store", zh: "门店" },
   { th: "สร้างเมื่อ", en: "Created", zh: "创建时间" },
   { th: "ดำเนินการ", en: "Actions", zh: "操作" },
+  { th: "การดำเนินการสำหรับ", en: "Actions for", zh: "管理" },
+  { th: "ระบบจะปิดสิทธิ์การเข้าถึงร้านค้า เซสชันที่ใช้งานอยู่ และโทเค็นของอุปกรณ์ โดยยังเก็บประวัติบัญชีไว้", en: "Store access, active sessions, and device tokens will be disabled. Account history is preserved.", zh: "门店访问权限、活动会话和设备令牌将被停用。账户历史会予以保留。" },
   { th: "ไม่ระบุ", en: "Not set", zh: "未设置" },
   { th: "ปฏิเสธ", en: "Reject", zh: "拒绝" },
   { th: "อนุมัติ", en: "Approve", zh: "批准" },
@@ -99,6 +102,25 @@ export const registrationPhrases: LegacyI18nPhrase[] = [
   { th: "ไม่เคย", en: "Never", zh: "从未" },
   { th: "ปิดใช้งาน", en: "Deactivate", zh: "停用" },
   { th: "เปิดสิทธิ์เต็มอีกครั้ง", en: "Reactivate full access", zh: "重新启用完整权限" },
+  { th: "ต้องเข้าสู่ระบบ", en: "Authentication required", zh: "请先登录" },
+  { th: "กรุณาเข้าสู่ระบบด้วยบัญชีผู้ดูแลระบบ", en: "Please sign in as an administrator.", zh: "请使用管理员账户登录。" },
+  { th: "ดำเนินการ", en: "Action", zh: "操作" },
+  { th: "รีเซ็ตรหัสผ่านให้", en: "Reset password for", zh: "为以下账户重置密码：" },
+  { th: ") ที่", en: ") at", zh: ")，门店：" },
+  { th: "? สิทธิ์เข้าถึงร้านค้า เซสชันที่ใช้งานอยู่ และโทเค็นอุปกรณ์จะถูกปิดใช้งาน โดยยังเก็บประวัติบัญชีไว้", en: "? Store access, active sessions, and device tokens will be disabled. Account history is preserved.", zh: "？门店访问权限、活动会话和设备令牌将被停用。账户历史会予以保留。" },
+  { th: "? ระบบจะคืนสิทธิ์สมาชิกของร้านค้าที่ได้รับอนุมัติในปัจจุบัน โดยจะไม่มีการส่งอีเมลแจ้งอนุมัติ", en: "? The current approved store membership will be restored. No approval email will be sent.", zh: "？将恢复当前已批准的门店成员权限。系统不会发送审批邮件。" },
+  { th: "รออนุมัติ (", en: "Pending approval (", zh: "待审批（" },
+  { th: "อนุมัติ / จัดการ (", en: "Approved / Manage (", zh: "已批准 / 管理（" },
+  { th: "รหัสพนักงาน:", en: "Employee ID:", zh: "员工编号：" },
+  { th: "รหัสผ่านชั่วคราว", en: "Temporary password", zh: "临时密码" },
+  { th: "รีเซ็ตรหัสผ่านสำเร็จสำหรับ", en: "Password reset completed for", zh: "已为以下账户重置密码：" },
+  { th: ". เซสชันเดิมถูกออกจากระบบแล้ว และเจ้าของบัญชีต้องเปลี่ยนรหัสผ่านนี้หลังเข้าสู่ระบบ", en: ". Their existing sessions were signed out and they must change this password after signing in.", zh: "。该账户的现有会话已退出，账户所有者必须在登录后更改此密码。" },
+  { th: "รหัสผ่านนี้จะแสดงเฉพาะผลการรีเซ็ตครั้งนี้ โปรดแชร์กับเจ้าของบัญชีผ่านช่องทางที่ปลอดภัย", en: "This password is shown only for this reset result. Share it securely with the account owner.", zh: "此密码仅在本次重置结果中显示。请通过安全渠道分享给账户所有者。" },
+  { th: "คัดลอกแล้ว", en: "Copied", zh: "已复制" },
+  { th: "คัดลอกรหัสผ่าน", en: "Copy password", zh: "复制密码" },
+  { th: "สร้างรหัสผ่านชั่วคราวให้", en: "Generate a temporary password for", zh: "为以下账户生成临时密码：" },
+  { th: "รหัสผ่านปัจจุบันจะใช้ไม่ได้ เซสชันที่มีอยู่จะถูกออกจากระบบ และเจ้าของบัญชีจะต้องตั้งรหัสผ่านใหม่หลังเข้าสู่ระบบ", en: "The current password will stop working, existing sessions will be signed out, and the account owner will be required to set a new password after signing in.", zh: "当前密码将失效，现有会话将退出，账户所有者登录后必须设置新密码。" },
+  { th: "กำลังรีเซ็ต…", en: "Resetting…", zh: "正在重置…" },
 ];
 
 export const registrationTemplates: LegacyI18nTemplate[] = [

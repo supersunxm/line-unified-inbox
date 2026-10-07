@@ -9,6 +9,7 @@
     "start": "next start -H 0.0.0.0 -p ${PORT:-3000}",
     "lint": "eslint",
     "test": "node --test --experimental-strip-types test/*.test.mts",
+    "audit:localization:classified": "node scripts/audit-localization.mjs --classified",
     "typecheck:baseline": "node scripts/check-tsc-baseline.mjs",
     "audit:contrast": "node scripts/contrast-audit.mjs"
   },

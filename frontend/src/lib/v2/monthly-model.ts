@@ -1,3 +1,6 @@
+import { type AppLanguage } from "../../app/language-utils.ts";
+import { v2Text } from "./v2-translations.ts";
+
 // v2 monthly numbers. Pure: node --test imports it directly.
 //
 // One definition, shared with Store Chats (/chats):
@@ -424,7 +427,8 @@ export function coverageText(input: {
   current: { withChats: number; total: number };
   previous: { withChats: number; total: number } | null;
   previousReason: string | null;
-}): string {
-  const previous = input.previous ? `${input.previous.withChats} ร้าน` : `— (${input.previousReason ?? "ไม่มีข้อมูล"})`;
-  return `สาขาที่มีข้อมูลแชท ${input.currentLabel} ${input.current.withChats} ร้าน · ${input.previousLabel} ${previous} (จาก ${input.current.total} ร้าน)`;
+}, language: AppLanguage = "th"): string {
+  const t = v2Text(language);
+  const previous = input.previous ? t("storeCount", { count: input.previous.withChats }) : `— (${input.previousReason ?? t("noData")})`;
+  return t("coverage", { currentLabel: input.currentLabel, count: input.current.withChats, previousLabel: input.previousLabel, previous, total: input.current.total });
 }

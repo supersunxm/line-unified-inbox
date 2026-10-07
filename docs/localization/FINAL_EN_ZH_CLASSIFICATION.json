@@ -1,0 +1,1471 @@
+{
+  "status": "CLASSIFIED",
+  "auditedAt": "2026-10-07",
+  "scope": "Direct rendered English and Simplified Chinese source candidates in multilingual TSX surfaces, captured by the AST sweep before the final repair. Diagnostic output, unreferenced modules, fixture content, product/brand names, schemas, protocol scopes, endonyms, currency, timezone, legal company name, and technical commands are classified explicitly.",
+  "metrics": {
+    "candidateOccurrences": 143,
+    "BUG": 3,
+    "BUGFixed": 3,
+    "NON_UI": 56,
+    "INTENTIONAL_UI": 84,
+    "unclassified": 0,
+    "byLocale": {
+      "en": {
+        "candidateOccurrences": 139,
+        "BUG": 2,
+        "BUGFixed": 2,
+        "NON_UI": 56,
+        "INTENTIONAL_UI": 81,
+        "unclassified": 0
+      },
+      "zh": {
+        "candidateOccurrences": 6,
+        "BUG": 2,
+        "BUGFixed": 2,
+        "NON_UI": 0,
+        "INTENTIONAL_UI": 4,
+        "unclassified": 0
+      }
+    }
+  },
+  "findings": [
+    {
+      "file": "frontend/src/app/admin/purchase-analytics/purchase-analytics-desktop.tsx",
+      "line": 588,
+      "text": "One row per customer. Current date and store filters are applied automatically.",
+      "languages": [
+        "en"
+      ],
+      "classification": "NON_UI",
+      "reason": "Unreferenced legacy desktop module: route registration imports PurchaseIntelligenceDashboard and MobilePurchaseAnalyticsApp, and no route imports this component."
+    },
+    {
+      "file": "frontend/src/app/admin/purchase-analytics/purchase-analytics-desktop.tsx",
+      "line": 647,
+      "text": "match the current audience selection. Multiple purchases and products are aggregated into one customer row to prevent duplicate recipients.",
+      "languages": [
+        "en"
+      ],
+      "classification": "NON_UI",
+      "reason": "Unreferenced legacy desktop module: route registration imports PurchaseIntelligenceDashboard and MobilePurchaseAnalyticsApp, and no route imports this component."
+    },
+    {
+      "file": "frontend/src/app/admin/purchase-analytics/purchase-analytics-desktop.tsx",
+      "line": 652,
+      "text": "Re-enable",
+      "languages": [
+        "en"
+      ],
+      "classification": "NON_UI",
+      "reason": "Unreferenced legacy desktop module: route registration imports PurchaseIntelligenceDashboard and MobilePurchaseAnalyticsApp, and no route imports this component."
+    },
+    {
+      "file": "frontend/src/app/admin/purchase-analytics/purchase-analytics-desktop.tsx",
+      "line": 652,
+      "text": "to create a Broadcast Audience draft. CSV export can still include excluded customers.",
+      "languages": [
+        "en"
+      ],
+      "classification": "NON_UI",
+      "reason": "Unreferenced legacy desktop module: route registration imports PurchaseIntelligenceDashboard and MobilePurchaseAnalyticsApp, and no route imports this component."
+    },
+    {
+      "file": "frontend/src/app/admin/purchase-analytics/purchase-analytics-desktop.tsx",
+      "line": 665,
+      "text": "customers ·",
+      "languages": [
+        "en"
+      ],
+      "classification": "NON_UI",
+      "reason": "Unreferenced legacy desktop module: route registration imports PurchaseIntelligenceDashboard and MobilePurchaseAnalyticsApp, and no route imports this component."
+    },
+    {
+      "file": "frontend/src/app/admin/purchase-analytics/purchase-analytics-desktop.tsx",
+      "line": 665,
+      "text": "stores ·",
+      "languages": [
+        "en"
+      ],
+      "classification": "NON_UI",
+      "reason": "Unreferenced legacy desktop module: route registration imports PurchaseIntelligenceDashboard and MobilePurchaseAnalyticsApp, and no route imports this component."
+    },
+    {
+      "file": "frontend/src/app/admin/purchase-analytics/purchase-analytics-desktop.tsx",
+      "line": 665,
+      "text": "LINE OAs",
+      "languages": [
+        "en"
+      ],
+      "classification": "NON_UI",
+      "reason": "Unreferenced legacy desktop module: route registration imports PurchaseIntelligenceDashboard and MobilePurchaseAnalyticsApp, and no route imports this component."
+    },
+    {
+      "file": "frontend/src/app/admin/purchase-analytics/purchase-analytics-desktop.tsx",
+      "line": 682,
+      "text": "Customer name, LINE User ID, conversation, language, LINE OA, store, current sales status, products, variants, colors, quantities, purchase channels, payment methods, last purchase/message dates, BM recorder, and messageability status.",
+      "languages": [
+        "en"
+      ],
+      "classification": "NON_UI",
+      "reason": "Unreferenced legacy desktop module: route registration imports PurchaseIntelligenceDashboard and MobilePurchaseAnalyticsApp, and no route imports this component."
+    },
+    {
+      "file": "frontend/src/app/admin/registrations/admin-registrations-desktop.tsx",
+      "line": 378,
+      "text": "BM",
+      "languages": [
+        "en"
+      ],
+      "classification": "INTENTIONAL_UI",
+      "reason": "Fixed official brand, product, platform, protocol, legal, locale-endonym, schema, currency, timezone, or technical identifier whose spelling is stable across locales."
+    },
+    {
+      "file": "frontend/src/app/admin/registrations/admin-registrations-desktop.tsx",
+      "line": 379,
+      "text": "PC",
+      "languages": [
+        "en"
+      ],
+      "classification": "INTENTIONAL_UI",
+      "reason": "Fixed official brand, product, platform, protocol, legal, locale-endonym, schema, currency, timezone, or technical identifier whose spelling is stable across locales."
+    },
+    {
+      "file": "frontend/src/app/admin/registrations/admin-registrations-desktop.tsx",
+      "line": 647,
+      "text": "DELETE",
+      "languages": [
+        "en"
+      ],
+      "classification": "INTENTIONAL_UI",
+      "reason": "Fixed official brand, product, platform, protocol, legal, locale-endonym, schema, currency, timezone, or technical identifier whose spelling is stable across locales."
+    },
+    {
+      "file": "frontend/src/app/admin/registrations/mobile-admin-registrations-app.tsx",
+      "line": 223,
+      "text": "DELETE",
+      "languages": [
+        "en"
+      ],
+      "classification": "INTENTIONAL_UI",
+      "reason": "Fixed official brand, product, platform, protocol, legal, locale-endonym, schema, currency, timezone, or technical identifier whose spelling is stable across locales."
+    },
+    {
+      "file": "frontend/src/app/auto-responses/auto-response-message-builder.tsx",
+      "line": 290,
+      "text": "RM",
+      "languages": [
+        "en"
+      ],
+      "classification": "INTENTIONAL_UI",
+      "reason": "Fixed official brand, product, platform, protocol, legal, locale-endonym, schema, currency, timezone, or technical identifier whose spelling is stable across locales."
+    },
+    {
+      "file": "frontend/src/app/auto-responses/auto-response-preview-stream.tsx",
+      "line": 70,
+      "text": "OA",
+      "languages": [
+        "en"
+      ],
+      "classification": "INTENTIONAL_UI",
+      "reason": "Fixed official brand, product, platform, protocol, legal, locale-endonym, schema, currency, timezone, or technical identifier whose spelling is stable across locales."
+    },
+    {
+      "file": "frontend/src/app/auto-responses/auto-response-preview-stream.tsx",
+      "line": 88,
+      "text": "RM",
+      "languages": [
+        "en"
+      ],
+      "classification": "INTENTIONAL_UI",
+      "reason": "Fixed official brand, product, platform, protocol, legal, locale-endonym, schema, currency, timezone, or technical identifier whose spelling is stable across locales."
+    },
+    {
+      "file": "frontend/src/app/auto-responses/auto-response-rich-message-block.tsx",
+      "line": 62,
+      "text": "RM",
+      "languages": [
+        "en"
+      ],
+      "classification": "INTENTIONAL_UI",
+      "reason": "Fixed official brand, product, platform, protocol, legal, locale-endonym, schema, currency, timezone, or technical identifier whose spelling is stable across locales."
+    },
+    {
+      "file": "frontend/src/app/broadcast/broadcast-view.tsx",
+      "line": 940,
+      "text": "LINE",
+      "languages": [
+        "en"
+      ],
+      "classification": "INTENTIONAL_UI",
+      "reason": "Fixed official brand, product, platform, protocol, legal, locale-endonym, schema, currency, timezone, or technical identifier whose spelling is stable across locales."
+    },
+    {
+      "file": "frontend/src/app/broadcast/broadcast-view.tsx",
+      "line": 943,
+      "text": "OPPO",
+      "languages": [
+        "en"
+      ],
+      "classification": "INTENTIONAL_UI",
+      "reason": "Fixed official brand, product, platform, protocol, legal, locale-endonym, schema, currency, timezone, or technical identifier whose spelling is stable across locales."
+    },
+    {
+      "file": "frontend/src/app/connect/tiktok/analytics/store-owner-analytics.tsx",
+      "line": 175,
+      "text": "OPPO Brand Shop",
+      "languages": [
+        "en"
+      ],
+      "classification": "INTENTIONAL_UI",
+      "reason": "Fixed official brand, product, platform, protocol, legal, locale-endonym, schema, currency, timezone, or technical identifier whose spelling is stable across locales."
+    },
+    {
+      "file": "frontend/src/app/connect/tiktok/analytics/store-owner-analytics.tsx",
+      "line": 177,
+      "text": "OPPO Brand Shop · TikTok Integration",
+      "languages": [
+        "en"
+      ],
+      "classification": "INTENTIONAL_UI",
+      "reason": "Fixed official brand, product, platform, protocol, legal, locale-endonym, schema, currency, timezone, or technical identifier whose spelling is stable across locales."
+    },
+    {
+      "file": "frontend/src/app/connect/tiktok/page.tsx",
+      "line": 30,
+      "text": "OPPO Brand Shop",
+      "languages": [
+        "en"
+      ],
+      "classification": "INTENTIONAL_UI",
+      "reason": "Fixed official brand, product, platform, protocol, legal, locale-endonym, schema, currency, timezone, or technical identifier whose spelling is stable across locales."
+    },
+    {
+      "file": "frontend/src/app/connect/tiktok/page.tsx",
+      "line": 60,
+      "text": "TikTok Login Kit v2",
+      "languages": [
+        "en"
+      ],
+      "classification": "INTENTIONAL_UI",
+      "reason": "Fixed official brand, product, platform, protocol, legal, locale-endonym, schema, currency, timezone, or technical identifier whose spelling is stable across locales."
+    },
+    {
+      "file": "frontend/src/app/connect/tiktok/page.tsx",
+      "line": 114,
+      "text": "(Direct Messages)",
+      "languages": [
+        "en"
+      ],
+      "classification": "INTENTIONAL_UI",
+      "reason": "Fixed official brand, product, platform, protocol, legal, locale-endonym, schema, currency, timezone, or technical identifier whose spelling is stable across locales."
+    },
+    {
+      "file": "frontend/src/app/connect/tiktok/success/store-binding-success.tsx",
+      "line": 259,
+      "text": "OPPO Brand Shop",
+      "languages": [
+        "en"
+      ],
+      "classification": "INTENTIONAL_UI",
+      "reason": "Fixed official brand, product, platform, protocol, legal, locale-endonym, schema, currency, timezone, or technical identifier whose spelling is stable across locales."
+    },
+    {
+      "file": "frontend/src/app/connect/tiktok/success/store-binding-success.tsx",
+      "line": 260,
+      "text": "OPPO Brand Shop · TikTok Integration",
+      "languages": [
+        "en"
+      ],
+      "classification": "INTENTIONAL_UI",
+      "reason": "Fixed official brand, product, platform, protocol, legal, locale-endonym, schema, currency, timezone, or technical identifier whose spelling is stable across locales."
+    },
+    {
+      "file": "frontend/src/app/connect/tiktok/success/store-binding-success.tsx",
+      "line": 284,
+      "text": "● TikTok Login Kit v2",
+      "languages": [
+        "en"
+      ],
+      "classification": "INTENTIONAL_UI",
+      "reason": "Fixed official brand, product, platform, protocol, legal, locale-endonym, schema, currency, timezone, or technical identifier whose spelling is stable across locales."
+    },
+    {
+      "file": "frontend/src/app/coupons/coupon-management-view.tsx",
+      "line": 418,
+      "text": "https://…",
+      "languages": [
+        "en"
+      ],
+      "classification": "NON_UI",
+      "reason": "Unreferenced legacy coupon-management module; the live route uses the aligned and mobile coupon components."
+    },
+    {
+      "file": "frontend/src/app/coupons/coupon-management-view.tsx",
+      "line": 429,
+      "text": "THB",
+      "languages": [
+        "en"
+      ],
+      "classification": "NON_UI",
+      "reason": "Unreferenced legacy coupon-management module; the live route uses the aligned and mobile coupon components."
+    },
+    {
+      "file": "frontend/src/app/coupons/coupon-management-view.tsx",
+      "line": 440,
+      "text": "Asia/Bangkok (UTC+7)",
+      "languages": [
+        "en"
+      ],
+      "classification": "NON_UI",
+      "reason": "Unreferenced legacy coupon-management module; the live route uses the aligned and mobile coupon components."
+    },
+    {
+      "file": "frontend/src/app/coupons/coupon-management-view.tsx",
+      "line": 446,
+      "text": "Select visible",
+      "languages": [
+        "en"
+      ],
+      "classification": "NON_UI",
+      "reason": "Unreferenced legacy coupon-management module; the live route uses the aligned and mobile coupon components."
+    },
+    {
+      "file": "frontend/src/app/coupons/coupon-manager-aligned-view.tsx",
+      "line": 487,
+      "text": "(UTC+07:00) Asia/Bangkok, Jakarta",
+      "languages": [
+        "en"
+      ],
+      "classification": "INTENTIONAL_UI",
+      "reason": "Fixed official brand, product, platform, protocol, legal, locale-endonym, schema, currency, timezone, or technical identifier whose spelling is stable across locales."
+    },
+    {
+      "file": "frontend/src/app/coupons/coupon-manager-aligned-view.tsx",
+      "line": 701,
+      "text": "THB",
+      "languages": [
+        "en"
+      ],
+      "classification": "INTENTIONAL_UI",
+      "reason": "Fixed official brand, product, platform, protocol, legal, locale-endonym, schema, currency, timezone, or technical identifier whose spelling is stable across locales."
+    },
+    {
+      "file": "frontend/src/app/coupons/coupon-manager-aligned-view.tsx",
+      "line": 766,
+      "text": "THB",
+      "languages": [
+        "en"
+      ],
+      "classification": "INTENTIONAL_UI",
+      "reason": "Fixed official brand, product, platform, protocol, legal, locale-endonym, schema, currency, timezone, or technical identifier whose spelling is stable across locales."
+    },
+    {
+      "file": "frontend/src/app/coupons/mobile-coupons-app.tsx",
+      "line": 412,
+      "text": "THB",
+      "languages": [
+        "en"
+      ],
+      "classification": "INTENTIONAL_UI",
+      "reason": "Fixed official brand, product, platform, protocol, legal, locale-endonym, schema, currency, timezone, or technical identifier whose spelling is stable across locales."
+    },
+    {
+      "file": "frontend/src/app/coupons/mobile-coupons-app.tsx",
+      "line": 429,
+      "text": "COUPON2026",
+      "languages": [
+        "en"
+      ],
+      "classification": "INTENTIONAL_UI",
+      "reason": "Fixed official brand, product, platform, protocol, legal, locale-endonym, schema, currency, timezone, or technical identifier whose spelling is stable across locales."
+    },
+    {
+      "file": "frontend/src/app/dashboard/store-24h-response-panel.tsx",
+      "line": 244,
+      "text": "LINE OA Manager",
+      "languages": [
+        "en"
+      ],
+      "classification": "INTENTIONAL_UI",
+      "reason": "Fixed official brand, product, platform, protocol, legal, locale-endonym, schema, currency, timezone, or technical identifier whose spelling is stable across locales."
+    },
+    {
+      "file": "frontend/src/app/dashboard/store-risk-scatter-matrix.tsx",
+      "line": 120,
+      "text": "SLA",
+      "languages": [
+        "en"
+      ],
+      "classification": "INTENTIONAL_UI",
+      "reason": "Fixed official brand, product, platform, protocol, legal, locale-endonym, schema, currency, timezone, or technical identifier whose spelling is stable across locales."
+    },
+    {
+      "file": "frontend/src/app/download/download-content.tsx",
+      "line": 104,
+      "text": "OPPO LINE OA Chat",
+      "languages": [
+        "en"
+      ],
+      "classification": "INTENTIONAL_UI",
+      "reason": "Fixed official brand, product, platform, protocol, legal, locale-endonym, schema, currency, timezone, or technical identifier whose spelling is stable across locales."
+    },
+    {
+      "file": "frontend/src/app/download/download-content.tsx",
+      "line": 106,
+      "text": "OPPO Brand Shop",
+      "languages": [
+        "en"
+      ],
+      "classification": "INTENTIONAL_UI",
+      "reason": "Fixed official brand, product, platform, protocol, legal, locale-endonym, schema, currency, timezone, or technical identifier whose spelling is stable across locales."
+    },
+    {
+      "file": "frontend/src/app/download/download-content.tsx",
+      "line": 107,
+      "text": "OPPO LINE OA Chat",
+      "languages": [
+        "en"
+      ],
+      "classification": "INTENTIONAL_UI",
+      "reason": "Fixed official brand, product, platform, protocol, legal, locale-endonym, schema, currency, timezone, or technical identifier whose spelling is stable across locales."
+    },
+    {
+      "file": "frontend/src/app/follower-insights/follower-insights-view.tsx",
+      "line": 485,
+      "text": "Sync Error:",
+      "languages": [
+        "en"
+      ],
+      "classification": "BUG",
+      "reason": "Visible sync-error label bypassed the locale resource; replaced with followerInsightsTranslations.syncErrorLabel and tested for all locales.",
+      "translationKey": "followerInsightsTranslations.syncErrorLabel",
+      "status": "FIXED"
+    },
+    {
+      "file": "frontend/src/app/friend-attribution/friend-attribution-view.tsx",
+      "line": 420,
+      "text": "OPPO",
+      "languages": [
+        "en"
+      ],
+      "classification": "INTENTIONAL_UI",
+      "reason": "OPPO is the fixed product/brand name."
+    },
+    {
+      "file": "frontend/src/app/friend-attribution/friend-attribution-view.tsx",
+      "line": 508,
+      "text": "Diagnostic Info (",
+      "languages": [
+        "en"
+      ],
+      "classification": "NON_UI",
+      "reason": "This copy belongs to the conditional LIFF diagnostic panel used for developer troubleshooting, not the normal multilingual application interface."
+    },
+    {
+      "file": "frontend/src/app/friend-attribution/friend-attribution-view.tsx",
+      "line": 510,
+      "text": "Build Marker: LIFF-ATTR-V3",
+      "languages": [
+        "en"
+      ],
+      "classification": "NON_UI",
+      "reason": "This copy belongs to the conditional LIFF diagnostic panel used for developer troubleshooting, not the normal multilingual application interface."
+    },
+    {
+      "file": "frontend/src/app/friend-attribution/friend-attribution-view.tsx",
+      "line": 511,
+      "text": "Initialized LIFF ID:",
+      "languages": [
+        "en"
+      ],
+      "classification": "NON_UI",
+      "reason": "This copy belongs to the conditional LIFF diagnostic panel used for developer troubleshooting, not the normal multilingual application interface."
+    },
+    {
+      "file": "frontend/src/app/friend-attribution/friend-attribution-view.tsx",
+      "line": 512,
+      "text": "In Client:",
+      "languages": [
+        "en"
+      ],
+      "classification": "NON_UI",
+      "reason": "This copy belongs to the conditional LIFF diagnostic panel used for developer troubleshooting, not the normal multilingual application interface."
+    },
+    {
+      "file": "frontend/src/app/friend-attribution/friend-attribution-view.tsx",
+      "line": 512,
+      "text": "Yes",
+      "languages": [
+        "en"
+      ],
+      "classification": "NON_UI",
+      "reason": "This copy belongs to the conditional LIFF diagnostic panel used for developer troubleshooting, not the normal multilingual application interface."
+    },
+    {
+      "file": "frontend/src/app/friend-attribution/friend-attribution-view.tsx",
+      "line": 512,
+      "text": "No",
+      "languages": [
+        "en"
+      ],
+      "classification": "NON_UI",
+      "reason": "This copy belongs to the conditional LIFF diagnostic panel used for developer troubleshooting, not the normal multilingual application interface."
+    },
+    {
+      "file": "frontend/src/app/friend-attribution/friend-attribution-view.tsx",
+      "line": 513,
+      "text": "Is Logged In:",
+      "languages": [
+        "en"
+      ],
+      "classification": "NON_UI",
+      "reason": "This copy belongs to the conditional LIFF diagnostic panel used for developer troubleshooting, not the normal multilingual application interface."
+    },
+    {
+      "file": "frontend/src/app/friend-attribution/friend-attribution-view.tsx",
+      "line": 513,
+      "text": "Yes",
+      "languages": [
+        "en"
+      ],
+      "classification": "NON_UI",
+      "reason": "This copy belongs to the conditional LIFF diagnostic panel used for developer troubleshooting, not the normal multilingual application interface."
+    },
+    {
+      "file": "frontend/src/app/friend-attribution/friend-attribution-view.tsx",
+      "line": 513,
+      "text": "No",
+      "languages": [
+        "en"
+      ],
+      "classification": "NON_UI",
+      "reason": "This copy belongs to the conditional LIFF diagnostic panel used for developer troubleshooting, not the normal multilingual application interface."
+    },
+    {
+      "file": "frontend/src/app/friend-attribution/friend-attribution-view.tsx",
+      "line": 514,
+      "text": "Has Access Token:",
+      "languages": [
+        "en"
+      ],
+      "classification": "NON_UI",
+      "reason": "This copy belongs to the conditional LIFF diagnostic panel used for developer troubleshooting, not the normal multilingual application interface."
+    },
+    {
+      "file": "frontend/src/app/friend-attribution/friend-attribution-view.tsx",
+      "line": 514,
+      "text": "Yes",
+      "languages": [
+        "en"
+      ],
+      "classification": "NON_UI",
+      "reason": "This copy belongs to the conditional LIFF diagnostic panel used for developer troubleshooting, not the normal multilingual application interface."
+    },
+    {
+      "file": "frontend/src/app/friend-attribution/friend-attribution-view.tsx",
+      "line": 514,
+      "text": "No",
+      "languages": [
+        "en"
+      ],
+      "classification": "NON_UI",
+      "reason": "This copy belongs to the conditional LIFF diagnostic panel used for developer troubleshooting, not the normal multilingual application interface."
+    },
+    {
+      "file": "frontend/src/app/friend-attribution/friend-attribution-view.tsx",
+      "line": 515,
+      "text": "Has ID Token:",
+      "languages": [
+        "en"
+      ],
+      "classification": "NON_UI",
+      "reason": "This copy belongs to the conditional LIFF diagnostic panel used for developer troubleshooting, not the normal multilingual application interface."
+    },
+    {
+      "file": "frontend/src/app/friend-attribution/friend-attribution-view.tsx",
+      "line": 515,
+      "text": "Yes",
+      "languages": [
+        "en"
+      ],
+      "classification": "NON_UI",
+      "reason": "This copy belongs to the conditional LIFF diagnostic panel used for developer troubleshooting, not the normal multilingual application interface."
+    },
+    {
+      "file": "frontend/src/app/friend-attribution/friend-attribution-view.tsx",
+      "line": 515,
+      "text": "No",
+      "languages": [
+        "en"
+      ],
+      "classification": "NON_UI",
+      "reason": "This copy belongs to the conditional LIFF diagnostic panel used for developer troubleshooting, not the normal multilingual application interface."
+    },
+    {
+      "file": "frontend/src/app/friend-attribution/friend-attribution-view.tsx",
+      "line": 516,
+      "text": "Current Path:",
+      "languages": [
+        "en"
+      ],
+      "classification": "NON_UI",
+      "reason": "This copy belongs to the conditional LIFF diagnostic panel used for developer troubleshooting, not the normal multilingual application interface."
+    },
+    {
+      "file": "frontend/src/app/friend-attribution/friend-attribution-view.tsx",
+      "line": 517,
+      "text": "Session Bootstrap:",
+      "languages": [
+        "en"
+      ],
+      "classification": "NON_UI",
+      "reason": "This copy belongs to the conditional LIFF diagnostic panel used for developer troubleshooting, not the normal multilingual application interface."
+    },
+    {
+      "file": "frontend/src/app/friend-attribution/friend-attribution-view.tsx",
+      "line": 583,
+      "text": "Diagnostic Info (",
+      "languages": [
+        "en"
+      ],
+      "classification": "NON_UI",
+      "reason": "This copy belongs to the conditional LIFF diagnostic panel used for developer troubleshooting, not the normal multilingual application interface."
+    },
+    {
+      "file": "frontend/src/app/friend-attribution/friend-attribution-view.tsx",
+      "line": 585,
+      "text": "Initialized LIFF ID:",
+      "languages": [
+        "en"
+      ],
+      "classification": "NON_UI",
+      "reason": "This copy belongs to the conditional LIFF diagnostic panel used for developer troubleshooting, not the normal multilingual application interface."
+    },
+    {
+      "file": "frontend/src/app/friend-attribution/friend-attribution-view.tsx",
+      "line": 586,
+      "text": "In Client:",
+      "languages": [
+        "en"
+      ],
+      "classification": "NON_UI",
+      "reason": "This copy belongs to the conditional LIFF diagnostic panel used for developer troubleshooting, not the normal multilingual application interface."
+    },
+    {
+      "file": "frontend/src/app/friend-attribution/friend-attribution-view.tsx",
+      "line": 586,
+      "text": "Yes",
+      "languages": [
+        "en"
+      ],
+      "classification": "NON_UI",
+      "reason": "This copy belongs to the conditional LIFF diagnostic panel used for developer troubleshooting, not the normal multilingual application interface."
+    },
+    {
+      "file": "frontend/src/app/friend-attribution/friend-attribution-view.tsx",
+      "line": 586,
+      "text": "No",
+      "languages": [
+        "en"
+      ],
+      "classification": "NON_UI",
+      "reason": "This copy belongs to the conditional LIFF diagnostic panel used for developer troubleshooting, not the normal multilingual application interface."
+    },
+    {
+      "file": "frontend/src/app/friend-attribution/friend-attribution-view.tsx",
+      "line": 587,
+      "text": "Is Logged In:",
+      "languages": [
+        "en"
+      ],
+      "classification": "NON_UI",
+      "reason": "This copy belongs to the conditional LIFF diagnostic panel used for developer troubleshooting, not the normal multilingual application interface."
+    },
+    {
+      "file": "frontend/src/app/friend-attribution/friend-attribution-view.tsx",
+      "line": 587,
+      "text": "Yes",
+      "languages": [
+        "en"
+      ],
+      "classification": "NON_UI",
+      "reason": "This copy belongs to the conditional LIFF diagnostic panel used for developer troubleshooting, not the normal multilingual application interface."
+    },
+    {
+      "file": "frontend/src/app/friend-attribution/friend-attribution-view.tsx",
+      "line": 587,
+      "text": "No",
+      "languages": [
+        "en"
+      ],
+      "classification": "NON_UI",
+      "reason": "This copy belongs to the conditional LIFF diagnostic panel used for developer troubleshooting, not the normal multilingual application interface."
+    },
+    {
+      "file": "frontend/src/app/friend-attribution/friend-attribution-view.tsx",
+      "line": 588,
+      "text": "Has Access Token:",
+      "languages": [
+        "en"
+      ],
+      "classification": "NON_UI",
+      "reason": "This copy belongs to the conditional LIFF diagnostic panel used for developer troubleshooting, not the normal multilingual application interface."
+    },
+    {
+      "file": "frontend/src/app/friend-attribution/friend-attribution-view.tsx",
+      "line": 588,
+      "text": "Yes",
+      "languages": [
+        "en"
+      ],
+      "classification": "NON_UI",
+      "reason": "This copy belongs to the conditional LIFF diagnostic panel used for developer troubleshooting, not the normal multilingual application interface."
+    },
+    {
+      "file": "frontend/src/app/friend-attribution/friend-attribution-view.tsx",
+      "line": 588,
+      "text": "No",
+      "languages": [
+        "en"
+      ],
+      "classification": "NON_UI",
+      "reason": "This copy belongs to the conditional LIFF diagnostic panel used for developer troubleshooting, not the normal multilingual application interface."
+    },
+    {
+      "file": "frontend/src/app/friend-attribution/friend-attribution-view.tsx",
+      "line": 589,
+      "text": "Has ID Token:",
+      "languages": [
+        "en"
+      ],
+      "classification": "NON_UI",
+      "reason": "This copy belongs to the conditional LIFF diagnostic panel used for developer troubleshooting, not the normal multilingual application interface."
+    },
+    {
+      "file": "frontend/src/app/friend-attribution/friend-attribution-view.tsx",
+      "line": 589,
+      "text": "Yes",
+      "languages": [
+        "en"
+      ],
+      "classification": "NON_UI",
+      "reason": "This copy belongs to the conditional LIFF diagnostic panel used for developer troubleshooting, not the normal multilingual application interface."
+    },
+    {
+      "file": "frontend/src/app/friend-attribution/friend-attribution-view.tsx",
+      "line": 589,
+      "text": "No",
+      "languages": [
+        "en"
+      ],
+      "classification": "NON_UI",
+      "reason": "This copy belongs to the conditional LIFF diagnostic panel used for developer troubleshooting, not the normal multilingual application interface."
+    },
+    {
+      "file": "frontend/src/app/friend-attribution/friend-attribution-view.tsx",
+      "line": 590,
+      "text": "Current Path:",
+      "languages": [
+        "en"
+      ],
+      "classification": "NON_UI",
+      "reason": "This copy belongs to the conditional LIFF diagnostic panel used for developer troubleshooting, not the normal multilingual application interface."
+    },
+    {
+      "file": "frontend/src/app/friend-attribution/friend-attribution-view.tsx",
+      "line": 591,
+      "text": "Session Bootstrap:",
+      "languages": [
+        "en"
+      ],
+      "classification": "NON_UI",
+      "reason": "This copy belongs to the conditional LIFF diagnostic panel used for developer troubleshooting, not the normal multilingual application interface."
+    },
+    {
+      "file": "frontend/src/app/friend-source-links/friend-source-links-view.tsx",
+      "line": 785,
+      "text": "LIFF",
+      "languages": [
+        "en"
+      ],
+      "classification": "INTENTIONAL_UI",
+      "reason": "Fixed official brand, product, platform, protocol, legal, locale-endonym, schema, currency, timezone, or technical identifier whose spelling is stable across locales."
+    },
+    {
+      "file": "frontend/src/app/friend-source-links/friend-source-links-view.tsx",
+      "line": 1099,
+      "text": "QR",
+      "languages": [
+        "en"
+      ],
+      "classification": "INTENTIONAL_UI",
+      "reason": "Fixed official brand, product, platform, protocol, legal, locale-endonym, schema, currency, timezone, or technical identifier whose spelling is stable across locales."
+    },
+    {
+      "file": "frontend/src/app/google-review-kpi/google-review-kpi-view.tsx",
+      "line": 1248,
+      "text": "AI Audit / Antigravity",
+      "languages": [
+        "en"
+      ],
+      "classification": "NON_UI",
+      "reason": "The text is part of static example/import fixture content (sample audit source, sample account, sample runner, or sample JSON), not live user-facing KPI data."
+    },
+    {
+      "file": "frontend/src/app/google-review-kpi/google-review-kpi-view.tsx",
+      "line": 1256,
+      "text": "OPPO Admin",
+      "languages": [
+        "en"
+      ],
+      "classification": "NON_UI",
+      "reason": "The text is part of static example/import fixture content (sample audit source, sample account, sample runner, or sample JSON), not live user-facing KPI data."
+    },
+    {
+      "file": "frontend/src/app/google-review-kpi/google-review-kpi-view.tsx",
+      "line": 1438,
+      "text": "AI Audit / Antigravity",
+      "languages": [
+        "en"
+      ],
+      "classification": "NON_UI",
+      "reason": "The text is part of static example/import fixture content (sample audit source, sample account, sample runner, or sample JSON), not live user-facing KPI data."
+    },
+    {
+      "file": "frontend/src/app/google-review-kpi/google-review-kpi-view.tsx",
+      "line": 1459,
+      "text": "AI Audit / Antigravity",
+      "languages": [
+        "en"
+      ],
+      "classification": "NON_UI",
+      "reason": "The text is part of static example/import fixture content (sample audit source, sample account, sample runner, or sample JSON), not live user-facing KPI data."
+    },
+    {
+      "file": "frontend/src/app/google-review-kpi/google-review-kpi-view.tsx",
+      "line": 1480,
+      "text": "Chrome Runner (Legacy)",
+      "languages": [
+        "en"
+      ],
+      "classification": "NON_UI",
+      "reason": "The text is part of static example/import fixture content (sample audit source, sample account, sample runner, or sample JSON), not live user-facing KPI data."
+    },
+    {
+      "file": "frontend/src/app/google-review-kpi/google-review-kpi-view.tsx",
+      "line": 2393,
+      "text": "{\"month\":\"2026-09\",\"stores\":{\"25610\":{\"definiteNewQualifiedReviews\":2,\"definiteNewSeptemberReviews\":2}}}",
+      "languages": [
+        "en"
+      ],
+      "classification": "NON_UI",
+      "reason": "The text is part of static example/import fixture content (sample audit source, sample account, sample runner, or sample JSON), not live user-facing KPI data."
+    },
+    {
+      "file": "frontend/src/app/greeting-messages/greeting-management-view.tsx",
+      "line": 242,
+      "text": "LINE",
+      "languages": [
+        "en"
+      ],
+      "classification": "INTENTIONAL_UI",
+      "reason": "Fixed official brand, product, platform, protocol, legal, locale-endonym, schema, currency, timezone, or technical identifier whose spelling is stable across locales."
+    },
+    {
+      "file": "frontend/src/app/greeting-messages/greeting-management-view.tsx",
+      "line": 242,
+      "text": "OPPO LINE OA Monitor",
+      "languages": [
+        "en"
+      ],
+      "classification": "INTENTIONAL_UI",
+      "reason": "Fixed official brand, product, platform, protocol, legal, locale-endonym, schema, currency, timezone, or technical identifier whose spelling is stable across locales."
+    },
+    {
+      "file": "frontend/src/app/greeting-messages/greeting-management-view.tsx",
+      "line": 242,
+      "text": "Retail Operations",
+      "languages": [
+        "en"
+      ],
+      "classification": "INTENTIONAL_UI",
+      "reason": "Fixed official brand, product, platform, protocol, legal, locale-endonym, schema, currency, timezone, or technical identifier whose spelling is stable across locales."
+    },
+    {
+      "file": "frontend/src/app/greeting-messages/greeting-management-view.tsx",
+      "line": 254,
+      "text": "Sunn",
+      "languages": [
+        "en"
+      ],
+      "classification": "NON_UI",
+      "reason": "Sunn is sample store/content data shown as an example, not interface copy."
+    },
+    {
+      "file": "frontend/src/app/greeting-messages/greeting-management-view.tsx",
+      "line": 254,
+      "text": "Retail Operations",
+      "languages": [
+        "en"
+      ],
+      "classification": "INTENTIONAL_UI",
+      "reason": "Fixed official brand, product, platform, protocol, legal, locale-endonym, schema, currency, timezone, or technical identifier whose spelling is stable across locales."
+    },
+    {
+      "file": "frontend/src/app/greeting-messages/greeting-message-builder.tsx",
+      "line": 237,
+      "text": "RM",
+      "languages": [
+        "en"
+      ],
+      "classification": "INTENTIONAL_UI",
+      "reason": "Fixed official brand, product, platform, protocol, legal, locale-endonym, schema, currency, timezone, or technical identifier whose spelling is stable across locales."
+    },
+    {
+      "file": "frontend/src/app/greeting-messages/greeting-messages-view.tsx",
+      "line": 912,
+      "text": "oppo",
+      "languages": [
+        "en"
+      ],
+      "classification": "NON_UI",
+      "reason": "This is example greeting/customer content, not interface copy."
+    },
+    {
+      "file": "frontend/src/app/greeting-messages/greeting-rich-message-block.tsx",
+      "line": 60,
+      "text": "RM",
+      "languages": [
+        "en"
+      ],
+      "classification": "INTENTIONAL_UI",
+      "reason": "Fixed official brand, product, platform, protocol, legal, locale-endonym, schema, currency, timezone, or technical identifier whose spelling is stable across locales."
+    },
+    {
+      "file": "frontend/src/app/language.tsx",
+      "line": 118,
+      "text": "Language / ภาษา / 语言",
+      "languages": [
+        "en",
+        "zh"
+      ],
+      "classification": "INTENTIONAL_UI",
+      "reason": "Fixed official brand, product, platform, protocol, legal, locale-endonym, schema, currency, timezone, or technical identifier whose spelling is stable across locales."
+    },
+    {
+      "file": "frontend/src/app/login/page.tsx",
+      "line": 128,
+      "text": "OPPO LINE OA Monitor",
+      "languages": [
+        "en"
+      ],
+      "classification": "INTENTIONAL_UI",
+      "reason": "Fixed official brand, product, platform, protocol, legal, locale-endonym, schema, currency, timezone, or technical identifier whose spelling is stable across locales."
+    },
+    {
+      "file": "frontend/src/app/mass-messages/purchase-broadcast-draft-banner.tsx",
+      "line": 36,
+      "text": "CRM",
+      "languages": [
+        "en"
+      ],
+      "classification": "INTENTIONAL_UI",
+      "reason": "Fixed official brand, product, platform, protocol, legal, locale-endonym, schema, currency, timezone, or technical identifier whose spelling is stable across locales."
+    },
+    {
+      "file": "frontend/src/app/monthly-operations-report/page.tsx",
+      "line": 535,
+      "text": "BM",
+      "languages": [
+        "en"
+      ],
+      "classification": "INTENTIONAL_UI",
+      "reason": "Fixed official brand, product, platform, protocol, legal, locale-endonym, schema, currency, timezone, or technical identifier whose spelling is stable across locales."
+    },
+    {
+      "file": "frontend/src/app/page.tsx",
+      "line": 3377,
+      "text": "OPPO LINE OA Monitor",
+      "languages": [
+        "en"
+      ],
+      "classification": "INTENTIONAL_UI",
+      "reason": "Fixed official brand, product, platform, protocol, legal, locale-endonym, schema, currency, timezone, or technical identifier whose spelling is stable across locales."
+    },
+    {
+      "file": "frontend/src/app/page.tsx",
+      "line": 3855,
+      "text": "ngrok http",
+      "languages": [
+        "en"
+      ],
+      "classification": "NON_UI",
+      "reason": "This is a local development tunnel command in developer setup guidance, not multilingual application copy."
+    },
+    {
+      "file": "frontend/src/app/public-landing-page.tsx",
+      "line": 93,
+      "text": "OPPO Brand Shop",
+      "languages": [
+        "en"
+      ],
+      "classification": "INTENTIONAL_UI",
+      "reason": "Fixed official brand, product, platform, protocol, legal, locale-endonym, schema, currency, timezone, or technical identifier whose spelling is stable across locales."
+    },
+    {
+      "file": "frontend/src/app/public-landing-page.tsx",
+      "line": 337,
+      "text": "LINE",
+      "languages": [
+        "en"
+      ],
+      "classification": "INTENTIONAL_UI",
+      "reason": "Fixed official brand, product, platform, protocol, legal, locale-endonym, schema, currency, timezone, or technical identifier whose spelling is stable across locales."
+    },
+    {
+      "file": "frontend/src/app/review15/opengraph-image.tsx",
+      "line": 122,
+      "text": "oppo",
+      "languages": [
+        "en"
+      ],
+      "classification": "INTENTIONAL_UI",
+      "reason": "Fixed Thai Review15 social-preview artwork is for the Thai-language review word-count tool and has no app-locale context."
+    },
+    {
+      "file": "frontend/src/app/review15/opengraph-image.tsx",
+      "line": 125,
+      "text": "Brand Shop",
+      "languages": [
+        "en"
+      ],
+      "classification": "INTENTIONAL_UI",
+      "reason": "Fixed Thai Review15 social-preview artwork is for the Thai-language review word-count tool and has no app-locale context."
+    },
+    {
+      "file": "frontend/src/app/review15/opengraph-image.tsx",
+      "line": 176,
+      "text": "เช็กข้อความรีวิวให้ครบตามกฎ Review KPI",
+      "languages": [
+        "en"
+      ],
+      "classification": "INTENTIONAL_UI",
+      "reason": "Fixed Thai Review15 social-preview artwork is for the Thai-language review word-count tool and has no app-locale context."
+    },
+    {
+      "file": "frontend/src/app/review15/opengraph-image.tsx",
+      "line": 218,
+      "text": "oppo",
+      "languages": [
+        "en"
+      ],
+      "classification": "INTENTIONAL_UI",
+      "reason": "Fixed Thai Review15 social-preview artwork is for the Thai-language review word-count tool and has no app-locale context."
+    },
+    {
+      "file": "frontend/src/app/review15/opengraph-image.tsx",
+      "line": 235,
+      "text": "พนักงานบริการดีมาก แนะนำ OPPO Reno 5G ใช้งานง่าย กล้องสวย ภาพคมชัด แบตอึด ร้านสะอาด ราคาคุ้มค่า ประทับใจมาก",
+      "languages": [
+        "en"
+      ],
+      "classification": "NON_UI",
+      "reason": "The review is illustrative sample content embedded in the static social preview image."
+    },
+    {
+      "file": "frontend/src/app/review15/review-15-checker.tsx",
+      "line": 556,
+      "text": "OPPO Brand Shop",
+      "languages": [
+        "en"
+      ],
+      "classification": "INTENTIONAL_UI",
+      "reason": "Fixed official brand, product, platform, protocol, legal, locale-endonym, schema, currency, timezone, or technical identifier whose spelling is stable across locales."
+    },
+    {
+      "file": "frontend/src/app/review15/review-15-checker.tsx",
+      "line": 710,
+      "text": "Google Vision OCR:",
+      "languages": [
+        "en"
+      ],
+      "classification": "INTENTIONAL_UI",
+      "reason": "Fixed official brand, product, platform, protocol, legal, locale-endonym, schema, currency, timezone, or technical identifier whose spelling is stable across locales."
+    },
+    {
+      "file": "frontend/src/app/review15/review-15-checker.tsx",
+      "line": 910,
+      "text": "OPPO Reno 5G",
+      "languages": [
+        "en"
+      ],
+      "classification": "NON_UI",
+      "reason": "OPPO Reno 5G is illustrative sample review content used in Review15, not interface copy."
+    },
+    {
+      "file": "frontend/src/app/rich-menus/rich-menus-view.tsx",
+      "line": 1248,
+      "text": "px",
+      "languages": [
+        "en"
+      ],
+      "classification": "INTENTIONAL_UI",
+      "reason": "Fixed official brand, product, platform, protocol, legal, locale-endonym, schema, currency, timezone, or technical identifier whose spelling is stable across locales."
+    },
+    {
+      "file": "frontend/src/app/rich-menus/rich-menus-view.tsx",
+      "line": 1280,
+      "text": "px)",
+      "languages": [
+        "en"
+      ],
+      "classification": "INTENTIONAL_UI",
+      "reason": "Fixed official brand, product, platform, protocol, legal, locale-endonym, schema, currency, timezone, or technical identifier whose spelling is stable across locales."
+    },
+    {
+      "file": "frontend/src/app/rich-menus/rich-menus-view.tsx",
+      "line": 1437,
+      "text": "{{store.googleMapsUrl}}",
+      "languages": [
+        "en"
+      ],
+      "classification": "INTENTIONAL_UI",
+      "reason": "Fixed official brand, product, platform, protocol, legal, locale-endonym, schema, currency, timezone, or technical identifier whose spelling is stable across locales."
+    },
+    {
+      "file": "frontend/src/app/rich-menus/rich-menus-view.tsx",
+      "line": 1445,
+      "text": "{{store.storeName}}",
+      "languages": [
+        "en"
+      ],
+      "classification": "INTENTIONAL_UI",
+      "reason": "Fixed official brand, product, platform, protocol, legal, locale-endonym, schema, currency, timezone, or technical identifier whose spelling is stable across locales."
+    },
+    {
+      "file": "frontend/src/app/rich-menus/rich-menus-view.tsx",
+      "line": 1453,
+      "text": "{{store.lineUrl}}",
+      "languages": [
+        "en"
+      ],
+      "classification": "INTENTIONAL_UI",
+      "reason": "Fixed official brand, product, platform, protocol, legal, locale-endonym, schema, currency, timezone, or technical identifier whose spelling is stable across locales."
+    },
+    {
+      "file": "frontend/src/app/rich-menus/rich-menus-view.tsx",
+      "line": 1461,
+      "text": "{{store.tiktokUrl}}",
+      "languages": [
+        "en"
+      ],
+      "classification": "INTENTIONAL_UI",
+      "reason": "Fixed official brand, product, platform, protocol, legal, locale-endonym, schema, currency, timezone, or technical identifier whose spelling is stable across locales."
+    },
+    {
+      "file": "frontend/src/app/rich-messages/rich-messages-view.tsx",
+      "line": 217,
+      "text": "URI",
+      "languages": [
+        "en"
+      ],
+      "classification": "INTENTIONAL_UI",
+      "reason": "Fixed official brand, product, platform, protocol, legal, locale-endonym, schema, currency, timezone, or technical identifier whose spelling is stable across locales."
+    },
+    {
+      "file": "frontend/src/app/rich-messages/rich-messages-view.tsx",
+      "line": 217,
+      "text": "MESSAGE",
+      "languages": [
+        "en"
+      ],
+      "classification": "INTENTIONAL_UI",
+      "reason": "Fixed official brand, product, platform, protocol, legal, locale-endonym, schema, currency, timezone, or technical identifier whose spelling is stable across locales."
+    },
+    {
+      "file": "frontend/src/app/store-360/store-360-view.tsx",
+      "line": 317,
+      "text": "中文",
+      "languages": [
+        "zh"
+      ],
+      "classification": "INTENTIONAL_UI",
+      "reason": "Fixed official brand, product, platform, protocol, legal, locale-endonym, schema, currency, timezone, or technical identifier whose spelling is stable across locales."
+    },
+    {
+      "file": "frontend/src/app/store-locator/store-locator-app.tsx",
+      "line": 43,
+      "text": "LINE",
+      "languages": [
+        "en"
+      ],
+      "classification": "INTENTIONAL_UI",
+      "reason": "Fixed official brand, product, platform, protocol, legal, locale-endonym, schema, currency, timezone, or technical identifier whose spelling is stable across locales."
+    },
+    {
+      "file": "frontend/src/app/store-locator/store-locator-app.tsx",
+      "line": 262,
+      "text": "OPPO Brand Shop",
+      "languages": [
+        "en"
+      ],
+      "classification": "INTENTIONAL_UI",
+      "reason": "Fixed official brand, product, platform, protocol, legal, locale-endonym, schema, currency, timezone, or technical identifier whose spelling is stable across locales."
+    },
+    {
+      "file": "frontend/src/app/stores/[identifier]/public-store-profile.tsx",
+      "line": 86,
+      "text": "OPPO Brand Shop",
+      "languages": [
+        "en"
+      ],
+      "classification": "INTENTIONAL_UI",
+      "reason": "Fixed official brand, product, platform, protocol, legal, locale-endonym, schema, currency, timezone, or technical identifier whose spelling is stable across locales."
+    },
+    {
+      "file": "frontend/src/app/stores/[identifier]/public-store-profile.tsx",
+      "line": 237,
+      "text": "TT",
+      "languages": [
+        "en"
+      ],
+      "classification": "INTENTIONAL_UI",
+      "reason": "Fixed official brand, product, platform, protocol, legal, locale-endonym, schema, currency, timezone, or technical identifier whose spelling is stable across locales."
+    },
+    {
+      "file": "frontend/src/app/stores/public-stores-directory.tsx",
+      "line": 153,
+      "text": "OPPO Brand Shop",
+      "languages": [
+        "en"
+      ],
+      "classification": "INTENTIONAL_UI",
+      "reason": "Fixed official brand, product, platform, protocol, legal, locale-endonym, schema, currency, timezone, or technical identifier whose spelling is stable across locales."
+    },
+    {
+      "file": "frontend/src/app/stores/public-stores-directory.tsx",
+      "line": 394,
+      "text": "LINE",
+      "languages": [
+        "en"
+      ],
+      "classification": "INTENTIONAL_UI",
+      "reason": "Fixed official brand, product, platform, protocol, legal, locale-endonym, schema, currency, timezone, or technical identifier whose spelling is stable across locales."
+    },
+    {
+      "file": "frontend/src/app/tiktok/connect/error/error-content.tsx",
+      "line": 63,
+      "text": "OPPO Retail TikTok",
+      "languages": [
+        "en"
+      ],
+      "classification": "INTENTIONAL_UI",
+      "reason": "Fixed official brand, product, platform, protocol, legal, locale-endonym, schema, currency, timezone, or technical identifier whose spelling is stable across locales."
+    },
+    {
+      "file": "frontend/src/app/tiktok/connect/success/success-content.tsx",
+      "line": 111,
+      "text": "OPPO Brand Shop · TikTok Integration",
+      "languages": [
+        "en"
+      ],
+      "classification": "INTENTIONAL_UI",
+      "reason": "Fixed official brand, product, platform, protocol, legal, locale-endonym, schema, currency, timezone, or technical identifier whose spelling is stable across locales."
+    },
+    {
+      "file": "frontend/src/app/tiktok/connect/success/success-content.tsx",
+      "line": 166,
+      "text": "TikTok Login Kit v2",
+      "languages": [
+        "en"
+      ],
+      "classification": "INTENTIONAL_UI",
+      "reason": "Fixed official brand, product, platform, protocol, legal, locale-endonym, schema, currency, timezone, or technical identifier whose spelling is stable across locales."
+    },
+    {
+      "file": "frontend/src/app/tiktok-integration/page.tsx",
+      "line": 25,
+      "text": "OPPO Brand Shop",
+      "languages": [
+        "en"
+      ],
+      "classification": "INTENTIONAL_UI",
+      "reason": "Fixed official brand, product, platform, protocol, legal, locale-endonym, schema, currency, timezone, or technical identifier whose spelling is stable across locales."
+    },
+    {
+      "file": "frontend/src/app/tiktok-integration/page.tsx",
+      "line": 78,
+      "text": "TikTok Login Kit (Web OAuth 2.0)",
+      "languages": [
+        "en"
+      ],
+      "classification": "INTENTIONAL_UI",
+      "reason": "Fixed official brand, product, platform, protocol, legal, locale-endonym, schema, currency, timezone, or technical identifier whose spelling is stable across locales."
+    },
+    {
+      "file": "frontend/src/app/tiktok-integration/page.tsx",
+      "line": 94,
+      "text": "user.info.basic",
+      "languages": [
+        "en"
+      ],
+      "classification": "INTENTIONAL_UI",
+      "reason": "Fixed official brand, product, platform, protocol, legal, locale-endonym, schema, currency, timezone, or technical identifier whose spelling is stable across locales."
+    },
+    {
+      "file": "frontend/src/app/tiktok-integration/page.tsx",
+      "line": 94,
+      "text": "user.info.profile",
+      "languages": [
+        "en"
+      ],
+      "classification": "INTENTIONAL_UI",
+      "reason": "Fixed official brand, product, platform, protocol, legal, locale-endonym, schema, currency, timezone, or technical identifier whose spelling is stable across locales."
+    },
+    {
+      "file": "frontend/src/app/tiktok-integration/page.tsx",
+      "line": 94,
+      "text": "user.info.stats",
+      "languages": [
+        "en"
+      ],
+      "classification": "INTENTIONAL_UI",
+      "reason": "Fixed official brand, product, platform, protocol, legal, locale-endonym, schema, currency, timezone, or technical identifier whose spelling is stable across locales."
+    },
+    {
+      "file": "frontend/src/app/tiktok-integration/page.tsx",
+      "line": 203,
+      "text": "obsthailand@gmail.com",
+      "languages": [
+        "en"
+      ],
+      "classification": "INTENTIONAL_UI",
+      "reason": "Fixed official brand, product, platform, protocol, legal, locale-endonym, schema, currency, timezone, or technical identifier whose spelling is stable across locales."
+    },
+    {
+      "file": "frontend/src/app/welcome/page.tsx",
+      "line": 58,
+      "text": "OPPO LINE OA Monitor",
+      "languages": [
+        "en"
+      ],
+      "classification": "INTENTIONAL_UI",
+      "reason": "Fixed official brand, product, platform, protocol, legal, locale-endonym, schema, currency, timezone, or technical identifier whose spelling is stable across locales."
+    },
+    {
+      "file": "frontend/src/app/welcome/page.tsx",
+      "line": 72,
+      "text": "© 2026 OPPO Retail Operations",
+      "languages": [
+        "en"
+      ],
+      "classification": "INTENTIONAL_UI",
+      "reason": "Fixed official brand, product, platform, protocol, legal, locale-endonym, schema, currency, timezone, or technical identifier whose spelling is stable across locales."
+    },
+    {
+      "file": "frontend/src/components/shell/app-sidebar.tsx",
+      "line": 157,
+      "text": "Retail Operations",
+      "languages": [
+        "en"
+      ],
+      "classification": "INTENTIONAL_UI",
+      "reason": "Fixed official brand, product, platform, protocol, legal, locale-endonym, schema, currency, timezone, or technical identifier whose spelling is stable across locales."
+    },
+    {
+      "file": "frontend/src/components/shell/app-sidebar.tsx",
+      "line": 185,
+      "text": "🇬🇧 English",
+      "languages": [
+        "en"
+      ],
+      "classification": "INTENTIONAL_UI",
+      "reason": "Fixed official brand, product, platform, protocol, legal, locale-endonym, schema, currency, timezone, or technical identifier whose spelling is stable across locales."
+    },
+    {
+      "file": "frontend/src/components/shell/app-sidebar.tsx",
+      "line": 185,
+      "text": "🇨🇳 中文",
+      "languages": [
+        "zh"
+      ],
+      "classification": "INTENTIONAL_UI",
+      "reason": "Fixed official brand, product, platform, protocol, legal, locale-endonym, schema, currency, timezone, or technical identifier whose spelling is stable across locales."
+    },
+    {
+      "file": "frontend/src/components/shell/top-navigation.tsx",
+      "line": 207,
+      "text": "🇬🇧 English",
+      "languages": [
+        "en"
+      ],
+      "classification": "INTENTIONAL_UI",
+      "reason": "Fixed official brand, product, platform, protocol, legal, locale-endonym, schema, currency, timezone, or technical identifier whose spelling is stable across locales."
+    },
+    {
+      "file": "frontend/src/components/shell/top-navigation.tsx",
+      "line": 207,
+      "text": "🇨🇳 中文",
+      "languages": [
+        "zh"
+      ],
+      "classification": "INTENTIONAL_UI",
+      "reason": "Fixed official brand, product, platform, protocol, legal, locale-endonym, schema, currency, timezone, or technical identifier whose spelling is stable across locales."
+    },
+    {
+      "file": "frontend/src/components/shell/top-navigation.tsx",
+      "line": 264,
+      "text": "OPPO LINE OA Monitor",
+      "languages": [
+        "en"
+      ],
+      "classification": "INTENTIONAL_UI",
+      "reason": "Fixed official brand, product, platform, protocol, legal, locale-endonym, schema, currency, timezone, or technical identifier whose spelling is stable across locales."
+    },
+    {
+      "file": "frontend/src/components/v2/month-report.tsx",
+      "line": 158,
+      "text": "OPPO LINE OA ·",
+      "languages": [
+        "en"
+      ],
+      "classification": "INTENTIONAL_UI",
+      "reason": "Fixed official brand, product, platform, protocol, legal, locale-endonym, schema, currency, timezone, or technical identifier whose spelling is stable across locales."
+    },
+    {
+      "file": "frontend/src/components/v2/v2-shell.tsx",
+      "line": 111,
+      "text": "OPPO LINE OA",
+      "languages": [
+        "en"
+      ],
+      "classification": "INTENTIONAL_UI",
+      "reason": "Fixed official brand, product, platform, protocol, legal, locale-endonym, schema, currency, timezone, or technical identifier whose spelling is stable across locales."
+    },
+    {
+      "file": "frontend/src/app/store-locator/store-locator-app.tsx",
+      "line": 22,
+      "text": "ภูมิภาค / จังหวัด",
+      "languages": [
+        "zh"
+      ],
+      "classification": "BUG",
+      "reason": "Browser QA exposed Thai step labels in the Chinese store-locator page; the step labels now come from explicit locale-specific resources.",
+      "translationKey": "storeLocatorStepLabels.zh",
+      "status": "FIXED"
+    },
+    {
+      "file": "frontend/src/app/store-locator/store-locator-app.tsx",
+      "line": 190,
+      "text": "ไม่สามารถโหลดข้อมูลสาขาได้ กรุณาลองใหม่อีกครั้ง",
+      "languages": [
+        "en",
+        "zh"
+      ],
+      "classification": "BUG",
+      "reason": "Browser QA showed this Thai API error fallback in both English and Chinese. The exact state message now has complete locale entries in the route dictionary.",
+      "translationKey": "storeLocatorPhrases.loadStoreDataError",
+      "status": "FIXED"
+    }
+  ]
+}

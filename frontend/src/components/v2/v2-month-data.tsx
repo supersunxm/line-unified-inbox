@@ -1,5 +1,7 @@
 "use client";
 
+import { useAppLanguage } from "@/app/language";
+
 // Data for v2's monthly views. Every source is an existing endpoint shared with an existing page:
 //   bm-reply-status-summary?month=  — /chats's month view (แชท / ยังไม่ตอบ / ตอบแล้ว, per store)
 //   /conversations?month=&sort=     — /chats's list call (previous month over the same days; one store's month)
@@ -269,6 +271,7 @@ export function useSelectedMonth(): string {
 }
 
 export function V2MonthDataProvider({ children }: { children: React.ReactNode }) {
+  const { language } = useAppLanguage();
   const month = useSelectedMonth();
   const [nonce, setNonce] = useState(0);
   const [now, setNow] = useState(() => Date.now());
@@ -327,9 +330,9 @@ export function V2MonthDataProvider({ children }: { children: React.ReactNode })
       month,
       now,
       frame,
-      periodText: comparisonLabel(frame),
+      periodText: comparisonLabel(frame, language),
       close: monthClose.data?.close ?? null,
-      statusText: closeStatusLabel(monthClose.data?.close ?? null, monthClose.data?.dueAt ?? null, frame),
+      statusText: closeStatusLabel(monthClose.data?.close ?? null, monthClose.data?.dueAt ?? null, frame, language),
       stores,
       partnerMapping,
       current,
@@ -352,7 +355,7 @@ export function V2MonthDataProvider({ children }: { children: React.ReactNode })
       nonce,
       refresh,
     };
-  }, [current, google, month, nonce, now, partnerMapping, previousSummary, previousRates, rates, refresh, stores, frame, monthClose.data, monthClose.error, tagCoverage]);
+  }, [language, current, google, month, nonce, now, partnerMapping, previousSummary, previousRates, rates, refresh, stores, frame, monthClose.data, monthClose.error, tagCoverage]);
 
   return <V2MonthContext.Provider value={value}>{children}</V2MonthContext.Provider>;
 }

@@ -7,6 +7,7 @@ const css = read("../src/app/globals.css");
 const tiktokDashboard = read("../src/app/tiktok/tiktok-public-dashboard.tsx");
 const followerChart = read("../src/app/tiktok/dashboard/tiktok-follower-chart.tsx");
 const richMessages = read("../src/app/rich-messages/rich-messages-view.tsx");
+const richMessagesI18n = read("../src/app/rich-messages/rich-messages-i18n.ts");
 
 // Dark mode remaps the slate scale and white (--color-slate-900 becomes #f8fafc,
 // --color-white becomes the surface colour), so stock Tailwind dark: palette classes
@@ -32,8 +33,10 @@ test("/tiktok uses --app-* tokens in dark mode", () => {
 
 test("/rich-messages: token preview surface and readable green buttons in dark mode", () => {
   assert.match(richMessages, /<div className="sticky top-5 rounded-xl bg-\[#eef1f4\] p-4 dark:bg-\[var\(--app-surface-subtle\)\]">/);
-  assert.match(richMessages, /bg-\[#06c755\] px-4 py-2 text-sm font-semibold text-white dark:bg-\[var\(--app-accent\)\]">\+ สร้างใหม่/);
+  assert.match(richMessages, /bg-\[#06c755\] px-4 py-2 text-sm font-semibold text-white dark:bg-\[var\(--app-accent\)\]">\{t\.createNew\}/);
   assert.match(richMessages, /bg-\[#06c755\] px-5 py-2\.5 text-sm font-semibold text-white disabled:opacity-50 dark:bg-\[var\(--app-accent\)\]"/);
+  assert.match(richMessages, /: t\.create\}/);
+  assert.match(richMessagesI18n, /th:[\s\S]*createNew: "\+ สร้างใหม่"[\s\S]*en:[\s\S]*createNew: "\+ Create new"[\s\S]*zh:[\s\S]*createNew: "\+ 新建"/);
   // The rule that gives those buttons white text exists only in dark mode and skips disabled buttons.
   assert.ok(css.includes('html[data-theme="dark"] button.text-white[class~="dark:bg-[var(--app-accent)]"]:not(:disabled, [aria-disabled="true"]) {\n  color: var(--app-accent-contrast);\n}'));
   assert.ok(css.includes('html[data-theme="dark"] button.text-white[class~="dark:bg-[var(--app-accent)]"]:is(:disabled, [aria-disabled="true"]) {\n  background: var(--button-primary-disabled-bg);'));

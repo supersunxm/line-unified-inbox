@@ -6,6 +6,7 @@ import { useState, useTransition } from "react";
 import { PageContainer } from "@/components/shell";
 import { useAppLanguage } from "../language";
 import type { TikTokPublicDashboardStore, TikTokPublicHistoryPoint } from "./tiktok-public-api";
+import { tiktokStoreDetailText } from "./tiktok-dashboard-i18n";
 
 type Props = { store: TikTokPublicDashboardStore; history: TikTokPublicHistoryPoint[] };
 type HistoryPeriod = "7D" | "30D";
@@ -54,10 +55,12 @@ function FollowerChart({
   points,
   locale,
   emptyLabel,
+  chartLabel,
 }: {
   points: TikTokPublicHistoryPoint[];
   locale: string;
   emptyLabel: string;
+  chartLabel: string;
 }) {
   if (points.length < 2) {
     return (
@@ -107,7 +110,7 @@ function FollowerChart({
             preserveAspectRatio="none"
             className="relative z-10 h-full w-full overflow-visible"
             role="img"
-            aria-label="Follower history chart"
+            aria-label={chartLabel}
           >
             <defs>
               <linearGradient id="followerArea" x1="0" y1="0" x2="0" y2="1">
@@ -150,51 +153,7 @@ export function TikTokPublicStoreDetail({ store, history }: Props) {
   };
 
   const locale = language === "th" ? "th-TH" : language === "zh" ? "zh-CN" : "en-US";
-  const labels = language === "th" ? {
-    back: "กลับ TikTok Analytics",
-    followers: "Followers",
-    following: "Following",
-    likes: "Total Likes",
-    videos: "Videos",
-    oneDay: "วันนี้",
-    seven: "7 วัน",
-    thirty: "30 วัน",
-    history: "Follower Growth",
-    historySub: "แนวโน้มผู้ติดตามจาก Daily Snapshot",
-    snapshot: "Snapshot",
-    updated: "อัปเดต",
-    noBaseline: "ยังไม่มีข้อมูลเปรียบเทียบ",
-    open: "เปิด TikTok",
-    content: "Content",
-    growth: "Follower Growth",
-    avgDaily: "เฉลี่ย / วัน",
-    bestDay: "ดีที่สุด / วัน",
-    range: "ช่วงการเปลี่ยนแปลง",
-    snapshots: "Snapshots",
-    noHistory: "ต้องมีอย่างน้อย 2 Daily Snapshots เพื่อแสดงกราฟ",
-  } : {
-    back: "Back to TikTok Analytics",
-    followers: "Followers",
-    following: "Following",
-    likes: "Total Likes",
-    videos: "Videos",
-    oneDay: "Today",
-    seven: "7 days",
-    thirty: "30 days",
-    history: "Follower Growth",
-    historySub: "Follower trend from daily snapshots",
-    snapshot: "Snapshot",
-    updated: "Updated",
-    noBaseline: "No comparison data yet",
-    open: "Open TikTok",
-    content: "Content",
-    growth: "Follower Growth",
-    avgDaily: "Avg / day",
-    bestDay: "Best / day",
-    range: "Change range",
-    snapshots: "Snapshots",
-    noHistory: "At least 2 daily snapshots are required to draw history",
-  };
+  const labels = tiktokStoreDetailText[language];
 
   const growthText = (value: number | null) => value === null ? "—" : `${value > 0 ? "+" : ""}${formatNumber(value, locale)}`;
   const percentText = (value: number | null) => value === null ? "—" : `${value > 0 ? "+" : ""}${value.toFixed(2)}%`;
@@ -238,7 +197,7 @@ export function TikTokPublicStoreDetail({ store, history }: Props) {
             onClick={handleRefresh}
             disabled={isRefreshing}
             className="flex h-9 w-9 items-center justify-center rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-text-secondary)] transition hover:bg-[var(--app-surface-subtle)] disabled:opacity-50"
-            aria-label="Refresh data"
+            aria-label={labels.refreshData}
           >
             <svg className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -360,7 +319,7 @@ export function TikTokPublicStoreDetail({ store, history }: Props) {
           </div>
 
           <div className="px-5 py-5">
-            <FollowerChart points={chartPoints} locale={locale} emptyLabel={labels.noHistory} />
+            <FollowerChart points={chartPoints} locale={locale} emptyLabel={labels.noHistory} chartLabel={labels.historyChart} />
           </div>
 
           <div className="grid border-t border-[var(--app-border-subtle)] sm:grid-cols-4 sm:divide-x sm:divide-[var(--app-border-subtle)]">

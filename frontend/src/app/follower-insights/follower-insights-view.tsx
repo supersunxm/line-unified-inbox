@@ -462,7 +462,7 @@ export function FollowerInsightsView({ language = "en" }: { language?: Language 
                     <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                     </svg>
-                    <span>{language === "th" ? "ดึงข้อมูลวันที่เลือก" : "Sync Selected Date"}</span>
+                    <span>{language === "th" ? "ดึงข้อมูลวันที่เลือก" : language === "zh" ? "同步所选日期" : "Sync Selected Date"}</span>
                   </>
                 )}
               </button>
@@ -483,7 +483,7 @@ export function FollowerInsightsView({ language = "en" }: { language?: Language 
         {/* Sync Error Banner */}
         {syncError && (
           <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-600 dark:text-red-400">
-            Sync Error: {syncError}
+            {t.syncErrorLabel} {syncError}
           </div>
         )}
 
@@ -662,7 +662,7 @@ export function FollowerInsightsView({ language = "en" }: { language?: Language 
               <div className="lg:col-span-2">
                 {!endpointsUsable && (
                   <div className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-400">
-                    <strong>{language === "th" ? "คำเตือน:" : "Warning:"}</strong> {t.endpointWarning}
+                    <strong>{language === "th" ? "คำเตือน:" : language === "zh" ? "提示：" : "Warning:"}</strong> {t.endpointWarning}
                   </div>
                 )}
                 <StoreBreakdownTable

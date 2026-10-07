@@ -759,7 +759,8 @@ export function transformNetworkHealthProps(
 }
 
 export function transformStoreRiskMatrixProps(
-  analytics: DashboardAnalyticsResponse
+  analytics: DashboardAnalyticsResponse,
+  language: "th" | "en" | "zh",
 ): StoreScatterPoint[] {
   const stores = analytics.storeRanking || [];
   const medianVolume = stores.length > 0
@@ -773,7 +774,7 @@ export function transformStoreRiskMatrixProps(
         action: item.recommendedAction || "Follow up with Branch Manager",
         impact: item.impact || "High customer waiting risk & lost trust",
         problem: item.problem || `${item.pending} pending messages`,
-        problemAge: `${Math.floor(item.pending * 15 / 60)}h ${(item.pending * 15) % 60}m`,
+        problemAge: formatRiskProblemAge(`${Math.floor(item.pending * 15 / 60)}h ${(item.pending * 15) % 60}m`, language),
         severity: item.pending > 10 ? "CRITICAL" : "HIGH",
       });
     }
@@ -788,7 +789,7 @@ export function transformStoreRiskMatrixProps(
         action: item.recommendation || "Dispatch Branch Manager alert",
         impact: `Expected SLA breach in ${item.expectedBreachHours}h`,
         problem: `No BM response after peak hour`,
-        problemAge: `${wholeHours}h ${mins < 10 ? "0" + mins : mins}m`,
+        problemAge: formatRiskProblemAge(`${wholeHours}h ${mins < 10 ? "0" + mins : mins}m`, language),
         severity: item.riskLevel === "HIGH" ? "CRITICAL" : "HIGH",
       });
     }
@@ -825,7 +826,7 @@ export function transformStoreRiskMatrixProps(
         : "Low operational impact");
 
     const problem = detail?.problem || (quadrant === "CRITICAL" ? "No BM response after peak hour" : `${pendingCount} pending customer messages`);
-    const problemAge = detail?.problemAge || (idx === 0 ? "2h 35m" : idx === 1 ? "1h 45m" : "0h 50m");
+    const problemAge = detail?.problemAge || formatRiskProblemAge(idx === 0 ? "2h 35m" : idx === 1 ? "1h 45m" : "0h 50m", language);
     const severity = detail?.severity || (quadrant === "CRITICAL" ? "CRITICAL" : quadrant === "LOW_RISK" ? "HIGH" : "MEDIUM");
 
     return {
@@ -842,6 +843,16 @@ export function transformStoreRiskMatrixProps(
       severity,
     };
   });
+}
+
+export function formatRiskProblemAge(value: string, language: "th" | "en" | "zh") {
+  const match = value.match(/^(\d+)h\s+(\d+)m$/);
+  if (!match) return value;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (language === "th") return `${hours} ชม. ${minutes} นาที`;
+  if (language === "zh") return `${hours} 小时 ${minutes} 分钟`;
+  return `${hours}h ${minutes}m`;
 }
 
 export function transformExecutiveDecisionProps(
@@ -871,7 +882,7 @@ export function transformExecutiveDecisionProps(
   const recommendedAction = insights[3] || insights[2] || (isTh
     ? `จัดสรรกำลังพลพนักงานกระจายความช่วยเหลือในสาขากลุ่ม Critical และกระตุ้นการแจ้งเตือน BM`
     : isZh
-    ? `ใน Key 高峰时段重新分配浮动支持人员，并向 Critical 门店发送 BM 紧急通知`
+    ? `在高峰时段重新分配机动支援人员，并向高风险门店发送 BM 紧急通知`
     : `Assign backup responder during peak hours (${peakWindow}) and dispatch BM alerts.`);
 
   const executeActionLabel = isTh

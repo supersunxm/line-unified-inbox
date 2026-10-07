@@ -1,3 +1,6 @@
+import { languageLocale, type AppLanguage } from "../../app/language-utils.ts";
+import { v2Text } from "./v2-translations.ts";
+
 // Month windows for v2's monthly views. Pure: node --test imports it directly.
 //
 // A month is a Bangkok calendar month (UTC+7, no DST), the same window /chats and the
@@ -150,31 +153,35 @@ export function monthWindow(month: string, now: number = Date.now()): MonthWindo
 }
 
 /** "ต.ค. 2026" (Gregorian year, as /chats's month selector shows it). */
-export function monthShortLabel(month: string): string {
+export function monthShortLabel(month: string, language: AppLanguage = "th"): string {
   const { year, monthIndex } = parts(month);
-  return `${THAI_MONTHS_SHORT[monthIndex]} ${year}`;
+  if (language === "th") return `${THAI_MONTHS_SHORT[monthIndex]} ${year}`;
+  return new Intl.DateTimeFormat(languageLocale(language), { month: "short", year: "numeric", timeZone: "Asia/Bangkok" }).format(new Date(monthStartMs(month)));
 }
 
 /** "ตุลาคม 2026". */
-export function monthLongLabel(month: string): string {
+export function monthLongLabel(month: string, language: AppLanguage = "th"): string {
   const { year, monthIndex } = parts(month);
-  return `${THAI_MONTHS_LONG[monthIndex]} ${year}`;
+  if (language === "th") return `${THAI_MONTHS_LONG[monthIndex]} ${year}`;
+  return new Intl.DateTimeFormat(languageLocale(language), { month: "long", year: "numeric", timeZone: "Asia/Bangkok" }).format(new Date(monthStartMs(month)));
 }
 
 /** "1–7 ต.ค. 2026", or "ทั้งเดือน ก.ย. 2026" for a whole month. */
-export function periodLabel(period: MonthPeriod): string {
-  if (period.wholeMonth) return `ทั้งเดือน ${monthShortLabel(period.month)}`;
-  return `${period.lastDay === 1 ? "1" : `1–${period.lastDay}`} ${monthShortLabel(period.month)}`;
+export function periodLabel(period: MonthPeriod, language: AppLanguage = "th"): string {
+  const t = v2Text(language);
+  const month = monthShortLabel(period.month, language);
+  if (period.wholeMonth) return t("wholeMonth", { month });
+  return t("period", { days: period.lastDay === 1 ? "1" : `1–${period.lastDay}`, month });
 }
 
 /** "1–7 ต.ค. 2026 เทียบ 1–7 ก.ย. 2026" — every number states its period with this. */
-export function comparisonLabel(window: MonthWindow): string {
-  return `${periodLabel(window.current)} เทียบ ${periodLabel(window.previous)}`;
+export function comparisonLabel(window: MonthWindow, language: AppLanguage = "th"): string {
+  return v2Text(language)("comparison", { current: periodLabel(window.current, language), previous: periodLabel(window.previous, language) });
 }
 
 /** "เดือนนี้ยังไม่ปิด (ถึงวันที่ 7)" / "ปิดเดือนแล้ว". */
-export function monthStatusLabel(window: MonthWindow): string {
-  return window.inProgress ? `เดือนนี้ยังไม่ปิด (ข้อมูลถึงวันที่ ${window.current.lastDay})` : "ปิดเดือนแล้ว";
+export function monthStatusLabel(window: MonthWindow, language: AppLanguage = "th"): string {
+  return window.inProgress ? v2Text(language)("openMonth", { day: window.current.lastDay }) : v2Text(language)("closedMonth");
 }
 
 /**

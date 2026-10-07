@@ -1,3 +1,4 @@
+import { v2Text } from "../src/lib/v2/v2-translations.ts";
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import test from "node:test";
@@ -50,14 +51,15 @@ test("business-hours waiting appears only in the ตอนนี้ tab; monthly
     assert.doesNotMatch(read(file), /WaitLabel|businessMinutes|formatWaitMinutes|นับเฉพาะเวลาเปิดร้าน/, file);
   }
   assert.match(read("components/v2/store-scorecard-drawer.tsx"), /import \{ formatWaitingDuration \} from "@\/components\/shell\/store-priority-score";/);
-  assert.match(read("components/v2/response-view.tsx"), /data-v2-business-hours-label[^>]*>นับเฉพาะเวลาเปิดร้าน</);
+  assert.match(v2Text("th")("responseDescription", { minutes: 60, limit: 15 }), /นับเฉพาะเวลาเปิดร้าน \(10:00–21:00\)/);
+  assert.match(read("components/v2/response-view.tsx"), /data-v2-business-hours-label[^>]*>\{t\("responseDescription"/);
 });
 
 test("shell: monthly pages carry the month selector; ภาพรวมเดือน and ตอนนี้ are tabs; daily attention list removed", () => {
   const shell = read("components/v2/v2-shell.tsx");
   assert.match(shell, /"\/v2": "ภาพรวมเดือน", "\/v2\/response": "ตอนนี้", "\/v2\/stores": "สาขา"/);
   assert.match(shell, /\{monthly && <MonthSelector \/>\}/);
-  assert.match(shell, /label: "สาขา", icon: "stores"/);
+  assert.match(shell, /label: t\("stores"\), icon: "stores"/);
   assert.match(read("components/v2/v2-month-controls.tsx"), /selectableMonths\(now\)/);
   assert.match(read("app/v2/(shell)/page.tsx"), /<MonthOverview \/>/);
   assert.match(read("app/v2/(shell)/stores/page.tsx"), /<StoreScorecardView \/>/);
@@ -70,7 +72,7 @@ test("shell: monthly pages carry the month selector; ภาพรวมเดื
 test("store list: no 'สาขาที่ต้องดู' KPI or daily inclusion rule; Google Review column only with results", () => {
   const view = read("components/v2/store-scorecard-view.tsx");
   assert.doesNotMatch(view, /สาขาที่ต้องดู|hasAttention|ต้องดู"/);
-  assert.match(view, /\{data\.hasGoogleResults && <TableHead scope="col">Google Review<\/TableHead>\}/);
+  assert.match(view, /\{data\.hasGoogleResults && <TableHead scope="col">\{t\("reviewLabel"\)\}<\/TableHead>\}/);
   assert.match(view, /<th scope="row"/, "real table semantics: the store is the row header");
 });
 

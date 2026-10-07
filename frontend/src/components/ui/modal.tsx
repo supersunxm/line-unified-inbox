@@ -2,6 +2,8 @@
 
 import React, { useEffect, useRef } from "react";
 import { IconButton } from "./icon-button";
+import { useAppLanguage } from "@/app/language";
+import { getSharedUiText } from "@/app/shared-ui-i18n";
 
 export interface ModalProps {
   isOpen: boolean;
@@ -33,6 +35,8 @@ export function Modal({
   className = "",
 }: ModalProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
+  const { language } = useAppLanguage();
+  const text = getSharedUiText(language);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -86,7 +90,7 @@ export function Modal({
           <IconButton
             size="sm"
             variant="ghost"
-            aria-label="Close dialog"
+            aria-label={text.closeDialog}
             onClick={onClose}
           >
             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

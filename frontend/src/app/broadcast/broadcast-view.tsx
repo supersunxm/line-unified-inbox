@@ -731,11 +731,11 @@ export function BroadcastView({ language, userRole }: Props) {
                       </div>
                     </div>
                     <div className="self-start rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
-                      <div className="font-semibold">Targeting rule</div>
+                  <div className="font-semibold">{language === "th" ? "กฎการกำหนดเป้าหมาย" : language === "zh" ? "定向规则" : "Targeting rule"}</div>
                       <p className="mt-1 text-xs leading-5">
                         {periods.has("D180_364") && periods.has("D365_PLUS") && periods.size === 2
-                          ? "180–364 days + 365 days or more จะถูก normalize เป็น Friendship period ≥ 180 days."
-                          : "ระบบจะรักษาช่วงที่เลือกแบบตรงตัว และจะไม่ fallback เป็น All friends หากร้านส่งไม่ได้"}
+                          ? (language === "th" ? "ช่วง 180–364 วันและ 365 วันขึ้นไปจะถูกรวมเป็น Friendship period ≥ 180 days." : language === "zh" ? "180–364 天和 365 天以上将统一为 Friendship period ≥ 180 days。" : "The 180–364 days and 365 days or more ranges will be normalized to Friendship period ≥ 180 days.")
+                          : (language === "th" ? "ระบบจะรักษาช่วงที่เลือกแบบตรงตัว และจะไม่ fallback เป็น All friends หากร้านส่งไม่ได้" : language === "zh" ? "系统将保留所选范围；如果门店无法发送，不会自动回退为 All friends。" : "The selected ranges are preserved exactly. If a store cannot send, the system will not fall back to All friends.")}
                       </p>
                     </div>
                   </div>

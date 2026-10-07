@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import React, { useCallback, useMemo, useState } from "react";
+import { useAppLanguage } from "@/app/language";
 import { PageHeader } from "@/components/shell/page-header";
 import { SearchInput, SectionCard, SectionCardSkeleton, Table, TableBody, TableCell, TableEmptyState, TableHead, TableHeader, TableRow, useDeferredLoading } from "@/components/ui";
-import { KPI_DIFFERENCE_NOTE, NO_TARGET_LABEL, RATE24_TARGET, REPLIED_RATE_TARGET } from "@/lib/v2/kpi";
+import { RATE24_TARGET, REPLIED_RATE_TARGET } from "@/lib/v2/kpi";
 import { monthLongLabel } from "@/lib/v2/month";
 import { parseStoresUrl, reportHref, storesHref, type StoresUrlState } from "@/lib/v2/month-url";
 import { filterMonthRows, MIN_RATE_SAMPLE, sortMonthRows, type MonthSort, type MonthStoreRow } from "@/lib/v2/monthly-model";
@@ -17,34 +18,39 @@ import { useV2Month } from "./v2-month-data";
 import { HowCounted } from "./kpi-cards";
 import { TagCoverageCell, useTagCoverageNote } from "./tag-coverage";
 import { CountCell, RateCell, SourceNotice, StateValue } from "./v2-ui";
+import { v2Text } from "@/lib/v2/v2-translations";
 
-const SORT_LABELS: Array<[MonthSort, string]> = [
-  ["rate24", "ห่างเป้าตอบใน 24 ชม. (ห่างสุดก่อน)"],
-  ["reply", "ตอบแล้ว % (ต่ำสุดก่อน)"],
-  ["delta", "ตอบใน 24 ชม. ลดลงมากสุด (จุด)"],
-  ["unreplied", "ยังไม่ตอบ (มากสุดก่อน)"],
+const SORT_LABELS: Array<[MonthSort, "sort24Gap" | "sortReplyRate" | "sort24Drop" | "sortUnanswered"]> = [
+  ["rate24", "sort24Gap"],
+  ["reply", "sortReplyRate"],
+  ["delta", "sort24Drop"],
+  ["unreplied", "sortUnanswered"],
 ];
 
 const selectClass = "h-9 rounded-[var(--app-radius-md)] border border-[var(--app-border)] bg-[var(--app-surface)] px-3 text-xs text-[var(--app-text-primary)]";
 
 /** "2/13", or "—" with the reason it is not ranked. */
-export function PartnerRank({ row }: { row: MonthStoreRow }) {
+export function PartnerRank({ row, language = "th" }: { row: MonthStoreRow; language?: "th" | "en" | "zh" }) {
+  const t = v2Text(language);
   if (row.partnerRank !== null) return <span className="tabular-nums">{row.partnerRank}<span className="text-[var(--app-text-secondary)]">/{row.partnerRankedCount}</span></span>;
-  const reason = row.partner === UNMATCHED_PARTNER ? "ไม่ระบุ partner" : `แชทน้อยกว่า ${MIN_RATE_SAMPLE} แชท ไม่จัดอันดับ`;
+  const reason = row.partner === UNMATCHED_PARTNER ? t("noPartnerRank") : t("tooFewForRank", { count: MIN_RATE_SAMPLE });
   return <span title={reason} className="text-[var(--app-text-secondary)]">—<span className="sr-only"> ({reason})</span></span>;
 }
 
-function ReviewCell({ result }: { result: { qualifiedReviews: number; targetQualifiedReviews: number; isPassed: boolean } | null }) {
-  if (!result) return <span title="ยังไม่ตรวจเดือนนี้" className="text-[var(--app-text-secondary)]">—<span className="sr-only"> (ยังไม่ตรวจเดือนนี้)</span></span>;
+function ReviewCell({ result, language }: { result: { qualifiedReviews: number; targetQualifiedReviews: number; isPassed: boolean } | null; language: "th" | "en" | "zh" }) {
+  const t = v2Text(language);
+  if (!result) return <span title={t("reviewNotChecked")} className="text-[var(--app-text-secondary)]">—<span className="sr-only"> ({t("reviewNotChecked")})</span></span>;
   return (
     <span className="whitespace-nowrap">
       <span className="font-semibold tabular-nums">{result.qualifiedReviews}/{result.targetQualifiedReviews}</span>{" "}
-      <span className={`text-xs ${result.isPassed ? "text-[var(--app-text-secondary)]" : "text-[var(--app-danger)]"}`}>{result.isPassed ? "ถึงเป้า" : "ต่ำกว่าเป้า"}</span>
+      <span className={`text-xs ${result.isPassed ? "text-[var(--app-text-secondary)]" : "text-[var(--app-danger)]"}`}>{result.isPassed ? t("targetMetShort") : t("targetBelowShort")}</span>
     </span>
   );
 }
 
 export function StoreScorecardView() {
+  const { language } = useAppLanguage();
+  const t = v2Text(language);
   const data = useV2Month();
   const router = useRouter();
   const params = useSearchParams();
@@ -73,78 +79,78 @@ export function StoreScorecardView() {
   return (
     <div className="h-full overflow-y-auto px-6 py-5">
       <PageHeader
-        title={`สาขา · ${monthLongLabel(data.month)}`}
-        description={`คะแนนรายเดือนของแต่ละสาขา · ${data.periodText} · คลิกชื่อสาขาเพื่อดูรายละเอียด`}
-        actions={<Link href={reportHref({ month: data.month, partner: state.partner, store: null })} target="_blank" className="rounded-[var(--app-radius-md)] border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-1.5 text-sm font-medium text-[var(--app-accent)] hover:bg-[var(--app-accent-soft)]">รายงานเดือน{state.partner ? ` · ${state.partner}` : ""} ↗</Link>}
+        title={t("scorecardTitle", { month: monthLongLabel(data.month, language) })}
+        description={t("scorecardDescription", { period: data.periodText })}
+        actions={<Link href={reportHref({ month: data.month, partner: state.partner, store: null })} target="_blank" className="rounded-[var(--app-radius-md)] border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-1.5 text-sm font-medium text-[var(--app-accent)] hover:bg-[var(--app-accent-soft)]">{state.partner ? t("monthlyReportPartner", { partner: state.partner }) : t("monthlyReport") + " ↗"}</Link>}
       />
       <div className="space-y-4">
         <DataLine />
-        {data.partnerMapping.error && !data.partnerMapping.data && <SourceNotice>โหลด partner ของสาขาไม่สำเร็จ ทุกสาขาจึงแสดงเป็น &quot;ไม่ระบุ partner&quot;: {data.partnerMapping.error}</SourceNotice>}
+        {data.partnerMapping.error && !data.partnerMapping.data && <SourceNotice>{t("partnerMappingFailed", { error: data.partnerMapping.error })}</SourceNotice>}
         {(data.current.error || data.rates.error || data.previous.error) && (
           <SourceNotice>
-            โหลดไม่สำเร็จ — {[data.current.error && `จำนวนแชท: ${data.current.error}`, data.rates.error && `ตอบใน 24 ชม.: ${data.rates.error}`, data.previous.error && `ช่วงเทียบ: ${data.previous.error}`].filter(Boolean).join(" · ")}
+            {t("sourceLoadListFailed", { details: [data.current.error && t("chatCountLabelError", { error: data.current.error }), data.rates.error && t("replyWithin24Error", { error: data.rates.error }), data.previous.error && t("comparisonPeriodError", { error: data.previous.error })].filter(Boolean).join(" · ") })}
           </SourceNotice>
         )}
 
         <div className="flex flex-wrap items-center gap-2">
           <label className="flex items-center gap-2 text-xs text-[var(--app-text-secondary)]">
-            Partner
+            {t("partnerFilter")}
             <select data-v2-partner-filter value={state.partner ?? ""} onChange={(event) => navigate({ partner: event.target.value || null, store: null })} className={selectClass}>
-              <option value="">ทุก partner</option>
+              <option value="">{t("allPartners")}</option>
               {partners.map((partner) => <option key={partner} value={partner}>{partner}</option>)}
             </select>
           </label>
           <label className="flex items-center gap-2 text-xs text-[var(--app-text-secondary)]">
-            ภาค
+            {t("region")}
             <select data-v2-region-filter value={state.region ?? ""} onChange={(event) => navigate({ region: event.target.value || null, store: null })} className={selectClass}>
-              <option value="">ทุกภาค</option>
+              <option value="">{t("allRegions")}</option>
               {regions.map((region) => <option key={region} value={region}>{thaiRegion(region) ?? region}</option>)}
             </select>
           </label>
           <label className="flex items-center gap-2 text-xs text-[var(--app-text-secondary)]">
-            เรียงตาม
+            {t("sortBy")}
             <select data-v2-sort value={state.sort} onChange={(event) => navigate({ sort: event.target.value as MonthSort })} className={selectClass}>
-              {SORT_LABELS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+              {SORT_LABELS.map(([value, key]) => <option key={value} value={value}>{t(key)}</option>)}
             </select>
           </label>
           <div className="ml-auto w-72">
-            <SearchInput value={search} onChange={(event) => setSearch(event.target.value)} onClear={() => setSearch("")} placeholder="ค้นหาชื่อสาขา" />
+            <SearchInput value={search} onChange={(event) => setSearch(event.target.value)} onClear={() => setSearch("")} placeholder={t("searchStoreName")} />
           </div>
         </div>
 
         <div data-v2-kpi-notes className="grid grid-cols-2 gap-4 rounded-[var(--app-radius-md)] border border-[var(--app-border)] bg-[var(--app-surface)] px-4 py-2">
-          <div><span className="text-xs font-semibold">ตอบแล้ว %</span> <span className="text-xs text-[var(--app-text-secondary)]">· {REPLIED_RATE_TARGET === null ? NO_TARGET_LABEL : `เป้า ${REPLIED_RATE_TARGET}%`}</span><HowCounted kpi="replied" /></div>
-          <div><span className="text-xs font-semibold">ตอบใน 24 ชม. %</span> <span className="text-xs text-[var(--app-text-secondary)]">· เป้า {RATE24_TARGET}%</span><HowCounted kpi="rate24" /></div>
-          <p className="col-span-2 text-xs text-[var(--app-text-secondary)]">{KPI_DIFFERENCE_NOTE} · ตัวเลขใต้อัตรา = เปลี่ยนกี่จุดจากช่วงเทียบ · ตัวเลขใต้จำนวนแชทไม่ใช้สี เพราะขึ้นลงตามจำนวนแชท</p>
+          <div><span className="text-xs font-semibold">{t("repliedRate")}</span> <span className="text-xs text-[var(--app-text-secondary)]">· {t("noTarget")}</span><HowCounted kpi="replied" /></div>
+          <div><span className="text-xs font-semibold">{t("rate24")}</span> <span className="text-xs text-[var(--app-text-secondary)]">· {RATE24_TARGET === null ? t("noTarget") : t("targetWithValue", { value: RATE24_TARGET })}</span><HowCounted kpi="rate24" /></div>
+          <p className="col-span-2 text-xs text-[var(--app-text-secondary)]">{t("kpiDifference")} · {t("kpiDifferenceLegend")}</p>
         </div>
 
         {data.coreLoading ? (
-          showSkeleton ? <SectionCardSkeleton title="คะแนนสาขา" lines={10} /> : null
+          showSkeleton ? <SectionCardSkeleton title={t("storeScorecard")} lines={10} /> : null
         ) : (
           <SectionCard
-            title="คะแนนสาขา"
-            meta={`${rows.length} จาก ${data.rows.length} สาขา · ${data.periodText}`}
+            title={t("storeScorecard")}
+            meta={t("storesFiltered", { visible: rows.length, total: data.rows.length, period: data.periodText })}
             bodyPadding="none"
-            footer={<span className="text-xs text-[var(--app-text-secondary)]">อัตราที่มาจากแชทน้อยกว่า {MIN_RATE_SAMPLE} แชทแสดงเป็นสีจาง ไม่เทียบเป้า และอยู่ท้ายเมื่อเรียงตามอัตรา · ความครบของแท็ก = % ของชื่อลูกค้าที่อ่านแล้วที่มีแท็กอย่างน้อย 1 อย่าง{tagNote ? ` (${tagNote})` : ""}{data.hasGoogleResults ? "" : " · ยังไม่มีผล Google Review ของเดือนนี้ จึงไม่แสดงคอลัมน์"}</span>}
+            footer={<span className="text-xs text-[var(--app-text-secondary)]">{t("scorecardFooter", { count: MIN_RATE_SAMPLE, tagNote: tagNote ? t("tagCoverageNoteSuffix", { note: tagNote }) : "", reviewNote: data.hasGoogleResults ? "" : t("noGoogleReviewData") })}</span>}
           >
             <div className="overflow-x-auto">
               <Table data-v2-scorecard-table>
-                <caption className="sr-only">คะแนนสาขา {data.periodText}</caption>
+                <caption className="sr-only">{t("scorecardTitle", { month: data.periodText })}</caption>
                 <TableHeader>
                   <tr>
-                    <TableHead scope="col">สาขา</TableHead>
-                    <TableHead scope="col" align="right">แชท</TableHead>
-                    <TableHead scope="col" align="right">ยังไม่ตอบ</TableHead>
-                    <TableHead scope="col" align="right">ตอบแล้ว %</TableHead>
-                    <TableHead scope="col" align="right">ตอบใน 24 ชม. % (n)</TableHead>
-                    <TableHead scope="col" align="right">อันดับใน partner</TableHead>
-                    <TableHead scope="col" align="right">ความครบของแท็ก</TableHead>
-                    {data.hasGoogleResults && <TableHead scope="col">Google Review</TableHead>}
+                    <TableHead scope="col">{t("storeName")}</TableHead>
+                    <TableHead scope="col" align="right">{t("chats")}</TableHead>
+                    <TableHead scope="col" align="right">{t("unanswered")}</TableHead>
+                    <TableHead scope="col" align="right">{t("repliedRate")}</TableHead>
+                    <TableHead scope="col" align="right">{t("rate24")} (n)</TableHead>
+                    <TableHead scope="col" align="right">{t("partnerRank")}</TableHead>
+                    <TableHead scope="col" align="right">{t("tagCoverageLabel")}</TableHead>
+                    {data.hasGoogleResults && <TableHead scope="col">{t("reviewLabel")}</TableHead>}
                   </tr>
                 </TableHeader>
                 <TableBody>
                   {rows.length === 0 ? (
-                    <TableEmptyState colSpan={columns} message="ไม่พบสาขาตามตัวกรองนี้" />
+                    <TableEmptyState colSpan={columns} message={t("noStoresForFilter")} />
                   ) : rows.map((row) => {
                     const location = thaiLocationLabel(row.region, row.province);
                     return (
@@ -164,9 +170,9 @@ export function StoreScorecardView() {
                         <TableCell align="right" numeric><CountCell value={row.unreplied} delta={row.unrepliedDelta} /></TableCell>
                         <TableCell align="right" numeric><RateCell value={row.replyRate} delta={row.replyRateDelta} target={REPLIED_RATE_TARGET} /></TableCell>
                         <TableCell align="right" numeric><RateCell value={row.rate24} delta={row.rate24Delta} target={RATE24_TARGET} showN /></TableCell>
-                        <TableCell align="right"><PartnerRank row={row} /></TableCell>
+                        <TableCell align="right"><PartnerRank row={row} language={language} /></TableCell>
                         <TableCell align="right"><TagCoverageCell counts={data.tagCoverageByStore.get(row.storeId)} /></TableCell>
-                        {data.hasGoogleResults && <TableCell><ReviewCell result={reviews.get(row.storeId) ?? null} /></TableCell>}
+                        {data.hasGoogleResults && <TableCell><ReviewCell result={reviews.get(row.storeId) ?? null} language={language} /></TableCell>}
                       </TableRow>
                     );
                   })}

@@ -2,9 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useAppLanguage } from "../language";
+import { getGreetingDict } from "./greeting-i18n";
 
 export function GreetingModeNav() {
   const pathname = usePathname();
+  const { language } = useAppLanguage();
+  const t = getGreetingDict(language);
   const onOverview = pathname === "/greeting-messages/manage";
 
   return (
@@ -17,7 +21,7 @@ export function GreetingModeNav() {
             : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
         }`}
       >
-        ภาพรวม
+        {t.overviewTab}
       </Link>
       <Link
         href="/greeting-messages"
@@ -27,7 +31,7 @@ export function GreetingModeNav() {
             : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
         }`}
       >
-        Builder
+        {t.builderTab}
       </Link>
     </div>
   );

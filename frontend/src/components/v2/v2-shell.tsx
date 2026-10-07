@@ -1,8 +1,11 @@
 "use client";
 
+import { LanguageControl, useAppLanguage } from "@/app/language";
+import { v2Text } from "@/lib/v2/v2-translations";
+
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import React from "react";
+import React, { useEffect } from "react";
 import { useThemeToggle } from "@/app/theme";
 import { api } from "@/lib/api";
 import { useAuthUserSnapshot } from "@/lib/auth-user-store";
@@ -55,8 +58,10 @@ export function isMonthlyPage(pathname: string): boolean {
 }
 
 function ThemeToggle() {
+  const { language } = useAppLanguage();
+  const t = v2Text(language);
   const { shown, toggle } = useThemeToggle();
-  const label = shown === "dark" ? "สลับเป็นโหมดสว่าง" : "สลับเป็นโหมดมืด";
+  const label = shown === "dark" ? t("lightMode") : t("darkMode");
   const common = { fill: "none", stroke: "currentColor", strokeWidth: 1.8, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
   return (
     <button type="button" data-theme-toggle onClick={toggle} aria-label={label} title={label} className={`${focusRing} flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-text-secondary)] hover:bg-[var(--app-surface-hover)] hover:text-[var(--app-text-primary)]`}>
@@ -71,6 +76,8 @@ function ThemeToggle() {
 
 /** Sidebar and top bar for /v2. Lives in app/v2/layout.tsx, so it stays mounted across /v2 pages. */
 export function V2Shell({ children }: { children: React.ReactNode }) {
+  const { language } = useAppLanguage();
+  const t = v2Text(language);
   const pathname = usePathname() || "/v2";
   const data = useV2Data();
   const monthData = useV2Month();
@@ -78,18 +85,22 @@ export function V2Shell({ children }: { children: React.ReactNode }) {
   const monthly = isMonthlyPage(pathname);
 
   const mainItems: NavItem[] = [
-    { href: withMonth("/v2", monthData.month), label: "ภาพรวมเดือน", icon: "today", active: (path) => path === "/v2" || path.startsWith("/v2/response") },
-    { href: withMonth("/v2/stores", monthData.month), label: "สาขา", icon: "stores", active: (path) => path.startsWith("/v2/stores") },
-    { href: "/admin/purchase-analytics", label: "ลูกค้าและการขาย", icon: "customers" },
-    { href: "/follower-insights", label: "การเติบโต", icon: "growth" },
+    { href: withMonth("/v2", monthData.month), label: t("monthOverview"), icon: "today", active: (path) => path === "/v2" || path.startsWith("/v2/response") },
+    { href: withMonth("/v2/stores", monthData.month), label: t("stores"), icon: "stores", active: (path) => path.startsWith("/v2/stores") },
+    { href: "/admin/purchase-analytics", label: t("customersSales"), icon: "customers" },
+    { href: "/follower-insights", label: t("growth"), icon: "growth" },
   ];
   const toolItems: NavItem[] = [
-    { href: "/mass-messages", label: "ส่งข้อความ", icon: "send" },
-    { href: "/monthly-operations-report", label: "รายงาน", icon: "report" },
-    { href: "/admin/registrations", label: "ผู้ดูแลระบบ", icon: "admin" },
-    { href: "/v2/admin/partners", label: "Partner ของสาขา", icon: "stores", active: (path) => path.startsWith("/v2/admin/partners") },
+    { href: "/mass-messages", label: t("sendMessage"), icon: "send" },
+    { href: "/monthly-operations-report", label: t("report"), icon: "report" },
+    { href: "/admin/registrations", label: t("admin"), icon: "admin" },
+    { href: "/v2/admin/partners", label: t("storePartners"), icon: "stores", active: (path) => path.startsWith("/v2/admin/partners") },
   ];
-  const title = V2_PAGE_TITLES[pathname] ?? "OPPO LINE OA Monitor";
+  const title = ({ "/v2": t("monthOverview"), "/v2/response": t("now"), "/v2/stores": t("stores"), "/v2/admin/partners": t("storePartners") } as Record<string, string>)[pathname] ?? "OPPO LINE OA Monitor";
+
+  useEffect(() => {
+    document.title = `${title} | OPPO LINE OA Monitor`;
+  }, [title]);
 
   return (
     <div data-v2-shell className="flex h-dvh w-full min-w-[1024px] overflow-hidden bg-[var(--app-bg)] text-[var(--app-text-primary)]">
@@ -98,16 +109,16 @@ export function V2Shell({ children }: { children: React.ReactNode }) {
           <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[var(--app-accent)] text-[11px] font-bold text-white">O</span>
           <div className="min-w-0">
             <div className="truncate text-sm font-semibold">OPPO LINE OA</div>
-            <div className="text-[11px] text-[var(--app-text-tertiary)]">เวอร์ชันใหม่ (v2)</div>
+            <div className="text-[11px] text-[var(--app-text-tertiary)]">{t("newVersion")}</div>
           </div>
         </div>
-        <nav aria-label="เมนู v2" className="flex-1 space-y-1 overflow-y-auto p-3">
+        <nav aria-label={t("navigation")} className="flex-1 space-y-1 overflow-y-auto p-3">
           {mainItems.map((item) => <NavLink key={item.href} item={item} pathname={pathname} />)}
-          <div className="px-3 pb-1 pt-5 text-xs font-semibold text-[var(--app-text-tertiary)]">เครื่องมือ</div>
+          <div className="px-3 pb-1 pt-5 text-xs font-semibold text-[var(--app-text-tertiary)]">{t("tools")}</div>
           {toolItems.map((item) => <NavLink key={item.href} item={item} pathname={pathname} />)}
         </nav>
         <div className="border-t border-[var(--app-border-subtle)] p-3">
-          <Link href="/home" className={`${focusRing} block rounded-[var(--app-radius-md)] px-3 py-2 text-xs text-[var(--app-text-secondary)] hover:bg-[var(--app-surface-hover)]`}>กลับไปเวอร์ชันเดิม</Link>
+          <Link href="/home" className={`${focusRing} block rounded-[var(--app-radius-md)] px-3 py-2 text-xs text-[var(--app-text-secondary)] hover:bg-[var(--app-surface-hover)]`}>{t("backLegacy")}</Link>
         </div>
       </aside>
 
@@ -116,15 +127,14 @@ export function V2Shell({ children }: { children: React.ReactNode }) {
           <div className="min-w-0 flex-1 truncate text-sm font-semibold">{title}</div>
           {monthly && <MonthSelector />}
           <button type="button" onClick={() => { monthData.refresh(); if (data.active) data.refresh(); }} className={`${focusRing} h-9 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] px-3 text-xs font-medium text-[var(--app-text-secondary)] hover:bg-[var(--app-surface-hover)]`}>
-            รีเฟรช
-          </button>
+            {t("refresh")}</button>
+          <LanguageControl />
           <ThemeToggle />
           {user && (
             <div className="flex items-center gap-2">
               <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--app-accent)] text-xs font-bold text-white" aria-hidden="true">{user.displayName.charAt(0).toUpperCase()}</span>
               <button type="button" onClick={() => void api.logout().catch(() => undefined).then(() => window.location.replace("/"))} className={`${focusRing} rounded-lg px-2 py-1 text-xs text-[var(--app-text-secondary)] hover:bg-[var(--app-surface-hover)]`}>
-                ออกจากระบบ
-              </button>
+                {t("logout")}</button>
             </div>
           )}
         </header>

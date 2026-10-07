@@ -1,5 +1,9 @@
 "use client";
 
+import { useAppLanguage } from "@/app/language";
+import { languageLocale } from "@/app/language-utils";
+import { v2Text } from "@/lib/v2/v2-translations";
+
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import React, { useCallback, useEffect, useMemo } from "react";
 import { PageHeader } from "@/components/shell/page-header";
@@ -13,25 +17,32 @@ import { useV2Data, WAITING_MAX_PAGES, WAITING_PAGE_SIZE } from "./v2-data";
 import { OverviewTabs } from "./v2-month-controls";
 import { SourceNotice } from "./v2-ui";
 
-const TAB_LABELS: Record<StoreTab, string> = { "follow-today": "ตามวันนี้", all: "ทั้งหมด", "no-data": "ไม่มีข้อมูล" };
-const SORT_LABELS: Array<[StoreSort, string]> = [["recent", "รอตอบตั้งแต่เมื่อวาน"], ["wait", "รอนานสุด"], ["rate", "ตอบใน 24 ชม. (ต่ำสุดก่อน)"], ["age", "แชทค้างนานสุด"]];
 
 function Notices() {
+  const { language } = useAppLanguage();
+  const t = v2Text(language);
+
   const data = useV2Data();
   const notices: string[] = [];
-  if (data.summary.error) notices.push(`โหลดสถานะการตอบไม่สำเร็จ: ${data.summary.error}`);
-  if (data.waiting.error) notices.push(`โหลดรายการแชทที่รอไม่สำเร็จ: ${data.waiting.error}`);
-  if (data.waiting.data?.truncated) notices.push(`แชทที่รอใน ${RECENT_WAIT_WINDOW_DAYS} วันมีมากกว่า ${(WAITING_MAX_PAGES * WAITING_PAGE_SIZE).toLocaleString("th-TH")} แชท จึงวัดเวลารอจากแชทล่าสุดเท่านั้น จำนวนแชทที่รอยังนับครบจากระบบ`);
+  if (data.summary.error) notices.push(t("responseStatusError", { error: data.summary.error }));
+  if (data.waiting.error) notices.push(t("waitingError", { error: data.waiting.error }));
+  if (data.waiting.data?.truncated) notices.push(t("truncatedWait", { days: RECENT_WAIT_WINDOW_DAYS, count: (WAITING_MAX_PAGES * WAITING_PAGE_SIZE).toLocaleString(languageLocale(language)) }));
   if (data.mirror.error) notices.push(data.hasDataSource === "activity"
-    ? `โหลดสถานะการเก็บแชทไม่สำเร็จ จึงนับร้านที่มีแชทใน 7 วันล่าสุดว่า "มีข้อมูล" แทน: ${data.mirror.error}`
-    : `โหลดสถานะการเก็บแชทไม่สำเร็จ จึงยังแยกร้านที่ไม่มีข้อมูลไม่ได้: ${data.mirror.error}`);
-  if (data.rates7d.error || data.ratesPrev7d.error) notices.push(`โหลดอัตราตอบใน 24 ชม. ไม่สำเร็จ: ${data.rates7d.error ?? data.ratesPrev7d.error}`);
-  if (data.daily.error) notices.push(`โหลดแนวโน้มรายวันไม่สำเร็จ: ${data.daily.error}`);
+    ? t("activityFallback", { error: data.mirror.error })
+    : t("collectionError", { error: data.mirror.error }));
+  if (data.rates7d.error || data.ratesPrev7d.error) notices.push(t("responseRateError", { error: data.rates7d.error ?? data.ratesPrev7d.error ?? "" }));
+  if (data.daily.error) notices.push(t("dailyError", { error: data.daily.error }));
   if (notices.length === 0) return null;
   return <div className="space-y-2">{notices.map((notice) => <SourceNotice key={notice}>{notice}</SourceNotice>)}</div>;
 }
 
 export function ResponseView() {
+  const { language } = useAppLanguage();
+  const t = v2Text(language);
+
+const TAB_LABELS: Record<StoreTab, string> = { "follow-today": t("followToday"), all: t("all"), "no-data": t("noData") };
+const SORT_LABELS: Array<[StoreSort, string]> = [["recent", t("sortRecent")], ["wait", t("sortWait")], ["rate", t("sortRate")], ["age", t("sortAge")]];
+
   const data = useV2Data();
   const router = useRouter();
   const pathname = usePathname() || "/v2/response";
@@ -54,7 +65,7 @@ export function ResponseView() {
   }, [firstStoreId, navigate, needsDefaultStore]);
 
   const tabs = (
-    <div role="tablist" aria-label="ตัวกรองร้าน" className="inline-flex gap-1 rounded-[var(--app-radius-md)] bg-[var(--app-surface-subtle)] p-1">
+    <div role="tablist" aria-label={t("storeFilters")} className="inline-flex gap-1 rounded-[var(--app-radius-md)] bg-[var(--app-surface-subtle)] p-1">
       {(Object.keys(TAB_LABELS) as StoreTab[]).map((tab) => {
         const count = filterStoreRows(data.storeRows, tab).length;
         const active = state.tab === tab;
@@ -78,8 +89,7 @@ export function ResponseView() {
   // "ทั้งหมด" can be re-sorted; "ตามวันนี้" keeps its own order (count, then longest wait).
   const sortControl = state.tab === "all" ? (
     <label className="flex items-center gap-2 text-sm text-[var(--app-text-secondary)]">
-      เรียงตาม
-      <select
+      {t("sortBy")}<select
         data-v2-sort
         value={sort}
         onChange={(event) => navigate({ sort: event.target.value as StoreSort })}
@@ -93,16 +103,16 @@ export function ResponseView() {
   return (
     <div className={`flex h-full min-h-0 flex-col gap-4 px-6 py-5 ${state.view === "stores" ? "overflow-y-auto" : "overflow-hidden"}`}>
       <PageHeader
-        title="ตอนนี้"
-        description={<>ลูกค้าที่รอคำตอบตอนนี้ · <span data-v2-business-hours-label className="font-medium text-[var(--app-text-primary)]">นับเฉพาะเวลาเปิดร้าน</span> (10:00–21:00) · ตามวันนี้ = ร้านที่ลูกค้ารอ ≥ {FOLLOW_UP_THRESHOLD_MINUTES} นาทีตั้งแต่เมื่อวาน 10:00 มากที่สุด {FOLLOW_TODAY_LIMIT} ร้าน · ร้านที่ไม่มีข้อมูลไม่นับในทุกตัวเลข · ตัวเลขรายเดือนอยู่ที่แท็บ ภาพรวมเดือน</>}
+        title={t("now")}
+        description={<span data-v2-business-hours-label>{t("responseDescription", { minutes: FOLLOW_UP_THRESHOLD_MINUTES, limit: FOLLOW_TODAY_LIMIT })}</span>}
         actions={
           <div data-v2-view-switch className="flex flex-wrap items-center gap-3 text-[var(--app-text-primary)]">
             <OverviewTabs active="now" />
             <SegmentedControl<View>
-              aria-label="มุมมอง"
+              aria-label={t("view")}
               value={state.view}
               onChange={(view) => navigate({ view })}
-              items={[{ id: "stores", label: "ภาพรวมร้าน" }, { id: "chat", label: "หน้าแชท" }]}
+              items={[{ id: "stores", label: t("storeOverview") }, { id: "chat", label: t("chatView") }]}
             />
           </div>
         }
@@ -111,8 +121,8 @@ export function ResponseView() {
       {data.coreLoading ? (
         showSkeleton ? (
           <div className="space-y-4">
-            <KpiStripSkeleton columns={5} labels={["ร้านที่ต้องตามวันนี้", "แชทที่รอคำตอบ", `ค้างเกิน ${RECENT_WAIT_WINDOW_DAYS} วัน`, "ตอบใน 24 ชม. · 7 วัน", "ร้านที่ไม่มีข้อมูล"]} />
-            <SectionCardSkeleton title="ร้านเรียงตามเวลารอนานสุด" lines={8} />
+            <KpiStripSkeleton columns={5} labels={[t("followStores"), t("waitingChats"), t("backlogDays", { days: RECENT_WAIT_WINDOW_DAYS }), t("weekRate"), t("noDataStores")]} />
+            <SectionCardSkeleton title={t("tableWait")} lines={8} />
           </div>
         ) : null
       ) : state.view === "stores" ? (

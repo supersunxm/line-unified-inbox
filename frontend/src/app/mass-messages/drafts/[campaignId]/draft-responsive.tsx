@@ -3,10 +3,19 @@
 import { useEffect, useState } from "react";
 import { MobilePurchaseBroadcastComposer } from "../../mobile-purchase-broadcast-composer";
 import { PurchaseBroadcastComposer } from "../../purchase-broadcast-composer";
+import { useAppLanguage, pickLanguageText } from "../../../language";
+
+const translations = {
+  th: { opening: "กำลังเปิด Campaign Draft..." },
+  en: { opening: "Opening campaign draft..." },
+  zh: { opening: "正在打开群发草稿..." },
+};
 
 type ViewportMode = "loading" | "mobile" | "desktop";
 
 export function PurchaseBroadcastDraftResponsive({ campaignId }: { campaignId: string }) {
+  const { language } = useAppLanguage();
+  const text = pickLanguageText(language, translations);
   const [mode, setMode] = useState<ViewportMode>("loading");
 
   useEffect(() => {
@@ -20,7 +29,7 @@ export function PurchaseBroadcastDraftResponsive({ campaignId }: { campaignId: s
   if (mode === "loading") {
     return (
       <main className="flex h-dvh w-full items-center justify-center bg-[var(--app-bg)] text-sm text-[var(--app-text-secondary)]">
-        กำลังเปิด Campaign Draft...
+        {text.opening}
       </main>
     );
   }

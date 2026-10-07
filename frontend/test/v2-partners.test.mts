@@ -46,5 +46,5 @@ test("admin page: ADMIN-only editing, an 'ยังไม่ระบุ' filter
   assert.match(admin, /method: "PUT"/);
   assert.match(admin, /data-v2-partner-changes/);
   const shell = readFileSync(new URL("../src/components/v2/v2-shell.tsx", import.meta.url), "utf8");
-  assert.match(shell, /href: "\/v2\/admin\/partners", label: "Partner ของสาขา"/);
+  assert.match(shell, /href: "\/v2\/admin\/partners", label: t\("storePartners"\)/);
 });

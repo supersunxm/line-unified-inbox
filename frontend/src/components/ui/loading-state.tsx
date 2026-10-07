@@ -1,6 +1,8 @@
 "use client";
 
 import React from "react";
+import { useAppLanguage } from "@/app/language";
+import { getSharedUiText } from "@/app/shared-ui-i18n";
 
 export function Skeleton({
   className = "",
@@ -22,6 +24,8 @@ export function LoadingSpinner({
   size?: "sm" | "md" | "lg";
   className?: string;
 }) {
+  const { language } = useAppLanguage();
+  const text = getSharedUiText(language);
   const sizeClass = {
     sm: "h-4 w-4 border-2",
     md: "h-6 w-6 border-2",
@@ -32,7 +36,7 @@ export function LoadingSpinner({
     <div
       className={`animate-spin rounded-full border-[var(--app-border)] border-t-[var(--app-accent)] ${sizeClass} ${className}`}
       role="status"
-      aria-label="กำลังโหลด..."
+      aria-label={text.loading}
     />
   );
 }
@@ -72,19 +76,21 @@ export function TableSkeleton({ rows = 5, cols = 4 }: { rows?: number; cols?: nu
 }
 
 export function LoadingState({
-  message = "กำลังโหลด...",
+  message,
   className = "",
 }: {
   message?: string;
   className?: string;
 }) {
+  const { language } = useAppLanguage();
+  const text = getSharedUiText(language);
   return (
     <div
       className={`flex flex-col items-center justify-center p-8 text-center text-xs text-[var(--app-text-secondary)] ${className}`}
       role="status"
     >
       <LoadingSpinner size="md" className="mb-3" />
-      <span>{message}</span>
+      <span>{message ?? text.loading}</span>
     </div>
   );
 }

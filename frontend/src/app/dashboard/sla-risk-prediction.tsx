@@ -82,7 +82,7 @@ export function SlaRiskPredictionCard({
     operationalInsights: [],
   };
 
-  const points = transformStoreRiskMatrixProps(fullAnalytics);
+  const points = transformStoreRiskMatrixProps(fullAnalytics, language);
 
   return (
     <StoreRiskScatterMatrix

@@ -4,10 +4,13 @@ import Link from "next/link";
 import { AuthorizedSection } from "../authorized-workspace";
 import { InternalPageShell } from "@/components/shell/internal-page-shell";
 import { Store24hResponsePanel } from "../dashboard/store-24h-response-panel";
+import { LegacyI18nBoundary } from "../legacy-i18n-boundary";
+import { dashboardLegacyPhrases, dashboardLegacyTemplates } from "../dashboard/dashboard-legacy-i18n";
 
 export default function ReplyMessagePage() {
   return (
-    <AuthorizedSection section="dashboard">
+    <LegacyI18nBoundary phrases={dashboardLegacyPhrases} templates={dashboardLegacyTemplates} showControl={false}>
+      <AuthorizedSection section="dashboard">
       <InternalPageShell section="dashboard">
       <main className="min-h-full bg-[var(--app-bg)] text-[var(--app-text-primary)]">
         <div className="mx-auto w-full max-w-[1440px] px-4 py-5 sm:px-6 lg:px-8">
@@ -38,6 +41,7 @@ export default function ReplyMessagePage() {
         </div>
       </main>
       </InternalPageShell>
-    </AuthorizedSection>
+      </AuthorizedSection>
+    </LegacyI18nBoundary>
   );
 }

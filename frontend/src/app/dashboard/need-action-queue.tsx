@@ -2,6 +2,7 @@
 
 import React from "react";
 import type { NeedActionStoreItem } from "@/types/api";
+import { needActionQueueFallbackText } from "./need-action-queue-i18n";
 
 interface NeedActionQueueProps {
   queue: NeedActionStoreItem[];
@@ -84,6 +85,7 @@ export function NeedActionQueueCard({
   language,
 }: NeedActionQueueProps) {
   const t = LABELS[language] ?? LABELS.en;
+  const fallback = needActionQueueFallbackText[language];
 
   const handleNotifyBm = (storeId: string, name: string) => {
     if (onNotifyBm) {
@@ -115,7 +117,7 @@ export function NeedActionQueueCard({
         ) : (
           queue.map((item, idx) => {
             const score = item.priorityScore ?? 92;
-            const reasonsList = item.reasons ?? [`${item.pending} pending chats`, `${item.responseRate}% SLA`, "High traffic store"];
+            const reasonsList = item.reasons ?? [fallback.pendingChats(item.pending), `${item.responseRate}% SLA`, fallback.highTrafficStore];
 
             return (
               <div
@@ -138,17 +140,17 @@ export function NeedActionQueueCard({
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs pt-1">
                       <div>
                         <span className="text-[var(--muted-foreground)] block font-medium">{t.problem}</span>
-                        <span className="font-bold text-rose-600 dark:text-rose-400">{item.problem || `${item.pending} Pending Conversations`}</span>
+                        <span className="font-bold text-rose-600 dark:text-rose-400">{item.problem || fallback.pendingConversations(item.pending)}</span>
                       </div>
 
                       <div>
                         <span className="text-[var(--muted-foreground)] block font-medium">{t.impact}</span>
-                        <span className="font-bold text-rose-700 dark:text-rose-300">{item.impact || "High SLA Risk"}</span>
+                        <span className="font-bold text-rose-700 dark:text-rose-300">{item.impact || fallback.highSlaRisk}</span>
                       </div>
 
                       <div>
                         <span className="text-[var(--muted-foreground)] block font-medium">{t.action}</span>
-                        <span className="font-bold text-amber-700 dark:text-amber-300">{item.recommendedAction || "Review evening manpower"}</span>
+                        <span className="font-bold text-amber-700 dark:text-amber-300">{item.recommendedAction || fallback.reviewEveningManpower}</span>
                       </div>
                     </div>
 

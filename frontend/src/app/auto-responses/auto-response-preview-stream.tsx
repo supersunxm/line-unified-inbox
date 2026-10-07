@@ -85,10 +85,10 @@ export function AutoResponsePreviewStream({
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={rich.previewUrl} alt={rich.altText || rich.richMessageName} className="h-auto w-full object-cover" />
                   ) : (
-                    <div className="flex h-36 w-52 flex-col items-center justify-center p-4 text-center text-xs text-[var(--app-text-secondary)]"><span className="mb-1 text-lg font-bold">RM</span><span>{rich.richMessageName || "Rich Message"}</span></div>
+                    <div className="flex h-36 w-52 flex-col items-center justify-center p-4 text-center text-xs text-[var(--app-text-secondary)]"><span className="mb-1 text-lg font-bold">RM</span><span>{rich.richMessageName || t.richMessageFallback}</span></div>
                   )}
                 </div>
-                <p className="mt-1 text-[10px] font-medium text-[var(--app-text-secondary)]">Rich Message · กดได้ใน LINE</p>
+                <p className="mt-1 text-[10px] font-medium text-[var(--app-text-secondary)]">{t.richMessageLineInteraction}</p>
                 {!rich.isValid && rich.validationError && <p className="mt-1 text-[11px] font-medium text-red-500">⚠ {rich.validationError}</p>}
               </div>
             );
@@ -100,7 +100,7 @@ export function AutoResponsePreviewStream({
                 <div className="relative max-w-[260px] overflow-hidden rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] shadow-md">
                   {msg.imageUrl || msg.previewUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={msg.previewUrl || msg.imageUrl} alt="Auto-response image preview" className="h-auto w-full object-cover" />
+                    <img src={msg.previewUrl || msg.imageUrl} alt={t.previewImageAlt} className="h-auto w-full object-cover" />
                   ) : (
                     <div className="flex h-36 w-52 flex-col items-center justify-center p-4 text-center text-xs text-[var(--app-text-secondary)]"><span className="text-2xl mb-1">🖼</span><span>{t.previewMissingImage}</span></div>
                   )}
