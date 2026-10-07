@@ -107,7 +107,9 @@ export class LineChatHealthSchedulerService implements OnModuleInit, OnModuleDes
         return "IDLE";
       }
 
-      if (this.sessionService?.isMirrorCycleActive() || this.sessionService?.isMirrorCooldownActive(now)) {
+      // Fleet activity may belong to another profile. Probes acquire their own
+      // coordinator lease; only the cleanup/transition cooldown defers all work.
+      if (this.sessionService?.isMirrorCooldownActive(now)) {
         return "IDLE";
       }
 

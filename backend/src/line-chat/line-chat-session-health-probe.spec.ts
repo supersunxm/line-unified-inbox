@@ -215,10 +215,10 @@ test("invalid resolved profile path records CONFIG_ERROR before browser work", a
   }
 });
 
-test("busy profile skips the probe and writes no health observation", async () => {
+test("scheduled probe on a busy profile skips diagnostics and writes no health timestamps", async () => {
   const fixture = makeFixture({ coordinatorBusy: true });
   try {
-    const result = await fixture.service.probeSession("session-1");
+    const result = await fixture.service.probeSession("session-1", "SCHEDULED");
     assert.deepEqual(result, {
       outcome: "SKIPPED_BUSY",
       sessionId: "session-1",
