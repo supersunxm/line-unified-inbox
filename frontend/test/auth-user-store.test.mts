@@ -211,7 +211,7 @@ test("the global 401 redirect only fires for an expired session on a protected p
   assert.equal(shouldRedirectOnUnauthorized("/storemanagement", true), true);
   assert.equal(shouldRedirectOnUnauthorized("/download-center", true), true);
   assert.equal(shouldRedirectOnUnauthorized("/chats", false), false, "never seen a session: leave the page alone");
-  for (const publicPath of ["/", "/login", "/register", "/privacy", "/terms", "/download", "/download/history", "/stores", "/stores/profile", "/store-locator", "/friend-attribution", "/f/abc"]) {
+  for (const publicPath of ["/", "/login", "/change-password", "/register", "/privacy", "/terms", "/download", "/download/history", "/stores", "/stores/profile", "/store-locator", "/friend-attribution", "/f/abc"]) {
     assert.equal(isPublicPath(publicPath), true, publicPath);
     assert.equal(shouldRedirectOnUnauthorized(publicPath, true), false, publicPath);
   }
