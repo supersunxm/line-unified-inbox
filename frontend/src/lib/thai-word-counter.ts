@@ -26,7 +26,7 @@
  * finalWordCount >= 15
  */
 
-export const WORD_COUNT_RULE_VERSION = "THAI_REVIEW_WORDS_V3";
+export const WORD_COUNT_RULE_VERSION = "THAI_REVIEW_WORDS_V4";
 
 /**
  * Business-approved lexical units. Besides fixing browser-tokenizer drift,
@@ -39,6 +39,9 @@ export const PROTECTED_LEXICON = [
   "โปรโมชั่น",
   "สมาร์ทโฟน",
   "ประทับใจ",
+  "คำแนะนำ",
+  "ของแถม",
+  "ใช้บริการ",
   "ใช้งาน",
   "วันนี้",
   "แบต",
