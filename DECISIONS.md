@@ -3296,3 +3296,11 @@ Rationale:
 - The correction is narrowly scoped and backed by exact final-token regression fixtures.
 
 The existing rule remains: do not expand the protected lexicon speculatively. Add terms only from an audited disputed count with an explicit expected token list.
+
+## 2026-10-07 — Review15 header uses shared public branding
+
+Decision: the public Review15 page must use the same OPPO Brand Shop home-link markup contract as the public store directory rather than maintaining a custom text-only OPPO logo.
+
+Rationale:
+- `public-branding.css` already owns the approved `LOGO_OBS.png` treatment for `aria-label="OPPO Brand Shop Home"`.
+- Reusing that contract keeps the logo asset, responsive sizing, and brand identity aligned across public pages without duplicating logo-specific CSS.
