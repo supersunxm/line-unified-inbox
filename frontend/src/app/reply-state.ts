@@ -20,3 +20,24 @@ export function effectiveSummaryCounts(summary: {
     total: summary.notReplied + summary.notifiedBm + summary.replied,
   };
 }
+
+/**
+ * One store's counts as Store Chats shows them for a month (bm-reply-status-summary row →
+ * sidebar counts). v2's monthly views call this same function, so both agree by construction.
+ */
+export function chatsStoreCounts(store: {
+  total: number;
+  notReplied: number;
+  notifiedBm: number;
+  replied: number;
+  oldestWaitingMinutes?: number | null;
+}) {
+  const effectiveCounts = effectiveSummaryCounts(store);
+  return {
+    total: store.total,
+    notReplied: effectiveCounts.notReplied,
+    notifiedBm: 0,
+    replied: effectiveCounts.replied,
+    oldestWaitingMinutes: store.oldestWaitingMinutes ?? 0,
+  };
+}

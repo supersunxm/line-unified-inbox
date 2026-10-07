@@ -70,7 +70,7 @@ import { ConversationRowSkeleton } from "./conversation-row-skeleton";
 import { getChatsPaginationText } from "./chats-pagination-utils";
 import { buildConversationListQuery, conversationListQueryKey, LatestConversationRequestGuard, reconcileConversationPage, type ConversationListQuery } from "./conversation-list-query";
 import { getBmCustomerSalesTags, getBmTagChipClass, getConversationListTagsWithNicknameMetadata, getConversationListTitle } from "./conversation-list-presentation";
-import { effectiveSummaryCounts, getEffectiveReplyState } from "./reply-state";
+import { chatsStoreCounts, effectiveSummaryCounts, getEffectiveReplyState } from "./reply-state";
 import { getChatPeriodOptions, getCurrentBangkokMonth, isReplyStatusCovered, isSelectableChatPeriod } from "./chat-period";
 import { NicknameSourceBadge } from "./nickname-source-badge";
 import { NicknameDerivedMetadataCard } from "./nickname-derived-metadata-card";
@@ -2535,14 +2535,7 @@ export function ApplicationWorkspace({ initialSection, initialAuthUser }: { init
   const storeBmCounts = useMemo(() => {
     const countsMap: Record<string, { total: number; notReplied: number; notifiedBm: number; replied: number; oldestWaitingMinutes?: number }> = {};
     for (const s of bmSummaryData.stores) {
-      const effectiveCounts = effectiveSummaryCounts(s);
-      countsMap[s.storeId] = {
-        total: s.total,
-        notReplied: effectiveCounts.notReplied,
-        notifiedBm: 0,
-        replied: effectiveCounts.replied,
-        oldestWaitingMinutes: s.oldestWaitingMinutes ?? 0,
-      };
+      countsMap[s.storeId] = chatsStoreCounts(s);
     }
     return countsMap;
   }, [bmSummaryData.stores]);
