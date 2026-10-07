@@ -3297,6 +3297,12 @@ Rationale:
 
 The existing rule remains: do not expand the protected lexicon speculatively. Add terms only from an audited disputed count with an explicit expected token list.
 
+## 2026-10-07 — Per-profile ownership governs scheduled health during Mirror
+
+Fleet Mirror activity is not proof that every persistent browser profile is busy. Do not veto the scheduler globally for an active fleet cycle: delegate target-profile contention to the existing coordinator's local lock and database lease. A busy probe returns SKIPPED_BUSY and records no health timestamp or future schedule, while an idle profile can refresh genuine health evidence during the other profile's Mirror work.
+
+Retain the global Mirror cooldown because it protects Chromium cleanup/transition periods. Preserve nickname priority, operation limits, recovery code and frontend freshness/precedence. Do not manufacture a healthy timestamp from fleet activity or weaken the 30-minute healthy-evidence policy to conceal scheduler starvation.
+
 ## 2026-10-07 — Review15 header uses shared public branding
 
 Decision: the public Review15 page must use the same OPPO Brand Shop home-link markup contract as the public store directory rather than maintaining a custom text-only OPPO logo.
