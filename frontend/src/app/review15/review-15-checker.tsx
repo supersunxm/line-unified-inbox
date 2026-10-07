@@ -404,7 +404,12 @@ export function Review15Checker() {
       setScanStatus("กำลังแยกเฉพาะข้อความรีวิว...");
 
       const payload = (await response.json()) as VisionScanResponse;
-      const nextCandidates: ScanCandidate[] = payload.candidates.map(
+      const usableCandidates = payload.candidates.filter(
+        (candidate) => candidate.text.trim().length > 0,
+      );
+      const droppedBlankCandidates =
+        payload.candidates.length - usableCandidates.length;
+      const nextCandidates: ScanCandidate[] = usableCandidates.map(
         (candidate, index) => ({
           id:
             "vision-" +
@@ -413,7 +418,7 @@ export function Review15Checker() {
             index +
             "-" +
             Date.now(),
-          text: candidate.text,
+          text: candidate.text.trim(),
           sourceName:
             scanImages[candidate.imageIndex]?.file.name ||
             "ภาพ " + (candidate.imageIndex + 1),
@@ -422,18 +427,25 @@ export function Review15Checker() {
         }),
       );
 
+      const missingReviewCount =
+        (payload.missingReviewCount ?? 0) + droppedBlankCandidates;
+      const estimatedReviewCount = Math.max(
+        payload.estimatedReviewCount ?? 0,
+        nextCandidates.length + missingReviewCount,
+      );
+
       setScanCandidates(nextCandidates);
-      setScanEstimatedReviewCount(payload.estimatedReviewCount ?? nextCandidates.length);
-      setScanMissingReviewCount(payload.missingReviewCount ?? 0);
+      setScanEstimatedReviewCount(estimatedReviewCount);
+      setScanMissingReviewCount(missingReviewCount);
       setScanProgress(100);
 
       if (nextCandidates.length > 0) {
-        if ((payload.missingReviewCount ?? 0) > 0) {
+        if (missingReviewCount > 0) {
           setScanStatus(
             "แยกข้อความได้ " +
               nextCandidates.length +
               " จากประมาณ " +
-              payload.estimatedReviewCount +
+              estimatedReviewCount +
               " รีวิว",
           );
         } else {
