@@ -21,6 +21,7 @@ import {
 import { api } from "@/lib/api";
 import { couponApi } from "@/lib/coupon-api";
 import type { ApiStore } from "@/types/api";
+import { useAppLanguage } from "../language";
 import type {
   CouponCampaign,
   CouponCampaignDetail,
@@ -32,7 +33,6 @@ import type {
   CouponStoreMode,
 } from "@/types/coupons";
 
-type Language = "th" | "en" | "zh";
 type AuthUser = { id: string; email: string; displayName: string; role: "ADMIN" | "ASSISTANT" | "VIEWER" };
 type ViewMode = "create" | "campaigns" | "detail";
 type ExecutionMode = "pilot" | "full";
@@ -123,9 +123,9 @@ function getCouponBadgeVariant(status: string): BadgeVariant {
 }
 
 export function CouponManagerAlignedView() {
+  const { language, setLanguage } = useAppLanguage();
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
-  const [language, setLanguage] = useState<Language>("th");
   const [viewMode, setViewMode] = useState<ViewMode>("create");
   const [executionMode, setExecutionMode] = useState<ExecutionMode>("pilot");
   const [stores, setStores] = useState<ApiStore[]>([]);

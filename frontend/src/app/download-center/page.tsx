@@ -15,7 +15,7 @@ import { downloadDailyFollowerGrowthWorkbook } from "../follower-insights/daily-
 
 const copy = {
   th: {
-    title: "Download Center",
+    title: "ศูนย์ดาวน์โหลด",
     description: "รวมไฟล์ดาวน์โหลดจากระบบไว้ในที่เดียว พร้อมอธิบายว่าแต่ละไฟล์มีข้อมูลอะไรและเหมาะกับงานแบบไหน",
     catalog: "ชุดข้อมูลที่ดาวน์โหลดได้",
     lineTitle: "LINE OA Daily Follower Growth",
@@ -85,7 +85,7 @@ const copy = {
     error: "Unable to download file",
   },
   zh: {
-    title: "Download Center",
+    title: "下载中心",
     description: "集中管理系统导出文件，并说明每个文件包含什么数据及其用途。",
     catalog: "可下载数据集",
     lineTitle: "LINE OA 每日关注者增长",

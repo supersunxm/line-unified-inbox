@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { canAccessPrimarySection } from "../src/lib/authorization.ts";
 import { primaryNavigationState } from "../src/app/primary-navigation.ts";
+import { formatGoogleReviewWeeklyPeriodLabel } from "../src/app/google-review-kpi/weekly-period-label.ts";
 import type { AuthUser } from "../src/types/api.ts";
 
 const apiCode = readFileSync(new URL("../src/lib/api.ts", import.meta.url), "utf8");
@@ -77,3 +78,26 @@ test("Google Review KPI view has Download / Export buttons and handlers", () => 
   assert.match(kpiViewCode, /handleToggleSort/);
 });
 
+test("Google Review KPI tabs use Thai labels instead of Chinese fallback copy", () => {
+  assert.match(kpiViewCode, /title:\s*"KPI รีวิว Google Maps"/);
+  assert.match(kpiViewCode, /title:\s*"Google Maps Review KPI"/);
+  assert.match(kpiViewCode, /title:\s*"Google Maps 评价 KPI 检查器"/);
+  assert.match(kpiViewCode, /tabMonthly:\s*"KPI รายเดือน"/);
+  assert.match(kpiViewCode, /tabWeeklyTopStore:\s*"ร้านยอดนิยมรายสัปดาห์"/);
+  assert.match(kpiViewCode, /tabMonthly:\s*"Monthly KPI"/);
+  assert.match(kpiViewCode, /tabMonthly:\s*"月度 KPI"/);
+});
+
+test("weekly review periods use the selected locale without mixing Thai and Chinese", () => {
+  const period = {
+    weekNumber: 2,
+    label: "第二周 สัปดาห์ที่ 2 (03-09.09.2026)",
+    labelTh: "สัปดาห์ที่ 2",
+    labelZh: "第二周",
+  };
+
+  assert.equal(formatGoogleReviewWeeklyPeriodLabel(period, "th"), "สัปดาห์ที่ 2 (03-09.09.2026)");
+  assert.equal(formatGoogleReviewWeeklyPeriodLabel(period, "en"), "Week 2 (03-09.09.2026)");
+  assert.equal(formatGoogleReviewWeeklyPeriodLabel(period, "zh"), "第二周 (03-09.09.2026)");
+  assert.doesNotMatch(formatGoogleReviewWeeklyPeriodLabel(period, "en"), /[\u0E00-\u0E7F\u4E00-\u9FFF]/);
+});

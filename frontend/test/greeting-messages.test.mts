@@ -91,6 +91,16 @@ test("LINE OA visual layout strings are defined across all supported languages",
   const en = getGreetingDict("en");
   const zh = getGreetingDict("zh");
 
+  assert.equal(th.previewTitle, "ตัวอย่าง");
+  assert.equal(th.chatScreen, "หน้าจอแชท");
+  assert.equal(th.chatList, "รายการแชท");
+  assert.equal(en.previewTitle, "Preview");
+  assert.equal(en.chatScreen, "Chat screen");
+  assert.equal(en.chatList, "Chat list");
+  assert.equal(zh.previewTitle, "预览");
+  assert.equal(zh.chatScreen, "聊天界面");
+  assert.equal(zh.chatList, "聊天列表");
+
   // Section headers
   assert.equal(th.sendingRestrictions, "ข้อจำกัดการส่ง");
   assert.equal(en.sendingRestrictions, "Sending restrictions");
