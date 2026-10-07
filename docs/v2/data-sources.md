@@ -32,6 +32,11 @@ Selected with `?month=YYYY-MM` (default: the current Bangkok month). Loaded by
 | Tag coverage (store list, partner, network) | none | — | **MISSING**: needs a backend aggregate (`tag-analysis.md` §6) |
 | Links | `/chats?storeId=&month=` (and `&replyState=NOT_REPLIED`) via `/chats`'s `buildChatsHref`; `/store-360?storeId=`; LINE OA Manager from `conversation.store.lineManagerUrl` when `VALID` | — | available |
 
+## Monthly report: /v2/report
+
+Same sources and numbers as the monthly views above (`V2MonthDataProvider`), no extra calls.
+The "คัดลอกสรุป" text is built from those numbers by `lib/v2/report-summary.ts`.
+
 ## ตอนนี้ tab: /v2/response (live, business hours)
 
 Unchanged from before the monthly redesign. These sources load only while this tab is open.

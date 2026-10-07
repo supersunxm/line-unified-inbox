@@ -48,13 +48,16 @@ function messageOf(error: unknown) {
   return error instanceof Error ? error.message : "โหลดข้อมูลไม่สำเร็จ";
 }
 
+/** A shared response is reused for this long, so a page opened later (e.g. the report) fetches fresh numbers. */
+export const SHARED_RESPONSE_TTL_MS = 2 * 60 * 1000;
+
 // One promise per key and refresh, so the trend and the main view share a month's summary.
-const inflight = new Map<string, Promise<unknown>>();
+const inflight = new Map<string, { promise: Promise<unknown>; at: number }>();
 function shared<T>(fullKey: string, load: () => Promise<T>): Promise<T> {
-  const existing = inflight.get(fullKey) as Promise<T> | undefined;
-  if (existing) return existing;
+  const existing = inflight.get(fullKey);
+  if (existing && Date.now() - existing.at < SHARED_RESPONSE_TTL_MS) return existing.promise as Promise<T>;
   const promise = load();
-  inflight.set(fullKey, promise);
+  inflight.set(fullKey, { promise, at: Date.now() });
   promise.catch(() => inflight.delete(fullKey));
   if (inflight.size > 200) inflight.delete(inflight.keys().next().value as string);
   return promise;

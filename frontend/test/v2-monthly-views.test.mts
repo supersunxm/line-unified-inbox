@@ -56,8 +56,8 @@ test("shell: monthly pages carry the month selector; ภาพรวมเดื
   assert.match(shell, /\{monthly && <MonthSelector \/>\}/);
   assert.match(shell, /label: "สาขา", icon: "stores"/);
   assert.match(read("components/v2/v2-month-controls.tsx"), /selectableMonths\(now\)/);
-  assert.match(read("app/v2/page.tsx"), /<MonthOverview \/>/);
-  assert.match(read("app/v2/stores/page.tsx"), /<StoreScorecardView \/>/);
+  assert.match(read("app/v2/(shell)/page.tsx"), /<MonthOverview \/>/);
+  assert.match(read("app/v2/(shell)/stores/page.tsx"), /<StoreScorecardView \/>/);
   const files = readdirSync(new URL("../src/components/v2", import.meta.url));
   assert.ok(!files.includes("today-view.tsx"));
   assert.ok(!files.includes("stores-view.tsx"));

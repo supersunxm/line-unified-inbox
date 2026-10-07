@@ -85,3 +85,6 @@ confirmed by the owner), **CANCELLED**.
 | Date | Item | Decision | Status |
 |---|---|---|---|
 | 2026-10-07 | Open-month footer | "ตัวเลขเดือนที่ยังไม่ปิดอาจเปลี่ยนได้" on every report of a month in progress. Snapshots come in Wave B. | DECIDED |
+| 2026-10-07 | Report URL | `/v2/report?month=YYYY-MM` (network: KPIs, partner table, all stores), `&partner=<name>` (that partner's KPIs and stores), `&store=<id>` (one store). Outside the shell route group, so it has no navigation chrome. | DECIDED |
+| 2026-10-07 | Report rendering | A4 (`@page size: A4; margin 12mm`), light only: the report scopes the light token values to `.v2-report`, so it is light whatever the app theme. PDF is the browser's print → Save as PDF. No new dependencies. Red and green are darkened slightly so they stay legible on paper. | DECIDED |
+| 2026-10-07 | "คัดลอกสรุป" text | Lines: `สรุปเดือน <เดือน> · <scope>` / `ช่วง: <period>` / `แชท N · ยังไม่ตอบ N (Δ)` / `ตอบแล้ว % · ตอบใน 24 ชม. % (Δ จุด) · เป้า 90%` / the 3 stores with the most ยังไม่ตอบ / the open-month note when the month is open. Built by `lib/v2/report-summary.ts`. | DECIDED |

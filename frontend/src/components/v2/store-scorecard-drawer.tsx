@@ -5,7 +5,7 @@ import React, { useEffect, useRef } from "react";
 import { formatWaitingDuration } from "@/components/shell/store-priority-score";
 import { RESPONSE_RATE_TARGET_PERCENT } from "@/lib/v2/business-hours";
 import { monthShortLabel, periodLabel } from "@/lib/v2/month";
-import { chatsHref } from "@/lib/v2/month-url";
+import { chatsHref, reportHref } from "@/lib/v2/month-url";
 import { dailyBreakdown, storeCounts, tagCoverage, type MonthStoreRow } from "@/lib/v2/monthly-model";
 import { thaiLocationLabel } from "@/lib/v2/thai-geo";
 import { countState, formatValue, numericValue, rateState, type ValueState } from "@/lib/v2/value-state";
@@ -214,6 +214,7 @@ export function StoreScorecardDrawer({ row, onClose }: { row: MonthStoreRow; onC
             <div className="flex flex-wrap gap-2 text-xs">
               <Link href={chatsHref({ storeId: row.storeId, month: data.month })} className="rounded-[var(--app-radius-md)] border border-[var(--app-border)] px-3 py-1.5 font-medium text-[var(--app-accent)] hover:bg-[var(--app-accent-soft)]">แชทเดือนนี้ในหน้าแชทร้านค้า →</Link>
               <Link href={chatsHref({ storeId: row.storeId, month: data.month, unrepliedOnly: true })} className="rounded-[var(--app-radius-md)] border border-[var(--app-border)] px-3 py-1.5 font-medium text-[var(--app-accent)] hover:bg-[var(--app-accent-soft)]">เฉพาะยังไม่ตอบ →</Link>
+              <Link href={reportHref({ month: data.month, partner: null, store: row.storeId })} target="_blank" className="rounded-[var(--app-radius-md)] border border-[var(--app-border)] px-3 py-1.5 font-medium text-[var(--app-text-secondary)] hover:bg-[var(--app-surface-hover)]">รายงานสาขา ↗</Link>
               <Link href={`/store-360?storeId=${encodeURIComponent(row.storeId)}`} className="rounded-[var(--app-radius-md)] border border-[var(--app-border)] px-3 py-1.5 font-medium text-[var(--app-text-secondary)] hover:bg-[var(--app-surface-hover)]">Store 360 →</Link>
             </div>
           </Section>
