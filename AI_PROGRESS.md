@@ -6427,3 +6427,11 @@ Live worker continues independently at 146 configured unique active OA identitie
 - The sample button is now labeled `สุ่มข้อความตัวอย่าง`; repeated clicks pick another example and avoid immediately returning the exact current sample when alternatives exist.
 - Added deterministic picker tests, uniqueness/length coverage, pass/fail diversity checks, and an exact 15-word fixture.
 - Verification status: implementation complete on `feat/review15-random-examples`; hosted CI pending.
+## 2026-10-07 — Forced password reset recovery
+
+- Task: repair the web flow after an administrator resets a user's password. Production showed successful login and /auth/me while protected APIs correctly returned PASSWORD_CHANGE_REQUIRED.
+- Implemented: dedicated /change-password page in Thai/English/Chinese; login and protected workspace redirect when mustChangePassword is true; API redirects only the exact PASSWORD_CHANGE_REQUIRED 403; password changes invalidate the shared auth-user cache.
+- Safety: /change-password is exempt from the global 401 redirect so an incorrect temporary password can be shown as a form error; the page itself still sends an actually unauthenticated session to /login.
+- Regression coverage: forced-password redirect predicate, recovery-page wiring, auth cache invalidation, and 401-loop exemption.
+- Verification status: source diff reviewed. PR #507 opened. GitHub CI is required to pass before merge; production functional verification follows deployment.
+- Next action: wait for PR #507 CI, repair any failures, merge with a merge commit only when green, then verify Railway deployment and the reset-login-change-password-dashboard path.
