@@ -405,7 +405,7 @@ export const api = {
       { ...options, cache: "no-store", headers: { "Cache-Control": "no-cache, no-store, must-revalidate" } },
     ),
   requestSetupOtp: (displayName: string, email: string, password: string, language: "th" | "en" | "zh") => request<{ challengeId: string; maskedEmail: string; expiresInSeconds: number; resendAfterSeconds: number }>("/auth/setup/request-otp", { method: "POST", body: JSON.stringify({ displayName, email, password, language }) }),
-  verifySetupOtp: (input: { challengeId: string; displayName: string; email: string; password: string; otp: string; language: "th" | "en" | "zh" }) => withAuthUserReset(() => request<{ id: string; email: string; displayName: string; role: "ADMIN" | "VIEWER" }>("/auth/setup/verify-otp", { method: "POST", body: JSON.stringify(input) })),
+  verifySetupOtp: (input: { challengeId: string; displayName: string; email: string; password: string; otp: string; language: "th" | "en" | "zh" }) => withAuthUserReset(() => request<{ id: string; email: string; displayName: string; role: "ADMIN" | "ASSISTANT" | "VIEWER" }>("/auth/setup/verify-otp", { method: "POST", body: JSON.stringify(input) })),
   resendSetupOtp: (challengeId: string, language: "th" | "en" | "zh") => request<{ challengeId: string; maskedEmail: string; expiresInSeconds: number; resendAfterSeconds: number }>("/auth/setup/resend-otp", { method: "POST", body: JSON.stringify({ challengeId, language }) }),
   logout: () => withAuthUserReset(() => request<{ success: true }>("/auth/logout", { method: "POST" }), { endSession: true }),
   me: (options?: ApiRequestOptions) =>

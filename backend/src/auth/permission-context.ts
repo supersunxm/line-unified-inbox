@@ -1,4 +1,5 @@
 import { UserRole } from "@prisma/client";
+import { hasCapability } from "./capability-policy";
 
 export type PermissionContextMembership = {
   storeId: string;
@@ -39,6 +40,7 @@ export type PermissionContext = {
   };
   capabilities: {
     manageAccounts: boolean;
+    downloadData: boolean;
     reply: boolean;
     accessMainOa: boolean;
     manageMainOa: boolean;
@@ -63,7 +65,7 @@ export function buildPermissionContext(input: PermissionContextInput): Permissio
   const canAccessMobile = input.canAccessMobile ?? true;
   const canAccessHq = isAdmin || (input.canAccessHq ?? false);
   const canAccessAllStores = isAdmin || (input.canAccessAllStores ?? false);
-  const canManageAccounts = isAdmin || (input.canManageAccounts ?? false);
+  const canManageAccounts = input.role !== UserRole.ASSISTANT && (isAdmin || (input.canManageAccounts ?? false));
   const canReply = isAdmin || (input.canReply ?? storeIds.length > 0);
   const canAccessMainOa = input.canAccessMainOa ?? false;
   const canManageMainOa = canAccessMainOa && (input.canManageMainOa ?? false);
@@ -89,6 +91,7 @@ export function buildPermissionContext(input: PermissionContextInput): Permissio
     },
     capabilities: {
       manageAccounts: canManageAccounts,
+      downloadData: hasCapability(input.role, "downloadData"),
       reply: canReply,
       accessMainOa: canAccessMainOa,
       manageMainOa: canManageMainOa,

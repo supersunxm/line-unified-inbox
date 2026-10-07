@@ -58,13 +58,14 @@ export function MassMessagesView({
   userRole,
 }: {
   language?: Language;
-  userRole: "ADMIN" | "VIEWER";
+  userRole: "ADMIN" | "ASSISTANT" | "VIEWER";
 }) {
   const t = getMassMessagesText(language);
-  const isAuthorized = userRole === "ADMIN";
+  const isAuthorized = userRole === "ADMIN" || userRole === "ASSISTANT";
+  const isAdmin = userRole === "ADMIN";
 
   // Navigation & View mode: "compose" | "progress" | "history"
-  const [viewMode, setViewMode] = useState<"compose" | "progress" | "history">("compose");
+  const [viewMode, setViewMode] = useState<"compose" | "progress" | "history">(userRole === "ASSISTANT" ? "history" : "compose");
 
   // Stores Data
   const [stores, setStores] = useState<ApiStore[]>([]);
@@ -110,7 +111,7 @@ export function MassMessagesView({
   useEffect(() => {
     if (!isAuthorized) return;
     let active = true;
-    setStoresLoading(true);
+    const timer = window.setTimeout(() => { if (active) setStoresLoading(true); }, 0);
     api
       .stores()
       .then((data) => {
@@ -124,6 +125,7 @@ export function MassMessagesView({
       });
     return () => {
       active = false;
+      window.clearTimeout(timer);
     };
   }, [isAuthorized]);
 
@@ -153,9 +155,9 @@ export function MassMessagesView({
         audienceType,
       });
       setPreview(res);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Preview failed", err);
-      setPreviewError(err?.message || t.previewError);
+      setPreviewError(err instanceof Error ? err.message : t.previewError);
       setPreview(null);
     } finally {
       setPreviewLoading(false);
@@ -215,6 +217,12 @@ export function MassMessagesView({
       setHistoryLoading(false);
     }
   }, [isAuthorized]);
+
+  useEffect(() => {
+    if (userRole !== "ASSISTANT") return;
+    const timer = window.setTimeout(() => void loadHistory(), 0);
+    return () => window.clearTimeout(timer);
+  }, [loadHistory, userRole]);
 
   const handleOpenHistory = () => {
     setViewMode("history");
@@ -279,9 +287,9 @@ export function MassMessagesView({
         name: file.name,
         size: file.size,
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Image upload failed", err);
-      setImageUploadError(err?.message || t.imageUploadFailed);
+      setImageUploadError(err instanceof Error ? err.message : t.imageUploadFailed);
     } finally {
       setIsUploadingImage(false);
     }
@@ -350,9 +358,9 @@ export function MassMessagesView({
       setActiveCampaignId(created.id);
       setActiveCampaign(created);
       setViewMode("progress");
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Failed to create campaign", err);
-      setSendError(err?.message || "Failed to dispatch campaign");
+      setSendError(err instanceof Error ? err.message : "Failed to dispatch campaign");
     } finally {
       setSending(false);
     }
@@ -405,7 +413,7 @@ export function MassMessagesView({
             <Badge size="md" variant="accent" dot>
               {t.adminOnlyBadge}
             </Badge>
-            {viewMode !== "compose" && (
+            {isAdmin && viewMode !== "compose" && (
               <Button
                 variant="primary"
                 size="sm"
@@ -423,7 +431,7 @@ export function MassMessagesView({
                 {t.viewHistoryButton}
               </Button>
             )}
-            {viewMode === "history" && (
+            {isAdmin && viewMode === "history" && (
               <Button
                 variant="secondary"
                 size="sm"
@@ -941,7 +949,7 @@ export function MassMessagesView({
                       <div>
                         <div className="flex items-center gap-2">
                           <span className="text-[11px] font-mono text-[var(--app-text-tertiary)]">ID: {activeCampaign.id}</span>
-                          {activeCampaign.messagePayload?.messages?.some((m: any) => m.type === "image") && (
+                          {activeCampaign.messagePayload?.messages?.some((m) => m.type === "image") && (
                             <Badge size="sm" variant="accent">
                               {t.imageAttachedBadge}
                             </Badge>
@@ -1198,7 +1206,7 @@ export function MassMessagesView({
                           <TableCell className="font-semibold text-[var(--app-text-primary)]">
                             <div className="flex items-center gap-1.5">
                               <span>{item.title || "Mass Message"}</span>
-                              {item.messagePayload?.messages?.some((m: any) => m.type === "image") && (
+                              {item.messagePayload?.messages?.some((m) => m.type === "image") && (
                                 <Badge size="sm" variant="accent">
                                   IMG
                                 </Badge>

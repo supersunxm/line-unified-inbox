@@ -1,4 +1,5 @@
 "use client";
+import { DownloadAction, useCanDownloadData } from "@/lib/download-permission";
 
 import { UnifiedPeriodPicker } from "@/components/date-range/unified-period-picker";
 
@@ -10,6 +11,7 @@ import type { Language } from "./follower-insights-translations";
 import { downloadDailyFollowerGrowthWorkbook } from "./daily-follower-growth-export";
 
 export function DailyFollowerGrowthExportControl({ language = "en" }: { language?: Language }) {
+  const canDownload = useCanDownloadData();
   const today = new Date();
   const start = new Date(today);
   start.setDate(start.getDate() - 6);
@@ -102,6 +104,8 @@ export function DailyFollowerGrowthExportControl({ language = "en" }: { language
     }
   };
 
+  if (!canDownload) return null;
+
   return (
     <>
       <button
@@ -161,7 +165,7 @@ export function DailyFollowerGrowthExportControl({ language = "en" }: { language
 
             <div className="mt-5 flex justify-end gap-2">
               <button type="button" onClick={() => setOpen(false)} disabled={downloading} className="rounded-xl border border-[var(--border)] px-4 py-2 text-sm font-medium text-[var(--foreground)] hover:bg-[var(--hover)] disabled:opacity-50">{text.cancel}</button>
-              <button type="button" onClick={() => void handleDownload()} disabled={downloading || !dateFrom || !dateTo || dateTo < dateFrom} className="rounded-xl bg-[var(--app-accent)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--app-accent-hover)] disabled:opacity-50">{downloading ? text.downloading : text.download}</button>
+              <DownloadAction><button type="button" onClick={() => void handleDownload()} disabled={downloading || !dateFrom || !dateTo || dateTo < dateFrom} className="rounded-xl bg-[var(--app-accent)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--app-accent-hover)] disabled:opacity-50">{downloading ? text.downloading : text.download}</button></DownloadAction>
             </div>
           </div>
         </div>

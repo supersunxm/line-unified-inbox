@@ -149,7 +149,7 @@ export function MobileBottomNav({ current, onMore }: { current: MobileNavKey; on
   );
 }
 
-export function MobileMoreSheet({ displayName, role, onClose }: { displayName: string; role: "ADMIN" | "VIEWER"; onClose: () => void }) {
+export function MobileMoreSheet({ displayName, role, onClose }: { displayName: string; role: "ADMIN" | "ASSISTANT" | "VIEWER"; onClose: () => void }) {
   const { language } = useAppLanguage();
   const t = pickLanguageText(language, mobileNavigationTranslations);
   const links = [

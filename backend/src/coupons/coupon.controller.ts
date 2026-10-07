@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from "@nestjs/common";
 import { UserRole } from "@prisma/client";
-import { Roles } from "../auth/auth.decorators";
+import { OperationalRead, Roles } from "../auth/auth.decorators";
 import { AuthGuard, type AuthRequest } from "../auth/auth.guard";
 import { CouponExecutionPolicyService } from "./coupon-execution-policy.service";
 import { CouponService } from "./coupon.service";
@@ -39,16 +39,19 @@ export class CouponController {
     return this.service.discontinue(id);
   }
 
+  @OperationalRead()
   @Get("execution-mode")
   executionMode() {
     return { mode: this.executionPolicy.getMode() };
   }
 
+  @OperationalRead()
   @Get(":id")
   getCampaign(@Param("id") id: string) {
     return this.service.getCampaign(id);
   }
 
+  @OperationalRead()
   @Get()
   listCampaigns(@Query("limit") limit = "20", @Query("offset") offset = "0") {
     return this.service.listCampaigns(Number.parseInt(limit, 10) || 20, Number.parseInt(offset, 10) || 0);

@@ -1,4 +1,5 @@
 "use client";
+import { DownloadAction, authorizeDataDownload } from "@/lib/download-permission";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { FilterBar, PageHeader } from "@/components/shell";
@@ -48,7 +49,7 @@ export function FriendSourceLinksView({
   userRole,
 }: {
   language?: Language;
-  userRole: "ADMIN" | "VIEWER";
+  userRole: "ADMIN" | "ASSISTANT" | "VIEWER";
 }) {
   const t = getFriendSourceLinksText(language);
 
@@ -331,6 +332,7 @@ export function FriendSourceLinksView({
   };
 
   const handleExportExcel = async (mode: "all" | "current") => {
+    if (!(await authorizeDataDownload())) return;
     setExportMenuOpen(false);
     setExporting(true);
     try {
@@ -469,7 +471,7 @@ export function FriendSourceLinksView({
         }
         actions={
           <div className="relative shrink-0">
-            <Button
+            <DownloadAction><Button
               id="fsl-export-button"
               type="button"
               variant="secondary"
@@ -483,14 +485,14 @@ export function FriendSourceLinksView({
               <span>📊</span>
               <span>{exporting ? t.exportRunning : t.exportExcel}</span>
               <span className="text-[10px]">▼</span>
-            </Button>
+            </Button></DownloadAction>
 
             {exportMenuOpen && (
               <div
                 role="menu"
                 className="absolute right-0 top-12 z-30 w-64 rounded-[var(--app-radius-lg)] border border-[var(--app-border)] bg-[var(--app-surface-elevated)] p-1.5 shadow-[var(--app-shadow-elevated)]"
               >
-                <button
+                <DownloadAction><button
                   id="fsl-export-all"
                   role="menuitem"
                   onClick={() => void handleExportExcel("all")}
@@ -504,9 +506,9 @@ export function FriendSourceLinksView({
                       ? "下载系统中所有门店的链接"
                       : "Download all links across all stores"}
                   </span>
-                </button>
+                </button></DownloadAction>
 
-                <button
+                <DownloadAction><button
                   id="fsl-export-current"
                   role="menuitem"
                   onClick={() => void handleExportExcel("current")}
@@ -520,7 +522,7 @@ export function FriendSourceLinksView({
                       ? "仅下载符合当前筛选条件的链接"
                       : "Download links matching active filters"}
                   </span>
-                </button>
+                </button></DownloadAction>
               </div>
             )}
           </div>

@@ -1,3 +1,4 @@
+import { authorizeDataDownload } from "../../lib/data-download-policy.ts";
 import type { ByStoreAccountRow } from "@/types/api";
 import { api } from "@/lib/api";
 import type { Language } from "./follower-insights-translations";
@@ -155,6 +156,7 @@ export async function downloadDailyFollowerGrowthWorkbook(options: {
   selectedLineOaIds?: string[];
   language?: Language;
 }) {
+  if (!(await authorizeDataDownload())) return;
   const language = options.language ?? "en";
   const dates = enumerateIsoDates(options.dateFrom, options.dateTo);
   const fetchDates = [addIsoDays(options.dateFrom, -1), ...dates];

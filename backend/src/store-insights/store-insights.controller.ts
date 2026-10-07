@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Param, Post, Query, Req, Res } from "@nestjs/common";
 import type { Response } from "express";
 import type { AuthRequest } from "../auth/auth.guard";
+import { RequireDownload } from "../auth/auth.decorators";
 import { StoreInsightsCustomerVoiceDrilldownQueryDto, StoreInsightsExportDto, StoreInsightsQueryDto, StoreInsightsResponseCasesQueryDto } from "./store-insights.types";
 import { CustomerVoiceService } from "./customer-voice.service";
 import { StoreInsightsService } from "./store-insights.service";
@@ -10,6 +11,7 @@ export class StoreInsightsController {
   constructor(private readonly storeInsights: StoreInsightsService, private readonly customerVoice: CustomerVoiceService) {}
 
   @Post("export")
+  @RequireDownload()
   async export(@Req() request: AuthRequest, @Body() dto: StoreInsightsExportDto, @Res() response: Response) {
     const result = await this.storeInsights.export(request.user!, dto);
     response.setHeader("Content-Type", result.contentType);

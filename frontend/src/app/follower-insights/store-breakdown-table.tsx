@@ -1,4 +1,5 @@
 "use client";
+import { DownloadAction } from "@/lib/download-permission";
 
 import { useMemo, useRef, useState } from "react";
 import type { ByStoreAccountRow } from "@/types/api";
@@ -370,7 +371,7 @@ function StoreBreakdownTableInner({
                 {labels.count(filteredRows.length, rows.length)}
               </span>
 
-              <button
+              <DownloadAction><button
                 type="button"
                 onClick={() => exportStoreCsv(filteredRows.map((row) => row.source), dateFrom, dateTo, language)}
                 disabled={filteredRows.length === 0}
@@ -382,7 +383,7 @@ function StoreBreakdownTableInner({
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 11v5m0 0-2-2m2 2 2-2" />
                 </svg>
                 {t.exportCsv}
-              </button>
+              </button></DownloadAction>
             </div>
           )}
         </div>

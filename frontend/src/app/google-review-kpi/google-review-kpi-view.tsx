@@ -1,4 +1,5 @@
 "use client";
+import { DownloadAction, authorizeDataDownload } from "@/lib/download-permission";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/lib/api";
@@ -343,7 +344,7 @@ const translations = {
 
 type ViewProps = {
   language: Language;
-  userRole?: "ADMIN" | "VIEWER";
+  userRole?: "ADMIN" | "ASSISTANT" | "VIEWER";
 };
 
 type FormMessage = {
@@ -477,6 +478,7 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
   };
 
   const handleDownloadWeeklyExport = async (format: "xlsx" | "csv") => {
+    if (!(await authorizeDataDownload())) return;
     try {
       setExportingFormat(format);
       setExportError(null);
@@ -639,7 +641,8 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
   };
 
   // Export & Download handlers
-  const handleDownloadCsv = (filteredOnly: boolean = false) => {
+  const handleDownloadCsv = async (filteredOnly: boolean = false) => {
+    if (!(await authorizeDataDownload())) return;
     const listToExport = filteredOnly ? filteredStores : (summary?.stores || []);
     if (listToExport.length === 0) return;
 
@@ -694,7 +697,8 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
     setDownloadDropdownOpen(false);
   };
 
-  const handleDownloadJson = () => {
+  const handleDownloadJson = async () => {
+    if (!(await authorizeDataDownload())) return;
     if (!summary) return;
     const blob = new Blob([JSON.stringify(summary, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -706,7 +710,8 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
     setDownloadDropdownOpen(false);
   };
 
-  const handleDownloadImportHistoryJson = () => {
+  const handleDownloadImportHistoryJson = async () => {
+    if (!(await authorizeDataDownload())) return;
     const history = summary?.importHistory || [];
     const blob = new Blob([JSON.stringify(history, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -718,7 +723,8 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
     setDownloadDropdownOpen(false);
   };
 
-  const handleDownloadNeedsAttentionCsv = () => {
+  const handleDownloadNeedsAttentionCsv = async () => {
+    if (!(await authorizeDataDownload())) return;
     const attentionStores = (summary?.stores || []).filter((s) => s.needsAttention);
     const headers = ["Store ID", "Store Name", "Province", "Region", "Reason", "Google Maps URL"];
     const rows = attentionStores.map((s) => [
@@ -740,7 +746,8 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
     setDownloadDropdownOpen(false);
   };
 
-  const handleDownloadSingleStoreJson = (store: GoogleReviewKpiStoreItem) => {
+  const handleDownloadSingleStoreJson = async (store: GoogleReviewKpiStoreItem) => {
+    if (!(await authorizeDataDownload())) return;
     const blob = new Blob([JSON.stringify(store, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -1011,7 +1018,7 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
               />
             </div>
             <div className="flex items-center gap-2">
-              <button
+              <DownloadAction><button
                 type="button"
                 id="downloadBtn"
                 onClick={() => handleDownloadWeeklyExport("xlsx")}
@@ -1019,8 +1026,8 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
                 className="flex items-center gap-1.5 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-subtle)] px-3.5 py-2 text-xs font-semibold text-[var(--app-text-primary)] hover:bg-[var(--app-surface-hover)] transition-colors"
               >
                 <span id="downloadExcel">{t.downloadExcel}</span>
-              </button>
-              <button
+              </button></DownloadAction>
+              <DownloadAction><button
                 type="button"
                 id="downloadCsv"
                 onClick={() => handleDownloadWeeklyExport("csv")}
@@ -1028,7 +1035,7 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
                 className="flex items-center gap-1.5 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-subtle)] px-3.5 py-2 text-xs font-semibold text-[var(--app-text-primary)] hover:bg-[var(--app-surface-hover)] transition-colors"
               >
                 <span>{t.downloadCsv}</span>
-              </button>
+              </button></DownloadAction>
             </div>
           </div>
         </div>
@@ -1105,7 +1112,7 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
 
               {/* Download Dropdown */}
               <div className="relative">
-                <button
+                <DownloadAction><button
                   type="button"
                   id="downloadBtn"
                   onClick={() => setDownloadDropdownOpen((prev) => !prev)}
@@ -1116,54 +1123,54 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
                   </svg>
                   <span>📥 ดาวน์โหลดข้อมูล</span>
                   <span className="text-[10px] opacity-60">▼</span>
-                </button>
+                </button></DownloadAction>
 
                 {downloadDropdownOpen && (
                   <div className="absolute right-0 mt-2 w-64 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-2 shadow-2xl z-40 space-y-1 text-xs animate-in fade-in zoom-in-95">
-                    <button
+                    <DownloadAction><button
                       type="button"
                       id="downloadCsv"
                       onClick={() => handleDownloadCsv(false)}
                       className="w-full text-left px-3 py-2 rounded-xl hover:bg-[var(--app-surface-hover)] font-medium text-[var(--app-text-primary)] flex items-center gap-2"
                     >
                       <span>📄 ดาวน์โหลด CSV เดือนปัจจุบัน</span>
-                    </button>
-                    <button
+                    </button></DownloadAction>
+                    <DownloadAction><button
                       type="button"
                       onClick={handleDownloadJson}
                       className="w-full text-left px-3 py-2 rounded-xl hover:bg-[var(--app-surface-hover)] font-medium text-[var(--app-text-primary)] flex items-center gap-2"
                     >
                       <span>📦 ดาวน์โหลด JSON ข้อมูลดิบทั้งหมด</span>
-                    </button>
-                    <button
+                    </button></DownloadAction>
+                    <DownloadAction><button
                       type="button"
                       onClick={() => handleDownloadCsv(true)}
                       className="w-full text-left px-3 py-2 rounded-xl hover:bg-[var(--app-surface-hover)] font-medium text-[var(--app-text-primary)] flex items-center gap-2"
                     >
                       <span>📊 ดาวน์โหลด CSV รายการที่กรอง ({filteredStores.length} ร้าน)</span>
-                    </button>
-                    <button
+                    </button></DownloadAction>
+                    <DownloadAction><button
                       type="button"
                       onClick={handleDownloadImportHistoryJson}
                       className="w-full text-left px-3 py-2 rounded-xl hover:bg-[var(--app-surface-hover)] font-medium text-[var(--app-text-primary)] flex items-center gap-2"
                     >
                       <span>📜 ดาวน์โหลด JSON ประวัติการนำเข้า</span>
-                    </button>
-                    <button
+                    </button></DownloadAction>
+                    <DownloadAction><button
                       type="button"
                       onClick={handleDownloadNeedsAttentionCsv}
                       className="w-full text-left px-3 py-2 rounded-xl hover:bg-[var(--app-surface-hover)] font-medium text-amber-600 dark:text-amber-400 flex items-center gap-2"
                     >
                       <span>⚠ ดาวน์โหลด CSV ร้านที่ต้องตรวจสอบ (6 ร้าน)</span>
-                    </button>
-                    <button
+                    </button></DownloadAction>
+                    <DownloadAction><button
                       type="button"
                       id="downloadExcel"
                       onClick={() => handleDownloadCsv(false)}
                       className="w-full text-left px-3 py-2 rounded-xl hover:bg-[var(--app-surface-hover)] font-medium text-[var(--app-text-secondary)] border-t border-[var(--app-border)] mt-1 pt-2 flex items-center gap-2"
                     >
                       <span>📈 ดาวน์โหลดตารางภาพรวม Excel</span>
-                    </button>
+                    </button></DownloadAction>
                   </div>
                 )}
               </div>
@@ -1399,13 +1406,13 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
                 <h3 className="text-sm font-bold text-[var(--app-text-primary)]">ประวัติการนำเข้าผลลัพธ์</h3>
                 <p className="text-xs text-[var(--app-text-tertiary)]">ประวัติการอัปเดตและ Gap Fill ประจำเดือน</p>
               </div>
-              <button
+              <DownloadAction><button
                 type="button"
                 onClick={handleDownloadImportHistoryJson}
                 className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:underline"
               >
                 ดาวน์โหลด JSON ประวัติ →
-              </button>
+              </button></DownloadAction>
             </div>
 
             <div className="overflow-x-auto">
@@ -1577,20 +1584,20 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
                 </select>
 
                 {/* Quick Table Downloads */}
-                <button
+                <DownloadAction><button
                   type="button"
                   onClick={() => handleDownloadCsv(true)}
                   className="h-10 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-subtle)] px-3 text-xs font-semibold text-[var(--app-text-primary)] hover:bg-[var(--app-surface-hover)] transition-colors flex items-center gap-1.5 shadow-xs"
                 >
                   📥 ดาวน์โหลด CSV
-                </button>
-                <button
+                </button></DownloadAction>
+                <DownloadAction><button
                   type="button"
                   onClick={handleDownloadJson}
                   className="h-10 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-subtle)] px-3 text-xs font-semibold text-[var(--app-text-primary)] hover:bg-[var(--app-surface-hover)] transition-colors flex items-center gap-1.5 shadow-xs"
                 >
                   📥 ดาวน์โหลด JSON
-                </button>
+                </button></DownloadAction>
               </div>
             </div>
 
@@ -2050,13 +2057,13 @@ export function GoogleReviewKpiView({ language, userRole }: ViewProps) {
 
               {/* Drawer Footer */}
               <div className="p-4 border-t border-[var(--app-border)] bg-[var(--app-surface-subtle)] space-y-2">
-                <button
+                <DownloadAction><button
                   type="button"
                   onClick={() => handleDownloadSingleStoreJson(selectedStoreForDrawer)}
                   className="w-full rounded-xl bg-[var(--app-surface)] border border-[var(--app-border)] py-2.5 text-xs font-semibold text-[var(--app-text-primary)] hover:bg-[var(--app-surface-hover)] shadow-xs transition-colors flex items-center justify-center gap-1.5"
                 >
                   📥 ดาวน์โหลดข้อมูลร้านนี้ (JSON)
-                </button>
+                </button></DownloadAction>
               </div>
             </div>
           </div>

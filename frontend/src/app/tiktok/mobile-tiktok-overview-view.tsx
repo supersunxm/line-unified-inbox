@@ -27,7 +27,7 @@ import type {
   TikTokStoreData,
 } from "./tiktok-types";
 
-type AuthUser = { id: string; email: string; displayName: string; role: "ADMIN" | "VIEWER" };
+type AuthUser = { id: string; email: string; displayName: string; role: "ADMIN" | "ASSISTANT" | "VIEWER" };
 
 type Props = {
   accounts?: TikTokAccountListItem[];

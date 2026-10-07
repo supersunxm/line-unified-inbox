@@ -18,7 +18,7 @@ import { AutoResponsePreviewStream } from "./auto-response-preview-stream";
 
 type AutoResponsesViewProps = {
   language: "th" | "en" | "zh";
-  userRole: "ADMIN" | "VIEWER";
+  userRole: "ADMIN" | "ASSISTANT" | "VIEWER";
 };
 
 export function AutoResponsesView({ language, userRole }: AutoResponsesViewProps) {

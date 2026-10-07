@@ -22,7 +22,7 @@ import type { TikTokAccountListItem, TikTokHistoricalMetricsData, TikTokStoreDat
 import { getTikTokDashboardText } from "./tiktok-dashboard-translations";
 import { TikTokFollowerGrowthChart } from "./tiktok-follower-chart";
 
-type AuthUser = { id: string; email: string; displayName: string; role: "ADMIN" | "VIEWER" };
+type AuthUser = { id: string; email: string; displayName: string; role: "ADMIN" | "ASSISTANT" | "VIEWER" };
 type Tab = "overview" | "growth" | "videos";
 
 type Props = {

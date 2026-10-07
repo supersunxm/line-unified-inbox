@@ -8,6 +8,7 @@ import { DailySummaryTable } from "./daily-summary-table";
 import { StoreBreakdownTable } from "./store-breakdown-table";
 import { TrendChart } from "./trend-chart";
 import {
+  getBkkDateStr,
   calculateCoverage,
   clampFollowerInsightsDateRange,
   formatBkkDateTime,

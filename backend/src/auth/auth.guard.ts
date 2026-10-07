@@ -3,7 +3,7 @@ import { Reflector } from "@nestjs/core";
 import { SessionType, UserRole } from "@prisma/client";
 import { Request } from "express";
 import { AuthService } from "./auth.service";
-import { IS_PUBLIC, REQUIRED_ROLES } from "./auth.decorators";
+import { IS_PUBLIC, OPERATIONAL_READ, REQUIRED_ROLES } from "./auth.decorators";
 import type { PermissionContext } from "./permission-context";
 import { StoreAccessService } from "./store-access.service";
 
@@ -88,9 +88,14 @@ export class AuthGuard implements CanActivate {
       }
       await this.storeAccess.applyStoreContext(user, storeId);
     }
-    if (user.role === "VIEWER" && request.method !== "GET" && request.path !== "/auth/logout" && (!this.storeAccess || !(await this.storeAccess.canWriteAsStoreUser(user)))) throw new ForbiddenException("Viewer access is read-only");
+    if ((user.role === UserRole.VIEWER || user.role === UserRole.ASSISTANT) && request.method !== "GET" && request.path !== "/auth/logout" && (!this.storeAccess || !(await this.storeAccess.canWriteAsStoreUser(user)))) throw new ForbiddenException("Reply permission is required");
     const roles = this.reflector.getAllAndOverride<UserRole[]>(REQUIRED_ROLES, [context.getHandler(), context.getClass()]);
-    if (roles?.length && !roles.includes(user.role)) throw new ForbiddenException("Insufficient permissions");
+    const assistantRead = user.role === UserRole.ASSISTANT
+      && request.method === "GET"
+      && user.authorization?.workspaces.hq === true
+      && user.authorization.scope.allStores === true
+      && this.reflector.getAllAndOverride<boolean>(OPERATIONAL_READ, [context.getHandler(), context.getClass()]);
+    if (roles?.length && !roles.includes(user.role) && !assistantRead) throw new ForbiddenException("Insufficient permissions");
     return true;
   }
 }

@@ -31,7 +31,7 @@ import {
   loadLocalImportMetadata,
   validateAndPreviewImport,
 } from "./google-review-import.util";
-import ExcelJS from "exceljs";
+import * as ExcelJS from "exceljs";
 import {
   generateWeeklyPeriods,
   getBangkokDateParts,

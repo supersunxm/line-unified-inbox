@@ -1,3 +1,4 @@
+import { authorizeDataDownload } from "../../lib/data-download-policy.ts";
 import type { FriendSourceLink } from "@/types/api";
 import { getFriendSourceLinksText, type Language } from "./friend-source-links-translations.ts";
 import { formatConversionRate } from "./friend-source-links-utils.ts";
@@ -497,7 +498,8 @@ export async function createExcelWorkbookBuffer(
 /**
  * Triggers a browser file download using Blob & object URL.
  */
-export function triggerBrowserDownload(data: Uint8Array | ArrayBuffer | BlobPart, filename: string): void {
+export async function triggerBrowserDownload(data: Uint8Array | ArrayBuffer | BlobPart, filename: string): Promise<void> {
+  if (!(await authorizeDataDownload())) return;
   const blob = new Blob([data as BlobPart], {
     type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   });

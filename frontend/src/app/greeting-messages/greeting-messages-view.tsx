@@ -14,7 +14,7 @@ import { GreetingMessageBuilder } from "./greeting-message-builder";
 
 type GreetingMessagesViewProps = {
   language?: "th" | "en" | "zh" | string;
-  userRole?: "ADMIN" | "VIEWER";
+  userRole?: "ADMIN" | "ASSISTANT" | "VIEWER";
 };
 
 type ReadinessFilter = "ALL" | "READY" | "BLOCKED";

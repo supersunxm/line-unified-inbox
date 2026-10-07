@@ -1,4 +1,5 @@
 "use client";
+import { DownloadAction, authorizeDataDownload } from "@/lib/download-permission";
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -115,7 +116,8 @@ export function RichMenuOverviewView() {
     });
   }, [data, search, status, template]);
 
-  function exportCsv() {
+  async function exportCsv() {
+  if (!(await authorizeDataDownload())) return;
     const headers = [
       "Store ID", "Store", "LINE OA", "Province", "Region", "Current Rich Menu", "Published Version",
       "Current Template Version", "Recommended Variant", "Google Maps", "TikTok", "Status", "Reason", "Last Published At",
@@ -179,7 +181,7 @@ export function RichMenuOverviewView() {
           </div>
           <div className="flex flex-wrap gap-2">
             <button type="button" onClick={() => void load()} className="rounded-lg border border-[var(--app-border)] bg-[var(--app-surface)] px-4 py-2 text-sm font-medium hover:bg-[var(--app-surface-muted)]">รีเฟรช</button>
-            <button type="button" onClick={exportCsv} disabled={!data || filtered.length === 0} className="rounded-lg bg-[var(--app-accent)] px-4 py-2 text-sm font-medium text-white disabled:opacity-50">Export CSV</button>
+            <DownloadAction><button type="button" onClick={exportCsv} disabled={!data || filtered.length === 0} className="rounded-lg bg-[var(--app-accent)] px-4 py-2 text-sm font-medium text-white disabled:opacity-50">Export CSV</button></DownloadAction>
           </div>
         </div>
 

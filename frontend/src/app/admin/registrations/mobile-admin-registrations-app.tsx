@@ -14,7 +14,7 @@ import {
 } from "@/components/mobile/adaptive-mobile";
 import { api, type ApprovedAccount, type PendingRegistration } from "@/lib/api";
 
-type AuthUser = { id: string; email: string; displayName: string; role: "ADMIN" | "VIEWER" };
+type AuthUser = { id: string; email: string; displayName: string; role: "ADMIN" | "ASSISTANT" | "VIEWER" };
 type Tab = "pending" | "approved";
 type RoleFilter = "ALL" | "STAFF" | "STORE_MANAGER";
 type AccountStatusFilter = "ALL" | "ACTIVE" | "INACTIVE";

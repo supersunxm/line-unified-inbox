@@ -1,3 +1,4 @@
+import { authorizeDataDownload } from "../../lib/data-download-policy.ts";
 import type { ByStoreAccountRow, SummaryDailyRow } from "@/types/api";
 
 export type Language = "th" | "en" | "zh";
@@ -185,12 +186,13 @@ export function escapeCsvCell(val: string | number | null | undefined): string {
   return str;
 }
 
-export function exportStoreCsv(
+export async function exportStoreCsv(
   data: ByStoreAccountRow[],
   dateFrom: string,
   dateTo: string,
   language: Language = "en"
 ) {
+  if (!(await authorizeDataDownload())) return;
   const headers =
     language === "th"
       ? ["รหัสสาขา (Store ID)", "ร้านค้า", "LINE OA", "ผู้ติดตาม", "ผู้ติดตามวันเริ่มต้น", "เพิ่มขึ้นในช่วงเวลา", "ผู้รับข้อความที่เข้าถึงได้", "จำนวนบล็อก", "สถานะ", "ดึงข้อมูลล่าสุด"]

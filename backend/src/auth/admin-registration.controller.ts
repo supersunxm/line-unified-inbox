@@ -1,9 +1,10 @@
-import { Controller, Get, Param, Patch, Post, Req } from "@nestjs/common";
+import { Body, Controller, Get, Param, Patch, Post, Req } from "@nestjs/common";
 import { Roles } from "./auth.decorators";
 import { AuthRequest } from "./auth.guard";
 import { RegistrationService } from "./registration.service";
 import { HqRegistrationService } from "./hq-registration.service";
 import { AuthService } from "./auth.service";
+import { ChangeHqRoleDto } from "./hq-role.dto";
 
 @Controller("admin/registrations")
 @Roles("ADMIN")
@@ -20,6 +21,7 @@ export class AdminRegistrationController {
   @Post("hq-users/:id/reset-password") resetHqPassword(@Param("id") id: string, @Req() request: AuthRequest) { return this.hqRegistration.resetPassword(id, request.user!.id, request.ip, request.get("user-agent")); }
   @Patch("hq-users/:id/deactivate") deactivateHq(@Param("id") id: string, @Req() request: AuthRequest) { return this.hqRegistration.deactivate(id, request.user!.id, request.ip, request.get("user-agent")); }
   @Patch("hq-users/:id/reactivate") reactivateHq(@Param("id") id: string, @Req() request: AuthRequest) { return this.hqRegistration.reactivate(id, request.user!.id, request.ip, request.get("user-agent")); }
+  @Patch("hq-users/:id/role") changeHqRole(@Param("id") id: string, @Body() body: ChangeHqRoleDto, @Req() request: AuthRequest) { return this.hqRegistration.changeRole(id, body.role, request.user!.id, request.ip, request.get("user-agent")); }
   @Post("users/:id/reset-password") resetPassword(@Param("id") id: string, @Req() request: AuthRequest) { return this.auth.resetPassword(id, request.user!.id, request.ip, request.get("user-agent")); }
   @Patch("users/:id/deactivate") deactivate(@Param("id") id: string, @Req() request: AuthRequest) { return this.registration.deactivateAccount(id, request.user!.id, request.ip, request.get("user-agent")); }
   @Patch("users/:id/reactivate") reactivate(@Param("id") id: string, @Req() request: AuthRequest) { return this.registration.reactivateAccount(id, request.user!.id, request.ip, request.get("user-agent")); }

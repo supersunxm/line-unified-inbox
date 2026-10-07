@@ -25,7 +25,7 @@ export function MessageTranslationAction({
   onTranslated,
 }: {
   message: Message;
-  userRole: "ADMIN" | "VIEWER";
+  userRole: "ADMIN" | "ASSISTANT" | "VIEWER";
   onTranslated: (translatedText: string) => void;
 }) {
   const [state, setState] = useState<TranslationState>({ status: "idle" });

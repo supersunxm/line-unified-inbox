@@ -16,7 +16,7 @@ import { FileInterceptor } from "@nestjs/platform-express";
 import { memoryStorage } from "multer";
 import { AutoResponseStatus, UserRole } from "@prisma/client";
 import { AuthGuard, type AuthRequest } from "../auth/auth.guard";
-import { Roles } from "../auth/auth.decorators";
+import { OperationalRead, Roles } from "../auth/auth.decorators";
 import { AutoResponseService } from "./auto-response.service";
 import type {
   AutoResponsePreviewDto,
@@ -30,6 +30,7 @@ import type {
 export class AutoResponseController {
   constructor(private readonly service: AutoResponseService) {}
 
+  @OperationalRead()
   @Get()
   async listRules(
     @Query("status") status?: AutoResponseStatus,
@@ -78,6 +79,7 @@ export class AutoResponseController {
     return this.service.getPilotSummary();
   }
 
+  @OperationalRead()
   @Get(":id")
   async getRule(@Param("id") id: string) {
     return this.service.getRule(id);
@@ -107,6 +109,7 @@ export class AutoResponseController {
     return this.service.archiveRule(id, req.user!);
   }
 
+  @OperationalRead()
   @Get(":id/usage")
   async getRuleUsage(@Param("id") id: string) {
     return this.service.getRuleUsage(id);

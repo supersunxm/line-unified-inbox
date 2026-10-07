@@ -6,7 +6,7 @@ import { StoreInsightsController } from "./store-insights.controller";
 import { StoreInsightsService } from "./store-insights.service";
 import { CUSTOMER_VOICE_ANALYSIS_VERSION } from "./customer-voice-taxonomy";
 
-const user = { id: "user-1", email: "user@example.test", displayName: "Viewer", role: "VIEWER", isActive: true } as never;
+const user = { id: "user-1", email: "user@example.test", displayName: "Administrator", role: "ADMIN", isActive: true } as never;
 const currentVersion = CUSTOMER_VOICE_ANALYSIS_VERSION;
 
 function message(id: string, direction: "INBOUND" | "OUTBOUND" | "SYSTEM", sentAt: string, extras: Record<string, unknown> = {}) {
@@ -20,6 +20,7 @@ function message(id: string, direction: "INBOUND" | "OUTBOUND" | "SYSTEM", sentA
     senderDisplayName: null,
     sender: null,
     rawPayload: null,
+    deliveryStatus: "DELIVERED",
     ...extras,
   };
 }

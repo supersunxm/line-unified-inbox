@@ -33,7 +33,7 @@ import type {
 } from "@/types/coupons";
 
 type Language = "th" | "en" | "zh";
-type AuthUser = { id: string; email: string; displayName: string; role: "ADMIN" | "VIEWER" };
+type AuthUser = { id: string; email: string; displayName: string; role: "ADMIN" | "ASSISTANT" | "VIEWER" };
 type ViewMode = "create" | "campaigns" | "detail";
 type ExecutionMode = "pilot" | "full";
 type AcquisitionType = "normal" | "lottery";
@@ -157,12 +157,13 @@ export function CouponManagerAlignedView() {
 
   const t = copy[language];
   const isAdmin = authUser?.role === "ADMIN";
+  const canView = isAdmin || authUser?.role === "ASSISTANT";
   const pilot = executionMode === "pilot";
   const invalidatePreview = useCallback(() => setPreview(null), []);
 
   useEffect(() => {
     let active = true;
-    api.me().then((user) => { if (active) setAuthUser(user); }).catch(() => {
+    api.me().then((user) => { if (active) { setAuthUser(user); if (user.role === "ASSISTANT") setViewMode("campaigns"); } }).catch(() => {
       if (typeof window !== "undefined") window.location.replace("/login");
     }).finally(() => { if (active) setAuthChecked(true); });
     return () => { active = false; };
@@ -265,12 +266,18 @@ export function CouponManagerAlignedView() {
   };
 
   const loadCampaigns = useCallback(async () => {
-    if (!isAdmin) return;
+    if (!canView) return;
     setCampaignsLoading(true); setError(null);
     try { const result = await couponApi.list(50, 0); setCampaigns(result.items ?? []); }
     catch (reason) { setError(reason instanceof Error ? reason.message : "Unable to load coupon history"); }
     finally { setCampaignsLoading(false); }
-  }, [isAdmin]);
+  }, [canView]);
+
+  useEffect(() => {
+    if (authUser?.role !== "ASSISTANT") return;
+    const timer = window.setTimeout(() => void loadCampaigns(), 0);
+    return () => window.clearTimeout(timer);
+  }, [loadCampaigns, authUser?.role]);
 
   const openCampaign = async (id: string) => { setActionLoading(true); setError(null); try { setDetail(await couponApi.detail(id)); setViewMode("detail"); } catch (reason) { setError(reason instanceof Error ? reason.message : "Unable to load campaign"); } finally { setActionLoading(false); } };
   const retryFailed = async () => { if (!detail) return; setActionLoading(true); setError(null); try { setDetail(await couponApi.retryFailed(detail.campaign.id)); } catch (reason) { setError(reason instanceof Error ? reason.message : "Retry failed"); } finally { setActionLoading(false); } };
@@ -343,11 +350,11 @@ export function CouponManagerAlignedView() {
 
             {error && <ErrorState message={error} />}
 
-            {!isAdmin ? (
+            {!canView ? (
               <Card className="p-8 text-center text-xs text-[var(--app-text-secondary)]">
                 {t.adminOnly}
               </Card>
-            ) : viewMode === "create" ? (
+            ) : isAdmin && viewMode === "create" ? (
               <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_20rem]">
                 <div className="space-y-6">
                   <Card className="p-5 sm:p-6">
@@ -1014,7 +1021,7 @@ export function CouponManagerAlignedView() {
                   >
                     ← {t.back}
                   </Button>
-                  <div className="flex gap-2">
+                  {isAdmin && <div className="flex gap-2">
                     <Button
                       type="button"
                       size="sm"
@@ -1033,7 +1040,7 @@ export function CouponManagerAlignedView() {
                     >
                       {t.discontinue}
                     </Button>
-                  </div>
+                  </div>}
                 </div>
 
                 <Card className="p-5 sm:p-6">

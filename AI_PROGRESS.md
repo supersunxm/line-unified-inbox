@@ -1,3 +1,12 @@
+# 2026-10-07: Global role-based downloads and HQ role management
+
+- Current task: implement the replacement ADMIN/ASSISTANT policy across app-managed data exports, preserve operational grants, ship one PR and change the requested HQ account through the audited API after deployment.
+- Isolated checkout reconciled to canonical main 8857afc3 (password recovery preserved); unrelated primary workspace changes untouched. Existing ADMIN and VIEWER users are unchanged by the additive ASSISTANT enum migration.
+- Implemented shared downloadData/DownloadGuard for all five file endpoints; desktop/mobile built-in client exports hide actions and revalidate server identity. Full classified inventory is in docs/DOWNLOAD_AUTHORIZATION.md, including operational attachments and installation assets.
+- Implemented HQ role badges, effective permission summaries and responsive role dialog. Role mutation and audit are atomic; shared transaction lock protects the final active administrator across demotion/deactivation. Existing sessions immediately use current stored role on their next request.
+- Verification: affected backend auth/export suite 104/104 plus strengthened role tests 7/7 and real PostgreSQL concurrent-demotion regression 1/1; full frontend 915/915; both production builds pass. Frontend TypeScript improves from 50 to 49 and baseline lowered. New isolated migration chain and API health pass; real HTTP verifies all file endpoints, 401/403, scope, current-role cookie enforcement, preserved grants/audit and last-admin 409. Desktop/mobile browser checks pass with no page errors, including role saves and actual Administrator client download. Original port-3000 service restored with recorded command/environment, original cwd and HTTP 200. Full backend lint remains 884 inherited errors; frontend full lint improves from 70 to 64 inherited errors. Changed auth/UI scope lint passes; no rules or tests disabled. Relevant legacy XLSX test fixtures/runner repaired without changing assertions or KPI logic.
+- Next: push scoped PR, wait for required CI, merge normally, verify deployment and audited target role mutation. No production account mutation has run yet.
+
 # 2026-10-07: v2 monthly store-performance program (frontend only)
 
 - Current task: turn v2 into a monthly accountability tool that agrees with Store Chats (/chats). Brief replaced the earlier daily follow-up "Wave 1".

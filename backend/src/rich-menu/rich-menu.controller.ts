@@ -16,7 +16,7 @@ import { FileInterceptor } from "@nestjs/platform-express";
 import { memoryStorage } from "multer";
 import { UserRole } from "@prisma/client";
 import { AuthGuard, type AuthRequest } from "../auth/auth.guard";
-import { Roles } from "../auth/auth.decorators";
+import { OperationalRead, Roles } from "../auth/auth.decorators";
 import { RichMenuService } from "./rich-menu.service";
 import type {
   CreateRichMenuTemplateDto,
@@ -33,11 +33,13 @@ import type {
 export class RichMenuController {
   constructor(private readonly service: RichMenuService) {}
 
+  @OperationalRead()
   @Get("publish-capabilities")
   async getPublishCapabilities() {
     return this.service.getPublishCapabilities();
   }
 
+  @OperationalRead()
   @Get("templates")
   async listTemplates() {
     return this.service.listTemplates();
@@ -51,6 +53,7 @@ export class RichMenuController {
     return this.service.createTemplate(body, req.user!);
   }
 
+  @OperationalRead()
   @Get("templates/:id")
   async getTemplate(@Param("id") id: string) {
     return this.service.getTemplate(id);
@@ -77,6 +80,7 @@ export class RichMenuController {
     return this.service.preview(id, body);
   }
 
+  @OperationalRead()
   @Get("templates/:id/readiness")
   async evaluateReadiness(@Param("id") id: string) {
     return this.service.evaluateReadiness(id);

@@ -28,7 +28,7 @@ import {
   ImportConfirmDto,
 } from "./google-review-kpi.dto";
 import { AuthGuard, type AuthRequest } from "../auth/auth.guard";
-import { Roles } from "../auth/auth.decorators";
+import { RequireDownload, Roles } from "../auth/auth.decorators";
 import { UserRole } from "@prisma/client";
 
 @Controller("google-review-kpi")
@@ -67,6 +67,7 @@ export class GoogleReviewKpiController {
   }
 
   @Get("weekly/export")
+  @RequireDownload()
   async exportWeeklyLeaderboard(
     @Query() query: ExportWeeklyLeaderboardDto,
     @Res() res: Response,
@@ -108,19 +109,19 @@ export class GoogleReviewKpiController {
   }
 
   @Post("weekly/sync-stores")
-  @Roles(UserRole.ADMIN, UserRole.VIEWER)
+  @Roles(UserRole.ADMIN, UserRole.ASSISTANT, UserRole.VIEWER)
   async syncWeeklyStores() {
     return this.kpiService.syncWeeklyStoreMemberships();
   }
 
   @Post("weekly/daily-record")
-  @Roles(UserRole.ADMIN, UserRole.VIEWER)
+  @Roles(UserRole.ADMIN, UserRole.ASSISTANT, UserRole.VIEWER)
   async recordDailyKpi(@Body() dto: RecordDailyKpiDto) {
     return this.kpiService.recordDailyKpi(dto);
   }
 
   @Post("weekly/aggregate")
-  @Roles(UserRole.ADMIN, UserRole.VIEWER)
+  @Roles(UserRole.ADMIN, UserRole.ASSISTANT, UserRole.VIEWER)
   async aggregateWeeklyKpi(@Body() dto: AggregateWeeklyKpiDto) {
     await this.kpiService.aggregateWeeklyKpi(dto.weekNumber);
     return { success: true, weekNumber: dto.weekNumber };
@@ -132,7 +133,7 @@ export class GoogleReviewKpiController {
   // ==========================================
 
   @Post("audit-session/start")
-  @Roles(UserRole.ADMIN, UserRole.VIEWER)
+  @Roles(UserRole.ADMIN, UserRole.ASSISTANT, UserRole.VIEWER)
   async startBatchAudit(
     @Body() dto: StartMonthlyAuditDto,
     @Req() req: AuthRequest,
@@ -146,7 +147,7 @@ export class GoogleReviewKpiController {
   }
 
   @Post("audit-session/:sessionId/action")
-  @Roles(UserRole.ADMIN, UserRole.VIEWER)
+  @Roles(UserRole.ADMIN, UserRole.ASSISTANT, UserRole.VIEWER)
   async updateBatchAuditStatus(
     @Param("sessionId") sessionId: string,
     @Body() dto: UpdateAuditSessionStatusDto,
@@ -155,13 +156,13 @@ export class GoogleReviewKpiController {
   }
 
   @Get("audit-session/:sessionId/next-store")
-  @Roles(UserRole.ADMIN, UserRole.VIEWER)
+  @Roles(UserRole.ADMIN, UserRole.ASSISTANT, UserRole.VIEWER)
   async getNextPendingStore(@Param("sessionId") sessionId: string) {
     return this.kpiService.getNextPendingStore(sessionId);
   }
 
   @Post("audit-session/:sessionId/stores/:storeId/complete")
-  @Roles(UserRole.ADMIN, UserRole.VIEWER)
+  @Roles(UserRole.ADMIN, UserRole.ASSISTANT, UserRole.VIEWER)
   async completeStoreAudit(
     @Param("sessionId") sessionId: string,
     @Param("storeId") storeId: string,
@@ -172,7 +173,7 @@ export class GoogleReviewKpiController {
   }
 
   @Post(["audit-session/:sessionId/stores/:storeId/needs-attention", "audit-session/:sessionId/stores/:storeId/flag-attention"])
-  @Roles(UserRole.ADMIN, UserRole.VIEWER)
+  @Roles(UserRole.ADMIN, UserRole.ASSISTANT, UserRole.VIEWER)
   async flagStoreNeedsAttention(
     @Param("sessionId") sessionId: string,
     @Param("storeId") storeId: string,
@@ -182,7 +183,7 @@ export class GoogleReviewKpiController {
   }
 
   @Post("audit-session/:sessionId/stores/:storeId/skip")
-  @Roles(UserRole.ADMIN, UserRole.VIEWER)
+  @Roles(UserRole.ADMIN, UserRole.ASSISTANT, UserRole.VIEWER)
   async skipStore(
     @Param("sessionId") sessionId: string,
     @Param("storeId") storeId: string,
@@ -191,7 +192,7 @@ export class GoogleReviewKpiController {
   }
 
   @Post("audit-session/:sessionId/stores/:storeId/rerun")
-  @Roles(UserRole.ADMIN, UserRole.VIEWER)
+  @Roles(UserRole.ADMIN, UserRole.ASSISTANT, UserRole.VIEWER)
   async reRunStore(
     @Param("sessionId") sessionId: string,
     @Param("storeId") storeId: string,
@@ -210,13 +211,13 @@ export class GoogleReviewKpiController {
   }
 
   @Post("import-preview")
-  @Roles(UserRole.ADMIN, UserRole.VIEWER)
+  @Roles(UserRole.ADMIN, UserRole.ASSISTANT, UserRole.VIEWER)
   async previewImport(@Body() dto: ImportPreviewDto) {
     return this.kpiService.previewImport(dto);
   }
 
   @Post("import-confirm")
-  @Roles(UserRole.ADMIN, UserRole.VIEWER)
+  @Roles(UserRole.ADMIN, UserRole.ASSISTANT, UserRole.VIEWER)
   async confirmImport(
     @Body() dto: ImportConfirmDto,
     @Req() req: AuthRequest,
@@ -237,7 +238,7 @@ export class GoogleReviewKpiController {
   }
 
   @Post("check-result")
-  @Roles(UserRole.ADMIN, UserRole.VIEWER)
+  @Roles(UserRole.ADMIN, UserRole.ASSISTANT, UserRole.VIEWER)
   async recordResult(
     @Body() dto: CheckGoogleReviewKpiResultDto,
     @Req() req: AuthRequest,

@@ -17,7 +17,7 @@ import {
 import { api } from "@/lib/api";
 import type { ApiStore, LineOfficialAccountResponse, StoreDeletionPreview } from "@/types/api";
 
-type AuthUser = { id: string; email: string; displayName: string; role: "ADMIN" | "VIEWER" };
+type AuthUser = { id: string; email: string; displayName: string; role: "ADMIN" | "ASSISTANT" | "VIEWER" };
 type StoreTab = "active" | "issues" | "archived";
 
 type StoreRow = {

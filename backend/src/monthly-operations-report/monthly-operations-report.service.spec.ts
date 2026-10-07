@@ -1,3 +1,5 @@
+import assert from "node:assert/strict";
+import { describe, it } from "node:test";
 import * as ExcelJS from "exceljs";
 import { MessageDeliveryStatus, MessageDirection } from "@prisma/client";
 import {
@@ -42,9 +44,7 @@ describe("MonthlyOperationsReportService helpers", () => {
       { lineOaId: "oa-2", snapshotDate: new Date("2026-09-20T00:00:00.000Z"), followers: 999 },
     ];
 
-    expect(pickLatestSnapshotOnOrBefore(snapshots, "oa-1", "2026-09-20", "2026-09-01")).toEqual(
-      snapshots[2],
-    );
+    assert.deepEqual(pickLatestSnapshotOnOrBefore(snapshots, "oa-1", "2026-09-20", "2026-09-01"), snapshots[2]);
   });
 
   it("does not fall back before the report month", () => {
@@ -52,36 +52,36 @@ describe("MonthlyOperationsReportService helpers", () => {
       { lineOaId: "oa-1", snapshotDate: new Date("2026-08-31T00:00:00.000Z"), followers: 95 },
     ];
 
-    expect(pickLatestSnapshotOnOrBefore(snapshots, "oa-1", "2026-09-01", "2026-09-01")).toBeNull();
+    assert.equal(pickLatestSnapshotOnOrBefore(snapshots, "oa-1", "2026-09-01", "2026-09-01"), null);
   });
 
   it("counts a delivered internal-user outbound as a human reply", () => {
-    expect(isReportHumanReply(message({ senderUserId: "user-1" }))).toBe(true);
+    assert.equal(isReportHumanReply(message({ senderUserId: "user-1" })), true);
   });
 
   it("counts a delivered LINE Manager mirrored outbound even without senderUserId", () => {
-    expect(isReportHumanReply(message({
+    assert.equal(isReportHumanReply(message({
       senderDisplayName: "Somchai",
       rawPayload: { provider: "LINE_MANAGER", source: "LINE_MANAGER_MIRROR" },
-    }))).toBe(true);
+    })), true);
   });
 
   it("excludes LINE Manager auto replies", () => {
-    expect(isReportHumanReply(message({
+    assert.equal(isReportHumanReply(message({
       senderDisplayName: "Auto Reply Bot",
       rawPayload: {
         provider: "LINE_MANAGER",
         source: "AUTO_RESPONSE",
         managerBizId: "__AUTO_RESPONSE",
       },
-    }))).toBe(false);
+    })), false);
   });
 
   it("excludes failed outbound messages", () => {
-    expect(isReportHumanReply(message({
+    assert.equal(isReportHumanReply(message({
       senderUserId: "user-1",
       deliveryStatus: MessageDeliveryStatus.FAILED,
-    }))).toBe(false);
+    })), false);
   });
 
   it("uses consecutive inbound messages as one response cycle and closes on Manager human reply", () => {
@@ -105,33 +105,33 @@ describe("MonthlyOperationsReportService helpers", () => {
       }),
     ]);
 
-    expect(cycles).toHaveLength(1);
-    expect(cycles[0].startedAt.toISOString()).toBe("2026-09-01T00:00:00.000Z");
-    expect(cycles[0].answeredAt?.toISOString()).toBe("2026-09-01T00:30:00.000Z");
-    expect(cycles[0].durationSeconds).toBe(1800);
+    assert.equal((cycles).length, 1);
+    assert.equal(cycles[0].startedAt.toISOString(), "2026-09-01T00:00:00.000Z");
+    assert.equal(cycles[0].answeredAt?.toISOString(), "2026-09-01T00:30:00.000Z");
+    assert.equal(cycles[0].durationSeconds, 1800);
   });
 
   it("classifies reply KPI coverage from eligible response-cycle proof", () => {
-    expect(classifyReplyKpiCoverage({
+    assert.equal(classifyReplyKpiCoverage({
       mirrorAvailable: false,
       eligibleCycles: 3,
       coveredCycles: 0,
-    })).toBe("not_covered");
-    expect(classifyReplyKpiCoverage({
+    }), "not_covered");
+    assert.equal(classifyReplyKpiCoverage({
       mirrorAvailable: true,
       eligibleCycles: 10,
       coveredCycles: 6,
-    })).toBe("partial");
-    expect(classifyReplyKpiCoverage({
+    }), "partial");
+    assert.equal(classifyReplyKpiCoverage({
       mirrorAvailable: true,
       eligibleCycles: 10,
       coveredCycles: 10,
-    })).toBe("complete");
-    expect(classifyReplyKpiCoverage({
+    }), "complete");
+    assert.equal(classifyReplyKpiCoverage({
       mirrorAvailable: true,
       eligibleCycles: 0,
       coveredCycles: 0,
-    })).toBe("complete");
+    }), "complete");
   });
 
   it("does not make an unanswered cycle KPI-eligible until its 24h deadline passes", () => {
@@ -142,8 +142,8 @@ describe("MonthlyOperationsReportService helpers", () => {
         sentAt: new Date("2026-09-27T10:00:00.000Z"),
       }),
     ]);
-    expect(isReplyCycleEligible(cycles[0], new Date("2026-09-28T09:59:59.000Z"))).toBe(false);
-    expect(isReplyCycleEligible(cycles[0], new Date("2026-09-28T10:00:00.000Z"))).toBe(true);
+    assert.equal(isReplyCycleEligible(cycles[0], new Date("2026-09-28T09:59:59.000Z")), false);
+    assert.equal(isReplyCycleEligible(cycles[0], new Date("2026-09-28T10:00:00.000Z")), true);
   });
 
   it("treats a <=24h human reply as proven even without Manager history", () => {
@@ -160,7 +160,7 @@ describe("MonthlyOperationsReportService helpers", () => {
         senderUserId: "staff-1",
       }),
     ]);
-    expect(isReplyCycleCovered(
+    assert.equal(isReplyCycleCovered(
       cycles[0],
       new Date("2026-09-28T00:00:00.000Z"),
       {
@@ -168,7 +168,7 @@ describe("MonthlyOperationsReportService helpers", () => {
         lastSuccessfulSyncAt: null,
         historicalBackfillOldestAt: null,
       },
-    )).toBe(true);
+    ), true);
   });
 
   it("requires Manager history before cycle start and sync past deadline to prove a failure", () => {
@@ -187,25 +187,25 @@ describe("MonthlyOperationsReportService helpers", () => {
       }),
     ]);
     const periodEnd = new Date("2026-09-28T00:00:00.000Z");
-    expect(isReplyCycleCovered(cycles[0], periodEnd, {
+    assert.equal(isReplyCycleCovered(cycles[0], periodEnd, {
       mirrorEnabled: true,
       lastSuccessfulSyncAt: new Date("2026-09-28T00:00:00.000Z"),
       historicalBackfillOldestAt: new Date("2026-09-04T00:00:00.000Z"),
-    })).toBe(true);
-    expect(isReplyCycleCovered(cycles[0], periodEnd, {
+    }), true);
+    assert.equal(isReplyCycleCovered(cycles[0], periodEnd, {
       mirrorEnabled: true,
       lastSuccessfulSyncAt: new Date("2026-09-05T12:00:00.000Z"),
       historicalBackfillOldestAt: new Date("2026-09-04T00:00:00.000Z"),
-    })).toBe(false);
-    expect(isReplyCycleCovered(cycles[0], periodEnd, {
+    }), false);
+    assert.equal(isReplyCycleCovered(cycles[0], periodEnd, {
       mirrorEnabled: true,
       lastSuccessfulSyncAt: new Date("2026-09-28T00:00:00.000Z"),
       historicalBackfillOldestAt: new Date("2026-09-05T00:30:00.000Z"),
-    })).toBe(false);
+    }), false);
   });
 
   it("classifies zero-rate forensic causes deterministically", () => {
-    expect(classifyZeroRateForensic({
+    assert.equal(classifyZeroRateForensic({
       total: 0,
       within24h: 0,
       over24h: 0,
@@ -213,9 +213,9 @@ describe("MonthlyOperationsReportService helpers", () => {
       historicalAutoOutbound: 0,
       historicalNonAutoOutbound: 0,
       virtualHistoricalRows: 0,
-    })).toBe("NO_ELIGIBLE_CYCLE");
+    }), "NO_ELIGIBLE_CYCLE");
 
-    expect(classifyZeroRateForensic({
+    assert.equal(classifyZeroRateForensic({
       total: 12,
       within24h: 0,
       over24h: 5,
@@ -223,9 +223,9 @@ describe("MonthlyOperationsReportService helpers", () => {
       historicalAutoOutbound: 0,
       historicalNonAutoOutbound: 5,
       virtualHistoricalRows: 0,
-    })).toBe("REPLY_OVER_24H");
+    }), "REPLY_OVER_24H");
 
-    expect(classifyZeroRateForensic({
+    assert.equal(classifyZeroRateForensic({
       total: 8,
       within24h: 0,
       over24h: 0,
@@ -233,9 +233,9 @@ describe("MonthlyOperationsReportService helpers", () => {
       historicalAutoOutbound: 6,
       historicalNonAutoOutbound: 0,
       virtualHistoricalRows: 0,
-    })).toBe("AUTO_ONLY");
+    }), "AUTO_ONLY");
 
-    expect(classifyZeroRateForensic({
+    assert.equal(classifyZeroRateForensic({
       total: 8,
       within24h: 0,
       over24h: 0,
@@ -243,9 +243,9 @@ describe("MonthlyOperationsReportService helpers", () => {
       historicalAutoOutbound: 0,
       historicalNonAutoOutbound: 3,
       virtualHistoricalRows: 2,
-    })).toBe("UNMAPPED_OR_VIRTUAL");
+    }), "UNMAPPED_OR_VIRTUAL");
 
-    expect(classifyZeroRateForensic({
+    assert.equal(classifyZeroRateForensic({
       total: 8,
       within24h: 0,
       over24h: 0,
@@ -253,7 +253,7 @@ describe("MonthlyOperationsReportService helpers", () => {
       historicalAutoOutbound: 0,
       historicalNonAutoOutbound: 0,
       virtualHistoricalRows: 0,
-    })).toBe("NO_REPLY");
+    }), "NO_REPLY");
   });
 
   it("does not let an auto reply close a response cycle", () => {
@@ -272,8 +272,8 @@ describe("MonthlyOperationsReportService helpers", () => {
       }),
     ]);
 
-    expect(cycles).toHaveLength(1);
-    expect(cycles[0].answeredAt).toBeNull();
+    assert.equal((cycles).length, 1);
+    assert.equal(cycles[0].answeredAt, null);
   });
 });
 
@@ -366,6 +366,7 @@ describe("MonthlyOperationsReportService XLSX export", () => {
           notes: [],
         },
       }],
+      historicalSources: { historicalTextMessages: 0, currentMessages: 0, exactDuplicatesSuppressed: 0, historicalChats: 0 },
       dataContract: {
         followerSource: "LineOaFollowerSnapshot",
         chatSource: "Message",
@@ -382,7 +383,7 @@ describe("MonthlyOperationsReportService XLSX export", () => {
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.load(file.buffer as unknown as ExcelJS.Buffer);
 
-    expect(workbook.worksheets.map((sheet) => sheet.name)).toEqual([
+    assert.deepEqual(workbook.worksheets.map((sheet) => sheet.name), [
       "Operations Detail",
       "Summary",
       "Region Summary",
@@ -390,15 +391,16 @@ describe("MonthlyOperationsReportService XLSX export", () => {
     ]);
 
     const detail = workbook.getWorksheet("Operations Detail")!;
-    expect(detail.columnCount).toBe(35);
-    expect(detail.getRow(1).values).toContain("Replies Within 24h - Month");
-    expect(detail.getCell("A2").value).toBe(1);
-    expect(detail.getCell("F2").value).toBe("25610");
-    expect(detail.getCell("U2").value).toBe(3);
-    expect(detail.getCell("W2").value).toBe(0.75);
-    expect(detail.getCell("Y2").value).toBeNull();
-    expect(String(detail.getCell("AI2").value)).toContain("tag_history_unavailable");
-    expect(file.filename).toBe("OPPO_LINE_monthly_operations_2026-09_1stores.xlsx");
+    assert.equal(detail.columnCount, 35);
+    assert.ok((detail.getRow(1).values).includes("Replies Within 24h - Month"));
+    assert.equal(detail.getCell("A2").value, 1);
+    assert.equal(detail.getCell("F2").value, "25610");
+    assert.equal(detail.getCell("U2").value, 3);
+    assert.equal(detail.getCell("W2").value, 0.75);
+    assert.equal(detail.getCell("Y2").value, null);
+    assert.equal(typeof detail.getCell("AI2").value, "string");
+    assert.ok((detail.getCell("AI2").value as string).includes("tag_history_unavailable"));
+    assert.equal(file.filename, "OPPO_LINE_monthly_operations_2026-09_1stores.xlsx");
   });
 });
 
@@ -495,6 +497,7 @@ describe("MonthlyOperationsReportService XLSX production-scale export", () => {
         coveredFocusResponseCycles: 20,
       },
       stores,
+      historicalSources: { historicalTextMessages: 0, currentMessages: 0, exactDuplicatesSuppressed: 0, historicalChats: 0 },
       dataContract: {
         followerSource: "LineOaFollowerSnapshot",
         chatSource: "Message",
@@ -508,13 +511,13 @@ describe("MonthlyOperationsReportService XLSX production-scale export", () => {
     });
 
     const file = await service.exportXlsx({} as never, "2026-09");
-    expect(file.buffer.length).toBeGreaterThan(1000);
+    assert.ok((file.buffer.length) > (1000));
 
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.load(file.buffer as unknown as ExcelJS.Buffer);
     const detail = workbook.getWorksheet("Operations Detail")!;
-    expect(detail.rowCount).toBe(147);
-    expect(detail.columnCount).toBe(35);
+    assert.equal(detail.rowCount, 147);
+    assert.equal(detail.columnCount, 35);
   });
 });
 
@@ -607,6 +610,7 @@ describe("MonthlyOperationsReportService XLSX reply coverage", () => {
           notes: ["reply_coverage_partial"],
         },
       }],
+      historicalSources: { historicalTextMessages: 0, currentMessages: 0, exactDuplicatesSuppressed: 0, historicalChats: 0 },
       dataContract: {
         followerSource: "LineOaFollowerSnapshot",
         chatSource: "Message + LineChatMirrorMessage read-only fallback",
@@ -623,10 +627,11 @@ describe("MonthlyOperationsReportService XLSX reply coverage", () => {
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.load(file.buffer as unknown as ExcelJS.Buffer);
     const detail = workbook.getWorksheet("Operations Detail")!;
-    expect(detail.getCell("U2").value).toBeNull();
-    expect(detail.getCell("W2").value).toBeNull();
-    expect(detail.getCell("AG2").value).toBeNull();
-    expect(detail.getCell("AH2").value).toBe("PARTIAL");
-    expect(String(detail.getCell("AI2").value)).toContain("reply_coverage_partial");
+    assert.equal(detail.getCell("U2").value, null);
+    assert.equal(detail.getCell("W2").value, null);
+    assert.equal(detail.getCell("AG2").value, null);
+    assert.equal(detail.getCell("AH2").value, "PARTIAL");
+    assert.equal(typeof detail.getCell("AI2").value, "string");
+    assert.ok((detail.getCell("AI2").value as string).includes("reply_coverage_partial"));
   });
 });

@@ -9,7 +9,7 @@ import {
   UseGuards,
 } from "@nestjs/common";
 import { UserRole } from "@prisma/client";
-import { Roles } from "../auth/auth.decorators";
+import { OperationalRead, Roles } from "../auth/auth.decorators";
 import { AuthGuard, type AuthRequest } from "../auth/auth.guard";
 import { BroadcastService } from "./broadcast.service";
 import type {
@@ -45,11 +45,13 @@ export class BroadcastController {
     return this.service.retryFailed(id, req.user!);
   }
 
+  @OperationalRead()
   @Get(":id")
   getCampaign(@Param("id") id: string, @Req() req: AuthRequest) {
     return this.service.getCampaign(id, req.user!);
   }
 
+  @OperationalRead()
   @Get()
   listCampaigns(
     @Query("limit") limit = "20",

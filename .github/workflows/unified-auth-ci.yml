@@ -70,6 +70,13 @@ jobs:
           "src/auth/hq-registration.service.ts"
           "src/auth/hq-registration.service.spec.ts"
           "src/auth/unified-auth-stage2.spec.ts"
+          "src/auth/auth.decorators.ts"
+          "src/auth/capability-policy.ts"
+          "src/auth/download.guard.ts"
+          "src/auth/download-authorization.spec.ts"
+          "src/auth/hq-role.dto.ts"
+          "src/auth/hq-role.spec.ts"
+          "src/auth/hq-role.integration.spec.ts"
 
       - name: Unified auth regression tests
         run: >-
@@ -81,6 +88,27 @@ jobs:
           src/auth/registration.service.spec.ts
           src/auth/hq-registration.service.spec.ts
           src/auth/unified-auth-stage2.spec.ts
+          src/auth/download-authorization.spec.ts
+          src/auth/hq-role.spec.ts
+          src/store-insights/store-insights-export.spec.ts
+          src/monthly-operations-report/monthly-operations-report.service.spec.ts
+
+      - name: PostgreSQL concurrent role transaction regression
+        run: |
+          node <<'JS'
+          const { PrismaClient } = require('@prisma/client');
+          const { execFileSync } = require('node:child_process');
+          const db = new PrismaClient();
+          (async () => {
+            await db.$executeRawUnsafe('CREATE DATABASE authorization_role_transactions_test');
+            await db.$disconnect();
+            const url = new URL(process.env.DATABASE_URL);
+            url.pathname = '/authorization_role_transactions_test';
+            const env = { ...process.env, DATABASE_URL: url.toString(), AUTH_ROLE_TEST_DATABASE_URL: url.toString() };
+            execFileSync('npx', ['prisma', 'migrate', 'deploy'], { env, stdio: 'inherit' });
+            execFileSync('npx', ['tsx', '--test', 'src/auth/hq-role.integration.spec.ts'], { env, stdio: 'inherit' });
+          })().catch(async (error) => { console.error(error); await db.$disconnect(); process.exitCode = 1; });
+          JS
 
       - name: Backend build
         run: npm run build

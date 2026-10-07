@@ -3340,3 +3340,12 @@ The counter starts at deployment of this feature; no historical visitor analytic
 **Rationale:** The backend intentionally permits only `GET /auth/me`, `POST /auth/change-password`, and logout while the flag is set. Opening Dashboard first causes legitimate 403 responses to look like a data-service outage. Routing before protected data fetches makes frontend behavior match the backend contract.
 
 **401 handling exception:** `/change-password` is excluded from the global 401-to-login listener because an incorrect current/temporary password is also returned as 401. The recovery page independently checks `/auth/me` and redirects truly unauthenticated users to `/login`.
+
+
+## 2026-10-07 — Role-derived business-data downloads and HQ administration
+
+Reuse ADMIN and preserve VIEWER store/BM/PC semantics; add ASSISTANT for HQ operational use. Migration adds an enum value only, with no inferred account conversion. downloadData is evaluated from the freshly authenticated role by one reusable backend guard and the existing permission-context projection. Client exports use the same role-derived UI policy and revalidate current server identity.
+
+Role changes preserve unrelated persisted grants, passwords and sessions, and write the existing audit table atomically with the role update. A shared transaction advisory lock serializes final-admin demotion/deactivation checks; revalidate the actor under that lock to prevent a stale administrator request. Preserve the existing stronger self-deactivation prohibition.
+
+Separate business-data exports from inline message media, operational single-attachment handling and public APK installation assets. Preserve normal rendering and LINE recipients. Reviewed globally scoped operational reads are available to all-store HQ Assistant; administrator configuration/account mutations remain restricted. Do not claim visible browser data cannot be copied.

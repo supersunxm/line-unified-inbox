@@ -1,4 +1,5 @@
 "use client";
+import { DownloadAction, useCanDownloadData } from "@/lib/download-permission";
 
 import { useMemo, useRef, useState } from "react";
 import type { ApiStore } from "@/types/api";
@@ -14,6 +15,7 @@ export function Store360ExportControl({ stores, selectedStoreId, startDate, endD
   endDate: string;
   language: AppLanguage;
 }) {
+  const canDownload = useCanDownloadData();
   const [open, setOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [search, setSearch] = useState("");
@@ -99,6 +101,8 @@ export function Store360ExportControl({ stores, selectedStoreId, startDate, endD
     }
   };
 
+  if (!canDownload) return null;
+
   return (
     <>
       <button type="button" onClick={openDialog} disabled={!selectedStoreId || downloading} className="inline-flex h-9 items-center gap-2 rounded-lg bg-[var(--app-accent)] px-3 text-xs font-semibold text-white shadow-sm transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50">
@@ -135,7 +139,7 @@ export function Store360ExportControl({ stores, selectedStoreId, startDate, endD
             </div>
           </div>
           {error && <p role="alert" className="mt-3 rounded-xl border border-[var(--app-danger)]/30 bg-[var(--app-danger)]/10 px-3 py-2 text-sm text-[var(--app-danger)]">{error}</p>}
-          <div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => setOpen(false)} disabled={downloading} className="rounded-xl border border-[var(--app-border)] px-4 py-2 text-sm font-medium text-[var(--app-text-primary)] hover:bg-[var(--app-surface-hover)] disabled:opacity-50">{text.cancel}</button><button type="button" onClick={() => void handleDownload()} disabled={downloading || selectedIds.length === 0} className="rounded-xl bg-[var(--app-accent)] px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">{downloading ? text.downloading : text.download}</button></div>
+          <div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => setOpen(false)} disabled={downloading} className="rounded-xl border border-[var(--app-border)] px-4 py-2 text-sm font-medium text-[var(--app-text-primary)] hover:bg-[var(--app-surface-hover)] disabled:opacity-50">{text.cancel}</button><DownloadAction><button type="button" onClick={() => void handleDownload()} disabled={downloading || selectedIds.length === 0} className="rounded-xl bg-[var(--app-accent)] px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">{downloading ? text.downloading : text.download}</button></DownloadAction></div>
         </div>
       </div>}
     </>
