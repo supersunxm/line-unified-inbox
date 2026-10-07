@@ -6409,3 +6409,13 @@ Live worker continues independently at 146 configured unique active OA identitie
 - Frontend now drops blank OCR candidates and reports them as missing instead of rendering an empty review card.
 - Added regression fixtures matching the reported English review structure plus frontend blank-candidate coverage.
 - Verification status: implementation complete on `fix/review15-vision-english-multiline`; hosted CI pending.
+
+## 2026-10-07 — Review15 anonymous total visitor counter
+
+- Added a generic `PublicPageVisitor` Prisma model and migration for browser-level public-page visitor counts.
+- Review15 now generates one anonymous UUID in browser storage and POSTs it to `/review15/visitors`.
+- Backend stores only a SHA-256 digest scoped to the Review15 page; it does not store the raw browser ID, IP address, or user-agent.
+- Refreshes and repeat visits from the same browser reuse the same anonymous ID, so they do not increase the total.
+- The public page displays `ผู้เข้าชมรวมโดยประมาณ` with a privacy note. The count begins when this feature is deployed; historical visits cannot be reconstructed from existing application data.
+- Added backend hashing/upsert tests and frontend contract coverage.
+- Verification status: implementation complete on `feat/review15-total-visitors`; hosted CI pending.
