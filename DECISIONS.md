@@ -3310,3 +3310,13 @@ Decision: the public Review15 page must use the same OPPO Brand Shop home-link m
 Rationale:
 - `public-branding.css` already owns the approved `LOGO_OBS.png` treatment for `aria-label="OPPO Brand Shop Home"`.
 - Reusing that contract keeps the logo asset, responsive sizing, and brand identity aligned across public pages without duplicating logo-specific CSS.
+
+## 2026-10-07 — Review15 OCR candidate extraction policy
+
+Decision: Google Vision geometry remains the preferred source for separating review text from attached-photo text, but extraction must preserve the full contiguous review body rather than cap by paragraph count.
+
+Rationale:
+- Google Vision may split one review body into many paragraphs/lines, especially for English screenshots.
+- A fixed three-paragraph cap truncates valid reviews and status badges such as `NEW` can be mistaken for body text.
+- Structural boundaries (anchors, UI markers, geometry gaps, bounded total window) are safer than an arbitrary paragraph-count limit.
+- The frontend must never display an empty OCR candidate as if it were a successfully extracted review.
