@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import React, { useCallback, useMemo, useState } from "react";
 import { PageHeader } from "@/components/shell/page-header";
 import { SearchInput, SectionCard, SectionCardSkeleton, Table, TableBody, TableCell, TableEmptyState, TableHead, TableHeader, TableRow, useDeferredLoading } from "@/components/ui";
-import { RESPONSE_RATE_TARGET_PERCENT } from "@/lib/v2/business-hours";
+import { KPI_DIFFERENCE_NOTE, NO_TARGET_LABEL, RATE24_TARGET, REPLIED_RATE_TARGET } from "@/lib/v2/kpi";
 import { monthLongLabel } from "@/lib/v2/month";
 import { parseStoresUrl, reportHref, storesHref, type StoresUrlState } from "@/lib/v2/month-url";
 import { filterMonthRows, MIN_RATE_SAMPLE, sortMonthRows, type MonthSort, type MonthStoreRow } from "@/lib/v2/monthly-model";
@@ -14,13 +14,14 @@ import { thaiLocationLabel, thaiRegion } from "@/lib/v2/thai-geo";
 import { StoreScorecardDrawer } from "./store-scorecard-drawer";
 import { DataLine } from "./v2-month-controls";
 import { useV2Month } from "./v2-month-data";
-import { DeltaValue, SourceNotice, StateValue } from "./v2-ui";
+import { HowCounted } from "./kpi-cards";
+import { CountCell, RateCell, SourceNotice, StateValue } from "./v2-ui";
 
 const SORT_LABELS: Array<[MonthSort, string]> = [
-  ["unreplied", "ยังไม่ตอบ (มากสุดก่อน)"],
+  ["rate24", "ห่างเป้าตอบใน 24 ชม. (ห่างสุดก่อน)"],
   ["reply", "ตอบแล้ว % (ต่ำสุดก่อน)"],
-  ["rate24", "ตอบใน 24 ชม. (ต่ำสุดก่อน)"],
-  ["delta", "เทียบเดือนก่อน (เพิ่มมากสุดก่อน)"],
+  ["delta", "ตอบใน 24 ชม. ลดลงมากสุด (จุด)"],
+  ["unreplied", "ยังไม่ตอบ (มากสุดก่อน)"],
 ];
 
 const selectClass = "h-9 rounded-[var(--app-radius-md)] border border-[var(--app-border)] bg-[var(--app-surface)] px-3 text-xs text-[var(--app-text-primary)]";
@@ -65,7 +66,7 @@ export function StoreScorecardView() {
   );
   const reviews = useMemo(() => new Map((data.google.data ?? []).map((store) => [store.id, store.kpiResult])), [data.google.data]);
   const openRow = state.store ? data.rows.find((row) => row.storeId === state.store) ?? null : null;
-  const columns = 7 + (data.hasGoogleResults ? 1 : 0);
+  const columns = 6 + (data.hasGoogleResults ? 1 : 0);
 
   return (
     <div className="h-full overflow-y-auto px-6 py-5">
@@ -108,6 +109,12 @@ export function StoreScorecardView() {
           </div>
         </div>
 
+        <div data-v2-kpi-notes className="grid grid-cols-2 gap-4 rounded-[var(--app-radius-md)] border border-[var(--app-border)] bg-[var(--app-surface)] px-4 py-2">
+          <div><span className="text-xs font-semibold">ตอบแล้ว %</span> <span className="text-xs text-[var(--app-text-secondary)]">· {REPLIED_RATE_TARGET === null ? NO_TARGET_LABEL : `เป้า ${REPLIED_RATE_TARGET}%`}</span><HowCounted kpi="replied" /></div>
+          <div><span className="text-xs font-semibold">ตอบใน 24 ชม. %</span> <span className="text-xs text-[var(--app-text-secondary)]">· เป้า {RATE24_TARGET}%</span><HowCounted kpi="rate24" /></div>
+          <p className="col-span-2 text-xs text-[var(--app-text-secondary)]">{KPI_DIFFERENCE_NOTE} · ตัวเลขใต้อัตรา = เปลี่ยนกี่จุดจากช่วงเทียบ · ตัวเลขใต้จำนวนแชทไม่ใช้สี เพราะขึ้นลงตามจำนวนแชท</p>
+        </div>
+
         {data.coreLoading ? (
           showSkeleton ? <SectionCardSkeleton title="คะแนนสาขา" lines={10} /> : null
         ) : (
@@ -126,8 +133,7 @@ export function StoreScorecardView() {
                     <TableHead scope="col" align="right">แชท</TableHead>
                     <TableHead scope="col" align="right">ยังไม่ตอบ</TableHead>
                     <TableHead scope="col" align="right">ตอบแล้ว %</TableHead>
-                    <TableHead scope="col" align="right">ตอบใน 24 ชม. (n)</TableHead>
-                    <TableHead scope="col" align="right">เทียบเดือนก่อน</TableHead>
+                    <TableHead scope="col" align="right">ตอบใน 24 ชม. % (n)</TableHead>
                     <TableHead scope="col" align="right">อันดับใน partner</TableHead>
                     {data.hasGoogleResults && <TableHead scope="col">Google Review</TableHead>}
                   </tr>
@@ -151,10 +157,9 @@ export function StoreScorecardView() {
                           <span className="block truncate text-[var(--app-text-secondary)]">{[row.partner, location].filter(Boolean).join(" · ")}</span>
                         </th>
                         <TableCell align="right" numeric><StateValue state={row.chats} /></TableCell>
-                        <TableCell align="right" numeric className="font-semibold"><StateValue state={row.unreplied} /></TableCell>
-                        <TableCell align="right" numeric><StateValue state={row.replyRate} format="percent" /></TableCell>
-                        <TableCell align="right" numeric><StateValue state={row.rate24} format="percent" target={RESPONSE_RATE_TARGET_PERCENT} showN /></TableCell>
-                        <TableCell align="right"><DeltaValue state={row.unrepliedDelta} kind="count" worseWhen="up" /></TableCell>
+                        <TableCell align="right" numeric><CountCell value={row.unreplied} delta={row.unrepliedDelta} /></TableCell>
+                        <TableCell align="right" numeric><RateCell value={row.replyRate} delta={row.replyRateDelta} target={REPLIED_RATE_TARGET} /></TableCell>
+                        <TableCell align="right" numeric><RateCell value={row.rate24} delta={row.rate24Delta} target={RATE24_TARGET} showN /></TableCell>
                         <TableCell align="right"><PartnerRank row={row} /></TableCell>
                         {data.hasGoogleResults && <TableCell><ReviewCell result={reviews.get(row.storeId) ?? null} /></TableCell>}
                       </TableRow>

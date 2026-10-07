@@ -211,21 +211,25 @@ export function rankWithinPartners(rows: MonthStoreRow[]): MonthStoreRow[] {
   return rows;
 }
 
-export type MonthSort = "unreplied" | "reply" | "rate24" | "delta";
+export type MonthSort = "rate24" | "reply" | "unreplied" | "delta";
+
+/** Lower is worse; rates below MIN_RATE_SAMPLE or without chats sort after every measured rate. */
+const rateKey = (state: ValueState) => (meetsSample(state) ? valueOr(state, Infinity) : Infinity);
 
 /**
- * unreplied (default): most unreplied first. reply / rate24: lowest rate first; stores below
- * MIN_RATE_SAMPLE (and with no chats) go to the end. delta: biggest rise in unreplied first.
+ * rate24 (default): the 24-hour rate's gap to its target, worst first — the lowest rate first,
+ * since the target is the same for every store. reply: lowest ตอบแล้ว % first. Rates below
+ * MIN_RATE_SAMPLE (and stores with no chats) go to the end of both. delta: the biggest drop in
+ * the 24-hour rate (points) first. unreplied: most unreplied chats first.
  * Ties: most unreplied, then name.
  */
-export function sortMonthRows(rows: MonthStoreRow[], sort: MonthSort = "unreplied"): MonthStoreRow[] {
+export function sortMonthRows(rows: MonthStoreRow[], sort: MonthSort = "rate24"): MonthStoreRow[] {
   const tail = (a: MonthStoreRow, b: MonthStoreRow) => valueOr(b.unreplied, -1) - valueOr(a.unreplied, -1) || a.storeName.localeCompare(b.storeName, "th");
-  const rateKey = (state: ValueState) => (meetsSample(state) ? valueOr(state, Infinity) : Infinity);
   const compare: Record<MonthSort, (a: MonthStoreRow, b: MonthStoreRow) => number> = {
-    unreplied: tail,
-    reply: (a, b) => rateKey(a.replyRate) - rateKey(b.replyRate) || tail(a, b),
     rate24: (a, b) => rateKey(a.rate24) - rateKey(b.rate24) || tail(a, b),
-    delta: (a, b) => valueOr(b.unrepliedDelta, -Infinity) - valueOr(a.unrepliedDelta, -Infinity) || tail(a, b),
+    reply: (a, b) => rateKey(a.replyRate) - rateKey(b.replyRate) || tail(a, b),
+    unreplied: tail,
+    delta: (a, b) => (meetsSample(a.rate24Delta) ? valueOr(a.rate24Delta, Infinity) : Infinity) - (meetsSample(b.rate24Delta) ? valueOr(b.rate24Delta, Infinity) : Infinity) || tail(a, b),
   };
   return [...rows].sort((a, b) => {
     const order = compare[sort](a, b);
@@ -359,7 +363,11 @@ export function partnerRows(rows: MonthStoreRow[], rates: PeriodSource<RateRespo
       }),
     };
   });
-  return result.sort((a, b) => valueOr(b.unreplied, -1) - valueOr(a.unreplied, -1) || a.partner.localeCompare(b.partner, "en"));
+  // Worst 24-hour rate first (its gap to the target); low-sample partners last.
+  return result.sort((a, b) => {
+    const order = rateKey(a.rate24) - rateKey(b.rate24);
+    return (Number.isNaN(order) ? 0 : order) || valueOr(b.unreplied, -1) - valueOr(a.unreplied, -1) || a.partner.localeCompare(b.partner, "en");
+  });
 }
 
 /** The stores with the most unreplied chats (n > 0), most first. */
@@ -370,6 +378,12 @@ export function topUnreplied(rows: MonthStoreRow[], limit = 10): MonthStoreRow[]
 /** "Stores with chat data N/M": stores with at least one chat in the period. */
 export function dataCoverage(rows: MonthStoreRow[]): { withChats: number; total: number } {
   return { withChats: rows.filter((row) => (numericValue(row.chats) ?? 0) > 0).length, total: rows.length };
+}
+
+/** Stores with at least one chat in the comparison period, or null when that period has no numbers. */
+export function previousCoverage(rows: MonthStoreRow[]): { withChats: number; total: number } | null {
+  if (rows.length === 0 || rows.some((row) => numericValue(row.previousChats) === null)) return null;
+  return { withChats: rows.filter((row) => (numericValue(row.previousChats) ?? 0) > 0).length, total: rows.length };
 }
 
 /**
@@ -438,4 +452,19 @@ export function tagCoverage(items: StoreMonthConversation[]): TagCoverage {
     tagged: rateState(taggedCount, items.length),
     withPeriod: rateState(withPeriodCount, items.length),
   };
+}
+
+/**
+ * "สาขาที่มีข้อมูลแชท 1–7 ต.ค. 2026 134 ร้าน · 1–7 ก.ย. 2026 139 ร้าน (จาก 150 ร้าน)".
+ * Both compared periods are stated; no cause is inferred.
+ */
+export function coverageText(input: {
+  currentLabel: string;
+  previousLabel: string;
+  current: { withChats: number; total: number };
+  previous: { withChats: number; total: number } | null;
+  previousReason: string | null;
+}): string {
+  const previous = input.previous ? `${input.previous.withChats} ร้าน` : `— (${input.previousReason ?? "ไม่มีข้อมูล"})`;
+  return `สาขาที่มีข้อมูลแชท ${input.currentLabel} ${input.current.withChats} ร้าน · ${input.previousLabel} ${previous} (จาก ${input.current.total} ร้าน)`;
 }

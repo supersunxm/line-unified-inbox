@@ -17,10 +17,12 @@ Definitions and their sources are in `decisions.md`.
 | แชท / แชททั้งหมด | Chats whose latest message is in the period (same as /chats "ทั้งหมด"). |
 | ยังไม่ตอบ | Chats in the period that have not been answered (same as /chats "ยังไม่ตอบ"). Every customer message needs an answer, stickers included. |
 | ตอบแล้ว | Chats in the period that have been answered (same as /chats "ตอบแล้ว"). |
-| ตอบแล้ว % | ตอบแล้ว ÷ แชท. |
-| ตอบใน 24 ชม. | Share of customer messages answered within 24 hours (same as /replymessage). Target 90%. |
+| ตอบแล้ว % | Official KPI 1. ตอบแล้ว ÷ แชท (latest message answered, status now). Target not set: "ยังไม่กำหนดเป้า". |
+| ตอบใน 24 ชม. % | Official KPI 2. Chats whose first customer message in the period got a reply within 24 hours (same as /replymessage). Target 90%. |
 | เป้า | The target (90% for ตอบใน 24 ชม.). |
-| Δ / เทียบเดือนก่อน | Change vs the comparison period. For ยังไม่ตอบ, a count; for rates, percentage points ("จุด"). |
+| Δ / เปลี่ยน | Change vs the comparison period. For KPIs, percentage points ("จุด"), coloured. For counts, a neutral number. |
+| นับยังไง | One-line disclosure explaining how a KPI is counted. |
+| ห่างเป้า | A KPI's gap to its target in points (default sort). |
 | partner | The dealer that operates the store, from the store name "By …". |
 | ไม่ระบุ partner | Stores whose name has no "By …". |
 | อันดับใน partner | The store's position among its partner's stores (1 = best). |

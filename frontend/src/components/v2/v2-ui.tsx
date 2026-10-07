@@ -125,8 +125,8 @@ export function StateValue({ state, format = "count", target, showN = false, cla
 }
 
 /**
- * Change vs the comparison period. kind "count": "+3" / "−2" (ยังไม่ตอบ: up is worse).
- * kind "points": "+1.2 จุด" / "−3.4 จุด" (a rate: down is worse).
+ * Change vs the comparison period. kind "count": "+3" / "−2", always neutral (counts follow
+ * chat volume). kind "points": "+1.2 จุด" / "−3.4 จุด", coloured (a rate: down is worse).
  */
 export function DeltaValue({ state, kind, worseWhen }: { state: ValueState; kind: "count" | "points"; worseWhen: "up" | "down" }) {
   const reason = valueReason(state);
@@ -134,14 +134,35 @@ export function DeltaValue({ state, kind, worseWhen }: { state: ValueState; kind
   if (value === null || state.kind === "loading") {
     return <span data-v2-value-state={state.kind} title={reason ?? undefined} className="whitespace-nowrap text-xs text-[var(--app-text-secondary)]">—{reason && <span className="sr-only"> ({reason})</span>}</span>;
   }
-  const muted = state.kind === "low-sample" || state.kind === "stale";
+  // Only rate changes (points) carry meaning: a count moves with chat volume, so it stays neutral.
+  const muted = kind === "count" || state.kind === "low-sample" || state.kind === "stale";
   const worse = !muted && value !== 0 && (worseWhen === "up" ? value > 0 : value < 0);
   const better = !muted && value !== 0 && !worse;
   const text = value === 0 ? "เท่าเดิม" : `${value > 0 ? "+" : "−"}${kind === "points" ? Math.abs(value).toFixed(1) : Math.abs(value).toLocaleString("th-TH")}${kind === "points" ? " จุด" : ""}`;
   return (
-    <span data-v2-value-state={state.kind} title={reason ?? undefined} className={`whitespace-nowrap text-xs font-medium tabular-nums ${worse ? "text-[var(--app-danger)]" : better ? "text-[var(--app-accent)]" : "text-[var(--app-text-secondary)]"}`}>
+    <span data-v2-value-state={state.kind} title={reason ?? undefined} className={`whitespace-nowrap text-xs font-medium tabular-nums ${worse ? "text-[var(--app-danger)]" : better ? "text-[var(--app-accent)] dark:text-[var(--app-success)]" : "text-[var(--app-text-secondary)]"}`}>
       {text}
       {reason && <span className="sr-only"> ({reason})</span>}
+    </span>
+  );
+}
+
+/** A KPI rate in a table: the value (target colour only when a target is set) and its change in points. */
+export function RateCell({ value, delta, target, showN = false }: { value: ValueState; delta: ValueState; target: number | null; showN?: boolean }) {
+  return (
+    <span className="inline-flex flex-col items-end">
+      <StateValue state={value} format="percent" target={target ?? undefined} showN={showN} />
+      {numericValue(delta) !== null && <DeltaValue state={delta} kind="points" worseWhen="down" />}
+    </span>
+  );
+}
+
+/** A count in a table with its change, both neutral: counts follow chat volume. */
+export function CountCell({ value, delta, strong = false }: { value: ValueState; delta?: ValueState; strong?: boolean }) {
+  return (
+    <span className="inline-flex flex-col items-end">
+      <StateValue state={value} className={strong ? "font-semibold" : ""} />
+      {delta && numericValue(delta) !== null && <DeltaValue state={delta} kind="count" worseWhen="up" />}
     </span>
   );
 }
