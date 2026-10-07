@@ -43,7 +43,7 @@ export function resolveAuthRedirect({
 }
 
 // Routes anyone may view signed out. A 401 there must never bounce the visitor to /login.
-const PUBLIC_PATH_PREFIXES = ["/login", "/register", "/privacy", "/terms", "/download", "/stores", "/store-locator", "/friend-attribution", "/f/"];
+const PUBLIC_PATH_PREFIXES = ["/login", "/change-password", "/register", "/privacy", "/terms", "/download", "/stores", "/store-locator", "/friend-attribution", "/f/"];
 
 export function isPublicPath(pathname: string) {
   if (pathname === "/") return true;
