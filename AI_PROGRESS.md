@@ -6435,3 +6435,9 @@ Live worker continues independently at 146 configured unique active OA identitie
 - Regression coverage: forced-password redirect predicate, recovery-page wiring, auth cache invalidation, and 401-loop exemption.
 - Verification status: source diff reviewed. PR #507 opened. GitHub CI is required to pass before merge; production functional verification follows deployment.
 - Next action: wait for PR #507 CI, repair any failures, merge with a merge commit only when green, then verify Railway deployment and the reset-login-change-password-dashboard path.
+## 2026-10-07 — Password recovery visibility and rule checklist
+
+- Task: improve the forced-password-change form after the reset-password recovery fix.
+- Implemented: show/hide controls on temporary, new, and confirmation password fields; live checklist for the exact backend password policy (8+ characters, at least one letter, at least one number); Thai/English/Chinese copy and accessible button labels.
+- Safety: submission validation still uses the same backend-aligned policy and the existing forced-password-change flow is unchanged.
+- Verification: regression coverage added for visibility controls and password rules. GitHub CI and production deployment verification are required before completion.
