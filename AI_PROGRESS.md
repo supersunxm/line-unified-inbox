@@ -6419,3 +6419,11 @@ Live worker continues independently at 146 configured unique active OA identitie
 - The public page displays `ผู้เข้าชมรวมโดยประมาณ` with a privacy note. The count begins when this feature is deployed; historical visits cannot be reconstructed from existing application data.
 - Added backend hashing/upsert tests and frontend contract coverage.
 - Verification status: implementation complete on `feat/review15-total-visitors`; hosted CI pending.
+
+## 2026-10-07 — Review15 randomized sample reviews
+
+- Replaced the single fixed sample behind the Review15 manual checker with a pool of 12 diverse examples.
+- The pool includes short/failing reviews, passing reviews, Thai, English, mixed-script product names, no-space Thai, financing, promotions, after-sales service, camera/battery, and an exact 15-word English boundary sample.
+- The sample button is now labeled `สุ่มข้อความตัวอย่าง`; repeated clicks pick another example and avoid immediately returning the exact current sample when alternatives exist.
+- Added deterministic picker tests, uniqueness/length coverage, pass/fail diversity checks, and an exact 15-word fixture.
+- Verification status: implementation complete on `feat/review15-random-examples`; hosted CI pending.
