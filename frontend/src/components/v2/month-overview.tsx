@@ -8,6 +8,7 @@ import { RATE24_TARGET, REPLIED_RATE_TARGET } from "@/lib/v2/kpi";
 import { monthLongLabel, periodLabel } from "@/lib/v2/month";
 import { reportHref, storesHref } from "@/lib/v2/month-url";
 import { topUnreplied } from "@/lib/v2/monthly-model";
+import { numericValue } from "@/lib/v2/value-state";
 import { TwoKpiCards, VolumeLine } from "./kpi-cards";
 import { DataLine, OverviewTabs } from "./v2-month-controls";
 import { useV2Month } from "./v2-month-data";
@@ -94,7 +95,7 @@ function TopUnreplied() {
                 </span>
                 <span className="shrink-0 text-right">
                   <span className="block text-sm font-semibold"><StateValue state={row.unreplied} /> <span className="text-xs font-normal text-[var(--app-text-secondary)]">แชท</span></span>
-                  <span className="block text-xs text-[var(--app-text-secondary)]">ตอบใน 24 ชม. <StateValue state={row.rate24} format="percent" target={RATE24_TARGET ?? undefined} /> · <DeltaValue state={row.unrepliedDelta} kind="count" worseWhen="up" /></span>
+                  <span className="block text-xs text-[var(--app-text-secondary)]">ตอบใน 24 ชม. <StateValue state={row.rate24} format="percent" target={RATE24_TARGET ?? undefined} />{numericValue(row.unrepliedDelta) !== null && <> · <DeltaValue state={row.unrepliedDelta} kind="count" worseWhen="up" /></>}</span>
                 </span>
               </Link>
             </li>

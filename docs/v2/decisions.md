@@ -57,12 +57,25 @@ first-customer-message date), so the two n's differ. UI sentence (`KPI_DIFFERENC
 | 2026-10-07 | Reads | v2 (all views, report) reads partner only from `GET /v2/store-partners` (scoped to the caller's stores). The frontend no longer parses names. If the mapping fails to load, every store reads "ไม่ระบุ partner" and the page says so. | DECIDED |
 | 2026-10-07 | Edits | `PUT /v2/store-partners/:storeId` ADMIN only; each change writes one audit row (actor, time, before/after, reason). Same value = no-op, no audit row. Admin UI: /v2/admin/partners "Partner ของสาขา" with a "ยังไม่ระบุ" filter and the last 50 changes. | DECIDED |
 
+## Month close (B2)
+
+| Date | Item | Decision | Status |
+|---|---|---|---|
+| 2026-10-07 | Tables | `MonthlyKpiClose` (one row per close: month, revision, closedBy SYSTEM/ADMIN, actor, reason, backfill, dueAt, closedAt, definitionVersion, store count, network totals) and `MonthlyStoreKpiSnapshot` (per store: Store UUID, Store ID, name, chats all/unreplied/replied, oldest waiting minutes, 24h numerator/denominator, coverage flags hasChatData / rate24Measured / replyStatusCovered, computedAt, definitionVersion, closedBy). Migration `20261007160000_v2_month_close`: two new tables only. | DECIDED |
+| 2026-10-07 | Values | Computed at close time by the same functions as /chats (`getBmReplyStatusSummary(month)`, effective two-state counts) and /replymessage (`replyAnalytics` over the month's Bangkok days, as an all-stores system actor). Parity test: at close time the snapshot equals the live /chats counts. `definitionVersion` = `v2-month-1`. | DECIDED |
+| 2026-10-07 | `MONTH_CLOSE_GRACE_DAYS` | 1. A month closes automatically at 00:00 Asia/Bangkok on day (1 + grace) of the next month — October 2026 closes at 2 Nov 2026 00:00. | DECIDED (owner) |
+| 2026-10-07 | Scheduler | The backend's existing pattern: an in-process interval in the API service (as `BroadcastSchedulerService`), every 10 minutes, advisory-locked, closes only months with no close yet. No new Railway service or cron. Disable with `V2_MONTH_CLOSE_SCHEDULER_DISABLED=true`. | DECIDED |
+| 2026-10-07 | Backfill | A first close made more than 24 h after its due time is flagged `backfill` ("ปิดย้อนหลัง"; values as of the close time). September 2026 (due 2 Oct) is closed by the first scheduler tick after deploy and is flagged. | DECIDED (owner) |
+| 2026-10-07 | No overwrite | A closed month is never re-computed automatically. Re-closing: `POST /v2/month-close/:month` (ADMIN) with a reason; it writes revision n+1 and keeps every earlier revision's rows. The same endpoint performs a first close of an ended month on demand (idempotent with the scheduler: whichever runs first is revision 1). | DECIDED (owner) |
+| 2026-10-07 | Reads | `GET /v2/month-close/:month` → the latest revision's snapshot, limited to the caller's stores (all-store callers get the close's network totals = /chats overview at close time; scoped callers the sum of their stores), plus `dueAt`. v2 (all views, trend, report) reads the snapshot for closed months and live data for open months; the comparison of an open month stays live (days 1–D). If the lookup fails, live data is shown and the page says so. Status shown: "ปิดเดือนแล้ว เมื่อ …", "ปิดย้อนหลัง เมื่อ … (ตัวเลข ณ เวลาที่ปิด)", "ปิดใหม่ครั้งที่ n เมื่อ … โดย … (เหตุผล)", "เดือนนี้ยังไม่ปิด (ข้อมูลถึงวันที่ D)", or "สิ้นเดือนแล้ว รอปิดอัตโนมัติ …". The open-month report footer shows until the month is closed. | DECIDED |
+| 2026-10-07 | Manual command | None needed. If the scheduler is ever disabled: `curl -X POST -b <admin session> https://<api>/v2/month-close/2026-09 -H 'Content-Type: application/json' -d '{}'` (add `"reason"` to re-close). | DECIDED |
+
 ## One definition, shared with /chats (Task 1)
 
 | Date | Item | Decision | Status |
 |---|---|---|---|
 | 2026-10-07 | Chats in a month (แชท / ยังไม่ตอบ / ตอบแล้ว), network and per store | `GET /conversations/bm-reply-status-summary?month=YYYY-MM` — the call `/chats` makes for its month view. Network = `overview.total` and `effectiveSummaryCounts(overview)`; per store = `chatsStoreCounts(row)`. Both functions live in `frontend/src/app/reply-state.ts` and `/chats` calls the same ones (`chatsStoreCounts` was extracted from `/chats`'s inline loop, behaviour unchanged). Locked by `test/v2-monthly-model.test.mts`. | DECIDED |
-| 2026-10-07 | Which month a chat belongs to | The Bangkok month of its **latest message** (`Conversation.latestMessageAt`, backend `resolveChatMonthRange`). Consequence: a chat that gets a new message moves to the newer month, so a closed month's count can still fall slightly until snapshots exist (Wave B). | DECIDED (backend behaviour) |
+| 2026-10-07 | Which month a chat belongs to | The Bangkok month of its **latest message** (`Conversation.latestMessageAt`, backend `resolveChatMonthRange`). Consequence: a chat that gets a new message moves to the newer month; once a month is closed (B2), v2 shows its snapshot, so its numbers no longer move. | DECIDED (backend behaviour) |
 | 2026-10-07 | ยังไม่ตอบ | `notReplied + notifiedBm` (`effectiveSummaryCounts`), from the backend reply-state resolver. Two states only in the UI. | DECIDED |
 | 2026-10-07 | ตอบแล้ว % | ตอบแล้ว ÷ แชท for the period. | DECIDED |
 | 2026-10-07 | ตอบใน 24 ชม. % | `GET /dashboard/store-24h-response-summary?dateFrom&dateTo` (replyAnalytics), the source of `/replymessage`: `within24h ÷ total`. Network value = the endpoint's own `overview`; partner value = Σwithin24h ÷ Σtotal of its stores. n = `total`. | DECIDED |
@@ -127,7 +140,7 @@ first-customer-message date), so the two n's differ. UI sentence (`KPI_DIFFERENC
 
 | Date | Item | Decision | Status |
 |---|---|---|---|
-| 2026-10-07 | Open-month footer | "ตัวเลขเดือนที่ยังไม่ปิดอาจเปลี่ยนได้" on every report of a month in progress. Snapshots come in Wave B. | DECIDED |
+| 2026-10-07 | Open-month footer | "ตัวเลขเดือนที่ยังไม่ปิดอาจเปลี่ยนได้" on every report of a month that is not closed yet (in progress, or ended and awaiting its close). | DECIDED |
 | 2026-10-07 | Report URL | `/v2/report?month=YYYY-MM` (network: KPIs, partner table, all stores), `&partner=<name>` (that partner's KPIs and stores), `&store=<id>` (one store). Outside the shell route group, so it has no navigation chrome. | DECIDED |
 | 2026-10-07 | Report rendering | A4 (`@page size: A4; margin 12mm`), light only: the report scopes the light token values to `.v2-report`, so it is light whatever the app theme. PDF is the browser's print → Save as PDF. No new dependencies. Red and green are darkened slightly so they stay legible on paper. | DECIDED |
 | 2026-10-07 | "คัดลอกสรุป" text | Lines: `สรุปเดือน <เดือน> · <scope>` / `ช่วง: <period>` / `แชท N · ยังไม่ตอบ N (Δ)` / `ตอบแล้ว % · ตอบใน 24 ชม. % (Δ จุด) · เป้า 90%` / the 3 stores with the most ยังไม่ตอบ / the open-month note when the month is open. Built by `lib/v2/report-summary.ts`. | DECIDED |

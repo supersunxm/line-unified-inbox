@@ -166,6 +166,23 @@ export async function routeSeededApi(page, seed = buildSeed()) {
     if (path === "/stores") return json(route, seed.stores);
     if (path === "/v2/store-partners") return json(route, { stores: seed.stores.filter((store) => store.isActive).map((store) => ({ storeUuid: store.id, storeId: store.storeId ?? null, storeName: store.name, partner: store.partner ?? null, updatedAt: store.partner ? new Date(seed.now - 86_400_000).toISOString() : null, updatedByName: store.partner ? "system (seed)" : null })) });
     if (path === "/v2/store-partners/changes") return json(route, { changes: [] });
+    const closeMatch = /^\/v2\/month-close\/(\d{4}-\d{2})$/.exec(path);
+    if (closeMatch) {
+      // Synthetic: September 2026 is closed as a backfill; later months are open.
+      const month = closeMatch[1];
+      const dueAt = new Date(Date.parse(`${nextMonth(month)}-02T00:00:00+07:00`)).toISOString();
+      if (month !== "2026-09") return json(route, { close: null, stores: [], network: null, dueAt });
+      const summary = summaryFor(seed, month);
+      const rates = ratesFor(seed, "2026-09-01", "2026-09-30");
+      const rateBy = new Map(rates.stores.map((row) => [row.storeId, row]));
+      const stores = summary.stores.filter((row) => row.storeId !== "focus-seven-store-group").map((row) => ({ storeUuid: row.storeId, storeId: null, storeName: row.storeName, chatsTotal: row.total, chatsUnreplied: row.notReplied + row.notifiedBm, chatsReplied: row.replied, oldestWaitingMinutes: row.oldestWaitingMinutes || null, rate24Total: rateBy.get(row.storeId)?.total ?? 0, rate24Within: rateBy.get(row.storeId)?.within24h ?? 0 }));
+      return json(route, {
+        close: { id: "close-sep", month, revision: 1, closedBy: "SYSTEM", actorName: "system", reason: null, backfill: true, dueAt, closedAt: new Date(seed.now - 3_600_000).toISOString(), definitionVersion: "synthetic" },
+        stores,
+        network: { chatsTotal: summary.overview.total, chatsUnreplied: summary.overview.notReplied + summary.overview.notifiedBm, chatsReplied: summary.overview.replied, rate24Total: rates.overview.total, rate24Within: rates.overview.within24h },
+        dueAt,
+      });
+    }
     if (path === "/conversations/bm-reply-status-summary") {
       const from = url.searchParams.get("from");
       const to = url.searchParams.get("to");

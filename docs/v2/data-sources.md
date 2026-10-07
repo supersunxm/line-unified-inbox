@@ -1,7 +1,8 @@
 # v2 data sources
 
-Every v2 number comes from an endpoint that already exists; nothing here needs a backend
-change. Definitions and constants are in `decisions.md`. Status values:
+Every v2 number comes from the endpoints below. The v2 additions (partner mapping, summary
+date range, per-store daily 24h rate, month close) are additive backend endpoints under
+`/v2` or optional query parameters. Definitions and constants are in `decisions.md`. Status values:
 
 - **available**: an existing endpoint returns it directly.
 - **derivable**: computed in the browser from a bounded set of existing responses
@@ -18,11 +19,12 @@ Selected with `?month=YYYY-MM` (default: the current Bangkok month). Loaded by
 | แชท / ยังไม่ตอบ / ตอบแล้ว, network | `api.bmReplyStatusSummary(month)` → `GET /conversations/bm-reply-status-summary?month=`; `overview.total` and `effectiveSummaryCounts(overview)` | `/chats` sidebar overview (same call, same function) | available |
 | แชท / ยังไม่ตอบ / ตอบแล้ว, per store | same response; `chatsStoreCounts(row)` | `/chats` sidebar store counts (same call, same function) | available |
 | ตอบแล้ว % | ตอบแล้ว ÷ แชท from the rows above | — | derivable |
-| Previous month, closed month | `bm-reply-status-summary?month=<previous>` | `/chats` with the previous month selected | available |
+| Closed month (all of the above) | `GET /v2/month-close/:month` → latest revision of `MonthlyStoreKpiSnapshot` (values as computed at close time); network totals from `MonthlyKpiClose` | `/chats` and `/replymessage` at close time (parity-tested) | available |
+| Previous month, not closed | `bm-reply-status-summary?month=<previous>` | `/chats` with the previous month selected | available |
 | Previous month, same days (month in progress) | `bm-reply-status-summary?from=<prev>-01&to=<prev>-DD` (Bangkok days 1–D, same bucketing as month mode) | `/chats` endpoint | available |
 | ตอบใน 24 ชม. | `GET /dashboard/store-24h-response-summary?dateFrom&dateTo` (replyAnalytics), current period and comparison period; network = response `overview`; partner = Σwithin24h ÷ Σtotal | `/replymessage` | available |
 | Store list, location, placeholder signal | `api.stores()` → `GET /stores`: `name`, `region`, `area` (province), `_count.lineOfficialAccounts` | — | available |
-| Partner | store name suffix "By …" (`lib/v2/partners.ts`) | — | derivable |
+| Partner | `GET /v2/store-partners` (Store ID → partner, `StorePartnerMapping`); "ไม่ระบุ partner" when unset | admin page "Partner ของสาขา" | available |
 | อันดับใน partner | from the rows above (`rankWithinPartners`) | — | derivable |
 | รอนานสุด (calendar) | summary `oldestWaitingMinutes`, formatted with `/chats`'s `formatWaitingDuration` | `/chats` "Waiting 6วัน 10ชม." | available |
 | Google Review column | `GET /google-review-kpi?month=`; shown only when at least one store has a result | Google Review KPI page | available |
@@ -88,8 +90,9 @@ views above. Their sources were the ones listed for /v2/response.
 ## Known limits
 
 - A chat belongs to the month of its latest message (as in `/chats`). A chat that gets a
-  new message moves to the newer month, so a closed month can still change slightly until
-  monthly snapshots exist (Wave B). Reports of an open month say so.
+  new message moves to the newer month, so a month's live counts can still change until it
+  is closed (B2); v2 then shows the snapshot. Reports of a month that is not closed say so.
+- `/chats` itself stays live: for a closed month it can differ from the v2 snapshot.
 - The 24-hour rate counts customer messages, not chats, so its n differs from แชท.
 
 - The 7-day range includes today, as on the existing 24H Response Rate page.

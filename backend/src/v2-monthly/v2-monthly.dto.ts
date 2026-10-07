@@ -13,3 +13,11 @@ export class SetStorePartnerDto {
   @MaxLength(500)
   reason?: string;
 }
+
+export class CloseMonthDto {
+  /** Required to re-close a month that is already closed. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  reason?: string;
+}
