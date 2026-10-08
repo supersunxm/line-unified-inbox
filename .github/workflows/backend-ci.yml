@@ -55,6 +55,14 @@ jobs:
       - name: Apply migrations to clean PostgreSQL
         run: npx prisma migrate deploy
 
+      - name: Sunn Secretary secure owner settings
+        env:
+          SECRETARY_SETTINGS_TEST_DATABASE_URL: ${{ env.DATABASE_URL }}
+          SUNN_SECRETARY_WEBHOOK_ENABLED: "false"
+        run: |
+          npx eslint src/ai/sunn-secretary/sunn-secretary-credentials*.ts src/ai/sunn-secretary/sunn-secretary-owner-settings.ts src/ai/sunn-secretary/sunn-secretary-owner-settings.controller.ts src/ai/sunn-secretary/sunn-secretary.module.ts src/line-official-accounts/line-official-accounts.service.ts
+          npx tsx --test src/ai/sunn-secretary/*.spec.ts
+
       - name: Lint regression scope
         run: npx eslint "src/coupons/**/*.ts" "src/app-version/**/*.ts" "src/mobile/mobile-conversations.service.ts" "src/mobile/mobile-customer-sales-activity.spec.ts" "src/mobile/mobile-video-preview.ts" "src/mobile/mobile-video-preview.spec.ts" "src/conversation-data-contract.ts" "src/conversation-data-contract.spec.ts" "src/purchase-analytics.controller.ts" "src/purchase-analytics.dto.ts" "src/purchase-analytics.service.ts" "src/purchase-analytics.service.spec.ts" "src/purchase-broadcast-audience.dto.ts" "src/purchase-broadcast-audience.service.ts" "src/purchase-broadcast-audience.service.spec.ts" "src/purchase-broadcast-composer.service.spec.ts" "src/mass-message/mass-message.controller.ts" "src/mass-message/mass-message-selected-users-guard.spec.ts" "src/dashboard.controller.ts" "src/dashboard-executive.service.ts" "src/dashboard-executive.service.spec.ts" "src/app.module.ts" "src/line-chat/line-chat-session-health-probe.service.ts" "src/line-chat/line-chat-session-health-probe.spec.ts" "src/line-chat/line-chat-health-probe.cli.ts" "src/line-chat/line-chat-health-probe.cli.spec.ts" "src/line-chat/line-chat-oa-health-probe.service.ts" "src/line-chat/line-chat-oa-health-probe.spec.ts" "src/line-chat/line-chat-oa-health-probe.cli.ts" "src/line-chat/line-chat-oa-health-probe.cli.spec.ts" "src/line-chat/line-chat-health-scheduler.service.ts" "src/line-chat/line-chat-health-scheduler.spec.ts" "src/line-chat/line-chat-operations.controller.ts" "src/line-chat/line-chat-operations-auth.spec.ts" "src/line-chat/line-chat.module.ts" "src/line-chat/line-chat-nickname-worker.module.ts" "src/google-review-kpi/google-review-kpi.controller.ts" "src/google-review-kpi/google-review-kpi-canonical-export.spec.ts"
 
@@ -169,6 +177,11 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Sunn Secretary real HTTP security and restart persistence
+        env:
+          SECRETARY_SETTINGS_TEST_DATABASE_URL: ${{ env.DATABASE_URL }}
+        run: node scripts/test-sunn-secretary-owner-http.cjs
+
       - name: Smoke test backend auth guards
         env:
           NODE_ENV: test
@@ -249,6 +262,9 @@ jobs:
       # page, including v2 and Review 15, gate the merge. It replaces a fixed list of files.
       - name: Frontend tests (full suite)
         run: npm run test
+
+      - name: Sunn Secretary form lint
+        run: npx eslint src/app/admin/registrations/hq/page.tsx src/app/admin/registrations/hq/sunn-secretary-settings.tsx src/app/admin/registrations/hq/sunn-secretary-settings-i18n.ts
 
       - name: Type error baseline (fails if tsc errors rise)
         run: npm run typecheck:baseline
