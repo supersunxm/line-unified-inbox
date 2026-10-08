@@ -7,7 +7,7 @@ const secret = "test-only-secret";
 const body = Buffer.from('{"events":[]}', "utf8");
 const signature = createHmac("sha256", secret).update(body).digest("base64");
 const botUserId = "U" + "a".repeat(32);
-const config = { groupIds: ["allowed-group"], userIds: ["allowed-user"], botUserId };
+const config = { userIds: ["allowed-user"], botUserId };
 const event = {
   type: "message", webhookEventId: "event-001", source: {type:"group",groupId:"allowed-group",userId:"allowed-user"},
   message: {type:"text",text:"@เลขาซันน์ ร้านไหนค้างตอบ",mention:{mentionees:[{type:"user",userId:botUserId}]}},
@@ -20,9 +20,10 @@ test("valid LINE signature must cover exact raw bytes", () => {
   assert.equal(verifySunnLineSignature(undefined, signature, secret), false);
   assert.equal(verifySunnLineSignature(body, signature, undefined), false);
 });
-test("requires real bot mention and both LINE sender/group allowlists", () => {
+test("accepts any LINE group but requires authorized sender and real bot mention", () => {
   assert.equal(authorizeSunnEvent(event, config), true);
-  assert.equal(authorizeSunnEvent({...event,source:{...event.source,groupId:"unknown"}},config),false);
+  assert.equal(authorizeSunnEvent({...event,source:{...event.source,groupId:"another-group"}},config),true);
+  assert.equal(authorizeSunnEvent({...event,source:{...event.source,groupId:""}},config),false);
   assert.equal(authorizeSunnEvent({...event,source:{...event.source,userId:"unknown"}},config),false);
   assert.equal(authorizeSunnEvent({...event,message:{...event.message,mention:{mentionees:[]}}},config),false);
   assert.equal(authorizeSunnEvent({...event,source:{...event.source,type:"user"}},config),false);
