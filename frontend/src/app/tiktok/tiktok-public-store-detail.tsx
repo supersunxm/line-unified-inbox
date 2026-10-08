@@ -56,12 +56,21 @@ function FollowerChart({
   locale,
   emptyLabel,
   chartLabel,
+  followersLabel,
+  noPreviousSnapshotLabel,
+  previousDayLabel,
+  gapSinceLabel,
 }: {
   points: TikTokPublicHistoryPoint[];
   locale: string;
   emptyLabel: string;
   chartLabel: string;
+  followersLabel: string;
+  noPreviousSnapshotLabel: string;
+  previousDayLabel: string;
+  gapSinceLabel: string;
 }) {
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
   if (points.length < 2) {
     return (
       <div className="flex h-56 items-center justify-center text-sm text-[var(--app-text-tertiary)]">
@@ -92,6 +101,11 @@ function FollowerChart({
   const linePoints = coords.map(([x, y]) => `${x},${y}`).join(" ");
   const areaPoints = `${chartLeft},${chartBottom} ${linePoints} ${chartRight},${chartBottom}`;
   const middleIndex = Math.floor((points.length - 1) / 2);
+  const selectedIndex = Math.max(0, points.findIndex((p) => p.metricDate === selectedDate));
+  const selected = points[selectedIndex];
+  const previous = points[selectedIndex - 1];
+  const delta = previous ? selected.followerCount - previous.followerCount : null;
+  const consecutive = previous ? shiftMetricDate(previous.metricDate, 1) === selected.metricDate : false;
 
   return (
     <div>
@@ -129,12 +143,33 @@ function FollowerChart({
               strokeLinejoin="round"
             />
           </svg>
+          {coords.map(([x, y], index) => (
+            <button key={points[index].metricDate} type="button"
+              onClick={() => setSelectedDate(points[index].metricDate)}
+              onMouseEnter={() => setSelectedDate(points[index].metricDate)}
+              onFocus={() => setSelectedDate(points[index].metricDate)}
+              aria-label={`${formatMetricDate(points[index].metricDate, locale)}: ${formatNumber(points[index].followerCount, locale)}`}
+              aria-pressed={selected.metricDate === points[index].metricDate}
+              style={{ left: `${(x / 1000) * 100}%`, top: `${(y / 240) * 100}%` }}
+              className={`absolute z-20 h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-[var(--app-accent)] bg-[var(--app-surface)] shadow-sm focus-visible:outline-2 focus-visible:outline-offset-2 ${selected.metricDate === points[index].metricDate ? "ring-2 ring-[var(--app-accent)]" : ""}`}
+            />
+          ))}
         </div>
       </div>
       <div className="ml-[60px] mt-2 flex justify-between text-[11px] text-[var(--app-text-tertiary)]">
         <span>{formatShortDate(points[0].metricDate, locale)}</span>
         <span>{formatShortDate(points[middleIndex].metricDate, locale)}</span>
         <span>{formatShortDate(points[points.length - 1].metricDate, locale)}</span>
+      </div>
+      <div aria-live="polite" className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-[var(--app-surface-subtle)] px-4 py-3">
+        <div>
+          <div className="text-xs text-[var(--app-text-secondary)]">{formatMetricDate(selected.metricDate, locale)}</div>
+          <div className="text-lg font-black tabular-nums">{formatNumber(selected.followerCount, locale)} <span className="text-xs font-normal">{followersLabel}</span></div>
+        </div>
+        <div className="text-right">
+          <div className={`font-bold tabular-nums ${growthTextClass(delta)}`}>{delta === null ? "—" : `${delta > 0 ? "+" : ""}${formatNumber(delta, locale)}`}</div>
+          <div className="text-xs text-[var(--app-text-tertiary)]">{!previous ? noPreviousSnapshotLabel : consecutive ? previousDayLabel : `${gapSinceLabel} ${formatShortDate(previous.metricDate, locale)}`}</div>
+        </div>
       </div>
     </div>
   );
@@ -144,6 +179,7 @@ export function TikTokPublicStoreDetail({ store, history }: Props) {
   const router = useRouter();
   const [isRefreshing, startTransition] = useTransition();
   const [historyPeriod, setHistoryPeriod] = useState<HistoryPeriod>("30D");
+  const [showDaily, setShowDaily] = useState(false);
   const { language } = useAppLanguage();
 
   const handleRefresh = () => {
@@ -165,17 +201,23 @@ export function TikTokPublicStoreDetail({ store, history }: Props) {
   ];
 
   const sortedHistory = [...history].sort((a, b) => a.metricDate.localeCompare(b.metricDate));
-  const chartPoints = historyPeriod === "7D" ? sortedHistory.slice(-7) : sortedHistory.slice(-30);
+  const latestHistoryDate = sortedHistory[sortedHistory.length - 1]?.metricDate;
+  const cutoff = latestHistoryDate ? shiftMetricDate(latestHistoryDate, historyPeriod === "7D" ? -6 : -29) : null;
+  const chartPoints = sortedHistory.filter((p) => !cutoff || p.metricDate >= cutoff);
   const firstPoint = chartPoints[0];
   const lastPoint = chartPoints[chartPoints.length - 1];
   const chartNetGrowth = firstPoint && lastPoint ? lastPoint.followerCount - firstPoint.followerCount : null;
-  const averageDailyGrowth = chartPoints.length > 1 && chartNetGrowth !== null
-    ? chartNetGrowth / (chartPoints.length - 1)
-    : null;
+  const dailyDeltas = chartPoints.flatMap((point, i) => {
+    const prior = chartPoints[i - 1];
+    return prior && shiftMetricDate(prior.metricDate, 1) === point.metricDate
+      ? [point.followerCount - prior.followerCount] : [];
+  });
+  const averageDailyGrowth = dailyDeltas.length ? dailyDeltas.reduce((a, b) => a + b, 0) / dailyDeltas.length : null;
 
   let bestDailyGrowth: number | null = null;
   let bestDailyDate: string | null = null;
   for (let index = 1; index < chartPoints.length; index += 1) {
+    if (shiftMetricDate(chartPoints[index - 1].metricDate, 1) !== chartPoints[index].metricDate) continue;
     const delta = chartPoints[index].followerCount - chartPoints[index - 1].followerCount;
     if (bestDailyGrowth === null || delta > bestDailyGrowth) {
       bestDailyGrowth = delta;
@@ -300,7 +342,12 @@ export function TikTokPublicStoreDetail({ store, history }: Props) {
               </div>
               <p className="mt-0.5 text-xs text-[var(--app-text-tertiary)]">{labels.historySub}</p>
             </div>
-            <div className="inline-flex w-fit rounded-lg bg-[var(--app-surface-subtle)] p-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <button type="button" aria-expanded={showDaily} onClick={() => setShowDaily(!showDaily)}
+                className="rounded-lg border border-[var(--app-border)] px-3 py-2 text-xs font-bold">
+                {labels.dailyToggle} {showDaily ? "−" : "+"}
+              </button>
+              <div className="inline-flex w-fit rounded-lg bg-[var(--app-surface-subtle)] p-1">
               {(["7D", "30D"] as HistoryPeriod[]).map((period) => (
                 <button
                   key={period}
@@ -315,12 +362,48 @@ export function TikTokPublicStoreDetail({ store, history }: Props) {
                   {period}
                 </button>
               ))}
+              </div>
             </div>
           </div>
 
           <div className="px-5 py-5">
-            <FollowerChart points={chartPoints} locale={locale} emptyLabel={labels.noHistory} chartLabel={labels.historyChart} />
+            <FollowerChart
+              key={historyPeriod}
+              points={chartPoints}
+              locale={locale}
+              emptyLabel={labels.noHistory}
+              chartLabel={labels.historyChart}
+              followersLabel={labels.followers}
+              noPreviousSnapshotLabel={labels.noPreviousSnapshot}
+              previousDayLabel={labels.previousDay}
+              gapSinceLabel={labels.gapSince}
+            />
           </div>
+          {showDaily && (
+            <div className="border-t border-[var(--app-border-subtle)] px-5 py-4">
+              <h3 className="mb-2 text-sm font-bold">{labels.dailySnapshots}</h3>
+              <div className="max-h-80 divide-y divide-[var(--app-border-subtle)] overflow-y-auto">
+                {[...chartPoints].reverse().map((point, reverseIndex) => {
+                  const index = chartPoints.length - reverseIndex - 1;
+                  const prior = chartPoints[index - 1];
+                  const diff = prior ? point.followerCount - prior.followerCount : null;
+                  const adjacent = prior ? shiftMetricDate(prior.metricDate, 1) === point.metricDate : false;
+                  return (
+                    <div key={point.metricDate} className="flex items-center justify-between gap-4 py-3 text-sm">
+                      <div>
+                        <div className="font-semibold">{formatMetricDate(point.metricDate, locale)}</div>
+                        <div className="text-xs text-[var(--app-text-tertiary)]">{!prior ? labels.firstSnapshot : adjacent ? labels.previousDay : `${labels.missingDays}: ${formatShortDate(prior.metricDate, locale)} → ${formatShortDate(point.metricDate, locale)}`}</div>
+                      </div>
+                      <div className="text-right">
+                        <div className="font-bold tabular-nums">{formatNumber(point.followerCount, locale)}</div>
+                        <div className={`text-xs font-semibold tabular-nums ${growthTextClass(diff)}`}>{diff === null ? "—" : `${diff > 0 ? "+" : ""}${formatNumber(diff, locale)}${adjacent ? "" : ` (${labels.gapSuffix})`}`}</div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           <div className="grid border-t border-[var(--app-border-subtle)] sm:grid-cols-4 sm:divide-x sm:divide-[var(--app-border-subtle)]">
             <div className="border-b border-[var(--app-border-subtle)] px-5 py-3 sm:border-b-0">
