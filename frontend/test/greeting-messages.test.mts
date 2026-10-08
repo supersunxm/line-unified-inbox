@@ -5,7 +5,7 @@ import { primaryNavigationState } from "../src/app/primary-navigation.ts";
 import type { PrimarySection } from "../src/app/primary-navigation.ts";
 import { canAccessPrimarySection } from "../src/lib/authorization.ts";
 import { getGreetingDict } from "../src/app/greeting-messages/greeting-i18n.ts";
-import { greetingManagementPhrases, greetingManagementTemplates } from "../src/app/greeting-messages/greeting-management-i18n.ts";
+import { getGreetingManagementStatusCopy, greetingManagementPhrases, greetingManagementTemplates } from "../src/app/greeting-messages/greeting-management-i18n.ts";
 import {
   extractTemplateVariables,
   resolveTemplateVariables,
@@ -88,8 +88,29 @@ test("Greeting management status explanations have TH/EN/ZH translations and the
     zh: "已在 {{value}} 家门店启用",
   }]);
 
+  assert.deepEqual(getGreetingManagementStatusCopy("th", 5), {
+    ACTIVE: { title: "ใช้งานอยู่", subtitle: "ใช้งานอยู่ใน 5 ร้าน" },
+    DRAFT: { title: "ฉบับร่าง", subtitle: "ยังไม่ได้ใช้งาน" },
+    INACTIVE: { title: "ปิดใช้งาน", subtitle: "ปิดการใช้งาน" },
+    ARCHIVED: { title: "จัดเก็บเป็นประวัติ", subtitle: "เก็บไว้เป็นประวัติ" },
+  });
+  assert.deepEqual(getGreetingManagementStatusCopy("en", 5), {
+    ACTIVE: { title: "Active", subtitle: "Active in 5 stores" },
+    DRAFT: { title: "Draft", subtitle: "Not in use yet" },
+    INACTIVE: { title: "Inactive", subtitle: "Currently disabled" },
+    ARCHIVED: { title: "Archived", subtitle: "Kept for history" },
+  });
+  assert.deepEqual(getGreetingManagementStatusCopy("zh", 5), {
+    ACTIVE: { title: "启用中", subtitle: "已在 5 家门店启用" },
+    DRAFT: { title: "草稿", subtitle: "尚未使用" },
+    INACTIVE: { title: "已停用", subtitle: "当前已停用" },
+    ARCHIVED: { title: "已归档", subtitle: "已归档保存" },
+  });
+
   const route = readFileSync(new URL("../src/app/greeting-messages/manage/page.tsx", import.meta.url), "utf8");
   assert.match(route, /templates=\{greetingManagementTemplates\}/);
+  const view = readFileSync(new URL("../src/app/greeting-messages/greeting-management-view.tsx", import.meta.url), "utf8");
+  assert.match(view, /getGreetingManagementStatusCopy\(language, activeStores\)/);
 });
 
 test("Greeting I18N dictionary contains duplication warning and send policy copy in TH, EN, ZH", () => {

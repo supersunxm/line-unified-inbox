@@ -1,6 +1,6 @@
 # Authenticated three-language visual QA
 
-**Status: PROTECTED ROUTE VISUAL QA: PASS.** Source three-language coverage remains PASS. PR #531's greeting-manager fix at `552119f7048def0f6360500f8661872bf3274d39` passed authenticated visual QA in TH/EN/ZH at 1440×900 and 375×812: all four status labels/subtitles localized, no Thai status copy under EN/ZH, no viewport overflow, and no browser console errors. PR #535 localizes the existing Purchase Intelligence DRAFT ONLY composer, including safety/preview copy, audience metrics/statuses, and the readiness message. Post-deploy visual QA passed in all three languages at desktop 1440×900 and mobile 375×812. Forced password reset is the only remaining `BLOCKED_SAFE_ACTION` exception.
+**Status: PROTECTED ROUTE VISUAL QA: PENDING_POST_DEPLOY.** The earlier authenticated pass on PR #535 remains recorded below. A fresh production visit on 2026-10-08 exposed an initial-render leak in the greeting-manager status cards: English titles appeared beside Thai explanations until `LegacyI18nBoundary` translated the DOM after render. The source fix now renders status copy directly from the selected locale; its post-deployment desktop/mobile verification is still required before restoring PASS. Forced password reset remains `BLOCKED_SAFE_ACTION`.
 
 ## Revision and access
 
@@ -25,6 +25,7 @@
 | V2 Response | PASS | PASS | PASS | PASS | PASS | PASS | PASS |
 | Google Review KPI | PASS | PASS | PASS | PASS | PASS | PASS | PASS |
 | Broadcast landing and visible controls | PASS | PASS | PASS | PASS | PASS | PASS | PASS |
+| Broadcast edit (history contains no existing broadcast draft; no draft created) | BLOCKED_SAFE_ACTION | BLOCKED_SAFE_ACTION | BLOCKED_SAFE_ACTION | BLOCKED_SAFE_ACTION | BLOCKED_SAFE_ACTION | BLOCKED_SAFE_ACTION | BLOCKED_SAFE_ACTION |
 | Existing Purchase Intelligence draft editor (DRAFT ONLY; no save/upload/send) | PASS | PASS | PASS | PASS | PASS | PASS | PASS |
 | Main OA | PASS | PASS | PASS | PASS | PASS | PASS | PASS |
 | HQ / account management | PASS | PASS | PASS | PASS | PASS | PASS | PASS |
@@ -33,7 +34,7 @@
 | Purchase / operations analytics | PASS | PASS | PASS | PASS | PASS | PASS | PASS |
 | Message traffic | PASS | PASS | PASS | PASS | PASS | PASS | PASS |
 | Auto replies | PASS | PASS | PASS | PASS | PASS | PASS | PASS |
-| Greeting manager (PR #531 status descriptions) | PASS | PASS | PASS | PASS | PASS | PASS | PASS |
+| Greeting manager status cards (`/greeting-messages/manage`; fix pending deployment) | PENDING_POST_DEPLOY | PENDING_POST_DEPLOY | PENDING_POST_DEPLOY | PENDING_POST_DEPLOY | PENDING_POST_DEPLOY | PENDING_POST_DEPLOY | PENDING_POST_DEPLOY |
 | Rich messages and rich menus | PASS | PASS | PASS | PASS | PASS | PASS | PASS |
 | Coupons | PASS | PASS | PASS | PASS | PASS | PASS | PASS |
 | Friend-source pages | PASS | PASS | PASS | PASS | PASS | PASS | PASS |
@@ -46,6 +47,7 @@
 - On the earlier authenticated Inbox pass, the real selector changed TH → EN → ZH → TH immediately without logout; `/chats` and its month/conversation query remained, and refresh restored the saved locale.
 - On the deployed draft route, the real desktop selector changed TH → EN → ZH → TH, retained the exact route, and same-tab refresh restored Thai. At mobile width, the route was reloaded under TH, EN and ZH and retained the same path. The draft route had no query, selected store, active filter, or selected conversation to preserve.
 - On `/greeting-messages/manage`, the real desktop and mobile selectors both completed TH → EN → ZH → TH and preserved the route; reload restored Thai. This route has no query, store, filter, or conversation state. Login has no query, store, or filter state to retain.
+- The follow-up production check used the real Language selector across TH/EN/ZH on `/greeting-messages/manage`; the route stayed selected. Broadcast history contained no saved records, so an editable broadcast draft was unavailable; no draft was created or saved.
 - Coupon desktop locale synchronization was defective on the original baseline and fixed in deployed PR #513; the targeted post-fix desktop/mobile check passed in all three languages in this QA pass.
 
 ## Defects found
@@ -54,17 +56,19 @@ The following presentation defects were observed on the original deployed baseli
 
 A post-merge inspection of the deployed English Google Review KPI screen found Thai-only static copy across the monthly overview, import history, store table/drawer, criteria, import/paste dialogs, and weekly summary. PR #514 routes these labels and sample dates through existing locale phrases, adds translations for the mismatch and import-success notices, and corrects the Thai coverage label. All required CI passed and the fix is deployed in `753c4283`. The latest targeted protected visual inspection passed in TH/EN/ZH at desktop and mobile sizes.
 
-- **I18N:** The KPI English/Chinese source leakage is fixed and deployed in PR #514. PR #531 fixed the greeting manager's Thai-only status subtitles by adding TH/EN/ZH phrase coverage and the dynamic active-store template to the manager route's i18n boundary; all four cards pass runtime checks at desktop and mobile sizes. PR #535 localizes the draft composer's safety and preview copy, audience metrics, status labels, and readiness message in desktop and mobile views; all six locale/viewport cells pass.
+- **I18N:** The KPI English/Chinese source leakage is fixed and deployed in PR #514. PR #531 added TH/EN/ZH greeting status phrase coverage, but the view still populated cards with Thai strings and depended on `LegacyI18nBoundary`'s post-render DOM translation. A fresh production navigation showed mixed copy on initial render. The follow-up now reads the selected locale during React render; keep this route pending until the deployed build passes all six visual cells. PR #535 localizes the draft composer's safety and preview copy, audience metrics, status labels, and readiness message in desktop and mobile views; all six locale/viewport cells pass.
+- **Safe-action exceptions:** Broadcast history showed “No broadcasts yet.” The edit subflow needs a saved broadcast, so it remains `BLOCKED_SAFE_ACTION`; no production draft was created. Forced password reset remains `BLOCKED_SAFE_ACTION` because no legitimate reset session is available.
 - **Layout:** The targeted protected routes listed in this pass had no horizontal overflow at 1440×900 or 375×812. V2 overview/store/response/partner pages and the V2 A4 report were previously observed wider than 375px; they were not in this targeted recheck, so that prior observation remains open.
 - **Pre-existing:** `/friend-attribution` still reproduces React hydration error 418 in its no-configuration state on the deployed revision. It remains classified PRE_EXISTING and was not changed by localization.
 
 ## Regression and delivery state
 
-- Focused greeting/localization/composer tests: 58/58 passed; full frontend suite: 968/968 passed on current main. The classified Thai source count is 655, with 0 unclassified candidates and 0 unfixed bugs.
-- Focused ESLint reports only one inherited hook error and two inherited image warnings in the mobile composer; the exact `origin/main` file has the same diagnostics. Full ESLint is 61 errors / 97 warnings on both main baseline and branch, with 0 new diagnostics.
-- TypeScript baseline check: 49 diagnostics versus 49 on latest main.
-- Local production build passed; Next logged an existing dynamic-font HTTP 400 and `metadataBase` warning. Greeting and draft route browser error logs were zero on the verified UI tabs.
+- Focused greeting test file: 9/9; full frontend suite: 968/968 on the fix branch. The classified Thai source count is 655, with 0 unclassified candidates and 0 unfixed bugs.
+- Focused ESLint reports the same 2 inherited hook errors and 2 inherited image warnings in `greeting-management-view.tsx` on main and branch. Full ESLint is 61 errors / 97 warnings on both main baseline and branch, with 0 new diagnostics.
+- TypeScript baseline check: 49 diagnostics on main and branch.
+- Local production build passed; Next logged the existing dynamic-font HTTP 400 and `metadataBase` warning. Browser console errors were zero on the prior deployed route checks; the post-fix browser log check remains pending deployment.
 - Required PR #535 checks all passed (Adaptive Auth, Backend, Frontend, CI Gate); it merged normally. Railway deployment `46019769-2d5a-4ccb-ab52-f8b072cfccf9` is active on `29e889e`; the route loaded successfully. `git diff --check`: passed.
+- Current fix branch `codex/i18n-greeting-final-qa` is based on `33db80d545eaf87cc5fb7f1619d9536331312cd1`. Focused greeting tests pass 9/9 and `git diff --check` passes. Focused/full lint, full frontend tests, typecheck, build, PR CI, and post-merge Railway revision/health checks are pending.
 
 ## Safety and remaining work
 
