@@ -313,8 +313,8 @@ function HqApprovalContent() {
             <p className="text-xs text-[var(--app-text-secondary)]">{t.secretarySecretWarning}</p>
           </div>
           <div className="space-y-1">
-            <p className="text-sm font-semibold">Webhook URL</p>
-            <code className="block break-all rounded-lg border border-[var(--app-border)] bg-[var(--app-bg)] p-3 text-xs">https://lineoppo.click/sunn-secretary/webhook</code>
+            <p className="text-sm font-semibold">{t.secretaryWebhookLabel}</p>
+            <code className="block break-all rounded-lg border border-[var(--app-border)] bg-[var(--app-bg)] p-3 text-xs">{t.secretaryWebhookUrl}</code>
             <p className="text-xs text-[var(--app-text-secondary)]">{t.secretaryWebhookWarning}</p>
           </div>
           <a href="https://railway.com/dashboard" target="_blank" rel="noopener noreferrer" className="inline-flex rounded-lg border border-[var(--app-border)] px-4 py-2 text-sm font-medium">{t.secretaryOpenRailway}</a>
