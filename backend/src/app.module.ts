@@ -31,6 +31,7 @@ import { RootCauseService } from "./ai/root-cause.service";
 import { RecommendationService } from "./ai/recommendation.service";
 import { ExecutiveBriefModule } from "./ai/executive-brief/executive-brief.module";
 import { BiAssistantModule } from "./ai/bi-assistant/bi-assistant.module";
+import { SunnSecretaryModule } from "./ai/sunn-secretary/sunn-secretary.module";
 import { ActionAgentModule } from "./ai/action-agent/action-agent.module";
 import { ImpactEngineModule } from "./ai/impact-engine/impact-engine.module";
 import { AiTelemetryModule } from "./ai/telemetry/ai-telemetry.module";
@@ -77,7 +78,7 @@ import { ReplyStateShadowService } from "./reply-state-shadow.service";
 import { Review15VisionModule } from "./review15/review15-vision.module";
 
 @Module({
-  imports: [PrismaModule, AuthModule, StoreInsightsModule, RealtimeModule, CredentialsModule, MediaModule, ClassificationModule, LineProfileModule, LineWebhookModule, LineOfficialAccountsModule, StoreMasterModule, FollowerInsightsModule, FriendSourceLinksModule, TranslationModule, OperationsModule, ExecutiveBriefModule, BiAssistantModule, ActionAgentModule, ImpactEngineModule, AiTelemetryModule, OperationalMemoryModule, MassMessageModule, CouponModule, TikTokModule, AppVersionModule, RichMenuModule, AutoResponseModule, GreetingMessageModule, RichMessageModule, LineChatModule, GoogleReviewKpiModule, Review15VisionModule, PublicStoresModule, MonthlyOperationsReportModule, V2MonthlyModule],
+  imports: [PrismaModule, AuthModule, StoreInsightsModule, RealtimeModule, CredentialsModule, MediaModule, ClassificationModule, LineProfileModule, LineWebhookModule, LineOfficialAccountsModule, StoreMasterModule, FollowerInsightsModule, FriendSourceLinksModule, TranslationModule, OperationsModule, ExecutiveBriefModule, BiAssistantModule, SunnSecretaryModule, ActionAgentModule, ImpactEngineModule, AiTelemetryModule, OperationalMemoryModule, MassMessageModule, CouponModule, TikTokModule, AppVersionModule, RichMenuModule, AutoResponseModule, GreetingMessageModule, RichMessageModule, LineChatModule, GoogleReviewKpiModule, Review15VisionModule, PublicStoresModule, MonthlyOperationsReportModule, V2MonthlyModule],
   controllers: [HealthController, MainOaController, StoresController, ConversationsController, ActivityController, DashboardController, DashboardResponseBucketsController, MessageTrafficController, MetadataController, OperationsController, CustomersController, MobileConversationsController, MobileVideoController, MobileNotificationsController, MobileConfigController, MobileProductsController, MonthlySummaryController, PurchaseAnalyticsController, HistoricalTimelineController],
   providers: [ConversationsService, ReplyStateShadowService, HistoricalTimelineService, { provide: LineMessagingService, useClass: PilotAwareLineMessagingService }, DashboardAnalyticsService, DashboardExecutiveService, OperationReportService, CustomerIntelligenceService, RootCauseService, RecommendationService, MobileConversationsService, MobilePdfSendService, MobileVideoService, MobileNotificationsService, MobileConfigService, MonthlySummaryService, MonthlyFollowerSummaryService, PriorityService, PurchaseAnalyticsService, PurchaseBroadcastAudienceService, MessageTrafficService],
 })
