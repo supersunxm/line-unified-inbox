@@ -35,11 +35,12 @@ test("status: closed, backfill, re-close, open month, ended but awaiting the aut
 });
 
 test("v2 reads the snapshot for closed months and live data only for open ones", () => {
-  const data = readFileSync(new URL("../src/components/v2/v2-month-data.tsx", import.meta.url), "utf8");
+  // The data layer moved to lib/metrics/use-monthly-metrics.tsx (shared with Home, Dashboard, Store 360).
+  const data = readFileSync(new URL("../src/lib/metrics/use-monthly-metrics.tsx", import.meta.url), "utf8");
   assert.match(data, /fetch\(`\/api-backend\/v2\/month-close\/\$\{encodeURIComponent\(month\)\}`/);
   assert.match(data, /currentClosed \? \{ data: snapshotSummary\(monthClose\.data!\)/);
   assert.match(data, /currentClosed \? \{ data: snapshotRates\(monthClose\.data!\)/);
-  assert.match(data, /useKeyedSource\("summary", closeKnown && !currentClosed \? JSON\.stringify\(\{ month \}\) : null/, "no live call for a closed month");
+  assert.match(data, /useKeyedSource\("summary", on\(closeKnown && !currentClosed \? JSON\.stringify\(\{ month \}\) : null\)/, "no live call for a closed month");
   assert.match(data, /if \(close\?\.close\) return \{ \.\.\.point, summary: snapshotSummary\(close\), rates: snapshotRates\(close\), error: null \};/, "trend too");
   assert.match(readFileSync(new URL("../src/components/v2/v2-month-controls.tsx", import.meta.url), "utf8"), /data\.statusText,/);
 });

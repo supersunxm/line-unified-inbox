@@ -35,7 +35,8 @@ test("links to /chats use /chats's own URL params (storeId, month, replyState)",
 });
 
 test("data layer: monthly numbers come from the /chats and /replymessage endpoints", () => {
-  const data = read("components/v2/v2-month-data.tsx");
+  // The data layer moved to lib/metrics/use-monthly-metrics.tsx (shared with Home, Dashboard, Store 360).
+  const data = read("lib/metrics/use-monthly-metrics.tsx");
   assert.match(data, /api\.bmReplyStatusSummary\(parsed\.month\)/, "/chats month view");
   assert.match(data, /fetch\(`\/api-backend\/conversations\/bm-reply-status-summary\?\$\{params\.toString\(\)\}`/, "/chats summary endpoint with from/to for the same-days comparison");
   assert.match(data, /frame\.inProgress \? JSON\.stringify\(\{ from: frame\.previous\.dateFrom, to: frame\.previous\.dateTo \}\)/);
@@ -46,7 +47,7 @@ test("data layer: monthly numbers come from the /chats and /replymessage endpoin
 });
 
 test("business-hours waiting appears only in the ตอนนี้ tab; monthly views use /chats's calendar wait", () => {
-  const monthly = ["components/v2/month-overview.tsx", "components/v2/store-scorecard-view.tsx", "components/v2/store-scorecard-drawer.tsx", "components/v2/v2-month-data.tsx", "lib/v2/monthly-model.ts"];
+  const monthly = ["components/v2/month-overview.tsx", "components/v2/store-scorecard-view.tsx", "components/v2/store-scorecard-drawer.tsx", "components/v2/v2-month-data.tsx", "lib/v2/monthly-model.ts", "lib/metrics/store-model.ts", "lib/metrics/use-monthly-metrics.tsx"];
   for (const file of monthly) {
     assert.doesNotMatch(read(file), /WaitLabel|businessMinutes|formatWaitMinutes|นับเฉพาะเวลาเปิดร้าน/, file);
   }
@@ -91,7 +92,7 @@ test("no user-visible internal terms in v2 components", () => {
 });
 
 test("drawer: per-store per-day 24h rate from the /replymessage endpoint with storeId", () => {
-  const data = read("components/v2/v2-month-data.tsx");
+  const data = read("lib/metrics/use-monthly-metrics.tsx");
   assert.match(data, /new URLSearchParams\(\{ dateFrom, dateTo, storeId \}\)/);
   assert.match(data, /\/api-backend\/dashboard\/store-24h-response-summary\?\$\{params\.toString\(\)\}/);
   const drawer = read("components/v2/store-scorecard-drawer.tsx");

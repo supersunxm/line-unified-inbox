@@ -190,14 +190,20 @@ test('"/" focuses search except while typing; Enter opens the first result; Esc 
 test("แชทร้านค้า badge counts ยังไม่ตอบ with the same request and helper as /chats", () => {
   const badge = read("components/shell/chats-unreplied-badge.ts");
   const chatsPage = read("app/page.tsx");
-  // Same request: this Bangkok month's bm-reply-status-summary.
-  assert.match(badge, /api\.bmReplyStatusSummary\(getCurrentBangkokMonth\(\)\)/);
+  // Same request: this Bangkok month's bm-reply-status-summary, through the metrics layer's shared cache.
+  const metrics = read("lib/metrics/use-monthly-metrics.tsx");
+  const model = read("lib/metrics/store-model.ts");
+  assert.match(badge, /sharedMonthSummary\(getCurrentBangkokMonth\(\)\)/);
+  assert.match(metrics, /export function sharedMonthSummary\(month: string\)[\s\S]*?shared\(`summary:\$\{key\}#0`/);
+  assert.match(metrics, /api\.bmReplyStatusSummary\(parsed\.month\)/);
   assert.match(chatsPage, /const \[chatMonth, setChatMonth\] = useState\(\(\) => getCurrentBangkokMonth\(\)\);/);
   assert.match(chatsPage, /api\.bmReplyStatusSummary\(chatMonth, \{ signal: controller\.signal \}\)/);
   // Same helper for the count.
-  assert.match(badge, /return effectiveSummaryCounts\(summary\.overview\)\.notReplied;/);
+  assert.match(badge, /return unrepliedCount\(summary\);/);
+  assert.match(model, /export function unrepliedCount\([^)]*\): number \{\n\s*return effectiveSummaryCounts\(summary\.overview\)\.notReplied;/);
   assert.match(chatsPage, /notReplied: effectiveSummaryCounts\(bmSummaryData\.overview\)\.notReplied/);
-  assert.match(badge, /import \{ effectiveSummaryCounts \} from "@\/app\/reply-state";/);
+  assert.match(badge, /import \{ unrepliedCount \} from "@\/lib\/metrics\/store-model";/);
+  assert.match(model, /import \{ chatsStoreCounts, effectiveSummaryCounts, getEffectiveReplyState \} from "\.\.\/\.\.\/app\/reply-state\.ts";/);
   assert.match(chatsPage, /import \{ chatsStoreCounts, effectiveSummaryCounts, getEffectiveReplyState \} from "\.\/reply-state";/);
   // Shared cache, at most every 5 minutes; no badge while loading or after an error (never a placeholder 0).
   assert.match(badge, /export const CHATS_BADGE_REFRESH_MS = 5 \* 60 \* 1000;/);

@@ -81,7 +81,8 @@ test("parity with /chats: per-store counts are chatsStoreCounts, the function /c
 
 test("parity with /chats: both import the shared counting functions and call the same endpoint", () => {
   const chatsPage = readFileSync(new URL("../src/app/page.tsx", import.meta.url), "utf8");
-  const model = readFileSync(new URL("../src/lib/v2/monthly-model.ts", import.meta.url), "utf8");
+  // The counting moved to lib/metrics/store-model.ts (shared by Home, Dashboard, Store 360 and v2).
+  const model = readFileSync(new URL("../src/lib/metrics/store-model.ts", import.meta.url), "utf8");
   assert.match(chatsPage, /countsMap\[s\.storeId\] = chatsStoreCounts\(s\);/);
   assert.match(chatsPage, /effectiveSummaryCounts\(bmSummaryData\.overview\)\.notReplied/);
   assert.match(chatsPage, /api\.bmReplyStatusSummary\(chatMonth/);
