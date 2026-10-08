@@ -208,6 +208,8 @@ export const tiktokStoreDetailText = {
     snapshot: "ข้อมูลล่าสุด", updated: "อัปเดต", noBaseline: "ยังไม่มีข้อมูลเปรียบเทียบ", open: "เปิด TikTok", content: "คอนเทนต์",
     growth: "การเติบโตของผู้ติดตาม", avgDaily: "เฉลี่ยต่อวัน", bestDay: "ดีที่สุดต่อวัน", range: "ช่วงการเปลี่ยนแปลง", snapshots: "ข้อมูลรายวัน",
     noHistory: "ต้องมีข้อมูลรายวันอย่างน้อย 2 วันเพื่อแสดงกราฟ", historyChart: "กราฟประวัติผู้ติดตาม", refreshData: "รีเฟรชข้อมูล",
+    dailyToggle: "รายวัน", dailySnapshots: "ข้อมูลรายวัน", firstSnapshot: "จุดเริ่มต้น", previousDay: "เทียบวันก่อน",
+    noPreviousSnapshot: "ไม่มี snapshot ก่อนหน้า", gapSince: "ข้ามช่วงข้อมูลจาก", missingDays: "ข้อมูลขาดช่วง", gapSuffix: "ข้ามวัน",
   },
   en: {
     back: "Back to TikTok Analytics", followers: "Followers", following: "Following", likes: "Total Likes", videos: "Videos",
@@ -215,6 +217,8 @@ export const tiktokStoreDetailText = {
     snapshot: "Snapshot", updated: "Updated", noBaseline: "No comparison data yet", open: "Open TikTok", content: "Content",
     growth: "Follower Growth", avgDaily: "Average per day", bestDay: "Best day", range: "Change range", snapshots: "Snapshots",
     noHistory: "At least 2 daily snapshots are required to draw the chart", historyChart: "Follower history chart", refreshData: "Refresh data",
+    dailyToggle: "Daily", dailySnapshots: "Daily snapshots", firstSnapshot: "First snapshot", previousDay: "Previous day",
+    noPreviousSnapshot: "No previous snapshot", gapSince: "Gap since", missingDays: "Missing days", gapSuffix: "gap",
   },
   zh: {
     back: "返回 TikTok 分析", followers: "关注者", following: "正在关注", likes: "获赞总数", videos: "视频",
@@ -222,5 +226,7 @@ export const tiktokStoreDetailText = {
     snapshot: "快照", updated: "更新时间", noBaseline: "暂无对比数据", open: "打开 TikTok", content: "内容",
     growth: "关注者增长", avgDaily: "日均", bestDay: "单日最佳", range: "变化范围", snapshots: "快照",
     noHistory: "至少需要 2 天的每日快照才能绘制图表", historyChart: "关注者历史图表", refreshData: "刷新数据",
+    dailyToggle: "每日", dailySnapshots: "每日快照", firstSnapshot: "起始快照", previousDay: "与前一日相比",
+    noPreviousSnapshot: "没有上一条快照", gapSince: "数据间隔自", missingDays: "数据缺失", gapSuffix: "跨日",
   },
 } as const satisfies Record<AppLanguage, Record<string, string>>;
