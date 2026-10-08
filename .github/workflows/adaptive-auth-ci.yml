@@ -41,8 +41,7 @@ jobs:
       - name: Lint adaptive auth scope
         run: npx eslint "src/lib/authorization.ts" "test/authorization.test.mts"
 
-      - name: Frontend tests
-        run: npm test
-
-      - name: Frontend build
-        run: npm run build
+      # Application CI runs the full frontend suite and production build on every PR.
+      # Keep the dedicated authorization regression here without repeating those jobs.
+      - name: Adaptive authorization regression tests
+        run: node --test test/authorization.test.mts
