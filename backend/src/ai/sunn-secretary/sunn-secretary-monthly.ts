@@ -27,7 +27,7 @@ const NONNEGATIVE_INTEGER = (value: unknown): value is number =>
 
 /**
  * Does not use AI to compute totals. Rejects even small reconciliation differences.
- * The synthetic FOCUS_STORE_GROUP_ID summary is excluded to avoid double counting.
+ * The synthetic focus-seven-store-group_ID summary is excluded to avoid double counting.
  */
 export function normalizeMonthlyReplySummary(month: string, summary: MonthlySummary, now: Date): SecretaryMonthlyAnswer {
   if (!MONTH.test(month) || !Number.isFinite(now.getTime())) throw new Error("Invalid month or as-of date");
@@ -37,7 +37,7 @@ export function normalizeMonthlyReplySummary(month: string, summary: MonthlySumm
   const seen = new Set<string>();
   const stores: StoreMonthlyRow[] = [];
   for (const row of summary.stores) {
-    if (row.storeId === "FOCUS_STORE_GROUP") continue;
+    if (row.storeId === "focus-seven-store-group") continue;
     if (!row.storeId || !row.storeName || seen.has(row.storeId) || !NONNEGATIVE_INTEGER(row.notReplied)) {
       throw new Error("Unverifiable store-level reply summary");
     }
