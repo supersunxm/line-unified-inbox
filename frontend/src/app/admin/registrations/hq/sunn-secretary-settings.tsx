@@ -5,7 +5,7 @@ import { secretarySettingsText } from "./sunn-secretary-settings-i18n";
 
 export type SecretaryStatus = {
   channelIdConfigured: boolean; channelSecretConfigured: boolean; accessTokenConfigured: boolean; botUserIdConfigured: boolean;
-  webhookEnabled: boolean; webhookUrl: string; validationState: "NOT_CONFIGURED" | "NOT_VALIDATED" | "VALIDATED" | "FAILED"; lastValidatedAt: string | null;
+  webhookEnabled: boolean; webhookUrl: string; validationState: "NOT_CONFIGURED" | "NOT_VALIDATED" | "VALIDATED" | "FAILED"; validationFailureReason?: "TOKEN_REJECTED" | "BOT_IDENTITY_MISMATCH" | "LINE_API_UNAVAILABLE" | null; lastValidatedAt: string | null;
 };
 const fields = ["channelId", "channelSecret", "accessToken", "botUserId"] as const;
 type Field = typeof fields[number];
@@ -51,7 +51,7 @@ export function SunnSecretarySettings({ language, onClose }: { language: AppLang
       const result = await settingsRequest(action === "saving" ? "credentials" : "test-connection", language, action === "saving" ? "PATCH" : "POST", action === "saving" ? values : {});
       setStatus(result);
       if (action === "saving") { setValues(empty()); setVisible({ channelId: false, channelSecret: false, accessToken: false, botUserId: false }); setNotice(t.saved); }
-      else setNotice(result.validationState === "VALIDATED" ? t.validated : t.failed);
+      else setNotice(result.validationState === "VALIDATED" ? t.validated : (result.validationFailureReason ? t[result.validationFailureReason] : t.failed));
     } catch (cause) { setError(cause instanceof Error ? cause.message : t.error); }
     finally { lock.current = false; setBusy(null); }
   };
@@ -74,7 +74,7 @@ export function SunnSecretarySettings({ language, onClose }: { language: AppLang
         <p className="text-xs text-[var(--app-text-secondary)]">{t.preserve}</p>
         <div className="flex flex-wrap gap-2"><button type="submit" disabled={busy !== null || !status || !fields.some(field => values[field].trim())} className="rounded-lg bg-[var(--app-accent)] px-4 py-2 text-sm text-white disabled:opacity-50">{busy === "saving" ? t.saving : t.save}</button><button type="button" onClick={() => void act("testing")} disabled={busy !== null || !status?.accessTokenConfigured || !status.botUserIdConfigured || fields.some(field => values[field].trim())} className="rounded-lg border border-[var(--app-border)] px-4 py-2 text-sm disabled:opacity-50">{busy === "testing" ? t.testing : t.test}</button><button type="button" onClick={() => { setBusy("loading"); setError(null); setStatus(null); setReload(current => current + 1); }} disabled={busy !== null} className="rounded-lg border border-[var(--app-border)] px-3 py-2 text-sm">{t.refresh}</button></div>
       </form>
-      <p className="text-sm">{status ? status.validationState === "VALIDATED" ? t.validated : status.validationState === "FAILED" ? t.failed : t.notValidated : t.unknown}</p>
+      <p className="text-sm">{status ? status.validationState === "VALIDATED" ? t.validated : status.validationState === "FAILED" ? (status.validationFailureReason ? t[status.validationFailureReason] : t.failed) : t.notValidated : t.unknown}</p>
       {status?.lastValidatedAt && <p className="text-xs">{t.verifiedAt}: {new Intl.DateTimeFormat(language === "zh" ? "zh-CN" : language === "th" ? "th-TH" : "en-US", { timeZone: "Asia/Bangkok", dateStyle: "medium", timeStyle: "short" }).format(new Date(status.lastValidatedAt))}</p>}
       <p className="text-xs text-[var(--app-text-secondary)]">{t.limited}</p>
       <p className="text-sm font-semibold">{t.webhook}</p><code className="block break-all rounded-lg border border-[var(--app-border)] p-3 text-xs">https://lineoppo.click/sunn-secretary/webhook</code>
