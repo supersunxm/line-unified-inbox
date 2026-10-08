@@ -56,12 +56,15 @@ function FollowerChart({
   locale,
   emptyLabel,
   chartLabel,
+  language,
 }: {
   points: TikTokPublicHistoryPoint[];
   locale: string;
   emptyLabel: string;
   chartLabel: string;
+  language: string;
 }) {
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
   if (points.length < 2) {
     return (
       <div className="flex h-56 items-center justify-center text-sm text-[var(--app-text-tertiary)]">
@@ -92,6 +95,11 @@ function FollowerChart({
   const linePoints = coords.map(([x, y]) => `${x},${y}`).join(" ");
   const areaPoints = `${chartLeft},${chartBottom} ${linePoints} ${chartRight},${chartBottom}`;
   const middleIndex = Math.floor((points.length - 1) / 2);
+  const selectedIndex = Math.max(0, points.findIndex((p) => p.metricDate === selectedDate));
+  const selected = points[selectedIndex];
+  const previous = points[selectedIndex - 1];
+  const delta = previous ? selected.followerCount - previous.followerCount : null;
+  const consecutive = previous ? shiftMetricDate(previous.metricDate, 1) === selected.metricDate : false;
 
   return (
     <div>
@@ -129,12 +137,33 @@ function FollowerChart({
               strokeLinejoin="round"
             />
           </svg>
+          {coords.map(([x, y], index) => (
+            <button key={points[index].metricDate} type="button"
+              onClick={() => setSelectedDate(points[index].metricDate)}
+              onMouseEnter={() => setSelectedDate(points[index].metricDate)}
+              onFocus={() => setSelectedDate(points[index].metricDate)}
+              aria-label={`${formatMetricDate(points[index].metricDate, locale)}: ${formatNumber(points[index].followerCount, locale)}`}
+              aria-pressed={selected.metricDate === points[index].metricDate}
+              style={{ left: `${(x / 1000) * 100}%`, top: `${(y / 240) * 100}%` }}
+              className={`absolute z-20 h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-[var(--app-accent)] bg-[var(--app-surface)] shadow-sm focus-visible:outline-2 focus-visible:outline-offset-2 ${selected.metricDate === points[index].metricDate ? "ring-2 ring-[var(--app-accent)]" : ""}`}
+            />
+          ))}
         </div>
       </div>
       <div className="ml-[60px] mt-2 flex justify-between text-[11px] text-[var(--app-text-tertiary)]">
         <span>{formatShortDate(points[0].metricDate, locale)}</span>
         <span>{formatShortDate(points[middleIndex].metricDate, locale)}</span>
         <span>{formatShortDate(points[points.length - 1].metricDate, locale)}</span>
+      </div>
+      <div aria-live="polite" className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-[var(--app-surface-subtle)] px-4 py-3">
+        <div>
+          <div className="text-xs text-[var(--app-text-secondary)]">{formatMetricDate(selected.metricDate, locale)}</div>
+          <div className="text-lg font-black tabular-nums">{formatNumber(selected.followerCount, locale)} <span className="text-xs font-normal">{language === "th" ? "ผู้ติดตาม" : "followers"}</span></div>
+        </div>
+        <div className="text-right">
+          <div className={`font-bold tabular-nums ${growthTextClass(delta)}`}>{delta === null ? "—" : `${delta > 0 ? "+" : ""}${formatNumber(delta, locale)}`}</div>
+          <div className="text-xs text-[var(--app-text-tertiary)]">{!previous ? (language === "th" ? "ไม่มี snapshot ก่อนหน้า" : "No previous snapshot") : consecutive ? (language === "th" ? "เทียบวันก่อน" : "Previous day") : (language === "th" ? `ข้ามช่วงข้อมูลจาก ${formatShortDate(previous.metricDate, locale)}` : `Gap since ${formatShortDate(previous.metricDate, locale)}`)}</div>
+        </div>
       </div>
     </div>
   );
