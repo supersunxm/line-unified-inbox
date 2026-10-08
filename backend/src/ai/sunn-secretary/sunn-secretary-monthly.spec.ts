@@ -6,7 +6,7 @@ const now = new Date("2026-10-08T03:00:00Z");
 const sample = { overview: { notReplied: 3 }, stores: [
   { storeId: "a", storeName: "A", notReplied: 1 },
   { storeId: "b", storeName: "B", notReplied: 2 },
-  { storeId: "FOCUS_STORE_GROUP", storeName: "Focus stores", notReplied: 3 },
+  { storeId: "focus-seven-store-group", storeName: "Focus stores", notReplied: 3 },
 ]};
 test("monthly totals exclude synthetic group and rank real stores", () => {
   const x = normalizeMonthlyReplySummary("2026-10", sample, now);
