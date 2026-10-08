@@ -174,6 +174,16 @@ export function periodLabel(period: MonthPeriod, language: AppLanguage = "th"): 
   return t("period", { days: period.lastDay === 1 ? "1" : `1–${period.lastDay}`, month });
 }
 
+/** "1–8 ต.ค." / "Oct 1–8" / "10月1–8日": the days of a period without the year (Home's header). */
+export function periodDaysLabel(period: MonthPeriod, language: AppLanguage = "th"): string {
+  const { monthIndex } = parts(period.month);
+  const days = period.lastDay === 1 ? "1" : `1–${period.lastDay}`;
+  if (language === "th") return `${days} ${THAI_MONTHS_SHORT[monthIndex]}`;
+  if (language === "zh") return `${monthIndex + 1}月${days}日`;
+  const month = new Intl.DateTimeFormat("en-US", { month: "short", timeZone: "UTC" }).format(new Date(Date.UTC(2026, monthIndex, 15)));
+  return `${month} ${days}`;
+}
+
 /** "1–7 ต.ค. 2026 เทียบ 1–7 ก.ย. 2026" — every number states its period with this. */
 export function comparisonLabel(window: MonthWindow, language: AppLanguage = "th"): string {
   return v2Text(language)("comparison", { current: periodLabel(window.current, language), previous: periodLabel(window.previous, language) });

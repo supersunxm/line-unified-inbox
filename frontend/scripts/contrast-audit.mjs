@@ -53,6 +53,7 @@ const PAGES = [
   { name: "ตอนนี้ · ทั้งหมด", path: "/v2/response?tab=all" },
   { name: "ตอนนี้ · หน้าแชท", path: "/v2/response?view=chat" },
   // The metrics pages (Home / Dashboard / Store 360 rework, 8 Oct 2026): the whole page is measured.
+  { name: "หน้าหลัก", path: "/home", waitFor: "[data-home-stores-to-watch] table" },
   { name: "แดชบอร์ด", path: "/dashboard", waitFor: "[data-dashboard-store-table]" },
   { name: "แดชบอร์ด (เดือนก่อน)", path: "/dashboard?month=2026-09", waitFor: "[data-dashboard-store-table]" },
   // Main app pages: only the left sidebar is measured (scope), with every menu group opened.

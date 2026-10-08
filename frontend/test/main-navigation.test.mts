@@ -261,22 +261,10 @@ test("icon-only badge is a compact pill of at most 4 characters, with the full n
   assert.match(sidebar, /aria-label=\{collapsed \? \(count \? `\$\{label\} · \$\{t\.unrepliedBadge\} \$\{count\.toLocaleString\("th-TH"\)\}`/);
 });
 
-test("/home: the unreplied card and Needs-attention row state their scope, with this month beside it", async () => {
-  const { thisMonthLine, UNREPLIED_SCOPE_LABELS } = await import("../src/app/home/unreplied-scope.ts");
-  assert.equal(UNREPLIED_SCOPE_LABELS.th.unrepliedAllMonths, "ยังไม่ตอบ (ทุกเดือน)");
-  assert.equal(UNREPLIED_SCOPE_LABELS.en.unrepliedAllMonths, "Unreplied (all months)");
-  assert.equal(UNREPLIED_SCOPE_LABELS.zh.unrepliedAllMonths, "未回复（全部月份）");
-  assert.equal(thisMonthLine("th", 1_258), "เดือนนี้ 1,258");
-  assert.equal(thisMonthLine("en", 1_258), "This month 1,258");
-  assert.equal(thisMonthLine("zh", 1_258), "本月 1,258");
-  assert.equal(thisMonthLine("th", null), null, "no line while loading or on error, never a 0");
-  assert.equal(thisMonthLine("th", 0), "เดือนนี้ 0", "a loaded zero is a real zero");
+// /home was reworked (8 Oct 2026): the all-months "Unreplied" card and the "ต้องจัดการ" row are gone;
+// Home shows this month's ยังไม่ตอบ only, the same number as the sidebar badge (test/home-monthly.test.mts).
+test("/home: one unreplied number, this month's, the same as the sidebar badge", () => {
   const page = read("app/home/page.tsx");
-  // What the card counts is unchanged: every unreplied chat (bm-reply-status-summary without a month).
-  assert.match(page, /const unreplied = bmSummary\?\.overview\.notReplied \?\? 0;/);
-  assert.match(page, /api\.bmReplyStatusSummary\(\),/);
-  // Label on the card and on the Needs-attention row; the month number is the sidebar badge's helper.
-  assert.match(page, /<StatCard label=\{scope\.unrepliedAllMonths\} value=\{unreplied\.toLocaleString\(\)\}[^>]*secondary=\{monthLine \?\? undefined\}/);
-  assert.match(page, /value=\{`\$\{unreplied\.toLocaleString\(\)\} \$\{scope\.unrepliedAllMonths\}`\}/);
-  assert.match(page, /const monthUnreplied = useChatsUnrepliedBadge\(Boolean\(authUser\)\);/);
+  assert.doesNotMatch(page, /unrepliedAllMonths|api\.bmReplyStatusSummary\(\)/);
+  assert.match(page, /const badge = useChatsUnrepliedBadge\(Boolean\(authUser\)\);/);
 });

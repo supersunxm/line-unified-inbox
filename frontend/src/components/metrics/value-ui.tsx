@@ -13,7 +13,7 @@ import { formatValue, numericValue, valueReason, type ValueState } from "@/lib/m
  * A monthly number from its value state. "—" and muted values always carry their reason:
  * as a tooltip and as screen-reader text. `showN` adds "(n=…)" for rates.
  */
-export function StateValue({ state, format = "count", target, showN = false, className = "" }: { state: ValueState; format?: "count" | "percent"; target?: number; showN?: boolean; className?: string }) {
+export function StateValue({ state, format = "count", target, showN = false, signed = false, className = "" }: { state: ValueState; format?: "count" | "percent"; target?: number; showN?: boolean; /** "+334" / "−79" for a net change. */ signed?: boolean; className?: string }) {
   const { language } = useAppLanguage();
   const formatted = formatValue(state, format, language);
   const value = numericValue(state);
@@ -21,7 +21,7 @@ export function StateValue({ state, format = "count", target, showN = false, cla
   const n = "n" in state && typeof state.n === "number" ? state.n : null;
   return (
     <span data-v2-value-state={state.kind} title={formatted.reason ?? undefined} className={`whitespace-nowrap tabular-nums ${formatted.muted ? "text-[var(--app-text-secondary)]" : belowTarget ? "text-[var(--app-danger)]" : ""} ${className}`}>
-      {formatted.text}
+      {signed && value !== null && value > 0 ? "+" : ""}{signed && value !== null && value < 0 ? `−${formatted.text.replace(/^-/, "")}` : formatted.text}
       {showN && n !== null && <span className="ml-1 text-xs font-normal text-[var(--app-text-secondary)]">(n={n.toLocaleString(languageLocale(language))})</span>}
       {formatted.reason && <span className="sr-only"> ({formatted.reason})</span>}
     </span>

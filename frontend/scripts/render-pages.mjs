@@ -6,7 +6,7 @@
 //   OUT=/tmp/shots node scripts/render-pages.mjs /home /dashboard "/store-360?storeId=store-1"
 //
 // Writes <OUT>/<name>-<theme>-<viewport>.png for light and dark, desktop (1440) and mobile (390),
-// and prints console errors. Exit 1 when a page logs a console or page error.
+// in Thai (LANGUAGE_CODE=en|zh to switch), and prints console errors. Exit 1 when a page logs a console or page error.
 
 import { createRequire } from "node:module";
 import { execSync } from "node:child_process";
@@ -45,9 +45,9 @@ const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePa
 mkdirSync(OUT, { recursive: true });
 const errors = [];
 for (const theme of ["light", "dark"]) {
-  for (const [viewport, size] of [["desktop", { width: 1440, height: 1000 }], ["mobile", { width: 390, height: 844 }]]) {
+  for (const [viewport, size] of [["desktop", { width: 1440, height: 2600 }], ["mobile", { width: 390, height: 2400 }]]) {
     const context = await browser.newContext({ viewport: size, colorScheme: theme, isMobile: viewport === "mobile", hasTouch: viewport === "mobile" });
-    await context.addInitScript((value) => { try { localStorage.setItem("oppo-line-oa-theme", value); } catch { /* storage blocked */ } }, theme);
+    await context.addInitScript(([value, language]) => { try { localStorage.setItem("oppo-line-oa-theme", value); localStorage.setItem("oppo-line-oa-language", language); } catch { /* storage blocked */ } }, [theme, process.env.LANGUAGE_CODE ?? "th"]);
     const page = await context.newPage();
     page.on("console", (message) => { if (message.type() === "error") errors.push(`${viewport}/${theme} ${page.url()}: ${message.text()}`); });
     page.on("pageerror", (error) => errors.push(`${viewport}/${theme} ${page.url()}: ${String(error)}`));
@@ -56,7 +56,8 @@ for (const theme of ["light", "dark"]) {
       await page.goto(`${BASE_URL}${path}`, { waitUntil: "networkidle" });
       await page.waitForTimeout(1200);
       const file = join(OUT, `${slug(path)}-${theme}-${viewport}.png`);
-      await page.screenshot({ path: file, fullPage: true });
+      // A tall viewport instead of fullPage: the workspace scrolls inside its own container.
+      await page.screenshot({ path: file });
       console.log(file);
     }
     await context.close();
