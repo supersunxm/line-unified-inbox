@@ -16,7 +16,7 @@
     "NON_UI": 19,
     "INTENTIONAL_UI": 533,
     "unclassified": 0,
-    "currentCandidates": 908,
+    "currentCandidates": 762,
     "additionalLiveOccurrences": 122,
     "additionalLiveBugsFixed": 7
   },
@@ -11053,7 +11053,7 @@
   ],
   "liveSweep": {
     "auditedAt": "2026-10-07",
-    "currentThaiUiCandidates": 908,
+    "currentThaiUiCandidates": 762,
     "additionalOccurrencesNotInOriginalQueue": 122,
     "additionalClassificationCounts": {
       "BUG": 0,
@@ -11061,7 +11061,7 @@
       "INTENTIONAL_UI": 122,
       "unclassified": 0
     },
-    "note": "The original 1,003-row candidate queue remains preserved in findings. liveFindings adds source candidates in the current worktree that were outside that queue; the classified audit matches live findings one-for-one against both collections."
+    "note": "The original 1,003-row candidate queue remains preserved in findings. liveFindings adds source candidates in the current worktree that were outside that queue; the classified audit matches live findings one-for-one against both collections. The 2026-10-08 Google Review KPI QA routes the page's static labels and examples through the existing three-language phrases; the current source sweep is 762 with zero unclassified or unfixed bugs."
   },
   "additionalFixes": [
     {

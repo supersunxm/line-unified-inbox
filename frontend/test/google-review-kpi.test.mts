@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import { canAccessPrimarySection } from "../src/lib/authorization.ts";
 import { primaryNavigationState } from "../src/app/primary-navigation.ts";
 import { formatGoogleReviewWeeklyPeriodLabel } from "../src/app/google-review-kpi/weekly-period-label.ts";
+import { googleReviewKpiPhrases, googleReviewKpiText } from "../src/app/google-review-kpi/google-review-kpi-i18n.ts";
 import type { AuthUser } from "../src/types/api.ts";
 
 const apiCode = readFileSync(new URL("../src/lib/api.ts", import.meta.url), "utf8");
@@ -73,8 +74,8 @@ test("Google Review KPI view has Download / Export buttons and handlers", () => 
   assert.match(kpiViewCode, /handleDownloadWeeklyExport/);
   assert.match(kpiViewCode, /Google Rating/);
   assert.match(kpiViewCode, /Google Review Count/);
-  assert.match(kpiViewCode, /คะแนน Google/);
-  assert.match(kpiViewCode, /Google Maps ปัจจุบัน/);
+  assert.match(kpiViewCode, /googleReviewKpiText\(language, "googleRating"\)/);
+  assert.match(kpiViewCode, /googleReviewKpiText\(language, "currentGoogleMaps"\)/);
   assert.match(kpiViewCode, /handleToggleSort/);
 });
 
@@ -100,4 +101,21 @@ test("weekly review periods use the selected locale without mixing Thai and Chin
   assert.equal(formatGoogleReviewWeeklyPeriodLabel(period, "en"), "Week 2 (03-09.09.2026)");
   assert.equal(formatGoogleReviewWeeklyPeriodLabel(period, "zh"), "第二周 (03-09.09.2026)");
   assert.doesNotMatch(formatGoogleReviewWeeklyPeriodLabel(period, "en"), /[\u0E00-\u0E7F\u4E00-\u9FFF]/);
+});
+
+test("Google Review coverage labels keep the store unit in the selected locale", () => {
+  const english = googleReviewKpiText("en", "coverageNeedsAttention");
+  const chinese = googleReviewKpiText("zh", "coverageNeedsAttention");
+
+  assert.match(english, /6 stores/);
+  assert.match(chinese, /6 家门店/);
+  assert.doesNotMatch(english, /[\u0E00-\u0E7F\u4E00-\u9FFF]/);
+  assert.doesNotMatch(chinese, /[\u0E00-\u0E7F]/);
+});
+
+test("Google Review KPI English and Chinese phrases contain no Thai-script leakage", () => {
+  for (const phrase of googleReviewKpiPhrases) {
+    assert.doesNotMatch(phrase.en, /[\u0E00-\u0E7F]/u, `${phrase.key} English phrase`);
+    assert.doesNotMatch(phrase.zh, /[\u0E00-\u0E7F]/u, `${phrase.key} Chinese phrase`);
+  }
 });
