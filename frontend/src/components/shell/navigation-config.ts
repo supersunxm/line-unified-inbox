@@ -196,6 +196,21 @@ export function isTypingTarget(target: { tagName?: string; isContentEditable?: b
   return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
 }
 
+/** Highest count shown in full; above it the badge reads "9,999+". */
+export const NAV_BADGE_FULL_MAX = 9_999;
+
+/** Full number with a thousands separator ("1,258"), "9,999+" above 9,999. */
 export function formatNavBadge(count: number): string {
-  return count > 999 ? "999+" : String(count);
+  return count > NAV_BADGE_FULL_MAX ? `${NAV_BADGE_FULL_MAX.toLocaleString("en-US")}+` : count.toLocaleString("en-US");
+}
+
+/**
+ * Icon-only mode: at most 4 characters. 999 → "999", 1,258 → "1.2k", 10,500 → "10k",
+ * 99,999 → "99k", 100,000+ → "99k+". (Truncated, never rounded up, so it never overstates.)
+ */
+export function formatNavBadgeCompact(count: number): string {
+  if (count < 1_000) return String(count);
+  if (count < 10_000) return `${Math.floor(count / 100) / 10}k`;
+  if (count < 100_000) return `${Math.floor(count / 1_000)}k`;
+  return "99k+";
 }

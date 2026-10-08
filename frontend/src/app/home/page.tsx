@@ -4,8 +4,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/shell";
+import { useChatsUnrepliedBadge } from "@/components/shell/chats-unreplied-badge";
 import { api } from "@/lib/api";
 import type { BmReplyStatusSummaryResponse, DashboardAnalyticsResponse } from "@/types/api";
+import { thisMonthLine, UNREPLIED_SCOPE_LABELS } from "./unreplied-scope";
 
 type Language = "th" | "en" | "zh";
 type AuthUser = { id: string; email: string; displayName: string; role: "ADMIN" | "ASSISTANT" | "VIEWER" };
@@ -201,7 +203,7 @@ function toneClasses(tone: Tone) {
   return "bg-[var(--app-surface-subtle)] text-[var(--app-text-secondary)]";
 }
 
-function StatCard({ label, value, helper, tone = "neutral" }: { label: string; value: string; helper?: string; tone?: Tone }) {
+function StatCard({ label, value, helper, secondary, tone = "neutral" }: { label: string; value: string; helper?: string; secondary?: string; tone?: Tone }) {
   return (
     <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4 shadow-[var(--app-shadow-sm)]">
       <div className="text-xs font-medium text-[var(--app-text-secondary)]">{label}</div>
@@ -210,6 +212,7 @@ function StatCard({ label, value, helper, tone = "neutral" }: { label: string; v
         <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${tone === "green" ? "bg-[var(--app-success)]" : tone === "red" ? "bg-[var(--app-danger)]" : tone === "amber" ? "bg-[var(--app-warning)]" : tone === "purple" ? "bg-purple-500" : "bg-[var(--app-border-strong)]"}`} />
       </div>
       {helper && <div className="mt-1.5 text-[11px] text-[var(--app-text-tertiary)]">{helper}</div>}
+      {secondary && <div data-home-unreplied-month className="mt-0.5 text-[11px] font-semibold text-[var(--app-text-secondary)]">{secondary}</div>}
     </div>
   );
 }
@@ -323,6 +326,10 @@ export default function HomePage() {
 
   const connectedRate = health && health.totalStoreCount > 0 ? Math.round((health.connectedStoreCount / health.totalStoreCount) * 100) : 0;
   const unreplied = bmSummary?.overview.notReplied ?? 0;
+  // This month's count: the sidebar badge's shared helper (bm-reply-status-summary?month=).
+  const monthUnreplied = useChatsUnrepliedBadge(Boolean(authUser));
+  const scope = UNREPLIED_SCOPE_LABELS[language];
+  const monthLine = thisMonthLine(language, monthUnreplied);
   const follower = analytics?.summaryCards.followerGrowth;
   const dataHealthy = analytics?.dataQuality.status === "Healthy";
   const urgentCount = unreplied + (pendingApprovals ?? 0) + (systemStatus?.lineOaIssueCount ?? 0) + (dataHealthy === false ? 1 : 0);
@@ -381,7 +388,7 @@ export default function HomePage() {
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
               <StatCard label={t.totalStores} value={(health?.totalStoreCount ?? analytics?.dataQuality.storeCount ?? 0).toLocaleString()} helper={t.network} />
               <StatCard label={t.connected} value={`${(health?.connectedStoreCount ?? 0).toLocaleString()} / ${(health?.totalStoreCount ?? 0).toLocaleString()}`} helper={`${connectedRate}%`} tone={connectedRate >= 90 ? "green" : "amber"} />
-              <StatCard label={t.unreplied} value={unreplied.toLocaleString()} helper={t.unrepliedMessages} tone={unreplied > 0 ? "red" : "green"} />
+              <StatCard label={scope.unrepliedAllMonths} value={unreplied.toLocaleString()} helper={t.unrepliedMessages} secondary={monthLine ?? undefined} tone={unreplied > 0 ? "red" : "green"} />
               <StatCard label={t.followers} value={(follower?.totalFriends ?? 0).toLocaleString()} helper={follower ? `${follower.netToday >= 0 ? "+" : ""}${follower.netToday.toLocaleString()} ${t.today}` : undefined} tone="green" />
             </div>
           </section>
@@ -400,7 +407,7 @@ export default function HomePage() {
                   <div className="flex min-h-28 items-center justify-center rounded-xl bg-[var(--app-success-soft)] px-4 text-center text-sm font-medium text-[var(--app-success)]">{t.noUrgent}</div>
                 ) : (
                   <>
-                    {unreplied > 0 && <AttentionItem label={t.unrepliedMessages} value={`${unreplied.toLocaleString()} ${t.unreplied}`} href="/chats" action={t.openChats} tone="red" />}
+                    {unreplied > 0 && <AttentionItem label={t.unrepliedMessages} value={`${unreplied.toLocaleString()} ${scope.unrepliedAllMonths}`} href="/chats" action={t.openChats} tone="red" />}
                     {authUser.role === "ADMIN" && (pendingApprovals ?? 0) > 0 && <AttentionItem label={t.bmPending} value={`${pendingApprovals?.toLocaleString()} ${t.approval}`} href="/admin/registrations" action={t.review} tone="amber" />}
                     {(systemStatus?.lineOaIssueCount ?? 0) > 0 && <AttentionItem label={t.oaIssues} value={`${systemStatus?.lineOaIssueCount.toLocaleString()} LINE OA`} href="/stores" action={t.manage} tone="amber" />}
                     {dataHealthy === false && <AttentionItem label={t.dataQuality} value={analytics?.dataQuality.status ?? t.attention} href="/dashboard" action={t.review} tone="purple" />}
