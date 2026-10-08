@@ -142,3 +142,30 @@ same-store frequency check before being marked safe.
 — counts only, same store scope and month bucketing (`latestMessageAt`) as
 `bm-reply-status-summary`, `observed` = chats with any nickname observation (so "not read"
 can be told apart from "no tag").
+
+
+## 7. Purchase months lost under Parser v4.1 (8 Oct 2026)
+
+Production re-derive (7 Oct): of 757 chats with a v4.0 purchase month, 502 are unchanged, 184 changed
+(mostly "69" = BE 2569, 2069 → 2026) and 71 lost it because the year is outside both windows
+(CE 2021–2027, BE 2564–2570); 74 date-like words were left as text.
+
+**Status: breakdown by token shape NOT RUN.** It needs a read-only aggregate query on the production
+database, which this cloud session cannot reach (no DB access; reading production credentials was not
+done). Run it as an operator, copy only the table below (counts by shape and YY — no names, no rows):
+
+```sql
+-- Latest READ nickname per chat; counts of date-like tokens by shape and last-segment value only.
+WITH latest AS (
+  SELECT DISTINCT ON ("lineOfficialAccountId", "lineChatUserId") nickname
+  FROM "NicknameSourceObservation" WHERE "nicknameReadStatus" = 'READ'
+  ORDER BY "lineOfficialAccountId", "lineChatUserId", "observedAt" DESC, id DESC
+), tokens AS (
+  SELECT m[1] a, m[2] b, m[3] c
+  FROM latest, regexp_matches(nickname, '(?<![[:alnum:]_/])([0-9]{1,4})/([0-9]{1,4})(?:/([0-9]{1,4}))?(?![[:alnum:]_/])', 'g') m
+)
+SELECT regexp_replace(regexp_replace(concat_ws('/', a, b, c), '[0-9]', 'N', 'g'), 'N+', 'N', 'g') AS punct,
+       concat_ws('/', length(a), length(b), length(c)) AS digit_lengths,
+       coalesce(c, b) AS yy, count(*) AS tokens
+FROM tokens GROUP BY 1, 2, 3 ORDER BY tokens DESC;
+```

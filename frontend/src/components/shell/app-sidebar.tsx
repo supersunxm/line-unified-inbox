@@ -9,6 +9,7 @@ import { useChatsUnrepliedBadge } from "./chats-unreplied-badge";
 import {
   activeNavGroupId,
   formatNavBadge,
+  formatNavBadgeCompact,
   isNavGroupOpen,
   isNavItemActive,
   isTypingTarget,
@@ -89,12 +90,18 @@ export function SidebarIcon({ name, className = "" }: { name: IconName; classNam
 }
 
 
-/** ยังไม่ตอบ count on แชทร้านค้า: rendered only when there is a count (never while loading or on error). */
+/**
+ * ยังไม่ตอบ count on แชทร้านค้า: rendered only when there is a count (never while loading or on error).
+ * Expanded: the full number ("1,258", "9,999+"). Compact (icon-only): a small pill anchored to the
+ * icon's top-right corner, ≤ 4 characters ("1.2k"); the full number is in the tooltip and the
+ * link's aria-label.
+ */
 export function NavBadge({ count, label, compact = false }: { count: number | null; label: string; compact?: boolean }) {
   if (count === null || count <= 0) return null;
+  const full = `${label} ${count.toLocaleString("th-TH")}`;
   return (
-    <span data-nav-badge className={`${compact ? "absolute -right-1 -top-1 min-w-[1.1rem] px-1 text-[9px] leading-[1.1rem]" : "ml-auto min-w-[1.5rem] px-1.5 text-[11px] leading-5"} rounded-full bg-[var(--app-danger-soft)] text-center font-semibold tabular-nums text-[var(--app-text-primary)] ring-1 ring-[var(--app-danger)]`} title={`${label} ${count.toLocaleString("th-TH")}`}>
-      {formatNavBadge(count)}<span className="sr-only"> {label}</span>
+    <span data-nav-badge={compact ? "compact" : "full"} className={`${compact ? "absolute left-[1.2rem] -top-2 h-4 min-w-[1rem] px-1 text-[9px] leading-[0.9rem]" : "ml-auto min-w-[1.5rem] px-1.5 text-[11px] leading-5"} whitespace-nowrap rounded-full bg-[var(--app-danger-soft)] text-center font-semibold tabular-nums text-[var(--app-text-primary)] ring-1 ring-[var(--app-danger)]`} title={full}>
+      {compact ? formatNavBadgeCompact(count) : formatNavBadge(count)}<span className="sr-only"> {label}</span>
     </span>
   );
 }

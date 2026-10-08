@@ -5,6 +5,7 @@ import { canAccessPrimarySection, canAccessWebTool, type AuthUser } from "../src
 import {
   activeNavGroupId,
   formatNavBadge,
+  formatNavBadgeCompact,
   isNavGroupOpen,
   isTypingTarget,
   NAV_GROUPS,
@@ -204,7 +205,12 @@ test("แชทร้านค้า badge counts ยังไม่ตอบ wi
   assert.match(badge, /\(\) => publish\(\{ count: null, fetchedAt: Date\.now\(\), inFlight: false \}\)/);
   assert.match(read("components/shell/app-sidebar.tsx"), /if \(count === null \|\| count <= 0\) return null;/);
   assert.equal(formatNavBadge(7), "7");
-  assert.equal(formatNavBadge(12_345), "999+");
+  assert.equal(formatNavBadge(999), "999");
+  assert.equal(formatNavBadge(1_000), "1,000");
+  assert.equal(formatNavBadge(1_258), "1,258");
+  assert.equal(formatNavBadge(9_999), "9,999");
+  assert.equal(formatNavBadge(10_000), "9,999+");
+  assert.equal(formatNavBadge(12_345), "9,999+");
 });
 
 test("desktop, collapsed and mobile are all built from the one menu config", () => {
@@ -234,4 +240,37 @@ test('/v2/report: no params = this month\'s network report; "← กลับ" g
   const report = read("components/v2/month-report.tsx");
   assert.match(report, /if \(typeof window !== "undefined" && window\.history\.length > 1\) router\.back\(\);\n\s*else router\.push\("\/home"\);/);
   assert.match(report, /<button type="button" data-report-back onClick=\{\(\) => goBack\(router\)\}[^>]*>\{t\("reportBack"\)\}<\/button>/);
+});
+
+test("icon-only badge is a compact pill of at most 4 characters, with the full number in the tooltip and aria-label", () => {
+  const expected: Array<[number, string]> = [[7, "7"], [999, "999"], [1_000, "1k"], [1_258, "1.2k"], [9_999, "9.9k"], [10_000, "10k"], [10_500, "10k"], [99_999, "99k"], [100_000, "99k+"], [7_647_000, "99k+"]];
+  for (const [count, text] of expected) {
+    assert.equal(formatNavBadgeCompact(count), text, String(count));
+    assert.ok(formatNavBadgeCompact(count).length <= 4, text);
+  }
+  const sidebar = read("components/shell/app-sidebar.tsx");
+  assert.match(sidebar, /\{compact \? formatNavBadgeCompact\(count\) : formatNavBadge\(count\)\}/);
+  assert.match(sidebar, /absolute left-\[1\.2rem\] -top-2/, "anchored to the icon's top-right corner, not over it");
+  assert.match(sidebar, /title=\{full\}/);
+  assert.match(sidebar, /aria-label=\{collapsed \? \(count \? `\$\{label\} · \$\{t\.unrepliedBadge\} \$\{count\.toLocaleString\("th-TH"\)\}`/);
+});
+
+test("/home: the unreplied card and Needs-attention row state their scope, with this month beside it", async () => {
+  const { thisMonthLine, UNREPLIED_SCOPE_LABELS } = await import("../src/app/home/unreplied-scope.ts");
+  assert.equal(UNREPLIED_SCOPE_LABELS.th.unrepliedAllMonths, "ยังไม่ตอบ (ทุกเดือน)");
+  assert.equal(UNREPLIED_SCOPE_LABELS.en.unrepliedAllMonths, "Unreplied (all months)");
+  assert.equal(UNREPLIED_SCOPE_LABELS.zh.unrepliedAllMonths, "未回复（全部月份）");
+  assert.equal(thisMonthLine("th", 1_258), "เดือนนี้ 1,258");
+  assert.equal(thisMonthLine("en", 1_258), "This month 1,258");
+  assert.equal(thisMonthLine("zh", 1_258), "本月 1,258");
+  assert.equal(thisMonthLine("th", null), null, "no line while loading or on error, never a 0");
+  assert.equal(thisMonthLine("th", 0), "เดือนนี้ 0", "a loaded zero is a real zero");
+  const page = read("app/home/page.tsx");
+  // What the card counts is unchanged: every unreplied chat (bm-reply-status-summary without a month).
+  assert.match(page, /const unreplied = bmSummary\?\.overview\.notReplied \?\? 0;/);
+  assert.match(page, /api\.bmReplyStatusSummary\(\),/);
+  // Label on the card and on the Needs-attention row; the month number is the sidebar badge's helper.
+  assert.match(page, /<StatCard label=\{scope\.unrepliedAllMonths\} value=\{unreplied\.toLocaleString\(\)\}[^>]*secondary=\{monthLine \?\? undefined\}/);
+  assert.match(page, /value=\{`\$\{unreplied\.toLocaleString\(\)\} \$\{scope\.unrepliedAllMonths\}`\}/);
+  assert.match(page, /const monthUnreplied = useChatsUnrepliedBadge\(Boolean\(authUser\)\);/);
 });
