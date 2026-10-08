@@ -63,6 +63,7 @@ export class SunnSecretaryCredentialsService {
       ...sunnSecretarySetupStatus(process.env), ...presence,
       storage: record ? "ENCRYPTED_DATABASE" : "ENVIRONMENT",
       validationState, lastValidatedAt: validationState === "VALIDATED" ? record?.lastConnectionTestAt?.toISOString() ?? null : null,
+      validationFailureReason: validationState === "FAILED" && ["TOKEN_REJECTED", "BOT_IDENTITY_MISMATCH", "LINE_API_UNAVAILABLE"].includes(record?.lastConnectionError ?? "") ? record!.lastConnectionError : null,
     };
   }
 
