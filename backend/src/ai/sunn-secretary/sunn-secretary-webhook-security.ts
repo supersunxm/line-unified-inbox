@@ -12,10 +12,10 @@ export function verifySunnLineSignature(rawBody: Buffer | undefined, signature: 
 export type SecretarySource = { type?: unknown; groupId?: unknown; userId?: unknown };
 export type SecretaryMessage = { type?: unknown; text?: unknown; mention?: { mentionees?: unknown } };
 export type SecretaryEvent = { type?: unknown; source?: SecretarySource; message?: SecretaryMessage; webhookEventId?: unknown };
-export type SecretaryConfig = { groupIds: readonly string[]; userIds: readonly string[]; botUserId: string };
+export type SecretaryConfig = { userIds: readonly string[]; botUserId: string };
 
 /**
- * Strict allowlist: both LINE group AND actual sender must match.
+ * No group preapproval: any real LINE group is eligible, but the actual sender must be authorized.
  * Mentions must identify the LINE bot, not simply contain arbitrary @ text.
  * This filter performs no network actions and never trusts the displayed nickname.
  */
@@ -23,7 +23,7 @@ export function authorizeSunnEvent(event: SecretaryEvent, config: SecretaryConfi
   const { source, message } = event;
   if (event.type !== "message" || message?.type !== "text" || typeof message.text !== "string") return false;
   if (source?.type !== "group" || typeof source.groupId !== "string" || typeof source.userId !== "string") return false;
-  if (!config.groupIds.includes(source.groupId) || !config.userIds.includes(source.userId)) return false;
+  if (!source.groupId.trim() || !config.userIds.includes(source.userId)) return false;
   if (!/^U[0-9a-f]{32}$/iu.test(config.botUserId)) return false;
   const mentionees = message.mention?.mentionees;
   if (!Array.isArray(mentionees)) return false;
