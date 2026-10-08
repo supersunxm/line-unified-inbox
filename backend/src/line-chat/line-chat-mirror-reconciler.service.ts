@@ -1,3 +1,4 @@
+import { managerCanonicalMessageType, managerMirrorRowEligibility } from "./line-chat-manager-event-contract";
 import { Inject, Injectable, Logger, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
 import { createHash } from "node:crypto";
 import {
@@ -230,16 +231,7 @@ export function selectUniqueExactInboundConversationId(
 }
 
 export function canonicalMessageTypeFromMirror(raw: string | null | undefined): MessageType {
-  switch (raw?.trim().toLowerCase()) {
-    case "text": return MessageType.TEXT;
-    case "image": return MessageType.IMAGE;
-    case "video": return MessageType.VIDEO;
-    case "audio": return MessageType.AUDIO;
-    case "file": return MessageType.FILE;
-    case "location": return MessageType.LOCATION;
-    case "sticker": return MessageType.STICKER;
-    default: return MessageType.UNSUPPORTED;
-  }
+  return managerCanonicalMessageType(raw);
 }
 
 export function mirrorCanonicalText(input: {
@@ -1051,6 +1043,24 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
         if (mapping.source === "DIRECT_LINE_CHAT_USER_ID") result.directMapped += 1;
         else if (mapping.source === "EXACT_INBOUND_MESSAGE_ID") result.messageIdMapped += 1;
         else result.identityMapped += 1;
+
+        const eventEligibility = managerMirrorRowEligibility({
+          eventType: row.eventType,
+          messageType: row.messageType,
+          managerEventId: row.managerMessageId,
+          normalMessageIdPresent: Boolean(row.managerMessageId.trim()),
+          timestampValid: Number.isFinite(row.sentAt.getTime()),
+          storedDirection: row.direction,
+        });
+        if (row.direction !== LineChatMirrorDirection.UNKNOWN && eventEligibility.kind !== "CUSTOMER_MESSAGE") {
+          await this.markMirror(row.id, {
+            status: LineChatMirrorReconcileStatus.SKIPPED,
+            conversationId: mapping.conversationId,
+            source: "EVENT_ELIGIBILITY",
+            error: eventEligibility.reason ?? "MANAGER_EVENT_ELIGIBILITY_UNPROVEN",
+          }, apply);
+          continue;
+        }
 
         if (row.direction === LineChatMirrorDirection.UNKNOWN) {
           await this.markMirror(row.id, {

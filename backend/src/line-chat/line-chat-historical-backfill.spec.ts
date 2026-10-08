@@ -331,7 +331,7 @@ test("A1 checkpoint resumes an interrupted initial-page attempt after restart", 
   assert.equal(historicalBackfillCanResume(started.historicalBackfillStatus), true);
   assert.equal(historicalBackfillCanResume(null), true);
   assert.equal(historicalBackfillCanResume(HistoricalBackfillStatus.FAST_PATH_COMPLETE), false);
-  assert.equal(historicalBackfillCanResume(HistoricalBackfillStatus.NEEDS_BACKWARD_PAGINATION), false);
+  assert.equal(historicalBackfillCanResume(HistoricalBackfillStatus.NEEDS_BACKWARD_PAGINATION), true);
 });
 
 test("A1 checkpoint writes do not overwrite live sync or conversation state", () => {
@@ -354,11 +354,12 @@ test("A1 checkpoint writes do not overwrite live sync or conversation state", ()
 
 test("A1 historical checkpoints never use the live watermark as Sep 1 proof", () => {
   const classification = classifyHistoricalPage(page([textEvent("new", afterBoundary)], "opaque"));
-  const patch = historicalFetchResultPatch(classification, new Date("2026-09-23T10:00:00Z"));
+  const patch = historicalFetchResultPatch(classification, new Date("2026-09-23T10:00:00Z"), "cursor-checkpoint");
   assert.equal(classification.complete, false);
   assert.equal(classification.status, HistoricalBackfillStatus.NEEDS_BACKWARD_PAGINATION);
   assert.equal("historySyncedThroughAt" in patch, false);
   assert.equal(patch.historicalBackfillLowerBoundAt.toISOString(), "2026-08-31T17:00:00.000Z");
+  assert.equal(patch.historicalBackfillCursor, "cursor-checkpoint");
 });
 
 test("A1 lower bound uses the explicit Asia/Bangkok UTC offset", () => {
@@ -440,4 +441,24 @@ test("A1 isolates one store failure and continues the pilot store batch", async 
   assert.deepEqual(visited, ["29113", "28375", "25610"]);
   assert.deepEqual(outcome.results, ["28375", "25610"]);
   assert.equal(outcome.failures, 1);
+});
+
+test("historical boundary cannot hide invalid events", () => {
+  const parsed = page([textEvent("old", beforeBoundary), { timestamp: "invalid", message: { id: "bad" } }]);
+  assert.equal(classifyHistoricalPage(parsed).complete, false);
+  assert.equal(classifyHistoricalPage(parsed).errorCode, "HISTORY_INVALID_EVENTS");
+});
+test("historical boundary requires ordered timestamps", () => {
+  const parsed = page([textEvent("new", afterBoundary + 2), textEvent("old", beforeBoundary), textEvent("middle", afterBoundary)]);
+  assert.equal(classifyHistoricalPage(parsed).complete, false);
+  assert.equal(classifyHistoricalPage(parsed).errorCode, "HISTORY_TIMESTAMP_INVERSION");
+});
+test("malformed Manager history shape stays unproven", () => {
+  assert.equal(classifyHistoricalPage(parseManagerHistoryPage({})).errorCode, "HISTORY_INVALID_SHAPE");
+});
+
+test("unsafe numeric Manager IDs cannot fabricate exact identities", () => {
+  const parsed = page([{ type: "messageReceived", timestamp: beforeBoundary, message: { id: Number.MAX_SAFE_INTEGER + 1, type: "text" } }]);
+  assert.equal(parsed.invalidEventCount, 1);
+  assert.equal(classifyHistoricalPage(parsed).complete, false);
 });
