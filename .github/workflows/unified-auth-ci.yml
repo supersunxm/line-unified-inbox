@@ -114,8 +114,8 @@ jobs:
           })().catch(async (error) => { console.error(error); await db.$disconnect(); process.exitCode = 1; });
           JS
 
-      - name: Backend build
-        run: npm run build
+      # Application CI performs the full backend build on every PR.
+      # Keep the dedicated auth and concurrency regressions above.
 
   web-registration:
     runs-on: ubuntu-latest
@@ -139,5 +139,5 @@ jobs:
       - name: Lint Web registration scope
         run: npx eslint "src/app/login/page.tsx" "src/app/register/page.tsx" "src/app/admin/registrations/page.tsx" "src/app/admin/registrations/hq/page.tsx" "src/lib/registration-api.ts"
 
-      - name: Frontend build
-        run: npm run build
+      # Application CI performs the full frontend suite and build on every PR.
+      # Keep the registration-specific lint in this independent check.
