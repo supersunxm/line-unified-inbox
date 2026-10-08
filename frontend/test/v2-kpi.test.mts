@@ -21,7 +21,8 @@ test("two KPIs with their own targets: ตอบแล้ว % has none yet, 24h
 });
 
 test("rate changes carry the colour; count changes are neutral everywhere", () => {
-  const ui = read("components/v2/v2-ui.tsx");
+  // StateValue/DeltaValue/RateCell/CountCell moved to components/metrics/value-ui.tsx (shared with Dashboard and Store 360).
+  const ui = read("components/metrics/value-ui.tsx");
   assert.match(ui, /const muted = kind === "count" \|\| state\.kind === "low-sample" \|\| state\.kind === "stale";/);
   for (const file of ["components/v2/month-overview.tsx", "components/v2/store-scorecard-view.tsx", "components/v2/month-report.tsx"]) {
     const source = read(file);
@@ -30,14 +31,15 @@ test("rate changes carry the colour; count changes are neutral everywhere", () =
     assert.match(source, /<CountCell value=\{row\.unreplied\} delta=\{row\.unrepliedDelta\}/, file);
     assert.doesNotMatch(source, /เทียบเดือนก่อน<\/TableHead>|>เทียบ<\/th>/, `${file}: no count-only comparison column`);
   }
-  assert.match(read("components/v2/kpi-cards.tsx"), /kind=\{row\.format === "percent" \? "points" : "count"\}/, "drawer and report table");
+  // HowCounted/TargetText/KpiCompareTable moved to components/metrics/kpi-ui.tsx.
+  assert.match(read("components/metrics/kpi-ui.tsx"), /kind=\{row\.format === "percent" \? "points" : "count"\}/, "drawer and report table");
 });
 
 test("every view says how each KPI is counted, and why 24h can be higher", () => {
   assert.match(KPI_HOW_COUNTED.replied, /ข้อความล่าสุด/);
   assert.match(KPI_HOW_COUNTED.rate24, /ข้อความแรก/);
   assert.match(KPI_DIFFERENCE_NOTE, /ตอบใน 24 ชม\.” และ “ยังไม่ตอบ” พร้อมกัน/);
-  assert.match(read("components/v2/kpi-cards.tsx"), /<details data-v2-how-counted=\{kpi\}/, "a disclosure, not a tooltip");
+  assert.match(read("components/metrics/kpi-ui.tsx"), /<details data-v2-how-counted=\{kpi\}/, "a disclosure, not a tooltip");
   assert.match(read("components/v2/month-overview.tsx"), /<TwoKpiCards totals=\{data\.network\} frame=\{data\.frame\} \/>/);
   assert.match(read("components/v2/store-scorecard-view.tsx"), /<HowCounted kpi="replied" \/>[\s\S]*<HowCounted kpi="rate24" \/>[\s\S]*t\("kpiDifference"\)/);
   assert.match(read("components/v2/store-scorecard-drawer.tsx"), /<KpiCompareTable totals=\{row\} frame=\{data\.frame\} \/>[\s\S]*t\("kpiDifference"\)/);

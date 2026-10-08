@@ -2,9 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { AuthorizedSection, AuthorizedWorkspace } from "../authorized-workspace";
-import { LegacyI18nBoundary } from "../legacy-i18n-boundary";
 import { pickLanguageText, useAppLanguage } from "../language";
-import { dashboardLegacyPhrases, dashboardLegacyTemplates } from "./dashboard-legacy-i18n";
 import { MobileDashboardApp } from "./mobile-dashboard-app";
 
 type ViewportMode = "loading" | "mobile" | "desktop";
@@ -44,13 +42,7 @@ export default function DashboardPage() {
     <AuthorizedWorkspace section="dashboard" />
   );
 
-  return (
-    <LegacyI18nBoundary
-      phrases={dashboardLegacyPhrases}
-      templates={dashboardLegacyTemplates}
-      showControl={false}
-    >
-      {workspace}
-    </LegacyI18nBoundary>
-  );
+  // The monthly dashboard is translated through the metrics translation table; it needs no
+  // phrase-matching boundary (which also rewrote its Gregorian dates into Buddhist years).
+  return workspace;
 }

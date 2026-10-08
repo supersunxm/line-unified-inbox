@@ -42,6 +42,8 @@ export function buildSeed(now = Date.now()) {
     stores.push({ id: `store-${index + 1}`, storeId: `9${String(index + 1).padStart(4, "0")}`, partner, name: `OBS Synthetic ${String(index + 1).padStart(2, "0")} By ${partner}${index % 7 === 3 ? " 2" : ""}`, code: `S${index + 1}`, region, area, isActive: true, archivedAt: null, _count: { conversations: 0, lineOfficialAccounts: 1 } });
   }
   stores.push({ id: "store-unmatched", name: "OBS Synthetic Stand Alone", code: "SX", region: "Central", area: "Ayutthaya", isActive: true, archivedAt: null, _count: { conversations: 0, lineOfficialAccounts: 1 } });
+  // A store with a LINE OA whose chats the system never collected (Store 360's no-data state).
+  stores.push({ id: "store-nochat", name: "OBS Synthetic No Chat Data", code: "SN", region: "Southern", area: "Phuket", isActive: true, archivedAt: null, noChats: true, _count: { conversations: 0, lineOfficialAccounts: 1 } });
   stores.push({ id: "store-placeholder", name: "Synthetic placeholder", code: "SP", region: null, area: null, isActive: true, archivedAt: null, _count: { conversations: 0, lineOfficialAccounts: 0 } });
 
   const conversations = [];
@@ -56,7 +58,7 @@ export function buildSeed(now = Date.now()) {
     const end = Math.min(monthStart(nextMonth(month)), now);
     if (end <= start) continue;
     stores.forEach((store, storeIndex) => {
-      if (store._count.lineOfficialAccounts === 0) return;
+      if (store._count.lineOfficialAccounts === 0 || store.noChats) return;
       const volume = storeIndex % 9 === 8 ? 3 : Math.round(15 + random() * 120 * ((end - start) / (30 * DAY_MS)));
       for (let n = 0; n < volume; n += 1) {
         const at = start + Math.floor(random() * (end - start));
@@ -157,6 +159,40 @@ function listFor(seed, params) {
 }
 
 /** Route every API call of the page to the seed. Unknown endpoints get an empty 200. */
+// Synthetic follower snapshots: one LINE OA per store, deterministic by store and day. store-12 has
+// no snapshot before 2026-09-20 (a new store); store-5 has a small base (under 100 followers).
+function followerSnapshot(store, index, date) {
+  const day = Math.round((Date.parse(`${date}T00:00:00Z`) - Date.parse("2026-08-01T00:00:00Z")) / DAY_MS);
+  if (store.id === "store-12" && date < "2026-09-20") return null;
+  if (store._count.lineOfficialAccounts === 0) return null;
+  const base = store.id === "store-5" ? 60 : 400 + ((index * 389) % 4200);
+  const slope = ((index * 7) % 11) - 3;
+  const followers = Math.max(0, base + slope * day + (store.id === "store-12" ? 200 : 0));
+  const blocks = Math.round(base / 12) + Math.max(0, Math.round(day * (index % 4) / 3));
+  return { followers, blocks };
+}
+
+function followerRowsOn(seed, date) {
+  return seed.stores.filter((store) => store.isActive).map((store, index) => {
+    const snap = followerSnapshot(store, index, date);
+    return { lineOaId: `oa-${store.id}`, accountName: store.name, storeId: store.id, storeName: store.name, date, followers: snap ? snap.followers : null, previousFollowers: null, startFollowers: null, dailyIncrease: null, periodIncrease: null, targetedReaches: null, blocks: snap ? snap.blocks : null, status: snap ? "ready" : "missing", fetchedAt: null };
+  });
+}
+
+function datesBetween(from, to) {
+  const days = [];
+  for (let at = Date.parse(`${from}T00:00:00Z`); at <= Date.parse(`${to}T00:00:00Z`); at += DAY_MS) days.push(new Date(at).toISOString().slice(0, 10));
+  return days;
+}
+
+function shiftDay(date, days) {
+  return new Date(Date.parse(`${date}T00:00:00Z`) + days * DAY_MS).toISOString().slice(0, 10);
+}
+
+function followerTotals(seed, date, storeId = null) {
+  return followerRowsOn(seed, date).filter((row) => !storeId || row.storeId === storeId).reduce((sum, row) => ({ followers: sum.followers + (row.followers ?? 0), blocks: sum.blocks + (row.blocks ?? 0) }), { followers: 0, blocks: 0 });
+}
+
 export async function routeSeededApi(page, seed = buildSeed()) {
   const json = (route, body) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
   await page.route("**/auth/**", (route) => json(route, { id: "user-1", email: "hq@example.com", displayName: "HQ Synthetic", role: "ADMIN", permissions: { canAccessAllStores: true, canAccessMainOa: true, canManageMainOa: true, canManageAccounts: true } }));
@@ -205,6 +241,27 @@ export async function routeSeededApi(page, seed = buildSeed()) {
     if (path === "/dashboard/store-24h-response-summary") return json(route, ratesFor(seed, url.searchParams.get("dateFrom"), url.searchParams.get("dateTo"), url.searchParams.get("storeId")));
     if (path === "/operations/line-chat-nickname/mirror-status") return json(route, { stores: seed.stores.map((store) => ({ storeId: store.id, enabled: true, status: "SUCCESS", lastSuccessfulSyncAt: new Date(seed.now - 3600_000).toISOString() })) });
     if (path === "/google-review-kpi") return json(route, { month: url.searchParams.get("month"), stores: seed.stores.map((store, index) => ({ id: store.id, storeId: store.code, name: store.name, code: store.code, region: store.region, province: store.area, googleMapsUrl: null, googleMapsName: null, hasGoogleMaps: true, kpiResult: index % 3 === 0 ? { id: `k${index}`, month: url.searchParams.get("month"), reviewsChecked: 10, reviewsWithPhoto: 4, photoReviewsInTargetMonth: 3, reviewsOver15ThaiWords: 3, qualifiedReviews: index % 6 === 0 ? 3 : 1, targetQualifiedReviews: 3, isPassed: index % 6 === 0 } : null })) });
+    if (path === "/follower-insights/by-store") return json(route, followerRowsOn(seed, url.searchParams.get("dateTo") ?? url.searchParams.get("dateFrom")));
+    if (path === "/follower-insights/summary") {
+      const storeId = url.searchParams.get("storeId");
+      return json(route, datesBetween(url.searchParams.get("dateFrom"), url.searchParams.get("dateTo")).map((date) => {
+        const today = followerTotals(seed, date, storeId);
+        const before = followerTotals(seed, shiftDay(date, -1), storeId);
+        return { date, followers: today.followers, targetedReaches: null, blocks: today.blocks, dailyIncrease: today.followers - before.followers, accountsExpected: 1, accountsWithData: 1, accountsReady: 1, accountsUnready: 0, accountsMissing: 0 };
+      }));
+    }
+    if (path === "/dashboard/analytics") {
+      const from = url.searchParams.get("dateFrom");
+      const to = url.searchParams.get("dateTo");
+      const end = followerTotals(seed, to);
+      const start = followerTotals(seed, shiftDay(from, -1));
+      const added = end.followers - start.followers;
+      const blocked = end.blocks - start.blocks;
+      return json(route, { summaryCards: { followerGrowth: { totalFriends: end.followers - end.blocks, addedToday: added, blockedToday: blocked, netToday: added - blocked, added, blocked, net: added - blocked, growthAccountsCompared: seed.stores.length - 2, totalEligibleAccounts: seed.stores.length - 1 } } });
+    }
+    if (path === "/dashboard/executive-store-health") {
+      return json(route, { stores: [], followerTrend: datesBetween(url.searchParams.get("dateFrom"), url.searchParams.get("dateTo")).map((date) => ({ date, followers: followerTotals(seed, date).followers })), connectedStoreCount: seed.stores.length - 1, totalStoreCount: seed.stores.length, scopeStoreCount: seed.stores.length, filterOptions: { tiers: [], kpiPlans: [], areas: [], bms: [] } });
+    }
     return json(route, {});
   });
   return seed;

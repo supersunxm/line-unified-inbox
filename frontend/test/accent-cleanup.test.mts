@@ -14,8 +14,7 @@ test("brand-accent surfaces no longer hardcode the retired brand greens", () => 
     "../src/app/follower-insights/follower-insights-polish.module.css",
     "../src/app/follower-insights/trend-chart.tsx",
     "../src/app/follower-insights/store-breakdown-table.tsx",
-    "../src/app/dashboard/executive-dashboard-base.tsx",
-    "../src/app/dashboard/executive-dashboard-v2.tsx",
+    "../src/app/dashboard/monthly-dashboard.tsx",
     "../src/app/connect/tiktok/page.tsx",
     "../src/app/tiktok-integration/page.tsx",
   ]) {

@@ -29,6 +29,14 @@ function preserveWhitespace(original: string, translated: string) {
   return `${leading}${translated}${trailing}`;
 }
 
+/** Content that is already translated (its own three-language table) opts out with this attribute. */
+const SKIP_ATTRIBUTE = "data-legacy-i18n-skip";
+
+function isSkipped(node: Node): boolean {
+  const element = node instanceof Element ? node : node.parentElement;
+  return Boolean(element?.closest(`[${SKIP_ATTRIBUTE}]`));
+}
+
 function normalizePhrase(value: string) {
   return value.trim().replace(/\s+/g, " ");
 }
@@ -223,6 +231,7 @@ export function LegacyI18nBoundary({
 
     const translateTree = (node: Node) => {
       if (!root.isConnected) return;
+      if (isSkipped(node)) return;
       if (node.nodeType === Node.TEXT_NODE) {
         const current = node.nodeValue ?? "";
         const translated = translateValue(current);
@@ -231,7 +240,10 @@ export function LegacyI18nBoundary({
       }
       if (!(node instanceof Element)) return;
       translateElement(node);
-      const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT);
+      // A subtree marked data-legacy-i18n-skip is already translated: never rewrite it.
+      const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT, {
+        acceptNode: (candidate) => (candidate instanceof Element && candidate.hasAttribute(SKIP_ATTRIBUTE) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT),
+      });
       let current: Node | null = walker.currentNode;
       while (current) {
         if (current.nodeType === Node.TEXT_NODE) {
@@ -250,7 +262,7 @@ export function LegacyI18nBoundary({
       if (!root.isConnected) return;
       for (const mutation of mutations) {
         if (mutation.type === "characterData") translateTree(mutation.target);
-        if (mutation.type === "attributes" && mutation.target instanceof Element) translateElement(mutation.target);
+        if (mutation.type === "attributes" && mutation.target instanceof Element && !isSkipped(mutation.target)) translateElement(mutation.target);
         mutation.addedNodes.forEach(translateTree);
       }
     });

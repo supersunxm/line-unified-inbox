@@ -243,7 +243,7 @@ jobs:
         run: npm ci
 
       - name: Lint regression scope
-        run: npx eslint "src/app/coupons/**/*.tsx" "src/app/admin/purchase-analytics/page.tsx" "src/app/mass-messages/page.tsx" "src/app/mass-messages/purchase-broadcast-draft-banner.tsx" "src/app/mass-messages/purchase-broadcast-composer.tsx" "src/app/mass-messages/drafts/[campaignId]/page.tsx" "src/app/dashboard/dashboard-view.tsx" "src/app/dashboard/executive-dashboard-v2.tsx" "src/lib/coupon-api.ts" "src/types/coupons.ts" "src/app/primary-navigation.ts" "src/components/shell/top-navigation.tsx" "src/app/message-media.tsx" "src/components/chats/mobile-chats-app.tsx"
+        run: npx eslint "src/app/coupons/**/*.tsx" "src/app/admin/purchase-analytics/page.tsx" "src/app/mass-messages/page.tsx" "src/app/mass-messages/purchase-broadcast-draft-banner.tsx" "src/app/mass-messages/purchase-broadcast-composer.tsx" "src/app/mass-messages/drafts/[campaignId]/page.tsx" "src/app/dashboard/dashboard-view.tsx" "src/app/dashboard/monthly-dashboard.tsx" "src/lib/coupon-api.ts" "src/types/coupons.ts" "src/app/primary-navigation.ts" "src/components/shell/top-navigation.tsx" "src/app/message-media.tsx" "src/components/chats/mobile-chats-app.tsx"
 
       # The whole frontend suite (npm run test = every test/*.test.mts), so tests for any
       # page, including v2 and Review 15, gate the merge. It replaces a fixed list of files.
