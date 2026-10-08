@@ -22,6 +22,13 @@ export function createBackendRewrite(apiBaseUrl: string) {
   };
 }
 
+export function createSunnSecretaryWebhookRewrite(apiBaseUrl: string) {
+  return {
+    source: "/sunn-secretary/webhook",
+    destination: `${apiBaseUrl}/sunn-secretary/webhook`,
+  };
+}
+
 export function createGoogleReviewApiRewrite(apiBaseUrl: string) {
   return [
     {
@@ -70,6 +77,7 @@ const nextConfig: NextConfig = {
       createFriendSourceLinkRewrite(API_BASE_URL),
       createAuthRewrite(API_BASE_URL),
       createBackendRewrite(API_BASE_URL),
+      createSunnSecretaryWebhookRewrite(API_BASE_URL),
       ...createGoogleReviewApiRewrite(API_BASE_URL),
       ...createReview15Rewrites(),
     ];
