@@ -1,3 +1,4 @@
+import { managerCanonicalMessageType } from "./line-chat-manager-event-contract";
 import { Inject, Injectable, Logger, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
 import { createHash } from "node:crypto";
 import {
@@ -230,16 +231,7 @@ export function selectUniqueExactInboundConversationId(
 }
 
 export function canonicalMessageTypeFromMirror(raw: string | null | undefined): MessageType {
-  switch (raw?.trim().toLowerCase()) {
-    case "text": return MessageType.TEXT;
-    case "image": return MessageType.IMAGE;
-    case "video": return MessageType.VIDEO;
-    case "audio": return MessageType.AUDIO;
-    case "file": return MessageType.FILE;
-    case "location": return MessageType.LOCATION;
-    case "sticker": return MessageType.STICKER;
-    default: return MessageType.UNSUPPORTED;
-  }
+  return managerCanonicalMessageType(raw);
 }
 
 export function mirrorCanonicalText(input: {

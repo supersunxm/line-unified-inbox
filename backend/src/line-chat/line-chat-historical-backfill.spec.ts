@@ -441,3 +441,23 @@ test("A1 isolates one store failure and continues the pilot store batch", async 
   assert.deepEqual(outcome.results, ["28375", "25610"]);
   assert.equal(outcome.failures, 1);
 });
+
+test("historical boundary cannot hide invalid events", () => {
+  const parsed = page([textEvent("old", beforeBoundary), { timestamp: "invalid", message: { id: "bad" } }]);
+  assert.equal(classifyHistoricalPage(parsed).complete, false);
+  assert.equal(classifyHistoricalPage(parsed).errorCode, "HISTORY_INVALID_EVENTS");
+});
+test("historical boundary requires ordered timestamps", () => {
+  const parsed = page([textEvent("new", afterBoundary + 2), textEvent("old", beforeBoundary), textEvent("middle", afterBoundary)]);
+  assert.equal(classifyHistoricalPage(parsed).complete, false);
+  assert.equal(classifyHistoricalPage(parsed).errorCode, "HISTORY_TIMESTAMP_INVERSION");
+});
+test("malformed Manager history shape stays unproven", () => {
+  assert.equal(classifyHistoricalPage(parseManagerHistoryPage({})).errorCode, "HISTORY_INVALID_SHAPE");
+});
+
+test("unsafe numeric Manager IDs cannot fabricate exact identities", () => {
+  const parsed = page([{ type: "messageReceived", timestamp: beforeBoundary, message: { id: Number.MAX_SAFE_INTEGER + 1, type: "text" } }]);
+  assert.equal(parsed.invalidEventCount, 1);
+  assert.equal(classifyHistoricalPage(parsed).complete, false);
+});

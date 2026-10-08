@@ -1,9 +1,11 @@
 import { createHash } from "node:crypto";
+import { MANAGER_METADATA_EVENT_TYPES, managerEventDirection } from "./line-chat-manager-event-contract";
+import { historyTimestampsOrdered } from "./line-chat-history-pagination";
 import { LineChatMirrorDirection } from "@prisma/client";
 
 export const LINE_CHAT_HISTORICAL_LOWER_BOUND_ISO = "2026-09-01T00:00:00+07:00";
 export const LINE_CHAT_HISTORICAL_PILOT_STORE_CODES = ["29113", "28375", "25610"] as const;
-const EVENT_ONLY_TIMELINE_TYPES = new Set(["chatread", "follow", "unfollow"]);
+const EVENT_ONLY_TIMELINE_TYPES = MANAGER_METADATA_EVENT_TYPES;
 
 export const HistoricalBackfillStatus = {
   FETCHING_INITIAL_PAGE: "FETCHING_INITIAL_PAGE",
@@ -32,6 +34,8 @@ export interface ParsedManagerHistoryPage {
   events: HistoricalMirrorEvent[];
   invalidEventCount: number;
   backwardPresent: boolean;
+  responseShapeValid: boolean;
+  timestampOrderValid: boolean;
 }
 
 export interface HistoricalPageClassification {
@@ -70,13 +74,13 @@ function parseStableNonnegativeNumber(value: unknown): number | null {
 
 function managerIdValue(value: unknown): string {
   if (typeof value === "string") return value.trim();
-  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  if (typeof value === "number" && Number.isSafeInteger(value)) return String(value);
   return "";
 }
 
 function stableScalarString(value: unknown): string | null {
   if (typeof value === "string" && value.trim().length > 0) return value.trim();
-  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  if (typeof value === "number" && Number.isSafeInteger(value)) return String(value);
   return null;
 }
 
@@ -179,7 +183,7 @@ export function parseManagerHistoryPage(
     events.push({
       managerMessageId,
       eventType,
-      direction: managerDirectionForHistoricalEvent(eventType),
+      direction: managerEventDirection(eventType),
       messageType,
       text: !eventOnly && messageType?.toLowerCase() === "text"
         && typeof rawMessage.text === "string"
@@ -197,23 +201,29 @@ export function parseManagerHistoryPage(
   return {
     events,
     invalidEventCount,
+    responseShapeValid: isRecord(raw) && Array.isArray(body.list),
+    timestampOrderValid: historyTimestampsOrdered(events.map((event) => event.sentAt.getTime())),
     backwardPresent: typeof body.backward === "string" && body.backward.trim().length > 0,
   };
 }
 
-function managerDirectionForHistoricalEvent(eventType: string): LineChatMirrorDirection {
-  const normalized = eventType.trim().toLowerCase();
-  if (normalized === "messagesent") return LineChatMirrorDirection.OUTBOUND;
-  if (normalized === "messagereceived" || normalized === "message") {
-    return LineChatMirrorDirection.INBOUND;
-  }
-  return LineChatMirrorDirection.UNKNOWN;
-}
 
 export function classifyHistoricalPage(
-  page: Pick<ParsedManagerHistoryPage, "events" | "backwardPresent">,
+  page: Pick<ParsedManagerHistoryPage, "events" | "backwardPresent">
+    & Partial<Pick<ParsedManagerHistoryPage, "invalidEventCount" | "responseShapeValid" | "timestampOrderValid">>,
   lowerBound = lineChatHistoricalLowerBound(),
 ): HistoricalPageClassification {
+  const times = page.events.map((event) => event.sentAt.getTime());
+  const ordered = historyTimestampsOrdered(times);
+  const evidenceError = page.responseShapeValid === false ? "HISTORY_INVALID_SHAPE"
+    : (page.invalidEventCount ?? 0) > 0 ? "HISTORY_INVALID_EVENTS"
+      : times.some((t) => !Number.isFinite(t)) ? "HISTORY_INVALID_TIMESTAMP"
+        : !ordered || page.timestampOrderValid === false ? "HISTORY_TIMESTAMP_INVERSION"
+          : !Number.isFinite(lowerBound.getTime()) ? "HISTORY_INVALID_BOUNDARY" : null;
+  if (evidenceError) return {
+    status: HistoricalBackfillStatus.HISTORICAL_COVERAGE_UNPROVEN, errorCode: evidenceError,
+    backwardRequired: null, complete: false, oldestValidTimestamp: null, newestValidTimestamp: null,
+  };
   if (page.events.length === 0) {
     return {
       status: HistoricalBackfillStatus.HISTORICAL_COVERAGE_UNPROVEN,

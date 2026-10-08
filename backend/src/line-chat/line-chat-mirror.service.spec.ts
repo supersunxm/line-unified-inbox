@@ -1491,7 +1491,7 @@ test("a stale equal-timestamp candidate fetches and persists new messageSent wit
     evaluate: async (_fn: unknown, url: string) => {
       if (url.endsWith("/owners")) return [{ bizId: "synthetic-owner", name: "Synthetic Staff" }];
       historyReads += 1;
-      return { ok: true, status: 200, list: [{ type: "messageSent", timestamp: new Date("2026-09-30T05:00:00Z").getTime(),
+      return { ok: true, status: 200, shapeValid: true, list: [{ type: "messageSent", timestamp: new Date("2026-09-30T05:00:00Z").getTime(),
         bizId: "synthetic-owner", message: { id: "synthetic-reply", type: "text", text: "synthetic reply" } }] };
     },
   };

@@ -1,3 +1,4 @@
+import { managerEventDirection, parseNormalManagerHistoryList } from "./line-chat-manager-event-contract";
 import { NicknameSourceObserverService } from "./nickname-source-observer.service";
 import { Inject, Injectable, Logger, OnModuleDestroy, OnModuleInit, Optional } from "@nestjs/common";
 import {
@@ -376,12 +377,7 @@ export function isManagerOnlyOutboundRefresh(input: {
 export function mirrorDirectionForManagerEvent(
   eventType: string | null | undefined,
 ): LineChatMirrorDirection {
-  const normalized = eventType?.trim().toLowerCase() ?? "";
-  if (normalized === "messagesent") return LineChatMirrorDirection.OUTBOUND;
-  if (normalized === "messagereceived" || normalized === "message") {
-    return LineChatMirrorDirection.INBOUND;
-  }
-  return LineChatMirrorDirection.UNKNOWN;
+  return managerEventDirection(eventType);
 }
 
 function safeError(error: unknown): string {
@@ -1771,6 +1767,7 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
     let messagesInsertedOrUpdated = 0;
     let unknownDirectionEvents = 0;
     let historyFailures = 0;
+    const historyEvidenceIssues = new Map<string, number>();
     let browserLaunchDurationMs = 0;
     let navigationDurationMs = 0;
     let authenticationDurationMs = 0;
@@ -1858,39 +1855,11 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
           const historyRequestStartedAt = Date.now();
           const history = await page.evaluate(async (url) => {
             const response = await fetch(url, { credentials: "include" });
-            if (!response.ok) {
-              return {
-                ok: false,
-                status: response.status,
-                list: [] as Array<{
-                  type?: string;
-                  timestamp?: number;
-                  bizId?: string;
-                  message?: {
-                    id?: string;
-                    type?: string;
-                    text?: string;
-                    fileName?: string;
-                    name?: string;
-                  };
-                }>,
-              };
-            }
-            const body = await response.json() as {
-              list?: Array<{
-                type?: string;
-                timestamp?: number;
-                bizId?: string;
-                message?: {
-                  id?: string;
-                  type?: string;
-                  text?: string;
-                  fileName?: string;
-                  name?: string;
-                };
-              }>;
-            };
-            return { ok: true, status: response.status, list: body.list ?? [] };
+            if (!response.ok) return { ok: false as const, status: response.status, list: null, shapeValid: false };
+            const body: unknown = await response.json();
+            const list = typeof body === "object" && body !== null && !Array.isArray(body)
+              ? (body as { list?: unknown }).list : undefined;
+            return { ok: true as const, status: response.status, list, shapeValid: Array.isArray(list) };
           }, historyUrl);
           historyRequestDurationMs += Date.now() - historyRequestStartedAt;
 
@@ -1905,51 +1874,26 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
             continue;
           }
 
-          historiesFetched += 1;
-          const events: MirrorHistoryEvent[] = [];
-          for (const item of history.list) {
-            const messageId = item.message?.id?.trim();
-            const timestamp = Number(item.timestamp);
-            if (!messageId || !Number.isFinite(timestamp)) continue;
-            const eventType = typeof item.type === "string" && item.type.trim()
-              ? item.type.trim()
-              : "unknown";
-            const direction = mirrorDirectionForManagerEvent(eventType);
-            eventTypeCounts.set(
-              eventType,
-              (eventTypeCounts.get(eventType) ?? 0) + 1,
-            );
-            const rawMessageType = typeof item.message?.type === "string"
-              ? item.message.type.trim()
-              : "";
-            const safeMessageType = rawMessageType || "unknown";
-            messageTypeCounts.set(
-              safeMessageType,
-              (messageTypeCounts.get(safeMessageType) ?? 0) + 1,
-            );
-            if (direction === LineChatMirrorDirection.UNKNOWN) {
-              unknownDirectionEvents += 1;
-            }
-            const bizId = typeof item.bizId === "string" ? item.bizId : null;
-            const fileName = typeof item.message?.fileName === "string"
-              ? item.message.fileName
-              : typeof item.message?.name === "string"
-                ? item.message.name
-                : null;
-            events.push({
-              managerMessageId: messageId,
-              eventType,
-              direction,
-              messageType: rawMessageType || null,
-              text: typeof item.message?.text === "string"
-                ? item.message.text
-                : null,
-              fileName,
-              sentAt: new Date(timestamp),
-              bizId,
-              ownerName: bizId ? ownerByBizId.get(bizId) || null : null,
-            });
+          if (!history.shapeValid) {
+            historyFailures += 1;
+            historyEvidenceIssues.set("HISTORY_INVALID_SHAPE", (historyEvidenceIssues.get("HISTORY_INVALID_SHAPE") ?? 0) + 1);
+            await this.markMirrorChatFailure(input.lineOfficialAccountId, chat.lineChatUserId,
+              "HISTORY_INVALID_SHAPE", "LINE OA Manager history response shape was not recognized.");
+            continue;
           }
+          historiesFetched += 1;
+          const parsedHistory = parseNormalManagerHistoryList(history.list);
+          for (const [reason, count] of Object.entries(parsedHistory.issues)) {
+            historyFailures += count;
+            historyEvidenceIssues.set(reason, (historyEvidenceIssues.get(reason) ?? 0) + count);
+          }
+          const events: MirrorHistoryEvent[] = parsedHistory.events.map((event) => {
+            eventTypeCounts.set(event.eventType, (eventTypeCounts.get(event.eventType) ?? 0) + 1);
+            const safeMessageType = event.messageType ?? "unknown";
+            messageTypeCounts.set(safeMessageType, (messageTypeCounts.get(safeMessageType) ?? 0) + 1);
+            if (event.direction === LineChatMirrorDirection.UNKNOWN) unknownDirectionEvents += 1;
+            return { ...event, ownerName: event.bizId ? ownerByBizId.get(event.bizId) || null : null };
+          });
 
           messagesObserved += events.length;
           const persistStartedAt = Date.now();
@@ -2010,11 +1954,12 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
               },
             },
             data: {
-              historySyncedThroughAt: chat.lastMessageAt,
+              ...(Object.keys(parsedHistory.issues).length === 0 ? { historySyncedThroughAt: chat.lastMessageAt } : {}),
               lastHistorySyncedAt: new Date(),
-              status: LineChatMirrorSyncStatus.SUCCESS,
-              lastErrorCode: null,
-              lastErrorMessage: null,
+              status: Object.keys(parsedHistory.issues).length === 0 ? LineChatMirrorSyncStatus.SUCCESS : LineChatMirrorSyncStatus.PARTIAL,
+              lastErrorCode: Object.keys(parsedHistory.issues).length === 0 ? null : "HISTORY_EVIDENCE_UNPROVEN",
+              lastErrorMessage: Object.keys(parsedHistory.issues).length === 0
+                ? null : "One or more Manager timeline records could not be certified.",
             },
           });
         } catch (error) {
@@ -2061,6 +2006,7 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
       historiesFetched,
       messagesObserved,
       unknownDirectionEvents,
+      historyEvidenceIssues: Object.fromEntries([...historyEvidenceIssues.entries()].sort(([a], [b]) => a.localeCompare(b))),
       eventTypeBreakdown,
       messageTypeBreakdown,
     }));
@@ -2321,6 +2267,9 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
               const classification = classifyHistoricalPage({
                 events: parsed.events,
                 backwardPresent: history.backwardPresent,
+                invalidEventCount: parsed.invalidEventCount,
+                responseShapeValid: parsed.responseShapeValid,
+                timestampOrderValid: parsed.timestampOrderValid,
               }, lineChatHistoricalLowerBound());
               const persistence = await persistHistoricalEvents({
                 writer: {
