@@ -363,6 +363,39 @@ test("reconciler leaves ambiguous Manager mappings closed without canonical writ
   assert.equal(h.conversation.bmReplyStatus, BmReplyStatus.NOT_REPLIED);
 });
 
+test("reconciler skips unsupported and direction-conflicting events before canonical writes", async () => {
+  const h = createReconcileHarness();
+  h.rows.length = 0;
+  for (const row of [
+    { id: "unsupported-event", direction: LineChatMirrorDirection.OUTBOUND, eventType: "messageSent", messageType: "future-type" },
+    { id: "direction-conflict", direction: LineChatMirrorDirection.OUTBOUND, eventType: "messageReceived", messageType: "text" },
+  ]) {
+    h.rows.push({
+      id: row.id,
+      direction: row.direction,
+      reconcileStatus: LineChatMirrorReconcileStatus.PENDING,
+      updatedAt: new Date("2026-09-30T05:01:00Z"),
+      lineOfficialAccountId: "oa-test",
+      lineChatUserId: "chat-test",
+      managerMessageId: row.id,
+      eventType: row.eventType,
+      messageType: row.messageType,
+      text: "synthetic fixture",
+      fileName: null,
+      bizId: "owner-test",
+      ownerName: "Manager Test Staff",
+      sentAt: new Date("2026-09-30T05:01:00Z"),
+    });
+  }
+
+  await h.reconcile(2);
+
+  assert.deepEqual(h.processed, ["unsupported-event", "direction-conflict"]);
+  assert.ok(h.rows.every((row) => row.reconcileStatus === LineChatMirrorReconcileStatus.SKIPPED));
+  assert.equal(h.canonical.length, 1);
+  assert.equal(h.conversation.bmReplyStatus, BmReplyStatus.NOT_REPLIED);
+});
+
 test("reconciler dry-run reports Manager replies without changing canonical or mirror state", async () => {
   const h = createReconcileHarness();
   const result = await h.reconcile(1, false);

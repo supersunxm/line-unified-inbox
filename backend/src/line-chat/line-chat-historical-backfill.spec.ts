@@ -331,7 +331,7 @@ test("A1 checkpoint resumes an interrupted initial-page attempt after restart", 
   assert.equal(historicalBackfillCanResume(started.historicalBackfillStatus), true);
   assert.equal(historicalBackfillCanResume(null), true);
   assert.equal(historicalBackfillCanResume(HistoricalBackfillStatus.FAST_PATH_COMPLETE), false);
-  assert.equal(historicalBackfillCanResume(HistoricalBackfillStatus.NEEDS_BACKWARD_PAGINATION), false);
+  assert.equal(historicalBackfillCanResume(HistoricalBackfillStatus.NEEDS_BACKWARD_PAGINATION), true);
 });
 
 test("A1 checkpoint writes do not overwrite live sync or conversation state", () => {
@@ -354,11 +354,12 @@ test("A1 checkpoint writes do not overwrite live sync or conversation state", ()
 
 test("A1 historical checkpoints never use the live watermark as Sep 1 proof", () => {
   const classification = classifyHistoricalPage(page([textEvent("new", afterBoundary)], "opaque"));
-  const patch = historicalFetchResultPatch(classification, new Date("2026-09-23T10:00:00Z"));
+  const patch = historicalFetchResultPatch(classification, new Date("2026-09-23T10:00:00Z"), "cursor-checkpoint");
   assert.equal(classification.complete, false);
   assert.equal(classification.status, HistoricalBackfillStatus.NEEDS_BACKWARD_PAGINATION);
   assert.equal("historySyncedThroughAt" in patch, false);
   assert.equal(patch.historicalBackfillLowerBoundAt.toISOString(), "2026-08-31T17:00:00.000Z");
+  assert.equal(patch.historicalBackfillCursor, "cursor-checkpoint");
 });
 
 test("A1 lower bound uses the explicit Asia/Bangkok UTC offset", () => {

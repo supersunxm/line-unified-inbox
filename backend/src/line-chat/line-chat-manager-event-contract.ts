@@ -27,14 +27,15 @@ export interface ManagerEventEligibility {
   canonical: "OUTBOUND_REQUIRED" | "INBOUND_WEBHOOK_EQUIVALENT" | "NOT_REQUIRED" | "UNPROVEN";
   reason: string | null;
 }
-/** Certification contract, not an instruction to replay or to create canonical inbound messages. */
-export function managerEventEligibility(input: {
+export interface ManagerEventEligibilityInput {
   eventType: string;
   messageType: string | null;
   managerEventId: string | null;
   normalMessageIdPresent: boolean;
   timestampValid: boolean;
-}): ManagerEventEligibility {
+}
+/** Certification contract, not an instruction to replay or to create canonical inbound messages. */
+export function managerEventEligibility(input: ManagerEventEligibilityInput): ManagerEventEligibility {
   const normalized = input.eventType.trim().toLowerCase();
   const direction = managerEventDirection(normalized);
   const historicalRaw = input.managerEventId?.trim() && input.timestampValid ? "REQUIRED" : "UNPROVEN";
@@ -56,6 +57,22 @@ export function managerEventEligibility(input: {
   return { kind: "CUSTOMER_MESSAGE", direction, normalRaw: input.normalMessageIdPresent ? "REQUIRED" : "UNPROVEN",
     historicalRaw, canonical: direction === LineChatMirrorDirection.OUTBOUND ? "OUTBOUND_REQUIRED" : "INBOUND_WEBHOOK_EQUIVALENT",
     reason: input.normalMessageIdPresent ? null : "NORMAL_MESSAGE_ID_UNPROVEN" };
+}
+
+/** Reconciliation applies the same eligibility contract and rejects stored direction drift. */
+export function managerMirrorRowEligibility(input: ManagerEventEligibilityInput & {
+  storedDirection: LineChatMirrorDirection;
+}): ManagerEventEligibility {
+  const eligibility = managerEventEligibility(input);
+  if (eligibility.kind === "CUSTOMER_MESSAGE" && eligibility.direction !== input.storedDirection) {
+    return {
+      ...eligibility,
+      kind: "UNKNOWN",
+      canonical: "UNPROVEN",
+      reason: "MIRROR_DIRECTION_CONFLICT",
+    };
+  }
+  return eligibility;
 }
 
 export interface NormalManagerHistoryEvent {

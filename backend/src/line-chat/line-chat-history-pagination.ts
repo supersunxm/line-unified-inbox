@@ -11,6 +11,8 @@ export interface HistoryCoverageCursor {
   sourceKey: string;
   lowerBoundAt: string;
   maxPages: number;
+  maxAttemptsPerPage: number;
+  attemptsForPage: number;
   pages: number;
   backward: string | null;
   usedTokens: string[];
@@ -21,7 +23,7 @@ export interface HistoryCoverageCursor {
 }
 export function startHistoryCoverage(sourceKey: string, lowerBound: Date, maxPages = 20): HistoryCoverageCursor {
   if (!sourceKey || !Number.isFinite(lowerBound.getTime()) || !Number.isInteger(maxPages) || maxPages < 1 || maxPages > 200) throw new Error("INVALID_HISTORY_COVERAGE_INPUT");
-  return { version: 1, sourceKey, lowerBoundAt: lowerBound.toISOString(), maxPages, pages: 0, backward: null,
+  return { version: 1, sourceKey, lowerBoundAt: lowerBound.toISOString(), maxPages, maxAttemptsPerPage: 3, attemptsForPage: 0, pages: 0, backward: null,
     usedTokens: [], pageHashes: [], oldestAt: null, status: "IN_PROGRESS", reason: null };
 }
 export function historyPageUrl(endpoint: string, backward: string | null): string {
@@ -29,7 +31,10 @@ export function historyPageUrl(endpoint: string, backward: string | null): strin
   if (url.origin !== "https://chat.line.biz" || !/^\/api\/v3\/bots\/[^/]+\/chats\/[^/]+\/messages$/u.test(url.pathname)
     || url.username || url.password || url.hash || url.search) throw new Error("INVALID_HISTORY_ENDPOINT");
   // URL-shaped cursors are opaque too; never navigate to them.
-  if (backward !== null) url.searchParams.set("backward", backward);
+  if (backward !== null) {
+    if (!backward.trim() || backward.length > 8192) throw new Error("INVALID_HISTORY_CURSOR");
+    url.searchParams.set("backward", backward);
+  }
   return url.href;
 }
 function record(value: unknown): value is Record<string, unknown> {
@@ -40,17 +45,24 @@ function fail(state: HistoryCoverageCursor, reason: string, status: HistoryCover
 }
 /** Pure response transition. Caller owns IO, bounded retries, leases and atomic private persistence. */
 export function observeHistoryPage(state: HistoryCoverageCursor, input: {
-  requestedBackward: string | null; httpStatus: number; body: unknown;
+  requestedBackward: string | null; httpStatus: number; body: unknown; transportError?: boolean;
 }): HistoryCoverageCursor {
   if (state.status !== "IN_PROGRESS") return state;
   if (input.requestedBackward !== state.backward) return fail(state, "CURSOR_RESPONSE_MISMATCH");
   if (input.httpStatus === 401 || input.httpStatus === 403) return fail(state, "HISTORY_AUTHENTICATION", "AUTHENTICATION_BLOCKED");
-  if (input.httpStatus === 429 || input.httpStatus >= 500) return { ...state, reason: `HISTORY_HTTP_${input.httpStatus}` };
+  if (input.transportError || input.httpStatus === 429 || input.httpStatus >= 500) {
+    const attemptsForPage = state.attemptsForPage + 1;
+    if (attemptsForPage >= state.maxAttemptsPerPage) return fail(state, input.transportError
+      ? "HISTORY_TRANSPORT_RETRY_BUDGET_EXHAUSTED" : `HISTORY_HTTP_${input.httpStatus}_RETRY_BUDGET_EXHAUSTED`, "API_LIMITATION");
+    return { ...state, attemptsForPage, reason: input.transportError ? "HISTORY_TRANSPORT_FAILURE" : `HISTORY_HTTP_${input.httpStatus}` };
+  }
   if (input.httpStatus !== 200) return fail(state, `HISTORY_HTTP_${input.httpStatus}`, "API_LIMITATION");
   if (!record(input.body) || !Array.isArray(input.body.list)) return fail(state, "HISTORY_INVALID_SHAPE");
   const backward = input.body.backward;
   if (backward !== undefined && backward !== null && typeof backward !== "string") return fail(state, "HISTORY_INVALID_CURSOR");
   const token = typeof backward === "string" && backward.length > 0 ? backward : null;
+  if (token !== null && (token.trim().length === 0 || token.length > 8192)) return fail(state, "HISTORY_INVALID_CURSOR");
+  if (input.body.list.length > 1000) return fail(state, "HISTORY_PAGE_SIZE_LIMIT_EXCEEDED", "API_LIMITATION");
   const times: number[] = [], keys: string[] = [];
   for (const item of input.body.list) {
     if (!record(item) || (typeof item.timestamp !== "number" && typeof item.timestamp !== "string")
@@ -68,6 +80,7 @@ export function observeHistoryPage(state: HistoryCoverageCursor, input: {
   const oldestAt = Math.min(...times);
   if (state.oldestAt !== null && oldestAt >= state.oldestAt) return fail(state, "HISTORY_NO_OLDER_EVIDENCE");
   const next: HistoryCoverageCursor = { ...state, pages: state.pages + 1, oldestAt, backward: token,
+    attemptsForPage: 0,
     pageHashes: [...state.pageHashes, hash], usedTokens: input.requestedBackward === null
       ? state.usedTokens : [...state.usedTokens, input.requestedBackward], reason: null };
   if (token !== null && (token === input.requestedBackward || next.usedTokens.includes(token))) return fail(next, "HISTORY_CURSOR_LOOP");
@@ -90,9 +103,13 @@ export function restoreHistoryCursor(serialized: string, sourceKey: string, lowe
   const strings = (value: unknown): value is string[] => Array.isArray(value) && value.every((v: unknown) => typeof v === "string");
   if (!record(state) || state.version !== 1 || state.sourceKey !== sourceKey || state.lowerBoundAt !== lowerBound.toISOString()
     || typeof state.maxPages !== "number" || !Number.isInteger(state.maxPages) || state.maxPages < 1 || state.maxPages > 200
+    || state.maxAttemptsPerPage !== 3
+    || typeof state.attemptsForPage !== "number" || !Number.isInteger(state.attemptsForPage) || state.attemptsForPage < 0 || state.attemptsForPage >= state.maxAttemptsPerPage
     || typeof state.pages !== "number" || !Number.isInteger(state.pages) || state.pages < 0 || state.pages > state.maxPages
     || (state.backward !== null && typeof state.backward !== "string")
+    || (typeof state.backward === "string" && (!state.backward.trim() || state.backward.length > 8192))
     || !strings(state.usedTokens) || state.usedTokens.length > state.pages || new Set(state.usedTokens).size !== state.usedTokens.length
+    || state.usedTokens.some((token) => !token.trim() || token.length > 8192)
     || !strings(state.pageHashes) || state.pageHashes.length !== state.pages || state.pageHashes.some((h) => !/^[a-f0-9]{64}$/u.test(h))
     || (state.oldestAt !== null && (typeof state.oldestAt !== "number" || !Number.isFinite(state.oldestAt)))
     || typeof state.status !== "string" || !["IN_PROGRESS", "COVERAGE_PROVEN", "COVERAGE_BLOCKED", "API_LIMITATION", "AUTHENTICATION_BLOCKED"].includes(state.status)
@@ -103,6 +120,7 @@ export function restoreHistoryCursor(serialized: string, sourceKey: string, lowe
     || (state.status === "COVERAGE_PROVEN" && (state.pages === 0 || state.oldestAt === null
       || state.oldestAt > lowerBound.getTime() || state.backward !== null))) throw new Error("HISTORY_CHECKPOINT_EVIDENCE_INVALID");
   return { version: 1, sourceKey, lowerBoundAt: state.lowerBoundAt, maxPages: state.maxPages,
+    maxAttemptsPerPage: state.maxAttemptsPerPage, attemptsForPage: state.attemptsForPage,
     pages: state.pages, backward: state.backward, usedTokens: state.usedTokens, pageHashes: state.pageHashes,
     oldestAt: state.oldestAt, status: state.status as HistoryCoverageCursor["status"], reason: state.reason };
 }

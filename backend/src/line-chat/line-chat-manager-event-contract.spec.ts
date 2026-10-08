@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { managerEventEligibility, managerEventDirection, managerCanonicalMessageType, parseNormalManagerHistoryList } from "./line-chat-manager-event-contract";
-import { parseManagerHistoryPage } from "./line-chat-historical-backfill";
+import { managerEventEligibility, managerEventDirection, managerMirrorRowEligibility, managerCanonicalMessageType, parseNormalManagerHistoryList } from "./line-chat-manager-event-contract";
+import { classifyHistoricalPage, HistoricalBackfillStatus, parseManagerHistoryPage } from "./line-chat-historical-backfill";
 import { mirrorDirectionForManagerEvent } from "./line-chat-mirror.service";
 import { canonicalMessageTypeFromMirror } from "./line-chat-mirror-reconciler.service";
 for (const type of ["text", "image", "video", "audio", "file", "location", "sticker"]) {
@@ -60,6 +60,37 @@ test("NORMAL parser ignores known metadata but retains unknown message-like even
   assert.equal(parsed.events[1].direction, "UNKNOWN");
   assert.equal(parsed.issues.UNSUPPORTED_MANAGER_MESSAGE_TYPE, 1);
   assert.equal(parsed.issues.UNKNOWN_MANAGER_EVENT_TYPE, 1);
+});
+
+test("historical parsing preserves unknown message-like rows but refuses completeness certification", () => {
+  const at = Date.parse("2026-09-04T10:00:00+07:00");
+  const parsed = parseManagerHistoryPage({ list: [
+    { type: "messageReceived", timestamp: at, message: { id: "eligible", type: "text" } },
+    { type: "futureEvent", timestamp: at - 1, message: { id: "unknown-event", type: "text" } },
+  ] });
+  assert.equal(parsed.events.length, 2);
+  assert.equal(parsed.events[1].direction, "UNKNOWN");
+  assert.equal(parsed.invalidEventCount, 1);
+  const classification = classifyHistoricalPage(parsed);
+  assert.equal(classification.status, HistoricalBackfillStatus.HISTORICAL_COVERAGE_UNPROVEN);
+  assert.equal(classification.errorCode, "HISTORY_INVALID_EVENTS");
+});
+
+test("reconciliation uses shared eligibility and holds direction conflicts", () => {
+  const base = {
+    eventType: "messageSent",
+    messageType: "text",
+    managerEventId: "manager-event-1",
+    normalMessageIdPresent: true,
+    timestampValid: true,
+  };
+  assert.equal(managerMirrorRowEligibility({ ...base, storedDirection: "OUTBOUND" }).kind, "CUSTOMER_MESSAGE");
+  const conflict = managerMirrorRowEligibility({ ...base, storedDirection: "INBOUND" });
+  assert.equal(conflict.kind, "UNKNOWN");
+  assert.equal(conflict.reason, "MIRROR_DIRECTION_CONFLICT");
+  const unsupported = managerMirrorRowEligibility({ ...base, messageType: "future-type", storedDirection: "OUTBOUND" });
+  assert.equal(unsupported.kind, "UNKNOWN");
+  assert.equal(unsupported.canonical, "UNPROVEN");
 });
 test("NORMAL parser fails closed for missing IDs, bad timestamps, duplicate conflicts and malformed envelopes", () => {
   const parsed = parseNormalManagerHistoryList([

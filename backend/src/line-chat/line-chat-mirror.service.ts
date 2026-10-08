@@ -34,6 +34,14 @@ import { liveMirrorTargetCacheKey, readLiveMirrorAccountOverride, type LiveMirro
 import { resolveConfiguredMirrorFleetScope, type MirrorFleetScope } from "./line-chat-mirror-fleet-scope";
 import { MirrorOperationModeService, type MirrorOperationModeValue } from "./mirror-operation-mode.service";
 import { persistLineChatMirrorHistoryBatch } from "./line-chat-mirror-persistence";
+import {
+  historyPageUrl,
+  observeHistoryPage,
+  restoreHistoryCursor,
+  serializeHistoryCursor,
+  startHistoryCoverage,
+  type HistoryCoverageCursor,
+} from "./line-chat-history-pagination";
 
 const DEFAULT_INTERVAL_MS = 60_000;
 const MIN_INTERVAL_MS = 30_000;
@@ -94,6 +102,9 @@ export interface LiveMirrorHistoryCandidate {
 
 interface PendingHistoricalMirrorChat extends PendingMirrorChat {
   historicalBackfillStatus: string | null;
+  historicalBackfillCursor: string | null;
+  historicalBackfillOldestAt: Date | null;
+  historicalBackfillNewestAt: Date | null;
 }
 
 interface HistoricalMirrorTarget {
@@ -2036,6 +2047,7 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
         operationContext.assertOwnership();
         const resumableStatuses = [
           HistoricalBackfillStatus.FETCHING_INITIAL_PAGE,
+          HistoricalBackfillStatus.NEEDS_BACKWARD_PAGINATION,
           HistoricalBackfillStatus.FAILED,
         ];
         const cohortRows = await this.prisma.mirrorBackfillConversation.findMany({
@@ -2075,6 +2087,9 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
                   lineChatUserId: true,
                   lastMessageAt: true,
                   historicalBackfillStatus: true,
+                  historicalBackfillCursor: true,
+                  historicalBackfillOldestAt: true,
+                  historicalBackfillNewestAt: true,
                 },
               }),
         ]);
@@ -2088,6 +2103,11 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
               ?? observedTimestampById.get(candidate.lineChatUserId)
               ?? target.freezeAt,
             historicalBackfillStatus: candidate.historicalBackfillStatus,
+            historicalBackfillCursor: candidate.historicalBackfillCursor,
+            historicalBackfillOldestAt: candidate.historicalBackfillCursor !== null
+              ? candidate.historicalBackfillOldestAt : null,
+            historicalBackfillNewestAt: candidate.historicalBackfillCursor !== null
+              ? candidate.historicalBackfillNewestAt : null,
           }));
 
         if (candidatesWithTimestamp.length === 0) {
@@ -2125,7 +2145,9 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
                   lineChatUserId: candidate.lineChatUserId,
                 },
               },
-              data: historicalFetchStartedPatch(attemptedAt),
+              data: candidate.historicalBackfillCursor !== null
+                ? { historicalBackfillLastAttemptAt: attemptedAt }
+                : historicalFetchStartedPatch(attemptedAt),
             });
           }
           context = await this.sessionService.launchManagedPersistentContext(
@@ -2186,36 +2208,25 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
             process: async (candidate): Promise<HistoricalBackfillConversationResult> => {
               operationContext.assertOwnership();
               const attemptedAt = attemptTimes.get(candidate.lineChatUserId) ?? new Date();
-              const historyUrl = `https://chat.line.biz/api/v3/bots/${encodeURIComponent(target.botId)}/chats/${encodeURIComponent(candidate.lineChatUserId)}/messages`;
-              const history = await page.evaluate(async (url) => {
-                const response = await fetch(url, {
-                  credentials: "include",
-                  signal: AbortSignal.timeout(20_000),
-                });
-                if (!response.ok) {
-                  return {
-                    ok: false as const,
-                    status: response.status,
-                    list: [] as unknown[],
-                    backwardPresent: false,
-                  };
-                }
-                const body = await response.json() as {
-                  list?: unknown;
-                  backward?: unknown;
-                };
-                return {
-                  ok: true as const,
-                  status: response.status,
-                  list: Array.isArray(body.list) ? body.list : [],
-                  backwardPresent: typeof body.backward === "string"
-                    && body.backward.trim().length > 0,
-                };
-              }, historyUrl);
-              operationContext.assertOwnership();
-
-              if (!history.ok) {
-                const errorCode = `HISTORY_HTTP_${history.status}`;
+              const sourceKey = JSON.stringify([
+                target.runId,
+                target.lineOfficialAccountId,
+                target.botId,
+                candidate.lineChatUserId,
+                target.targetStartAt.toISOString(),
+                target.freezeAt.toISOString(),
+              ]);
+              let cursor: HistoryCoverageCursor;
+              try {
+                cursor = candidate.historicalBackfillCursor !== null
+                  ? restoreHistoryCursor(
+                    candidate.historicalBackfillCursor,
+                    sourceKey,
+                    lineChatHistoricalLowerBound(),
+                  )
+                  : startHistoryCoverage(sourceKey, lineChatHistoricalLowerBound());
+              } catch {
+                const errorCode = "HISTORY_CHECKPOINT_INTEGRITY_FAILED";
                 await this.prisma.lineChatMirrorChat.update({
                   where: {
                     lineOfficialAccountId_lineChatUserId: {
@@ -2224,12 +2235,75 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
                     },
                   },
                   data: {
-                    ...historicalFetchFailurePatch(errorCode),
+                    historicalBackfillStatus: HistoricalBackfillStatus.HISTORICAL_COVERAGE_UNPROVEN,
+                    historicalBackfillLowerBoundAt: lineChatHistoricalLowerBound(),
                     historicalBackfillLastAttemptAt: attemptedAt,
+                    historicalBackfillErrorCode: errorCode,
+                    historicalBackfillCursor: null,
                   },
                 });
                 return {
-                  status: HistoricalBackfillStatus.FAILED,
+                  status: HistoricalBackfillStatus.HISTORICAL_COVERAGE_UNPROVEN,
+                  eventsObserved: 0,
+                  validEventsPersisted: 0,
+                  upsertOperations: 0,
+                  existingBeforeWrite: 0,
+                  invalidEventCount: 0,
+                  oldestValidTimestamp: candidate.historicalBackfillOldestAt,
+                  newestValidTimestamp: candidate.historicalBackfillNewestAt,
+                  errorCode,
+                  retried: true,
+                };
+              }
+              const historyEndpoint = `https://chat.line.biz/api/v3/bots/${encodeURIComponent(target.botId)}/chats/${encodeURIComponent(candidate.lineChatUserId)}/messages`;
+              const historyUrl = historyPageUrl(historyEndpoint, cursor.backward);
+              const history = await page.evaluate(async (url) => {
+                try {
+                  const response = await fetch(url, {
+                    credentials: "include",
+                    signal: AbortSignal.timeout(20_000),
+                  });
+                  const body: unknown = await response.json().catch(() => null);
+                  return { status: response.status, body, transportError: false };
+                } catch {
+                  return { status: 0, body: null, transportError: true };
+                }
+              }, historyUrl);
+              operationContext.assertOwnership();
+
+              if (history.status !== 200 || history.transportError) {
+                const observed = observeHistoryPage(cursor, {
+                  requestedBackward: cursor.backward,
+                  httpStatus: history.status,
+                  body: history.body,
+                  transportError: history.transportError,
+                });
+                const retryable = observed.status === "IN_PROGRESS";
+                const errorCode = observed.reason ?? (history.transportError
+                  ? "HISTORY_TRANSPORT_FAILURE" : `HISTORY_HTTP_${history.status}`);
+                await this.prisma.lineChatMirrorChat.update({
+                  where: {
+                    lineOfficialAccountId_lineChatUserId: {
+                      lineOfficialAccountId: target.lineOfficialAccountId,
+                      lineChatUserId: candidate.lineChatUserId,
+                    },
+                  },
+                  data: {
+                    ...(retryable
+                      ? historicalFetchFailurePatch(errorCode)
+                      : {
+                        historicalBackfillStatus: HistoricalBackfillStatus.HISTORICAL_COVERAGE_UNPROVEN,
+                        historicalBackfillLowerBoundAt: lineChatHistoricalLowerBound(),
+                        historicalBackfillErrorCode: errorCode,
+                      }),
+                    historicalBackfillLastAttemptAt: attemptedAt,
+                    historicalBackfillCursor: serializeHistoryCursor(observed),
+                  },
+                });
+                return {
+                  status: retryable
+                    ? HistoricalBackfillStatus.FAILED
+                    : HistoricalBackfillStatus.HISTORICAL_COVERAGE_UNPROVEN,
                   eventsObserved: 0,
                   validEventsPersisted: 0,
                   upsertOperations: 0,
@@ -2240,23 +2314,11 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
                   errorCode,
                   retried: candidate.historicalBackfillStatus !== null
                     && historicalBackfillCanResume(candidate.historicalBackfillStatus),
-              };
-            }
+                };
+              }
 
-            const fetchedAt = new Date();
-            await this.prisma.lineChatMirrorChat.update({
-              where: {
-                lineOfficialAccountId_lineChatUserId: {
-                  lineOfficialAccountId: target.lineOfficialAccountId,
-                  lineChatUserId: candidate.lineChatUserId,
-                },
-              },
-              data: { historicalBackfillLastSuccessAt: fetchedAt },
-            });
-            const parsed = parseManagerHistoryPage(
-                { list: history.list, backward: history.backwardPresent ? "present" : undefined },
-                ownerByBizId,
-              );
+              const fetchedAt = new Date();
+              const parsed = parseManagerHistoryPage(history.body, ownerByBizId);
               const boundedEvents = parsed.events.filter((event) =>
                 isHistoricalBackfillEventInRange(
                   event.sentAt,
@@ -2264,13 +2326,44 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
                   target.freezeAt,
                 ),
               );
-              const classification = classifyHistoricalPage({
+              const pageClassification = classifyHistoricalPage({
                 events: parsed.events,
-                backwardPresent: history.backwardPresent,
+                backwardPresent: parsed.backwardPresent,
                 invalidEventCount: parsed.invalidEventCount,
                 responseShapeValid: parsed.responseShapeValid,
                 timestampOrderValid: parsed.timestampOrderValid,
               }, lineChatHistoricalLowerBound());
+              const observedCursor = pageClassification.status === HistoricalBackfillStatus.HISTORICAL_COVERAGE_UNPROVEN
+                ? cursor
+                : observeHistoryPage(cursor, {
+                  requestedBackward: cursor.backward,
+                  httpStatus: 200,
+                  body: history.body,
+                });
+              const resultStatus = observedCursor.status === "COVERAGE_PROVEN"
+                ? HistoricalBackfillStatus.FAST_PATH_COMPLETE
+                : observedCursor.status === "IN_PROGRESS"
+                  ? HistoricalBackfillStatus.NEEDS_BACKWARD_PAGINATION
+                  : HistoricalBackfillStatus.HISTORICAL_COVERAGE_UNPROVEN;
+              const errorCode = resultStatus === HistoricalBackfillStatus.FAST_PATH_COMPLETE
+                ? null
+                : resultStatus === HistoricalBackfillStatus.NEEDS_BACKWARD_PAGINATION
+                  ? null
+                  : observedCursor.reason ?? pageClassification.errorCode ?? "HISTORY_COVERAGE_UNPROVEN";
+              const classification = {
+                status: resultStatus,
+                errorCode,
+                backwardRequired: resultStatus === HistoricalBackfillStatus.NEEDS_BACKWARD_PAGINATION
+                  ? true : resultStatus === HistoricalBackfillStatus.FAST_PATH_COMPLETE ? false : null,
+                complete: resultStatus === HistoricalBackfillStatus.FAST_PATH_COMPLETE,
+                oldestValidTimestamp: observedCursor.oldestAt === null
+                  ? pageClassification.oldestValidTimestamp : new Date(observedCursor.oldestAt),
+                newestValidTimestamp: candidate.historicalBackfillNewestAt === null
+                  ? pageClassification.newestValidTimestamp
+                  : pageClassification.newestValidTimestamp === null
+                    ? candidate.historicalBackfillNewestAt
+                    : new Date(Math.max(candidate.historicalBackfillNewestAt.getTime(), pageClassification.newestValidTimestamp.getTime())),
+              };
               const persistence = await persistHistoricalEvents({
                 writer: {
                   findExistingIds: async (lineOfficialAccountId, managerMessageIds) => {
@@ -2331,11 +2424,21 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
                     lineChatUserId: candidate.lineChatUserId,
                   },
                 },
-                data: historicalFetchResultPatch(classification, fetchedAt),
+                data: {
+                  ...historicalFetchResultPatch(
+                    classification,
+                    fetchedAt,
+                    resultStatus === HistoricalBackfillStatus.NEEDS_BACKWARD_PAGINATION
+                      || resultStatus === HistoricalBackfillStatus.HISTORICAL_COVERAGE_UNPROVEN
+                      ? serializeHistoryCursor(observedCursor) : null,
+                  ),
+                  historicalBackfillLastAttemptAt: attemptedAt,
+                },
               });
               return {
                 status: classification.status,
-                eventsObserved: history.list.length,
+                eventsObserved: Array.isArray((history.body as { list?: unknown } | null)?.list)
+                  ? ((history.body as { list: unknown[] }).list.length) : 0,
                 validEventsPersisted: persistence.observed,
                 upsertOperations: persistence.upsertOperations,
                 existingBeforeWrite: persistence.existingBeforeWrite,

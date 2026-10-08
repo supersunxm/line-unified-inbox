@@ -24,6 +24,25 @@ test("serialized checkpoint resumes opaque tokens and rejects loops", () => {
   assert.equal(observeHistoryPage(state, { httpStatus: 200, requestedBackward: "opaque", body: page([at + 2], "opaque") }).reason, "HISTORY_CURSOR_LOOP");
   assert.equal(observeHistoryPage(state, { httpStatus: 200, requestedBackward: "opaque", body: page([at + 2, at]) }).status, "COVERAGE_PROVEN");
 });
+test("a persisted cursor resumes the next page and resets its per-page retry budget", async () => {
+  const { restoreHistoryCursor, serializeHistoryCursor } = await import("./line-chat-history-pagination");
+  const first = observeHistoryPage(initial(), {
+    httpStatus: 200,
+    requestedBackward: null,
+    body: page([at + 4, at + 3], "opaque-next"),
+  });
+  const restored = restoreHistoryCursor(serializeHistoryCursor(first), first.sourceKey, boundary);
+  assert.equal(restored.backward, "opaque-next");
+  assert.equal(restored.pages, 1);
+  const second = observeHistoryPage(restored, {
+    httpStatus: 200,
+    requestedBackward: "opaque-next",
+    body: page([at + 2, at]),
+  });
+  assert.equal(second.status, "COVERAGE_PROVEN");
+  assert.equal(second.pages, 2);
+  assert.equal(second.attemptsForPage, 0);
+});
 test("empty/recent terminal is no proof of lower bound", () => {
   assert.equal(observe([]).status, "API_LIMITATION");
   assert.equal(observe([at + 1]).reason, "HISTORY_TERMINAL_LOWER_BOUND_UNPROVEN");
@@ -41,6 +60,16 @@ test("transient errors retain cursor; auth failures are explicit", () => {
     assert.equal(result.pages, 0); assert.equal(result.status, "IN_PROGRESS");
   }
   for (const httpStatus of [401, 403]) assert.equal(observeHistoryPage(initial(), { httpStatus, requestedBackward: null, body: null }).status, "AUTHENTICATION_BLOCKED");
+});
+test("transient history requests stop after the bounded per-page retry budget", () => {
+  let state = initial();
+  state = observeHistoryPage(state, { httpStatus: 503, requestedBackward: null, body: null });
+  assert.equal(state.status, "IN_PROGRESS");
+  state = observeHistoryPage(state, { httpStatus: 503, requestedBackward: null, body: null });
+  assert.equal(state.status, "IN_PROGRESS");
+  state = observeHistoryPage(state, { httpStatus: 503, requestedBackward: null, body: null });
+  assert.equal(state.status, "API_LIMITATION");
+  assert.equal(state.reason, "HISTORY_HTTP_503_RETRY_BUDGET_EXHAUSTED");
 });
 test("page budgets cannot become coverage claims", () => {
   const state = startHistoryCoverage("source", boundary, 1);

@@ -1,4 +1,4 @@
-import { managerCanonicalMessageType } from "./line-chat-manager-event-contract";
+import { managerCanonicalMessageType, managerMirrorRowEligibility } from "./line-chat-manager-event-contract";
 import { Inject, Injectable, Logger, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
 import { createHash } from "node:crypto";
 import {
@@ -1043,6 +1043,24 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
         if (mapping.source === "DIRECT_LINE_CHAT_USER_ID") result.directMapped += 1;
         else if (mapping.source === "EXACT_INBOUND_MESSAGE_ID") result.messageIdMapped += 1;
         else result.identityMapped += 1;
+
+        const eventEligibility = managerMirrorRowEligibility({
+          eventType: row.eventType,
+          messageType: row.messageType,
+          managerEventId: row.managerMessageId,
+          normalMessageIdPresent: Boolean(row.managerMessageId.trim()),
+          timestampValid: Number.isFinite(row.sentAt.getTime()),
+          storedDirection: row.direction,
+        });
+        if (row.direction !== LineChatMirrorDirection.UNKNOWN && eventEligibility.kind !== "CUSTOMER_MESSAGE") {
+          await this.markMirror(row.id, {
+            status: LineChatMirrorReconcileStatus.SKIPPED,
+            conversationId: mapping.conversationId,
+            source: "EVENT_ELIGIBILITY",
+            error: eventEligibility.reason ?? "MANAGER_EVENT_ELIGIBILITY_UNPROVEN",
+          }, apply);
+          continue;
+        }
 
         if (row.direction === LineChatMirrorDirection.UNKNOWN) {
           await this.markMirror(row.id, {

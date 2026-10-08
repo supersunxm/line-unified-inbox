@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { MANAGER_METADATA_EVENT_TYPES, managerEventDirection } from "./line-chat-manager-event-contract";
+import { MANAGER_METADATA_EVENT_TYPES, managerEventEligibility } from "./line-chat-manager-event-contract";
 import { historyTimestampsOrdered } from "./line-chat-history-pagination";
 import { LineChatMirrorDirection } from "@prisma/client";
 
@@ -174,6 +174,14 @@ export function parseManagerHistoryPage(
     const messageType = !eventOnly && typeof rawMessage.type === "string" && rawMessage.type.trim()
       ? rawMessage.type.trim()
       : null;
+    const eligibility = managerEventEligibility({
+      eventType,
+      messageType,
+      managerEventId: managerMessageId,
+      normalMessageIdPresent: Boolean(managerIdValue(rawMessage.id)),
+      timestampValid: true,
+    });
+    if (eligibility.kind === "UNKNOWN") invalidEventCount += 1;
     const bizId = typeof rawEvent.bizId === "string" ? rawEvent.bizId : null;
     const fileName = typeof rawMessage.fileName === "string"
       ? rawMessage.fileName
@@ -183,7 +191,7 @@ export function parseManagerHistoryPage(
     events.push({
       managerMessageId,
       eventType,
-      direction: managerEventDirection(eventType),
+      direction: eligibility.direction,
       messageType,
       text: !eventOnly && messageType?.toLowerCase() === "text"
         && typeof rawMessage.text === "string"
@@ -279,6 +287,7 @@ export function classifyHistoricalPage(
 export function historicalBackfillCanResume(status: string | null): boolean {
   return status === null
     || status === HistoricalBackfillStatus.FETCHING_INITIAL_PAGE
+    || status === HistoricalBackfillStatus.NEEDS_BACKWARD_PAGINATION
     || status === HistoricalBackfillStatus.FAILED;
 }
 
@@ -290,6 +299,7 @@ export function historicalFetchStartedPatch(at: Date): {
   historicalBackfillLastAttemptAt: Date;
   historicalBackfillBackwardRequired: null;
   historicalBackfillErrorCode: null;
+  historicalBackfillCursor: null;
 } {
   return {
     historicalBackfillStatus: HistoricalBackfillStatus.FETCHING_INITIAL_PAGE,
@@ -299,12 +309,14 @@ export function historicalFetchStartedPatch(at: Date): {
     historicalBackfillLastAttemptAt: at,
     historicalBackfillBackwardRequired: null,
     historicalBackfillErrorCode: null,
+    historicalBackfillCursor: null,
   };
 }
 
 export function historicalFetchResultPatch(
   classification: HistoricalPageClassification,
   completedAt: Date,
+  cursor: string | null = null,
 ): {
   historicalBackfillStatus: string;
   historicalBackfillLowerBoundAt: Date;
@@ -313,6 +325,7 @@ export function historicalFetchResultPatch(
   historicalBackfillLastSuccessAt: Date;
   historicalBackfillBackwardRequired: boolean | null;
   historicalBackfillErrorCode: string | null;
+  historicalBackfillCursor: string | null;
 } {
   return {
     historicalBackfillStatus: classification.status,
@@ -322,6 +335,7 @@ export function historicalFetchResultPatch(
     historicalBackfillLastSuccessAt: completedAt,
     historicalBackfillBackwardRequired: classification.backwardRequired,
     historicalBackfillErrorCode: classification.errorCode,
+    historicalBackfillCursor: cursor,
   };
 }
 

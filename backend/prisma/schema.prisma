@@ -2455,6 +2455,7 @@ model LineChatMirrorChat {
   historicalBackfillLastSuccessAt DateTime?
   historicalBackfillBackwardRequired Boolean?
   historicalBackfillErrorCode String?
+  historicalBackfillCursor String?
   status                LineChatMirrorSyncStatus @default(IDLE)
   lastErrorCode         String?
   lastErrorMessage      String?
