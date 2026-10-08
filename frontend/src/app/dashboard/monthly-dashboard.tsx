@@ -14,6 +14,7 @@ import { CountCell, DeltaValue, StateValue } from "@/components/metrics/value-ui
 import { Button, SearchInput, SectionCard, SectionCardSkeleton, Table, TableBody, TableCell, TableEmptyState, TableHead, TableHeader, TableRow, useDeferredLoading } from "@/components/ui";
 import { belowTarget24, RATE_BANDS, rateBands, splitByChatData, storesCsv, storesPassing24 } from "@/lib/metrics/dashboard-model";
 import { FOLLOWER_MIN_AGE_DAYS, FOLLOWER_MIN_BASE, followerMovers, type StoreFollowerChange } from "@/lib/metrics/followers";
+import { store360Href } from "@/lib/metrics/links";
 import { KPI_TARGETS, RATE24_TARGET, REPLIED_RATE_TARGET, type KpiKey } from "@/lib/metrics/kpi";
 import { monthLongLabel, parseV2Month, periodLabel, THAI_MONTHS_SHORT } from "@/lib/metrics/month";
 import { filterStoreRows, sortStoreRows, type StoreMetricsRow } from "@/lib/metrics/store-model";
@@ -23,11 +24,6 @@ import { v2Text } from "@/lib/metrics/translations";
 import { useMonthlyFollowers, type FollowerTrendPoint } from "@/lib/metrics/use-monthly-followers";
 import { useMonthlyMetrics, type MonthlyMetrics, type Source } from "@/lib/metrics/use-monthly-metrics";
 import { countState, formatValue, MIN_RATE_SAMPLE, type ValueState } from "@/lib/metrics/value-state";
-
-/** Store 360 for one store and month. */
-export function store360Href(storeId: string, month: string): string {
-  return `/store-360?${new URLSearchParams({ storeId, month }).toString()}`;
-}
 
 function shortDate(dateKey: string, language: AppLanguage): string {
   const [year, month, day] = dateKey.split("-").map(Number);

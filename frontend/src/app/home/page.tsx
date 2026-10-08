@@ -1,295 +1,85 @@
 "use client";
 
+// หน้าหลัก: always the current month. Four KPIs with their comparison, the stores to check, one
+// data-health line and three shortcuts. Every number comes from the metrics layer (the same
+// functions as the Dashboard, Store 360, /chats and the sidebar badge; docs/metrics-registry.md).
+
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useAppLanguage } from "@/app/language";
+import { languageLocale, type AppLanguage } from "@/app/language-utils";
+import { TargetText } from "@/components/metrics/kpi-ui";
+import { DeltaValue, StateValue } from "@/components/metrics/value-ui";
 import { AppShell } from "@/components/shell";
 import { useChatsUnrepliedBadge } from "@/components/shell/chats-unreplied-badge";
 import { api } from "@/lib/api";
-import type { BmReplyStatusSummaryResponse, DashboardAnalyticsResponse } from "@/types/api";
-import { thisMonthLine, UNREPLIED_SCOPE_LABELS } from "./unreplied-scope";
+import { KPI_TARGETS, RATE24_TARGET } from "@/lib/metrics/kpi";
+import { chatsHref, DASHBOARD_STORES_HREF, kpiReportHref, store360Href } from "@/lib/metrics/links";
+import { currentMonth, monthLongLabel, periodDaysLabel, periodLabel } from "@/lib/metrics/month";
+import { storesToWatch } from "@/lib/metrics/store-model";
+import { storeScopeText } from "@/lib/metrics/store-scope";
+import { systemProblems } from "@/lib/metrics/system-health";
+import { v2Text } from "@/lib/metrics/translations";
+import { useMonthlyFollowers, type FollowerGrowth } from "@/lib/metrics/use-monthly-followers";
+import { useMonthlyMetrics, type Source } from "@/lib/metrics/use-monthly-metrics";
+import { countState, deltaState, MIN_RATE_SAMPLE, type ValueState } from "@/lib/metrics/value-state";
 
-type Language = "th" | "en" | "zh";
 type AuthUser = { id: string; email: string; displayName: string; role: "ADMIN" | "ASSISTANT" | "VIEWER" };
 type SystemStatus = Awaited<ReturnType<typeof api.systemStatus>>;
-type ExecutiveHealth = { connectedStoreCount: number; totalStoreCount: number };
-type Tone = "green" | "red" | "amber" | "purple" | "neutral";
-type ModuleIcon = "chat" | "dashboard" | "followers" | "traffic" | "stores" | "purchase" | "broadcast" | "approval" | "coupon" | "tiktok";
 
-const UI_PREFERENCES_STORAGE_KEY = "oppo-line-oa-monitor-ui-preferences";
-
-const copy = {
-  th: {
-    eyebrow: "OPPO LINE OA · MAIN WORKSPACE",
-    title: "ภาพรวมการทำงาน",
-    subtitle: "ดูสถานะเครือข่าย งานที่ต้องจัดการ และทางลัดไปยังเครื่องมือสำคัญจากหน้าเดียว",
-    updated: "อัปเดตล่าสุด",
-    search: "ค้นหาลูกค้า ร้านค้า หรือข้อความ",
-    network: "ภาพรวมเครือข่าย",
-    totalStores: "ร้านค้าทั้งหมด",
-    connected: "เชื่อมต่อแล้ว",
-    unreplied: "ยังไม่ตอบ",
-    followers: "ผู้ติดตามรวม",
-    needsAttention: "ต้องจัดการ",
-    needsAttentionHint: "รายการที่ควรตรวจสอบก่อน เพื่อให้การทำงานของเครือข่ายเป็นปกติ",
-    openChats: "เปิด Store Chats",
-    review: "ตรวจสอบ",
-    manage: "จัดการ",
-    viewDashboard: "ดู Dashboard",
-    noUrgent: "ยังไม่มีรายการเร่งด่วนที่ต้องจัดการ",
-    unrepliedMessages: "ข้อความลูกค้ายังไม่ได้รับการตอบกลับ",
-    bmPending: "คำขอ BM รอการอนุมัติ",
-    oaIssues: "LINE OA มีปัญหาการเชื่อมต่อ",
-    dataQuality: "ความสมบูรณ์ของข้อมูล",
-    today: "วันนี้",
-    messages: "ข้อความเข้า",
-    responseRate: "อัตราตอบกลับภายใน 24 ชม.",
-    peakTime: "ช่วงเวลาพีค",
-    followerNet: "ผู้ติดตามสุทธิ",
-    quickAccess: "ทางลัด",
-    quickAccessHint: "ไปยังงานหลักของระบบโดยไม่ต้องไล่หาเมนู",
-    system: "สถานะระบบ",
-    backend: "Backend API",
-    database: "Database",
-    webhook: "LINE Webhook",
-    lineOa: "LINE OA",
-    healthy: "ปกติ",
-    attention: "ควรตรวจสอบ",
-    enabled: "เปิดใช้งาน",
-    disabled: "ปิดใช้งาน",
-    retry: "ลองใหม่",
-    loading: "กำลังโหลดภาพรวม...",
-    error: "ไม่สามารถโหลดหน้า Main ได้",
-    chats: "Store Chats",
-    dashboard: "Dashboard",
-    followerInsights: "Follower Insights",
-    traffic: "Message Traffic",
-    stores: "จัดการร้านค้า",
-    purchase: "ข้อมูลการซื้อ",
-    mass: "ส่งข้อความ",
-    approval: "อนุมัติ BM",
-    coupons: "คูปอง",
-    tiktok: "TikTok",
-  },
-  en: {
-    eyebrow: "OPPO LINE OA · MAIN WORKSPACE",
-    title: "Operations overview",
-    subtitle: "See network status, work that needs attention, and shortcuts to key tools from one place.",
-    updated: "Last updated",
-    search: "Search customers, stores, or messages",
-    network: "Network overview",
-    totalStores: "Total stores",
-    connected: "Connected",
-    unreplied: "Unreplied",
-    followers: "Total followers",
-    needsAttention: "Needs attention",
-    needsAttentionHint: "Review these items first to keep network operations healthy.",
-    openChats: "Open Store Chats",
-    review: "Review",
-    manage: "Manage",
-    viewDashboard: "View Dashboard",
-    noUrgent: "No urgent items need attention right now.",
-    unrepliedMessages: "Customer messages are still unreplied",
-    bmPending: "BM requests are waiting for approval",
-    oaIssues: "LINE OA connections need attention",
-    dataQuality: "Data quality",
-    today: "Today",
-    messages: "Inbound messages",
-    responseRate: "24h response rate",
-    peakTime: "Peak time",
-    followerNet: "Net followers",
-    quickAccess: "Quick access",
-    quickAccessHint: "Jump directly to the system's main work areas.",
-    system: "System status",
-    backend: "Backend API",
-    database: "Database",
-    webhook: "LINE Webhook",
-    lineOa: "LINE OA",
-    healthy: "Healthy",
-    attention: "Attention",
-    enabled: "Enabled",
-    disabled: "Disabled",
-    retry: "Retry",
-    loading: "Loading overview...",
-    error: "Unable to load Main workspace",
-    chats: "Store Chats",
-    dashboard: "Dashboard",
-    followerInsights: "Follower Insights",
-    traffic: "Message Traffic",
-    stores: "Store Management",
-    purchase: "Purchase Intelligence",
-    mass: "Mass Message",
-    approval: "BM Approval",
-    coupons: "Coupons",
-    tiktok: "TikTok",
-  },
-  zh: {
-    eyebrow: "OPPO LINE OA · MAIN WORKSPACE",
-    title: "运营总览",
-    subtitle: "在一个页面查看网络状态、待处理事项以及主要工具入口。",
-    updated: "最后更新",
-    search: "搜索客户、门店或消息",
-    network: "网络总览",
-    totalStores: "门店总数",
-    connected: "已连接",
-    unreplied: "未回复",
-    followers: "总关注者",
-    needsAttention: "需要处理",
-    needsAttentionHint: "优先检查以下事项，确保门店网络正常运行。",
-    openChats: "打开门店聊天",
-    review: "检查",
-    manage: "管理",
-    viewDashboard: "查看仪表盘",
-    noUrgent: "目前没有紧急事项需要处理。",
-    unrepliedMessages: "客户消息尚未回复",
-    bmPending: "BM 申请等待审批",
-    oaIssues: "LINE OA 连接需要检查",
-    dataQuality: "数据完整性",
-    today: "今天",
-    messages: "收到消息",
-    responseRate: "24 小时回复率",
-    peakTime: "高峰时段",
-    followerNet: "净增关注者",
-    quickAccess: "快捷入口",
-    quickAccessHint: "直接进入系统主要工作区域。",
-    system: "系统状态",
-    backend: "Backend API",
-    database: "Database",
-    webhook: "LINE Webhook",
-    lineOa: "LINE OA",
-    healthy: "正常",
-    attention: "需检查",
-    enabled: "已启用",
-    disabled: "已停用",
-    retry: "重试",
-    loading: "正在加载总览...",
-    error: "无法加载主页",
-    chats: "门店聊天",
-    dashboard: "仪表盘",
-    followerInsights: "关注者洞察",
-    traffic: "消息流量",
-    stores: "门店管理",
-    purchase: "购买洞察",
-    mass: "群发消息",
-    approval: "BM 审批",
-    coupons: "优惠券",
-    tiktok: "TikTok",
-  },
-} as const;
-
-function ModuleGlyph({ type }: { type: ModuleIcon }) {
-  const common = { fill: "none", stroke: "currentColor", strokeWidth: 1.8, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
-  return (
-    <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden="true">
-      {type === "chat" && <><path {...common} d="M4 5h13a3 3 0 0 1 3 3v6a3 3 0 0 1-3 3H9l-5 3v-3a3 3 0 0 1-2-3V8a3 3 0 0 1 2-3Z"/><path {...common} d="M7 11h.01M11 11h.01M15 11h.01"/></>}
-      {type === "dashboard" && <><rect {...common} x="3" y="3" width="7" height="7" rx="1.5"/><rect {...common} x="14" y="3" width="7" height="7" rx="1.5"/><rect {...common} x="3" y="14" width="7" height="7" rx="1.5"/><rect {...common} x="14" y="14" width="7" height="7" rx="1.5"/></>}
-      {type === "followers" && <><circle {...common} cx="9" cy="8" r="3"/><path {...common} d="M3.5 19c.6-4 2.5-6 5.5-6 2 0 3.7.9 4.7 2.7"/><path {...common} d="M17 19v-6m3 6v-9"/></>}
-      {type === "traffic" && <><path {...common} d="M2 12c2.2-3.5 4.2-3.5 6.3 0s4.2 3.5 6.4 0 4.2-3.5 7 0"/><path {...common} d="M2 17c2.2-3.5 4.2-3.5 6.3 0s4.2 3.5 6.4 0"/></>}
-      {type === "stores" && <><path {...common} d="M4 9h16l-1.5-4h-13L4 9Z"/><path {...common} d="M5 10v9h14v-9M9 19v-5h6v5"/></>}
-      {type === "purchase" && <><path {...common} d="M7 8h10l1 12H6L7 8Z"/><path {...common} d="M9 8c0-3 1.2-5 3-5s3 2 3 5M9 15h6"/></>}
-      {type === "broadcast" && <><path {...common} d="M3 10v4l11 4V6L3 10Z"/><path {...common} d="m17 8 3-2m-2 6h4m-5 4 3 2"/></>}
-      {type === "approval" && <><path {...common} d="M12 3c3 2.5 6 2.7 8 3v5.5c0 4.5-2.7 7.7-8 9.5-5.3-1.8-8-5-8-9.5V6c2-.3 5-.5 8-3Z"/><path {...common} d="m8.5 12 2.2 2.2 4.8-5"/></>}
-      {type === "coupon" && <><path {...common} d="M4 6h16v3a2.5 2.5 0 0 0 0 5v4H4v-4a2.5 2.5 0 0 0 0-5V6Z"/><path {...common} d="m16 9-8 7"/></>}
-      {type === "tiktok" && <><path {...common} d="M13 4v10a4.5 4.5 0 1 1-4-4.5"/><path {...common} d="M13 4c1.6 2.8 3.7 4 6 4.3"/></>}
-    </svg>
-  );
+function dateTime(iso: string, language: AppLanguage): string {
+  return new Intl.DateTimeFormat(`${languageLocale(language)}-u-ca-gregory`, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Bangkok" }).format(new Date(iso));
 }
 
-function toneClasses(tone: Tone) {
-  if (tone === "green") return "bg-[var(--app-success-soft)] text-[var(--app-success)]";
-  if (tone === "red") return "bg-[var(--app-danger-soft)] text-[var(--app-danger)]";
-  if (tone === "amber") return "bg-[var(--app-warning-soft)] text-[var(--app-warning)]";
-  if (tone === "purple") return "bg-purple-500/10 text-purple-600 dark:text-purple-300";
-  return "bg-[var(--app-surface-subtle)] text-[var(--app-text-secondary)]";
+/** A follower growth source as value states (net and its change). */
+function followerStates(current: Source<FollowerGrowth>, previous: Source<FollowerGrowth>, available: boolean): { net: ValueState; delta: ValueState } {
+  const state = (source: Source<FollowerGrowth>): ValueState => (!available ? { kind: "not-collected" } : countState(source.data?.net ?? null, { loading: source.loading && !source.data, error: source.data ? null : source.error }));
+  const net = state(current);
+  return { net, delta: deltaState(net, state(previous)) };
 }
 
-function StatCard({ label, value, helper, secondary, tone = "neutral" }: { label: string; value: string; helper?: string; secondary?: string; tone?: Tone }) {
+function KpiTile({ label, href, children, footer }: { label: string; href: string; children: React.ReactNode; footer: React.ReactNode }) {
   return (
-    <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4 shadow-[var(--app-shadow-sm)]">
-      <div className="text-xs font-medium text-[var(--app-text-secondary)]">{label}</div>
-      <div className="mt-2 flex items-end justify-between gap-3">
-        <div className="text-2xl font-bold tracking-[-0.03em] text-[var(--app-text-primary)] sm:text-[28px]">{value}</div>
-        <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${tone === "green" ? "bg-[var(--app-success)]" : tone === "red" ? "bg-[var(--app-danger)]" : tone === "amber" ? "bg-[var(--app-warning)]" : tone === "purple" ? "bg-purple-500" : "bg-[var(--app-border-strong)]"}`} />
-      </div>
-      {helper && <div className="mt-1.5 text-[11px] text-[var(--app-text-tertiary)]">{helper}</div>}
-      {secondary && <div data-home-unreplied-month className="mt-0.5 text-[11px] font-semibold text-[var(--app-text-secondary)]">{secondary}</div>}
-    </div>
-  );
-}
-
-function AttentionItem({ label, value, href, action, tone }: { label: string; value: string; href: string; action: string; tone: Tone }) {
-  return (
-    <Link href={href} className="group flex items-center gap-3 border-b border-[var(--app-border-subtle)] px-1 py-3.5 last:border-0 hover:bg-[var(--app-surface-hover)] sm:px-2">
-      <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${toneClasses(tone)}`}><span className="h-2.5 w-2.5 rounded-full bg-current" /></span>
-      <div className="min-w-0 flex-1">
-        <div className="text-sm font-semibold text-[var(--app-text-primary)]">{value}</div>
-        <div className="mt-0.5 text-xs text-[var(--app-text-secondary)]">{label}</div>
-      </div>
-      <span className="shrink-0 text-xs font-semibold text-[var(--app-accent)] group-hover:underline">{action} →</span>
+    <Link href={href} data-home-kpi className="flex min-w-0 flex-col gap-1 rounded-[var(--app-radius-lg)] border border-[var(--app-border)] bg-[var(--app-surface)] p-4 shadow-[var(--app-shadow-sm)] transition hover:border-[var(--app-accent)]/40 hover:bg-[var(--app-surface-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--app-accent)]/40">
+      <span className="text-xs font-medium text-[var(--app-text-secondary)]">{label}</span>
+      <span className="text-2xl font-semibold tracking-[-0.02em] text-[var(--app-text-primary)] sm:text-[28px]">{children}</span>
+      <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-[var(--app-text-secondary)]">{footer}</span>
     </Link>
-  );
-}
-
-function StatusRow({ label, value, ok }: { label: string; value: string; ok: boolean }) {
-  return (
-    <div className="flex items-center justify-between gap-3 border-b border-[var(--app-border-subtle)] py-3 last:border-0">
-      <span className="text-xs text-[var(--app-text-secondary)]">{label}</span>
-      <span className={`inline-flex items-center gap-1.5 text-xs font-semibold ${ok ? "text-[var(--app-success)]" : "text-[var(--app-danger)]"}`}>
-        <span className="h-1.5 w-1.5 rounded-full bg-current" />{value}
-      </span>
-    </div>
   );
 }
 
 export default function HomePage() {
   const router = useRouter();
-  const [language, setLanguage] = useState<Language>("th");
+  const { language, setLanguage } = useAppLanguage();
+  const t = v2Text(language);
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
-  const [authChecked, setAuthChecked] = useState(false);
-  const [analytics, setAnalytics] = useState<DashboardAnalyticsResponse | null>(null);
-  const [bmSummary, setBmSummary] = useState<BmReplyStatusSummaryResponse | null>(null);
-  const [health, setHealth] = useState<ExecutiveHealth | null>(null);
   const [systemStatus, setSystemStatus] = useState<SystemStatus | null>(null);
-  const [pendingApprovals, setPendingApprovals] = useState<number | null>(null);
-  const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [statusError, setStatusError] = useState(false);
+  const [lastSync, setLastSync] = useState<string | null>(null);
   const [searchText, setSearchText] = useState("");
-  const t = copy[language];
+  const month = useMemo(() => currentMonth(), []);
+  const data = useMonthlyMetrics(month, { enabled: Boolean(authUser) });
+  const followers = useMonthlyFollowers({ current: data.frame.current, previous: data.frame.previousCollected ? data.frame.previous : null, nonce: data.nonce, now: data.now, parts: { growth: Boolean(authUser), previous: Boolean(authUser) } });
+  // The sidebar badge's number: the same cached request and the same unrepliedCount function.
+  const badge = useChatsUnrepliedBadge(Boolean(authUser));
 
-  useEffect(() => {
+  const loadStatus = useCallback(async (user: AuthUser) => {
     try {
-      const raw = window.localStorage.getItem(UI_PREFERENCES_STORAGE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw) as { language?: Language };
-        if (parsed.language === "th" || parsed.language === "en" || parsed.language === "zh") setLanguage(parsed.language);
-      }
-    } catch { /* keep Thai default */ }
-  }, []);
-
-  const load = useCallback(async (user: AuthUser) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const [analyticsData, bmData, healthResponse, statusData, approvalData] = await Promise.all([
-        api.dashboardAnalytics("today"),
-        api.bmReplyStatusSummary(),
-        fetch("/api-backend/dashboard/executive-store-health?period=today", { credentials: "include", cache: "no-store" }),
-        api.systemStatus(),
-        user.role === "ADMIN" ? api.getPendingRegistrations() : Promise.resolve(null),
-      ]);
-      if (!healthResponse.ok) throw new Error(`Executive health request failed (${healthResponse.status})`);
-      setAnalytics(analyticsData);
-      setBmSummary(bmData);
-      setHealth((await healthResponse.json()) as ExecutiveHealth);
-      setSystemStatus(statusData);
-      setPendingApprovals(Array.isArray(approvalData) ? approvalData.length : null);
-      setLastUpdatedAt(new Date());
-    } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "Unable to load Main workspace");
-    } finally {
-      setLoading(false);
+      setSystemStatus(await api.systemStatus());
+      setStatusError(false);
+    } catch {
+      setStatusError(true);
     }
+    if (user.role !== "ADMIN") return;
+    // The latest chat sync (ADMIN only, as on LINE Chat Health).
+    try {
+      const response = await fetch("/api-backend/operations/line-chat-nickname/mirror-status", { credentials: "include", cache: "no-store" });
+      if (!response.ok) return;
+      const rows = ((await response.json()) as { stores: Array<{ lastSuccessfulSyncAt: string | null }> }).stores;
+      const latest = rows.map((row) => row.lastSuccessfulSyncAt).filter((value): value is string => Boolean(value)).sort().pop() ?? null;
+      setLastSync(latest);
+    } catch { /* the line falls back to the last message received */ }
   }, []);
 
   useEffect(() => {
@@ -298,159 +88,132 @@ export default function HomePage() {
       .then((user) => {
         if (cancelled) return;
         setAuthUser(user);
-        setAuthChecked(true);
-        void load(user);
+        void loadStatus(user);
       })
-      .catch(() => {
-        if (cancelled) return;
-        setAuthChecked(true);
-        router.replace("/login");
-      });
+      .catch(() => { if (!cancelled) router.replace("/login"); });
     return () => { cancelled = true; };
-  }, [load, router]);
-
-  const changeLanguage = useCallback((nextLanguage: Language) => {
-    setLanguage(nextLanguage);
-    try {
-      const raw = window.localStorage.getItem(UI_PREFERENCES_STORAGE_KEY);
-      const current = raw ? JSON.parse(raw) as Record<string, unknown> : {};
-      window.localStorage.setItem(UI_PREFERENCES_STORAGE_KEY, JSON.stringify({ ...current, language: nextLanguage }));
-    } catch {
-      window.localStorage.setItem(UI_PREFERENCES_STORAGE_KEY, JSON.stringify({ language: nextLanguage }));
-    }
-  }, []);
+  }, [loadStatus, router]);
 
   const logout = useCallback(async () => {
     try { await api.logout(); } finally { router.replace("/login"); }
   }, [router]);
 
-  const connectedRate = health && health.totalStoreCount > 0 ? Math.round((health.connectedStoreCount / health.totalStoreCount) * 100) : 0;
-  const unreplied = bmSummary?.overview.notReplied ?? 0;
-  // This month's count: the sidebar badge's shared helper (bm-reply-status-summary?month=).
-  const monthUnreplied = useChatsUnrepliedBadge(Boolean(authUser));
-  const scope = UNREPLIED_SCOPE_LABELS[language];
-  const monthLine = thisMonthLine(language, monthUnreplied);
-  const follower = analytics?.summaryCards.followerGrowth;
-  const dataHealthy = analytics?.dataQuality.status === "Healthy";
-  const urgentCount = unreplied + (pendingApprovals ?? 0) + (systemStatus?.lineOaIssueCount ?? 0) + (dataHealthy === false ? 1 : 0);
-
-  const quickLinks = useMemo(() => {
-    const items: Array<{ href: string; label: string; icon: ModuleIcon; adminOnly?: boolean }> = [
-      { href: "/chats", label: t.chats, icon: "chat" },
-      { href: "/dashboard", label: t.dashboard, icon: "dashboard" },
-      { href: "/follower-insights", label: t.followerInsights, icon: "followers" },
-      { href: "/dashboard/message-traffic", label: t.traffic, icon: "traffic" },
-      { href: "/stores", label: t.stores, icon: "stores" },
-      { href: "/admin/purchase-analytics", label: t.purchase, icon: "purchase" },
-      { href: "/mass-messages", label: t.mass, icon: "broadcast", adminOnly: true },
-      { href: "/admin/registrations", label: t.approval, icon: "approval", adminOnly: true },
-      { href: "/coupons", label: t.coupons, icon: "coupon", adminOnly: true },
-      { href: "/tiktok", label: t.tiktok, icon: "tiktok", adminOnly: true },
-    ];
-    return items.filter((item) => !item.adminOnly || authUser?.role === "ADMIN");
-  }, [authUser?.role, t]);
-
-  if (!authChecked || !authUser) {
-    return <main className="flex min-h-screen items-center justify-center bg-[var(--app-bg)] text-sm text-[var(--app-text-secondary)]">{t.loading}</main>;
+  if (!authUser) {
+    return <main className="flex min-h-screen items-center justify-center bg-[var(--app-bg)] text-sm text-[var(--app-text-secondary)]">{t("homeLoading")}</main>;
   }
+
+  const locale = languageLocale(language);
+  const previousLabel = periodLabel(data.frame.previous, language);
+  const problems = systemStatus ? systemProblems(systemStatus) : [];
+  const follower = followerStates(followers.growth, followers.previousGrowth, followers.days !== null);
+  const watch = storesToWatch(data.storeRows);
+  const syncText = lastSync ? t("dataHealthSync", { time: dateTime(lastSync, language) }) : systemStatus?.lastValidWebhookReceived ? t("dataHealthWebhook", { time: dateTime(systemStatus.lastValidWebhookReceived, language) }) : null;
+  const versus = <span>{t("versusPeriod", { period: previousLabel })}</span>;
 
   return (
     <AppShell
       currentSection="home"
       authUser={authUser}
-      text={{ appName: "OPPO LINE OA Monitor", appDescription: t.subtitle, searchPlaceholder: t.search, lastUpdated: t.updated, loadingData: t.loading, apiError: t.error, retry: t.retry }}
+      text={{ appName: "OPPO LINE OA Monitor", retry: t("refresh") }}
       language={language}
-      changeLanguage={changeLanguage}
+      changeLanguage={setLanguage}
       searchText={searchText}
       setSearchText={setSearchText}
       pilotMode={systemStatus?.pilotMode}
-      lastUpdatedAt={lastUpdatedAt}
+      lastUpdatedAt={new Date(data.now)}
       logout={logout}
-      isLoading={loading && Boolean(analytics)}
-      apiError={error}
-      loadApplicationData={() => load(authUser)}
+      isLoading={data.coreLoading}
+      apiError={data.current.error}
+      loadApplicationData={() => { data.refresh(); void loadStatus(authUser); }}
     >
-      <main className="min-w-0 flex-1 bg-[var(--app-bg)] px-4 py-6 sm:px-6 lg:px-8">
-        <div className="mx-auto max-w-[1280px]">
-          <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
-            <div>
-              <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--app-text-tertiary)]">{t.eyebrow}</div>
-              <h1 className="mt-2 text-2xl font-bold tracking-[-0.03em] text-[var(--app-text-primary)] sm:text-[30px]">{t.title}</h1>
-              <p className="mt-1.5 max-w-2xl text-sm leading-6 text-[var(--app-text-secondary)]">{t.subtitle}</p>
+      <main data-home className="min-w-0 flex-1 bg-[var(--app-bg)] px-4 py-6 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-[1280px] space-y-6">
+          {problems.length > 0 && (
+            <div role="alert" data-home-system-banner className="rounded-[var(--app-radius-lg)] border border-[var(--app-danger)]/40 bg-[var(--app-danger-soft)] px-4 py-3 text-sm font-semibold text-[var(--app-danger)]">
+              {t("systemProblemBanner", { parts: problems.map((part) => t(part === "backend" ? "systemPartBackend" : part === "database" ? "systemPartDatabase" : "systemPartWebhook")).join(" · ") })}
+              {" "}<Link href="/operations/line-chat-health" className="underline">{t("dataHealthLink")}</Link>
             </div>
-            <Link href="/dashboard" className="inline-flex h-10 items-center rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] px-4 text-sm font-semibold text-[var(--app-text-primary)] shadow-[var(--app-shadow-sm)] transition hover:bg-[var(--app-surface-hover)]">
-              {t.viewDashboard} →
+          )}
+
+          <header className="flex flex-wrap items-end justify-between gap-4">
+            <div className="min-w-0">
+              <h1 className="text-2xl font-bold tracking-[-0.03em] text-[var(--app-text-primary)] sm:text-[30px]">{t("homeTitle", { month: `${monthLongLabel(month, language)} · ${periodDaysLabel(data.frame.current, language)}` })}</h1>
+              <p className="mt-1.5 text-sm text-[var(--app-text-secondary)]">{t("homeDescription", { previous: previousLabel })}</p>
+            </div>
+            <nav aria-label={t("shortcutsLabel")} data-home-shortcuts className="flex flex-wrap gap-2">
+              <Link href={`/chats?month=${encodeURIComponent(month)}`} className="inline-flex h-10 items-center gap-2 rounded-[var(--app-radius-md)] border border-[var(--app-border)] bg-[var(--app-surface)] px-4 text-sm font-semibold text-[var(--app-text-primary)] shadow-[var(--app-shadow-sm)] hover:bg-[var(--app-surface-hover)]">
+                {t("shortcutChats")}
+                {badge !== null && badge > 0 && <span data-home-chats-badge aria-label={t("unrepliedBadgeLabel", { count: badge.toLocaleString(locale) })} className="rounded-full bg-[var(--app-danger-soft)] px-2 py-0.5 text-xs font-bold tabular-nums text-[var(--app-danger)]">{badge.toLocaleString(locale)}</span>}
+              </Link>
+              <Link href={kpiReportHref(month)} className="inline-flex h-10 items-center rounded-[var(--app-radius-md)] border border-[var(--app-border)] bg-[var(--app-surface)] px-4 text-sm font-semibold text-[var(--app-text-primary)] shadow-[var(--app-shadow-sm)] hover:bg-[var(--app-surface-hover)]">{t("shortcutKpiReport")}</Link>
+              <Link href="/dashboard" className="inline-flex h-10 items-center rounded-[var(--app-radius-md)] border border-[var(--app-border)] bg-[var(--app-surface)] px-4 text-sm font-semibold text-[var(--app-text-primary)] shadow-[var(--app-shadow-sm)] hover:bg-[var(--app-surface-hover)]">{t("shortcutDashboard")}</Link>
+            </nav>
+          </header>
+
+          <section aria-label={t("homeKpis")} className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <KpiTile label={t("repliedRate")} href="/dashboard" footer={<>{versus}<DeltaValue state={data.network.replyRateDelta} kind="points" worseWhen="down" /><TargetText kpi="replied" value={data.network.replyRate} /></>}>
+              <StateValue state={data.network.replyRate} format="percent" target={KPI_TARGETS.replied ?? undefined} showN />
+            </KpiTile>
+            <KpiTile label={t("rate24")} href="/dashboard" footer={<>{versus}<DeltaValue state={data.network.rate24Delta} kind="points" worseWhen="down" /><TargetText kpi="rate24" value={data.network.rate24} /></>}>
+              <StateValue state={data.network.rate24} format="percent" target={RATE24_TARGET ?? undefined} showN />
+            </KpiTile>
+            <KpiTile label={t("unrepliedThisMonth")} href={`/chats?month=${encodeURIComponent(month)}`} footer={<>{versus}<DeltaValue state={data.network.unrepliedDelta} kind="count" worseWhen="up" />{data.network.chats.kind === "value" && <span>{t("chatsInMonth", { count: data.network.chats.value.toLocaleString(locale) })}</span>}</>}>
+              <span data-home-unreplied><StateValue state={data.network.unreplied} /></span>
+            </KpiTile>
+            <KpiTile label={t("followersNetThisMonth")} href="/dashboard" footer={followers.days ? <>{versus}<DeltaValue state={follower.delta} kind="count" worseWhen="down" /></> : <span>{t("followersNoSnapshot")}</span>}>
+              <span data-home-followers-net><StateValue state={follower.net} signed /></span>
+            </KpiTile>
+          </section>
+
+          <section aria-labelledby="home-stores-to-watch" data-home-stores-to-watch className="rounded-[var(--app-radius-lg)] border border-[var(--app-border)] bg-[var(--app-surface)] p-4 shadow-[var(--app-shadow-sm)] sm:p-5">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <h2 id="home-stores-to-watch" className="text-base font-bold text-[var(--app-text-primary)]">{t("storesToWatch")}</h2>
+              <Link href={DASHBOARD_STORES_HREF} className="text-sm font-semibold text-[var(--app-accent)] hover:underline">{t("allStoresLink")}</Link>
+            </div>
+            <p className="mt-1 text-xs text-[var(--app-text-secondary)]">{t("storesToWatchNote", { min: MIN_RATE_SAMPLE })}</p>
+            {data.coreLoading ? (
+              <p className="mt-3 text-sm text-[var(--app-text-secondary)]">{t("loadingEllipsis")}</p>
+            ) : watch.length === 0 ? (
+              <p className="mt-3 text-sm text-[var(--app-text-secondary)]">{data.current.error ? t("chatCountLabelError", { error: data.current.error }) : t("storesToWatchEmpty")}</p>
+            ) : (
+              <div className="mt-3 overflow-x-auto">
+                <table className="w-full min-w-[520px] text-left text-sm">
+                  <thead className="text-[11px] text-[var(--app-text-secondary)]">
+                    <tr className="border-b border-[var(--app-border)]">
+                      <th scope="col" className="px-2 py-2 font-medium">{t("storeName")}</th>
+                      <th scope="col" className="px-2 py-2 text-right font-medium">{t("unanswered")}</th>
+                      <th scope="col" className="px-2 py-2 text-right font-medium">{t("rate24")} (n)</th>
+                      <th scope="col" className="px-2 py-2 text-right font-medium">{t("rate24DeltaColumn")}</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[var(--app-border-subtle)]">
+                    {watch.map((row) => (
+                      <tr key={row.storeId} data-home-watch-row={row.storeId}>
+                        <th scope="row" className="max-w-[20rem] px-2 py-2.5 text-left font-medium">
+                          <Link href={store360Href(row.storeId, month)} className="block truncate text-[var(--app-text-primary)] hover:text-[var(--app-accent)] hover:underline" title={row.storeName}>{row.storeName}</Link>
+                        </th>
+                        <td className="px-2 py-2.5 text-right">
+                          <Link href={chatsHref({ storeId: row.storeId, month, unrepliedOnly: true })} className="font-semibold text-[var(--app-text-primary)] hover:underline"><StateValue state={row.unreplied} /></Link>
+                        </td>
+                        <td className="px-2 py-2.5 text-right"><StateValue state={row.rate24} format="percent" target={RATE24_TARGET ?? undefined} showN /></td>
+                        <td className="px-2 py-2.5 text-right"><DeltaValue state={row.rate24Delta} kind="points" worseWhen="down" /></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+
+          <p data-home-data-health className="text-xs text-[var(--app-text-secondary)]">
+            <Link href="/operations/line-chat-health" className="hover:text-[var(--app-text-primary)] hover:underline">
+              {[
+                data.stores.data && data.current.data ? storeScopeText(data.coverage, language) : null,
+                syncText,
+                systemStatus ? (problems.length === 0 ? t("systemNormal") : null) : statusError ? t("systemStatusUnknown") : null,
+              ].filter(Boolean).join(" · ")}
             </Link>
-          </div>
-
-          <section aria-labelledby="network-overview">
-            <div id="network-overview" className="mb-3 text-xs font-semibold uppercase tracking-[0.08em] text-[var(--app-text-tertiary)]">{t.network}</div>
-            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-              <StatCard label={t.totalStores} value={(health?.totalStoreCount ?? analytics?.dataQuality.storeCount ?? 0).toLocaleString()} helper={t.network} />
-              <StatCard label={t.connected} value={`${(health?.connectedStoreCount ?? 0).toLocaleString()} / ${(health?.totalStoreCount ?? 0).toLocaleString()}`} helper={`${connectedRate}%`} tone={connectedRate >= 90 ? "green" : "amber"} />
-              <StatCard label={scope.unrepliedAllMonths} value={unreplied.toLocaleString()} helper={t.unrepliedMessages} secondary={monthLine ?? undefined} tone={unreplied > 0 ? "red" : "green"} />
-              <StatCard label={t.followers} value={(follower?.totalFriends ?? 0).toLocaleString()} helper={follower ? `${follower.netToday >= 0 ? "+" : ""}${follower.netToday.toLocaleString()} ${t.today}` : undefined} tone="green" />
-            </div>
-          </section>
-
-          <div className="mt-6 grid grid-cols-1 gap-4 xl:grid-cols-[1.45fr_0.75fr]">
-            <section className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4 shadow-[var(--app-shadow-sm)] sm:p-5">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <h2 className="text-base font-bold text-[var(--app-text-primary)]">{t.needsAttention}</h2>
-                  <p className="mt-1 text-xs leading-5 text-[var(--app-text-secondary)]">{t.needsAttentionHint}</p>
-                </div>
-                <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${urgentCount > 0 ? "bg-[var(--app-danger-soft)] text-[var(--app-danger)]" : "bg-[var(--app-success-soft)] text-[var(--app-success)]"}`}>{urgentCount.toLocaleString()}</span>
-              </div>
-              <div className="mt-3">
-                {urgentCount === 0 ? (
-                  <div className="flex min-h-28 items-center justify-center rounded-xl bg-[var(--app-success-soft)] px-4 text-center text-sm font-medium text-[var(--app-success)]">{t.noUrgent}</div>
-                ) : (
-                  <>
-                    {unreplied > 0 && <AttentionItem label={t.unrepliedMessages} value={`${unreplied.toLocaleString()} ${scope.unrepliedAllMonths}`} href="/chats" action={t.openChats} tone="red" />}
-                    {authUser.role === "ADMIN" && (pendingApprovals ?? 0) > 0 && <AttentionItem label={t.bmPending} value={`${pendingApprovals?.toLocaleString()} ${t.approval}`} href="/admin/registrations" action={t.review} tone="amber" />}
-                    {(systemStatus?.lineOaIssueCount ?? 0) > 0 && <AttentionItem label={t.oaIssues} value={`${systemStatus?.lineOaIssueCount.toLocaleString()} LINE OA`} href="/stores" action={t.manage} tone="amber" />}
-                    {dataHealthy === false && <AttentionItem label={t.dataQuality} value={analytics?.dataQuality.status ?? t.attention} href="/dashboard" action={t.review} tone="purple" />}
-                  </>
-                )}
-              </div>
-            </section>
-
-            <section className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-5 shadow-[var(--app-shadow-sm)]">
-              <h2 className="text-base font-bold text-[var(--app-text-primary)]">{t.system}</h2>
-              <div className="mt-3">
-                <StatusRow label={t.backend} value={systemStatus?.backendApi ?? "—"} ok={(systemStatus?.backendApi ?? "").toLowerCase().includes("ok") || (systemStatus?.backendApi ?? "").toLowerCase().includes("healthy")} />
-                <StatusRow label={t.database} value={systemStatus?.database ?? "—"} ok={(systemStatus?.database ?? "").toLowerCase().includes("ok") || (systemStatus?.database ?? "").toLowerCase().includes("healthy")} />
-                <StatusRow label={t.webhook} value={systemStatus?.lineWebhookEnabled ? t.enabled : t.disabled} ok={Boolean(systemStatus?.lineWebhookEnabled)} />
-                <StatusRow label={t.lineOa} value={`${systemStatus?.connectedLineOaCount ?? 0} / ${systemStatus?.activeLineOaCount ?? 0}`} ok={(systemStatus?.lineOaIssueCount ?? 0) === 0} />
-              </div>
-            </section>
-          </div>
-
-          <section className="mt-6">
-            <div className="mb-3 text-xs font-semibold uppercase tracking-[0.08em] text-[var(--app-text-tertiary)]">{t.today}</div>
-            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-              <StatCard label={t.messages} value={(analytics?.summaryCards.messagesToday ?? 0).toLocaleString()} helper={analytics ? `${analytics.summaryCards.messagesDiffPct >= 0 ? "+" : ""}${analytics.summaryCards.messagesDiffPct}%` : undefined} tone="green" />
-              <StatCard label={t.responseRate} value={`${analytics?.summaryCards.responseRate24h ?? 0}%`} helper={analytics ? `${analytics.summaryCards.repliedCount.toLocaleString()} ${t.unreplied === "Unreplied" ? "replied" : language === "zh" ? "已回复" : "ตอบแล้ว"}` : undefined} tone={(analytics?.summaryCards.responseRate24h ?? 0) >= 80 ? "green" : "amber"} />
-              <StatCard label={t.peakTime} value={analytics?.peakHourAnalysis.peakWindow ?? "—"} helper={analytics ? `${analytics.peakHourAnalysis.peakTrafficCount.toLocaleString()} ${t.messages}` : undefined} tone="purple" />
-              <StatCard label={t.followerNet} value={follower ? `${follower.netToday >= 0 ? "+" : ""}${follower.netToday.toLocaleString()}` : "—"} helper={follower ? `${follower.addedToday.toLocaleString()} + / ${follower.blockedToday.toLocaleString()} −` : undefined} tone={(follower?.netToday ?? 0) >= 0 ? "green" : "red"} />
-            </div>
-          </section>
-
-          <section className="mt-6 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4 shadow-[var(--app-shadow-sm)] sm:p-5">
-            <div>
-              <h2 className="text-base font-bold text-[var(--app-text-primary)]">{t.quickAccess}</h2>
-              <p className="mt-1 text-xs text-[var(--app-text-secondary)]">{t.quickAccessHint}</p>
-            </div>
-            <div className="mt-4 grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-5">
-              {quickLinks.map((item) => (
-                <Link key={item.href} href={item.href} className="group flex min-h-24 flex-col justify-between rounded-xl border border-[var(--app-border-subtle)] bg-[var(--app-surface-subtle)] p-3.5 transition hover:-translate-y-0.5 hover:border-[var(--app-accent)]/30 hover:bg-[var(--app-accent-soft)]">
-                  <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-accent)] shadow-[var(--app-shadow-sm)]"><ModuleGlyph type={item.icon} /></span>
-                  <span className="mt-3 flex items-center justify-between gap-2 text-xs font-semibold text-[var(--app-text-primary)]"><span className="truncate">{item.label}</span><span className="text-[var(--app-text-tertiary)] transition group-hover:translate-x-0.5 group-hover:text-[var(--app-accent)]">→</span></span>
-                </Link>
-              ))}
-            </div>
-          </section>
+          </p>
         </div>
       </main>
     </AppShell>

@@ -4,7 +4,6 @@
 //   /v2/report?month=&partner=&store=
 // The month is always written, so a copied link keeps its month after the month turns.
 
-import { buildChatsHref } from "../../app/workspace-routing.ts";
 import type { MonthSort } from "./monthly-model.ts";
 import { parseV2Month } from "./month.ts";
 
@@ -55,7 +54,4 @@ export function reportHref(state: ReportUrlState): string {
   return `/v2/report${monthQuery(state.month, { partner: state.partner, store: state.store })}`;
 }
 
-/** /chats filtered to one store and month, with /chats's own URL builder (?storeId=&month=). */
-export function chatsHref(input: { storeId: string; month: string; unrepliedOnly?: boolean }): string {
-  return buildChatsHref({ store: input.storeId, month: input.month, ...(input.unrepliedOnly ? { replyState: "NOT_REPLIED" } : {}) });
-}
+export { chatsHref } from "../metrics/links.ts";

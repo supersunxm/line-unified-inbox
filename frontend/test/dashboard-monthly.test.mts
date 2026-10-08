@@ -89,7 +89,8 @@ test("dashboard reads the metrics layer, the /chats month selector and links sto
   assert.match(dashboard, /const data = useMonthlyMetrics\(month\);/);
   assert.match(dashboard, /const month = parseV2Month\(params\.get\("month"\)\);/);
   assert.match(dashboard, /<MetricsMonthSelect month=\{month\} \/>/);
-  assert.match(dashboard, /return `\/store-360\?\$\{new URLSearchParams\(\{ storeId, month \}\)\.toString\(\)\}`;/);
+  assert.match(read("lib/metrics/links.ts"), /return `\/store-360\?\$\{new URLSearchParams\(\{ storeId, month \}\)\.toString\(\)\}`;/);
+  assert.match(dashboard, /import \{ store360Href \} from "@\/lib\/metrics\/links";/);
   assert.match(dashboard, /<section id="stores"/, "Home's ดูทุกสาขา → lands on /dashboard#stores");
   assert.match(dashboard, /<HowCounted kpi="replied" \/>[\s\S]*<HowCounted kpi="rate24" \/>[\s\S]*t\("kpiDifference"\)/);
   assert.match(dashboard, /sortStoreRows\(filterStoreRows\(data\.storeRows, \{ region: region \|\| null, search \}\), "rate24"\)/, "default sort: 24h gap to target, low sample last");

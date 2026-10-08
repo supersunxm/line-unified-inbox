@@ -58,3 +58,15 @@ cache, 2-minute expiry, used by Home, Dashboard, Store 360, `/v2/report` and the
 | StoreMaster peer panel (Tier / KPI plan / Area / BM ranking) | Ranked stores by follower stock with partner parsed from names; the store table (24h gap to target) is the one store ranking. |
 
 Files deleted (unreachable after the change): `app/dashboard/executive-dashboard-v2.tsx`, `executive-dashboard-base.tsx`, `executive-store-peer-panel.tsx`.
+
+### Home (PR 3)
+
+| Module | Why |
+|---|---|
+| "ยังไม่ตอบ (ทุกเดือน)" card (7,652 in production) and its "ต้องจัดการ" row | Counted every month, so it contradicted the sidebar badge (this month) and the Dashboard (the period). Home shows one number: ยังไม่ตอบ this month, the same function and request as the badge. |
+| Quick-access grid (10 tiles) | Duplicated the sidebar. Three shortcuts remain: แชทร้านค้า (with the badge), รายงาน KPI รายเดือน, แดชบอร์ด. |
+| "วันนี้" cards (messages, 24h %, peak time, +followers today) | At 09:42 they read 24h 0% and +0 followers: a day is not the frame and the day had barely started. The month is the frame. |
+| Total stores / Connected / Total followers cards | Store counts disagreed with other pages (150 / 149 / 144 / 141). The one store count is the data-health line ("X จาก Y ร้านที่มีข้อมูลแชท", `store-scope.ts`). |
+| System status card | Replaced by one data-health line linking to LINE Chat Health, and a banner only when the backend, database or webhook is down. |
+
+Home's "ซิงก์แชทล่าสุด" is the latest successful chat sync (`GET /operations/line-chat-nickname/mirror-status`, ADMIN only); for other roles the line shows the last message received (`GET /operations/status` `lastValidWebhookReceived`).
