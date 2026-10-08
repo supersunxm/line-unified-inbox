@@ -6529,12 +6529,12 @@ Live worker continues independently at 146 configured unique active OA identitie
 
 ## 2026-10-08 — LINE Mirror completeness PR1 runtime integration
 
-- Current isolated branch: `codex/line-mirror-history-evidence`, based on verified `origin/main` `4bb2ab887bb8aa9441ad8dce445ebd00bfcaec00`; primary checkout remains untouched.
+- Current isolated branch: `codex/line-mirror-history-evidence`, implementation base `4bb2ab887bb8aa9441ad8dce445ebd00bfcaec00`; PR #545 targets refreshed `main` `5818259b351833fb633dbd85937e0bd47e30f2ff`. The primary checkout remains untouched.
 - Wired bounded opaque-cursor pagination into the existing operator-controlled Historical Backfill worker. Cursor scope binds run, OA, bot, conversation and source interval; each pass requests one page and persists checkpoint only after idempotent page persistence. Retry budget is three attempts per page. Invalid shape/order, cursor loops, exhausted bounds and invalid checkpoints remain unproven.
 - Historical parsing now uses shared Manager event eligibility, preserving unknown message-like rows as evidence while preventing them from certifying coverage. Reconciliation applies the same eligibility and stored-direction consistency gate before canonical writes.
 - Added one nullable cursor column and additive migration. No production migration/deployment, historical mode activation, application-data write, replay, or repair was performed.
 - Verification after the latest code edits: backend build passed; configured LINE Chat backend CI group 241/241 passed; changed-file ESLint passed; dedicated empty-schema migration test passed; Prisma schema validation passed. A fresh local database applied all 169 migrations, the production-mode backend started with LINE workers disabled, `/health` returned 200, the protected operations health route returned 401, and startup error-level logs were zero. The temporary database was dropped and port 3001 was released.
 - The existing BACKFILL mode still skips the normal fleet cycle for that worker pass. This predates this change; keep production in NORMAL and address scheduling/priority semantics in the later coordinator workstream before enabling historical collection.
 - Broad backend suite has a known unchanged-main failure baseline recorded in task notes; this PR reports the configured affected CI scope, not a false full-suite-green claim.
-- Local candidate commit is created in the isolated worktree and remains unpushed; no PR or hosted CI run exists yet.
-- Next: request explicit push approval as required by AGENTS.md. Hosted CI and production acceptance remain pending; PR2/PR3 and incident closure are not complete.
+- The exact approved implementation commit `1724756b9aa0c12733d0f462d6486d5ba3683638` was pushed first, and exactly one PR (#545) was opened. A progress-log-only follow-up is being added before final hosted CI monitoring.
+- Next: wait for fresh required CI and reviews, fix attributable failures without bypassing protection, merge with a merge commit only when eligible, then verify Railway and perform bounded read-only production checks. PR2/PR3 and historical incident closure remain incomplete.
