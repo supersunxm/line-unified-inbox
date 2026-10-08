@@ -60,6 +60,7 @@ function FollowerChart({
   noPreviousSnapshotLabel,
   previousDayLabel,
   gapSinceLabel,
+  gapSuffixLabel,
 }: {
   points: TikTokPublicHistoryPoint[];
   locale: string;
@@ -69,6 +70,7 @@ function FollowerChart({
   noPreviousSnapshotLabel: string;
   previousDayLabel: string;
   gapSinceLabel: string;
+  gapSuffixLabel: string;
 }) {
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   if (points.length < 2) {
@@ -143,17 +145,38 @@ function FollowerChart({
               strokeLinejoin="round"
             />
           </svg>
-          {coords.map(([x, y], index) => (
-            <button key={points[index].metricDate} type="button"
-              onClick={() => setSelectedDate(points[index].metricDate)}
-              onMouseEnter={() => setSelectedDate(points[index].metricDate)}
-              onFocus={() => setSelectedDate(points[index].metricDate)}
-              aria-label={`${formatMetricDate(points[index].metricDate, locale)}: ${formatNumber(points[index].followerCount, locale)}`}
-              aria-pressed={selected.metricDate === points[index].metricDate}
-              style={{ left: `${(x / 1000) * 100}%`, top: `${(y / 240) * 100}%` }}
-              className={`absolute z-20 h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-[var(--app-accent)] bg-[var(--app-surface)] shadow-sm focus-visible:outline-2 focus-visible:outline-offset-2 ${selected.metricDate === points[index].metricDate ? "ring-2 ring-[var(--app-accent)]" : ""}`}
-            />
-          ))}
+          {coords.map(([x, y], index) => {
+            const point = points[index];
+            const prior = points[index - 1];
+            const pointDelta = prior ? point.followerCount - prior.followerCount : null;
+            const pointConsecutive = prior ? shiftMetricDate(prior.metricDate, 1) === point.metricDate : false;
+            const pointDeltaText = pointDelta === null
+              ? "—"
+              : `${pointDelta > 0 ? "+" : ""}${formatNumber(pointDelta, locale)}${pointConsecutive ? "" : ` (${gapSuffixLabel})`}`;
+
+            return (
+              <div
+                key={point.metricDate}
+                style={{ left: `${(x / 1000) * 100}%`, top: `${(y / 240) * 100}%` }}
+                className="pointer-events-none absolute z-20 h-6 w-6 -translate-x-1/2 -translate-y-1/2"
+              >
+                <div
+                  className={`absolute bottom-7 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md border border-[var(--app-border-subtle)] bg-[var(--app-surface)] px-1.5 py-0.5 text-[10px] font-black tabular-nums shadow-sm ${growthTextClass(pointDelta)}`}
+                >
+                  {pointDeltaText}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedDate(point.metricDate)}
+                  onMouseEnter={() => setSelectedDate(point.metricDate)}
+                  onFocus={() => setSelectedDate(point.metricDate)}
+                  aria-label={`${formatMetricDate(point.metricDate, locale)}: ${formatNumber(point.followerCount, locale)}, ${pointDeltaText}`}
+                  aria-pressed={selected.metricDate === point.metricDate}
+                  className={`pointer-events-auto h-6 w-6 rounded-full border-2 border-[var(--app-accent)] bg-[var(--app-surface)] shadow-sm focus-visible:outline-2 focus-visible:outline-offset-2 ${selected.metricDate === point.metricDate ? "ring-2 ring-[var(--app-accent)]" : ""}`}
+                />
+              </div>
+            );
+          })}
         </div>
       </div>
       <div className="ml-[60px] mt-2 flex justify-between text-[11px] text-[var(--app-text-tertiary)]">
@@ -377,6 +400,7 @@ export function TikTokPublicStoreDetail({ store, history }: Props) {
               noPreviousSnapshotLabel={labels.noPreviousSnapshot}
               previousDayLabel={labels.previousDay}
               gapSinceLabel={labels.gapSince}
+              gapSuffixLabel={labels.gapSuffix}
             />
           </div>
           {showDaily && (
