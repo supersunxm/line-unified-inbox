@@ -11052,8 +11052,8 @@
     }
   ],
   "liveSweep": {
-    "auditedAt": "2026-10-07",
-    "currentThaiUiCandidates": 665,
+    "auditedAt": "2026-10-08",
+    "currentThaiUiCandidates": 655,
     "additionalOccurrencesNotInOriginalQueue": 122,
     "additionalClassificationCounts": {
       "BUG": 0,

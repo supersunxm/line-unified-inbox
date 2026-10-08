@@ -1,4 +1,5 @@
 import type { LegacyI18nPhrase, LegacyI18nTemplate } from "./legacy-i18n-boundary";
+import type { AppLanguage } from "./language-utils";
 
 export const mobileChatsPhrases: LegacyI18nPhrase[] = [
   { th: "เมนูหลักสำหรับมือถือ", en: "Mobile primary navigation", zh: "移动端主导航" },
@@ -244,24 +245,28 @@ export const mobileMassMessagesPhrases: LegacyI18nPhrase[] = [
   { th: "สร้างใหม่", en: "Create new", zh: "新建" },
   { th: "‹ ประวัติ", en: "‹ History", zh: "‹ 历史" },
   { th: "สร้าง Broadcast ใหม่", en: "Create new broadcast", zh: "新建群发" },
-  { th: "กำลังเปิด Campaign Draft...", en: "Opening campaign draft...", zh: "正在打开活动草稿..." },
-  { th: "Audience ถูกล็อกจาก Purchase Intelligence · การบันทึก Draft จะไม่ส่งข้อความ", en: "Audience is locked from Purchase Intelligence · saving the draft will not send messages", zh: "受众由 Purchase Intelligence 锁定 · 保存草稿不会发送消息" },
-  { th: "Purchase Intelligence Draft ใช้งานได้เฉพาะ Administrator", en: "Purchase Intelligence drafts are available to administrators only", zh: "Purchase Intelligence 草稿仅限管理员使用" },
-  { th: "กำลังโหลด Draft...", en: "Loading draft...", zh: "正在加载草稿..." },
+  { th: "กำลังเปิดฉบับร่างแคมเปญ...", en: "Opening campaign draft...", zh: "正在打开活动草稿..." },
+  { th: "กลุ่มผู้รับถูกล็อกไว้จาก Purchase Intelligence · การบันทึกฉบับร่างจะไม่ส่งข้อความ", en: "Audience is locked from Purchase Intelligence · saving the draft will not send messages", zh: "受众由 Purchase Intelligence 锁定 · 保存草稿不会发送消息" },
+  { th: "ฉบับร่าง Purchase Intelligence ใช้งานได้เฉพาะผู้ดูแลระบบ", en: "Purchase Intelligence drafts are available to administrators only", zh: "Purchase Intelligence 草稿仅限管理员使用" },
+  { th: "กำลังโหลดฉบับร่าง...", en: "Loading draft...", zh: "正在加载草稿..." },
+  { th: "โหลดฉบับร่างไม่สำเร็จ", en: "Unable to load draft.", zh: "加载草稿失败。" },
   { th: "ลองใหม่", en: "Try again", zh: "重试" },
-  { th: "บันทึก Draft แล้ว ·", en: "Draft saved ·", zh: "草稿已保存 ·" },
+  { th: "บันทึกฉบับร่างแล้ว ·", en: "Draft saved ·", zh: "草稿已保存 ·" },
   { th: "กำลังบันทึก...", en: "Saving...", zh: "正在保存..." },
   { th: "สูงสุด 1 ข้อความ + 1 รูปภาพ", en: "Up to 1 text message + 1 image", zh: "最多 1 条文字消息 + 1 张图片" },
-  { th: "ชื่อ Campaign", en: "Campaign name", zh: "活动名称" },
-  { th: "เช่น Reno upgrade campaign", en: "For example: Reno upgrade campaign", zh: "例如：Reno 升级活动" },
+  { th: "ชื่อแคมเปญ", en: "Campaign name", zh: "活动名称" },
+  { th: "เช่น แคมเปญอัปเกรด Reno", en: "For example: Reno upgrade campaign", zh: "例如：Reno 升级活动" },
   { th: "พิมพ์ข้อความที่ต้องการเตรียมไว้...", en: "Type the message to prepare...", zh: "输入要准备的消息..." },
-  { th: "Save Draft แก้เฉพาะเนื้อหา ไม่สร้าง delivery, ไม่เริ่ม processor และไม่ใช้ LINE quota", en: "Save Draft edits content only. It does not create deliveries, start the processor, or use LINE quota.", zh: "Save Draft 仅修改内容，不创建投递、不启动处理器，也不占用 LINE 配额。" },
-  { th: "Locked · ไม่สามารถเพิ่มผู้รับจากหน้านี้", en: "Locked · recipients cannot be added from this page", zh: "已锁定 · 无法从此页面添加收件人" },
+  { th: "บันทึกฉบับร่างจะแก้ไขเฉพาะเนื้อหา ไม่สร้างรายการส่ง ไม่เริ่มตัวประมวลผล และไม่ใช้โควตา LINE", en: "Save Draft edits content only. It does not create deliveries, start the processor, or use LINE quota.", zh: "保存草稿只会修改内容，不会创建投递记录，不会启动处理器，也不会占用 LINE 配额。" },
+  { th: "ล็อกแล้ว · ไม่สามารถเพิ่มผู้รับจากหน้านี้", en: "Locked · recipients cannot be added from this page", zh: "已锁定 · 无法从此页面添加收件人" },
   { th: "ช่วงวันที่:", en: "Date range:", zh: "日期范围：" },
-  { th: "Preview เท่านั้น ไม่มี request ไปยังลูกค้าจากหน้าจอนี้", en: "Preview only · this screen sends no requests to customers", zh: "仅供预览 · 此页面不会向客户发送请求" },
-  { th: "ข้อความ Preview จะแสดงที่นี่", en: "Message preview will appear here", zh: "消息预览将显示在此处" },
-  { th: "Review & Send ยังถูกล็อก", en: "Review & Send is still locked", zh: "Review & Send 仍处于锁定状态" },
-  { th: "หน้านี้อนุญาตให้เตรียมและบันทึก Draft เท่านั้น ก่อนส่งจริงระบบยังต้องทำ recipient re-validation, quota check และ final confirmation", en: "This page only allows drafts to be prepared and saved. Before sending, the system must still revalidate recipients, check quota, and request final confirmation.", zh: "此页面仅允许准备和保存草稿。实际发送前，系统仍需重新验证收件人、检查配额并进行最终确认。" },
+  { th: "ดูตัวอย่างเท่านั้น · หน้านี้จะไม่ส่งคำขอไปยังลูกค้า", en: "Preview only · this screen sends no requests to customers", zh: "仅供预览 · 此页面不会向客户发送请求" },
+  { th: "ตัวอย่างข้อความจะแสดงที่นี่", en: "Message preview will appear here", zh: "消息预览将显示在此处" },
+  { th: "การตรวจสอบและส่งยังถูกล็อกไว้", en: "Review & Send is still locked", zh: "审核并发送仍处于锁定状态" },
+  { th: "หน้านี้อนุญาตให้เตรียมและบันทึกฉบับร่างเท่านั้น ก่อนส่งจริง ระบบยังต้องตรวจสอบผู้รับอีกครั้ง ตรวจสอบโควตา และขอการยืนยันขั้นสุดท้าย", en: "This page only allows drafts to be prepared and saved. Before sending, the system must still revalidate recipients, check quota, and request final confirmation.", zh: "此页面仅允许准备和保存草稿。实际发送前，系统仍需重新验证收件人、检查配额并进行最终确认。" },
+  { th: "เตรียมเนื้อหาสำหรับกลุ่มลูกค้าที่บันทึกไว้ การบันทึกจะไม่ส่งข้อความผ่าน LINE", en: "Compose content for the exact saved customer audience. Saving never sends to LINE.", zh: "为已保存的客户群准备内容。保存草稿不会发送到 LINE。" },
+  { th: "เนื้อหา", en: "Content", zh: "内容" },
+  { th: "ดูตัวอย่าง", en: "Preview", zh: "预览" },
   { th: "OPPO LINE OA · การส่งข้อความบรอดแคสต์", en: "OPPO LINE OA · Broadcast messaging", zh: "OPPO LINE OA · 群发消息" },
   { th: "กลับไปหน้าสร้างข้อความ", en: "Back to message builder", zh: "返回消息创建页" },
   { th: "เลือกสาขาที่จะส่งข้อความบรอดแคสต์", en: "Select stores for the broadcast", zh: "选择要发送群发消息的门店" },
@@ -304,6 +309,55 @@ export const mobileMassMessagesPhrases: LegacyI18nPhrase[] = [
 
 export const mobileMassMessagesTemplates: LegacyI18nTemplate[] = [
   { th: "{{value}} ร้าน", en: "{{value}} stores", zh: "{{value}} 家门店" },
+  { th: "{{value}} รายการ", en: "{{value}} items", zh: "{{value}} 项" },
   { th: "ยืนยันส่งประมาณ {{value}} คน", en: "Confirm send to about {{value}} people", zh: "确认发送给约 {{value}} 人" },
   { th: "{{value}} recipients", en: "{{value}} recipients", zh: "{{value}} 个收件人" },
 ];
+
+const purchaseBroadcastAudienceStatuses: Record<AppLanguage, Record<string, string>> = {
+  th: {
+    PURCHASED: "ซื้อแล้ว",
+    INTERESTED: "สนใจ",
+    ONLINE: "ออนไลน์",
+    NOT_SPECIFIED: "ไม่ได้ระบุ",
+  },
+  en: {
+    PURCHASED: "Purchased",
+    INTERESTED: "Interested",
+    ONLINE: "Online",
+    NOT_SPECIFIED: "Not specified",
+  },
+  zh: {
+    PURCHASED: "已购买",
+    INTERESTED: "有意向",
+    ONLINE: "在线",
+    NOT_SPECIFIED: "未注明",
+  },
+};
+
+const purchaseBroadcastMetricLabels: Record<AppLanguage, Record<"customers" | "stores" | "lineOas", string>> = {
+  th: { customers: "ลูกค้า", stores: "ร้านค้า", lineOas: "LINE OA" },
+  en: { customers: "Customers", stores: "Stores", lineOas: "LINE OAs" },
+  zh: { customers: "客户", stores: "门店", lineOas: "LINE OA 账号" },
+};
+
+const purchaseBroadcastMessageabilityDefinitions: Record<AppLanguage, string> = {
+  th: "บัญชี LINE พร้อมรับข้อความ",
+  en: "LINE account is ready to receive messages",
+  zh: "LINE 账号已准备好接收消息",
+};
+
+export function purchaseBroadcastAudienceStatusLabel(status: string, language: AppLanguage) {
+  return purchaseBroadcastAudienceStatuses[language][status] ?? status;
+}
+
+export function purchaseBroadcastMetricLabel(metric: "customers" | "stores" | "lineOas", language: AppLanguage) {
+  return purchaseBroadcastMetricLabels[language][metric];
+}
+
+export function purchaseBroadcastMessageabilityLabel(definition: string, language: AppLanguage) {
+  if (definition === "LINE_USER_ID_AND_ACTIVE_READY_OA") {
+    return purchaseBroadcastMessageabilityDefinitions[language];
+  }
+  return definition;
+}
