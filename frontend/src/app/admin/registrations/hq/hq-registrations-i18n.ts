@@ -10,6 +10,8 @@ type HqRegistrationCopy = {
   secretarySecretWarning: string;
   secretaryWebhookWarning: string;
   secretaryOpenRailway: string;
+  secretaryWebhookLabel: string;
+  secretaryWebhookUrl: string;
   title: string;
   description: string;
   bmPcAccounts: string;
@@ -74,6 +76,8 @@ export const hqPermissionSummaryLabels = {
 
 export const hqRegistrationText: Record<AppLanguage, HqRegistrationCopy> = {
   th: {
+    secretaryWebhookLabel: "Webhook URL",
+    secretaryWebhookUrl: "https://lineoppo.click/sunn-secretary/webhook",
     secretaryName: "เลขาซันน์",
     secretarySettings: "ตั้งค่า LINE เลขาซันน์",
     secretaryOwnerDescription: "การตั้งค่าส่วนตัวสำหรับบัญชีผู้ดูแลที่ได้รับอนุญาต",
@@ -139,6 +143,8 @@ export const hqRegistrationText: Record<AppLanguage, HqRegistrationCopy> = {
     requestFailed: (status) => `คำขอไม่สำเร็จ (${status})`,
   },
   en: {
+    secretaryWebhookLabel: "Webhook URL",
+    secretaryWebhookUrl: "https://lineoppo.click/sunn-secretary/webhook",
     secretaryName: "Sunn Secretary",
     secretarySettings: "Sunn Secretary LINE settings",
     secretaryOwnerDescription: "Personal configuration for the authorized administrator.",
@@ -204,6 +210,8 @@ export const hqRegistrationText: Record<AppLanguage, HqRegistrationCopy> = {
     requestFailed: (status) => `Request failed (${status})`,
   },
   zh: {
+    secretaryWebhookLabel: "Webhook URL",
+    secretaryWebhookUrl: "https://lineoppo.click/sunn-secretary/webhook",
     secretaryName: "Sunn Secretary",
     secretarySettings: "Sunn Secretary LINE 设置",
     secretaryOwnerDescription: "仅供授权管理员使用的个人配置。",
