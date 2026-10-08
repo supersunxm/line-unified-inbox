@@ -12,6 +12,14 @@ type HqRegistrationCopy = {
   secretaryOpenRailway: string;
   secretaryWebhookLabel: string;
   secretaryWebhookUrl: string;
+  secretaryStatusFailed: string;
+  secretaryStatusLoading: string;
+  secretaryConfigured: string;
+  secretaryMissing: string;
+  secretaryUnknown: string;
+  secretaryWebhookState: string;
+  secretaryEnabled: string;
+  secretaryDisabled: string;
   title: string;
   description: string;
   bmPcAccounts: string;
@@ -76,6 +84,14 @@ export const hqPermissionSummaryLabels = {
 
 export const hqRegistrationText: Record<AppLanguage, HqRegistrationCopy> = {
   th: {
+    secretaryStatusFailed: "ไม่สามารถโหลดสถานะเลขาซันน์ได้",
+    secretaryStatusLoading: "กำลังตรวจสอบการตั้งค่า...",
+    secretaryConfigured: "ตั้งค่าแล้ว",
+    secretaryMissing: "ยังไม่ตั้งค่า",
+    secretaryUnknown: "ยังไม่ทราบ",
+    secretaryWebhookState: "สถานะ Webhook",
+    secretaryEnabled: "เปิดอยู่",
+    secretaryDisabled: "ปิดอยู่",
     secretaryWebhookLabel: "Webhook URL",
     secretaryWebhookUrl: "https://lineoppo.click/sunn-secretary/webhook",
     secretaryName: "เลขาซันน์",
@@ -143,6 +159,14 @@ export const hqRegistrationText: Record<AppLanguage, HqRegistrationCopy> = {
     requestFailed: (status) => `คำขอไม่สำเร็จ (${status})`,
   },
   en: {
+    secretaryStatusFailed: "Unable to load secretary status",
+    secretaryStatusLoading: "Checking configuration...",
+    secretaryConfigured: "Configured",
+    secretaryMissing: "Missing",
+    secretaryUnknown: "Unknown",
+    secretaryWebhookState: "Webhook status",
+    secretaryEnabled: "Enabled",
+    secretaryDisabled: "Disabled",
     secretaryWebhookLabel: "Webhook URL",
     secretaryWebhookUrl: "https://lineoppo.click/sunn-secretary/webhook",
     secretaryName: "Sunn Secretary",
@@ -210,6 +234,14 @@ export const hqRegistrationText: Record<AppLanguage, HqRegistrationCopy> = {
     requestFailed: (status) => `Request failed (${status})`,
   },
   zh: {
+    secretaryStatusFailed: "无法加载秘书配置状态",
+    secretaryStatusLoading: "正在检查配置…",
+    secretaryConfigured: "已配置",
+    secretaryMissing: "未配置",
+    secretaryUnknown: "未知",
+    secretaryWebhookState: "Webhook 状态",
+    secretaryEnabled: "已启用",
+    secretaryDisabled: "已关闭",
     secretaryWebhookLabel: "Webhook URL",
     secretaryWebhookUrl: "https://lineoppo.click/sunn-secretary/webhook",
     secretaryName: "Sunn Secretary",
