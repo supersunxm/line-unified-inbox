@@ -5,8 +5,8 @@ import test from "node:test";
 const read = (path: string) => readFileSync(new URL(path, import.meta.url), "utf8");
 const apiCode = read("../src/lib/api.ts");
 const workspaceCode = read("../src/app/page.tsx");
-const dashboardCode = read("../src/app/dashboard/executive-dashboard-base.tsx");
-const peerCode = read("../src/app/dashboard/executive-store-peer-panel.tsx");
+// The dashboard reads through the metrics layer, which drops superseded and unmounted responses.
+const metricsCode = read("../src/lib/metrics/use-monthly-metrics.tsx");
 const responseSummaryCode = read("../src/app/dashboard/store-24h-response-panel.tsx");
 const store360Code = read("../src/app/store-360/store-360-view.tsx");
 const customerVoiceCode = read("../src/app/store-360/customer-voice/customer-voice-view.tsx");
@@ -31,7 +31,8 @@ test("ApplicationWorkspace cancels obsolete reads without changing polling caden
 });
 
 test("dashboard and Store 360 route loaders cancel on supersede/unmount", () => {
-  for (const source of [dashboardCode, peerCode, responseSummaryCode, store360Code, customerVoiceCode, responseCode]) {
+  assert.match(metricsCode, /let cancelled = false;[\s\S]*?if \(!cancelled\) setLoaded[\s\S]*?return \(\) => \{ cancelled = true; \};/);
+  for (const source of [responseSummaryCode, store360Code, customerVoiceCode, responseCode]) {
     assert.match(source, /new AbortController\(\)/);
     assert.match(source, /signal: controller\.signal/);
     assert.match(source, /isAbortError\(/);

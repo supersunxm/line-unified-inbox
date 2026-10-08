@@ -305,9 +305,9 @@ test("Dark Mode Normalization: Tailwind v4 custom-variant dark and dashboard sem
   // Tailwind v4 custom variant
   assert.match(css, /@custom-variant dark \(&:(where\(\[data-theme="dark"\]|is\(\[data-theme="dark"\])/);
 
-  // ExecutiveDashboardV2 must NOT have hardcoded inline style overrides for --dash-*
-  const dashV2 = readFileSync(new URL("../src/app/dashboard/executive-dashboard-v2.tsx", import.meta.url), "utf8");
-  assert.doesNotMatch(dashV2, /style=\{\{\s*"--dash-bg":/);
+  // The dashboard (now the monthly dashboard) must NOT have hardcoded inline style overrides for --dash-*
+  const dashboard = readFileSync(new URL("../src/app/dashboard/monthly-dashboard.tsx", import.meta.url), "utf8");
+  assert.doesNotMatch(dashboard, /style=\{\{\s*"--dash-bg":/);
 
   // Store Breakdown Table in Follower Insights must use theme variables
   const storeTable = readFileSync(new URL("../src/app/follower-insights/store-breakdown-table.tsx", import.meta.url), "utf8");
@@ -367,8 +367,8 @@ test("Brand Accent: Global --app-accent uses the brand green and separates warni
   assert.match(topNav, /<AppSidebar/);
   assert.match(sidebar, /bg-\[var\(--app-accent-soft\)\]/);
 
-  // Dashboard 7-day follower trend must consume semantic accent
-  const dashV2 = readFileSync(new URL("../src/app/dashboard/executive-dashboard-v2.tsx", import.meta.url), "utf8");
-  assert.doesNotMatch(dashV2, /stroke="#FF6900"/);
-  assert.match(dashV2, /stroke="var\(--app-accent, #1f6b4a\)"/);
+  // Dashboard follower trend (now the month's daily followers) must consume the semantic accent
+  const dashboard = readFileSync(new URL("../src/app/dashboard/monthly-dashboard.tsx", import.meta.url), "utf8");
+  assert.doesNotMatch(dashboard, /stroke="#FF6900"/);
+  assert.match(dashboard, /stroke="var\(--app-accent\)"/);
 });

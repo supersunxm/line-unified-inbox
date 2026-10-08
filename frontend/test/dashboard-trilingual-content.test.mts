@@ -5,11 +5,13 @@ import { readFileSync } from "node:fs";
 const dashboardPage = readFileSync(new URL("../src/app/dashboard/page.tsx", import.meta.url), "utf8");
 const dashboardI18n = readFileSync(new URL("../src/app/dashboard/dashboard-legacy-i18n.ts", import.meta.url), "utf8");
 
-test("dashboard route applies the shared trilingual boundary", () => {
-  assert.match(dashboardPage, /LegacyI18nBoundary/);
-  assert.match(dashboardPage, /dashboardLegacyPhrases/);
-  assert.match(dashboardPage, /dashboardLegacyTemplates/);
-  assert.match(dashboardPage, /showControl=\{false\}/);
+// The monthly dashboard (8 Oct 2026) reads every string from the three-language metrics table, so the
+// route no longer wraps it in the phrase-matching boundary (which also turned its Gregorian dates into
+// Buddhist years). dashboard-legacy-i18n.ts stays: /replymessage still uses it.
+test("dashboard route renders the translated monthly dashboard without the legacy phrase boundary", () => {
+  assert.doesNotMatch(dashboardPage, /LegacyI18nBoundary/);
+  const dashboard = readFileSync(new URL("../src/app/dashboard/monthly-dashboard.tsx", import.meta.url), "utf8");
+  assert.match(dashboard, /const t = v2Text\(language\);/);
 });
 
 test("executive dashboard translations cover visible Thai, English, and Chinese content", () => {

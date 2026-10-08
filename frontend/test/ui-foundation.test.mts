@@ -20,7 +20,7 @@ test("IBM Plex Sans Thai is loaded once and is the app-wide sans font", () => {
 
   // Pages that named the family literally would miss next/font's generated family name.
   assert.match(read("../src/app/follower-insights/follower-insights-modern.module.css"), /font-family: var\(--app-font-sans\);/);
-  assert.doesNotMatch(read("../src/app/dashboard/executive-dashboard-base.tsx"), /IBM_Plex_Sans_Thai/);
+  assert.doesNotMatch(read("../src/app/dashboard/monthly-dashboard.tsx"), /IBM_Plex_Sans_Thai/);
 });
 
 test("primary buttons and focus rings use the brand accent in both themes", () => {

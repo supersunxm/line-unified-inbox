@@ -8,7 +8,9 @@ import test from "node:test";
 // re-inserting nodes into the detached dashboard tree. These checks pin the
 // two guards that stop that loop.
 
-const executiveV2 = readFileSync(new URL("../src/app/dashboard/executive-dashboard-v2.tsx", import.meta.url), "utf8");
+// The executive dashboard and its peer-panel portal (the first source of the freeze) were removed
+// with the monthly dashboard rework (8 Oct 2026); the monthly dashboard renders no DOM observers.
+const monthlyDashboard = readFileSync(new URL("../src/app/dashboard/monthly-dashboard.tsx", import.meta.url), "utf8");
 const legacyBoundary = readFileSync(new URL("../src/app/legacy-i18n-boundary.tsx", import.meta.url), "utf8");
 
 function effectBlockAround(source: string, marker: string) {
@@ -22,22 +24,8 @@ function effectBlockAround(source: string, marker: string) {
   return source.slice(effectIndex, markerIndex);
 }
 
-test("executive dashboard peer-panel observer is registered in a layout effect", () => {
-  const effect = effectBlockAround(executiveV2, "new MutationObserver(attach)");
-  assert.match(effect, /^useLayoutEffect\(/);
-  assert.match(executiveV2, /observer\.disconnect\(\)/);
-});
-
-test("executive dashboard attach does nothing once the observed root is detached", () => {
-  const attach = executiveV2.slice(
-    executiveV2.indexOf("const attach = () => {"),
-    executiveV2.indexOf("new MutationObserver(attach)"),
-  );
-  const guardIndex = attach.search(/if \(!root\.isConnected\) return;/);
-  const insertIndex = attach.indexOf("insertAdjacentElement");
-  assert.notEqual(guardIndex, -1);
-  assert.ok(guardIndex < insertIndex, "root.isConnected guard must precede the insert");
-  assert.match(attach, /!header\.isConnected\) return;/);
+test("the monthly dashboard has no DOM mutation observer or portal", () => {
+  assert.doesNotMatch(monthlyDashboard, /MutationObserver|createPortal/);
 });
 
 test("legacy i18n boundary observer is registered in a layout effect", () => {

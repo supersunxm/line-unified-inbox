@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-// Dark-mode contrast audit of the real rendered v2 pages and of the main app's left sidebar.
+// Dark-mode contrast audit of the real rendered v2 pages, the metrics pages (Home, Dashboard,
+// Store 360) and the main app's left sidebar.
 //
 //   npm run build && npx next start -p 3000      # in one terminal
 //   npm run audit:contrast                       # in another (BASE_URL to override)
@@ -51,6 +52,9 @@ const PAGES = [
   { name: "ตอนนี้", path: "/v2/response" },
   { name: "ตอนนี้ · ทั้งหมด", path: "/v2/response?tab=all" },
   { name: "ตอนนี้ · หน้าแชท", path: "/v2/response?view=chat" },
+  // The metrics pages (Home / Dashboard / Store 360 rework, 8 Oct 2026): the whole page is measured.
+  { name: "แดชบอร์ด", path: "/dashboard", waitFor: "[data-dashboard-store-table]" },
+  { name: "แดชบอร์ด (เดือนก่อน)", path: "/dashboard?month=2026-09", waitFor: "[data-dashboard-store-table]" },
   // Main app pages: only the left sidebar is measured (scope), with every menu group opened.
   { name: "อัตราตอบกลับ 24 ชม. · sidebar", path: "/replymessage", waitFor: "[data-app-sidebar] [data-nav-item]", scope: "[data-app-sidebar]" },
   { name: "Google Review KPI · sidebar", path: "/google-review-kpi", waitFor: "[data-app-sidebar] [data-nav-item]", scope: "[data-app-sidebar]" },

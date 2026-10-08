@@ -10,7 +10,9 @@ const gateCode = read("../src/app/authorized-workspace.tsx");
 const shellSkeletonCode = read("../src/components/shell/shell-skeleton.tsx");
 const trafficCode = read("../src/app/dashboard/message-traffic/message-traffic-view.tsx");
 const pickerCode = read("../src/components/date-range/unified-period-picker.tsx");
-const dashboardBaseCode = read("../src/app/dashboard/executive-dashboard-base.tsx");
+// The executive dashboard was replaced by the monthly dashboard (8 Oct 2026), which uses the UI kit skeleton.
+const dashboardCode = read("../src/app/dashboard/monthly-dashboard.tsx");
+const sectionSkeletonCode = read("../src/components/ui/section-card-skeleton.tsx");
 
 const checkSetupStatus = pageCode.match(/const checkSetupStatus = useCallback\(async \(\) => \{[\s\S]*?\n  \}, \[\]\);/)?.[0] ?? "";
 
@@ -62,8 +64,9 @@ test("Message Traffic loads behind skeletons with its real KPI labels and sectio
 });
 
 test("the dashboard placeholder pulses only when motion is allowed", () => {
-  assert.match(dashboardBaseCode, /max-w-\[1280px\] motion-safe:animate-pulse space-y-4/);
-  assert.doesNotMatch(dashboardBaseCode, /(^|[\s"])animate-pulse/);
+  assert.match(dashboardCode, /<SectionCardSkeleton title=\{t\("sectionStores"\)\} lines=\{10\} \/>/);
+  assert.doesNotMatch(dashboardCode, /animate-pulse/);
+  assert.doesNotMatch(sectionSkeletonCode, /(^|[\s"])animate-pulse/);
 });
 
 test("the pre-auth filter-bar placeholder has the date picker's geometry (42px preset group, 38px trigger)", () => {
