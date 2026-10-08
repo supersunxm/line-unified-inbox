@@ -2,6 +2,14 @@ import type { AppLanguage } from "../../../language-utils";
 
 type HqRegistrationCopy = {
   accountManagement: string;
+  secretaryName: string;
+  secretarySettings: string;
+  secretaryOwnerDescription: string;
+  secretaryNotReady: string;
+  secretaryRequiredVariables: string;
+  secretarySecretWarning: string;
+  secretaryWebhookWarning: string;
+  secretaryOpenRailway: string;
   title: string;
   description: string;
   bmPcAccounts: string;
@@ -66,6 +74,14 @@ export const hqPermissionSummaryLabels = {
 
 export const hqRegistrationText: Record<AppLanguage, HqRegistrationCopy> = {
   th: {
+    secretaryName: "เลขาซันน์",
+    secretarySettings: "ตั้งค่า LINE เลขาซันน์",
+    secretaryOwnerDescription: "การตั้งค่าส่วนตัวสำหรับบัญชีผู้ดูแลที่ได้รับอนุญาต",
+    secretaryNotReady: "ยังไม่เปิดรับข้อมูล LINE ผ่านหน้านี้ และ Webhook ต้องปิดไว้จนกว่าการตรวจสิทธิ์และการจัดเก็บ Secret จะพร้อม",
+    secretaryRequiredVariables: "ตัวแปรที่ต้องตั้งค่าบน Railway (Backend Service)",
+    secretarySecretWarning: "เก็บ Secret และ Access Token เป็นตัวแปรลับเท่านั้น อย่าส่งผ่านแชทหรือ GitHub",
+    secretaryWebhookWarning: "การเข้ากลุ่มสำเร็จไม่ได้หมายความว่า Webhook พร้อมใช้งาน",
+    secretaryOpenRailway: "เปิด Railway เพื่อจัดการ Secret",
     accountManagement: "การจัดการบัญชี",
     title: "บัญชี HQ",
     description: "อนุมัติคำขอ HQ และจัดการบทบาทบัญชี",
@@ -123,6 +139,14 @@ export const hqRegistrationText: Record<AppLanguage, HqRegistrationCopy> = {
     requestFailed: (status) => `คำขอไม่สำเร็จ (${status})`,
   },
   en: {
+    secretaryName: "Sunn Secretary",
+    secretarySettings: "Sunn Secretary LINE settings",
+    secretaryOwnerDescription: "Personal configuration for the authorized administrator.",
+    secretaryNotReady: "LINE credentials cannot be entered here yet. Keep the webhook disabled until authorization and secure secret storage are ready.",
+    secretaryRequiredVariables: "Required Railway variables (Backend Service)",
+    secretarySecretWarning: "Store secrets and access tokens only as sealed variables. Never share them in chat or GitHub.",
+    secretaryWebhookWarning: "Joining a group does not mean the webhook is ready.",
+    secretaryOpenRailway: "Open Railway to manage secrets",
     accountManagement: "Account Management",
     title: "HQ accounts",
     description: "Approve HQ requests and manage account roles.",
@@ -180,6 +204,14 @@ export const hqRegistrationText: Record<AppLanguage, HqRegistrationCopy> = {
     requestFailed: (status) => `Request failed (${status})`,
   },
   zh: {
+    secretaryName: "Sunn Secretary",
+    secretarySettings: "Sunn Secretary LINE 设置",
+    secretaryOwnerDescription: "仅供授权管理员使用的个人配置。",
+    secretaryNotReady: "目前无法在此输入 LINE 凭证。在权限验证和安全密钥存储准备好之前，请保持 Webhook 关闭。",
+    secretaryRequiredVariables: "Railway 必需变量（后端服务）",
+    secretarySecretWarning: "密钥和访问令牌只能存储为保密变量，切勿通过聊天或 GitHub 分享。",
+    secretaryWebhookWarning: "成功加入群组并不代表 Webhook 已准备就绪。",
+    secretaryOpenRailway: "打开 Railway 管理密钥",
     accountManagement: "账户管理",
     title: "HQ 账户",
     description: "审批 HQ 申请并管理账户角色。",
