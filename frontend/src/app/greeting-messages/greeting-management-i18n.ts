@@ -1,4 +1,5 @@
 import type { LegacyI18nPhrase, LegacyI18nTemplate } from "../legacy-i18n-boundary";
+import type { AppLanguage } from "../language";
 
 export const greetingManagementPhrases: LegacyI18nPhrase[] = [
   { th: "ริชเมนู", en: "Rich Menu", zh: "富媒体菜单" },
@@ -56,3 +57,35 @@ export const greetingManagementPhrases: LegacyI18nPhrase[] = [
 export const greetingManagementTemplates: LegacyI18nTemplate[] = [
   { th: "ใช้งานอยู่ใน {{value}} ร้าน", en: "Active in {{value}} stores", zh: "已在 {{value}} 家门店启用" },
 ];
+
+const statusPhrasesByThai = new Map(greetingManagementPhrases.map((phrase) => [phrase.th, phrase]));
+
+function localizedStatusPhrase(thai: string, language: AppLanguage) {
+  const phrase = statusPhrasesByThai.get(thai);
+  if (!phrase) throw new Error(`Missing greeting-management status phrase: ${thai}`);
+  return phrase[language];
+}
+
+export function getGreetingManagementStatusCopy(language: AppLanguage, activeStores: number) {
+  const activeStoresTemplate = greetingManagementTemplates.find((template) => template.th.includes("{{value}}"));
+  if (!activeStoresTemplate) throw new Error("Missing active-store greeting-management template");
+
+  return {
+    ACTIVE: {
+      title: localizedStatusPhrase("ใช้งานอยู่", language),
+      subtitle: activeStoresTemplate[language].replace("{{value}}", String(activeStores)),
+    },
+    DRAFT: {
+      title: localizedStatusPhrase("ฉบับร่าง", language),
+      subtitle: localizedStatusPhrase("ยังไม่ได้ใช้งาน", language),
+    },
+    INACTIVE: {
+      title: localizedStatusPhrase("ปิดใช้งาน", language),
+      subtitle: localizedStatusPhrase("ปิดการใช้งาน", language),
+    },
+    ARCHIVED: {
+      title: localizedStatusPhrase("จัดเก็บเป็นประวัติ", language),
+      subtitle: localizedStatusPhrase("เก็บไว้เป็นประวัติ", language),
+    },
+  };
+}

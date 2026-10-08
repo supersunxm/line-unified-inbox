@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
 import type { GreetingTemplate, GreetingTemplateStatus } from "@/types/api";
+import { useAppLanguage } from "../language";
+import { getGreetingManagementStatusCopy } from "./greeting-management-i18n";
 
 type StatusFilter = "ALL" | GreetingTemplateStatus;
 type SortKey = "updatedAt" | "activatedAt" | "assignedStoreCount";
@@ -98,6 +100,7 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export function GreetingManagementView() {
+  const { language } = useAppLanguage();
   const [templates, setTemplates] = useState<GreetingTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -227,11 +230,12 @@ export function GreetingManagementView() {
     }
   };
 
+  const statusCopy = getGreetingManagementStatusCopy(language, activeStores);
   const cards: Array<{ status: GreetingTemplateStatus; title: string; subtitle: string; accent: string }> = [
-    { status: "ACTIVE", title: "Active", subtitle: `ใช้งานอยู่ใน ${activeStores} ร้าน`, accent: "bg-emerald-50" },
-    { status: "DRAFT", title: "Draft", subtitle: "ยังไม่ได้ใช้งาน", accent: "bg-sky-50" },
-    { status: "INACTIVE", title: "Inactive", subtitle: "ปิดการใช้งาน", accent: "bg-rose-50" },
-    { status: "ARCHIVED", title: "Archived", subtitle: "เก็บไว้เป็นประวัติ", accent: "bg-gray-100" },
+    { status: "ACTIVE", ...statusCopy.ACTIVE, accent: "bg-emerald-50" },
+    { status: "DRAFT", ...statusCopy.DRAFT, accent: "bg-sky-50" },
+    { status: "INACTIVE", ...statusCopy.INACTIVE, accent: "bg-rose-50" },
+    { status: "ARCHIVED", ...statusCopy.ARCHIVED, accent: "bg-gray-100" },
   ];
 
   return (
