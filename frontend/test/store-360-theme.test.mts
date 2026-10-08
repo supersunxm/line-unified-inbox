@@ -4,7 +4,8 @@ import test from "node:test";
 
 const css = readFileSync(new URL("../src/app/globals.css", import.meta.url), "utf8");
 const layout = readFileSync(new URL("../src/app/layout.tsx", import.meta.url), "utf8");
-const view = readFileSync(new URL("../src/app/store-360/store-360-view.tsx", import.meta.url), "utf8");
+// Store 360 is now the monthly view (8 Oct 2026).
+const view = readFileSync(new URL("../src/app/store-360/store-360-monthly.tsx", import.meta.url), "utf8");
 const page = readFileSync(new URL("../src/app/store-360/page.tsx", import.meta.url), "utf8");
 const picker = readFileSync(new URL("../src/components/date-range/unified-period-picker.tsx", import.meta.url), "utf8");
 const exportControl = readFileSync(new URL("../src/app/store-360/store-360-export-control.tsx", import.meta.url), "utf8");
@@ -17,7 +18,8 @@ test("Store 360 reuses the canonical root theme state", () => {
   assert.match(page, /className="store360-workspace/);
   assert.doesNotMatch(view, /biWorkspaceStyle/);
   assert.doesNotMatch(view, /<ThemeControl/);
-  assert.doesNotMatch(view, /localStorage/);
+  // The only storage it reads is the last viewed store (lib/metrics/store-view.ts), never the theme.
+  assert.doesNotMatch(view, /oppo-line-oa-theme|localStorage\.setItem/);
 });
 
 test("Store 360 defines approved light tokens and a complete dark surface hierarchy", () => {
@@ -30,16 +32,12 @@ test("Store 360 defines approved light tokens and a complete dark surface hierar
   }
 });
 
-test("Store 360 chart series and product identity use theme-aware presentation tokens", () => {
-  assert.match(view, /fill="var\(--store360-chart-customers\)"/);
-  assert.match(view, /fill="var\(--store360-chart-sales\)"/);
-  assert.match(view, /stroke="var\(--store360-chart-reply\)"/);
-  assert.match(view, /bg-\[var\(--store360-chart-customers\)\]/);
-  assert.match(view, /bg-\[var\(--store360-chart-sales\)\]/);
-  assert.match(view, /bg-\[var\(--store360-chart-reply\)\]/);
-  assert.match(view, /var\(--store360-thumb-from\)/);
-  assert.match(view, /var\(--store360-avatar\)/);
-  assert.doesNotMatch(view, /fill="#64d3a6"|fill="#3c82dc"|stroke="#7543f5"/);
+test("Store 360 charts use theme tokens, never hardcoded colours", () => {
+  // The old customers/sales/reply chart series left with the old overview; the daily bars and the
+  // follower chart use the shared accent and danger tokens.
+  assert.match(view, /className="bg-\[var\(--app-accent\)\]"/);
+  assert.match(view, /className="bg-\[var\(--app-danger\)\]"/);
+  assert.doesNotMatch(view, /fill="#|stroke="#|bg-\[#/);
 });
 
 test("Store 360 date picker and export dialog inherit semantic theme tokens", () => {

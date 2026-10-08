@@ -819,11 +819,8 @@ test("Store 360 and LINE Chat Health direct UI copy has route-scoped th/en/zh co
       name: "Store 360",
       phrases: store360Phrases,
       files: [
-        "../src/app/store-360/store-360-view.tsx",
         "../src/app/store-360/customer-voice/customer-voice-view.tsx",
         "../src/app/store-360/response/response-view.tsx",
-        "../src/app/store-360/customer-voice-panel.tsx",
-        "../src/app/store-360/store-search-combobox.tsx",
         "../src/app/store-360/store-360-export-control.tsx",
       ],
     },

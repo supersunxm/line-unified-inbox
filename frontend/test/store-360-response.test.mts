@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { responseDrilldownHref, responseSegmentLabel } from "../src/app/store-360/response-utils.ts";
 
-const viewCode = readFileSync(new URL("../src/app/store-360/store-360-view.tsx", import.meta.url), "utf8");
+const viewCode = readFileSync(new URL("../src/app/store-360/store-360-monthly.tsx", import.meta.url), "utf8");
 const routeCode = readFileSync(new URL("../src/app/store-360/response/response-view.tsx", import.meta.url), "utf8");
 const pageCode = readFileSync(new URL("../src/app/store-360/response/page.tsx", import.meta.url), "utf8");
 const utilsCode = readFileSync(new URL("../src/app/store-360/response-utils.ts", import.meta.url), "utf8");
@@ -19,13 +19,10 @@ test("response drill-down URLs preserve store and Bangkok reporting context", ()
   assert.match(routeCode, /router\.push\("\/chats\?storeId=/);
 });
 
-test("approved Store 360 Overview response surfaces link to the matching segment", () => {
-  assert.match(viewCode, /label="Reply within 24h"[\s\S]*?responseDrilldownHref\(activeStoreId, from, to, "within-24h"\)/);
-  assert.match(viewCode, /label="Median response time"[\s\S]*?responseDrilldownHref\(activeStoreId, from, to, "all"\)/);
-  assert.match(viewCode, /label="Unanswered customers"[\s\S]*?responseDrilldownHref\(activeStoreId, from, to, "unanswered"\)/);
-  assert.match(viewCode, /"Within 15 minutes"[\s\S]*?"within-15m"/);
-  assert.match(viewCode, /"Within 1 hour"[\s\S]*?"within-1h"/);
-  assert.match(viewCode, /"Within 24 hours"[\s\S]*?"within-24h"/);
+// Owner decision 8 Oct 2026: the old response-analytics block and first-response-time tiles left the
+// Store 360 overview; /store-360/response keeps working, unlinked.
+test("the Store 360 overview no longer links the old response analytics", () => {
+  assert.doesNotMatch(viewCode, /responseDrilldownHref|Median response time|within-15m/);
 });
 
 test("response drill-down is a global-sidebar BI layer with restrained filters and evidence states", () => {

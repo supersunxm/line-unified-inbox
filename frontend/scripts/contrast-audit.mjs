@@ -56,6 +56,9 @@ const PAGES = [
   { name: "หน้าหลัก", path: "/home", waitFor: "[data-home-stores-to-watch] table" },
   { name: "แดชบอร์ด", path: "/dashboard", waitFor: "[data-dashboard-store-table]" },
   { name: "แดชบอร์ด (เดือนก่อน)", path: "/dashboard?month=2026-09", waitFor: "[data-dashboard-store-table]" },
+  { name: "Store 360 (เลือกสาขา)", path: "/store-360", waitFor: "[data-s360-picker]" },
+  { name: "Store 360", path: "/store-360?storeId=store-1", waitFor: "[data-s360-kpi]" },
+  { name: "Store 360 (ไม่มีข้อมูลแชท)", path: "/store-360?storeId=store-nochat", waitFor: "[data-s360-no-chat-data]" },
   // Main app pages: only the left sidebar is measured (scope), with every menu group opened.
   { name: "อัตราตอบกลับ 24 ชม. · sidebar", path: "/replymessage", waitFor: "[data-app-sidebar] [data-nav-item]", scope: "[data-app-sidebar]" },
   { name: "Google Review KPI · sidebar", path: "/google-review-kpi", waitFor: "[data-app-sidebar] [data-nav-item]", scope: "[data-app-sidebar]" },

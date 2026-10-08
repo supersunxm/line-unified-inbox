@@ -8,6 +8,7 @@ import { useSearchParams } from "next/navigation";
 import React, { useEffect, useMemo, useState } from "react";
 import { useAppLanguage } from "@/app/language";
 import { languageLocale, type AppLanguage } from "@/app/language-utils";
+import { FollowerChart, shortDate } from "@/components/metrics/follower-chart";
 import { HowCounted, TargetText } from "@/components/metrics/kpi-ui";
 import { MetricsMonthSelect } from "@/components/metrics/month-select";
 import { CountCell, DeltaValue, StateValue } from "@/components/metrics/value-ui";
@@ -16,20 +17,14 @@ import { belowTarget24, RATE_BANDS, rateBands, splitByChatData, storesCsv, store
 import { FOLLOWER_MIN_AGE_DAYS, FOLLOWER_MIN_BASE, followerMovers, type StoreFollowerChange } from "@/lib/metrics/followers";
 import { store360Href } from "@/lib/metrics/links";
 import { KPI_TARGETS, RATE24_TARGET, REPLIED_RATE_TARGET, type KpiKey } from "@/lib/metrics/kpi";
-import { monthLongLabel, parseV2Month, periodLabel, THAI_MONTHS_SHORT } from "@/lib/metrics/month";
+import { monthLongLabel, parseV2Month, periodLabel } from "@/lib/metrics/month";
 import { filterStoreRows, sortStoreRows, type StoreMetricsRow } from "@/lib/metrics/store-model";
 import { storeScopeText } from "@/lib/metrics/store-scope";
 import { thaiLocationLabel, thaiRegion } from "@/lib/metrics/thai-geo";
 import { v2Text } from "@/lib/metrics/translations";
-import { useMonthlyFollowers, type FollowerTrendPoint } from "@/lib/metrics/use-monthly-followers";
+import { useMonthlyFollowers } from "@/lib/metrics/use-monthly-followers";
 import { useMonthlyMetrics, type MonthlyMetrics, type Source } from "@/lib/metrics/use-monthly-metrics";
 import { countState, formatValue, MIN_RATE_SAMPLE, type ValueState } from "@/lib/metrics/value-state";
-
-function shortDate(dateKey: string, language: AppLanguage): string {
-  const [year, month, day] = dateKey.split("-").map(Number);
-  if (language === "th") return `${day} ${THAI_MONTHS_SHORT[month - 1]} ${year}`;
-  return new Intl.DateTimeFormat(languageLocale(language), { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(Date.UTC(year, month - 1, day)));
-}
 
 function timeOfDay(ms: number, language: AppLanguage): string {
   return new Intl.DateTimeFormat(`${languageLocale(language)}-u-ca-gregory`, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Bangkok" }).format(new Date(ms));
@@ -111,34 +106,6 @@ function RepliesSection({ data }: { data: MonthlyMetrics }) {
   );
 }
 
-/** Daily network followers (the existing follower trend), as a small line chart. */
-function FollowerChart({ points }: { points: FollowerTrendPoint[] }) {
-  const { language } = useAppLanguage();
-  const t = v2Text(language);
-  if (points.length < 2) return null;
-  const width = 640;
-  const height = 140;
-  const pad = 8;
-  const values = points.map((point) => point.followers);
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const range = Math.max(1, max - min);
-  const xy = points.map((point, index) => [pad + (index / (points.length - 1)) * (width - pad * 2), pad + ((max - point.followers) / range) * (height - pad * 2)] as const);
-  const line = xy.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
-  const locale = languageLocale(language);
-  return (
-    <figure className="space-y-1">
-      <figcaption className="text-xs font-medium text-[var(--app-text-secondary)]">{t("followersDaily")}</figcaption>
-      <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" className="h-36 w-full" role="img" aria-label={`${t("followersDaily")}: ${shortDate(points[0].date, language)} ${points[0].followers.toLocaleString(locale)} → ${shortDate(points[points.length - 1].date, language)} ${points[points.length - 1].followers.toLocaleString(locale)}`}>
-        <polygon points={`${pad},${height - pad} ${line} ${width - pad},${height - pad}`} fill="var(--app-accent-soft)" />
-        <polyline points={line} fill="none" stroke="var(--app-accent)" strokeWidth="2" vectorEffect="non-scaling-stroke" />
-        {xy.map(([x, y], index) => <circle key={points[index].date} cx={x} cy={y} r="2.5" fill="var(--app-accent)" vectorEffect="non-scaling-stroke"><title>{`${shortDate(points[index].date, language)}: ${t("followersPeople", { count: points[index].followers.toLocaleString(locale) })}`}</title></circle>)}
-      </svg>
-      <div className="flex justify-between text-[11px] text-[var(--app-text-tertiary)]"><span>{shortDate(points[0].date, language)}</span><span>{shortDate(points[points.length - 1].date, language)}</span></div>
-    </figure>
-  );
-}
-
 function MoversList({ title, rows, month }: { title: string; rows: StoreFollowerChange[]; month: string }) {
   const { language } = useAppLanguage();
   const t = v2Text(language);
@@ -192,7 +159,7 @@ function FollowersSection({ data, followers }: { data: MonthlyMetrics; followers
                 <span className="block text-xs text-[var(--app-text-secondary)]">{t("followerContributionNote")}</span>
               </p>
             )}
-            {followers.trend.data && <FollowerChart points={followers.trend.data} />}
+            {followers.trend.data && <FollowerChart points={followers.trend.data} title={t("followersDaily")} />}
             {movers ? (
               <>
                 <div className="grid gap-4 md:grid-cols-2">

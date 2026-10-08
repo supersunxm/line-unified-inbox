@@ -38,6 +38,10 @@ cache, 2-minute expiry, used by Home, Dashboard, Store 360, `/v2/report` and the
 | ผู้ติดตามรายวัน (chart) | Network follower total per day (the existing follower trend). | `GET /dashboard/executive-store-health?dateFrom&dateTo` → `followerTrend` | Month | Dashboard | — |
 | ผู้ติดตามสุทธิ (per store) | Same arithmetic per store, summed over the store's LINE OAs ready on both days; a store without both snapshots shows "—" with its reason, never 0. | `GET /follower-insights/by-store?dateFrom=D&dateTo=D` (baseline day, last day) | Month | Dashboard (column, top movers) | Store 360 (one store). `followers.ts` `storeFollowerChanges` |
 | เพิ่ม / ลดมากสุด 5 ร้าน | Top 5 by per-store net change, excluding stores with fewer than `FOLLOWER_MIN_BASE` (100) followers at the baseline and stores with no snapshot `FOLLOWER_MIN_AGE_DAYS` (30) days before the baseline (likely new). Contribution line "+X จาก N ร้านที่เพิ่ม · −Y จาก M ร้านที่ลด" sums every store in scope with both snapshots (it can differ slightly from the network total, which the backend computes with its own nearest-reliable-date rule; the page says so). | as above, plus the day 30 days before the baseline | Month | Dashboard | — |
+| อันดับใน 24 ชม. (Store 360) | "อันดับ X จาก N": rank of the store's 24h % among stores in scope with ≥ `MIN_RATE_SAMPLE`; ties share the better rank; below the sample: "ไม่จัดอันดับ". | as ตอบใน 24 ชม. | Month | Store 360 | — (`store-view.ts` `rate24Rank`) |
+| ยังไม่ตอบ / ตอบใน 24 ชม. per day (Store 360) | ยังไม่ตอบ by the Bangkok day of the latest message (the store's month from the `/chats` list, ≤ 2,000 chats); 24h as within/total by the day of the customer's first message. | `/conversations?storeId&month`, `store-24h-response-summary?storeId` | Month, by day | Store 360 | — |
+| Data coverage chip (Store 360) | "เก็บแชทถึง <date of the store's latest chat, any month>"; a store with no chat at all reads "ไม่ได้เก็บแชทของร้านนี้" and shows one no-data state (followers and Google Review still shown). | `/conversations?storeId&sort=latest-desc&pageSize=1` | All time | Store 360 | — |
+| ลูกค้าและการขาย (name tags) | Top products, channels and payment/finance counted per chat from the parsed customer-name metadata of the store's month; always labelled "นับจากชื่อลูกค้าที่ร้านตั้งใน LINE ไม่ใช่ยอดขายจริง" with "อ่านชื่อแล้ว N จาก M แชท" (tag coverage). | `/conversations?storeId&month` (`nicknameDerivedMetadata`), `/v2/tag-coverage` | Month | Store 360 | — |
 | ความครบของแท็ก | Chats with ≥ 1 Parser v4 tag ÷ chats whose name was read; "อ่านชื่อแล้ว N จาก M แชท". Never a sales figure. | `GET /v2/tag-coverage?month=` | Month (live, not snapshotted) | Store 360 | `/v2/report` |
 | Google Review | The store's monthly review KPI result. | `GET /google-review-kpi?month=` | Month | Store 360 | `/google-review-kpi` |
 
@@ -70,3 +74,16 @@ Files deleted (unreachable after the change): `app/dashboard/executive-dashboard
 | System status card | Replaced by one data-health line linking to LINE Chat Health, and a banner only when the backend, database or webhook is down. |
 
 Home's "ซิงก์แชทล่าสุด" is the latest successful chat sync (`GET /operations/line-chat-nickname/mirror-status`, ADMIN only); for other roles the line shows the last message received (`GET /operations/status` `lastValidWebhookReceived`).
+
+### Store 360 (PR 4)
+
+| Module | Why |
+|---|---|
+| Opening an arbitrary (nearly empty) store when no store is given | `/store-360` now opens the last viewed store (localStorage) or a searchable picker with the stores to check. |
+| KPI cards with their own definitions ("ยังไม่ตอบ: ไม่มีข้อมูล", "ตอบภายใน 24 ชม.: ไม่มีข้อมูล" while a panel said ยังไม่ตอบ 608) | Replaced by the scorecard from the shared rows (the Dashboard's numbers); the old per-page computation is gone. |
+| Customer Voice module | Covered 4 of 935 chats (showed 0%). Shown only as a link at the bottom when ≥ 20% of the month's chats are classified; `/store-360/customer-voice` keeps working. |
+| Team performance (5 staff, all "ไม่มีข้อมูล") | Per-staff performance is out of scope (owner); work is evaluated per store. |
+| Response analytics block and first-response-time tiles | A different source from the 24h KPI; `/store-360/response` keeps working, unlinked. |
+| Unique-customers headline, sales-tagged customers card, conversation explorer, 7D/30D/custom range | The month is the frame; customers and sales come from name tags, labelled as such. |
+
+Files deleted (unreachable after the change): `app/store-360/store-360-view.tsx`, `customer-voice-panel.tsx`, `store-search-combobox.tsx`, `store-search.ts`. The export control stays (scoped to the selected month).

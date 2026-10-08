@@ -11053,7 +11053,7 @@
   ],
   "liveSweep": {
     "auditedAt": "2026-10-07",
-    "currentThaiUiCandidates": 666,
+    "currentThaiUiCandidates": 665,
     "additionalOccurrencesNotInOriginalQueue": 122,
     "additionalClassificationCounts": {
       "BUG": 0,
@@ -11061,7 +11061,7 @@
       "INTENTIONAL_UI": 122,
       "unclassified": 0
     },
-    "note": "The original 1,003-row candidate queue remains preserved in findings. liveFindings adds source candidates in the current worktree that were outside that queue; the classified audit matches live findings one-for-one against both collections. The 2026-10-08 Google Review KPI QA routes the page's static labels and examples through the existing three-language phrases; the current source sweep is 762 with zero unclassified or unfixed bugs. The 2026-10-08 monthly dashboard rework removed the executive dashboard files (their Thai literals leave the sweep; the new dashboard reads the three-language metrics table); the current source sweep is 666 with zero unclassified or unfixed bugs."
+    "note": "The original 1,003-row candidate queue remains preserved in findings. liveFindings adds source candidates in the current worktree that were outside that queue; the classified audit matches live findings one-for-one against both collections. The 2026-10-08 Google Review KPI QA routes the page's static labels and examples through the existing three-language phrases; the current source sweep is 762 with zero unclassified or unfixed bugs. The 2026-10-08 monthly dashboard rework removed the executive dashboard files (their Thai literals leave the sweep; the new dashboard reads the three-language metrics table); the current source sweep is 666 with zero unclassified or unfixed bugs. The Store 360 monthly rework removed the old overview, its Customer Voice panel and store combobox; the current source sweep is 665 with zero unclassified or unfixed bugs."
   },
   "additionalFixes": [
     {
