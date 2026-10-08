@@ -8,7 +8,7 @@ const workspaceCode = read("../src/app/page.tsx");
 // The dashboard reads through the metrics layer, which drops superseded and unmounted responses.
 const metricsCode = read("../src/lib/metrics/use-monthly-metrics.tsx");
 const responseSummaryCode = read("../src/app/dashboard/store-24h-response-panel.tsx");
-const store360Code = read("../src/app/store-360/store-360-view.tsx");
+// Store 360 reads through the metrics layer (as the dashboard), which drops superseded responses.
 const customerVoiceCode = read("../src/app/store-360/customer-voice/customer-voice-view.tsx");
 const responseCode = read("../src/app/store-360/response/response-view.tsx");
 
@@ -32,7 +32,7 @@ test("ApplicationWorkspace cancels obsolete reads without changing polling caden
 
 test("dashboard and Store 360 route loaders cancel on supersede/unmount", () => {
   assert.match(metricsCode, /let cancelled = false;[\s\S]*?if \(!cancelled\) setLoaded[\s\S]*?return \(\) => \{ cancelled = true; \};/);
-  for (const source of [responseSummaryCode, store360Code, customerVoiceCode, responseCode]) {
+  for (const source of [responseSummaryCode, customerVoiceCode, responseCode]) {
     assert.match(source, /new AbortController\(\)/);
     assert.match(source, /signal: controller\.signal/);
     assert.match(source, /isAbortError\(/);

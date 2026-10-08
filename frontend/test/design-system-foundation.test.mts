@@ -367,8 +367,8 @@ test("Brand Accent: Global --app-accent uses the brand green and separates warni
   assert.match(topNav, /<AppSidebar/);
   assert.match(sidebar, /bg-\[var\(--app-accent-soft\)\]/);
 
-  // Dashboard follower trend (now the month's daily followers) must consume the semantic accent
-  const dashboard = readFileSync(new URL("../src/app/dashboard/monthly-dashboard.tsx", import.meta.url), "utf8");
-  assert.doesNotMatch(dashboard, /stroke="#FF6900"/);
-  assert.match(dashboard, /stroke="var\(--app-accent\)"/);
+  // Dashboard follower trend (now the month's daily followers, shared with Store 360) must consume the semantic accent
+  const followerChart = readFileSync(new URL("../src/components/metrics/follower-chart.tsx", import.meta.url), "utf8");
+  assert.doesNotMatch(followerChart, /stroke="#FF6900"/);
+  assert.match(followerChart, /stroke="var\(--app-accent\)"/);
 });

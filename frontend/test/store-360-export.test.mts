@@ -5,13 +5,14 @@ import test from "node:test";
 const controlCode = readFileSync(new URL("../src/app/store-360/store-360-export-control.tsx", import.meta.url), "utf8");
 const helperCode = readFileSync(new URL("../src/app/store-360/store-360-export.ts", import.meta.url), "utf8");
 const apiCode = readFileSync(new URL("../src/lib/api.ts", import.meta.url), "utf8");
-const viewCode = readFileSync(new URL("../src/app/store-360/store-360-view.tsx", import.meta.url), "utf8");
+// Store 360 is now the monthly view (8 Oct 2026); the export covers the selected month.
+const viewCode = readFileSync(new URL("../src/app/store-360/store-360-monthly.tsx", import.meta.url), "utf8");
 
 test("Store 360 export control uses the current store and active Bangkok date range", () => {
   assert.match(controlCode, /button: "ดาวน์โหลดข้อมูล"/);
   assert.match(controlCode, /button: "Export Data"/);
   assert.match(controlCode, /setSelectedIds\(selectedStoreId \? \[selectedStoreId\] : \[\]\)/);
-  assert.match(viewCode, /<Store360ExportControl[\s\S]*startDate=\{from\}[\s\S]*endDate=\{to\}/);
+  assert.match(viewCode, /<Store360ExportControl[\s\S]*startDate=\{data\.frame\.current\.dateFrom\}[\s\S]*endDate=\{data\.frame\.current\.dateTo\}/);
   assert.match(controlCode, /disabled={downloading \|\| selectedIds\.length === 0}/);
   assert.match(controlCode, /role="alert"/);
   assert.match(controlCode, /MAX_STORES = 10/);

@@ -1,12 +1,12 @@
 import { Suspense } from "react";
 import { AuthorizedSection } from "../authorized-workspace";
-import { Store360View } from "./store-360-view";
+import { Store360Monthly } from "./store-360-monthly";
 
 export default function Store360Page() {
   return (
     <Suspense fallback={<main className="store360-workspace flex min-h-screen items-center justify-center bg-[var(--app-bg)] text-sm text-[var(--app-text-secondary)]">Opening Store 360…</main>}>
       <AuthorizedSection section="store-360">
-        <Store360View />
+        <Store360Monthly />
       </AuthorizedSection>
     </Suspense>
   );
