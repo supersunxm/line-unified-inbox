@@ -2,8 +2,8 @@
 
 import { useEffect, useSyncExternalStore } from "react";
 import { getCurrentBangkokMonth } from "@/app/chat-period";
-import { effectiveSummaryCounts } from "@/app/reply-state";
-import { api } from "@/lib/api";
+import { unrepliedCount } from "@/lib/metrics/store-model";
+import { sharedMonthSummary } from "@/lib/metrics/use-monthly-metrics";
 
 /** At most one summary request per this interval, shared by every badge on the page. */
 export const CHATS_BADGE_REFRESH_MS = 5 * 60 * 1000;
@@ -19,13 +19,13 @@ function publish(next: BadgeState) {
 }
 
 /**
- * This month's ยังไม่ตอบ, exactly as /chats counts it: the same request
- * (bm-reply-status-summary?month=<current Bangkok month>) and the same helper
- * (effectiveSummaryCounts(overview).notReplied).
+ * This month's ยังไม่ตอบ, exactly as /chats, Home, Dashboard and Store 360 count it: the same request
+ * (bm-reply-status-summary?month=<current Bangkok month>, through the metrics layer's shared cache)
+ * and the same helper (unrepliedCount = effectiveSummaryCounts(overview).notReplied).
  */
 export async function loadChatsUnrepliedCount(): Promise<number> {
-  const summary = await api.bmReplyStatusSummary(getCurrentBangkokMonth());
-  return effectiveSummaryCounts(summary.overview).notReplied;
+  const summary = await sharedMonthSummary(getCurrentBangkokMonth());
+  return unrepliedCount(summary);
 }
 
 function refreshIfStale(now = Date.now()) {

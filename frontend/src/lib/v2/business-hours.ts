@@ -1,5 +1,6 @@
 import { languageLocale, type AppLanguage } from "../../app/language-utils.ts";
 import { v2Text } from "./v2-translations.ts";
+import { RATE24_TARGET_PERCENT } from "../metrics/kpi.ts";
 
 // Store opening hours and the follow-up rules for v2. One place for every constant.
 // Kept free of React so node --test can import it.
@@ -41,7 +42,7 @@ export function followTodayWindowStart(now: Date | number | string = Date.now())
 }
 
 /** Target for the backend's "replied within 24 hours" rate, in percent. */
-export const RESPONSE_RATE_TARGET_PERCENT = 90;
+export const RESPONSE_RATE_TARGET_PERCENT = RATE24_TARGET_PERCENT;
 
 function toMs(value: Date | number | string): number {
   return value instanceof Date ? value.getTime() : typeof value === "number" ? value : new Date(value).getTime();

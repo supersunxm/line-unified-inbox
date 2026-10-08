@@ -36,5 +36,5 @@ test("store list, partner table and drawer read the backend coverage (Parser v4)
   const drawer = read("components/v2/store-scorecard-drawer.tsx");
   assert.match(drawer, /<TagCoverageDetail counts=\{data\.tagCoverageByStore\.get\(row\.storeId\)\} \/>/);
   assert.doesNotMatch(drawer, /เป็นค่าต่ำสุด/, "no more client-side lower bound");
-  assert.match(read("components/v2/v2-month-data.tsx"), /\/api-backend\/v2\/tag-coverage\?month=/);
+  assert.match(read("lib/metrics/use-monthly-metrics.tsx"), /\/api-backend\/v2\/tag-coverage\?month=/, "the data layer moved to lib/metrics");
 });
