@@ -5,9 +5,9 @@ import { primaryNavigationState } from "../src/app/primary-navigation.ts";
 import type { PrimarySection } from "../src/app/primary-navigation.ts";
 import { canAccessPrimarySection } from "../src/lib/authorization.ts";
 import { getGreetingDict } from "../src/app/greeting-messages/greeting-i18n.ts";
+import { greetingManagementPhrases, greetingManagementTemplates } from "../src/app/greeting-messages/greeting-management-i18n.ts";
 import {
   extractTemplateVariables,
-  getStoreVariableValue,
   resolveTemplateVariables,
   validateTemplateVariables,
 } from "../src/lib/template-variable-resolver.ts";
@@ -63,6 +63,33 @@ test("Greeting Message Manager is ADMIN-only and denied for store users or viewe
 
   assert.equal(canAccessPrimarySection(adminUser, "greeting-messages"), true);
   assert.equal(canAccessPrimarySection(storeUser, "greeting-messages"), false);
+});
+
+test("Greeting management status explanations have TH/EN/ZH translations and the route wires its count template", () => {
+  const phraseByThai = new Map(greetingManagementPhrases.map((phrase) => [phrase.th, phrase]));
+  assert.deepEqual(phraseByThai.get("ยังไม่ได้ใช้งาน"), {
+    th: "ยังไม่ได้ใช้งาน",
+    en: "Not in use yet",
+    zh: "尚未使用",
+  });
+  assert.deepEqual(phraseByThai.get("ปิดการใช้งาน"), {
+    th: "ปิดการใช้งาน",
+    en: "Currently disabled",
+    zh: "当前已停用",
+  });
+  assert.deepEqual(phraseByThai.get("เก็บไว้เป็นประวัติ"), {
+    th: "เก็บไว้เป็นประวัติ",
+    en: "Kept for history",
+    zh: "已归档保存",
+  });
+  assert.deepEqual(greetingManagementTemplates, [{
+    th: "ใช้งานอยู่ใน {{value}} ร้าน",
+    en: "Active in {{value}} stores",
+    zh: "已在 {{value}} 家门店启用",
+  }]);
+
+  const route = readFileSync(new URL("../src/app/greeting-messages/manage/page.tsx", import.meta.url), "utf8");
+  assert.match(route, /templates=\{greetingManagementTemplates\}/);
 });
 
 test("Greeting I18N dictionary contains duplication warning and send policy copy in TH, EN, ZH", () => {

@@ -1,4 +1,4 @@
-import type { LegacyI18nPhrase } from "../legacy-i18n-boundary";
+import type { LegacyI18nPhrase, LegacyI18nTemplate } from "../legacy-i18n-boundary";
 
 export const greetingManagementPhrases: LegacyI18nPhrase[] = [
   { th: "ริชเมนู", en: "Rich Menu", zh: "富媒体菜单" },
@@ -8,6 +8,9 @@ export const greetingManagementPhrases: LegacyI18nPhrase[] = [
   { th: "ฉบับร่าง", en: "Draft", zh: "草稿" },
   { th: "ปิดใช้งาน", en: "Inactive", zh: "已停用" },
   { th: "จัดเก็บเป็นประวัติ", en: "Archived", zh: "已归档" },
+  { th: "ยังไม่ได้ใช้งาน", en: "Not in use yet", zh: "尚未使用" },
+  { th: "ปิดการใช้งาน", en: "Currently disabled", zh: "当前已停用" },
+  { th: "เก็บไว้เป็นประวัติ", en: "Kept for history", zh: "已归档保存" },
   { th: "หยุดใช้งาน", en: "Deactivate", zh: "停用" },
   { th: "เปิดใช้งาน", en: "Activate", zh: "启用" },
   { th: "ทำสำเนา", en: "Duplicate", zh: "复制" },
@@ -48,4 +51,8 @@ export const greetingManagementPhrases: LegacyI18nPhrase[] = [
   { th: "ยังไม่มีประวัติที่บันทึกไว้", en: "No recorded history yet", zh: "暂无已记录的历史" },
   { th: "เปิดใน Builder", en: "Open in builder", zh: "在编辑器中打开" },
   { th: "เลือก Greeting Message เพื่อดูรายละเอียด", en: "Select a Greeting Message to view its details", zh: "选择一条问候消息以查看详情" },
+];
+
+export const greetingManagementTemplates: LegacyI18nTemplate[] = [
+  { th: "ใช้งานอยู่ใน {{value}} ร้าน", en: "Active in {{value}} stores", zh: "已在 {{value}} 家门店启用" },
 ];
