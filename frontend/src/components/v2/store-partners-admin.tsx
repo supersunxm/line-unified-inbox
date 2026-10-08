@@ -1,14 +1,15 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useAppLanguage } from "@/app/language";
 import { languageLocale } from "@/app/language-utils";
 import { PageHeader } from "@/components/shell/page-header";
 import { SearchInput, SectionCard, Table, TableBody, TableCell, TableEmptyState, TableHead, TableHeader, TableRow } from "@/components/ui";
 import { useAuthUserSnapshot } from "@/lib/auth-user-store";
 import { sortPartnerNames, UNMATCHED_PARTNER, type StorePartnerRow } from "@/lib/v2/partners";
-import { fetchStorePartners, useV2Month } from "./v2-month-data";
-import { SourceNotice } from "./v2-ui";
+import { AuthorizedSection } from "@/app/authorized-workspace";
+import { InternalPageShell } from "@/components/shell/internal-page-shell";
+import { fetchStorePartners, useV2Month, V2MonthDataProvider } from "./v2-month-data";
 import { v2Text } from "@/lib/v2/v2-translations";
 
 type Change = { id: string; storeId: string; previousPartner: string | null; partnerName: string | null; source: string; actorName: string; reason: string | null; changedAt: string };
@@ -95,8 +96,8 @@ export function StorePartnersAdmin() {
     <div className="h-full overflow-y-auto px-6 py-5">
       <PageHeader title={t("partnerMappingTitle")} description={t("partnerMappingDescription")} />
       <div className="space-y-4">
-        {error && <SourceNotice>{error}</SourceNotice>}
-        {!isAdmin && <SourceNotice>{t("readOnlyAdmin")}</SourceNotice>}
+        {error && <div role="status" className="rounded-[var(--app-radius-md)] border border-[var(--app-warning)]/30 bg-[var(--app-warning-soft)] px-3 py-2 text-xs text-[var(--app-text-primary)]">{error}</div>}
+        {!isAdmin && <div role="status" className="rounded-[var(--app-radius-md)] border border-[var(--app-warning)]/30 bg-[var(--app-warning-soft)] px-3 py-2 text-xs text-[var(--app-text-primary)]">{t("readOnlyAdmin")}</div>}
         {message && <p role="status" className="text-sm text-[var(--app-text-secondary)]">{message}</p>}
         <div className="flex flex-wrap items-center gap-3">
           <label className="flex items-center gap-2 text-sm text-[var(--app-text-secondary)]">
@@ -190,5 +191,24 @@ export function StorePartnersAdmin() {
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * /v2/admin/partners on its own (the v2 workspace shell was retired, 8 Oct 2026): the Store → partner
+ * mapping that /v2/report?partner= reads. Gated like the report; not linked from the main menu.
+ */
+export function StorePartnersAdminPage() {
+  return (
+    <AuthorizedSection section="dashboard">
+      <InternalPageShell section="dashboard">
+        {/* ?month= is read with useSearchParams, which needs a Suspense boundary for prerendering. */}
+        <Suspense fallback={null}>
+          <V2MonthDataProvider>
+            <div className="h-full overflow-y-auto px-6 py-5"><StorePartnersAdmin /></div>
+          </V2MonthDataProvider>
+        </Suspense>
+      </InternalPageShell>
+    </AuthorizedSection>
   );
 }

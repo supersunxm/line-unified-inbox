@@ -42,5 +42,6 @@ test("v2 reads the snapshot for closed months and live data only for open ones",
   assert.match(data, /currentClosed \? \{ data: snapshotRates\(monthClose\.data!\)/);
   assert.match(data, /useKeyedSource\("summary", on\(closeKnown && !currentClosed \? JSON\.stringify\(\{ month \}\) : null\)/, "no live call for a closed month");
   assert.match(data, /if \(close\?\.close\) return \{ \.\.\.point, summary: snapshotSummary\(close\), rates: snapshotRates\(close\), error: null \};/, "trend too");
-  assert.match(readFileSync(new URL("../src/components/v2/v2-month-controls.tsx", import.meta.url), "utf8"), /data\.statusText,/);
+  // The close status is stated on the Dashboard (the v2 data line was retired with the v2 shell).
+  assert.match(readFileSync(new URL("../src/app/dashboard/monthly-dashboard.tsx", import.meta.url), "utf8"), /data\.statusText\]/);
 });

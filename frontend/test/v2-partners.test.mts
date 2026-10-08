@@ -38,13 +38,15 @@ test("partner names sort by name with the unmatched group last", () => {
   assert.deepEqual(sortPartnerNames(["TG", UNMATCHED_PARTNER, "Com7", "OPPO", "TG"]), ["Com7", "OPPO", "TG", UNMATCHED_PARTNER]);
 });
 
-test("admin page: ADMIN-only editing, an 'ยังไม่ระบุ' filter, change history, linked from the v2 shell", () => {
+test("admin page: ADMIN-only editing, an 'ยังไม่ระบุ' filter, change history; kept on its own after the v2 shell", () => {
   const admin = readFileSync(new URL("../src/components/v2/store-partners-admin.tsx", import.meta.url), "utf8");
   assert.match(admin, /const isAdmin = user\?\.role === "ADMIN";/);
   assert.match(admin, /\{isAdmin && row\.storeId \? \(/, "inputs only for ADMIN and only with a Store ID");
   assert.match(admin, /data-v2-partner-unset-filter/);
   assert.match(admin, /method: "PUT"/);
   assert.match(admin, /data-v2-partner-changes/);
-  const shell = readFileSync(new URL("../src/components/v2/v2-shell.tsx", import.meta.url), "utf8");
-  assert.match(shell, /href: "\/v2\/admin\/partners", label: t\("storePartners"\)/);
+  // The v2 shell (its only link) was retired on 8 Oct 2026; the page stays at /v2/admin/partners, gated,
+  // in the standard internal shell, for the mapping /v2/report?partner= reads.
+  assert.match(readFileSync(new URL("../src/app/v2/admin/partners/page.tsx", import.meta.url), "utf8"), /<StorePartnersAdminPage \/>/);
+  assert.match(admin, /<AuthorizedSection section="dashboard">\n\s*<InternalPageShell section="dashboard">/);
 });

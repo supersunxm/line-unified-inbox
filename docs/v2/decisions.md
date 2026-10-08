@@ -1,7 +1,7 @@
 # v2 decisions
 
-Every definition and constant v2 uses, with the date it was set. v2 is a **monthly
-store-performance and accountability tool**: monthly numbers evaluate store KPIs, feed the
+Every definition and constant v2 uses, with the date it was set. v2 was a **monthly
+store-performance and accountability tool**, retired into Home, Dashboard and Store 360 on 8 Oct 2026 (see below): monthly numbers evaluate store KPIs, feed the
 monthly summary sent to stores, BMs and partners, and drive partner review meetings. It is
 not a daily follow-up tool. Store Chats (`/chats`) stays a separate tool; v2 must agree with it.
 
@@ -45,6 +45,16 @@ So a chat whose first message was answered quickly, and whose customer then wrot
 counts as "ตอบใน 24 ชม." and as "ยังไม่ตอบ" at the same time. The populations also differ (latest-message month vs
 first-customer-message date), so the two n's differ. UI sentence (`KPI_DIFFERENCE_NOTE`): "ตอบใน 24 ชม. ดูแค่ข้อความแรกของลูกค้าในช่วงนี้
 ส่วนตอบแล้ว % ดูข้อความล่าสุด แชทที่ตอบครั้งแรกทันแต่ลูกค้าทักมาใหม่แล้วยังไม่ได้ตอบ จึงนับเป็น “ตอบใน 24 ชม.” และ “ยังไม่ตอบ” พร้อมกัน"
+
+## v2 retired into Home, Dashboard and Store 360 (owner decision 8 Oct 2026)
+
+| Date | Item | Decision | Status |
+|---|---|---|---|
+| 2026-10-08 | Frame | HQ evaluates **stores monthly**. The partner view is dropped from the pages (the mapping tables and `/v2/report?partner=` stay). Per-staff performance is removed. | DECIDED (owner) |
+| 2026-10-08 | One definition, one home | Every number on Home, Dashboard and Store 360 has one definition in `frontend/src/lib/metrics` and one owning page: `docs/metrics-registry.md`. `lib/v2/*` re-exports the moved modules. | DECIDED |
+| 2026-10-08 | Redirects | `/v2` → `/dashboard`, `/v2/stores` → `/dashboard#stores` (`?store=` → `/store-360?storeId=`), `/v2/response` → `/dashboard#stores`, `/v2/customers` → `/store-360`; `?month=` is kept (`app/v2/v2-redirects.ts`). | DECIDED (owner) |
+| 2026-10-08 | Kept | `/v2/report` (print; "รายงาน KPI รายเดือน" in the main menu), `/v2/admin/partners` (gated, unlinked, in the standard internal shell), the month-close scheduler and admin endpoints, the partner mapping tables. | DECIDED (owner) |
+| 2026-10-08 | Removed | The v2 shell and layout, ภาพรวมเดือน, the store list and scorecard drawer, the "ตอนนี้" tab (business-hours waiting, ตามวันนี้), and their lib modules (`response-model`, `response-url`, `conversation-list`, `business-hours`, `date-ranges`, `waiting-pages` shim) and tests — each proven unreferenced by grep and by `tsc`/build. The business-hours rows below apply only to the retired "ตอนนี้" tab. | DECIDED |
 
 ## Main menu, layout "A" (owner decision 7 Oct 2026)
 

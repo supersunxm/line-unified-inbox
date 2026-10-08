@@ -1,4 +1,3 @@
-import { v2Text } from "../src/lib/v2/v2-translations.ts";
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import test from "node:test";
@@ -46,35 +45,37 @@ test("data layer: monthly numbers come from the /chats and /replymessage endpoin
   assert.match(read("app/replymessage/../dashboard/store-24h-response-panel.tsx"), /\/api-backend\/dashboard\/store-24h-response-summary\?/);
 });
 
-test("business-hours waiting appears only in the ตอนนี้ tab; monthly views use /chats's calendar wait", () => {
-  const monthly = ["components/v2/month-overview.tsx", "components/v2/store-scorecard-view.tsx", "components/v2/store-scorecard-drawer.tsx", "components/v2/v2-month-data.tsx", "lib/v2/monthly-model.ts", "lib/metrics/store-model.ts", "lib/metrics/use-monthly-metrics.tsx"];
+// The v2 "ตอนนี้" tab (business-hours waiting) was retired on 8 Oct 2026: every view now uses /chats's
+// calendar wait and the monthly model.
+test("monthly views use /chats's calendar wait; no business-hours waiting is left", () => {
+  const monthly = ["app/dashboard/monthly-dashboard.tsx", "app/store-360/store-360-monthly.tsx", "app/home/page.tsx", "lib/metrics/store-model.ts", "lib/metrics/use-monthly-metrics.tsx", "components/v2/month-report.tsx"];
   for (const file of monthly) {
     assert.doesNotMatch(read(file), /WaitLabel|businessMinutes|formatWaitMinutes|นับเฉพาะเวลาเปิดร้าน/, file);
   }
-  assert.match(read("components/v2/store-scorecard-drawer.tsx"), /import \{ formatWaitingDuration \} from "@\/components\/shell\/store-priority-score";/);
-  assert.match(v2Text("th")("responseDescription", { minutes: 60, limit: 15 }), /นับเฉพาะเวลาเปิดร้าน \(10:00–21:00\)/);
-  assert.match(read("components/v2/response-view.tsx"), /data-v2-business-hours-label[^>]*>\{t\("responseDescription"/);
+  assert.match(read("lib/metrics/store-model.ts"), /oldestWaitingMinutes: counts && counts\.notReplied > 0 \? counts\.oldestWaitingMinutes : null/);
 });
 
-test("shell: monthly pages carry the month selector; ภาพรวมเดือน and ตอนนี้ are tabs; daily attention list removed", () => {
-  const shell = read("components/v2/v2-shell.tsx");
-  assert.match(shell, /"\/v2": "ภาพรวมเดือน", "\/v2\/response": "ตอนนี้", "\/v2\/stores": "สาขา"/);
-  assert.match(shell, /\{monthly && <MonthSelector \/>\}/);
-  assert.match(shell, /label: t\("stores"\), icon: "stores"/);
-  assert.match(read("components/v2/v2-month-controls.tsx"), /selectableMonths\(now\)/);
-  assert.match(read("app/v2/(shell)/page.tsx"), /<MonthOverview \/>/);
-  assert.match(read("app/v2/(shell)/stores/page.tsx"), /<StoreScorecardView \/>/);
-  const files = readdirSync(new URL("../src/components/v2", import.meta.url));
-  assert.ok(!files.includes("today-view.tsx"));
-  assert.ok(!files.includes("stores-view.tsx"));
-  assert.match(read("components/v2/v2-layout.tsx"), /<V2DataProvider active=\{pathname\.startsWith\("\/v2\/response"\)\}>/, "live sources load only on ตอนนี้");
-});
-
-test("store list: no 'สาขาที่ต้องดู' KPI or daily inclusion rule; Google Review column only with results", () => {
-  const view = read("components/v2/store-scorecard-view.tsx");
-  assert.doesNotMatch(view, /สาขาที่ต้องดู|hasAttention|ต้องดู"/);
-  assert.match(view, /\{data\.hasGoogleResults && <TableHead scope="col">\{t\("reviewLabel"\)\}<\/TableHead>\}/);
-  assert.match(view, /<th scope="row"/, "real table semantics: the store is the row header");
+// The v2 workspace was retired into Home, Dashboard and Store 360 (8 Oct 2026): its URLs redirect,
+// keeping the month; /v2/report and /v2/admin/partners stay.
+test("retired v2 URLs redirect with the month kept", async () => {
+  const { v2RedirectHref } = await import("../src/app/v2/v2-redirects.ts");
+  assert.equal(v2RedirectHref("overview", {}), "/dashboard");
+  assert.equal(v2RedirectHref("overview", { month: "2026-09" }), "/dashboard?month=2026-09");
+  assert.equal(v2RedirectHref("stores", { month: "2026-09", partner: "TG", sort: "unreplied" }), "/dashboard?month=2026-09#stores");
+  assert.equal(v2RedirectHref("stores", { month: "2026-09", store: "s1" }), "/store-360?storeId=s1&month=2026-09", "the old scorecard drawer opens Store 360");
+  assert.equal(v2RedirectHref("response", { view: "chat", tab: "all" }), "/dashboard#stores");
+  assert.equal(v2RedirectHref("customers", {}), "/store-360");
+  assert.equal(v2RedirectHref("overview", { month: "../evil" }), "/dashboard", "only a YYYY-MM month is carried");
+  assert.equal(v2RedirectHref("overview", { month: ["2026-10", "2026-09"] }), "/dashboard?month=2026-10");
+  for (const [path, route] of [["app/v2/page.tsx", "overview"], ["app/v2/stores/page.tsx", "stores"], ["app/v2/response/page.tsx", "response"], ["app/v2/customers/page.tsx", "customers"]]) {
+    assert.match(read(path), new RegExp(`redirect\\(v2RedirectHref\\("${route}", await searchParams\\)\\);`), path);
+  }
+  const files = readdirSync(new URL("../src/app/v2", import.meta.url));
+  assert.ok(!files.includes("(shell)"), "no v2 shell");
+  assert.match(read("app/v2/report/page.tsx"), /<MonthReport \/>/);
+  assert.match(read("app/v2/admin/partners/page.tsx"), /<StorePartnersAdminPage \/>/);
+  const components = readdirSync(new URL("../src/components/v2", import.meta.url)).sort();
+  assert.deepEqual(components, ["month-report.tsx", "store-partners-admin.tsx", "v2-month-data.tsx"]);
 });
 
 test("no user-visible internal terms in v2 components", () => {
@@ -91,11 +92,11 @@ test("no user-visible internal terms in v2 components", () => {
   }
 });
 
-test("drawer: per-store per-day 24h rate from the /replymessage endpoint with storeId", () => {
+test("Store 360: per-store per-day 24h rate from the /replymessage endpoint with storeId", () => {
   const data = read("lib/metrics/use-monthly-metrics.tsx");
   assert.match(data, /new URLSearchParams\(\{ dateFrom, dateTo, storeId \}\)/);
   assert.match(data, /\/api-backend\/dashboard\/store-24h-response-summary\?\$\{params\.toString\(\)\}/);
-  const drawer = read("components/v2/store-scorecard-drawer.tsx");
-  assert.match(drawer, /const dailyRates = useStoreDailyRates\(row\.storeId\);/);
-  assert.match(drawer, /rateByDay\.get\(day\.day\)!\.within24h\}\/\$\{rateByDay\.get\(day\.day\)!\.total\}/);
+  const view = read("app/store-360/store-360-monthly.tsx");
+  assert.match(view, /const dailyRates = useStoreDailyRateSource\(row\.storeId, data\.frame, data\.nonce\);/);
+  assert.match(view, /`\$\{rate\.within24h\}\/\$\{rate\.total\}`/);
 });
