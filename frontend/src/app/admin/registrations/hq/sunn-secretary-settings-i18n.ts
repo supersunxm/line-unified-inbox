@@ -1,5 +1,8 @@
 export const secretarySettingsText = {
   th: {
+    TOKEN_REJECTED: "LINE ปฏิเสธ Access Token (401/403) ตรวจว่า Token มาจาก Messaging API Channel เดียวกัน และยังใช้งานได้",
+    BOT_IDENTITY_MISMATCH: "Access Token ถูกต้อง แต่ Bot User ID ไม่ตรงกับ LINE OA ของ Token นี้ กรุณาตรวจค่า userId ที่ขึ้นต้นด้วย U ไม่ใช่ Basic ID ที่ขึ้นต้นด้วย @",
+    LINE_API_UNAVAILABLE: "ไม่สามารถตรวจสอบ LINE API ได้ในขณะนี้ อาจเป็นปัญหาเครือข่าย, Timeout หรือบริการ LINE กรุณาลองใหม่ภายหลัง",
     title: "ตั้งค่า LINE เลขาซันน์", close: "ปิด", loading: "กำลังโหลดสถานะ…", unknown: "ยังไม่ทราบ", configured: "ตั้งค่าแล้ว", missing: "ยังไม่ตั้งค่า",
     channelId: "Channel ID", channelSecret: "Channel Secret", accessToken: "Channel Access Token", botUserId: "Bot User ID",
     preserve: "เว้นว่างเพื่อเก็บค่าเดิม ระบบจะไม่แสดง Secret หรือ Token ที่บันทึกไว้", show: "แสดง", hide: "ซ่อน", save: "บันทึกอย่างปลอดภัย", saving: "กำลังบันทึก…", saved: "บันทึกข้อมูลแบบเข้ารหัสแล้ว",
@@ -9,6 +12,9 @@ export const secretarySettingsText = {
     unauthorized: "เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่", forbidden: "เฉพาะเจ้าของบัญชี HQ ที่กำหนดไว้เท่านั้นที่เข้าถึงได้", error: "ไม่สามารถดำเนินการได้ กรุณาลองใหม่", invalid: "กรุณาตรวจรูปแบบข้อมูลและกรอกครบทั้งสี่ช่องสำหรับการตั้งค่าครั้งแรก", rateLimited: "คำขอถี่เกินไป กรุณารอสักครู่", webhook: "Webhook URL", verifiedAt: "ตรวจสอบล่าสุด", refresh: "โหลดสถานะใหม่",
   },
   en: {
+    TOKEN_REJECTED: "LINE rejected the access token (401/403). Check that the token belongs to this Messaging API channel and is still valid.",
+    BOT_IDENTITY_MISMATCH: "Token accepted, but Bot User ID does not match this token's LINE OA. Use the bot userId beginning with U, not the @ Basic ID.",
+    LINE_API_UNAVAILABLE: "LINE API could not be verified (network error, timeout or LINE service issue). Try again later.",
     title: "Sunn Secretary LINE settings", close: "Close", loading: "Loading status…", unknown: "Unknown", configured: "Configured", missing: "Not configured",
     channelId: "Channel ID", channelSecret: "Channel Secret", accessToken: "Channel Access Token", botUserId: "Bot User ID",
     preserve: "Leave fields blank to preserve existing values. Saved secrets and tokens are never displayed.", show: "Show", hide: "Hide", save: "Save securely", saving: "Saving…", saved: "Encrypted credentials persisted",
@@ -18,6 +24,9 @@ export const secretarySettingsText = {
     unauthorized: "Your session expired. Sign in again.", forbidden: "Only the configured HQ owner can access these settings.", error: "The operation could not be completed. Try again.", invalid: "Check the values and provide all four fields for initial setup.", rateLimited: "Too many requests. Please wait.", webhook: "Webhook URL", verifiedAt: "Last validated", refresh: "Reload status",
   },
   zh: {
+    TOKEN_REJECTED: "LINE 拒绝了访问令牌（401/403）。请确认令牌属于该 Messaging API 频道且仍然有效。",
+    BOT_IDENTITY_MISMATCH: "访问令牌有效，但 Bot User ID 与此令牌对应的 LINE OA 不符。请使用以 U 开头的 userId，而不是以 @ 开头的 Basic ID。",
+    LINE_API_UNAVAILABLE: "暂时无法验证 LINE API（网络错误、超时或 LINE 服务问题），请稍后重试。",
     title: "Sunn Secretary LINE 设置", close: "关闭", loading: "正在加载状态…", unknown: "未知", configured: "已配置", missing: "未配置",
     channelId: "Channel ID", channelSecret: "Channel Secret", accessToken: "Channel Access Token", botUserId: "Bot User ID",
     preserve: "留空可保留现有值。已保存的密钥和令牌不会显示。", show: "显示", hide: "隐藏", save: "安全保存", saving: "正在保存…", saved: "加密凭据已持久保存",
