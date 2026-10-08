@@ -15,9 +15,13 @@ const THAI_MONTHS: Record<string, number> = {
 };
 
 export function bangkokMonth(now: Date): string {
-  return new Intl.DateTimeFormat("en-CA", {
+  const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: "Asia/Bangkok", year: "numeric", month: "2-digit",
-  }).format(now).replace("/", "-");
+  }).formatToParts(now);
+  const year = parts.find((part) => part.type === "year")?.value;
+  const month = parts.find((part) => part.type === "month")?.value;
+  if (!year || !month) throw new Error("Unable to resolve Bangkok month");
+  return `${year}-${month}`;
 }
 
 export function parseSunnSecretaryIntent(text: string, now: Date): SecretaryIntent {
