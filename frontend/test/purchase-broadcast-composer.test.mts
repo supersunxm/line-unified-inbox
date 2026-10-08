@@ -33,6 +33,14 @@ test("composer loads and saves through the dedicated draft-only endpoint", () =>
   assert.match(composerCode, /DRAFT ONLY/);
 });
 
+test("desktop composer follows and changes the shared application language", () => {
+  assert.match(composerCode, /import \{ useAppLanguage \} from "\.\.\/language"/);
+  assert.match(composerCode, /const \{ language, setLanguage \} = useAppLanguage\(\)/);
+  assert.match(composerCode, /language=\{language\}/);
+  assert.match(composerCode, /changeLanguage=\{setLanguage\}/);
+  assert.doesNotMatch(composerCode, /language="en"/);
+});
+
 test("composer supports text and existing protected image upload without send execution", () => {
   assert.match(composerCode, /api\.uploadMassMessageImage\(file\)/);
   assert.match(composerCode, /maxLength=\{5000\}/);

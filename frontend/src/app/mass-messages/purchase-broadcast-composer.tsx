@@ -12,9 +12,7 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-  ErrorState,
   Input,
-  LoadingSpinner,
   LoadingState,
   MetricCard,
   Table,
@@ -27,6 +25,7 @@ import {
 } from "@/components/ui";
 import { AUTH_UNAUTHORIZED_EVENT } from "@/lib/auth-session";
 import { api } from "@/lib/api";
+import { useAppLanguage } from "../language";
 
 type AuthUser = {
   id: string;
@@ -89,6 +88,7 @@ function composerUrl(campaignId: string) {
 }
 
 export function PurchaseBroadcastComposer({ campaignId }: { campaignId: string }) {
+  const { language, setLanguage } = useAppLanguage();
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [draft, setDraft] = useState<ComposerResponse | null>(null);
@@ -157,7 +157,7 @@ export function PurchaseBroadcastComposer({ campaignId }: { campaignId: string }
       } finally {
         if (active) {
           setAuthChecked(true);
-          if (!authUser) setLoading(false);
+          setLoading(false);
         }
       }
     };
@@ -283,8 +283,8 @@ export function PurchaseBroadcastComposer({ campaignId }: { campaignId: string }
         retry: "Retry",
         apiError: "Data service error",
       }}
-      language="en"
-      changeLanguage={() => undefined}
+      language={language}
+      changeLanguage={setLanguage}
       searchText=""
       setSearchText={() => undefined}
       logout={logout}
