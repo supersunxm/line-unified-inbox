@@ -68,7 +68,7 @@ A post-merge inspection of the deployed English Google Review KPI screen found T
 - TypeScript baseline check: 49 diagnostics on main and branch.
 - Local production build passed; Next logged the existing dynamic-font HTTP 400 and `metadataBase` warning. Browser console errors were zero on the prior deployed route checks; the post-fix browser log check remains pending deployment.
 - Required PR #535 checks all passed (Adaptive Auth, Backend, Frontend, CI Gate); it merged normally. Railway deployment `46019769-2d5a-4ccb-ab52-f8b072cfccf9` is active on `29e889e`; the route loaded successfully. `git diff --check`: passed.
-- Current fix branch `codex/i18n-greeting-final-qa` is based on `33db80d545eaf87cc5fb7f1619d9536331312cd1`. Focused greeting tests pass 9/9 and `git diff --check` passes. Focused/full lint, full frontend tests, typecheck, build, PR CI, and post-merge Railway revision/health checks are pending.
+- Current fix branch `codex/i18n-greeting-status-render-20261008-main` is based on latest main `e3c3a921af3503eeeb891429b46266fdf1fb0f92`. Focused greeting tests pass 9/9 and `git diff --check` passes. Focused/full lint, full frontend tests, typecheck, build, PR CI, and post-merge Railway revision/health checks are pending.
 
 ## Safety and remaining work
 
