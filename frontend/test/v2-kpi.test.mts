@@ -24,7 +24,8 @@ test("rate changes carry the colour; count changes are neutral everywhere", () =
   // StateValue/DeltaValue/RateCell/CountCell moved to components/metrics/value-ui.tsx (shared with Dashboard and Store 360).
   const ui = read("components/metrics/value-ui.tsx");
   assert.match(ui, /const muted = kind === "count" \|\| state\.kind === "low-sample" \|\| state\.kind === "stale";/);
-  for (const file of ["components/v2/month-overview.tsx", "components/v2/store-scorecard-view.tsx", "components/v2/month-report.tsx"]) {
+  // The v2 overview and store list were retired into the Dashboard (8 Oct 2026); the report keeps the cells.
+  for (const file of ["components/v2/month-report.tsx"]) {
     const source = read(file);
     assert.match(source, /<RateCell value=\{row\.rate24\} delta=\{row\.rate24Delta\} target=\{RATE24_TARGET\}/, file);
     assert.match(source, /<RateCell value=\{row\.replyRate\} delta=\{row\.replyRateDelta\} target=\{REPLIED_RATE_TARGET\}/, file);
@@ -40,9 +41,10 @@ test("every view says how each KPI is counted, and why 24h can be higher", () =>
   assert.match(KPI_HOW_COUNTED.rate24, /ข้อความแรก/);
   assert.match(KPI_DIFFERENCE_NOTE, /ตอบใน 24 ชม\.” และ “ยังไม่ตอบ” พร้อมกัน/);
   assert.match(read("components/metrics/kpi-ui.tsx"), /<details data-v2-how-counted=\{kpi\}/, "a disclosure, not a tooltip");
-  assert.match(read("components/v2/month-overview.tsx"), /<TwoKpiCards totals=\{data\.network\} frame=\{data\.frame\} \/>/);
-  assert.match(read("components/v2/store-scorecard-view.tsx"), /<HowCounted kpi="replied" \/>[\s\S]*<HowCounted kpi="rate24" \/>[\s\S]*t\("kpiDifference"\)/);
-  assert.match(read("components/v2/store-scorecard-drawer.tsx"), /<KpiCompareTable totals=\{row\} frame=\{data\.frame\} \/>[\s\S]*t\("kpiDifference"\)/);
+  // The v2 views were retired (8 Oct 2026): the Dashboard and Store 360 carry the disclosures now.
+  for (const file of ["app/dashboard/monthly-dashboard.tsx", "app/store-360/store-360-monthly.tsx"]) {
+    assert.match(read(file), /<HowCounted kpi="replied" \/>[\s\S]*<HowCounted kpi="rate24" \/>[\s\S]*t\("kpiDifference"\)/, file);
+  }
   assert.match(read("components/v2/month-report.tsx"), /t\("howReplied"\)[\s\S]*t\("howRate24"\)/);
 });
 

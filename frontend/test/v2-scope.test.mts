@@ -43,5 +43,6 @@ test("v2 never uses the nickname feature's fleet readiness as a has-data source"
   const v2Files = sourceFiles(srcRoot).filter((full) => isV2(relative(srcRoot, full)));
   const offenders = v2Files.filter((full) => /fleet-readiness|lineChatFleetReadiness/.test(readFileSync(full, "utf8"))).map((full) => relative(srcRoot, full));
   assert.deepEqual(offenders, []);
-  assert.ok(v2Files.some((full) => readFileSync(full, "utf8").includes("/operations/line-chat-nickname/mirror-status")));
+  // The "ตอนนี้" tab that read mirror-status was retired (8 Oct 2026); Home reads it for its sync time.
+  assert.match(readFileSync(join(srcRoot, "app/home/page.tsx"), "utf8"), /\/operations\/line-chat-nickname\/mirror-status/);
 });

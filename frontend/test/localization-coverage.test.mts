@@ -7,7 +7,6 @@ import { review15Translations, review15Text } from "../src/app/review15/review-1
 import { v2Translations, v2Text } from "../src/lib/v2/v2-translations.ts";
 import { languageLocale, type AppLanguage } from "../src/app/language-utils.ts";
 import { monthLongLabel, monthWindow, comparisonLabel } from "../src/lib/v2/month.ts";
-import { formatWaitMinutes, formatSentAt } from "../src/lib/v2/business-hours.ts";
 import { targetLabel, targetState } from "../src/lib/v2/kpi.ts";
 import { formatValue } from "../src/lib/v2/value-state.ts";
 import { formatPublicRegion } from "../src/lib/public-regions.ts";
@@ -863,8 +862,6 @@ for (const language of locales) {
       review("missingWarning", { count: 2, total: 4 }),
       v2("overviewTitle", { month: monthLongLabel("2026-10", language) }),
       comparisonLabel(frame, language),
-      formatWaitMinutes(125, language),
-      formatSentAt("2026-10-06T13:30:00Z", "2026-10-07T07:30:00Z", language),
       targetLabel(targetState({ kind: "value", value: 80, n: 100 }, 90), 90, language),
       formatValue({ kind: "not-collected" }, "count", language).reason!,
     ];

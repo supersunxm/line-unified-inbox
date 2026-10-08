@@ -30,11 +30,10 @@ test("partner coverage sums its stores", () => {
   assert.deepEqual([sum.total, sum.read, sum.tagged, sum.withPeriod, sum.byType.online, sum.byType.period], [15, 8, 4, 2, 4, 2]);
 });
 
-test("store list, partner table and drawer read the backend coverage (Parser v4)", () => {
-  assert.match(read("components/v2/store-scorecard-view.tsx"), /<TableHead scope="col" align="right">\{t\("tagCoverageLabel"\)\}<\/TableHead>[\s\S]*<TagCoverageCell counts=\{data\.tagCoverageByStore\.get\(row\.storeId\)\} \/>/);
-  assert.match(read("components/v2/month-overview.tsx"), /<TagCoverageCell counts=\{sumTagCoverage\(row\.storeIds\.map\(\(id\) => data\.tagCoverageByStore\.get\(id\)\)\)\} \/>[\s\S]*<TagCoverageCell counts=\{data\.tagCoverage\.data\?\.network\} \/>/);
-  const drawer = read("components/v2/store-scorecard-drawer.tsx");
-  assert.match(drawer, /<TagCoverageDetail counts=\{data\.tagCoverageByStore\.get\(row\.storeId\)\} \/>/);
-  assert.doesNotMatch(drawer, /เป็นค่าต่ำสุด/, "no more client-side lower bound");
+// The v2 store list, partner table and drawer were retired (8 Oct 2026); Store 360 shows the coverage.
+test("Store 360 reads the backend coverage (Parser v4)", () => {
+  const view = read("app/store-360/store-360-monthly.tsx");
+  assert.match(view, /const coverage = tagCoverageView\(data\.tagCoverageByStore\.get\(storeId\)\);/);
+  assert.doesNotMatch(view, /เป็นค่าต่ำสุด/, "no client-side lower bound");
   assert.match(read("lib/metrics/use-monthly-metrics.tsx"), /\/api-backend\/v2\/tag-coverage\?month=/, "the data layer moved to lib/metrics");
 });

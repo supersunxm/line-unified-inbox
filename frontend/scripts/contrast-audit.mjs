@@ -1,11 +1,11 @@
 #!/usr/bin/env node
-// Dark-mode contrast audit of the real rendered v2 pages, the metrics pages (Home, Dashboard,
-// Store 360) and the main app's left sidebar.
+// Dark-mode contrast audit of the real rendered metrics pages (Home, Dashboard, Store 360), the v2
+// partner admin page and the main app's left sidebar.
 //
 //   npm run build && npx next start -p 3000      # in one terminal
 //   npm run audit:contrast                       # in another (BASE_URL to override)
 //
-// Manual, not in CI. Opens every v2 page (and the scorecard drawer), and three main-app pages
+// Manual, not in CI. Opens every metrics page (and Store 360's picker and no-data state), and three main-app pages
 // measured inside the sidebar only (`scope`), in headless Chromium with
 // the app theme set to dark, answers every API call from scripts/v2-seed-api.mjs (synthetic,
 // deterministic data — no backend, no customer data), and checks each visible text node: its
@@ -42,16 +42,8 @@ async function loadPlaywright() {
 }
 
 const PAGES = [
-  { name: "ภาพรวมเดือน", path: "/v2" },
-  { name: "ภาพรวมเดือน (เดือนก่อน)", path: "/v2?month=2026-09" },
-  { name: "สาขา", path: "/v2/stores" },
-  { name: "สาขา + drawer", path: "/v2/stores?store=store-1", waitFor: "[data-v2-scorecard-drawer]" },
-  { name: "สาขา + drawer (ตัวอย่างน้อย)", path: "/v2/stores?store=store-9", waitFor: "[data-v2-scorecard-drawer]" },
-  { name: "สาขา + drawer (ยังไม่ได้อ่านชื่อ)", path: "/v2/stores?store=store-4", waitFor: "[data-v2-tag-unread]" },
+  // The v2 workspace pages redirect to the metrics pages since 8 Oct 2026; its partner admin page stays.
   { name: "Partner ของสาขา", path: "/v2/admin/partners", waitFor: "[data-v2-partner-admin]" },
-  { name: "ตอนนี้", path: "/v2/response" },
-  { name: "ตอนนี้ · ทั้งหมด", path: "/v2/response?tab=all" },
-  { name: "ตอนนี้ · หน้าแชท", path: "/v2/response?view=chat" },
   // The metrics pages (Home / Dashboard / Store 360 rework, 8 Oct 2026): the whole page is measured.
   { name: "หน้าหลัก", path: "/home", waitFor: "[data-home-stores-to-watch] table" },
   { name: "แดชบอร์ด", path: "/dashboard", waitFor: "[data-dashboard-store-table]" },

@@ -41,10 +41,9 @@ test("LINE summary of a closed month has no open-month note; no unreplied says s
 
 test("report page: no navigation chrome, A4 light, open-month footer", () => {
   const report = readFileSync(new URL("../src/components/v2/month-report.tsx", import.meta.url), "utf8");
-  const shellLayout = readFileSync(new URL("../src/app/v2/(shell)/layout.tsx", import.meta.url), "utf8");
   const rootLayout = readFileSync(new URL("../src/app/v2/layout.tsx", import.meta.url), "utf8");
-  assert.match(shellLayout, /<V2Layout>\{children\}<\/V2Layout>/);
-  assert.doesNotMatch(rootLayout, /V2Layout|V2Shell/, "the report is outside the shell");
+  // The v2 shell was retired (8 Oct 2026); the report never had navigation chrome.
+  assert.doesNotMatch(rootLayout, /V2Layout|V2Shell/, "the report is outside any shell");
   assert.doesNotMatch(report, /V2Shell|V2Layout/);
   assert.match(report, /@page \{ size: A4; margin: 12mm; \}/);
   assert.match(report, /color-scheme: light;/);

@@ -10,11 +10,12 @@ import { monthLongLabel, monthShortLabel, periodLabel } from "@/lib/v2/month";
 import { parseReportUrl } from "@/lib/v2/month-url";
 import { coverageText, dataCoverage, previousCoverage, sortMonthRows, type GroupTotals, type MonthStoreRow } from "@/lib/v2/monthly-model";
 import { buildReportSummary } from "@/lib/v2/report-summary";
+import { UNMATCHED_PARTNER } from "@/lib/v2/partners";
+import { MIN_RATE_SAMPLE } from "@/lib/v2/value-state";
 import { thaiLocationLabel } from "@/lib/v2/thai-geo";
-import { KpiCompareTable } from "./kpi-cards";
-import { PartnerRank } from "./store-scorecard-view";
+import { KpiCompareTable } from "@/components/metrics/kpi-ui";
 import { useV2Month, V2MonthDataProvider } from "./v2-month-data";
-import { CountCell, RateCell, StateValue } from "./v2-ui";
+import { CountCell, RateCell, StateValue } from "@/components/metrics/value-ui";
 import { v2Text } from "@/lib/v2/v2-translations";
 
 // The report is light-only and A4: these light token values apply inside .v2-report whatever
@@ -203,6 +204,14 @@ function ReportBody() {
     </div>
     </div>
   );
+}
+
+/** "2/13", or "—" with the reason it is not ranked. */
+export function PartnerRank({ row, language = "th" }: { row: MonthStoreRow; language?: "th" | "en" | "zh" }) {
+  const t = v2Text(language);
+  if (row.partnerRank !== null) return <span className="tabular-nums">{row.partnerRank}<span className="text-[var(--app-text-secondary)]">/{row.partnerRankedCount}</span></span>;
+  const reason = row.partner === UNMATCHED_PARTNER ? t("noPartnerRank") : t("tooFewForRank", { count: MIN_RATE_SAMPLE });
+  return <span title={reason} className="text-[var(--app-text-secondary)]">—<span className="sr-only"> ({reason})</span></span>;
 }
 
 /** /v2/report?month=&partner=&store= — A4, light, no navigation chrome. */

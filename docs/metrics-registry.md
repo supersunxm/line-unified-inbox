@@ -87,3 +87,10 @@ Home's "ซิงก์แชทล่าสุด" is the latest successful cha
 | Unique-customers headline, sales-tagged customers card, conversation explorer, 7D/30D/custom range | The month is the frame; customers and sales come from name tags, labelled as such. |
 
 Files deleted (unreachable after the change): `app/store-360/store-360-view.tsx`, `customer-voice-panel.tsx`, `store-search-combobox.tsx`, `store-search.ts`. The export control stays (scoped to the selected month).
+
+### v2 workspace (PR 5)
+
+| Module | Why |
+|---|---|
+| `/v2` ภาพรวมเดือน, `/v2/stores` (list and scorecard drawer), `/v2/response` ("ตอนนี้"), the v2 shell | Retired into Dashboard (network KPIs, store table) and Store 360 (one store). The URLs redirect with the month kept; `/v2/report` and `/v2/admin/partners` stay. |
+| Business-hours waiting and the ตามวันนี้ list | A daily follow-up loop; the owner's frame is monthly. Waiting time in the remaining views is `/chats`'s calendar wait. |
