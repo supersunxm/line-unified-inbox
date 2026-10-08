@@ -173,6 +173,7 @@ export function TikTokPublicStoreDetail({ store, history }: Props) {
   const router = useRouter();
   const [isRefreshing, startTransition] = useTransition();
   const [historyPeriod, setHistoryPeriod] = useState<HistoryPeriod>("30D");
+  const [showDaily, setShowDaily] = useState(false);
   const { language } = useAppLanguage();
 
   const handleRefresh = () => {
@@ -194,17 +195,23 @@ export function TikTokPublicStoreDetail({ store, history }: Props) {
   ];
 
   const sortedHistory = [...history].sort((a, b) => a.metricDate.localeCompare(b.metricDate));
-  const chartPoints = historyPeriod === "7D" ? sortedHistory.slice(-7) : sortedHistory.slice(-30);
+  const latestHistoryDate = sortedHistory[sortedHistory.length - 1]?.metricDate;
+  const cutoff = latestHistoryDate ? shiftMetricDate(latestHistoryDate, historyPeriod === "7D" ? -6 : -29) : null;
+  const chartPoints = sortedHistory.filter((p) => !cutoff || p.metricDate >= cutoff);
   const firstPoint = chartPoints[0];
   const lastPoint = chartPoints[chartPoints.length - 1];
   const chartNetGrowth = firstPoint && lastPoint ? lastPoint.followerCount - firstPoint.followerCount : null;
-  const averageDailyGrowth = chartPoints.length > 1 && chartNetGrowth !== null
-    ? chartNetGrowth / (chartPoints.length - 1)
-    : null;
+  const dailyDeltas = chartPoints.flatMap((point, i) => {
+    const prior = chartPoints[i - 1];
+    return prior && shiftMetricDate(prior.metricDate, 1) === point.metricDate
+      ? [point.followerCount - prior.followerCount] : [];
+  });
+  const averageDailyGrowth = dailyDeltas.length ? dailyDeltas.reduce((a, b) => a + b, 0) / dailyDeltas.length : null;
 
   let bestDailyGrowth: number | null = null;
   let bestDailyDate: string | null = null;
   for (let index = 1; index < chartPoints.length; index += 1) {
+    if (shiftMetricDate(chartPoints[index - 1].metricDate, 1) !== chartPoints[index].metricDate) continue;
     const delta = chartPoints[index].followerCount - chartPoints[index - 1].followerCount;
     if (bestDailyGrowth === null || delta > bestDailyGrowth) {
       bestDailyGrowth = delta;
@@ -329,7 +336,12 @@ export function TikTokPublicStoreDetail({ store, history }: Props) {
               </div>
               <p className="mt-0.5 text-xs text-[var(--app-text-tertiary)]">{labels.historySub}</p>
             </div>
-            <div className="inline-flex w-fit rounded-lg bg-[var(--app-surface-subtle)] p-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <button type="button" aria-expanded={showDaily} onClick={() => setShowDaily(!showDaily)}
+                className="rounded-lg border border-[var(--app-border)] px-3 py-2 text-xs font-bold">
+                {language === "th" ? "รายวัน" : language === "zh" ? "每日" : "Daily"} {showDaily ? "−" : "+"}
+              </button>
+              <div className="inline-flex w-fit rounded-lg bg-[var(--app-surface-subtle)] p-1">
               {(["7D", "30D"] as HistoryPeriod[]).map((period) => (
                 <button
                   key={period}
@@ -344,12 +356,38 @@ export function TikTokPublicStoreDetail({ store, history }: Props) {
                   {period}
                 </button>
               ))}
+              </div>
             </div>
           </div>
 
           <div className="px-5 py-5">
-            <FollowerChart points={chartPoints} locale={locale} emptyLabel={labels.noHistory} chartLabel={labels.historyChart} />
+            <FollowerChart key={historyPeriod} points={chartPoints} locale={locale} emptyLabel={labels.noHistory} chartLabel={labels.historyChart} language={language} />
           </div>
+          {showDaily && (
+            <div className="border-t border-[var(--app-border-subtle)] px-5 py-4">
+              <h3 className="mb-2 text-sm font-bold">{language === "th" ? "ข้อมูลรายวัน" : language === "zh" ? "每日快照" : "Daily snapshots"}</h3>
+              <div className="max-h-80 divide-y divide-[var(--app-border-subtle)] overflow-y-auto">
+                {[...chartPoints].reverse().map((point, reverseIndex) => {
+                  const index = chartPoints.length - reverseIndex - 1;
+                  const prior = chartPoints[index - 1];
+                  const diff = prior ? point.followerCount - prior.followerCount : null;
+                  const adjacent = prior ? shiftMetricDate(prior.metricDate, 1) === point.metricDate : false;
+                  return (
+                    <div key={point.metricDate} className="flex items-center justify-between gap-4 py-3 text-sm">
+                      <div>
+                        <div className="font-semibold">{formatMetricDate(point.metricDate, locale)}</div>
+                        <div className="text-xs text-[var(--app-text-tertiary)]">{!prior ? (language === "th" ? "จุดเริ่มต้น" : "First snapshot") : adjacent ? (language === "th" ? "เทียบวันก่อน" : "Previous day") : `${language === "th" ? "ข้อมูลขาดช่วง" : "Missing days"}: ${formatShortDate(prior.metricDate, locale)} → ${formatShortDate(point.metricDate, locale)}`}</div>
+                      </div>
+                      <div className="text-right">
+                        <div className="font-bold tabular-nums">{formatNumber(point.followerCount, locale)}</div>
+                        <div className={`text-xs font-semibold tabular-nums ${growthTextClass(diff)}`}>{diff === null ? "—" : `${diff > 0 ? "+" : ""}${formatNumber(diff, locale)}${adjacent ? "" : language === "th" ? " (ข้ามวัน)" : " (gap)"}`}</div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           <div className="grid border-t border-[var(--app-border-subtle)] sm:grid-cols-4 sm:divide-x sm:divide-[var(--app-border-subtle)]">
             <div className="border-b border-[var(--app-border-subtle)] px-5 py-3 sm:border-b-0">
