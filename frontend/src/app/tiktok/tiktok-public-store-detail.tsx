@@ -56,13 +56,19 @@ function FollowerChart({
   locale,
   emptyLabel,
   chartLabel,
-  language,
+  followersLabel,
+  noPreviousSnapshotLabel,
+  previousDayLabel,
+  gapSinceLabel,
 }: {
   points: TikTokPublicHistoryPoint[];
   locale: string;
   emptyLabel: string;
   chartLabel: string;
-  language: string;
+  followersLabel: string;
+  noPreviousSnapshotLabel: string;
+  previousDayLabel: string;
+  gapSinceLabel: string;
 }) {
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   if (points.length < 2) {
@@ -158,11 +164,11 @@ function FollowerChart({
       <div aria-live="polite" className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-[var(--app-surface-subtle)] px-4 py-3">
         <div>
           <div className="text-xs text-[var(--app-text-secondary)]">{formatMetricDate(selected.metricDate, locale)}</div>
-          <div className="text-lg font-black tabular-nums">{formatNumber(selected.followerCount, locale)} <span className="text-xs font-normal">{language === "th" ? "ผู้ติดตาม" : "followers"}</span></div>
+          <div className="text-lg font-black tabular-nums">{formatNumber(selected.followerCount, locale)} <span className="text-xs font-normal">{followersLabel}</span></div>
         </div>
         <div className="text-right">
           <div className={`font-bold tabular-nums ${growthTextClass(delta)}`}>{delta === null ? "—" : `${delta > 0 ? "+" : ""}${formatNumber(delta, locale)}`}</div>
-          <div className="text-xs text-[var(--app-text-tertiary)]">{!previous ? (language === "th" ? "ไม่มี snapshot ก่อนหน้า" : "No previous snapshot") : consecutive ? (language === "th" ? "เทียบวันก่อน" : "Previous day") : (language === "th" ? `ข้ามช่วงข้อมูลจาก ${formatShortDate(previous.metricDate, locale)}` : `Gap since ${formatShortDate(previous.metricDate, locale)}`)}</div>
+          <div className="text-xs text-[var(--app-text-tertiary)]">{!previous ? noPreviousSnapshotLabel : consecutive ? previousDayLabel : `${gapSinceLabel} ${formatShortDate(previous.metricDate, locale)}`}</div>
         </div>
       </div>
     </div>
@@ -339,7 +345,7 @@ export function TikTokPublicStoreDetail({ store, history }: Props) {
             <div className="flex flex-wrap items-center gap-2">
               <button type="button" aria-expanded={showDaily} onClick={() => setShowDaily(!showDaily)}
                 className="rounded-lg border border-[var(--app-border)] px-3 py-2 text-xs font-bold">
-                {language === "th" ? "รายวัน" : language === "zh" ? "每日" : "Daily"} {showDaily ? "−" : "+"}
+                {labels.dailyToggle} {showDaily ? "−" : "+"}
               </button>
               <div className="inline-flex w-fit rounded-lg bg-[var(--app-surface-subtle)] p-1">
               {(["7D", "30D"] as HistoryPeriod[]).map((period) => (
@@ -361,11 +367,21 @@ export function TikTokPublicStoreDetail({ store, history }: Props) {
           </div>
 
           <div className="px-5 py-5">
-            <FollowerChart key={historyPeriod} points={chartPoints} locale={locale} emptyLabel={labels.noHistory} chartLabel={labels.historyChart} language={language} />
+            <FollowerChart
+              key={historyPeriod}
+              points={chartPoints}
+              locale={locale}
+              emptyLabel={labels.noHistory}
+              chartLabel={labels.historyChart}
+              followersLabel={labels.followers}
+              noPreviousSnapshotLabel={labels.noPreviousSnapshot}
+              previousDayLabel={labels.previousDay}
+              gapSinceLabel={labels.gapSince}
+            />
           </div>
           {showDaily && (
             <div className="border-t border-[var(--app-border-subtle)] px-5 py-4">
-              <h3 className="mb-2 text-sm font-bold">{language === "th" ? "ข้อมูลรายวัน" : language === "zh" ? "每日快照" : "Daily snapshots"}</h3>
+              <h3 className="mb-2 text-sm font-bold">{labels.dailySnapshots}</h3>
               <div className="max-h-80 divide-y divide-[var(--app-border-subtle)] overflow-y-auto">
                 {[...chartPoints].reverse().map((point, reverseIndex) => {
                   const index = chartPoints.length - reverseIndex - 1;
@@ -376,11 +392,11 @@ export function TikTokPublicStoreDetail({ store, history }: Props) {
                     <div key={point.metricDate} className="flex items-center justify-between gap-4 py-3 text-sm">
                       <div>
                         <div className="font-semibold">{formatMetricDate(point.metricDate, locale)}</div>
-                        <div className="text-xs text-[var(--app-text-tertiary)]">{!prior ? (language === "th" ? "จุดเริ่มต้น" : "First snapshot") : adjacent ? (language === "th" ? "เทียบวันก่อน" : "Previous day") : `${language === "th" ? "ข้อมูลขาดช่วง" : "Missing days"}: ${formatShortDate(prior.metricDate, locale)} → ${formatShortDate(point.metricDate, locale)}`}</div>
+                        <div className="text-xs text-[var(--app-text-tertiary)]">{!prior ? labels.firstSnapshot : adjacent ? labels.previousDay : `${labels.missingDays}: ${formatShortDate(prior.metricDate, locale)} → ${formatShortDate(point.metricDate, locale)}`}</div>
                       </div>
                       <div className="text-right">
                         <div className="font-bold tabular-nums">{formatNumber(point.followerCount, locale)}</div>
-                        <div className={`text-xs font-semibold tabular-nums ${growthTextClass(diff)}`}>{diff === null ? "—" : `${diff > 0 ? "+" : ""}${formatNumber(diff, locale)}${adjacent ? "" : language === "th" ? " (ข้ามวัน)" : " (gap)"}`}</div>
+                        <div className={`text-xs font-semibold tabular-nums ${growthTextClass(diff)}`}>{diff === null ? "—" : `${diff > 0 ? "+" : ""}${formatNumber(diff, locale)}${adjacent ? "" : ` (${labels.gapSuffix})`}`}</div>
                       </div>
                     </div>
                   );
