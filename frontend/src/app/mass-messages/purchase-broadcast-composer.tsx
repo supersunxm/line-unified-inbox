@@ -26,6 +26,7 @@ import {
 import { AUTH_UNAUTHORIZED_EVENT } from "@/lib/auth-session";
 import { api } from "@/lib/api";
 import { useAppLanguage } from "../language";
+import { purchaseBroadcastAudienceStatusLabel, purchaseBroadcastMetricLabel } from "../mobile-route-i18n";
 
 type AuthUser = {
   id: string;
@@ -461,14 +462,14 @@ export function PurchaseBroadcastComposer({ campaignId }: { campaignId: string }
                       Recipients come from the saved Purchase Intelligence snapshot and cannot be expanded from this composer.
                     </CardDescription>
                     <div className="mt-4 grid grid-cols-3 gap-3">
-                      <MetricCard label="Customers" value={draft.audience.recipientCount.toLocaleString()} />
-                      <MetricCard label="Stores" value={draft.audience.storeCount.toLocaleString()} />
-                      <MetricCard label="LINE OAs" value={draft.audience.lineOaCount.toLocaleString()} />
+                      <MetricCard label={purchaseBroadcastMetricLabel("customers", language)} value={draft.audience.recipientCount.toLocaleString()} />
+                      <MetricCard label={purchaseBroadcastMetricLabel("stores", language)} value={draft.audience.storeCount.toLocaleString()} />
+                      <MetricCard label={purchaseBroadcastMetricLabel("lineOas", language)} value={draft.audience.lineOaCount.toLocaleString()} />
                     </div>
                     <div className="mt-4 flex flex-wrap gap-2 text-xs">
                       {draft.audience.statuses.map((status) => (
                         <Badge key={status} size="sm" variant="neutral">
-                          {status}
+                          {purchaseBroadcastAudienceStatusLabel(status, language)}
                         </Badge>
                       ))}
                       {(draft.audience.filters.from || draft.audience.filters.to) && (

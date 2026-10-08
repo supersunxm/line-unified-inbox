@@ -15,6 +15,8 @@ import {
   MobileSectionTabs,
 } from "@/components/mobile/adaptive-mobile";
 import { api } from "@/lib/api";
+import { useAppLanguage } from "../language";
+import { purchaseBroadcastAudienceStatusLabel, purchaseBroadcastMessageabilityLabel, purchaseBroadcastMetricLabel } from "../mobile-route-i18n";
 
 type AuthUser = { id: string; email: string; displayName: string; role: "ADMIN" | "ASSISTANT" | "VIEWER" };
 type DraftTab = "content" | "audience" | "preview";
@@ -66,6 +68,7 @@ function composerUrl(campaignId: string) {
 }
 
 export function MobilePurchaseBroadcastComposer({ campaignId }: { campaignId: string }) {
+  const { language } = useAppLanguage();
   const [user, setUser] = useState<AuthUser | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [draft, setDraft] = useState<ComposerResponse | null>(null);
@@ -95,7 +98,7 @@ export function MobilePurchaseBroadcastComposer({ campaignId }: { campaignId: st
       const response = await fetch(composerUrl(campaignId), { credentials: "include", cache: "no-store" });
       if (!response.ok) throw new Error(await readError(response, `Unable to load draft (${response.status}).`));
       hydrate(await response.json() as ComposerResponse);
-    } catch (reason) { setError(reason instanceof Error ? reason.message : "โหลด Draft ไม่สำเร็จ"); }
+    } catch (reason) { setError(reason instanceof Error ? reason.message : "Unable to load draft."); }
     finally { setLoading(false); }
   }, [campaignId, hydrate]);
 
@@ -152,14 +155,14 @@ export function MobilePurchaseBroadcastComposer({ campaignId }: { campaignId: st
     finally { setUploading(false); }
   };
 
-  if (!authChecked || !user) return <main className="fixed inset-0 z-[100] flex items-center justify-center bg-[var(--app-bg)] text-sm text-[var(--app-text-secondary)]">กำลังเปิด Campaign Draft...</main>;
+  if (!authChecked || !user) return <main className="fixed inset-0 z-[100] flex items-center justify-center bg-[var(--app-bg)] text-sm text-[var(--app-text-secondary)]">Opening campaign draft...</main>;
 
   return (
     <MobilePageShell bottomNav={<MobileBottomNav current="more" onMore={() => setMoreOpen(true)} />}>
       <MobilePageHeader
         eyebrow="Mass Message · Purchase Intelligence"
         title={draft?.title || "Campaign Draft"}
-        description="Audience ถูกล็อกจาก Purchase Intelligence · การบันทึก Draft จะไม่ส่งข้อความ"
+        description="Audience is locked from Purchase Intelligence · saving the draft will not send messages"
         action={<span className="rounded-full bg-amber-500/10 px-2.5 py-1 text-[9px] font-bold text-amber-600 dark:text-amber-400">DRAFT ONLY</span>}
       />
       {user.role === "ADMIN" && draft && (
@@ -171,34 +174,34 @@ export function MobilePurchaseBroadcastComposer({ campaignId }: { campaignId: st
       )}
 
       <div className="space-y-4 px-4 py-4 pb-8">
-        {user.role !== "ADMIN" ? <MobileEmptyState title="ไม่มีสิทธิ์ใช้งาน" description="Purchase Intelligence Draft ใช้งานได้เฉพาะ Administrator" /> : loading ? <MobileCard><p className="py-10 text-center text-xs text-[var(--app-text-secondary)]">กำลังโหลด Draft...</p></MobileCard> : error && !draft ? <MobileCard><p className="text-xs text-rose-600">{error}</p><button type="button" onClick={() => void loadDraft()} className="mt-3 min-h-11 w-full rounded-xl border border-[var(--app-border)] text-xs font-bold">ลองใหม่</button></MobileCard> : draft ? (
+          {user.role !== "ADMIN" ? <MobileEmptyState title="ไม่มีสิทธิ์ใช้งาน" description="Purchase Intelligence drafts are available to administrators only" /> : loading ? <MobileCard><p className="py-10 text-center text-xs text-[var(--app-text-secondary)]">Loading draft...</p></MobileCard> : error && !draft ? <MobileCard><p className="text-xs text-rose-600">{error}</p><button type="button" onClick={() => void loadDraft()} className="mt-3 min-h-11 w-full rounded-xl border border-[var(--app-border)] text-xs font-bold">ลองใหม่</button></MobileCard> : draft ? (
           <>
             {error && <div className="rounded-2xl border border-rose-500/25 bg-rose-500/10 px-4 py-3 text-xs text-rose-600 dark:text-rose-400">{error}</div>}
-            {savedAt && <div className="rounded-2xl border border-emerald-500/25 bg-emerald-500/10 px-4 py-3 text-xs text-emerald-600 dark:text-emerald-400">บันทึก Draft แล้ว · {new Date(savedAt).toLocaleString("th-TH")}</div>}
+            {savedAt && <div className="rounded-2xl border border-emerald-500/25 bg-emerald-500/10 px-4 py-3 text-xs text-emerald-600 dark:text-emerald-400">Draft saved · {new Date(savedAt).toLocaleString("th-TH")}</div>}
 
             {tab === "content" && (
               <MobileSection title="Campaign content" description="สูงสุด 1 ข้อความ + 1 รูปภาพ">
                 <MobileCard className="space-y-4">
-                  <label><span className="mb-1 block text-[11px] font-semibold text-[var(--app-text-secondary)]">ชื่อ Campaign</span><input value={title} maxLength={120} onChange={(event) => { setTitle(event.target.value); markDirty(); }} placeholder="เช่น Reno upgrade campaign" className={inputClass} /></label>
+                  <label><span className="mb-1 block text-[11px] font-semibold text-[var(--app-text-secondary)]">Campaign name</span><input value={title} maxLength={120} onChange={(event) => { setTitle(event.target.value); markDirty(); }} placeholder="For example: Reno upgrade campaign" className={inputClass} /></label>
                   <label><span className="mb-1 flex items-center justify-between text-[11px] font-semibold text-[var(--app-text-secondary)]"><span>ข้อความ</span><span>{messageText.length}/5000</span></span><textarea value={messageText} maxLength={5000} rows={8} onChange={(event) => { setMessageText(event.target.value); markDirty(); }} placeholder="พิมพ์ข้อความที่ต้องการเตรียมไว้..." className={`${inputClass} resize-none`} /></label>
                   <div><p className="mb-1 text-[11px] font-semibold text-[var(--app-text-secondary)]">รูปภาพ</p>{image ? <div className="overflow-hidden rounded-2xl border border-[var(--app-border)]"><img src={image.previewImageUrl} alt="Draft attachment preview" className="aspect-[16/9] w-full object-cover" /><div className="flex items-center justify-between gap-2 p-3"><span className="min-w-0 truncate text-[10px]">{image.label}</span><button type="button" onClick={() => { setImage(null); markDirty(); }} className="text-[10px] font-bold text-rose-600">ลบ</button></div></div> : <label className="flex min-h-24 cursor-pointer items-center justify-center rounded-2xl border border-dashed border-[var(--app-border)] bg-[var(--app-surface-subtle)] text-xs font-bold text-[var(--app-accent)]">{uploading ? "กำลังอัปโหลด..." : "+ เพิ่มรูป JPG / PNG"}<input type="file" accept="image/jpeg,image/png" disabled={uploading} className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadImage(file); event.currentTarget.value = ""; }} /></label>}</div>
                 </MobileCard>
-                <div className="rounded-2xl border border-amber-500/25 bg-amber-500/10 px-4 py-3 text-[10px] leading-5 text-amber-700 dark:text-amber-300">Save Draft แก้เฉพาะเนื้อหา ไม่สร้าง delivery, ไม่เริ่ม processor และไม่ใช้ LINE quota</div>
+                <div className="rounded-2xl border border-amber-500/25 bg-amber-500/10 px-4 py-3 text-[10px] leading-5 text-amber-700 dark:text-amber-300">Save Draft edits content only. It does not create deliveries, start the processor, or use LINE quota.</div>
               </MobileSection>
             )}
 
             {tab === "audience" && (
               <div className="space-y-4">
-                <MobileMetricGrid><MobileMetricCard label="Customers" value={draft.audience.recipientCount.toLocaleString()} tone="accent" wide /><MobileMetricCard label="Stores" value={draft.audience.storeCount.toLocaleString()} /><MobileMetricCard label="LINE OAs" value={draft.audience.lineOaCount.toLocaleString()} /></MobileMetricGrid>
-                <MobileSection title="Audience snapshot" description="Locked · ไม่สามารถเพิ่มผู้รับจากหน้านี้"><MobileCard className="space-y-2"><div className="flex flex-wrap gap-2">{draft.audience.statuses.map((status) => <span key={status} className="rounded-full bg-[var(--app-surface-subtle)] px-2.5 py-1 text-[9px] font-bold">{status}</span>)}</div>{(draft.audience.filters.from || draft.audience.filters.to) && <p className="text-[10px] text-[var(--app-text-secondary)]">ช่วงวันที่: {draft.audience.filters.from || "…"} → {draft.audience.filters.to || "…"}</p>}<p className="text-[10px] leading-4 text-[var(--app-text-tertiary)]">{draft.audience.messageabilityDefinition}</p></MobileCard></MobileSection>
+                <MobileMetricGrid><MobileMetricCard label={purchaseBroadcastMetricLabel("customers", language)} value={draft.audience.recipientCount.toLocaleString()} tone="accent" wide /><MobileMetricCard label={purchaseBroadcastMetricLabel("stores", language)} value={draft.audience.storeCount.toLocaleString()} /><MobileMetricCard label={purchaseBroadcastMetricLabel("lineOas", language)} value={draft.audience.lineOaCount.toLocaleString()} /></MobileMetricGrid>
+                <MobileSection title="Audience snapshot" description="Locked · recipients cannot be added from this page"><MobileCard className="space-y-2"><div className="flex flex-wrap gap-2">{draft.audience.statuses.map((status) => <span key={status} className="rounded-full bg-[var(--app-surface-subtle)] px-2.5 py-1 text-[9px] font-bold">{purchaseBroadcastAudienceStatusLabel(status, language)}</span>)}</div>{(draft.audience.filters.from || draft.audience.filters.to) && <p className="text-[10px] text-[var(--app-text-secondary)]">Date range: {draft.audience.filters.from || "…"} → {draft.audience.filters.to || "…"}</p>}<p className="text-[10px] leading-4 text-[var(--app-text-tertiary)]">{purchaseBroadcastMessageabilityLabel(draft.audience.messageabilityDefinition, language)}</p></MobileCard></MobileSection>
                 <MobileSection title="Store / LINE OA" description={`${draft.audience.stores.length} รายการ`}><div className="space-y-2.5">{draft.audience.stores.map((store) => <MobileListCard key={`${store.storeId}:${store.lineOfficialAccountId}`} title={`${store.externalStoreId ? `[${store.externalStoreId}] ` : ""}${store.storeName}`} subtitle={store.lineOaName} trailing={<strong className="text-sm tabular-nums">{store.recipientCount.toLocaleString()}</strong>}>{store.storeCode && <p className="text-[9px] text-[var(--app-text-tertiary)]">{store.storeCode}</p>}</MobileListCard>)}</div></MobileSection>
               </div>
             )}
 
             {tab === "preview" && (
               <div className="space-y-4">
-                <MobileSection title="Message preview" description="Preview เท่านั้น ไม่มี request ไปยังลูกค้าจากหน้าจอนี้"><MobileCard><div className="rounded-2xl bg-[var(--app-surface-subtle)] p-3"><div className="max-w-[92%] rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-3 text-xs leading-5">{messageText.trim() ? <p className="whitespace-pre-wrap break-words">{messageText}</p> : <p className="italic text-[var(--app-text-tertiary)]">ข้อความ Preview จะแสดงที่นี่</p>}{image && <img src={image.previewImageUrl} alt="Draft preview" className="mt-3 w-full rounded-xl object-cover" />}</div></div></MobileCard></MobileSection>
-                <MobileCard className="border-amber-500/30"><p className="text-xs font-bold text-amber-600 dark:text-amber-400">Review & Send ยังถูกล็อก</p><p className="mt-1 text-[10px] leading-5 text-[var(--app-text-secondary)]">หน้านี้อนุญาตให้เตรียมและบันทึก Draft เท่านั้น ก่อนส่งจริงระบบยังต้องทำ recipient re-validation, quota check และ final confirmation</p><button type="button" disabled className="mt-3 min-h-12 w-full cursor-not-allowed rounded-xl bg-[var(--app-surface-subtle)] text-xs font-bold text-[var(--app-text-tertiary)]">Review & Send — Locked</button></MobileCard>
+                <MobileSection title="Message preview" description="Preview only · this screen sends no requests to customers"><MobileCard><div className="rounded-2xl bg-[var(--app-surface-subtle)] p-3"><div className="max-w-[92%] rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-3 text-xs leading-5">{messageText.trim() ? <p className="whitespace-pre-wrap break-words">{messageText}</p> : <p className="italic text-[var(--app-text-tertiary)]">Message preview will appear here</p>}{image && <img src={image.previewImageUrl} alt="Draft preview" className="mt-3 w-full rounded-xl object-cover" />}</div></div></MobileCard></MobileSection>
+                <MobileCard className="border-amber-500/30"><p className="text-xs font-bold text-amber-600 dark:text-amber-400">Review & Send is still locked</p><p className="mt-1 text-[10px] leading-5 text-[var(--app-text-secondary)]">This page only allows drafts to be prepared and saved. Before sending, the system must still revalidate recipients, check quota, and request final confirmation.</p><button type="button" disabled className="mt-3 min-h-12 w-full cursor-not-allowed rounded-xl bg-[var(--app-surface-subtle)] text-xs font-bold text-[var(--app-text-tertiary)]">Review & Send — Locked</button></MobileCard>
               </div>
             )}
 

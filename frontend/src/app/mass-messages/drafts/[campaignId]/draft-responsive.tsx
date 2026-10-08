@@ -6,7 +6,7 @@ import { PurchaseBroadcastComposer } from "../../purchase-broadcast-composer";
 import { useAppLanguage, pickLanguageText } from "../../../language";
 
 const translations = {
-  th: { opening: "กำลังเปิด Campaign Draft..." },
+  th: { opening: "กำลังเปิดฉบับร่างแคมเปญ..." },
   en: { opening: "Opening campaign draft..." },
   zh: { opening: "正在打开群发草稿..." },
 };
