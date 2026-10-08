@@ -4,7 +4,7 @@ import type { AuthUser } from "../../auth/auth.guard";
 /** Canonical session user ID only; never authorize by display name, email or employee ID. */
 export function assertSunnSecretaryOwner(user: AuthUser | undefined, configuredOwnerId: string | undefined): void {
   if (!user || !configuredOwnerId?.trim() || user.id !== configuredOwnerId.trim() ||
-      user.role !== "ADMIN" || !user.isActive || user.storeContext) {
+      user.role !== "ADMIN" || !user.isActive || (user.status !== undefined && user.status !== "ACTIVE") || user.storeContext) {
     throw new ForbiddenException("Sunn Secretary owner access denied");
   }
 }

@@ -8,6 +8,7 @@ import { InternalPageShell } from "@/components/shell/internal-page-shell";
 import { invalidateAuthUser, refreshAuthUser } from "@/lib/auth-user-store";
 import { hqPermissionSummary, saveHqAccountRole, type HqAccount, type HqAccountRole } from "./hq-account-model";
 import { hqRegistrationText } from "./hq-registrations-i18n";
+import { SunnSecretarySettings } from "./sunn-secretary-settings";
 
 type PendingHq = {
   id: string;
@@ -20,7 +21,7 @@ type PendingHq = {
 type ApprovedHq = HqAccount;
 
 type Tab = "pending" | "approved";
-type SecretaryStatus = { channelIdConfigured: boolean; channelSecretConfigured: boolean; accessTokenConfigured: boolean; botUserIdConfigured: boolean; webhookEnabled: boolean; webhookUrl: string };
+
 
 async function request<T>(path: string, init: RequestInit | undefined, requestFailed: (status: number) => string): Promise<T> {
   const response = await fetch(`/api-backend${path}`, {
@@ -58,23 +59,18 @@ function HqApprovalContent() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [secretarySettingsOpen, setSecretarySettingsOpen] = useState(false);
-  const [secretaryStatus, setSecretaryStatus] = useState<SecretaryStatus | null>(null);
-  const [secretaryLoading, setSecretaryLoading] = useState(false);
-  const [secretaryError, setSecretaryError] = useState<string | null>(null);
-  const openSecretarySettings = async () => {
-    setSecretarySettingsOpen(true);
-    setSecretaryStatus(null);
-    setSecretaryLoading(true);
-    setSecretaryError(null);
-    try {
-      const status = await request<SecretaryStatus>("/sunn-secretary/owner/status", undefined, t.requestFailed);
-      setSecretaryStatus(status);
-    } catch (cause) {
-      setSecretaryError(cause instanceof Error ? cause.message : t.secretaryStatusFailed);
-    } finally {
-      setSecretaryLoading(false);
+  const [secretaryOwnerId, setSecretaryOwnerId] = useState<string | null>(null);
+  const secretaryOwnerAllowed = secretaryOwnerId === actor?.id && actor?.role === "ADMIN";
+  useEffect(() => {
+    const abort = new AbortController();
+    if (actor?.role === "ADMIN") {
+      void fetch("/api-backend/sunn-secretary/owner/status", { credentials: "include", cache: "no-store", signal: abort.signal })
+        .then(response => { if (!abort.signal.aborted) setSecretaryOwnerId(response.ok ? actor.id : null); })
+        .catch(() => { if (!abort.signal.aborted) setSecretaryOwnerId(null); });
     }
-  };
+    return () => abort.abort();
+  }, [actor?.id, actor?.role]);
+  const openSecretarySettings = () => setSecretarySettingsOpen(true);
 
   const openRoleEditor = (account: HqAccount) => {
     setRoleTarget(account);
@@ -290,7 +286,7 @@ function HqApprovalContent() {
                       <p className="mt-1 text-xs text-[var(--app-text-secondary)]">{t.lastLogin} {account.lastLoginAt ? new Date(account.lastLoginAt).toLocaleString(language === "th" ? "th-TH" : language === "zh" ? "zh-CN" : "en-US") : t.never}</p>
                     </div>
                     <div className="flex flex-wrap justify-end gap-2">
-                      {actor?.id === account.id && account.role === "ADMIN" && account.employeeId === "6901011" && (
+                      {secretaryOwnerAllowed && actor?.id === account.id && account.role === "ADMIN" && (
                         <button type="button" onClick={() => void openSecretarySettings()} className="rounded-lg border border-[var(--app-border)] bg-[var(--app-surface)] px-4 py-2 text-sm font-medium text-[var(--app-text-secondary)]" aria-label={t.secretarySettings}> {t.secretaryName}</button>
                       )}
                       <button type="button" disabled={acting !== null} onClick={() => openRoleEditor(account)} className="rounded-lg border border-[var(--app-border)] bg-[var(--app-surface)] px-4 py-2 text-sm font-medium disabled:opacity-50">{t.changeRole}</button>
@@ -311,44 +307,7 @@ function HqApprovalContent() {
         )}
       </div>
 
-      {secretarySettingsOpen && <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-labelledby="secretary-settings-title">
-        <div className="max-h-[90dvh] w-full max-w-lg space-y-4 overflow-y-auto rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-6 shadow-2xl">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <h2 id="secretary-settings-title" className="text-lg font-bold">{t.secretarySettings}</h2>
-              <p className="mt-1 text-sm text-[var(--app-text-secondary)]">{t.secretaryOwnerDescription}</p>
-            </div>
-            <button type="button" className="rounded-lg border border-[var(--app-border)] px-3 py-1.5 text-sm" onClick={() => setSecretarySettingsOpen(false)}>{t.cancel}</button>
-          </div>
-          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-            {t.secretaryNotReady}
-          </div>
-          <div className="space-y-2">
-            <p className="text-sm font-semibold">{t.secretaryRequiredVariables}</p>
-            {secretaryLoading && <p className="text-sm text-[var(--app-text-secondary)]">{t.secretaryStatusLoading}</p>}
-            {secretaryError && <p role="alert" className="text-sm text-red-600">{t.secretaryStatusFailed}: {secretaryError}</p>}
-            {([
-              ["SUNN_SECRETARY_CHANNEL_ID", "channelIdConfigured"],
-              ["SUNN_SECRETARY_CHANNEL_SECRET", "channelSecretConfigured"],
-              ["SUNN_SECRETARY_CHANNEL_ACCESS_TOKEN", "accessTokenConfigured"],
-              ["SUNN_SECRETARY_BOT_USER_ID", "botUserIdConfigured"],
-            ] as const).map(([name, key]) => (
-              <div key={name} className="flex items-center justify-between gap-2 rounded-lg border border-[var(--app-border)] bg-[var(--app-bg)] px-3 py-2">
-                <code className="break-all text-xs">{name}</code>
-                <span className="shrink-0 text-xs">{secretaryStatus ? (secretaryStatus[key] ? t.secretaryConfigured : t.secretaryMissing) : t.secretaryUnknown}</span>
-              </div>
-            ))}
-            {secretaryStatus && <p className="text-sm text-[var(--app-text-secondary)]">{t.secretaryWebhookState}: {secretaryStatus.webhookEnabled ? t.secretaryEnabled : t.secretaryDisabled}</p>}
-            <p className="text-xs text-[var(--app-text-secondary)]">{t.secretarySecretWarning}</p>
-          </div>
-          <div className="space-y-1">
-            <p className="text-sm font-semibold">{t.secretaryWebhookLabel}</p>
-            <code className="block break-all rounded-lg border border-[var(--app-border)] bg-[var(--app-bg)] p-3 text-xs">{t.secretaryWebhookUrl}</code>
-            <p className="text-xs text-[var(--app-text-secondary)]">{t.secretaryWebhookWarning}</p>
-          </div>
-          <a href="https://railway.com/dashboard" target="_blank" rel="noopener noreferrer" className="inline-flex rounded-lg border border-[var(--app-border)] px-4 py-2 text-sm font-medium">{t.secretaryOpenRailway}</a>
-        </div>
-      </div>}
+      {secretarySettingsOpen && secretaryOwnerAllowed && <SunnSecretarySettings language={language} onClose={() => setSecretarySettingsOpen(false)} />}
 
       {roleTarget && <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-labelledby="hq-role-title">
         <div className="max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-6 shadow-2xl">

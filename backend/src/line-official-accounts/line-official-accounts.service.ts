@@ -9,6 +9,7 @@ import { LatestManagerUrlMap, loadLatestManagerUrls, resolveLineOaManagerUrl } f
 import { getStoreGoogleMapsReadiness } from "../store-master/template-variable-resolver";
 import { storeClosedException } from "../store-master/store-lifecycle.service";
 import { FollowerInsightsService } from "../follower-insights/follower-insights.service";
+import { SECRETARY_CREDENTIAL_RECORD_ID } from "../ai/sunn-secretary/sunn-secretary-credentials.service";
 
 const safeInclude = { store: { include: { storeMaster: true } }, _count: { select: { conversations: true } } } satisfies Prisma.LineOfficialAccountInclude;
 type IncludedOa = Prisma.LineOfficialAccountGetPayload<{ include: typeof safeInclude }>;
@@ -663,6 +664,7 @@ export class LineOfficialAccountsService {
   }
 
   async testConnection(id: string) {
+    if (id === SECRETARY_CREDENTIAL_RECORD_ID) throw new NotFoundException("LINE Official Account not found");
     const raw = await this.prisma.lineOfficialAccount.findUnique({ where: { id }, include: safeInclude });
     if (!raw) throw new NotFoundException("LINE Official Account not found");
     const { webhookUrl } = this.webhookConfiguration(raw.webhookKey);
@@ -680,6 +682,7 @@ export class LineOfficialAccountsService {
   }
 
   async credentialHealth(id: string) {
+    if (id === SECRETARY_CREDENTIAL_RECORD_ID) throw new NotFoundException("LINE Official Account not found");
     const raw = await this.prisma.lineOfficialAccount.findUnique({ where: { id } });
     if (!raw) throw new NotFoundException("LINE Official Account not found");
     return {
@@ -693,6 +696,7 @@ export class LineOfficialAccountsService {
   }
 
   async webhookInfo(id: string) {
+    if (id === SECRETARY_CREDENTIAL_RECORD_ID) throw new NotFoundException("LINE Official Account not found");
     const raw = await this.prisma.lineOfficialAccount.findUnique({ where: { id }, include: safeInclude });
     if (!raw) throw new NotFoundException("LINE Official Account not found");
     const { webhookUrl, configured } = this.webhookConfiguration(raw.webhookKey);
@@ -730,6 +734,7 @@ export class LineOfficialAccountsService {
   }
 
   async remove(id: string) {
+    if (id === SECRETARY_CREDENTIAL_RECORD_ID) throw new NotFoundException("LINE Official Account not found");
     const item = await this.prisma.lineOfficialAccount.findUnique({ where: { id }, include: { _count: { select: { conversations: true } } } });
     if (!item) throw new NotFoundException("LINE Official Account not found");
     if (item._count.conversations > 0) return this.archive(id);
