@@ -1,3 +1,15 @@
+# 2026-10-08: Final greeting-manager authenticated QA follow-up (in progress)
+
+- Current task: close the remaining `/greeting-messages/manage` initial-render localization defect from the authenticated QA handoff, preserve the primary checkout, and finish the focused PR/deployment flow.
+- Isolated checkout: branch `codex/i18n-greeting-status-render-20261008-main`, based on latest main `e3c3a921af3503eeeb891429b46266fdf1fb0f92`; the existing dirty primary checkout remains untouched.
+- Reproduction: the already-authenticated production route initially displayed English status-card titles beside Thai explanations; later `LegacyI18nBoundary` translated those explanations. The real Language selector was used to verify TH/EN/ZH and kept the route selected.
+- Fix in progress: render all four status-card titles and explanations from the existing TH/EN/ZH phrase/template data in React using the selected application language, rather than relying on the post-render legacy DOM translation pass. No new translation phrases, API behavior, or auth behavior are changed.
+- Checks: focused `greeting-messages.test.mts` 9/9 and full frontend tests 968/968 passed; classified localization audit PASS (655 candidates, 0 unclassified, 0 unfixed); focused ESLint matches main (2 inherited hook errors, 2 inherited image warnings); full ESLint matches main (61 errors/97 warnings); TypeScript baseline is 49 on both main and branch; production build passed with existing dynamic-font HTTP 400 and `metadataBase` warnings; `git diff --check` passed. Frontend dependencies were installed offline in a temporary mirror under `/private/tmp` because the managed worktree does not permit creating `node_modules`.
+- Local service smoke: port 3000 belongs to a healthy separate worktree and was left untouched. The built branch frontend ran at free port 3002; `/api/health` and `/greeting-messages/manage` both returned HTTP 200, then the test server was stopped.
+- Primary checkout count comparison was read-only: 519 porcelain records vs 559 with `-uall`; the 40-record difference matches expansion of untracked directory entries (126 collapsed directories vs 166 file paths) already documented in the QA handoff. No write was performed there.
+- Safe-action review: authenticated Broadcast history contains no existing drafts, so Broadcast edit is `BLOCKED_SAFE_ACTION`; no draft was created. Forced password reset remains `BLOCKED_SAFE_ACTION` because no legitimate reset session exists.
+- Blockers: authenticated post-fix desktop/mobile visual QA, CI, merge, and Railway deployment verification must follow the fix. Do not mark the final QA PASS until the deployed revision is visually checked at desktop/mobile in all three locales.
+
 # 2026-10-08: Authenticated three-language localization QA complete
 
 - Current task: finish authenticated protected-route QA after PR #531 and the safe draft-composer fix. PR #535 passed Adaptive Auth CI and Application CI (Backend, Frontend, CI Gate), then merged normally as `29e889e86e379aa00cb8cc450940c02f26e5f4d0`.
