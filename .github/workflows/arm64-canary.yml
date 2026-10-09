@@ -1,0 +1,56 @@
+# Inert proposal: copy into .github/workflows only after separate approval.
+name: ARM64 runner smoke
+# Proposal only: dedicated branch push, no PR or default-branch change.
+on:
+  push:
+    branches: ['codex/arm64-runner-canary']
+    paths: ['.github/workflows/arm64-canary.yml']
+permissions:
+  contents: read
+concurrency:
+  group: arm64-runner-smoke
+  cancel-in-progress: true
+jobs:
+  smoke:
+    name: ARM64 runner smoke
+    runs-on: [self-hosted, Linux, ARM64, oppo-ci-disposable]
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: smoke
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U ci -d smoke"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify platform, isolation and service container
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(uname -m)" = aarch64
+          test "$(id -u)" = 1001
+          if sudo -n true 2>/dev/null; then exit 1; fi
+          if docker -H unix:///var/run/docker.sock info >/dev/null 2>&1; then exit 1; fi
+          docker info --format '{{json .SecurityOptions}}' | grep -q rootless
+          test -n "$(docker ps -q)"
+          docker exec "$(docker ps -q | head -1)" pg_isready -U ci -d smoke
+          curl -fsS --max-time 20 -o /dev/null https://api.github.com
+          curl -fsS --max-time 20 -o /dev/null https://registry.npmjs.org
+          printf SYNTHETIC_DISPOSAL_MARKER > "$HOME/SMOKE_DISPOSAL_MARKER"
+      - name: Verify registration input absent and synthetic log masking
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -z "${ACTIONS_RUNNER_INPUT_JITCONFIG+x}"
+          marker="synthetic-mask-$RANDOM-$RANDOM"
+          echo "::add-mask::$marker"
+          echo "$marker"
+      - name: Completion summary
+        run: echo 'ARM64 smoke steps passed; host disposal still requires verification.' >> "$GITHUB_STEP_SUMMARY"
