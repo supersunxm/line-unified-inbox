@@ -3386,3 +3386,14 @@ Reuse the existing AES-256-GCM credential service and OA encrypted columns under
 Owner access uses the configured canonical authenticated user ID, active ADMIN state, a web session and no store impersonation. Mutation protection combines the configured frontend origin, session cookie, custom JSON header, bounded raw body and no query parameters. Existing atomic rate-limit storage caps save/test requests independently; encrypted writes and redacted audit events are transactional.
 
 Connection validation is a fixed read-only LINE bot-info request outside the database transaction. A compare-and-set protects the result from credential rotation during that request. Token/bot validation is explicitly distinct from Channel ID/Secret verification, signed ingress, group authorization, persistent event deduplication and reply readiness. Saving and testing never enable ingress or send a LINE message. The disabled ingress continues to use its existing environment configuration until a separately approved bot release wires and verifies all processing gates.
+
+## 2026-10-10 — Sunn Secretary receipt duplicate classification and access scope
+
+Decision: classify a Prisma `P2002` as a Sunn duplicate only when its metadata is the verified PostgreSQL Prisma field-target array containing exactly `externalWebhookEventId`. Missing or unrecognized metadata and unrelated unique constraints fail closed. Validate bot and event IDs at runtime before hashing, while retaining the existing `sunn-secretary:v1:` SHA-256 derivation for accepted identities.
+
+Rationale:
+- The shared `WebhookEvent` model has both a primary-key uniqueness constraint and the intended event-ID uniqueness constraint; treating every `P2002` as a duplicate can acknowledge unrelated persistence failures.
+- The disposable real PostgreSQL concurrency test confirmed Prisma reports this unique violation with the exact field target array used above; two independent clients returned one `NEW` and one `DUPLICATE`.
+- No migration is needed; receipts remain namespaced and `IGNORED`, so storefront `RECEIVED` processing remains isolated.
+
+Product access requirement for future Phase 5.3: production Sunn Secretary must support authorized users in any LINE group, with no permanent group preapproval. A pilot can temporarily restrict to one verified group and user. Authorization is based on the authenticated user's permissions and explicit store scope; group membership alone never grants global store access. This requirement does not authorize Phase 5.3 implementation in PR #546.
