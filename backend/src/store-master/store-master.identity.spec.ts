@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import test from "node:test";
 import { PrismaService } from "../prisma.service";
 import { StoreMasterService } from "./store-master.service";
@@ -7,6 +8,14 @@ import { StoreLifecycleService } from "./store-lifecycle.service";
 const header = "STORE ID,STORE NAME,ACCOUNT NAME,Line OA Link,Line ID,URLS,Province / จังหวัด,Region / ภูมิภาค,Status";
 const row = (id: string, name: string, account: string, lineId: string, status = "ACTIVE") =>
   `${id},${name},${account},https://lin.ee/${id},${lineId},https://manager.line.biz/account/${lineId},Khon Kaen,Northeastern,${status}`;
+
+function explicitImport(csv: string, approvedChangeSet: Array<{ kind: "STORE_LIFECYCLE"; storeId: string; action: "CLOSE" | "REOPEN" }> = []) {
+  return {
+    apply: true as const,
+    expectedSha256: createHash("sha256").update(csv, "utf8").digest("hex"),
+    approvedChangeSet,
+  };
+}
 
 function harness(seed: Array<Record<string, unknown>> = [], operationalStores: Array<Record<string, unknown>> = []) {
   const records = seed.map((record) => ({ ...record }));
@@ -32,7 +41,7 @@ function harness(seed: Array<Record<string, unknown>> = [], operationalStores: A
   const prisma = {
     storeMaster,
     store,
-    $transaction: (work: (tx: { storeMaster: typeof storeMaster }) => Promise<void>) => work({ storeMaster }),
+    $transaction: (work: (tx: { $queryRaw: () => Promise<unknown[]>; storeMaster: typeof storeMaster; store: typeof store }) => Promise<void>) => work({ $queryRaw: () => Promise.resolve([{ lockResultIsNull: false }]), storeMaster, store }),
   } as unknown as PrismaService;
   const lifecycleCalls = { closed: [] as string[], reopened: [] as string[] };
   const lifecycle = {
@@ -54,7 +63,8 @@ const existing = (id: string, externalStoreId: string, sourceRowNumber: number, 
 
 void test("reordering rows preserves StoreMaster identity and refreshes sourceRowNumber", async () => {
   const h = harness([existing("master-a", "100", 2), existing("master-b", "200", 3)]);
-  await h.service.importCsv(`${header}\n${row("200", "Store 200", "Account 200", "@200")}\n${row("100", "Store 100", "Account 100", "@100")}`);
+  const csv = `${header}\n${row("200", "Store 200", "Account 200", "@200")}\n${row("100", "Store 100", "Account 100", "@100")}`;
+  await h.service.importCsv(csv, "GOOGLE_SHEET", explicitImport(csv));
   assert.equal(h.records.find(({ id }) => id === "master-a")?.sourceRowNumber, 3);
   assert.equal(h.records.find(({ id }) => id === "master-b")?.sourceRowNumber, 2);
   assert.equal(h.records.length, 2);
@@ -65,14 +75,16 @@ void test("new Store in a historically occupied row creates a new identity", asy
   const preview = await h.service.previewCsv(`${header}\n${row("17469", "Chum Phae", "OPPOLotusChumphaeBS", "@975tvkio")}`);
   assert.equal(preview.summary.creates, 1);
   assert.equal(preview.summary.oldRowOverwriteRisks, 1);
-  await h.service.importCsv(`${header}\n${row("17469", "Chum Phae", "OPPOLotusChumphaeBS", "@975tvkio")}`);
+  const csv = `${header}\n${row("17469", "Chum Phae", "OPPOLotusChumphaeBS", "@975tvkio")}`;
+  await h.service.importCsv(csv, "GOOGLE_SHEET", explicitImport(csv));
   assert.equal(h.records.find(({ id }) => id === "master-old")?.externalStoreId, "100");
   assert.ok(h.records.some(({ externalStoreId }) => externalStoreId === "17469"));
 });
 
 void test("duplicate source Store IDs fail closed before mutation", async () => {
   const h = harness();
-  await assert.rejects(h.service.importCsv(`${header}\n${row("100", "A", "A", "@a")}\n${row("100", "B", "B", "@b")}`), /duplicate Store ID/);
+  const csv = `${header}\n${row("100", "A", "A", "@a")}\n${row("100", "B", "B", "@b")}`;
+  await assert.rejects(h.service.importCsv(csv, "GOOGLE_SHEET", explicitImport(csv)), /duplicate Store ID/);
   assert.equal(h.records.length, 0);
 });
 
@@ -83,19 +95,21 @@ void test("CLOSED and reopened rows only toggle StoreMaster activity", async () 
   const preview = await h.service.previewCsv(closedCsv);
   assert.equal(preview.summary.deactivations, 1);
   assert.equal(preview.summary.closedStoreOperationalReview, 1);
-  await h.service.importCsv(closedCsv);
+  await h.service.importCsv(closedCsv, "GOOGLE_SHEET", explicitImport(closedCsv, [{ kind: "STORE_LIFECYCLE", storeId: "31749", action: "CLOSE" }]));
   assert.equal(h.records[0].isActive, false);
   assert.deepEqual(h.lifecycleCalls.closed, ["31749"]);
-  await h.service.importCsv(closedCsv);
-  assert.deepEqual(h.lifecycleCalls.closed, ["31749", "31749"], "repeated CLOSED sync must re-run the idempotent lifecycle");
-  await h.service.importCsv(`${header}\n${row("31749", "Central Park", "Central Park", "@31749", "ACTIVE")}`);
+  await h.service.importCsv(closedCsv, "GOOGLE_SHEET", explicitImport(closedCsv));
+  assert.deepEqual(h.lifecycleCalls.closed, ["31749"], "an unchanged CLOSED row must not rerun lifecycle work");
+  const reopenedCsv = `${header}\n${row("31749", "Central Park", "Central Park", "@31749", "ACTIVE")}`;
+  await h.service.importCsv(reopenedCsv, "GOOGLE_SHEET", explicitImport(reopenedCsv, [{ kind: "STORE_LIFECYCLE", storeId: "31749", action: "REOPEN" }]));
   assert.equal(h.records[0].isActive, true);
   assert.deepEqual(h.lifecycleCalls.reopened, ["31749"]);
 });
 
 void test("incomplete new row with a Store ID is created safely", async () => {
   const h = harness();
-  await h.service.importCsv(`${header}\n27258,Incomplete Store,,,,,Bangkok,Central,ACTIVE`);
+  const csv = `${header}\n27258,Incomplete Store,,,,,Bangkok,Central,ACTIVE`;
+  await h.service.importCsv(csv, "GOOGLE_SHEET", explicitImport(csv));
   assert.equal(h.records.length, 1);
   assert.equal(h.records[0].externalStoreId, "27258");
   assert.notEqual(h.records[0].dataQualityStatus, "COMPLETE");
@@ -103,9 +117,11 @@ void test("incomplete new row with a Store ID is created safely", async () => {
 
 void test("17469 identity survives arbitrary reorder and later insertion", async () => {
   const h = harness();
-  await h.service.importCsv(`${header}\n${row("17469", "Chum Phae", "OPPOLotusChumphaeBS", "@975tvkio")}\n${row("30538", "Phitsanulok", "OPPO Phitsanulok", "@nux7670t")}`);
+  const initialCsv = `${header}\n${row("17469", "Chum Phae", "OPPOLotusChumphaeBS", "@975tvkio")}\n${row("30538", "Phitsanulok", "OPPO Phitsanulok", "@nux7670t")}`;
+  await h.service.importCsv(initialCsv, "GOOGLE_SHEET", explicitImport(initialCsv));
   const identity = h.records.find(({ externalStoreId }) => externalStoreId === "17469")?.id;
-  await h.service.importCsv(`${header}\n${row("99999", "Inserted", "Inserted", "@inserted")}\n${row("30538", "Phitsanulok", "OPPO Phitsanulok", "@nux7670t")}\n${row("17469", "Chum Phae", "OPPOLotusChumphaeBS", "@975tvkio")}`);
+  const laterCsv = `${header}\n${row("99999", "Inserted", "Inserted", "@inserted")}\n${row("30538", "Phitsanulok", "OPPO Phitsanulok", "@nux7670t")}\n${row("17469", "Chum Phae", "OPPOLotusChumphaeBS", "@975tvkio")}`;
+  await h.service.importCsv(laterCsv, "GOOGLE_SHEET", explicitImport(laterCsv));
   assert.equal(h.records.find(({ externalStoreId }) => externalStoreId === "17469")?.id, identity);
   assert.equal(h.records.length, 3);
 });

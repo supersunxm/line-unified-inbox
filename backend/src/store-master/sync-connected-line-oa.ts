@@ -1,5 +1,11 @@
-import { PrismaClient, StoreMaster } from "@prisma/client";
+import { Prisma, PrismaClient, StoreMaster } from "@prisma/client";
 import { normalizeSearchText } from "./store-master.utils";
+import {
+  assertStoreMasterChangeSetApproved,
+  type StoreMasterApprovedChange,
+} from "./store-master-approval";
+
+type SyncDatabaseClient = PrismaClient | Prisma.TransactionClient;
 
 export type StoreMasterSyncReport = {
   processed: number;
@@ -17,6 +23,7 @@ export type StoreMasterSyncReport = {
     expectedStoreId: string | null;
     basicId: string | null;
   }>;
+  changeSet: StoreMasterApprovedChange[];
 };
 
 type StoreTarget = {
@@ -29,7 +36,7 @@ type StoreTarget = {
 };
 
 async function uniqueMasterByExternalStoreId(
-  prisma: PrismaClient,
+  prisma: SyncDatabaseClient,
   externalStoreId: string | null,
 ): Promise<StoreMaster | null> {
   const storeId = externalStoreId?.trim();
@@ -43,7 +50,7 @@ async function uniqueMasterByExternalStoreId(
 }
 
 async function uniqueMasterByLineIdentity(
-  prisma: PrismaClient,
+  prisma: SyncDatabaseClient,
   basicId: string | null,
 ): Promise<StoreMaster | null> {
   const lineId = basicId?.trim();
@@ -57,7 +64,7 @@ async function uniqueMasterByLineIdentity(
 }
 
 async function uniqueMasterByAccountName(
-  prisma: PrismaClient,
+  prisma: SyncDatabaseClient,
   accountName: string,
 ): Promise<StoreMaster | null> {
   const normalized = normalizeSearchText(accountName);
@@ -89,7 +96,7 @@ function toTarget(store: StoreTarget): StoreTarget {
  * Only legacy Stores without a Store ID may recover identity from StoreMaster.
  */
 async function reconcileStoreMetadataByStoreId(
-  prisma: PrismaClient,
+  prisma: SyncDatabaseClient,
   dryRun: boolean,
   report: StoreMasterSyncReport,
   blockedStoreIds: ReadonlySet<string>,
@@ -182,9 +189,15 @@ async function reconcileStoreMetadataByStoreId(
 }
 
 export async function syncConnectedLineOaMetadata(
-  prisma: PrismaClient,
+  prisma: SyncDatabaseClient,
   dryRun: boolean,
+  approvedChangeSet: readonly StoreMasterApprovedChange[] = [],
 ): Promise<StoreMasterSyncReport> {
+  if (!dryRun) {
+    const plan = await syncConnectedLineOaMetadata(prisma, true);
+    assertStoreMasterChangeSetApproved(plan.changeSet, approvedChangeSet);
+  }
+
   const report: StoreMasterSyncReport = {
     processed: 0,
     updated: 0,
@@ -195,6 +208,7 @@ export async function syncConnectedLineOaMetadata(
     storeIdConflicts: 0,
     identityConflict: 0,
     identityConflicts: [],
+    changeSet: [],
   };
 
   const accounts = await prisma.lineOfficialAccount.findMany({
@@ -308,6 +322,26 @@ export async function syncConnectedLineOaMetadata(
       }
 
       report.updated++;
+      if (accountNeedsRebind) {
+        const fromExternalStoreId = account.store.code?.trim() || null;
+        const toExternalStoreId = targetStore.code?.trim() || null;
+        report.changeSet.push({
+          kind: "LINE_OA_REASSIGNMENT",
+          lineOaId: account.id,
+          fromStoreId: account.store.id,
+          toStoreId: targetStore.id,
+          fromExternalStoreId,
+          toExternalStoreId,
+        });
+        report.changeSet.push({
+          kind: "CONVERSATION_REASSIGNMENT",
+          lineOaId: account.id,
+          fromStoreId: account.store.id,
+          toStoreId: targetStore.id,
+          fromExternalStoreId,
+          toExternalStoreId,
+        });
+      }
       if (dryRun) continue;
 
       if (metadataChanged) {

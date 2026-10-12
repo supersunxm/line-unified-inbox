@@ -3386,3 +3386,25 @@ Reuse the existing AES-256-GCM credential service and OA encrypted columns under
 Owner access uses the configured canonical authenticated user ID, active ADMIN state, a web session and no store impersonation. Mutation protection combines the configured frontend origin, session cookie, custom JSON header, bounded raw body and no query parameters. Existing atomic rate-limit storage caps save/test requests independently; encrypted writes and redacted audit events are transactional.
 
 Connection validation is a fixed read-only LINE bot-info request outside the database transaction. A compare-and-set protects the result from credential rotation during that request. Token/bot validation is explicitly distinct from Channel ID/Secret verification, signed ingress, group authorization, persistent event deduplication and reply readiness. Saving and testing never enable ingress or send a LINE message. The disabled ingress continues to use its existing environment configuration until a separately approved bot release wires and verifies all processing gates.
+
+## 2026-10-12 — Store Master applies require reviewed source and change identities
+
+All Store Master entry points default to preview. An apply must explicitly provide `--apply` and a SHA-256 matching the exact original CSV bytes from the one source fetch (including line endings and BOM bytes). Google Sheets URL validation retains the configured `gid`; a changed or malformed source fails before database writes.
+
+High-impact changes require an exact approved JSON change set: Store close/reopen, LINE OA reassignment, and the resulting conversation reassignment. Extra, missing, duplicated, or stale actions abort the transaction. The CLI preview reports lifecycle rows; when an apply set is incomplete, the failed transaction reports the actual bounded change set for review. Reopening restores Store operational state only; it does not restore archived OAs or queued work.
+
+Fetch happens before opening a transaction. Each apply path shares one PostgreSQL transaction client for import, lifecycle mutations, connected-OA reconciliation, conversation reassignment, and post-import validation; Serializable isolation and a shared transaction-scoped advisory lock serialize Store Master writers without a migration. This is the intended database boundary, but real PostgreSQL rollback and concurrency evidence remains BLOCKED until disposable PostgreSQL is available.
+
+The ADMIN route and button are preview-only unless an authenticated caller explicitly supplies the source hash and exact approved set. Railway's existing backend pre-deploy still runs `prisma migrate deploy` before the built CLI; the CLI's no-argument default is now preview-only. Backend and reply-state projection services watch `backend/**`, so a future merge can deploy both. The nickname worker's configured watch set excludes these files. Pending production migration state is UNKNOWN; no production migration or deployment is authorized by this decision.
+
+## 2026-10-12 — Identity-conflicted Store Master previews fail closed
+
+The no-argument Store Master preview must return a nonzero exit (code 2) when identity conflicts are present, retain a concise diagnostic, and perform no database writes. A clean preview remains exit 0. This is an operator-safety signal; it does not change the existing apply approval contract.
+
+Real PostgreSQL verification found that the current shared advisory-lock helper asks Prisma to deserialize PostgreSQL's `void` result from `pg_advisory_xact_lock` through `$queryRaw`. Prisma rejects the result before the Store Master apply logic runs, so lifecycle and identity rollback, application-level serialization, and concurrent-writer behavior cannot yet be claimed as verified. Keep that correction separately scoped and rerun the isolated PostgreSQL assertions before treating the transaction boundary as production-ready.
+
+## 2026-10-12 — Store Master advisory lock and PostgreSQL verification completed
+
+The advisory-lock query now evaluates `pg_advisory_xact_lock(...) IS NULL` and returns a boolean through Prisma `$queryRaw`. The lock call remains inside the same transaction client with the existing two-part key, preserving transaction scope and failing closed if the result shape is unexpected. A disposable PostgreSQL 16 suite verified that a second independent connection remains blocked until the first transaction releases the lock.
+
+The permanent Store Master PostgreSQL integration suite runs in the required Backend CI job against a uniquely named local-only database, validates the `ci` database identity before creation, and drops it with `WITH (FORCE)` in a `finally` path. The final fresh Local CI evidence passed all 8 required jobs and 53 steps with zero required skips; all 77 Store Master tests passed and cleanup was confirmed. This is local evidence only, not a GitHub Check. No schema migration or production operation was performed; production migration state remains UNKNOWN.

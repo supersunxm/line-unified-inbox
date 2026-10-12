@@ -139,6 +139,17 @@ test("Store Master sync displays loading state and renders summary metrics", () 
   assert.match(page, /data-testid="dismiss-sync-summary"/);
 });
 
+test("Store Master control previews and shows the approved source fingerprint without applying changes", () => {
+  const page = readFileSync(new URL("../src/app/page.tsx", import.meta.url), "utf8");
+  const handler = page.match(/async function syncMasterFile\(\) \{([\s\S]*?)\n  \}/u)?.[1] ?? "";
+
+  assert.match(page, /Preview Store Master/);
+  assert.match(page, /syncMasterSuccess: "Store Master preview ready \(no data changed\)"/);
+  assert.match(page, /data-testid="sync-source-sha256"/);
+  assert.doesNotMatch(handler, /loadApplicationData/);
+  assert.match(handler, /api\.syncStoreMaster\(\)/);
+});
+
 test("Store ID 29113 / Central Pinklao refreshes Google Maps button after sync", () => {
   type StoreRow = {
     id: string;
