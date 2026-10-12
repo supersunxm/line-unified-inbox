@@ -1,11 +1,12 @@
-# 2026-10-12: Store Master Safety integration verified for PR review
+# 2026-10-12: Store Master Safety PR #547 prepared
 
-- Current task: finish the isolated Store Master Safety change on `codex/store-master-source-parity`; primary checkout was left untouched.
-- Corrected the real PostgreSQL advisory-lock failure in `store-master-transaction.ts`: `pg_advisory_xact_lock` remains transaction-scoped and uses the existing key, while the query now returns a Prisma-deserializable boolean. A disposable PostgreSQL 16 integration suite proves lock blocking across two independent clients, rollback behavior, concurrent writers, and Serializable conflict handling.
-- Added the real PostgreSQL regression suite to the mandatory Backend CI job. Fresh Local CI run `20261012093021-c5a3798d18` passed all 8/8 mandatory jobs and 53/53 steps, with zero required skips. All 77 Store Master tests passed; the temporary test database cleanup marker passed. Eight isolated guests were disposed. Optional public live probe remained blocked because it was not selected.
-- Exact validated source tree SHA-256: `e54ba3de8ee97f1275dc3160f4c01a91266fbb449ed78a8d35a9ed93876f40d8`. Evidence is preserved at `/private/tmp/store-master-runner-recovery-20261012-final-verified2`; result checksum `fad1159c1148d869c9d5b9f85f87cc57f99e1221503de39d843e39f351962d19`.
-- `git diff --check` passed. No Prisma migration was added. Production migration state remains UNKNOWN; no production database, Railway configuration, LINE webhook, customer message, Mirror, historical backfill, KPI, or OBS service was changed. The local pass is not a GitHub Actions check and is not merge authorization.
-- Next: stage only this Store Master Safety diff, commit, push the feature branch, open a separate PR, and report its URL and commit. Do not merge or deploy.
+- Current task: fix and verify Store Master Safety on `codex/store-master-source-parity`; the primary checkout was left untouched. Commit `54dbda8f1560c802e7445f5652b5161aada4f275` is PR #547 against main `428f04bafc7572b25e619e7a91226ba17cd2bbe2`.
+- Corrected the PostgreSQL advisory-lock result so Prisma receives a boolean while the existing transaction-scoped lock key and same transaction client are preserved. The disposable PostgreSQL 16 suite verifies independent-client lock blocking, rollback behavior, concurrent writers, and Serializable conflicts.
+- Fresh Local CI run `20261012095106-001774877e` passed 8/8 required jobs and 53/53 steps with zero required skips. All 77 Store Master tests passed, the temporary database cleanup passed, all 53 log hashes matched, and all 8 isolated guests were disposed. Optional public live probe was not selected.
+- Validated source-tree SHA-256: `666e73d34b640c3d7262e51de3aa76e07d979dcd3d12aa1f31889773ccbb1fbe`. Evidence: `/private/tmp/store-master-runner-recovery-20261012-final-verified3`; `result.json` SHA-256 `418e356783bf21ae8d7391d2856b108321817837b4374be61d207de2c7e4e2e2`.
+- GitHub Actions were automatically started by PR creation; all five associated check runs failed before any steps and hosted logs were unavailable, so their cause is UNKNOWN. Do not equate local CI with GitHub Checks or rerun Actions without authorization.
+- No Prisma migration was added. Production migration state remains UNKNOWN. No production database, Railway configuration/deployment, LINE webhook/message, Live Mirror, Historical Backfill, KPI calculation, or OBS service was changed. Railway production services track `main`; the nickname worker watches paths outside this change. No deployment occurred.
+- Next: investigate the GitHub-hosted runner failure before treating the PR as merge-ready. PR #547 remains open and unmerged; do not deploy or merge under this task.
 
 # 2026-10-08: Authenticated three-language localization QA complete
 
