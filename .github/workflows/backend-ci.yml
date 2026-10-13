@@ -80,6 +80,13 @@ jobs:
       - name: Mirror cutover regression tests
         run: npx tsx --test src/line-chat/line-chat-mirror-cutover.spec.ts src/line-chat/line-chat-mirror-reconciler.service.spec.ts src/line-chat/line-chat-store-oa-selector.spec.ts src/line-chat/line-chat-store-chat-parity.spec.ts src/line-chat/line-chat-manager-media-materializer.spec.ts src/line-chat/line-chat-manager-nickname-sales-tag.spec.ts src/line-chat/line-chat-mirror-sales-tag-sync.service.spec.ts
 
+      - name: Mirror message identity database regression
+        env:
+          MIRROR_IDENTITY_TEST_DATABASE_URL: ${{ env.DATABASE_URL }}
+        run: |
+          npx eslint src/line-chat/line-chat-mirror-identity.integration.spec.ts src/line-chat/fixtures/live-mirror-identity-collisions.ts
+          npx tsx --test src/line-chat/line-chat-mirror-identity.integration.spec.ts
+
       - name: Mirror identity bridge lint and database regression
         run: |
           npx eslint src/line-chat/mirror-identity*.ts src/line-chat/mirror-direct-url*.ts src/conversations.controller.ts

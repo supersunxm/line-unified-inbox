@@ -6575,3 +6575,26 @@ Live worker continues independently at 146 configured unique active OA identitie
 - Fresh Local CI run 20261013051239-15d08994a3: all 8 mandatory jobs and 53/53 steps PASS, zero required skips, eight guest disposals. Optional external live-probe was not selected. Source fingerprint 0379bb5e224ee6a0bd727760915193cdcbfc75be565cb21ab2690bc9e1795f96 remains unchanged. Local CI does not create GitHub Required Checks.
 - Evidence: /private/tmp/pr547-schema-final-20261013/local-ci-final and final-postgres-run4. History SQL checksums remain exact. Schema comparison is baseline-relative compatibility, not a zero-diff claim.
 - Source ready for publication in the existing PR only. Owner release authorization and internal Local CI exception remain pending; require warning classification and fresh Mirror/other-worker release gates before main merge. No production changes or PR #546 modifications.
+
+## 2026-10-13 — Live Mirror original PR1 identity integrity
+
+- Task: only PR1 from Oct13 Root Cause and Remediation Report; isolated `codex/live-mirror-exact-identity-pr1` based on main428f04ba. Preserve dirty primary and all unrelated work.
+- Completed: replace unsafe content/time duplicate certification with exact identity checks, distinct-ID preservation and unproven holds; scope/direction checks and P2002 guard; sanitized seven-pair fixtures, requested regressions and PostgreSQL integration; CI test wiring.
+- Passed:170 affected tests; real database integration (seven pairs/restarts/race/alias); changed-file lint; production types/build; local backend/worker200 health and401 protected routes; clean whitespace diff. Seven cases reproduce the defect on unchanged main.
+- Baselines: full backend18 failures unchanged; full types295 errors unchanged; full lint893 errors/2 warnings unchanged. Full suite2726 total,2695 pass,18 fail,13 skip; the database test passed separately. No suppressed checks or unrelated repairs.
+- Limits: no production data/config/deployment changes, no historical recovery or next PR. Existing419 identity holds and52 ID-less auto replies untouched. Hosted CI BLOCKED: GitHub account payments/spending-limit restriction; all four jobs have zero executed steps (runs38353945146/38353944965, code commit e7c6c43f).
+- Delivery: draft PR548 opened and attached. Dedicated local validation services/container/volume cleaned up; primary status fingerprint unchanged. Handoff: `docs/live-mirror/PR1_IDENTITY_INTEGRITY_HANDOFF.md`.
+- Next action: STOP. Await user approval and hosted-check resolution before merge/deploy. Do not start PR2.
+
+## 2026-10-13 — PR548 current-main integration and readiness review
+
+- Task: merge current main f0471c640257787d9cfcf387250056a42a8ca9e9 into existing isolated PR548 branch without history rewrite; no production deployment or later remediation PR.
+- Conflict inventory: only append-only AI_PROGRESS.md and DECISIONS.md; both main and PR1 additions preserved. Workflow auto-merge retains main Store Master/compatibility tests and PR1 identity database test.
+- Verification underway: new-main baseline comparison,170 focused tests,seven source pairs,PostgreSQL replay/concurrency,build/types/lint/runtime,hosted check and existing alternative-CI inspection.
+- Next: validate exact integration state, update same branch normally, verify remote mergeability, publish one final readiness decision. No historic data repair/replay/backfill.
+
+- Completed updated-main checks:172 focused tests (original170 plus2 Store-scope cases),PostgreSQL identity integration,78 Store Master/PostgreSQL tests,39 webhook/default permission tests,974 frontend tests,production types/build/scoped lint,runtime200/200 and401/401.169 existing main migrations replayed only in disposable local PostgreSQL.
+- Safety finding: direct OA/chat resolution accepted a mismatched/null conversation Store; reproduced against f0471c64 and prior PR548 in local PostgreSQL. Narrow PR1 correction now holds DIRECT_CONVERSATION_STORE_SCOPE_CONFLICT without importing. Durable unit and PostgreSQL tests pass; no schema/mapping recovery change.
+- New-main baseline:2733 tests/2702 pass/19 fail/12 skip; integration2763/2731 pass/same19 fail/13 skip. HTTP sandbox failure passes separately; Store Master setup failure passes through its prescribed78-test database wrapper. Types295 and lint893 errors/2 warnings unchanged; no new normalized failures.
+- Existing alternative CI: stopped oppo-ci ARM64 Lima base; supported current workflow inventory with no parser errors, but unsigned local results are not posted to GitHub and cannot supply Required Checks. Registered GitHub runners0; protection/ruleset read endpoints403 plan restriction. No infrastructure created or activated.
+- Next: push normal merge to existing PR548, verify GitHub mergeability and fresh hosted checks, record final head and CI evidence in release-readiness report. No merge/deploy/history correction.

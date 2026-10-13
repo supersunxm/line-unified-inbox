@@ -3416,3 +3416,16 @@ Use production ledger checksums to select exact historical migration bytes; pres
 ## 2026-10-13 — Baseline-relative schema compatibility and stored mobile default
 
 The controlled database-to-database comparison proves only the retirement default differs between the old and corrected histories. Align Prisma's omitted-field default to false instead of changing verified SQL or production records. Preserve all existing and explicitly granted permissions, registration/approval behavior, role semantics, retained tables, historical enum values, defaults and constraints. Treat the unchanged 24 baseline diff blocks as separate schema debt; do not execute destructive generated SQL. Validation requires identical final-vs-baseline comparison output, real PostgreSQL rollback/default tests, auth tests in their correct runners, and fresh mandatory Local CI. Publication updates only the existing PR branch; main deployment and Mirror restart approval remain separate gates.
+
+## 2026-10-13 — Live Mirror PR1 requires exact identity evidence
+
+- Keep original seven-PR ordering. PR1 fixes content/time collision certification without schema changes; durable alias storage and historical repair remain separate approved work.
+- Exact provider/Manager identities plus Store/OA/conversation/direction evidence authorize a duplicate receipt. Content/time only identifies a review candidate. Known different IDs remain distinct; missing/conflicting identity stays held without a blind application/auto-reply duplicate.
+- Retain existing namespaces/unique constraints and conservative exact-manifest guards. Bound near-match metadata reads to100; hold saturated sets. Do not infer provider identity from a numeric outbound client key.
+- Validate seven sanitized pairs on actual main and isolated PostgreSQL, including repeat polling/service restart and uniqueness races. Retain full-repository baseline failures explicitly; local success cannot certify hosted CI or production completeness.
+
+## 2026-10-13 — Preserve histories when integrating PR548 with new main
+
+Use a normal main-to-feature merge commit, retaining every PR547 migration/schema/Store Master change and the complete original PR1 identity fix. Resolve only appended documentation by preserving both sets of entries. Compare validation to f0471c64 rather than428f04ba; local evidence cannot replace unavailable GitHub Required Checks or trusted status reporting. No force-push, new runner or production action is authorized by this repair.
+
+PR548 attribution review additionally reproduced a pre-existing direct OA/chat mapping with a conflicting Store on current main. Select Store identity and hold conflicting/null Store destinations before import; retain the existing mapped-conversation contract without inventing a bridge. This narrow guard satisfies PR1 Store-attribution safety and adds no schema/replay/PR4 recovery. Validate against synthetic PostgreSQL before/after and retain ambiguity rather than wrong attribution.

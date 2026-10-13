@@ -24,6 +24,8 @@ import {
   selectUniqueExactInboundConversationId,
 } from "./line-chat-mirror-reconciler.service";
 
+import { liveMirrorIdentityCollisions } from "./fixtures/live-mirror-identity-collisions";
+
 function withEnv(
   values: Record<string, string | undefined>,
   callback: () => void,
@@ -187,6 +189,8 @@ type TestCanonicalMessage = {
   senderUserId: string | null;
   senderDisplayName: string | null;
   rawPayload: Prisma.JsonValue;
+  fileName: string | null;
+  conversation: { storeId: string | null; lineOfficialAccountId: string | null };
 };
 
 function createReconcileHarness() {
@@ -210,7 +214,8 @@ function createReconcileHarness() {
     id: "canonical-inbound", conversationId: "conversation-test", externalMessageId: "webhook-test",
     direction: MessageDirection.INBOUND, deliveryStatus: MessageDeliveryStatus.DELIVERED,
     messageType: MessageType.TEXT, originalText: "synthetic question", sentAt: inboundAt,
-    senderUserId: null, senderDisplayName: null, rawPayload: {},
+    senderUserId: null, senderDisplayName: null, rawPayload: {}, fileName: null,
+    conversation: { storeId: "store-test", lineOfficialAccountId: "oa-test" },
   }];
   const conversation = {
     id: "conversation-test", latestMessageAt: inboundAt,
@@ -219,9 +224,12 @@ function createReconcileHarness() {
   };
   const queries: Prisma.LineChatMirrorMessageFindManyArgs[] = [];
   const processed: string[] = [];
+  const receipts: Array<{ id: string; data: Record<string, unknown> }> = [];
+  let failReceiptOnce = false;
   const logs: string[] = [];
   const activities: unknown[] = [];
   let directMatches = 1;
+  let directStoreId: string | null = "store-test";
   let contentMatches = 0;
   let failReplyStateObservation = false;
   const prisma = {
@@ -245,6 +253,8 @@ function createReconcileHarness() {
         return selected.slice(0, query.take);
       },
       update: async (input: { where: { id: string }; data: { reconcileStatus: LineChatMirrorReconcileStatus } }) => {
+        if (failReceiptOnce) { failReceiptOnce = false; throw new Error("synthetic receipt failure"); }
+        receipts.push({ id: input.where.id, data: input.data });
         processed.push(input.where.id);
         const row = rows.find((item) => item.id === input.where.id)!;
         row.reconcileStatus = input.data.reconcileStatus;
@@ -260,21 +270,49 @@ function createReconcileHarness() {
             : [];
         }
         return typeof query.where?.lineChatUserId === "string"
-          ? Array.from({ length: directMatches }, (_, index) => ({ id: index === 0 ? conversation.id : "other-conversation" }))
+          ? Array.from({ length: directMatches }, (_, index) => ({ id: index === 0 ? conversation.id : "other-conversation", storeId: directStoreId }))
           : [];
       },
       findUnique: async () => ({ ...conversation }),
       update: async (input: { data: Partial<typeof conversation> }) => Object.assign(conversation, input.data),
     },
     message: {
-      findFirst: async (query: { where: { externalMessageId: { in: string[] } } }) =>
-        canonical.find((message) => message.externalMessageId && query.where.externalMessageId.in.includes(message.externalMessageId)) ?? null,
       findMany: async (query: Prisma.MessageFindManyArgs) => {
-        if (query.where?.direction) return Array.from({ length: contentMatches }, (_, index) => ({ id: `content-duplicate-${index}` }));
+        if (query.where?.OR) {
+          return canonical.filter((message) => query.where!.OR!.some((filter) => {
+            const external = filter.externalMessageId;
+            if (typeof external === "object" && Array.isArray(external?.in)
+              && external.in.includes(message.externalMessageId ?? "")) return true;
+            if (!Array.isArray(filter.AND)) return false;
+            const payload = message.rawPayload && typeof message.rawPayload === "object" && !Array.isArray(message.rawPayload)
+              ? message.rawPayload : {};
+            return filter.AND.every((part) => {
+              if (part.conversation) return message.conversation.lineOfficialAccountId === "oa-test";
+              const raw = part.rawPayload;
+              if (raw && "path" in raw && Array.isArray(raw.path) && typeof raw.path[0] === "string") {
+                return payload[raw.path[0]] === raw.equals;
+              }
+              return false;
+            });
+          }));
+        }
+        if (query.where?.sentAt && query.where.direction) {
+          const time = query.where.sentAt as Prisma.DateTimeFilter;
+          const near = canonical.filter((message) => message.conversationId === query.where!.conversationId
+            && message.direction === query.where!.direction
+            && message.deliveryStatus === MessageDeliveryStatus.DELIVERED
+            && message.messageType === query.where!.messageType
+            && message.originalText === query.where!.originalText
+            && message.sentAt >= time.gte! && message.sentAt <= time.lte!);
+          return [...near, ...Array.from({ length: contentMatches }, (_, index) => ({
+            id: `content-duplicate-${index}`, externalMessageId: null, rawPayload: {},
+          }))].slice(0, query.take);
+        }
         return [...canonical].sort((a, b) => b.sentAt.getTime() - a.sentAt.getTime());
       },
       create: async (input: { data: Omit<TestCanonicalMessage, "id"> }) => {
-        const message = { ...input.data, id: `canonical-${canonical.length}` };
+        const message = { ...input.data, id: `canonical-${canonical.length}`,
+          conversation: { storeId: "store-test", lineOfficialAccountId: "oa-test" } };
         canonical.push(message);
         return { id: message.id };
       },
@@ -294,9 +332,11 @@ function createReconcileHarness() {
   const reconcile = (batch: number, apply = true) => (service as unknown as {
     reconcileStore: (code: string, since: Date, apply: boolean, batch: number) => Promise<LineChatMirrorReconcileCycleResult>;
   }).reconcileStore("28220", new Date("2026-09-01"), apply, batch);
-  return { service, reconcile, rows, canonical, conversation, queries, processed, activities, logs,
+  return { service, reconcile, rows, canonical, conversation, queries, processed, receipts, activities, logs, prisma: client,
+    failReceipt: () => { failReceiptOnce = true; },
     setContentMatches: (count: number) => { contentMatches = count; },
     setDirectMatches: (count: number) => { directMatches = count; },
+    setDirectStoreId: (value: string | null) => { directStoreId = value; },
     failReplyStateObservation: () => { failReplyStateObservation = true; } };
 }
 
@@ -374,10 +414,12 @@ test("reconciler dry-run reports Manager replies without changing canonical or m
 });
 
 
-test("content/time duplicates and conflicting exact IDs cannot create another canonical reply", async () => {
+test("unproven content/time near-matches are held and conflicting exact IDs cannot link", async () => {
   const duplicate = createReconcileHarness();
   duplicate.setContentMatches(1);
-  assert.equal((await duplicate.reconcile(1)).contentTimeDuplicates, 1);
+  assert.equal((await duplicate.reconcile(1)).ambiguous, 1);
+  assert.equal(duplicate.receipts[0].data.reconcileSource, "CONTENT_TIME_IDENTITY_UNPROVEN");
+  assert.equal(duplicate.receipts[0].data.canonicalMessageId, undefined);
   assert.equal(duplicate.canonical.length, 1);
 
   const ambiguous = createReconcileHarness();
@@ -456,3 +498,186 @@ test("full-fleet cycle passes the bounded batch to every effective apply store a
     });
   }
 });
+
+function identityHarness() {
+  const h = createReconcileHarness();
+  const template = { ...h.canonical[0] };
+  h.canonical.length = 0;
+  h.rows.splice(1);
+  h.rows[0].text = "sanitized repeated message";
+  const candidate = (managerId: string, overrides: Partial<TestCanonicalMessage> = {}): TestCanonicalMessage => ({
+    ...template, conversation: { ...template.conversation },
+    id: `canonical-${managerId}`, externalMessageId: mirrorCanonicalExternalId(managerId),
+    direction: MessageDirection.OUTBOUND, originalText: h.rows[0].text, sentAt: h.rows[0].sentAt,
+    rawPayload: { managerMessageId: managerId }, ...overrides,
+  });
+  return { ...h, candidate };
+}
+
+for (const fixture of liveMirrorIdentityCollisions) {
+  test(`production pair ${fixture.storeCode}/${fixture.managerId} remains distinct and replay-safe`, async () => {
+    const h = identityHarness();
+    h.rows[0].managerMessageId = fixture.managerId;
+    h.rows[0].sentAt = new Date(fixture.sourceAt);
+    h.rows[0].bizId = fixture.canonicalSource === "AUTO_RESPONSE" ? "__AUTO_RESPONSE" : "owner-test";
+    h.canonical.push(h.candidate(fixture.otherManagerId, { sentAt: new Date(fixture.otherAt),
+      rawPayload: { managerMessageId: fixture.otherManagerId, source: fixture.canonicalSource } }));
+    const result = await h.reconcile(1);
+    assert.equal(result.importedOutbound, 1);
+    assert.equal(result.contentTimeDuplicates, 0);
+    assert.equal(h.canonical.length, 2);
+    assert.equal(new Set(h.canonical.map((message) => message.externalMessageId)).size, 2);
+    assert.equal(h.receipts[0].data.canonicalMessageId, h.canonical[1].id);
+    h.rows[0].reconcileStatus = LineChatMirrorReconcileStatus.PENDING;
+    assert.equal((await h.reconcile(1)).exactDuplicates, 1);
+    assert.equal(h.canonical.length, 2);
+  });
+}
+
+test("six identical texts within one second preserve six distinct Manager IDs", async () => {
+  const h = identityHarness();
+  h.rows[0].managerMessageId = "635000000000000001";
+  for (let index = 1; index <= 5; index += 1) {
+    h.rows.push({ ...h.rows[0], id: `raw-${index}`, managerMessageId: `63500000000000000${index + 1}`,
+      sentAt: new Date(h.rows[0].sentAt.getTime() + index * 100) });
+  }
+  assert.equal((await h.reconcile(10)).importedOutbound, 6);
+  assert.equal(h.canonical.length, 6);
+  assert.equal(new Set(h.canonical.map((message) => message.externalMessageId)).size, 6);
+});
+
+test("verified webhook/Manager identity correlates despite out-of-order timestamps", async () => {
+  const h = identityHarness();
+  h.rows[0].direction = LineChatMirrorDirection.INBOUND;
+  h.rows[0].managerMessageId = "635000000000000001";
+  h.canonical.push(h.candidate(h.rows[0].managerMessageId, { externalMessageId: h.rows[0].managerMessageId,
+    direction: MessageDirection.INBOUND, sentAt: new Date(h.rows[0].sentAt.getTime() - 20_000), rawPayload: {} }));
+  assert.equal((await h.reconcile(1)).exactDuplicates, 1);
+  assert.equal(h.receipts[0].data.canonicalMessageId, h.canonical[0].id);
+  assert.equal(h.canonical.length, 1);
+});
+
+test("similar distinct inbound webhook/Manager events wait for exact webhook evidence", async () => {
+  const h = identityHarness();
+  h.rows[0].direction = LineChatMirrorDirection.INBOUND;
+  h.canonical.push(h.candidate("635000000000000002", { externalMessageId: "635000000000000002",
+    direction: MessageDirection.INBOUND, rawPayload: {} }));
+  const result = await h.reconcile(1);
+  assert.equal(result.waitingInboundCanonical, 1);
+  assert.equal(result.contentTimeDuplicates, 0);
+  assert.equal(h.receipts[0].data.canonicalMessageId, undefined);
+});
+
+test("persisted provider alias correlates an application event without overwriting its client ID", async () => {
+  const h = identityHarness();
+  h.canonical.push(h.candidate("application", { externalMessageId: "client-delivery-id",
+    rawPayload: { providerMessageId: h.rows[0].managerMessageId } }));
+  assert.equal((await h.reconcile(1)).exactDuplicates, 1);
+  assert.equal(h.canonical.length, 1);
+  assert.equal(h.canonical[0].externalMessageId, "client-delivery-id");
+});
+
+test("identical content in another conversation cannot suppress an outbound import", async () => {
+  const h = identityHarness();
+  h.canonical.push(h.candidate("635000000000000002", { conversationId: "other-conversation" }));
+  assert.equal((await h.reconcile(1)).importedOutbound, 1);
+  assert.equal(h.canonical[1].conversationId, "conversation-test");
+});
+
+for (const conflict of ["direction", "store", "oa", "conversation", "payload"] as const) {
+  test(`exact source with conflicting ${conflict} evidence remains unlinked`, async () => {
+    const h = identityHarness();
+    const message = h.candidate(h.rows[0].managerMessageId);
+    if (conflict === "direction") message.direction = MessageDirection.INBOUND;
+    if (conflict === "store") message.conversation.storeId = "other-store";
+    if (conflict === "oa") message.conversation.lineOfficialAccountId = "other-oa";
+    if (conflict === "conversation") message.conversationId = "other-conversation";
+    if (conflict === "payload") message.rawPayload = { managerMessageId: "different-source" };
+    h.canonical.push(message);
+    assert.equal((await h.reconcile(1)).failed, 1);
+    assert.equal(h.receipts[0].data.canonicalMessageId, undefined);
+    assert.equal(h.canonical.length, 1);
+  });
+}
+
+test("opposite directions with different IDs remain distinct", async () => {
+  const h = identityHarness();
+  h.canonical.push(h.candidate("635000000000000002", { direction: MessageDirection.INBOUND }));
+  assert.equal((await h.reconcile(1)).importedOutbound, 1);
+  assert.equal(h.canonical[1].direction, MessageDirection.OUTBOUND);
+});
+
+for (const missing of ["", "   ", "event:synthetic"] as const) {
+  test(`unproven source ${JSON.stringify(missing)} cannot merge or import`, async () => {
+    const h = identityHarness();
+    h.rows[0].managerMessageId = missing;
+    h.canonical.push(h.candidate("635000000000000002"));
+    assert.equal((await h.reconcile(1)).ambiguous, 1);
+    assert.equal(h.receipts[0].data.reconcileSource, "SOURCE_IDENTITY_UNPROVEN");
+    assert.equal(h.receipts[0].data.canonicalMessageId, undefined);
+    assert.equal(h.canonical.length, 1);
+  });
+}
+
+test("ID-less auto reply stays held without merging or blindly importing a duplicate", async () => {
+  const h = identityHarness();
+  h.canonical.push(h.candidate("execution", { id: "auto-reply:execution", externalMessageId: null,
+    rawPayload: { source: "AUTO_RESPONSE" } }));
+  assert.equal((await h.reconcile(1)).ambiguous, 1);
+  assert.equal(h.receipts[0].data.reconcileSource, "CONTENT_TIME_IDENTITY_UNPROVEN");
+  assert.equal(h.receipts[0].data.canonicalMessageId, undefined);
+  assert.equal(h.canonical.length, 1);
+});
+
+test("multiple Canonical claims for one exact identity stay held", async () => {
+  const h = identityHarness();
+  h.canonical.push(h.candidate(h.rows[0].managerMessageId));
+  h.canonical.push(h.candidate("alias", { externalMessageId: "client-id",
+    rawPayload: { providerMessageId: h.rows[0].managerMessageId } }));
+  assert.equal((await h.reconcile(1)).ambiguous, 1);
+  assert.equal(h.receipts[0].data.reconcileSource, "EXACT_SOURCE_IDENTITY_AMBIGUOUS");
+  assert.equal(h.canonical.length, 2);
+});
+
+test("restart after Canonical insert before Raw receipt and repeated polling remain idempotent", async () => {
+  const h = identityHarness();
+  h.failReceipt();
+  assert.equal((await h.reconcile(1)).failed, 1);
+  assert.equal(h.canonical.length, 1);
+  const restarted = new LineChatMirrorReconcilerService(h.prisma as unknown as PrismaService);
+  Object.defineProperty(restarted, "logger", { value: { log() {}, warn() {}, error() {} } });
+  const reconcile = () => (restarted as unknown as {
+    reconcileStore: (code: string, since: Date, apply: boolean, batch: number) => Promise<LineChatMirrorReconcileCycleResult>;
+  }).reconcileStore("28220", new Date("2026-09-01"), true, 1);
+  assert.equal((await reconcile()).exactDuplicates, 1);
+  h.rows[0].reconcileStatus = LineChatMirrorReconcileStatus.PENDING;
+  assert.equal((await reconcile()).exactDuplicates, 1);
+  assert.equal(h.canonical.length, 1);
+});
+
+test("a capped near-match set stays held and cannot hide an unknown identity", async () => {
+  const h = identityHarness();
+  for (let index = 0; index < 100; index += 1) h.canonical.push(h.candidate(`known-${index}`));
+  assert.equal((await h.reconcile(1)).ambiguous, 1);
+  assert.equal(h.receipts[0].data.canonicalMessageId, undefined);
+  assert.equal(h.canonical.length, 100);
+});
+
+test("a numeric outbound client key without a provider alias is not identity proof", async () => {
+  const h = identityHarness();
+  h.canonical.push(h.candidate("client", { externalMessageId: "635000000000000002", rawPayload: {} }));
+  assert.equal((await h.reconcile(1)).ambiguous, 1);
+  assert.equal(h.canonical.length, 1);
+});
+
+
+for (const storeId of ["other-store", null]) {
+  test(`direct OA/chat mapping with conflicting Store ${String(storeId)} stays held`, async () => {
+    const h = identityHarness();
+    h.setDirectStoreId(storeId);
+    assert.equal((await h.reconcile(1)).ambiguous, 1);
+    assert.equal(h.receipts[0].data.reconcileError, "DIRECT_CONVERSATION_STORE_SCOPE_CONFLICT");
+    assert.equal(h.receipts[0].data.canonicalMessageId, undefined);
+    assert.equal(h.canonical.length, 0);
+  });
+}
