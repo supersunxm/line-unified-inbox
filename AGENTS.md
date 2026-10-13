@@ -32,3 +32,13 @@ For authentication work, verify migrations, User and OTP tables, setup-status, l
 ## Progress documentation
 
 Maintain `AI_PROGRESS.md` with the current task, completed work, checks run/passed, blockers, and next action. Maintain `DECISIONS.md` for meaningful architectural choices and rationale. Never put raw logs or secrets in either file.
+
+## Permanent Local CI policy
+
+- Local CI is the default mandatory merge verification mechanism.
+- Run all eight mandatory Local CI jobs and every recorded step in isolated disposable guests. Use PostgreSQL test databases, never Production.
+- Record the tested base, final HEAD, source fingerprint, workflow hashes, per-step log hashes, and guest cleanup. Verify them with `tools/codex-ci/evidence.py` before presenting a pass.
+- Any application, test, workflow, runner, evidence-verifier, or policy change requires a fresh complete Local CI run. Do not reclassify failed or unavailable GitHub-hosted checks as passed.
+- The Local CI policy does not create GitHub Checks or bypass GitHub protections. Inspect and satisfy all rules enforced at merge time.
+- Owner authorization is still required for each merge and each production release. Never auto-merge or deploy from a green Local CI result.
+- Preserve the approved disposable runner's isolation, credential boundary, network allowlist, and cleanup behavior. If any boundary cannot be verified, stop instead of weakening it.

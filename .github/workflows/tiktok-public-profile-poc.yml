@@ -1,13 +1,6 @@
 name: TikTok public profile PoC
 
 on:
-  pull_request:
-    paths:
-      - "backend/src/tiktok/tiktok-public-profile.ts"
-      - "backend/src/tiktok/tiktok-public-profile.spec.ts"
-      - "backend/scripts/tiktok-public-profile-probe.ts"
-      - "backend/package.json"
-      - ".github/workflows/tiktok-public-profile-poc.yml"
   workflow_dispatch:
     inputs:
       username:

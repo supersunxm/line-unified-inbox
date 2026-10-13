@@ -1,13 +1,6 @@
 name: Adaptive Auth CI
 
 on:
-  pull_request:
-    paths:
-      - "frontend/src/lib/authorization.ts"
-      - "frontend/test/authorization.test.mts"
-      - "frontend/src/components/shell/**"
-      - "frontend/src/app/**"
-      - ".github/workflows/adaptive-auth-ci.yml"
   workflow_dispatch:
 
 concurrency:
@@ -41,7 +34,7 @@ jobs:
       - name: Lint adaptive auth scope
         run: npx eslint "src/lib/authorization.ts" "test/authorization.test.mts"
 
-      # Application CI runs the full frontend suite and production build on every PR.
+      # Mandatory Local CI runs the full frontend suite and production build for every PR.
       # Keep the dedicated authorization regression here without repeating those jobs.
       - name: Adaptive authorization regression tests
         run: node --test test/authorization.test.mts

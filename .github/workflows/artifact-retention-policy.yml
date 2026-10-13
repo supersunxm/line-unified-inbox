@@ -1,9 +1,6 @@
 name: Artifact Retention Policy
 
 on:
-  pull_request:
-    paths:
-      - ".github/workflows/**"
   workflow_dispatch:
 
 permissions:
@@ -15,6 +12,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
       - name: Check upload-artifact retention
         shell: python
         run: |
@@ -25,7 +30,10 @@ jobs:
           MAX_DAYS = 3
           failures = []
 
-          for path in sorted(Path(".github/workflows").glob("*.y*ml")):
+          workflows = sorted(Path(".github/workflows").glob("*.y*ml"))
+          if not workflows:
+              sys.exit("Artifact retention policy requires the checked-out workflow files")
+          for path in workflows:
               lines = path.read_text(encoding="utf-8").splitlines()
               i = 0
               while i < len(lines):
@@ -69,3 +77,9 @@ jobs:
               sys.exit(1)
 
           print(f"PASS: every actions/upload-artifact use has an explicit retention-days value between 1 and {MAX_DAYS}.")
+
+      - name: Local CI policy and isolation regressions
+        run: |
+          npm ci --prefix tools/codex-ci --ignore-scripts --no-audit --no-fund
+          node --test tools/codex-ci/*.test.mjs tools/ci-runner/disposable-guest.test.mjs
+          python3 tools/codex-ci/evidence-verifier-test.py
