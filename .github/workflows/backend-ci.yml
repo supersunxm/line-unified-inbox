@@ -1,7 +1,6 @@
 name: Application CI
 
 on:
-  pull_request:
   workflow_dispatch:
 
 concurrency:

@@ -3441,3 +3441,8 @@ Store32610 recovery does not close the fleet gate when the completed next cycle 
 ## 2026-10-13 — Sunn Secretary inbound preparation without delivery
 
 Reuse IGNORED WebhookEvent receipts with namespaced eventType states and a versioned bounded plan in errorMessage, avoiding schema changes and Mirror deployment watch paths. Insert the full initial plan atomically. Use optimistic leased claims and side-effect-free deterministic preparation, not receipt reservation as command completion. No group preapproval; sender authorization plus actual bot mention is required. Resolve nonempty store scope server-side and fail closed if absent. PREPARED does not imply query execution or LINE delivery; external execution and ambiguous-delivery policies remain a later review gate. See docs/SUNN_SECRETARY_PHASE53_INBOUND.md.
+
+
+## 2026-10-13 — Local CI policy uses manual workflows and the proven isolated runner
+
+Remove only the automatic GitHub Actions event triggers from the five audited workflows; keep each `workflow_dispatch`, all existing permissions, and every existing required test command. Local CI remains a local result and never creates GitHub Checks or bypasses protections. Preserve the existing eight-job runner and guest lifecycle. Add one mandatory enforcement step to test trigger policy, baseline command parity, runner boundaries, evidence tamper detection, and the fail-closed artifact-retention inventory. Use a pinned `js-yaml` parser under `tools/codex-ci` because Ruby is absent from the approved guest; do not add system packages or change runner isolation. Package evidence from unchanged original logs, with source/Git identity and cleanup verified before handoff. Owner approval remains required for each merge and production release.

@@ -1,0 +1,258 @@
+{
+  "baselineCommit": "109c067778805cc2104a13726b7c1466dbe54968",
+  "description": "Original mandatory workflow run commands. Policy transition must retain every command; the retention step adds only a fail-closed empty-inventory guard. Changes require explicit reviewed coverage updates.",
+  "jobs": {
+    "web-adaptive-auth": {
+      "workflow": "adaptive-auth-ci.yml",
+      "steps": [
+        {
+          "name": "Install dependencies",
+          "sha256": "9db3f780def6105eee3cc930de4d0982607760820fddaa3facdd3813ccb40628"
+        },
+        {
+          "name": "Lint adaptive auth scope",
+          "sha256": "a6bf248f0b91372406f672cf33e848c96285fd4af41ae1ab67a4c7b2f17c0545"
+        },
+        {
+          "name": "Adaptive authorization regression tests",
+          "sha256": "01c693e8fcf03d073f823aa7cb3a4ae718ea588a654dd86a1ce843e489429cb5"
+        }
+      ]
+    },
+    "enforce": {
+      "workflow": "artifact-retention-policy.yml",
+      "steps": [
+        {
+          "name": "Check upload-artifact retention",
+          "sha256": "238b65ad7c80e1577cb44ca4ed47d5aacacff33edb2b390e1d241e6a928ac103"
+        }
+      ]
+    },
+    "backend": {
+      "workflow": "backend-ci.yml",
+      "steps": [
+        {
+          "name": "Install dependencies",
+          "sha256": "9db3f780def6105eee3cc930de4d0982607760820fddaa3facdd3813ccb40628"
+        },
+        {
+          "name": "Prisma validate",
+          "sha256": "f26a631764176aca081475f76d82294d46b2e5550493dd6e4e0de62977a13022"
+        },
+        {
+          "name": "Apply migrations to clean PostgreSQL",
+          "sha256": "a852b3ec1a4fc79baae895db494043e6616feb56c8bc50a9a0d693bab3d0ace1"
+        },
+        {
+          "name": "Sunn Secretary secure owner settings",
+          "sha256": "d1bba22c397767ddfa671fbcf5a085cfac5c060877263be8d1810d0917a240b1"
+        },
+        {
+          "name": "Lint regression scope",
+          "sha256": "413f8ff3bb3ebd5beb25525a3ed0d3e333cca287abc3e8215b745fff80f63e16"
+        },
+        {
+          "name": "Nickname source contract lint",
+          "sha256": "a4baf369be25076885a72c54848bf90a1e647ec2d2ac0ddb0836873704071815"
+        },
+        {
+          "name": "Nickname source contract and database regression tests",
+          "sha256": "9196f8f9866d2da99075a6f863df1708e461e8231510494c23c3d513dc880c73"
+        },
+        {
+          "name": "Mirror cutover lint",
+          "sha256": "c33f078ac24868785a772a5a493355bf993793f503ce097bc93d1bf0e4dc6ea6"
+        },
+        {
+          "name": "Mirror cutover regression tests",
+          "sha256": "38ffc58d1fa61919700437aaaeea264f40177c72f64963dbe1ca3d069c703e19"
+        },
+        {
+          "name": "Mirror identity bridge lint and database regression",
+          "sha256": "4d52ab3a3beeda9dbf984aeff1b07832a81508dd6db31e1223cb67da6c38f4b2"
+        },
+        {
+          "name": "Exact manifest and Historical source anchor lint",
+          "sha256": "2f3c3717ee6597475445b16d99a5740b8b99d9b828adcd88703b60abb6301a1c"
+        },
+        {
+          "name": "Exact manifest and Historical source anchor regression tests",
+          "sha256": "85cc521e70efce33a11a418d236b638def94adb63d17bb2265afb726c7217fc8"
+        },
+        {
+          "name": "LINE chat health regression tests",
+          "sha256": "7a42a5cbe262305d9e11ad475646d8cea5a6af9a6c25a6010f1c7b17882f1f8a"
+        },
+        {
+          "name": "Nickname Parser v3 lint and regression tests",
+          "sha256": "97fbef35323c13638a446d0c9c9ccbc2d7420aaae385bfff748d880287a5ebdb"
+        },
+        {
+          "name": "Manual Manager recovery regression",
+          "sha256": "8c50a2879d3e1d13a6f8101acc8f5ff59dd53b14a53efd02b432c324dc8ffafd"
+        },
+        {
+          "name": "Coupon unit tests",
+          "sha256": "89d4e017595fc4228713294e318e2185634573c1a41c47ffef9b11ea86dfd6aa"
+        },
+        {
+          "name": "App version unit tests",
+          "sha256": "dd0a46e4ce6b42347cdfd84cf6b74f9b151def6ef059c1e26457beb641271fb5"
+        },
+        {
+          "name": "Conversation data contract regression tests",
+          "sha256": "00e7d55231b1b6260a30673550091ca45a6300c30f7da5aa41c875640db64c6d"
+        },
+        {
+          "name": "Reply state resolver lint",
+          "sha256": "a82400544143433da2c0b7400f286f8b987692b2944663b80aa44f58a095f2cf"
+        },
+        {
+          "name": "Reply state resolver tests",
+          "sha256": "6a3534b1ead63064db946605786bf60ed98c2e6107d6a96b4479245ea0ef9933"
+        },
+        {
+          "name": "Mobile sales audit regression tests",
+          "sha256": "a343d192b75452ad059d11ad09bc427f01041ccb33ec231555dcbc60b25e872e"
+        },
+        {
+          "name": "Mobile video preview runtime regression tests",
+          "sha256": "9880c2fda7905357da0f269a787962b8a9decf5cc5c372cdd394da5c39f1d092"
+        },
+        {
+          "name": "Purchase intelligence and broadcast audience regression tests",
+          "sha256": "e6b74b72e5f5a5baa80be9361ba133b0b5e48e910d74cb4880899f3f986f80ca"
+        },
+        {
+          "name": "Multi-store Broadcast targeting regression tests",
+          "sha256": "ab25b673353c7b0fa8a25b6063cccc4dc6a3399f3799ab319b158092769d2e90"
+        },
+        {
+          "name": "Executive dashboard regression tests",
+          "sha256": "4b7f0099653044fe361e8e9516afc8e1d2c710d1dfacf4549c8de0a674ae02ed"
+        },
+        {
+          "name": "v2 monthly lint and database regression",
+          "sha256": "3ba022da6075ca9ce633ebc8a0740594d51ebd69ac78223611e77ddc2c30eafc"
+        },
+        {
+          "name": "Canonical Store ID export and Store Master PostgreSQL regression",
+          "sha256": "7b0329142c3c835eb8e9fc6cf7de455168ccb39be17afa7bc9ef6484501f795e"
+        },
+        {
+          "name": "Build",
+          "sha256": "16c0e4305ac213dff39fc82b69b6e08aeeb8758e33cd72d7c409752a70e9f054"
+        },
+        {
+          "name": "Sunn Secretary real HTTP security and restart persistence",
+          "sha256": "9436c5fdfa95bb725c0021fe8932ea3d4b4a3dea103be538a1a45bce452ba37f"
+        },
+        {
+          "name": "Smoke test backend auth guards",
+          "sha256": "55fe66e4dba2a32b36d9fc10e7c43e4ccd2c3bcf1886a8adb11ff69ff665cec8"
+        }
+      ]
+    },
+    "frontend": {
+      "workflow": "backend-ci.yml",
+      "steps": [
+        {
+          "name": "Install dependencies",
+          "sha256": "9db3f780def6105eee3cc930de4d0982607760820fddaa3facdd3813ccb40628"
+        },
+        {
+          "name": "Lint regression scope",
+          "sha256": "a94018963fc5b87463992e4c5dfe70eb20f7767a062e28005171d5574c3e2e8f"
+        },
+        {
+          "name": "Frontend tests (full suite)",
+          "sha256": "0c7ec4aac044044cc5b274b09866dbba6c2eedca7ca0198dae0fa3b38e59513b"
+        },
+        {
+          "name": "Sunn Secretary form lint",
+          "sha256": "b0424fe4dd1f09e4100218fee08902f6de145860ae2ae886a3c85b2b0fa68bac"
+        },
+        {
+          "name": "Type error baseline (fails if tsc errors rise)",
+          "sha256": "3b50ef4b93d9b1c84c889f44a9760a5fbc73c3d9dce07df1439b755676bade23"
+        },
+        {
+          "name": "Build",
+          "sha256": "16c0e4305ac213dff39fc82b69b6e08aeeb8758e33cd72d7c409752a70e9f054"
+        }
+      ]
+    },
+    "ci-gate": {
+      "workflow": "backend-ci.yml",
+      "steps": [
+        {
+          "name": "Require all application checks",
+          "sha256": "be8fd44cfde46b2e8800f169f01e58a8224a9ccaf4cafbe9d7627abbecef7dff"
+        }
+      ]
+    },
+    "validate": {
+      "workflow": "tiktok-public-profile-poc.yml",
+      "steps": [
+        {
+          "name": "Run step 1",
+          "sha256": "9db3f780def6105eee3cc930de4d0982607760820fddaa3facdd3813ccb40628"
+        },
+        {
+          "name": "Unit test public TikTok parser",
+          "sha256": "d4393929007920448b31776b41da9c6b51ae6169a54afc7cc251b1860936f2a1"
+        },
+        {
+          "name": "Lint TikTok public collector",
+          "sha256": "a4392ff900c82938e9633768baf762b5e3e364039b4e39c2b7e2d436bec3849f"
+        },
+        {
+          "name": "Build backend",
+          "sha256": "16c0e4305ac213dff39fc82b69b6e08aeeb8758e33cd72d7c409752a70e9f054"
+        }
+      ]
+    },
+    "auth-foundation": {
+      "workflow": "unified-auth-ci.yml",
+      "steps": [
+        {
+          "name": "Install dependencies",
+          "sha256": "9db3f780def6105eee3cc930de4d0982607760820fddaa3facdd3813ccb40628"
+        },
+        {
+          "name": "Prisma validate",
+          "sha256": "f26a631764176aca081475f76d82294d46b2e5550493dd6e4e0de62977a13022"
+        },
+        {
+          "name": "Apply migrations to clean PostgreSQL",
+          "sha256": "a852b3ec1a4fc79baae895db494043e6616feb56c8bc50a9a0d693bab3d0ace1"
+        },
+        {
+          "name": "Lint unified auth scope",
+          "sha256": "5c7aead3e5ff9857436fd638ab10cd5834b499b5dc7b645d7c797a5bc8d96817"
+        },
+        {
+          "name": "Unified auth regression tests",
+          "sha256": "e7c85c4431a221de17ce646bc2b724e8be3abd185dca4737f45b7ea257dbe8e9"
+        },
+        {
+          "name": "PostgreSQL concurrent role transaction regression",
+          "sha256": "92dad78f5519b02dc019579c84959f252a6e94dd23a7a054d432506f080afbea"
+        }
+      ]
+    },
+    "web-registration": {
+      "workflow": "unified-auth-ci.yml",
+      "steps": [
+        {
+          "name": "Install dependencies",
+          "sha256": "9db3f780def6105eee3cc930de4d0982607760820fddaa3facdd3813ccb40628"
+        },
+        {
+          "name": "Lint Web registration scope",
+          "sha256": "ee3080efcdcdab48eb360811e7815b70678c801b645614fd2d0439903bb1b40b"
+        }
+      ]
+    }
+  }
+}

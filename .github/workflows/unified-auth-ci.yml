@@ -1,16 +1,6 @@
 name: Unified Auth CI
 
 on:
-  pull_request:
-    paths:
-      - "backend/src/auth/**"
-      - "backend/prisma/schema.prisma"
-      - "backend/prisma/migrations/**"
-      - "frontend/src/app/login/page.tsx"
-      - "frontend/src/app/register/**"
-      - "frontend/src/app/admin/registrations/**"
-      - "frontend/src/lib/registration-api.ts"
-      - ".github/workflows/unified-auth-ci.yml"
   workflow_dispatch:
 
 concurrency:
@@ -114,7 +104,7 @@ jobs:
           })().catch(async (error) => { console.error(error); await db.$disconnect(); process.exitCode = 1; });
           JS
 
-      # Application CI performs the full backend build on every PR.
+      # Mandatory Local CI performs the full backend build for every PR.
       # Keep the dedicated auth and concurrency regressions above.
 
   web-registration:
@@ -139,5 +129,5 @@ jobs:
       - name: Lint Web registration scope
         run: npx eslint "src/app/login/page.tsx" "src/app/register/page.tsx" "src/app/admin/registrations/page.tsx" "src/app/admin/registrations/hq/page.tsx" "src/lib/registration-api.ts"
 
-      # Application CI performs the full frontend suite and build on every PR.
+      # Mandatory Local CI performs the full frontend suite and build for every PR.
       # Keep the registration-specific lint in this independent check.
