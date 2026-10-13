@@ -829,6 +829,7 @@ void test("ConversationsService.list supports bmReplyStatus filter", async () =>
 
 void test("ConversationsService.getBmReplyStatusSummary aggregates overall and per-store counts including empty stores", async () => {
   const { BmReplyStatus } = await import("@prisma/client");
+  const recentAt = new Date();
 
   const prisma = {
     store: {
@@ -840,11 +841,11 @@ void test("ConversationsService.getBmReplyStatusSummary aggregates overall and p
     },
     conversation: {
       findMany: () => Promise.resolve([
-        ...Array.from({ length: 10 }, () => ({ storeId: "store-1", bmReplyStatus: BmReplyStatus.NOT_REPLIED, latestMessageAt: new Date("2026-10-01T00:00:00.000Z") })),
-        ...Array.from({ length: 5 }, () => ({ storeId: "store-1", bmReplyStatus: BmReplyStatus.NOTIFIED_BM, latestMessageAt: new Date("2026-10-01T00:00:00.000Z") })),
-        { storeId: "store-1", bmReplyStatus: BmReplyStatus.REPLIED, latestMessageAt: new Date("2026-10-01T00:00:00.000Z") },
-        ...Array.from({ length: 20 }, () => ({ storeId: "store-2", bmReplyStatus: BmReplyStatus.NOT_REPLIED, latestMessageAt: new Date("2026-10-01T00:00:00.000Z") })),
-        ...Array.from({ length: 2 }, () => ({ storeId: "store-2", bmReplyStatus: BmReplyStatus.REPLIED, latestMessageAt: new Date("2026-10-01T00:00:00.000Z") })),
+        ...Array.from({ length: 10 }, () => ({ storeId: "store-1", bmReplyStatus: BmReplyStatus.NOT_REPLIED, latestMessageAt: recentAt })),
+        ...Array.from({ length: 5 }, () => ({ storeId: "store-1", bmReplyStatus: BmReplyStatus.NOTIFIED_BM, latestMessageAt: recentAt })),
+        { storeId: "store-1", bmReplyStatus: BmReplyStatus.REPLIED, latestMessageAt: recentAt },
+        ...Array.from({ length: 20 }, () => ({ storeId: "store-2", bmReplyStatus: BmReplyStatus.NOT_REPLIED, latestMessageAt: recentAt })),
+        ...Array.from({ length: 2 }, () => ({ storeId: "store-2", bmReplyStatus: BmReplyStatus.REPLIED, latestMessageAt: recentAt })),
       ]),
     },
   } as unknown as PrismaService;

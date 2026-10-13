@@ -67,6 +67,12 @@ export const conversationDetailInclude = {
   activityHistory: { orderBy: { createdAt: "desc" as const } },
 } satisfies Prisma.ConversationInclude;
 type IncludedConversation = Prisma.ConversationGetPayload<{ include: typeof conversationDetailInclude }>;
+type BmReplyStatusSummaryOptions = {
+  /** Optional transaction client for a caller-owned read-only snapshot. */
+  client?: Prisma.TransactionClient;
+  /** Bounded query budget; one extra row detects truncation without reporting partial totals. */
+  maxRows?: number;
+};
 
 /**
  * Serialize the persisted author of a message without leaking User fields.
@@ -1577,8 +1583,17 @@ export class ConversationsService {
     return this.get(id);
   }
 
-  async getBmReplyStatusSummary(accessibleStoreIds: string[] | null | undefined, month?: string, dateRange?: { from?: string; to?: string }) {
+  async getBmReplyStatusSummary(
+    accessibleStoreIds: string[] | null | undefined,
+    month?: string,
+    dateRange?: { from?: string; to?: string },
+    options: BmReplyStatusSummaryOptions = {},
+  ) {
     if (accessibleStoreIds === undefined) throw new ForbiddenException("Store scope is required");
+    const client = options.client ?? this.prisma;
+    if (options.maxRows !== undefined && (!Number.isSafeInteger(options.maxRows) || options.maxRows < 1 || options.maxRows > 10_000)) {
+      throw new BadRequestException("Invalid summary row budget");
+    }
     // Optional from/to (Asia/Bangkok, inclusive): the same latestMessageAt bucketing as month mode.
     const customRange = dateRange ? resolveChatDateRange(dateRange.from, dateRange.to) : null;
     if (dateRange && (month !== undefined || !customRange)) {
@@ -1589,7 +1604,7 @@ export class ConversationsService {
       archivedAt: null,
       ...(accessibleStoreIds === null ? {} : { id: { in: accessibleStoreIds } }),
     };
-    const stores = await this.prisma.store.findMany({
+    const stores = await client.store.findMany({
       where: storeScope,
       orderBy: { name: "asc" },
       select: {
@@ -1600,24 +1615,28 @@ export class ConversationsService {
       },
     });
 
-    const resetFilter = await this.operations.getOperationalConversationFilter();
+    const resetFilter = await this.operations.getOperationalConversationFilter(client);
     const monthRange = customRange ?? resolveChatMonthRange(month);
     const enforceReplyStatusCoverage = month !== undefined || customRange !== null;
 
-    const summaryRows = await this.prisma.conversation.findMany({
+    const fetchedRows = await client.conversation.findMany({
       where: {
         store: storeScope,
         lineOfficialAccount: { accountType: "STORE" },
         ...(resetFilter as Prisma.ConversationWhereInput),
         latestMessageAt: monthRange ?? undefined,
       },
+      take: options.maxRows === undefined ? undefined : options.maxRows + 1,
       select: {
         storeId: true,
         latestMessageAt: true,
         bmReplyStatus: true,
-        replyStateProjection: { select: { state: true } },
+        replyStateProjection: { select: { state: true, computedAt: true, updatedAt: true, resolverVersion: true } },
+        lineOfficialAccount: { select: { storeId: true, accountType: true, isActive: true, archivedAt: true } },
       },
     });
+    const rowBudgetExceeded = options.maxRows !== undefined && fetchedRows.length > options.maxRows;
+    const summaryRows = rowBudgetExceeded ? fetchedRows.slice(0, options.maxRows) : fetchedRows;
 
     const overview = {
       total: summaryRows.length,
@@ -1630,6 +1649,25 @@ export class ConversationsService {
     for (const store of stores) {
       storeMap.set(store.id, { total: 0, notReplied: 0, notifiedBm: 0, replied: 0 });
     }
+
+    const coveredRows = enforceReplyStatusCoverage
+      ? summaryRows.filter((item) => isChatReplyStatusCovered(item.latestMessageAt))
+      : summaryRows;
+    const dataQuality = {
+      sourceConversationCount: summaryRows.length,
+      rowBudgetExceeded,
+      unmappedStoreConversationCount: summaryRows.filter((item) => !item.storeId || !storeMap.has(item.storeId)).length,
+      lineOaStoreIdentityMismatchCount: summaryRows.filter((item) => !item.lineOfficialAccount ||
+        item.lineOfficialAccount.accountType !== "STORE" || item.lineOfficialAccount.storeId !== item.storeId).length,
+      inactiveLineOaConversationCount: summaryRows.filter((item) => !item.lineOfficialAccount?.isActive ||
+        item.lineOfficialAccount.archivedAt !== null).length,
+      replyProjectionConversationCount: coveredRows.length,
+      replyProjectionMissingCount: coveredRows.filter((item) => !item.replyStateProjection).length,
+      replyProjectionStaleCount: coveredRows.filter((item) => Boolean(
+        item.latestMessageAt && item.replyStateProjection && item.replyStateProjection.computedAt < item.latestMessageAt,
+      )).length,
+      replyProjectionUnknownVersionCount: coveredRows.filter((item) => item.replyStateProjection?.resolverVersion !== "reply-state-v1").length,
+    };
 
     const now = Date.now();
     const oldestMap = new Map<string, number>();
@@ -1719,6 +1757,7 @@ export class ConversationsService {
     return {
       overview,
       stores: storesList,
+      dataQuality,
     };
   }
 }
