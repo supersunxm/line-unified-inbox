@@ -26,7 +26,7 @@ test("real PostgreSQL execution uses the existing summary in a read-only snapsho
   const storeId = randomUUID();
   const storeCode = `S54${suffix.slice(0, 8)}`;
   const owner = `U${suffix.replace(/-/gu, "").slice(0, 32)}`;
-  const oaIds = [randomUUID(), randomUUID()];
+  const oaIds = [randomUUID()];
   const now = new Date();
   const month = bangkokMonth(now);
   const [year, monthNumber] = month.split("-").map(Number);

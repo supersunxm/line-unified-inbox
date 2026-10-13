@@ -24,6 +24,11 @@ store. It then calls the existing
 transaction client. The existing monthly counting logic remains authoritative.
 The query is capped at 10,000 source conversations and runs with a five-second
 PostgreSQL statement timeout and a seven-second transaction timeout.
+The existing migration enforces at most one active, non-archived `STORE` OA
+per store; inactive or archived rows may remain. The adapter checks every
+active Store OA returned for the explicit scope. Tests cover multiple accounts
+across a multi-store scope and defensive multiple-OA input shapes without
+changing that production invariant.
 
 The adapter checks that the returned unique store IDs exactly match the
 authorized scope, source conversation counts reconcile to store totals, the
@@ -54,8 +59,9 @@ progress is therefore an as-of snapshot, not a final month close.
 
 All execution failures are redacted reason codes. The adapter has no LINE
 Messaging API or generative AI dependency, persists no metrics or result, and
-does not update BM reply states. The existing webhook flag remains
-`SUNN_SECRETARY_WEBHOOK_ENABLED=false`; no automatic execution or outbound
-delivery loop is introduced. A later phase must separately design durable
+does not update BM reply states. This change does not alter runtime
+configuration; keep `SUNN_SECRETARY_WEBHOOK_ENABLED=false`. The code only
+permits execution when the flag is explicitly true, and no automatic execution
+or outbound delivery loop is introduced. A later phase must separately design durable
 result recording and delivery behavior before connecting this adapter to
 receipt recovery.
