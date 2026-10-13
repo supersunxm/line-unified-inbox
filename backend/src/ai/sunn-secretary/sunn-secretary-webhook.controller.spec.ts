@@ -13,7 +13,8 @@ test("inbound HTTP boundary validates raw bytes and destination before persisten
   let reads = 0;
   let accepted = 0;
   let fail = false;
-  const credentials = { inboundIdentity: async () => { reads++; return { botUserId: bot, channelSecret: "test-secret" }; } } as unknown as SunnSecretaryCredentialsService;
+  let failIdentity = false;
+  const credentials = { inboundIdentity: async () => { reads++; if (failIdentity) throw new Error("private database connection diagnostic"); return { botUserId: bot, channelSecret: "test-secret" }; } } as unknown as SunnSecretaryCredentialsService;
   const inbound = { accept: async () => { if (fail) throw new Error("private SQL detail"); accepted++; } } as unknown as SunnSecretaryInboundService;
   const controller = new SunnSecretaryWebhookController(credentials, inbound);
   const req = (rawBody: Buffer) => ({ rawBody }) as Parameters<typeof controller.receive>[0];
@@ -46,6 +47,11 @@ test("inbound HTTP boundary validates raw bytes and destination before persisten
       const before = reads;
       await assert.rejects(controller.receive(req(Buffer.alloc(128 * 1024 + 1)), "invalid"), /too large/u);
       assert.equal(reads, before);
+    });
+    await t.test("credential lookup failures are redacted before Nest exception logging", async () => {
+      failIdentity = true;
+      await assert.rejects(controller.receive(req(body), sign(body)), { message: "Secretary identity unavailable" });
+      failIdentity = false;
     });
     assert.equal(accepted, 1);
     await t.test("persistence failures are retryable and redacted", async () => {

@@ -16,7 +16,10 @@ export class SunnSecretaryWebhookController {
   async receive(@Req() request: RawBodyRequest<Request>, @Headers("x-line-signature") signature?: string): Promise<{ received: boolean }> {
     if (process.env.SUNN_SECRETARY_WEBHOOK_ENABLED !== "true") throw new NotFoundException("Secretary webhook disabled");
     if (request.rawBody && request.rawBody.length > 128 * 1024) throw new PayloadTooLargeException("LINE payload too large");
-    const { botUserId, channelSecret } = await this.credentials.inboundIdentity();
+    let identity: { botUserId: string; channelSecret: string };
+    try { identity = await this.credentials.inboundIdentity(); }
+    catch { throw new ServiceUnavailableException("Secretary identity unavailable"); }
+    const { botUserId, channelSecret } = identity;
     if (!verifySunnLineSignature(request.rawBody, signature, channelSecret)) throw new UnauthorizedException("Invalid LINE signature");
     let payload: unknown;
     try { payload = JSON.parse(request.rawBody!.toString("utf8")); }
