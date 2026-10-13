@@ -58,7 +58,7 @@ INSERT INTO "AppRelease" (
     false,
     'https://lineoppo.click/downloads/oppo-line-oa-chat-v1.0.5-production.apk',
     '56.9 MB',
-    'a59f8903b9f7ad5f39173612017054f30dc00cdeafb2525e970fbe4495001bd8',
+    'da00c1a50ef111cbf290ca2783575aaaa5d8c2088f0422a765d4b6219d8afc2f',
     ARRAY[
         'Interested → Purchased conversion workflow',
         'Customer Sales CRM improvement',
@@ -66,91 +66,8 @@ INSERT INTO "AppRelease" (
         'CRM confirmation flow',
         'In-app update check'
     ]::TEXT[],
-    false,
-    0,
-    CURRENT_TIMESTAMP,
-    CURRENT_TIMESTAMP
-) ON CONFLICT DO NOTHING;
-
-INSERT INTO "AppRelease" (
-    "id",
-    "platform",
-    "version",
-    "buildNumber",
-    "minimumSupportedVersion",
-    "minimumSupportedBuildNumber",
-    "forceUpdate",
-    "apkUrl",
-    "apkSize",
-    "sha256",
-    "releaseNotes",
-    "isActive",
-    "downloadCount",
-    "createdAt",
-    "updatedAt"
-) VALUES (
-    'app-release-android-1-0-6-7',
-    'ANDROID',
-    '1.0.6',
-    7,
-    '1.0.3',
-    4,
-    false,
-    'https://lineoppo.click/downloads/oppo-line-oa-chat-v1.0.6-production.apk',
-    '56.9 MB',
-    'fbdebd187c41107973f9dc5de8d72050719a9bdff7ee82ff2fe2d5c9df36d819',
-    ARRAY[
-        'Product Selection UX improvement',
-        'Draft Selection Flow (Select → Configure → Confirm → Save)',
-        'Prevent accidental product tagging',
-        'Improved CRM tagging accuracy',
-        'Multi-product customer sales tagging support'
-    ]::text[],
-    false,
-    0,
-    CURRENT_TIMESTAMP,
-    CURRENT_TIMESTAMP
-) ON CONFLICT DO NOTHING;
-
-INSERT INTO "AppRelease" (
-    "id",
-    "platform",
-    "version",
-    "buildNumber",
-    "minimumSupportedVersion",
-    "minimumSupportedBuildNumber",
-    "forceUpdate",
-    "apkUrl",
-    "apkSize",
-    "sha256",
-    "releaseNotes",
-    "isActive",
-    "downloadCount",
-    "createdAt",
-    "updatedAt"
-) VALUES (
-    'app-release-android-1-0-7-8',
-    'ANDROID',
-    '1.0.7',
-    8,
-    '1.0.3',
-    4,
-    false,
-    'https://lineoppo.click/downloads/oppo-line-oa-chat-v1.0.7-production.apk',
-    '56.9 MB',
-    '3458e9b78e1231cf16165e5fee20c69653bde4f8227e9d58f964e0352f7b2c19',
-    ARRAY[
-        'Improved product tagging flow',
-        'Draft Selection Flow (Select → Configure → Confirm → Save)',
-        'Fixed product persistence issue after confirmation',
-        'Improved product name display and overflow handling',
-        'Improved CRM accuracy for multi-product tagging'
-    ]::text[],
     true,
     0,
     CURRENT_TIMESTAMP,
     CURRENT_TIMESTAMP
 ) ON CONFLICT DO NOTHING;
-
--- Deactivate previous releases so only v1.0.7 is active
-UPDATE "AppRelease" SET "isActive" = false WHERE "platform" = 'ANDROID' AND "buildNumber" < 8;
