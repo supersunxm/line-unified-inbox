@@ -1,6 +1,7 @@
 # Live Mirror PR1 — Preserve distinct exact message identities during dedupe (P0)
 
 2026-10-13. **Identity collision fixed in code; production remains unverified.**
+Delivery: [draft PR #548](https://github.com/supersunxm/line-unified-inbox/pull/548). Validated code commit: `e7c6c43fd400cf0e465e3dfff814a0f39843c934`.
 This is original PR1 of the approved seven-PR Root Cause and Remediation Report (§G), not a new numbering of that plan. No dependency on PR545, PR2 or PR3 is required for this core fix. No other remediation PR is implemented here.
 
 ## Evidence and root cause
@@ -65,7 +66,7 @@ The four Store19704 pairs retain AUTO_RESPONSE source tagging and still preserve
 |Full backend suite vs unchanged-main baseline|Changed: 2726 tests, 2695 pass, 18 fail, 13 skip. Baseline: 2698 tests, 2668 pass, same 18 fail, 12 skip. No new failure identities. Extra skipped test is the database regression without its dedicated URL; it separately passed with that URL.|
 |Full TypeScript including existing specs|295 baseline errors, 295 after; no added normalized diagnostics|
 |Full backend lint|893 baseline errors + 2 warnings, unchanged; changed scope passes|
-|Hosted CI|See PR checks. Local validation does not replace hosted CI. No manual workflow dispatch.|
+|Hosted CI|**BLOCKED** on validated code commit: Application CI run38353945146 and Artifact Retention run38353944965. Backend, Frontend, CI Gate and retention jobs have zero steps; all annotate failed account payments or spending-limit restriction. No test code executed. Local validation does not replace hosted CI. No manual workflow dispatch.|
 
 Baseline failures remain outside PR1: missing Jest describe/Vitest dependencies; conversation summary mocks/date assumptions; weekly-collector credential-resolution precedence; health-state/queue mocks; sales-sync eligibility expectation; nickname DI ownership tests; worker Docker archive assertion; store-priority business summary mocks; two Vision expectations; TikTok viewer authorization expectation. Exact failure identities were compared, not only totals. Full repository checks are not green. Prisma package.json deprecation and npm allow-scripts warnings were retained and inspected; no lint rules, tests or warnings were suppressed.
 
