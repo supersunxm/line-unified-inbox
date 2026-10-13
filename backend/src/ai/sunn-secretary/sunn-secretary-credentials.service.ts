@@ -43,6 +43,23 @@ export class SunnSecretaryCredentialsService {
     }
   }
 
+  /** Inbound-only access: never return or decrypt the messaging access token. */
+  async inboundIdentity(): Promise<{ botUserId: string; channelSecret: string }> {
+    const record = await this.prisma.lineOfficialAccount.findUnique({ where: { id: SECRETARY_CREDENTIAL_RECORD_ID } });
+    this.assertRecord(record);
+    if (record) {
+      if (!record.lastConnectionTestAt || record.lastConnectionError || !record.destinationId || !record.encryptedChannelSecret) {
+        throw new ServiceUnavailableException("Secretary identity is not validated");
+      }
+      try { return { botUserId: record.destinationId, channelSecret: this.encryption.decrypt(record.encryptedChannelSecret) }; }
+      catch { throw new ServiceUnavailableException("Secretary credentials cannot be read securely"); }
+    }
+    const botUserId = process.env.SUNN_SECRETARY_BOT_USER_ID;
+    const channelSecret = process.env.SUNN_SECRETARY_CHANNEL_SECRET;
+    if (!botUserId || !/^U[0-9a-f]{32}$/iu.test(botUserId) || !channelSecret) throw new ServiceUnavailableException("Secretary identity unavailable");
+    return { botUserId, channelSecret };
+  }
+
   async status() {
     const record = await this.prisma.lineOfficialAccount.findUnique({ where: { id: SECRETARY_CREDENTIAL_RECORD_ID } });
     this.assertRecord(record);

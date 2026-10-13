@@ -60,7 +60,7 @@ jobs:
           SECRETARY_SETTINGS_TEST_DATABASE_URL: ${{ env.DATABASE_URL }}
           SUNN_SECRETARY_WEBHOOK_ENABLED: "false"
         run: |
-          npx eslint src/ai/sunn-secretary/sunn-secretary-credentials*.ts src/ai/sunn-secretary/sunn-secretary-owner-settings.ts src/ai/sunn-secretary/sunn-secretary-owner-settings.controller.ts src/ai/sunn-secretary/sunn-secretary.module.ts src/line-official-accounts/line-official-accounts.service.ts
+          npx eslint src/ai/sunn-secretary/sunn-secretary-inbound*.ts src/ai/sunn-secretary/sunn-secretary-webhook.controller*.ts src/ai/sunn-secretary/sunn-secretary-event-receipt*.ts src/ai/sunn-secretary/sunn-secretary-credentials*.ts src/ai/sunn-secretary/sunn-secretary-owner-settings.ts src/ai/sunn-secretary/sunn-secretary-owner-settings.controller.ts src/ai/sunn-secretary/sunn-secretary.module.ts src/line-official-accounts/line-official-accounts.service.ts
           npx tsx --test src/ai/sunn-secretary/*.spec.ts
 
       - name: Lint regression scope

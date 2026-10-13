@@ -4,6 +4,9 @@ import { randomBytes } from "node:crypto";
 import test from "node:test";
 import { Prisma, WebhookProcessingStatus } from "@prisma/client";
 import { sunnReceiptKey, SunnSecretaryEventReceiptService } from "./sunn-secretary-event-receipt";
+import { SunnSecretaryInboundService, SunnSecretaryCommandPreparation } from "./sunn-secretary-inbound.service";
+import { SunnSecretaryCredentialsService } from "./sunn-secretary-credentials.service";
+import { classifySunnInbound, SUNN_INBOUND_PREFIX, type InboundPlan } from "./sunn-secretary-inbound";
 import { PrismaService } from "../../prisma.service";
 
 const bot = "U" + "a".repeat(32);
@@ -222,6 +225,65 @@ test("real PostgreSQL uniqueness safely serializes concurrent Sunn receipt reser
       ].sort(),
     );
     assert.equal(await firstClient.webhookEvent.count({ where: { processingStatus: WebhookProcessingStatus.RECEIVED } }), 0);
+    // Independent PostgreSQL connections exercise actual CAS, not mock scheduling.
+    const envKeys = ["SUNN_SECRETARY_WEBHOOK_ENABLED", "SUNN_SECRETARY_ALLOWED_USER_IDS", "SUNN_SECRETARY_STORE_SCOPE_BY_USER"] as const;
+    const saved = Object.fromEntries(envKeys.map(key => [key, process.env[key]]));
+    const owner = "U" + "c".repeat(32);
+    const event = (id: string) => ({ type: "message", webhookEventId: id, timestamp: Date.now(), source: { type: "group", groupId: "C" + "d".repeat(32), userId: owner }, message: { type: "text", text: "@เลขาซันน์ เดือนตุลาคม ปี 2026 LINE OA ไหนยังค้างตอบลูกค้า", mention: { mentionees: [{ type: "user", userId: bot }] } }, replyToken: "never-persist-this-token" });
+    const credentials = { inboundIdentity: async () => ({ botUserId: bot, channelSecret: "unused" }) } as unknown as SunnSecretaryCredentialsService;
+    let preparations = 0;
+    const actual = new SunnSecretaryCommandPreparation();
+    const preparation: SunnSecretaryCommandPreparation = { prepare: (plan: InboundPlan) => { preparations++; return actual.prepare(plan); } };
+    const worker = (db: PrismaService, prep = preparation) => new SunnSecretaryInboundService(db, new SunnSecretaryEventReceiptService(db), credentials, prep);
+    const one = worker(firstClient), two = worker(secondClient);
+    const state = (id: string) => firstClient!.webhookEvent.findUniqueOrThrow({ where: { externalWebhookEventId: sunnReceiptKey(bot, id) } });
+    const expire = (id: string) => secondClient!.webhookEvent.update({ where: { externalWebhookEventId: sunnReceiptKey(bot, id) }, data: { updatedAt: new Date(Date.now() - 60_000) } });
+    try {
+      process.env.SUNN_SECRETARY_WEBHOOK_ENABLED = "true";
+      process.env.SUNN_SECRETARY_ALLOWED_USER_IDS = owner;
+      process.env.SUNN_SECRETARY_STORE_SCOPE_BY_USER = JSON.stringify({ [owner]: ["11111111-1111-4111-8111-111111111111"] });
+      await Promise.all([one.accept(bot, [event("inbound-race")]), two.accept(bot, [event("inbound-race")])]);
+      assert.equal(await firstClient.webhookEvent.count({ where: { externalWebhookEventId: sunnReceiptKey(bot, "inbound-race") } }), 1);
+      await Promise.all([one.recoverAndPrepare(), two.recoverAndPrepare()]);
+      assert.equal(preparations, 1, "concurrent workers own one preparation lease");
+      assert.equal((await state("inbound-race")).eventType, SUNN_INBOUND_PREFIX + "PREPARED");
+      await one.accept(bot, [event("inbound-race")]); await two.recoverAndPrepare();
+      assert.equal(preparations, 1, "duplicate must not reset terminal work");
+      const persisted = JSON.stringify(await state("inbound-race"));
+      for (const secret of ["never-persist-this-token", owner, "ค้างตอบ"]) assert.ok(!persisted.includes(secret));
+      await one.accept(bot, [event("restart-received")]); await worker(secondClient).recoverAndPrepare();
+      assert.equal((await state("restart-received")).eventType, SUNN_INBOUND_PREFIX + "PREPARED");
+      await one.accept(bot, [event("restart-processing")]);
+      const plan = JSON.parse((await state("restart-processing")).errorMessage!) as InboundPlan;
+      await firstClient.webhookEvent.update({ where: { externalWebhookEventId: sunnReceiptKey(bot, "restart-processing") }, data: { eventType: SUNN_INBOUND_PREFIX + "PROCESSING", errorMessage: JSON.stringify({ ...plan, attempts: 1, lease: "11111111-1111-4111-8111-111111111111" }) } });
+      const before = preparations;
+      await two.recoverAndPrepare(); assert.equal(preparations, before, "active lease cannot be stolen");
+      await expire("restart-processing"); await worker(secondClient).recoverAndPrepare();
+      assert.equal((await state("restart-processing")).eventType, SUNN_INBOUND_PREFIX + "PREPARED");
+      await one.accept(bot, [event("revoked")]); process.env.SUNN_SECRETARY_ALLOWED_USER_IDS = "";
+      await two.recoverAndPrepare(); assert.equal((await state("revoked")).eventType, SUNN_INBOUND_PREFIX + "UNAUTHORIZED");
+      process.env.SUNN_SECRETARY_ALLOWED_USER_IDS = owner;
+      process.env.SUNN_SECRETARY_STORE_SCOPE_BY_USER = "{}";
+      await one.accept(bot, [event("no-scope")]); await two.recoverAndPrepare();
+      assert.equal((await state("no-scope")).eventType, SUNN_INBOUND_PREFIX + "BLOCKED_SCOPE");
+      const fail = { prepare: () => { throw new Error("sensitive-private-error"); } } as unknown as SunnSecretaryCommandPreparation;
+      await one.accept(bot, [event("bounded-failure")]);
+      for (let attempt = 0; attempt < 3; attempt++) { await expire("bounded-failure"); await worker(secondClient, fail).recoverAndPrepare(); }
+      const failed = await state("bounded-failure");
+      assert.equal(failed.eventType, SUNN_INBOUND_PREFIX + "FAILED_FINAL");
+      assert.equal((JSON.parse(failed.errorMessage!) as InboundPlan).attempts, 3);
+      assert.ok(!failed.errorMessage!.includes("sensitive"));
+      const otherPlan = classifySunnInbound(event("other-bot"), bot, [owner], new Date()).plan;
+      await secondReceipts.reserveInbound(secondBot, "other-bot", otherPlan); await one.recoverAndPrepare();
+      assert.equal((await firstClient.webhookEvent.findUniqueOrThrow({ where: { externalWebhookEventId: sunnReceiptKey(secondBot, "other-bot") } })).eventType, SUNN_INBOUND_PREFIX + "RECEIVED");
+      const count = await firstClient.webhookEvent.count(); process.env.SUNN_SECRETARY_WEBHOOK_ENABLED = "false";
+      await one.accept(bot, [event("disabled-write")]); await one.recoverAndPrepare();
+      assert.equal(await firstClient.webhookEvent.count(), count);
+      assert.equal(await firstClient.webhookEvent.count({ where: { processingStatus: WebhookProcessingStatus.RECEIVED } }), 0, "storefront workers cannot claim assistant work");
+    } finally {
+      for (const key of envKeys) { if (saved[key] === undefined) delete process.env[key]; else process.env[key] = saved[key]; }
+    }
+
   } finally {
     await Promise.all([firstClient?.$disconnect(), secondClient?.$disconnect()]);
     if (databaseCreated) {
