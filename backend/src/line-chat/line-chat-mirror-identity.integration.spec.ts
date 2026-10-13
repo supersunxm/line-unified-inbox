@@ -18,6 +18,7 @@ test("PostgreSQL: seven exact identity pairs, unique-key races and restart repla
   const store = await db.store.create({ data: { name: "Identity regression", code: prefix } });
   const oa = await db.lineOfficialAccount.create({ data: { name: "Identity regression", storeId: store.id, webhookKey: prefix } });
   const conversationIds: string[] = [];
+  let conflictingStoreId: string | null = null;
   const service = () => new LineChatMirrorReconcilerService(db as unknown as PrismaService);
   const reconcile = (worker: LineChatMirrorReconcilerService) => (worker as unknown as {
     reconcileStore: (code: string, since: Date, apply: boolean, batch: number) => Promise<LineChatMirrorReconcileCycleResult>;
@@ -58,6 +59,27 @@ test("PostgreSQL: seven exact identity pairs, unique-key races and restart repla
     assert.equal(await db.message.count({ where: { conversationId: { in: conversationIds } } }), 14);
 
 
+
+    // A persisted OA/chat mapping is not proof of the Store attribution when
+    // the Conversation's Store conflicts with the OA's owning Store.
+    const foreign = await db.store.create({ data: { name: "Sanitized conflicting Store", code: `${prefix}-foreign` } });
+    conflictingStoreId = foreign.id;
+    const conflictingChat = `U${"8".padStart(32, "0")}`;
+    const wrongConversation = await db.conversation.create({ data: { customerId: customer.id,
+      storeId: foreign.id, lineOfficialAccountId: oa.id, lineChatUserId: conflictingChat, latestMessageAt: new Date() } });
+    conversationIds.push(wrongConversation.id);
+    const conflictingRaw = await db.lineChatMirrorMessage.create({ data: { lineOfficialAccountId: oa.id,
+      lineChatUserId: conflictingChat, managerMessageId: `${prefix}-store-conflict`, eventType: "messageSent",
+      direction: "OUTBOUND", messageType: "text", text: "Sanitized scope conflict", sentAt: new Date() } });
+    const held = await reconcile(service());
+    assert.equal(held.importedOutbound, 0);
+    const heldRaw = await db.lineChatMirrorMessage.findUniqueOrThrow({ where: { id: conflictingRaw.id } });
+    assert.equal(heldRaw.reconcileStatus, "AMBIGUOUS");
+    assert.equal(heldRaw.reconcileError, "DIRECT_CONVERSATION_STORE_SCOPE_CONFLICT");
+    assert.equal(heldRaw.canonicalMessageId, null);
+    assert.equal(await db.message.count({ where: { conversationId: wrongConversation.id } }), 0);
+    await db.lineChatMirrorMessage.delete({ where: { id: conflictingRaw.id } });
+
     // Verify the real OA-scoped JSON alias lookup, not only its unit-test mock.
     const aliasId = `${prefix}-provider-alias`;
     const application = await db.message.create({ data: { conversationId: conversationIds[0],
@@ -95,6 +117,7 @@ test("PostgreSQL: seven exact identity pairs, unique-key races and restart repla
     await db.conversation.deleteMany({ where: { id: { in: conversationIds } } });
     await db.lineOfficialAccount.delete({ where: { id: oa.id } });
     await db.store.delete({ where: { id: store.id } });
+    if (conflictingStoreId) await db.store.delete({ where: { id: conflictingStoreId } });
     await db.customer.delete({ where: { id: customer.id } });
     await db.$disconnect();
   }

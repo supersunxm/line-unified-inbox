@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { Injectable } from "@nestjs/common";
 import { Prisma, StoreMasterDataQualityStatus } from "@prisma/client";
 import { PrismaService } from "../prisma.service";
@@ -6,6 +7,7 @@ import {
   isValidGoogleMapsUrl,
   isValidManagerUrl,
   isValidTikTokProfileUrl,
+  hasRequiredStoreMasterCsvHeaders,
   normalizeSearchText,
   parseStoreMasterCsv,
   regionFromProvince,
@@ -14,9 +16,44 @@ import {
 import { syncConnectedLineOaMetadata } from "./sync-connected-line-oa";
 import { getStoreGoogleMapsReadiness } from "./template-variable-resolver";
 import { StoreLifecycleService } from "./store-lifecycle.service";
+import {
+  assertStoreMasterCsvSnapshot,
+  createStoreMasterCsvSnapshot,
+  fetchStoreMasterCsvSnapshot,
+  type StoreMasterCsvSnapshot,
+} from "./store-master-source";
+import {
+  assertStoreMasterChangeSetApproved,
+  type StoreMasterApprovedChange,
+} from "./store-master-approval";
+import { acquireStoreMasterApplyLock } from "./store-master-transaction";
 
 type MasterRecord = Prisma.StoreMasterGetPayload<Record<string, never>>;
 type ParsedRows = ReturnType<typeof parseStoreMasterCsv>;
+type StoreMasterDbClient = Prisma.TransactionClient | PrismaService;
+
+function assertExpectedStoreMasterSourceHash(snapshot: StoreMasterCsvSnapshot, expectedSha256?: string): void {
+  if (!expectedSha256 || !/^[a-fA-F0-9]{64}$/u.test(expectedSha256)) {
+    throw new Error("--apply requires a valid --expected-sha256 fingerprint; no data was changed");
+  }
+  if (expectedSha256.toLocaleLowerCase() !== snapshot.sha256) {
+    throw new Error("Store Master source fingerprint does not match the approved snapshot; no data was changed");
+  }
+}
+
+function assertWellFormedExpectedStoreMasterHash(expectedSha256?: string): void {
+  if (!expectedSha256 || !/^[a-fA-F0-9]{64}$/u.test(expectedSha256)) {
+    throw new Error("--apply requires a valid --expected-sha256 fingerprint; no data was changed");
+  }
+}
+
+function assertExpectedStoreMasterTextHash(csv: string, expectedSha256?: string): void {
+  assertWellFormedExpectedStoreMasterHash(expectedSha256);
+  const actual = createHash("sha256").update(Buffer.from(csv, "utf8")).digest("hex");
+  if (expectedSha256?.toLocaleLowerCase() !== actual) {
+    throw new Error("Store Master source fingerprint does not match the approved snapshot; no data was changed");
+  }
+}
 
 type ImportAction = {
   kind: "CREATE" | "UPDATE" | "UNCHANGED";
@@ -118,10 +155,14 @@ export class StoreMasterService {
     return stable;
   }
 
-  async previewCsv(csv: string, source = "GOOGLE_SHEET") {
+  async previewCsv(csv: string, source = "GOOGLE_SHEET", client: StoreMasterDbClient = this.prisma) {
+    if (!hasRequiredStoreMasterCsvHeaders(csv)) {
+      throw new Error("Store Master source is missing or duplicates required headers; no data was changed");
+    }
     const parsed = parseStoreMasterCsv(csv);
+    if (parsed.length === 0) throw new Error("Store Master source is empty; no data was changed");
     this.assertUniqueStoreIds(parsed);
-    const existingMasters = await this.prisma.storeMaster.findMany({
+    const existingMasters = await client.storeMaster.findMany({
       where: { source },
       orderBy: { createdAt: "asc" },
     });
@@ -176,7 +217,7 @@ export class StoreMasterService {
     const closedStoreOperationalReview = [];
     for (const action of closedActions) {
       if (!action.existing) continue;
-      const stores = await this.prisma.store.findMany({
+      const stores = await client.store.findMany({
         where: { storeMasterId: action.existing.id },
         select: { id: true, code: true, name: true, isActive: true, archivedAt: true,
           lineOfficialAccounts: { where: { isActive: true, archivedAt: null }, select: { id: true } },
@@ -197,6 +238,10 @@ export class StoreMasterService {
         updates: actions.filter(({ kind }) => kind === "UPDATE").length,
         unchanged: actions.filter(({ kind }) => kind === "UNCHANGED").length,
         deactivations: actions.filter(({ existing, row }) => Boolean(existing?.isActive && !row.isActive)).length,
+        reopens: actions.filter(({ existing, row }) => Boolean(existing && !existing.isActive && row.isActive)).length,
+        lifecycleChanges: actions.filter(({ existing, row }) => Boolean(
+          row.externalStoreId && (row.isActive ? existing?.isActive === false : existing?.isActive !== false),
+        )).length,
         identityConflicts: identityConflicts.length,
         duplicateStoreIds: this.duplicateCount(parsed.map(({ externalStoreId }) => externalStoreId)),
         oldRowOverwriteRisks: oldRowOverwriteRisks.length,
@@ -205,73 +250,168 @@ export class StoreMasterService {
       identityConflicts,
       oldRowOverwriteRisks,
       closedStoreOperationalReview,
+      lifecycleReview: actions
+        .filter(({ existing, row }) => Boolean(
+          row.externalStoreId && (row.isActive ? existing?.isActive === false : existing?.isActive !== false),
+        ))
+        .map(({ existing, row }) => ({
+          externalStoreId: row.externalStoreId,
+          storeName: row.storeName,
+          sourceRowNumber: row.sourceRowNumber,
+          operation: row.isActive ? "REOPEN" as const : "CLOSE" as const,
+          previousStoreMasterActive: existing?.isActive ?? null,
+          nextStoreMasterActive: row.isActive,
+        })),
     };
   }
 
-  async importCsv(csv: string, source = "GOOGLE_SHEET") {
-    const preview = await this.previewCsv(csv, source);
-    if (preview.identityConflicts.length > 0) throw new Error(`Store Master identity conflicts: ${preview.identityConflicts.length}; no data was changed`);
-    await this.prisma.$transaction(async (tx) => {
-      for (const action of preview.actions) {
-        const wasActive = action.existing?.isActive;
-        let storeMasterId = action.existing?.id ?? null;
-        if (action.kind === "CREATE") {
-          storeMasterId = (await tx.storeMaster.create({ data: action.data })).id;
-        } else if (action.kind === "UPDATE") {
-          const updated = await tx.storeMaster.updateMany({
-            where: { id: action.existing?.id, externalStoreId: action.row.externalStoreId },
-            data: action.data,
-          });
-          if (updated.count !== 1) {
-            throw new Error(`Store Master identity changed during import for Store ID ${action.row.externalStoreId ?? "legacy"}; no data was changed`);
-          }
-        }
-        if (action.row.externalStoreId && !action.row.isActive) {
-          await this.lifecycle.closeStoreFromMaster(tx, {
-            storeMasterId,
-            externalStoreId: action.row.externalStoreId,
-          });
-        } else if (action.row.externalStoreId && action.existing && wasActive === false) {
-          await this.lifecycle.reopenStoreFromMaster(tx, {
-            storeMasterId,
-            externalStoreId: action.row.externalStoreId,
-          });
+  private async applyPreview(client: StoreMasterDbClient, preview: Awaited<ReturnType<StoreMasterService["previewCsv"]>>) {
+    for (const action of preview.actions) {
+      const wasActive = action.existing?.isActive;
+      let storeMasterId = action.existing?.id ?? null;
+      if (action.kind === "CREATE") {
+        storeMasterId = (await client.storeMaster.create({ data: action.data })).id;
+      } else if (action.kind === "UPDATE") {
+        const updated = await client.storeMaster.updateMany({
+          where: { id: action.existing?.id, externalStoreId: action.row.externalStoreId },
+          data: action.data,
+        });
+        if (updated.count !== 1) {
+          throw new Error(`Store Master identity changed during import for Store ID ${action.row.externalStoreId ?? "legacy"}; no data was changed`);
         }
       }
-    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 15000, timeout: 60000 });
-    return this.validate();
+      if (action.row.externalStoreId && !action.row.isActive && wasActive !== false) {
+        await this.lifecycle.closeStoreFromMaster(client, {
+          storeMasterId,
+          externalStoreId: action.row.externalStoreId,
+        });
+      } else if (action.row.externalStoreId && action.row.isActive && action.existing && wasActive === false) {
+        await this.lifecycle.reopenStoreFromMaster(client, {
+          storeMasterId,
+          externalStoreId: action.row.externalStoreId,
+        });
+      }
+    }
   }
 
-  private async configuredCsv(csvPath?: string) {
-    let csv: string;
+  async importCsv(csv: string, source?: string): Promise<Awaited<ReturnType<StoreMasterService["previewCsv"]>>>;
+  async importCsv(
+    csv: string,
+    source: string | undefined,
+    options: { apply?: false; expectedSha256?: string; approvedChangeSet?: readonly StoreMasterApprovedChange[] },
+  ): Promise<Awaited<ReturnType<StoreMasterService["previewCsv"]>>>;
+  async importCsv(
+    csv: string,
+    source: string | undefined,
+    options: { apply: true; expectedSha256: string; approvedChangeSet?: readonly StoreMasterApprovedChange[] },
+  ): Promise<Awaited<ReturnType<StoreMasterService["validate"]>>>;
+  async importCsv(
+    csv: string,
+    source = "GOOGLE_SHEET",
+    options?: {
+      apply?: boolean;
+      expectedSha256?: string;
+      approvedChangeSet?: readonly StoreMasterApprovedChange[];
+    },
+  ) {
+    if (!options?.apply) {
+      if (options?.expectedSha256 !== undefined || (options?.approvedChangeSet?.length ?? 0) > 0) {
+        throw new Error("Source approval options require apply; no data was changed");
+      }
+      return this.previewCsv(csv, source);
+    }
+    assertExpectedStoreMasterTextHash(csv, options.expectedSha256);
+    return this.applyCsv(csv, source, options.approvedChangeSet ?? []);
+  }
+
+  private async applyCsv(
+    csv: string,
+    source: string,
+    approvedChangeSet: readonly StoreMasterApprovedChange[],
+  ) {
+    return this.prisma.$transaction(async (tx) => {
+      await acquireStoreMasterApplyLock(tx);
+      const preview = await this.previewCsv(csv, source, tx);
+      if (preview.identityConflicts.length > 0) throw new Error(`Store Master identity conflicts: ${preview.identityConflicts.length}; no data was changed`);
+      const lifecycleChanges: StoreMasterApprovedChange[] = preview.lifecycleReview.flatMap((change) => {
+        if (!change.externalStoreId) return [];
+        return [{ kind: "STORE_LIFECYCLE", storeId: change.externalStoreId, action: change.operation }];
+      });
+      assertStoreMasterChangeSetApproved(lifecycleChanges, approvedChangeSet);
+      await this.applyPreview(tx, preview);
+      const validation = await this.validate(tx);
+      if (validation.duplicateExternalStoreIds > 0) {
+        throw new Error(`Store Master post-import validation found ${validation.duplicateExternalStoreIds} duplicate Store ID(s); no data was changed`);
+      }
+      return validation;
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 15000, timeout: 60000 });
+  }
+
+  private async configuredSnapshot(csvPath?: string): Promise<StoreMasterCsvSnapshot> {
     if (csvPath) {
       const { readFile } = await import("node:fs/promises");
-      csv = await readFile(csvPath, "utf8");
-    } else {
-      const configured = process.env.STORE_MASTER_GOOGLE_SHEET_URL?.trim();
-      if (!configured)
-        throw new Error("Set STORE_MASTER_GOOGLE_SHEET_URL or provide a CSV file path");
-      const match = configured.match(/\/spreadsheets\/d\/([^/]+)/u);
-      if (!match) throw new Error("Invalid Google Sheets URL");
-      const response = await fetch(
-        `https://docs.google.com/spreadsheets/d/${match[1]}/export?format=csv`
-      );
-      if (!response.ok) throw new Error(`Google Sheets export failed (${response.status})`);
-      csv = await response.text();
+      return createStoreMasterCsvSnapshot(await readFile(csvPath), "local-file");
     }
-    return csv;
+    const configured = process.env.STORE_MASTER_GOOGLE_SHEET_URL?.trim();
+    if (!configured) throw new Error("Set STORE_MASTER_GOOGLE_SHEET_URL or provide a CSV file path");
+    return fetchStoreMasterCsvSnapshot(configured);
   }
 
   async previewFromConfiguredSource(csvPath?: string) {
-    return this.previewCsv(await this.configuredCsv(csvPath));
+    const snapshot = await this.configuredSnapshot(csvPath);
+    return {
+      mode: "PREVIEW" as const,
+      source: { sourceUrl: snapshot.sourceUrl, fetchedAt: snapshot.fetchedAt, sha256: snapshot.sha256 },
+      ...(await this.previewCsv(snapshot.csv)),
+    };
   }
 
-  async importFromConfiguredSource(csvPath?: string) {
-    return this.importCsv(await this.configuredCsv(csvPath));
+  async importFromConfiguredSource(
+    csvPath?: string,
+    options: { apply?: boolean; expectedSha256?: string; approvedChangeSet?: readonly StoreMasterApprovedChange[] } = {},
+  ) {
+    if (!options.apply && (options.expectedSha256 !== undefined || (options.approvedChangeSet?.length ?? 0) > 0)) {
+      throw new Error("Source approval options require --apply; no data was changed");
+    }
+    if (options.apply) assertWellFormedExpectedStoreMasterHash(options.expectedSha256);
+    const snapshot = await this.configuredSnapshot(csvPath);
+    assertStoreMasterCsvSnapshot(snapshot);
+    if (!hasRequiredStoreMasterCsvHeaders(snapshot.csv)) {
+      throw new Error("Store Master source is missing or duplicates required headers; no data was changed");
+    }
+    if (parseStoreMasterCsv(snapshot.csv).length === 0) {
+      throw new Error("Store Master source is empty; no data was changed");
+    }
+    if (!options.apply) {
+      const preview = await this.previewCsv(snapshot.csv);
+      return {
+        mode: "PREVIEW" as const,
+        source: { sourceUrl: snapshot.sourceUrl, fetchedAt: snapshot.fetchedAt, sha256: snapshot.sha256 },
+        ...preview,
+      };
+    }
+    assertExpectedStoreMasterSourceHash(snapshot, options.expectedSha256);
+    return this.applyCsv(snapshot.csv, "GOOGLE_SHEET", options.approvedChangeSet ?? []);
   }
 
-  async syncFromGoogleSheet() {
-    const csv = await this.configuredCsv();
+  async syncFromGoogleSheet(
+    snapshot?: StoreMasterCsvSnapshot,
+    options: {
+      apply?: boolean;
+      expectedSha256?: string;
+      approvedChangeSet?: readonly StoreMasterApprovedChange[];
+    } = {},
+  ) {
+    if (!options.apply && (options.expectedSha256 !== undefined || (options.approvedChangeSet?.length ?? 0) > 0)) {
+      throw new Error("Source approval options require apply; no data was changed");
+    }
+    if (options.apply) assertWellFormedExpectedStoreMasterHash(options.expectedSha256);
+    const sourceSnapshot = snapshot ?? await fetchStoreMasterCsvSnapshot();
+    assertStoreMasterCsvSnapshot(sourceSnapshot);
+    const csv = sourceSnapshot.csv;
+    if (!hasRequiredStoreMasterCsvHeaders(csv)) {
+      throw new Error("Google Sheet source is missing or duplicates required Store Master headers; no data was changed");
+    }
     const parsed = parseStoreMasterCsv(csv);
     const validation = this.validationForRows(parsed);
     if (validation.total === 0)
@@ -284,22 +424,93 @@ export class StoreMasterService {
       throw new Error(
         `Google Sheet validation failed: ${validation.invalidManagerUrls} invalid manager URL(s); no data was changed`
       );
-    const preview = await this.previewCsv(csv, "GOOGLE_SHEET");
-    if (preview.identityConflicts.length > 0) throw new Error(`Store Master identity conflicts: ${preview.identityConflicts.length}; no data was changed`);
-    const imported = await this.importCsv(csv, "GOOGLE_SHEET");
-    const connectedOaSync = await syncConnectedLineOaMetadata(this.prisma, false);
+    if (!options.apply) {
+      const preview = await this.previewCsv(csv);
+      return {
+        mode: "PREVIEW" as const,
+        applied: false,
+        source: {
+          type: "GOOGLE_SHEET",
+          sheetName: process.env.STORE_MASTER_GOOGLE_SHEET_TAB?.trim() || "LINE OA",
+          fetchedAt: sourceSnapshot.fetchedAt,
+          rows: parsed.length,
+          sha256: sourceSnapshot.sha256,
+        },
+        validation,
+        preview: preview.summary,
+        lifecycleReview: preview.lifecycleReview,
+        oldRowOverwriteRisks: preview.oldRowOverwriteRisks,
+        closedStoreOperationalReview: preview.closedStoreOperationalReview,
+      };
+    }
+    assertExpectedStoreMasterSourceHash(sourceSnapshot, options.expectedSha256);
+    const syncResult = await this.prisma.$transaction(async (tx) => {
+      await acquireStoreMasterApplyLock(tx);
+      const preview = await this.previewCsv(csv, "GOOGLE_SHEET", tx);
+      if (preview.identityConflicts.length > 0) {
+        throw new Error(`Store Master identity conflicts: ${preview.identityConflicts.length}; no data was changed`);
+      }
+      await this.applyPreview(tx, preview);
+      const connectedOaPlan = await syncConnectedLineOaMetadata(tx, true);
+      const lifecycleChanges: StoreMasterApprovedChange[] = preview.lifecycleReview.flatMap((change) => {
+        if (!change.externalStoreId) return [];
+        return [{ kind: "STORE_LIFECYCLE", storeId: change.externalStoreId, action: change.operation }];
+      });
+      assertStoreMasterChangeSetApproved(
+        [...lifecycleChanges, ...connectedOaPlan.changeSet],
+        options.approvedChangeSet ?? [],
+      );
+      const connectedOaSync = await syncConnectedLineOaMetadata(tx, false, connectedOaPlan.changeSet);
+      if (connectedOaSync.identityConflict > 0 || connectedOaSync.storeIdConflicts > 0 || connectedOaSync.failed > 0) {
+        throw new Error(
+          `Connected LINE OA reconciliation blocked (identity conflicts: ${connectedOaSync.identityConflict}, Store ID conflicts: ${connectedOaSync.storeIdConflicts}, failed records: ${connectedOaSync.failed}); no data was changed`,
+        );
+      }
+      const linkedStores = await tx.store.findMany({
+        where: { archivedAt: null, isActive: true, storeMasterId: { not: null } },
+        select: {
+          code: true,
+          name: true,
+          region: true,
+          area: true,
+          storeMaster: { select: { externalStoreId: true, storeName: true, region: true, province: true } },
+        },
+      });
+      const mismatchCount = linkedStores.filter((store) => {
+        const master = store.storeMaster;
+        if (!master?.externalStoreId) return false;
+        return (
+          store.code?.trim() !== master.externalStoreId.trim() ||
+          store.name !== master.storeName ||
+          store.region !== master.region ||
+          store.area !== master.province
+        );
+      }).length;
+      if (mismatchCount > 0) {
+        throw new Error(`Post-sync Store ID verification failed for ${mismatchCount} linked store(s); no data was changed`);
+      }
+      const imported = await this.validate(tx);
+      if (imported.duplicateExternalStoreIds > 0) {
+        throw new Error(`Store Master post-sync validation found ${imported.duplicateExternalStoreIds} duplicate Store ID(s); no data was changed`);
+      }
+      return { preview, imported, connectedOaSync };
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 15000, timeout: 120000 });
     return {
+      mode: "APPLIED" as const,
+      applied: true,
       source: {
         type: "GOOGLE_SHEET",
         sheetName: process.env.STORE_MASTER_GOOGLE_SHEET_TAB?.trim() || "LINE OA",
-        fetchedAt: new Date().toISOString(),
+        fetchedAt: sourceSnapshot.fetchedAt,
         rows: parsed.length,
+        sha256: sourceSnapshot.sha256,
       },
       validation,
-      import: { validation: imported, failed: 0 },
-      preview: preview.summary,
-      closedStoreOperationalReview: preview.closedStoreOperationalReview,
-      connectedOaSync,
+      import: { validation: syncResult.imported, failed: 0 },
+      preview: syncResult.preview.summary,
+      oldRowOverwriteRisks: syncResult.preview.oldRowOverwriteRisks,
+      closedStoreOperationalReview: syncResult.preview.closedStoreOperationalReview,
+      connectedOaSync: syncResult.connectedOaSync,
     };
   }
 
@@ -423,8 +634,8 @@ export class StoreMasterService {
       .slice(0, Math.min(Math.max(limit, 1), 50));
   }
 
-  async validate() {
-    const items = await this.prisma.storeMaster.findMany({ where: { isActive: true } });
+  async validate(client: StoreMasterDbClient = this.prisma) {
+    const items = await client.storeMaster.findMany({ where: { isActive: true } });
     const duplicate = (values: Array<string | null>) => this.duplicateCount(values);
     const byStatus = (status: StoreMasterDataQualityStatus) =>
       items.filter((item) => item.dataQualityStatus === status).length;

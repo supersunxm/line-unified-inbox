@@ -178,8 +178,12 @@ jobs:
           })().catch(async (error) => { console.error(error); await db.$disconnect(); process.exitCode = 1; });
           JS
 
-      - name: Canonical Store ID export regression tests
-        run: npx tsx --test src/line-official-accounts/line-official-account-canonical-export.spec.ts src/google-review-kpi/google-review-kpi-canonical-export.spec.ts
+      - name: Canonical Store ID export and Store Master PostgreSQL regression
+        run: |
+          npx tsx --test src/line-official-accounts/line-official-account-canonical-export.spec.ts src/google-review-kpi/google-review-kpi-canonical-export.spec.ts
+          npx eslint src/store-master/store-master-postgres.integration.spec.ts
+          node --check scripts/test-store-master-postgres.cjs
+          node scripts/test-store-master-postgres.cjs
 
       - name: Build
         run: npm run build

@@ -1362,9 +1362,12 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
       },
       orderBy: [{ latestMessageAt: "desc" }, { id: "asc" }],
       take: 3,
-      select: { id: true },
+      select: { id: true, storeId: true },
     });
     if (direct.length === 1) {
+      if (direct[0].storeId !== input.storeId) {
+        return { status: "AMBIGUOUS", reason: "DIRECT_CONVERSATION_STORE_SCOPE_CONFLICT" };
+      }
       return {
         status: "MAPPED",
         conversationId: direct[0].id,

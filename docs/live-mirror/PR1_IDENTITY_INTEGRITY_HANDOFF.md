@@ -91,3 +91,14 @@ Exact scope is only the seven suppressed source IDs in the table, under the orig
 ## Intentionally deferred original plan
 
 PR2 shared eligibility/truthful debt; PR3 durable provider aliases; PR4 conversation/inbound identity recovery; PR5 bounded source coverage checkpoints; PR6 Mirror-first admission/revisits; PR7 durable cycle/debt/alerts. Incomplete cycles, source omissions at20789/29496, fleet exclusions, historical backfill, UI and monitoring redesign are not implemented. Stop after this PR is prepared; merge, deployment and next PR await user approval.
+
+
+## Current-main repair verification (2026-10-13)
+
+The previous validation tables describe the original428f04ba baseline. Superseding integration base is `f0471c640257787d9cfcf387250056a42a8ca9e9`. Merge conflicts were only appended AI_PROGRESS.md and DECISIONS.md entries; both sides are preserved. The workflow retains PR547's Store Master PostgreSQL step plus PR548's identity step. All main schema/migration/Store Master/frontend files are unchanged relative to this new base. No force-push/history rewrite.
+
+A pre-existing direct OA/chat mapping safety defect was additionally reproduced on this main: a Conversation's Store may disagree with its OA owner, and the old direct resolution imported into that wrong Store. PR1 now selects Store identity and holds conflicting/null Store mappings as DIRECT_CONVERSATION_STORE_SCOPE_CONFLICT, without import or Canonical link. PostgreSQL before/after and two permanent unit cases verify it. Original identity rules and seven source pairs remain intact.
+
+Updated local results:172 focused tests (all original170 plus2 scope guards); dedicated PostgreSQL identity integration;78 Store Master/database tests;39 webhook/default-permission tests;974 frontend tests; changed-scope lint,production types,backend build and local runtime200/200 plus guarded401/401 pass.169 existing migrations replay only locally. New main broad suite2733 total,2702 pass,19 fail,12 skip; integrated suite2763 total,2731 pass,the same19 fail,13 skip. There are no added failure identities. Two failures are test setup/environment (HTTP socket restriction, missing dedicated Store Master database); they pass under separate appropriate verification. Types295 errors and full lint893 errors/2 warnings remain unchanged. These are not green repository-wide results.
+
+Registered GitHub runners:0. Existing alternative CI adapter recognizes updated workflow inventory (31 backend run steps) without errors, but its stopped ARM64 Lima base supplies unsigned local results and explicitly cannot post trusted GitHub Required Checks. No runner was created/activated. Branch protection/ruleset reads return403 requiring a plan upgrade; no bypass or policy change was attempted. Fresh head/check evidence and the quantitative release monitoring plan are recorded in the final PR548 readiness report, not inferred from historical billing failures.

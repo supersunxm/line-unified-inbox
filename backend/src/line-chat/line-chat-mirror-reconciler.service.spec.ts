@@ -229,6 +229,7 @@ function createReconcileHarness() {
   const logs: string[] = [];
   const activities: unknown[] = [];
   let directMatches = 1;
+  let directStoreId: string | null = "store-test";
   let contentMatches = 0;
   let failReplyStateObservation = false;
   const prisma = {
@@ -269,7 +270,7 @@ function createReconcileHarness() {
             : [];
         }
         return typeof query.where?.lineChatUserId === "string"
-          ? Array.from({ length: directMatches }, (_, index) => ({ id: index === 0 ? conversation.id : "other-conversation" }))
+          ? Array.from({ length: directMatches }, (_, index) => ({ id: index === 0 ? conversation.id : "other-conversation", storeId: directStoreId }))
           : [];
       },
       findUnique: async () => ({ ...conversation }),
@@ -335,6 +336,7 @@ function createReconcileHarness() {
     failReceipt: () => { failReceiptOnce = true; },
     setContentMatches: (count: number) => { contentMatches = count; },
     setDirectMatches: (count: number) => { directMatches = count; },
+    setDirectStoreId: (value: string | null) => { directStoreId = value; },
     failReplyStateObservation: () => { failReplyStateObservation = true; } };
 }
 
@@ -667,3 +669,15 @@ test("a numeric outbound client key without a provider alias is not identity pro
   assert.equal((await h.reconcile(1)).ambiguous, 1);
   assert.equal(h.canonical.length, 1);
 });
+
+
+for (const storeId of ["other-store", null]) {
+  test(`direct OA/chat mapping with conflicting Store ${String(storeId)} stays held`, async () => {
+    const h = identityHarness();
+    h.setDirectStoreId(storeId);
+    assert.equal((await h.reconcile(1)).ambiguous, 1);
+    assert.equal(h.receipts[0].data.reconcileError, "DIRECT_CONVERSATION_STORE_SCOPE_CONFLICT");
+    assert.equal(h.receipts[0].data.canonicalMessageId, undefined);
+    assert.equal(h.canonical.length, 0);
+  });
+}

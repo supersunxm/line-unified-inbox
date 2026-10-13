@@ -318,7 +318,7 @@ model User {
   status                        UserStatus                   @default(ACTIVE)
   isActive                      Boolean                      @default(true)
   canAccessWeb                  Boolean                      @default(true)
-  canAccessMobile               Boolean                      @default(true)
+  canAccessMobile               Boolean                      @default(false)
   canAccessHq                   Boolean                      @default(false)
   canAccessAllStores            Boolean                      @default(false)
   canManageAccounts             Boolean                      @default(false)

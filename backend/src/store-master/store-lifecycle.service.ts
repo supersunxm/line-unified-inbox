@@ -1,6 +1,7 @@
 import { ConflictException, Injectable } from "@nestjs/common";
 import { Prisma, PrismaClient } from "@prisma/client";
 import { PrismaService } from "../prisma.service";
+import { acquireStoreMasterApplyLock } from "./store-master-transaction";
 
 type DbClient = Prisma.TransactionClient | PrismaService | PrismaClient;
 
@@ -113,6 +114,7 @@ export class StoreLifecycleService {
 
   async closeByMasterId(storeMasterId: string) {
     return this.prisma.$transaction(async (tx) => {
+      await acquireStoreMasterApplyLock(tx);
       const master = await tx.storeMaster.findUnique({ where: { id: storeMasterId }, select: { id: true, externalStoreId: true, isActive: true } });
       if (!master?.externalStoreId) throw new Error("Store Master canonical Store ID is required");
       if (master.isActive) throw new Error("Store Master is not CLOSED");

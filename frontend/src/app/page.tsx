@@ -368,11 +368,14 @@ const translations = {
     exportingHandover: "กำลังสร้างไฟล์ส่งต่อ...",
     handoverExportFailed: "สร้างไฟล์ส่งต่อ Credentials ไม่สำเร็จ กรุณาลองอีกครั้ง",
     handoverExportWarning: "ไฟล์นี้มี Channel Secret และ Channel Access Token จริงของทุกสาขาที่เลือก ผู้ที่ได้รับไฟล์สามารถใช้ Messaging API ของ LINE OA ได้\n\nยืนยันดาวน์โหลดไฟล์สำหรับส่งต่อหรือไม่?",
-    syncMasterFile: "↻ Sync Store Master",
+    syncMasterFile: "↻ Preview Store Master",
     syncingMasterFile: "Syncing Store Master...",
-    syncMasterSuccess: "Sync Store Master สำเร็จ",
+    syncMasterSuccess: "แสดงตัวอย่าง Store Master แล้ว (ยังไม่มีการเปลี่ยนแปลงข้อมูล)",
     syncMasterFailed: "Sync Store Master ไม่สำเร็จ",
-    syncSummaryTitle: "ผลการ Sync Store Master",
+    syncSummaryTitle: "ตัวอย่างข้อมูล Store Master",
+    syncSourceFingerprint: "ค่า SHA-256 ของข้อมูลต้นทาง",
+    syncLifecycleApproval: "การเปลี่ยนสถานะร้านค้าต้องได้รับอนุมัติก่อน:",
+    syncSourceRow: "แถวข้อมูลต้นทาง",
     syncTotalRows: "ทั้งหมด (Total)",
     syncCompleteRows: "สมบูรณ์ (Complete)",
     syncIncompleteRows: "ไม่สมบูรณ์ (Incomplete)",
@@ -733,11 +736,14 @@ const translations = {
     exportingHandover: "Preparing handover file...",
     handoverExportFailed: "Credential handover export failed. Please try again.",
     handoverExportWarning: "This file contains the real Channel Secret and Channel Access Token for every selected LINE OA. Anyone with the file can use the LINE Messaging API for those accounts.\n\nDownload the handover file?",
-    syncMasterFile: "↻ Sync Store Master",
+    syncMasterFile: "↻ Preview Store Master",
     syncingMasterFile: "Syncing Store Master...",
-    syncMasterSuccess: "Store Master sync succeeded",
+    syncMasterSuccess: "Store Master preview ready (no data changed)",
     syncMasterFailed: "Store Master sync failed",
-    syncSummaryTitle: "Store Master Sync Summary",
+    syncSummaryTitle: "Store Master Preview",
+    syncSourceFingerprint: "Source SHA-256",
+    syncLifecycleApproval: "Lifecycle changes require explicit approval:",
+    syncSourceRow: "Source row",
     syncTotalRows: "Total Rows",
     syncCompleteRows: "Complete",
     syncIncompleteRows: "Incomplete",
@@ -1096,11 +1102,14 @@ const translations = {
     exportingHandover: "正在生成交接文件...",
     handoverExportFailed: "Credential 交接文件生成失败，请重试。",
     handoverExportWarning: "此文件包含所选 LINE OA 的真实 Channel Secret 和 Channel Access Token。任何获得此文件的人都可以使用这些账号的 LINE Messaging API。\n\n确认下载交接文件吗？",
-    syncMasterFile: "↻ 同步 Store Master",
+    syncMasterFile: "↻ 预览 Store Master",
     syncingMasterFile: "正在同步 Store Master...",
-    syncMasterSuccess: "Store Master 同步成功",
+    syncMasterSuccess: "Store Master 预览已就绪（数据未更改）",
     syncMasterFailed: "Store Master 同步失败",
-    syncSummaryTitle: "Store Master 同步结果摘要",
+    syncSummaryTitle: "Store Master 预览",
+    syncSourceFingerprint: "源数据 SHA-256",
+    syncLifecycleApproval: "门店生命周期变更需先获得明确批准：",
+    syncSourceRow: "源数据行",
     syncTotalRows: "总行数 (Total)",
     syncCompleteRows: "完整 (Complete)",
     syncIncompleteRows: "不完整 (Incomplete)",
@@ -3124,8 +3133,7 @@ function ApplicationWorkspaceContent({ initialSection, initialAuthUser }: { init
     try {
       const result = await api.syncStoreMaster();
       setMasterSyncResult(result);
-      await loadApplicationData(true, true);
-      setToastMessage(`${text.syncMasterSuccess} · Total: ${result.validation?.total ?? result.source?.rows} · Updated: ${result.connectedOaSync?.updated} · Unchanged: ${result.connectedOaSync?.unchanged}`);
+      setToastMessage(text.syncMasterSuccess);
     } catch (error) {
       setLineOaError(`${text.syncMasterFailed}: ${error instanceof Error ? error.message : "Unknown error"}`);
     } finally {
@@ -3746,14 +3754,18 @@ function ApplicationWorkspaceContent({ initialSection, initialAuthUser }: { init
                           <p className="text-[10px] text-[var(--app-text-tertiary)] uppercase font-semibold">{text.syncIncompleteRows}</p>
                           <p className={`mt-0.5 text-sm font-bold ${masterSyncResult.validation.incomplete > 0 ? "text-[var(--app-warning)]" : "text-[var(--app-text-primary)]"}`} data-testid="sync-incomplete">{masterSyncResult.validation.incomplete}</p>
                         </div>
-                        <div className="rounded-[var(--app-radius-md)] bg-[var(--app-surface-subtle)] p-2.5 border border-[var(--app-border-subtle)]">
-                          <p className="text-[10px] text-[var(--app-text-tertiary)] uppercase font-semibold">{text.syncOaUpdated}</p>
-                          <p className="mt-0.5 text-sm font-bold text-[var(--app-accent)]" data-testid="sync-updated">{masterSyncResult.connectedOaSync.updated}</p>
-                        </div>
-                        <div className="rounded-[var(--app-radius-md)] bg-[var(--app-surface-subtle)] p-2.5 border border-[var(--app-border-subtle)]">
-                          <p className="text-[10px] text-[var(--app-text-tertiary)] uppercase font-semibold">{text.syncOaUnchanged}</p>
-                          <p className="mt-0.5 text-sm font-bold text-[var(--app-text-secondary)]" data-testid="sync-unchanged">{masterSyncResult.connectedOaSync.unchanged}</p>
-                        </div>
+                        {masterSyncResult.connectedOaSync && (
+                          <>
+                            <div className="rounded-[var(--app-radius-md)] bg-[var(--app-surface-subtle)] p-2.5 border border-[var(--app-border-subtle)]">
+                              <p className="text-[10px] text-[var(--app-text-tertiary)] uppercase font-semibold">{text.syncOaUpdated}</p>
+                              <p className="mt-0.5 text-sm font-bold text-[var(--app-accent)]" data-testid="sync-updated">{masterSyncResult.connectedOaSync.updated}</p>
+                            </div>
+                            <div className="rounded-[var(--app-radius-md)] bg-[var(--app-surface-subtle)] p-2.5 border border-[var(--app-border-subtle)]">
+                              <p className="text-[10px] text-[var(--app-text-tertiary)] uppercase font-semibold">{text.syncOaUnchanged}</p>
+                              <p className="mt-0.5 text-sm font-bold text-[var(--app-text-secondary)]" data-testid="sync-unchanged">{masterSyncResult.connectedOaSync.unchanged}</p>
+                            </div>
+                          </>
+                        )}
                       </div>
                       <div className="grid grid-cols-2 gap-2 sm:grid-cols-5 text-xs pt-2 border-t border-[var(--app-border-subtle)]">
                         <div>
@@ -3841,6 +3853,19 @@ function ApplicationWorkspaceContent({ initialSection, initialAuthUser }: { init
                           </span>
                         </button>
                       </div>
+                      <p className="break-all border-t border-[var(--app-border-subtle)] pt-2 text-[10px] text-[var(--app-text-tertiary)]" data-testid="sync-source-sha256">{text.syncSourceFingerprint}: {masterSyncResult.source.sha256}</p>
+                      {masterSyncResult.lifecycleReview && masterSyncResult.lifecycleReview.length > 0 && (
+                        <div className="rounded-[var(--app-radius-md)] border border-[var(--app-border-subtle)] bg-[var(--app-surface-subtle)] p-3 text-xs" data-testid="sync-lifecycle-review">
+                          <p className="mb-2 font-semibold text-[var(--app-text-primary)]">{text.syncLifecycleApproval}</p>
+                          <ul className="space-y-1">
+                            {masterSyncResult.lifecycleReview.map((change) => (
+                              <li key={`${change.externalStoreId}:${change.operation}`}>
+                                {change.operation} · {change.externalStoreId} · {change.storeName} · {text.syncSourceRow} {change.sourceRowNumber}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
                     </Card>
                   )}
 
