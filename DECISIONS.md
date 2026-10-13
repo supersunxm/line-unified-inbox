@@ -3416,3 +3416,19 @@ Use production ledger checksums to select exact historical migration bytes; pres
 ## 2026-10-13 — Baseline-relative schema compatibility and stored mobile default
 
 The controlled database-to-database comparison proves only the retirement default differs between the old and corrected histories. Align Prisma's omitted-field default to false instead of changing verified SQL or production records. Preserve all existing and explicitly granted permissions, registration/approval behavior, role semantics, retained tables, historical enum values, defaults and constraints. Treat the unchanged 24 baseline diff blocks as separate schema debt; do not execute destructive generated SQL. Validation requires identical final-vs-baseline comparison output, real PostgreSQL rollback/default tests, auth tests in their correct runners, and fresh mandatory Local CI. Publication updates only the existing PR branch; main deployment and Mirror restart approval remain separate gates.
+
+## 2026-10-10 — Sunn Secretary receipt duplicate classification and access scope
+
+Decision: classify a Prisma `P2002` as a Sunn duplicate only when its metadata is the verified PostgreSQL Prisma field-target array containing exactly `externalWebhookEventId`. Missing or unrecognized metadata and unrelated unique constraints fail closed. Validate bot and event IDs at runtime before hashing, while retaining the existing `sunn-secretary:v1:` SHA-256 derivation for accepted identities.
+
+Rationale:
+- The shared `WebhookEvent` model has both a primary-key uniqueness constraint and the intended event-ID uniqueness constraint; treating every `P2002` as a duplicate can acknowledge unrelated persistence failures.
+- The disposable real PostgreSQL concurrency test confirmed Prisma reports this unique violation with the exact field target array used above; two independent clients returned one `NEW` and one `DUPLICATE`.
+- No migration is needed; receipts remain namespaced and `IGNORED`, so storefront `RECEIVED` processing remains isolated.
+
+Product access requirement for future Phase 5.3: production Sunn Secretary must support authorized users in any LINE group, with no permanent group preapproval. A pilot can temporarily restrict to one verified group and user. Authorization is based on the authenticated user's permissions and explicit store scope; group membership alone never grants global store access. This requirement does not authorize Phase 5.3 implementation in PR #546.
+
+
+## 2026-10-13 — Separate local Sunn preparation from production Mirror closure
+
+Store32610 recovery does not close the fleet gate when the completed next cycle has26otherPROFILE_OPERATION_BUSY partials. Report the verified118/144 success result and retain historical completeness as unproven. The contention is caused by non-waiting lock acquisition behind a healthy HEALTH_SESSION; propose bounded cooperative wait or a deferred retry while retaining ownership/identity checks. Do not disable health checks, force unlock, change credentials or replay data. Continue PR546 local-only compatibility preparation independently; do not expand its receipt foundation into event handling/delivery or production changes.
