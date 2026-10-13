@@ -45,6 +45,7 @@ function resolverTestSession(id: string): ResolverTestSession {
 function createTargetResolverHarness(options: {
   sessions: ResolverTestSession[];
   busySessionIds?: ReadonlySet<string>;
+  busyHolder?: "HEALTH_SESSION" | "NICKNAME_UPDATE";
   unusableSessionIds?: ReadonlySet<string>;
   authBySession?: ReadonlyMap<string, "YES" | "NO" | "UNKNOWN">;
   botIdBySession?: ReadonlyMap<string, string | null>;
@@ -122,6 +123,7 @@ function createTargetResolverHarness(options: {
           requestId: `busy-${input.sessionId}`,
           busyStage: "DATABASE_LEASE" as const,
           waitedMs: 0,
+          holderOperationKind: options.busyHolder,
         };
       }
       return {
@@ -1641,4 +1643,27 @@ test("Mirror yields between profile attempts after the current profile safely re
   await pause;
   assert.equal(result.ok, false);
   assert.deepEqual(harness.leaseRequests.map((request) => request.sessionId), [first.id]);
+});
+
+
+test("target resolution marks only verified health contention for deferred retry", async () => {
+  const session = resolverTestSession("busy");
+  for (const holder of ["HEALTH_SESSION", "NICKNAME_UPDATE"] as const) {
+    const harness = createTargetResolverHarness({ sessions: [session], busySessionIds: new Set([session.id]), busyHolder: holder });
+    const resolution = await harness.service.resolveMirrorTarget(targetResolverInput());
+    assert.equal(resolution.ok, false);
+    if (resolution.ok) assert.fail("busy profile cannot verify a target");
+    assert.equal(resolution.errorCode, "MIRROR_MANAGER_TARGET_BUSY");
+    assert.equal(resolution.healthSessionContention === true, holder === "HEALTH_SESSION");
+  }
+});
+
+test("rejected discovery without profile contention cannot request a health retry", async () => {
+  const botId = "U" + "a".repeat(32);
+  const harness = createTargetResolverHarness({ sessions: [resolverTestSession("a")], failedDiscoveryBotIds: new Set([botId]) });
+  const resolution = await harness.service.resolveMirrorTarget(targetResolverInput());
+  assert.equal(resolution.ok, false);
+  if (resolution.ok) assert.fail("rejected target cannot succeed");
+  assert.equal(resolution.errorCode, "MIRROR_MANAGER_TARGET_NOT_FOUND");
+  assert.notEqual(resolution.healthSessionContention, true);
 });
