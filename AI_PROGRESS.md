@@ -6516,3 +6516,12 @@ Live worker continues independently at 146 configured unique active OA identitie
 - Local verification: 28 focused tests including real PostgreSQL concurrency/reload pass; real compiled Nest HTTP authorization, CSRF, payload bounds, durable save/restart and disabled webhook pass. Frontend 973/973 tests, changed-scope lint, both builds, and security check pass. Frontend TypeScript remains 49 errors; backend full TypeScript remains 295. Broad backend suite has the same 18 failing tests as unchanged main, with no suppressed assertions or unrelated fixes.
 - Deployment isolation: reviewed Railway worker watch paths; no modified file matches them. Worker remains on its existing successful deployment. Primary dirty checkout status digest unchanged.
 - Next: required GitHub CI, merge commit, backend/frontend deployment and authenticated production UI verification. Real LINE credentials are not supplied; actual token/bot validation and production credential persistence remain unverified until owner entry.
+
+## 2026-10-13 — Live Mirror original PR1 identity integrity
+
+- Task: only PR1 from Oct13 Root Cause and Remediation Report; isolated `codex/live-mirror-exact-identity-pr1` based on main428f04ba. Preserve dirty primary and all unrelated work.
+- Completed: replace unsafe content/time duplicate certification with exact identity checks, distinct-ID preservation and unproven holds; scope/direction checks and P2002 guard; sanitized seven-pair fixtures, requested regressions and PostgreSQL integration; CI test wiring.
+- Passed:170 affected tests; real database integration (seven pairs/restarts/race/alias); changed-file lint; production types/build; local backend/worker200 health and401 protected routes; clean whitespace diff. Seven cases reproduce the defect on unchanged main.
+- Baselines: full backend18 failures unchanged; full types295 errors unchanged; full lint893 errors/2 warnings unchanged. Full suite2726 total,2695 pass,18 fail,13 skip; the database test passed separately. No suppressed checks or unrelated repairs.
+- Limits: no production data/config/deployment changes, no historical recovery or next PR. Existing419 identity holds and52 ID-less auto replies untouched. Hosted CI is separate and pending PR creation/check evidence.
+- Next action: prepare one draft PR with `docs/live-mirror/PR1_IDENTITY_INTEGRITY_HANDOFF.md`; stop for user approval before merge/deploy.

@@ -35,6 +35,28 @@ import {
   parseExactMirrorManifestCsv,
 } from "./line-chat-mirror-exact-manifest";
 
+/** Only durable provider/Manager IDs prove that a near-match is a distinct event.
+ * Client/execution external IDs cannot prove Manager equivalence or difference.
+ */
+function authoritativeCanonicalIds(message: {
+  externalMessageId: string | null;
+  rawPayload: Prisma.JsonValue;
+  direction: MessageDirection;
+}): string[] {
+  const payload = message.rawPayload && typeof message.rawPayload === "object"
+    && !Array.isArray(message.rawPayload) ? message.rawPayload : {};
+  const external = message.externalMessageId;
+  // The webhook persists message.id as the inbound external ID. Application
+  // outbound external IDs are client keys; their provider alias must be explicit.
+  const sourceExternal = external && (message.direction === MessageDirection.INBOUND
+    || external.startsWith("line-chat-manager:"))
+    ? external : null;
+  return [...new Set([sourceExternal, payload.managerMessageId, payload.providerMessageId]
+    .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+    .map((value) => value.trim().replace(/^line-chat-manager:/u, ""))
+    .filter((value) => value.length > 0 && !value.startsWith("event:")))];
+}
+
 const DEFAULT_INTERVAL_MS = 60_000;
 const MIN_INTERVAL_MS = 30_000;
 const DEFAULT_BATCH_SIZE = 250;
@@ -43,6 +65,7 @@ const FULL_FLEET_BATCH_THRESHOLD = 32;
 const FULL_FLEET_MAX_BATCH_PER_STORE = 100;
 const START_DELAY_MS = 15_000;
 const IDENTITY_EVIDENCE_LIMIT = 100;
+const CONTENT_TIME_CANDIDATE_LIMIT = 100;
 const MIN_IDENTITY_MATCHES = 3;
 const INBOUND_MAPPING_EVIDENCE_LIMIT = 25;
 const CONTENT_TIME_TOLERANCE_MS = 2_000;
@@ -682,6 +705,9 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
       const canonical = canonicalCandidates[0];
       if (canonical) {
         const matches = canonical.conversationId === expected.canonicalConversationId
+          && canonical.conversation.storeId === expected.storeId
+          && canonical.conversation.lineOfficialAccountId === expected.lineOfficialAccountId
+          && authoritativeCanonicalIds(canonical).every((identity) => identity === expected.sourceEventId)
           && canonical.direction === MessageDirection.OUTBOUND
           && canonical.deliveryStatus === MessageDeliveryStatus.DELIVERED
           && canonical.messageType === canonicalMessageTypeFromMirror(raw.messageType)
@@ -1062,22 +1088,47 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
           continue;
         }
 
-        const exact = await this.findExactCanonical(
-          row.managerMessageId,
-          exactScope?.oaId,
-        );
+        // A content/time resemblance is never proof of event identity.
+        if (!row.managerMessageId.trim() || row.managerMessageId !== row.managerMessageId.trim()
+          || row.managerMessageId.startsWith("event:")) {
+          result.ambiguous += 1;
+          await this.markMirror(row.id, {
+            status: LineChatMirrorReconcileStatus.AMBIGUOUS,
+            conversationId: mapping.conversationId,
+            source: "SOURCE_IDENTITY_UNPROVEN",
+            error: "An authoritative Manager message identity is required.",
+          }, apply);
+          continue;
+        }
+        const exactCandidates = await this.findExactCanonicals(row.managerMessageId, oa.id);
+        if (exactCandidates.length > 1) {
+          result.ambiguous += 1;
+          await this.markMirror(row.id, {
+            status: LineChatMirrorReconcileStatus.AMBIGUOUS,
+            conversationId: mapping.conversationId,
+            source: "EXACT_SOURCE_IDENTITY_AMBIGUOUS",
+            error: "Multiple Canonical records claim the same source identity.",
+          }, apply);
+          continue;
+        }
+        const exact = exactCandidates[0];
         if (exact) {
+          const expectedDirection = row.direction === LineChatMirrorDirection.INBOUND
+            ? MessageDirection.INBOUND : MessageDirection.OUTBOUND;
+          const identities = authoritativeCanonicalIds(exact);
           if (exact.conversationId !== mapping.conversationId
+            || exact.conversation.storeId !== store.id
+            || exact.conversation.lineOfficialAccountId !== oa.id
+            || exact.direction !== expectedDirection
+            || exact.deliveryStatus !== MessageDeliveryStatus.DELIVERED
+            || identities.some((identity) => identity !== row.managerMessageId)
             || (exactScope && !this.canonicalMatchesMirrorRow(exact, row))) {
             result.failed += 1;
             await this.markMirror(row.id, {
               status: LineChatMirrorReconcileStatus.FAILED,
               conversationId: mapping.conversationId,
-              messageId: exact.id,
-              source: exact.conversationId !== mapping.conversationId
-                ? "EXACT_EXTERNAL_ID_CONFLICT"
-                : "EXACT_EXTERNAL_ID_PAYLOAD_CONFLICT",
-              error: "Existing canonical source identity does not match the exact manifest destination and payload.",
+              source: "EXACT_EXTERNAL_ID_CONFLICT",
+              error: "Existing Canonical source identity conflicts with destination, direction, or payload evidence.",
             }, apply);
             continue;
           }
@@ -1109,26 +1160,20 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
           }, apply);
           continue;
         }
-        if (contentTime.length === 1) {
-          result.contentTimeDuplicates += 1;
-          await this.markMirror(row.id, {
-            status: LineChatMirrorReconcileStatus.DUPLICATE,
-            conversationId: mapping.conversationId,
-            messageId: contentTime[0].id,
-            source: "CONTENT_TIME_MATCH",
-          }, apply);
-          if (row.direction === LineChatMirrorDirection.OUTBOUND) {
-            touchedConversationIds.add(mapping.conversationId);
-          }
-          continue;
-        }
-        if (contentTime.length > 1) {
+        // Known different source IDs are separate events. Unknown or conflicting
+        // identities may be application/auto-reply echoes: hold without linking
+        // or blindly importing. A capped candidate set cannot certify absence.
+        const unprovenNearMatch = contentTime.some((candidate) => {
+          const identities = authoritativeCanonicalIds(candidate);
+          return identities.length !== 1 || identities[0] === row.managerMessageId;
+        });
+        if (unprovenNearMatch || contentTime.length === CONTENT_TIME_CANDIDATE_LIMIT) {
           result.ambiguous += 1;
           await this.markMirror(row.id, {
             status: LineChatMirrorReconcileStatus.AMBIGUOUS,
             conversationId: mapping.conversationId,
-            source: "CONTENT_TIME_AMBIGUOUS",
-            error: `${contentTime.length} canonical messages match content/time window.`,
+            source: "CONTENT_TIME_IDENTITY_UNPROVEN",
+            error: "Content/time candidates lack unambiguous distinct source identity evidence.",
           }, apply);
           continue;
         }
@@ -1541,38 +1586,6 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
     return users.length === 1 ? users[0] : null;
   }
 
-  private async findExactCanonical(
-    managerMessageId: string,
-    oaId?: string,
-  ): Promise<{
-    id: string;
-    conversationId: string;
-    externalMessageId: string | null;
-    direction: MessageDirection;
-    deliveryStatus: MessageDeliveryStatus;
-    messageType: MessageType;
-    originalText: string;
-    fileName: string | null;
-    sentAt: Date;
-    conversation: { storeId: string | null; lineOfficialAccountId: string | null };
-  } | null> {
-    return this.prisma.message.findFirst({
-      where: this.exactCanonicalIdentityWhere(managerMessageId, oaId),
-      select: {
-        id: true,
-        conversationId: true,
-        externalMessageId: true,
-        direction: true,
-        deliveryStatus: true,
-        messageType: true,
-        originalText: true,
-        fileName: true,
-        sentAt: true,
-        conversation: { select: { storeId: true, lineOfficialAccountId: true } },
-      },
-    });
-  }
-
   private async findExactCanonicals(
     managerMessageId: string,
     oaId: string,
@@ -1586,6 +1599,8 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
     originalText: string;
     fileName: string | null;
     sentAt: Date;
+    rawPayload: Prisma.JsonValue;
+    conversation: { storeId: string | null; lineOfficialAccountId: string | null };
   }>> {
     return this.prisma.message.findMany({
       where: this.exactCanonicalIdentityWhere(managerMessageId, oaId),
@@ -1601,6 +1616,8 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
         originalText: true,
         fileName: true,
         sentAt: true,
+        rawPayload: true,
+        conversation: { select: { storeId: true, lineOfficialAccountId: true } },
       },
     });
   }
@@ -1655,7 +1672,7 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
     conversationId: string,
     row: MirrorRow,
     strictNonTextGuard = false,
-  ): Promise<Array<{ id: string }>> {
+  ): Promise<Array<{ id: string; externalMessageId: string | null; rawPayload: Prisma.JsonValue; direction: MessageDirection }>> {
     const direction = row.direction === LineChatMirrorDirection.INBOUND
       ? MessageDirection.INBOUND
       : MessageDirection.OUTBOUND;
@@ -1690,8 +1707,8 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
     return this.prisma.message.findMany({
       where,
       orderBy: [{ sentAt: "asc" }, { id: "asc" }],
-      take: 3,
-      select: { id: true },
+      take: CONTENT_TIME_CANDIDATE_LIMIT,
+      select: { id: true, externalMessageId: true, rawPayload: true, direction: true },
     });
   }
 
@@ -1741,9 +1758,12 @@ export class LineChatMirrorReconcilerService implements OnModuleInit, OnModuleDe
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
         const existing = await this.prisma.message.findUnique({
           where: { externalMessageId },
-          select: { id: true, conversationId: true },
+          select: { id: true, conversationId: true, direction: true, deliveryStatus: true, rawPayload: true, externalMessageId: true },
         });
-        if (existing?.conversationId === input.conversationId) {
+        if (existing?.conversationId === input.conversationId
+          && existing.direction === MessageDirection.OUTBOUND
+          && existing.deliveryStatus === MessageDeliveryStatus.DELIVERED
+          && authoritativeCanonicalIds(existing).every((identity) => identity === input.row.managerMessageId)) {
           return { created: false, messageId: existing.id };
         }
       }

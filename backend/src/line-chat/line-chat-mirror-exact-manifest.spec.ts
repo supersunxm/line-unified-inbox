@@ -277,7 +277,7 @@ function exactManifestHarness(options: {
           return canonicalRows.filter((message) => alternatives.some((alternative) => {
             const external = alternative.externalMessageId as { in?: string[] } | undefined;
             return Boolean(external?.in?.includes(message.externalMessageId ?? ""));
-          }));
+          })).map((message) => ({ ...message, conversation: conversations.find((item) => item.id === message.conversationId) }));
         }
         if (query.where.direction) return [];
         if (query.where.conversationId) {
@@ -591,4 +591,12 @@ test("a separately bounded nineteen-row manifest cannot select adjacent events o
   assert.equal(second.stillSafeToApply, 0);
   assert.equal(second.writes, 0);
   await assert.rejects(harness.service.reconcileExactManifestCsv({ bytes, apply: true }), /DIGEST_MISMATCH/u);
+});
+
+test("exact manifest cannot certify an external ID contradicted by a Manager payload ID", async () => {
+  const harness = exactManifestHarness({ canonicalOverride: { index: 0 } });
+  harness.canonicalRows[0].rawPayload.managerMessageId = "different-manager-event";
+  const result = await runSyntheticManifest(harness.service, harness.bytes, harness.sha256);
+  assert.equal(result.newConflict, 1);
+  assert.equal(result.alreadyCanonical, 0);
 });

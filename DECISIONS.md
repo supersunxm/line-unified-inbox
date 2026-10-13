@@ -3386,3 +3386,10 @@ Reuse the existing AES-256-GCM credential service and OA encrypted columns under
 Owner access uses the configured canonical authenticated user ID, active ADMIN state, a web session and no store impersonation. Mutation protection combines the configured frontend origin, session cookie, custom JSON header, bounded raw body and no query parameters. Existing atomic rate-limit storage caps save/test requests independently; encrypted writes and redacted audit events are transactional.
 
 Connection validation is a fixed read-only LINE bot-info request outside the database transaction. A compare-and-set protects the result from credential rotation during that request. Token/bot validation is explicitly distinct from Channel ID/Secret verification, signed ingress, group authorization, persistent event deduplication and reply readiness. Saving and testing never enable ingress or send a LINE message. The disabled ingress continues to use its existing environment configuration until a separately approved bot release wires and verifies all processing gates.
+
+## 2026-10-13 — Live Mirror PR1 requires exact identity evidence
+
+- Keep original seven-PR ordering. PR1 fixes content/time collision certification without schema changes; durable alias storage and historical repair remain separate approved work.
+- Exact provider/Manager identities plus Store/OA/conversation/direction evidence authorize a duplicate receipt. Content/time only identifies a review candidate. Known different IDs remain distinct; missing/conflicting identity stays held without a blind application/auto-reply duplicate.
+- Retain existing namespaces/unique constraints and conservative exact-manifest guards. Bound near-match metadata reads to100; hold saturated sets. Do not infer provider identity from a numeric outbound client key.
+- Validate seven sanitized pairs on actual main and isolated PostgreSQL, including repeat polling/service restart and uniqueness races. Retain full-repository baseline failures explicitly; local success cannot certify hosted CI or production completeness.

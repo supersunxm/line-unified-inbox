@@ -302,7 +302,8 @@ function mediaHarness(options: {
       findMany: async (query: { where: Record<string, unknown> }) => {
         if (Array.isArray(query.where.OR)) {
           const filters = query.where.OR as Array<Record<string, unknown>>;
-          return canonicalRows.filter((message) => filters.some((filter) => matchesIdentityFilter(message, filter, conversations)));
+          return canonicalRows.filter((message) => filters.some((filter) => matchesIdentityFilter(message, filter, conversations)))
+            .map((message) => ({ ...message, conversation: conversations.find((item) => item.id === message.conversationId) }));
         }
         if (typeof query.where.direction === "string") {
           const sentAt = query.where.sentAt as { gte: Date; lte: Date };
