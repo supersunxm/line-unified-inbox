@@ -6547,3 +6547,31 @@ Live worker continues independently at 146 configured unique active OA identitie
 - Local verification: 28 focused tests including real PostgreSQL concurrency/reload pass; real compiled Nest HTTP authorization, CSRF, payload bounds, durable save/restart and disabled webhook pass. Frontend 973/973 tests, changed-scope lint, both builds, and security check pass. Frontend TypeScript remains 49 errors; backend full TypeScript remains 295. Broad backend suite has the same 18 failing tests as unchanged main, with no suppressed assertions or unrelated fixes.
 - Deployment isolation: reviewed Railway worker watch paths; no modified file matches them. Worker remains on its existing successful deployment. Primary dirty checkout status digest unchanged.
 - Next: required GitHub CI, merge commit, backend/frontend deployment and authenticated production UI verification. Real LINE credentials are not supplied; actual token/bot validation and production credential persistence remain unverified until owner entry.
+
+## 2026-10-13 — PR #547 migration-history parity repair (isolated draft)
+
+- Restored `20260818120000_add_app_release_management/migration.sql` byte-for-byte from verified commit `357df6f0b6af73a58bba5a762d384cdb53e490f5`; SHA-256 `cb61e06ffb681a07f4b9adec27235aeb3a37d24547df78d77070d47742814ba9` matches production metadata.
+- Added the exact already-applied `20261001090000_retire_legacy_android_product/migration.sql`; SHA-256 `7d219fe00257605632a484a67a19e3a6ebb4badf904ee8601afa5522e9771f8c`. Original untracked primary-checkout file preserved.
+- Corrected local migration catalogue matches all 169 applied production migration names/checksums from the 2026-10-13 read-only audit; no pending or unfinished migrations in that snapshot.
+- Disposable PostgreSQL 16 replay applied all 169 migrations. Verified 43 retained AppRelease rows, zero active releases, unique release builds, and database mobile-access default false.
+- STOPPED: Prisma schema comparison returned exit 2. `User.canAccessMobile` still declares default true, whereas retirement SQL sets false. The diff also includes retained legacy tables, CustomerSignal enum/index differences, timestamp defaults, and index names. No generated diff SQL was executed.
+- Per mission stop condition, Store Master regression tests and fresh eight-job Local CI were not started; prior CI does not validate this new source. No commit/push/PR update occurred. No production database changes, deploy, merge, webhook enablement, or LINE messages.
+- Guest and tmpfs database disposed; base VM stopped; supervisor lock released. Logs and source manifest: `/private/tmp/pr547-migration-repair-20261013/`.
+- Next: review a separately justified source-only Prisma default correction and baseline attribution of remaining schema differences before replay/CI. Never apply the generated destructive schema diff.
+
+## 2026-10-13 — PR #547 final schema compatibility validation
+
+- Continued in the isolated migration-parity worktree; primary checkout and original retirement migration remain untouched.
+- Identical Prisma 6.19.3 comparisons of clean 168-migration baseline and corrected 169-migration PostgreSQL 16 databases prove the sole schema delta is the retirement mobile-access default. All 24 other diff blocks are baseline-only and unchanged. No generated SQL was applied.
+- Aligned only User.canAccessMobile's Prisma default to false, matching the already-applied retirement SQL. Existing permission values and explicit HQ/store-registration grants are unchanged; no forward data migration is needed.
+- Added focused permission/DMMF tests and a real PostgreSQL create/update/rollback test; changed-file lint and Prisma validate pass. Fresh final replay passes 169 migrations, retains 43 AppRelease rows with zero active rows, and the schema diff now equals the clean baseline exactly.
+- Store Master tests pass 78/78. Node auth/mobile tests pass 132/132 with zero skips, including the role-transaction database test. The unchanged Jest-format store-context test runs separately using Jest 30.2.0 and exits zero; its stderr summary was not retained by the original focused harness, so no per-test outcomes are reconstructed.
+- Final required Local CI is running on source fingerprint 0379bb5e224ee6a0bd727760915193cdcbfc75be565cb21ab2690bc9e1795f96; previous results are not reused. Focused runner guests and databases are disposed.
+- Updated release planning in docs/STORE_MASTER_SCHEMA_RELEASE_REVIEW.md: main merge triggers Backend, Frontend, Reply State Projection, Mirror, and other main services watching backend/prisma/**. Future release requires exact eligible-store/OA baseline, raw continuity, bootstrap-flag/ownership checks, and explicit owner approval; no restart or deployment was performed.
+- Railway production configuration has zero services tracking the PR feature branch. Disabled webhook flag freshly verified. Source-level preparation does not resolve the inaccessible PostgreSQL warning or authorize a production release.
+
+### Final local validation completed
+
+- Fresh Local CI run 20261013051239-15d08994a3: all 8 mandatory jobs and 53/53 steps PASS, zero required skips, eight guest disposals. Optional external live-probe was not selected. Source fingerprint 0379bb5e224ee6a0bd727760915193cdcbfc75be565cb21ab2690bc9e1795f96 remains unchanged. Local CI does not create GitHub Required Checks.
+- Evidence: /private/tmp/pr547-schema-final-20261013/local-ci-final and final-postgres-run4. History SQL checksums remain exact. Schema comparison is baseline-relative compatibility, not a zero-diff claim.
+- Source ready for publication in the existing PR only. Owner release authorization and internal Local CI exception remain pending; require warning classification and fresh Mirror/other-worker release gates before main merge. No production changes or PR #546 modifications.

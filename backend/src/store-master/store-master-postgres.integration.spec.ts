@@ -290,3 +290,33 @@ void test("Store Master transaction, rollback, locks, concurrency, and cleanup a
     await Promise.all([dbA.$disconnect(), dbB.$disconnect()]);
   }
 });
+
+
+void test("retired mobile default denies implicit access and preserves explicit grants on PostgreSQL", async () => {
+  const db = new PrismaClient(storeMasterTestPrismaOptions);
+  const fixturePrefix = `schema-default-${Date.now()}-${process.pid}`;
+  const rollback = new Error("EXPECTED_MOBILE_DEFAULT_TEST_ROLLBACK");
+  try {
+    await assert.rejects(db.$transaction(async (tx) => {
+      const defaults = await tx.$queryRaw<Array<{ column_default: string }>>`
+        SELECT column_default FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'User' AND column_name = 'canAccessMobile'
+      `;
+      assert.equal(defaults[0]?.column_default, "false");
+      const implicit = await tx.user.create({ data: { username: `${fixturePrefix}-implicit`, email: `${fixturePrefix}-implicit@example.invalid`, normalizedEmail: `${fixturePrefix}-implicit@example.invalid`, displayName: "Implicit test user" } });
+      assert.equal(implicit.canAccessMobile, false);
+      assert.equal(implicit.canAccessWeb, true);
+      const granted = await tx.user.create({ data: { username: `${fixturePrefix}-granted`, email: `${fixturePrefix}-granted@example.invalid`, normalizedEmail: `${fixturePrefix}-granted@example.invalid`, displayName: "Granted test administrator", role: "ADMIN", canAccessMobile: true } });
+      const before = await tx.user.findUniqueOrThrow({ where: { id: granted.id } });
+      const updated = await tx.user.update({ where: { id: granted.id }, data: { displayName: "Renamed test administrator" } });
+      for (const field of ["canAccessMobile", "canAccessWeb", "canAccessHq", "canAccessAllStores", "canManageAccounts", "canReply", "canAccessMainOa", "canManageMainOa", "role"] as const) {
+        assert.equal(updated[field], before[field]);
+      }
+      assert.equal(updated.canAccessMobile, true);
+      throw rollback;
+    }), (error: unknown) => error === rollback);
+    assert.equal(await db.user.count({ where: { username: { startsWith: fixturePrefix } } }), 0);
+  } finally {
+    await db.$disconnect();
+  }
+});
