@@ -1,3 +1,4 @@
+import { runMirrorFleetWithHealthRetry } from "./line-chat-mirror-health-retry";
 import { NicknameSourceObserverService } from "./nickname-source-observer.service";
 import { Inject, Injectable, Logger, OnModuleDestroy, OnModuleInit, Optional } from "@nestjs/common";
 import {
@@ -62,6 +63,7 @@ export interface LineChatMirrorCycleResult {
   pendingChats: number;
   unknownDirectionEvents: number;
   durationMs: number;
+  healthSessionContention?: boolean;
 }
 
 interface MirrorHistoryEvent {
@@ -159,6 +161,7 @@ export type MirrorTargetResolution =
         | "MIRROR_MANAGER_TARGET_NOT_FOUND"
         | "MIRROR_MANAGER_TARGET_AMBIGUOUS";
       errorMessage: string;
+      healthSessionContention?: boolean;
     };
 
 type MirrorTargetResolutionOutcome =
@@ -701,30 +704,43 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
         disabledIneligibleMirrorStates: disabledMirrorStates,
       }));
 
-      for (const storeCode of fleetScope.eligibleStoreCodes) {
-        if (this.manualRecoveryPaused) {
-          this.logger.warn(JSON.stringify({
-            event: "line_chat_mirror_cycle_preempted_for_manual_recovery",
-            storesAttempted,
-            storesRemaining: fleetScope.eligibleStoreCodes.length - storesAttempted,
-          }));
-          break;
-        }
-        storesAttempted += 1;
-        try {
-          results.push(await this.syncStore(
-            storeCode,
-            operationState.mode === "CATCH_UP" ? operationState.catchUpStartAt : null,
-          ));
-        } catch (error) {
-          storeExceptions += 1;
+      const fleetPass = await runMirrorFleetWithHealthRetry({
+        storeCodes: fleetScope.eligibleStoreCodes,
+        cycleStartedAt,
+        retryHealthContention: operationState.mode === "NORMAL",
+        shouldStop: () => this.manualRecoveryPaused,
+        attempt: (storeCode) => this.syncStore(
+          storeCode,
+          operationState.mode === "CATCH_UP" ? operationState.catchUpStartAt : null,
+        ),
+        onError: (storeCode, error) => {
           this.logger.warn(JSON.stringify({
             event: "line_chat_mirror_store_cycle_failed",
             storeCode,
             error: safeError(error),
           }));
-        }
+        },
+      });
+      results.push(...fleetPass.results);
+      storesAttempted = fleetPass.storesAttempted;
+      storeExceptions = fleetPass.storeExceptions;
+      if (this.manualRecoveryPaused) {
+        this.logger.warn(JSON.stringify({
+          event: "line_chat_mirror_cycle_preempted_for_manual_recovery",
+          storesAttempted,
+          storesRemaining: fleetScope.eligibleStoreCodes.length - storesAttempted,
+        }));
       }
+      this.logger.log(JSON.stringify({
+        event: "line_chat_mirror_health_retry_completed",
+        deferredStores: fleetPass.deferredStores,
+        retryAttempts: fleetPass.retryAttempts,
+        retryRecovered: fleetPass.retryRecovered,
+        retryExceptions: fleetPass.retryExceptions,
+        retryBudgetExhausted: fleetPass.retryBudgetExhausted,
+        cycleBudgetExhausted: fleetPass.cycleBudgetExhausted,
+        storesUnattempted: fleetScope.eligibleStoreCodes.length - storesAttempted,
+      }));
       if (operationState.mode === "CATCH_UP") {
         const failed = results.filter((result) => result.status === LineChatMirrorSyncStatus.FAILED).length;
         this.logger.log(JSON.stringify({
@@ -1045,6 +1061,7 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
           targetInputDurationMs: targetInputsDurationMs,
           targetResolutionDurationMs,
           status: LineChatMirrorSyncStatus.PARTIAL,
+          ...(target.healthSessionContention ? { healthSessionContention: true } : {}),
           recentChatsObserved: 0,
           historiesFetched: 0,
           messagesObserved: 0,
@@ -1292,6 +1309,7 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
       return {
         storeCode: effectiveStoreCode,
         status: LineChatMirrorSyncStatus.PARTIAL,
+        ...(operation.holderOperationKind === "HEALTH_SESSION" ? { healthSessionContention: true } : {}),
         recentChatsObserved: 0,
         historiesFetched: 0,
         messagesObserved: 0,
@@ -1462,7 +1480,7 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
       errorCode: Extract<MirrorTargetResolution, { ok: false }>['errorCode'],
       errorMessage: string,
       outcome: MirrorTargetResolutionOutcome,
-    ): MirrorTargetResolution => {
+    ): Extract<MirrorTargetResolution, { ok: false }> => {
       emitSummary(outcome);
       return { ok: false, errorCode, errorMessage };
     };
@@ -1536,6 +1554,7 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
     }
     diagnostics.sessionsConsidered = sessions.length;
 
+    let healthSessionContention = false;
     const candidates: Array<{
       botId: string;
       session: MirrorSessionTarget;
@@ -1662,6 +1681,7 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
       );
       if (!resolved.acquired) {
         diagnostics.sessionsBusy += 1;
+        healthSessionContention ||= resolved.holderOperationKind === "HEALTH_SESSION";
         continue;
       }
       if (!resolved.value) continue;
@@ -1674,11 +1694,14 @@ export class LineChatMirrorService implements OnModuleInit, OnModuleDestroy {
     const candidate = selectMirrorResolvedCandidate(candidates);
     if (candidate === null) {
       if (diagnostics.sessionsBusy > 0) {
-        return fail(
-          "MIRROR_MANAGER_TARGET_BUSY",
-          "One or more LINE OA Manager profiles are temporarily busy.",
-          "PROFILE_BUSY",
-        );
+        return {
+          ...fail(
+            "MIRROR_MANAGER_TARGET_BUSY",
+            "One or more LINE OA Manager profiles are temporarily busy.",
+            "PROFILE_BUSY",
+          ),
+          ...(healthSessionContention ? { healthSessionContention: true } : {}),
+        };
       }
       if (sessions.length === 0) {
         return fail(

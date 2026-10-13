@@ -3416,3 +3416,8 @@ Use production ledger checksums to select exact historical migration bytes; pres
 ## 2026-10-13 — Baseline-relative schema compatibility and stored mobile default
 
 The controlled database-to-database comparison proves only the retirement default differs between the old and corrected histories. Align Prisma's omitted-field default to false instead of changing verified SQL or production records. Preserve all existing and explicitly granted permissions, registration/approval behavior, role semantics, retained tables, historical enum values, defaults and constraints. Treat the unchanged 24 baseline diff blocks as separate schema debt; do not execute destructive generated SQL. Validation requires identical final-vs-baseline comparison output, real PostgreSQL rollback/default tests, auth tests in their correct runners, and fresh mandatory Local CI. Publication updates only the existing PR branch; main deployment and Mirror restart approval remain separate gates.
+
+
+## 2026-10-13 — Defer HEALTH_SESSION skips after the normal Mirror pass
+
+Preserve fast healthy-store processing and the existing exclusive profile coordinator. Retry only an explicit health-holder conflict, once per store after the normal pass, with backoff outside the lock. Do not broaden retries to authentication, HTTP 404, historical or message-delivery failures. Bound admission/backoff, retain in-flight ownership until safe completion, and report budget exhaustion without claiming complete coverage. No lock priority or production configuration changes are needed.
