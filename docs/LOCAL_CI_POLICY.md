@@ -54,3 +54,33 @@ Automatic pull-request execution is removed from the five audited workflows; the
 The policy change is limited to the five workflow files, `AGENTS.md`, this policy, `tools/codex-ci/`, and the already-proven disposable runner source. It changes no backend, frontend, worker, Prisma, application package manifest, production data or Railway configuration. Branch publication does not change `main`. On merge, these files have no match in the currently reviewed Railway service watch paths, so they are not expected to build or deploy a Railway service. Recheck current Railway watch paths and actual GitHub rules before any separately authorized merge; if they changed or the effect is uncertain, stop and report it.
 
 This policy is not release authorization. Confirm the effective branch rules at the time of each merge, use the repository's approved merge method, and require explicit owner authorization for that PR. Never bypass an enforced rule or treat local evidence as a GitHub Required Check.
+
+## Owner decisions and push gate
+
+These owner decisions are final:
+
+- **D1.** GitHub Actions stay `workflow_dispatch`-only permanently. There is no hosted "final check". Agents never trigger a workflow. Repository-policy tests fail if any workflow gains an automatic trigger (`push`, `pull_request`, `pull_request_target`, `schedule`, `workflow_run`, `repository_dispatch`, or any other event besides `workflow_dispatch`).
+- **D2.** Railway configuration stays unchanged (`checkSuites=false`). The release gate is the owner's manual merge, made only on verified Local CI evidence. Agents do not touch Railway.
+- **D3.** Merge-commit identity: a PR is mergeable only if its HEAD contains the current `origin/main` tip and its Local CI evidence was verified with base = that tip and head = PR HEAD. The merge commit's tree then equals the tested tree. If `main` advances, merge `origin/main` into the branch (merge commit, no rebase) and rerun full Local CI.
+- **D4.** Agents may push a branch and open a PR. Agents never merge, enable auto-merge, or deploy.
+
+No push without verified evidence for the exact HEAD. The commands are:
+
+```sh
+npm ci --prefix tools/codex-ci --ignore-scripts --no-audit --no-fund
+npm run hooks:install   # sets core.hooksPath=.githooks only if unset or already .githooks
+npm run ci:local        # clean tree required; fetches origin/main; fails unless HEAD contains it
+npm run ci:local:check  # fast re-check of recorded evidence for HEAD; no tests, no Lima
+```
+
+`ci:local` wraps the existing `local-ci.mjs` supervisor (all mandatory jobs from `workflow-inventory.mjs`) and the existing `evidence.py verify`, with base = `merge-base(HEAD, origin/main)`. Evidence is stored per head SHA under `$(git rev-parse --git-common-dir)/codex-local-ci/runs/<sha>/`, and a verified record is written to `codex-local-ci/verified/<sha>.json` only after the run passes and the verifier succeeds. The record binds the head, base, verifier summary and the SHA-256 of `result.json`.
+
+`.githooks/pre-push` checks every pushed commit (branch deletions are allowed) against its record: verified, passing, complete (every mandatory job and step PASS, 0 skips, every guest deleted, base stopped), `result.json` unchanged since verification, the commit contains the local `origin/main` ref, and the evidence base equals that ref. It reads local files only and finishes in seconds. Messages are in Thai and English.
+
+Never use `--no-verify`. The hook is a local safeguard only: it is unenforced in a clone where `hooks:install` was not run, `--no-verify` bypasses it, and it is not server-side protection. Bypassing it is a policy violation, and the owner's pre-merge evidence check remains the gate.
+
+### Pre-merge checklist (owner)
+
+1. The PR HEAD contains the current `origin/main` tip (up to date with `main`).
+2. Local CI evidence for that exact HEAD is verified with `evidence.py` (base = current `origin/main`, all mandatory jobs and steps PASS, 0 skips, guests deleted, base stopped).
+3. List the Railway services whose watch paths match the diff, and state whether the backend pre-deploy migration will run.

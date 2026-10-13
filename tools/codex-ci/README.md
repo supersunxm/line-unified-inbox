@@ -78,3 +78,7 @@ python3 evidence.py verify --evidence-dir=. --repo=/path/to/line-unified-inbox -
 ## Host limits
 
 This is a Mac-specific supervisor for the previously validated ARM64 Lima base. The base must exist, be stopped, and be readable by Lima. The supervisor and host remain trusted. Real Keychain ACL assurance and the supervisor's host access remain unresolved security risks; this system never accesses real credentials. Do not run against production credentials or add host mounts. No GitHub Actions job is triggered by these commands.
+
+## Push gate
+
+`npm run ci:local` wraps this runner and `evidence.py verify` for a clean HEAD that contains the current `origin/main` (base = `merge-base(HEAD, origin/main)`), stores evidence per head SHA under `$(git rev-parse --git-common-dir)/codex-local-ci/`, and records a verified entry only after both pass. `npm run ci:local:check` re-checks that record without running tests. `npm run hooks:install` sets `core.hooksPath=.githooks` only when it is unset or already `.githooks`; `.githooks/pre-push` then blocks any pushed commit without verified, complete evidence. The hook is local and bypassable; it is not server-side protection. See `docs/LOCAL_CI_POLICY.md`.

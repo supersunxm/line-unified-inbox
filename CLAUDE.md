@@ -2,7 +2,9 @@
 
 Persistent working agreement for Claude Code in this repository.
 `AGENTS.md` also applies. Where the two conflict during the current UI phase,
-this file takes precedence.
+this file takes precedence — except for CI, merge, push, and deploy rules:
+there `AGENTS.md` ("Permanent Local CI policy") and `docs/LOCAL_CI_POLICY.md`
+always win.
 
 ## Project context
 
@@ -109,27 +111,32 @@ the dependency, show exactly what change would be required, and wait.
 - Confirm the working tree is clean before editing; do not overwrite unrelated
   changes.
 - Keep commits focused. Do not force-push unless instructed.
-- **Merging to `main` deploys to production** (Railway deploys on merge). Merge
-  only as the Merging rule below allows; otherwise stop at the pull request.
+- **Merging to `main` deploys to production** (Railway deploys on merge).
+  Agents never merge; always stop at the pull request.
 - **Open every PR with base `main`.** After creating it, run
   `gh pr view --json baseRefName` and confirm it says `main`. Do not stack PRs
   on each other: branch each task from the latest `origin/main`, and if a task
   depends on an unmerged PR, wait for that PR to merge into `main` first.
-- **Merging:** once every CI check on a PR into main is green, merge it
-  automatically with a merge commit (`gh pr merge --merge`, or `--auto` when
-  available). Never bypass, override with admin rights, or disable a check.
-  Stop and report instead of merging if CI fails for reasons outside the task,
-  if a conflict touches unrelated files, or if branch protection blocks the
-  merge.
+- **Merging:** agents never merge, enable auto-merge, or deploy. The owner
+  merges manually, only on verified Local CI evidence for the PR's exact HEAD,
+  as defined in `AGENTS.md`. Before pushing, run `npm run ci:local` on a branch
+  that contains the current `origin/main`; the `pre-push` hook
+  (`npm run hooks:install`) blocks pushes without that evidence. Never use
+  `--no-verify` and never force-push unless instructed.
 
 ## Validation
 
-GitHub Actions is available. **CI must be green before merge.** Do not bypass a
-failing check: no merging over a red check, and no disabling, skipping, or
-loosening a check to get it green. Fix the cause. Local validation still runs
-first: run the commands below before you push, so CI confirms rather than
-discovers. A passing local build or CI run does not by itself prove production
-safety.
+**Local CI evidence is the gate** (`AGENTS.md`, `docs/LOCAL_CI_POLICY.md`):
+`npm run ci:local` runs all mandatory jobs in disposable guests and records
+evidence verified by `tools/codex-ci/evidence.py` for the exact HEAD. GitHub
+Actions workflows are manual (`workflow_dispatch`) only and are never a merge
+signal; do not trigger them. An absent, pending, or skipped check is never
+"green". Do not disable, skip, or loosen a check to make it pass; fix the
+cause. A passing local build or Local CI run does not by itself prove
+production safety.
+
+The frontend commands below are for fast feedback while working; they do not
+replace `npm run ci:local`.
 
 Run from `frontend/`:
 
@@ -150,7 +157,8 @@ not as the comparison target.
 
 **Do not run** root `npm run verify`, `dev:up`, `dev:restart`, `deploy:check`,
 or other root scripts. They touch backend Prisma, start the full dev stack,
-send webhook smoke tests, and auto-install dependencies.
+send webhook smoke tests, and auto-install dependencies. The exceptions are
+the Local CI scripts `ci:local`, `ci:local:check`, and `hooks:install`.
 
 For UI work also verify: no console/runtime errors, desktop and mobile layouts,
 loading/empty/error states, and that displayed data has not changed.
@@ -174,7 +182,9 @@ confirming none exists.
 3. Key implementation decisions
 4. Validation commands actually run
 5. Result of each
-6. What could not be validated locally, and the CI result (`gh pr checks`) once the PR exists
+6. What could not be validated locally, and the Local CI evidence for the final
+   HEAD (head SHA, base SHA, verified job/step counts). GitHub Actions results
+   are not a merge signal.
 7. Remaining risks
 8. Branch name
 9. Commit SHA, if committed
