@@ -1,6 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import { Prisma, WebhookProcessingStatus } from "@prisma/client";
 import { createHash } from "node:crypto";
+import { SUNN_INBOUND_PREFIX, type InboundPlan } from "./sunn-secretary-inbound";
 import { PrismaService } from "../../prisma.service";
 
 /**
@@ -46,16 +47,25 @@ export class SunnSecretaryEventReceiptService {
    * webhook processors from picking up this isolated assistant receipt.
    */
   async reserve(botUserId: unknown, eventId: unknown): Promise<"NEW" | "DUPLICATE"> {
+    return this.create(botUserId, eventId);
+  }
+
+  async reserveInbound(botUserId: unknown, eventId: unknown, plan: InboundPlan): Promise<"NEW" | "DUPLICATE"> {
+    return this.create(botUserId, eventId, plan);
+  }
+
+  private async create(botUserId: unknown, eventId: unknown, plan?: InboundPlan): Promise<"NEW" | "DUPLICATE"> {
     const identity = validateSunnReceiptIdentity(botUserId, eventId);
     const externalWebhookEventId = receiptKeyForIdentity(identity);
     try {
       await this.prisma.webhookEvent.create({
         data: {
           externalWebhookEventId,
-          eventType: "SUNN_SECRETARY_RESERVED",
+          eventType: plan ? SUNN_INBOUND_PREFIX + (plan.classification === "AUTHORIZED" ? "RECEIVED" : plan.classification) : "SUNN_SECRETARY_RESERVED",
+          errorMessage: plan ? JSON.stringify(plan) : null,
           destination: identity.botUserId,
           processingStatus: WebhookProcessingStatus.IGNORED,
-          processedAt: new Date(),
+          processedAt: plan?.classification === "AUTHORIZED" ? null : new Date(),
         },
       });
       return "NEW";

@@ -101,3 +101,19 @@ test("missing encryption key fails closed; generic OA APIs cannot operate on the
   const service = new LineOfficialAccountsService({} as PrismaService,{} as CredentialEncryptionService);
   for (const call of [() => service.remove(SECRETARY_CREDENTIAL_RECORD_ID), () => service.testConnection(SECRETARY_CREDENTIAL_RECORD_ID), () => service.credentialHealth(SECRETARY_CREDENTIAL_RECORD_ID), () => service.webhookInfo(SECRETARY_CREDENTIAL_RECORD_ID)]) await assert.rejects(call, /not found/u);
 });
+
+test("inbound identity uses only the dedicated validated vault secret and never decrypts access token", async () => {
+  const row = { webhookKey: "sunn-secretary-credentials-v1", accountType: "HEAD_OFFICE", storeId: null, isActive: false, archivedAt: new Date(),
+    destinationId: bot, encryptedChannelSecret: "encrypted-secret", encryptedChannelAccessToken: "must-not-decrypt", lastConnectionTestAt: new Date(), lastConnectionError: null as string | null };
+  const prisma = { lineOfficialAccount: { findUnique: async ({ where }: { where: { id: string } }) => { assert.equal(where.id, SECRETARY_CREDENTIAL_RECORD_ID); return row; } } } as unknown as PrismaService;
+  const encryption = { decrypt: (ciphertext: string) => { assert.equal(ciphertext, "encrypted-secret"); return secret; } } as unknown as CredentialEncryptionService;
+  const service = new SunnSecretaryCredentialsService(prisma, encryption);
+  assert.deepEqual(await service.inboundIdentity(), { botUserId: bot, channelSecret: secret });
+  row.lastConnectionError = "BOT_IDENTITY_MISMATCH";
+  await assert.rejects(service.inboundIdentity(), /not validated/u);
+  row.lastConnectionError = null; row.isActive = true;
+  await assert.rejects(service.inboundIdentity(), /storage unavailable/u);
+  row.isActive = false;
+  const unavailable = new SunnSecretaryCredentialsService(prisma, { decrypt: () => { throw new Error("private encryption diagnostic"); } } as unknown as CredentialEncryptionService);
+  await assert.rejects(unavailable.inboundIdentity(), { message: "Secretary credentials cannot be read securely" });
+});

@@ -1,5 +1,5 @@
 const assert = require('node:assert/strict');
-const { randomBytes, randomUUID, createHash } = require('node:crypto');
+const { randomBytes, randomUUID, createHash, createHmac } = require('node:crypto');
 const { spawn } = require('node:child_process');
 const { createServer } = require('node:net');
 const { openSync, closeSync } = require('node:fs');
@@ -25,11 +25,12 @@ async function run() {
     const exited = new Promise(resolve => child.once('exit', resolve));
     child.kill('SIGTERM'); await exited;
   };
-  const start = async (configured = true) => {
+  const start = async (configured = true, inboundEnabled = false) => {
     child = spawn(process.execPath, ['dist/main.js'], {
       env: { ...process.env, DATABASE_URL: url.toString(), NODE_ENV: 'test', PORT: '3001', FRONTEND_URL: 'http://localhost:3000',
         EMAIL_PROVIDER: 'none', LINE_CREDENTIAL_ENCRYPTION_KEY: encryptionKey, CREDENTIAL_ENCRYPTION_KEY: encryptionKey,
-        SUNN_SECRETARY_OWNER_HQ_USER_ID: configured ? ownerId : '', SUNN_SECRETARY_WEBHOOK_ENABLED: 'false',
+        SUNN_SECRETARY_OWNER_HQ_USER_ID: configured ? ownerId : '', SUNN_SECRETARY_WEBHOOK_ENABLED: inboundEnabled ? 'true' : 'false',
+        SUNN_SECRETARY_ALLOWED_USER_IDS: 'U' + 'a'.repeat(32), SUNN_SECRETARY_STORE_SCOPE_BY_USER: '{}', SUNN_SECRETARY_BOT_USER_ID: 'U' + '0'.repeat(32), SUNN_SECRETARY_CHANNEL_SECRET: 'intentionally-different-env-secret',
         LINE_WEBHOOK_ENABLED: 'false', PILOT_MODE: 'false' }, stdio: ['ignore', log, log],
     });
     for (let attempt = 0; attempt < 100; attempt++) {
@@ -75,7 +76,38 @@ async function run() {
     await stop(); await start();
     const reloaded = await request(tokens[0]); assert.equal(reloaded.status, 200);
     const state = await reloaded.json(); assert.equal(state.accessTokenConfigured, true); assert.equal(state.validationState, 'NOT_VALIDATED'); assert.equal(state.webhookEnabled, false);
-    console.log('PASS: real Nest HTTP authorization, CSRF, size limits, encryption, restart persistence and disabled webhook');
+    await stop();
+    // Local fixture only: no official LINE API call is made to validate these synthetic credentials.
+    await db.lineOfficialAccount.update({ where: { id: recordId }, data: { lastConnectionTestAt: new Date(), lastConnectionError: null } });
+    const eventId = 'http-inbound-' + randomUUID();
+    const payload = JSON.stringify({ destination: values.botUserId, events: [{ type: 'message', timestamp: Date.now(), webhookEventId: eventId,
+      source: { type: 'group', groupId: 'C' + 'a'.repeat(32), userId: 'U' + 'a'.repeat(32) },
+      message: { type: 'text', text: '@เลขาซันน์ เดือนตุลาคม ปี 2026 LINE OA ค้างตอบ', mention: { mentionees: [{ type: 'user', userId: values.botUserId }] } } }] });
+    const send = (raw, signature = createHmac('sha256', values.channelSecret).update(raw).digest('base64')) => fetch('http://127.0.0.1:3001/sunn-secretary/webhook', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-line-signature': signature }, body: raw });
+    try {
+      await start(true, true);
+      assert.equal((await send(payload, 'invalid')).status, 401);
+      assert.equal((await send(JSON.stringify({ destination: 'U' + '0'.repeat(32), events: [] }))).status, 400);
+      assert.equal((await send(JSON.stringify({ destination: values.botUserId, events: [] }))).status, 200);
+      assert.equal((await send(payload)).status, 200);
+      await stop(); await start(true, true);
+      assert.equal((await send(payload)).status, 200);
+      // New process automatically recovers the durable accepted event after restart.
+      let recovered = false;
+      for (let attempt = 0; attempt < 150; attempt++) {
+        const work = await db.webhookEvent.findFirst({ where: { destination: values.botUserId, eventType: 'SUNN_SECRETARY_INBOUND_BLOCKED_SCOPE' } });
+        if (work) { recovered = true; break; }
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+      assert.equal(recovered, true, 'scheduled recovery must run in the restarted compiled application');
+      const receipts = await db.webhookEvent.findMany({ where: { destination: values.botUserId, externalWebhookEventId: { startsWith: 'sunn-secretary:v1:' } } });
+      assert.equal(receipts.length, 1); assert.equal(receipts[0].processingStatus, 'IGNORED');
+      assert.ok(!receipts[0].errorMessage.includes('ค้างตอบ'));
+    } finally {
+      await stop();
+      await db.webhookEvent.deleteMany({ where: { destination: values.botUserId, externalWebhookEventId: { startsWith: 'sunn-secretary:v1:' } } });
+    }
+    console.log('PASS: real Nest HTTP authorization, CSRF, encrypted credential precedence, signed ingress, restart deduplication and disabled webhook');
   } finally {
     await stop(); closeSync(log);
     await db.auditLog.deleteMany({ where: { actorUserId: { in: users } } });

@@ -3432,3 +3432,7 @@ Product access requirement for future Phase 5.3: production Sunn Secretary must 
 ## 2026-10-13 — Separate local Sunn preparation from production Mirror closure
 
 Store32610 recovery does not close the fleet gate when the completed next cycle has26otherPROFILE_OPERATION_BUSY partials. Report the verified118/144 success result and retain historical completeness as unproven. The contention is caused by non-waiting lock acquisition behind a healthy HEALTH_SESSION; propose bounded cooperative wait or a deferred retry while retaining ownership/identity checks. Do not disable health checks, force unlock, change credentials or replay data. Continue PR546 local-only compatibility preparation independently; do not expand its receipt foundation into event handling/delivery or production changes.
+
+## 2026-10-13 — Sunn Secretary inbound preparation without delivery
+
+Reuse IGNORED WebhookEvent receipts with namespaced eventType states and a versioned bounded plan in errorMessage, avoiding schema changes and Mirror deployment watch paths. Insert the full initial plan atomically. Use optimistic leased claims and side-effect-free deterministic preparation, not receipt reservation as command completion. No group preapproval; sender authorization plus actual bot mention is required. Resolve nonempty store scope server-side and fail closed if absent. PREPARED does not imply query execution or LINE delivery; external execution and ambiguous-delivery policies remain a later review gate. See docs/SUNN_SECRETARY_PHASE53_INBOUND.md.
