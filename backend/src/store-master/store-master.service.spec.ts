@@ -1,10 +1,15 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import test from "node:test";
 import { PrismaService } from "../prisma.service";
 import { StoreMasterService } from "./store-master.service";
 
 const header =
   "STORE ID,STORE NAME,ACCOUNT NAME,Line OA Link,Line ID,URLS,Province / จังหวัด,Region / ภูมิภาค,TikTok Username,TikTok Profile URL";
+
+function explicitImport(csv: string) {
+  return { apply: true as const, expectedSha256: createHash("sha256").update(csv, "utf8").digest("hex") };
+}
 
 void test("re-import updates the stable Store ID and TikTok fields instead of creating a duplicate", async () => {
   const records: Array<Record<string, unknown>> = [];
@@ -27,20 +32,18 @@ void test("re-import updates the stable Store ID and TikTok fields instead of cr
   };
   const prisma = {
     storeMaster: model,
-    $transaction: (work: (tx: { storeMaster: typeof model }) => Promise<void>) =>
-      work({ storeMaster: model }),
+    $transaction: (work: (tx: { $queryRaw: () => Promise<unknown[]>; storeMaster: typeof model }) => Promise<unknown>) =>
+      work({ $queryRaw: () => Promise.resolve([{ lockResultIsNull: false }]), storeMaster: model }),
   } as unknown as PrismaService;
   const service = new StoreMasterService(prisma);
 
-  await service.importCsv(
-    `${header}\n22535,Old Store,Old Account,https://lin.ee/old,@old,https://manager.line.biz/account/old,Lamphun,Northern,@oppo_old,https://www.tiktok.com/@oppo_old`
-  );
+  const firstCsv = `${header}\n22535,Old Store,Old Account,https://lin.ee/old,@old,https://manager.line.biz/account/old,Lamphun,Northern,@oppo_old,https://www.tiktok.com/@oppo_old`;
+  await service.importCsv(firstCsv, "GOOGLE_SHEET", explicitImport(firstCsv));
   assert.equal(records.length, 1);
   assert.equal(records[0].tiktokUsername, "oppo_old");
 
-  await service.importCsv(
-    `${header}\n22535,Corrected Store,Corrected Account,https://lin.ee/new,@new,https://manager.line.biz/account/correct,Lamphun,Northern,@oppo_updated,https://www.tiktok.com/@oppo_updated`
-  );
+  const correctedCsv = `${header}\n22535,Corrected Store,Corrected Account,https://lin.ee/new,@new,https://manager.line.biz/account/correct,Lamphun,Northern,@oppo_updated,https://www.tiktok.com/@oppo_updated`;
+  await service.importCsv(correctedCsv, "GOOGLE_SHEET", explicitImport(correctedCsv));
   assert.equal(records.length, 1);
   assert.equal(records[0].storeName, "Corrected Store");
   assert.equal(records[0].lineManagerUrl, "https://manager.line.biz/account/correct");
@@ -65,7 +68,8 @@ void test("validation detects missing, duplicate, and mismatched TikTok account 
   };
   const prisma = {
     storeMaster: model,
-    $transaction: (work: any) => work({ storeMaster: model }),
+    $transaction: (work: (tx: { $queryRaw: () => Promise<unknown[]>; storeMaster: typeof model }) => Promise<unknown>) =>
+      work({ $queryRaw: () => Promise.resolve([{ lockResultIsNull: false }]), storeMaster: model }),
   } as unknown as PrismaService;
   const service = new StoreMasterService(prisma);
 
@@ -75,7 +79,7 @@ void test("validation detects missing, duplicate, and mismatched TikTok account 
 22537,Store 3,Account 3,https://lin.ee/3,@3,https://manager.line.biz/account/22537,Bangkok,Central,,
 22538,Store 4,Account 4,https://lin.ee/4,@4,https://manager.line.biz/account/22538,Bangkok,Central,@oppo_mismatch,https://www.tiktok.com/@oppo_other`;
 
-  const validation = await service.importCsv(testCsv);
+  const validation = await service.importCsv(testCsv, "GOOGLE_SHEET", explicitImport(testCsv));
   assert.equal(validation.total, 4);
   assert.equal(validation.duplicateTikTokUsernames, 2, "Should report duplicate username count");
   assert.equal(validation.missingTikTokUsernames, 1, "Should report missing username count");
@@ -99,7 +103,8 @@ void test("importCsv persists googleMapsUrl and validation counts invalidGoogleM
   };
   const prisma = {
     storeMaster: model,
-    $transaction: (work: any) => work({ storeMaster: model }),
+    $transaction: (work: (tx: { $queryRaw: () => Promise<unknown[]>; storeMaster: typeof model }) => Promise<unknown>) =>
+      work({ $queryRaw: () => Promise.resolve([{ lockResultIsNull: false }]), storeMaster: model }),
   } as unknown as PrismaService;
   const service = new StoreMasterService(prisma);
 
@@ -110,7 +115,7 @@ void test("importCsv persists googleMapsUrl and validation counts invalidGoogleM
 22537,Store 3,Account 3,https://lin.ee/3,@3,https://manager.line.biz/account/22537,Bangkok,Central,,,http://insecure.maps.google.com/not-https
 22538,Store 4,Account 4,https://lin.ee/4,@4,https://manager.line.biz/account/22538,Bangkok,Central,,,`;
 
-  const validation = await service.importCsv(csvData);
+  const validation = await service.importCsv(csvData, "GOOGLE_SHEET", explicitImport(csvData));
   assert.equal(validation.total, 4);
   assert.equal(records[0].googleMapsUrl, "https://maps.app.goo.gl/valid1?q=rama9");
   assert.equal(records[1].googleMapsUrl, "https://www.google.com/maps/place/OPPO+Central");

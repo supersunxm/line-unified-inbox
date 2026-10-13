@@ -1,143 +1,39 @@
+import { readFile } from "node:fs/promises";
 import { PrismaService } from "../prisma.service";
+import { parseStoreMasterApprovedChangeSet } from "./store-master-approval";
+import { getStoreMasterPreviewCliOutcome, parseStoreMasterSyncCliArgs } from "./store-master-cli-args";
 import { StoreMasterService } from "./store-master.service";
-import { parseStoreMasterCsv } from "./store-master.utils";
-
-function duplicateValues(values: Array<string | null>): string[] {
-  const counts = new Map<string, number>();
-  for (const raw of values) {
-    const value = raw?.trim();
-    if (!value) continue;
-    counts.set(value, (counts.get(value) ?? 0) + 1);
-  }
-  return [...counts.entries()].filter(([, count]) => count > 1).map(([value]) => value);
-}
-
-async function fetchConfiguredMasterCsv(): Promise<string> {
-  const configured = process.env.STORE_MASTER_GOOGLE_SHEET_URL?.trim();
-  if (!configured) throw new Error("STORE_MASTER_GOOGLE_SHEET_URL is not configured");
-  const match = configured.match(/\/spreadsheets\/d\/([^/]+)/u);
-  if (!match) throw new Error("Invalid Google Sheets URL");
-  const gid = configured.match(/[?&#]gid=(\d+)/u)?.[1];
-  const url = `https://docs.google.com/spreadsheets/d/${match[1]}/export?format=csv${gid ? `&gid=${gid}` : ""}`;
-  const response = await fetch(url);
-  if (!response.ok) throw new Error(`Google Sheets export failed (${response.status})`);
-  return response.text();
-}
+import { fetchStoreMasterCsvSnapshot } from "./store-master-source";
 
 async function main() {
-  const csv = await fetchConfiguredMasterCsv();
-  const sourceRows = parseStoreMasterCsv(csv);
-  if (sourceRows.length === 0) throw new Error("Store Master source is empty");
-
-  const duplicateSourceStoreIds = duplicateValues(sourceRows.map((row) => row.externalStoreId));
-  if (duplicateSourceStoreIds.length > 0) {
-    throw new Error(
-      `Store ID integrity check failed before import: duplicate Store ID(s): ${duplicateSourceStoreIds.join(", ")}`,
-    );
-  }
-
+  const options = parseStoreMasterSyncCliArgs(process.argv.slice(2));
+  const approvedChangeSet = options.approvedChangeSetPath
+    ? parseStoreMasterApprovedChangeSet(JSON.parse(await readFile(options.approvedChangeSetPath, "utf8")) as unknown)
+    : [];
+  const snapshot = await fetchStoreMasterCsvSnapshot();
   const prisma = new PrismaService();
   await prisma.$connect();
   try {
-    const activeMasterIds = await prisma.storeMaster.findMany({
-      where: { isActive: true, externalStoreId: { not: null } },
-      select: { externalStoreId: true },
+    const result = await new StoreMasterService(prisma).syncFromGoogleSheet(snapshot, {
+      apply: options.apply,
+      expectedSha256: options.expectedSha256,
+      approvedChangeSet,
     });
-    const duplicateDbStoreIds = duplicateValues(activeMasterIds.map((row) => row.externalStoreId));
-    if (duplicateDbStoreIds.length > 0) {
-      throw new Error(
-        `Store ID integrity check failed before sync: duplicate active StoreMaster ID(s): ${duplicateDbStoreIds.join(", ")}`,
-      );
+    process.stdout.write(`${JSON.stringify({ event: options.apply ? "store_master_sync_applied" : "store_master_sync_preview", ...result }, null, 2)}\n`);
+    if (result.mode === "PREVIEW") {
+      const outcome = getStoreMasterPreviewCliOutcome(result.preview.identityConflicts);
+      if (outcome.diagnostic) process.stderr.write(`${JSON.stringify(outcome.diagnostic)}\n`);
+      process.exitCode = outcome.exitCode;
     }
-
-    const service = new StoreMasterService(prisma);
-    if (process.argv.includes("--preview")) {
-      const preview = await service.previewCsv(csv, "GOOGLE_SHEET");
-      console.log(JSON.stringify({
-        event: "store_master_sync_preview",
-        summary: preview.summary,
-        identityConflicts: preview.identityConflicts,
-        oldRowOverwriteRisks: preview.oldRowOverwriteRisks,
-        closedStoreOperationalReview: preview.closedStoreOperationalReview,
-        expectedStores: preview.parsed
-          .filter((row) => ["2425", "18532", "21064", "24377", "26191", "26533", "27258", "30280", "30538", "30679", "30783", "31749", "31754", "32610", "32955", "32983"].includes(row.externalStoreId ?? ""))
-          .map((row) => ({ externalStoreId: row.externalStoreId, storeName: row.storeName, accountName: row.accountName, lineId: row.lineId, sourceRowNumber: row.sourceRowNumber, isActive: row.isActive, dataQualityStatus: row.dataQualityStatus })),
-      }));
-      if (preview.identityConflicts.length > 0) process.exitCode = 1;
-      return;
-    }
-    const result = await service.syncFromGoogleSheet();
-
-    if (result.validation.duplicateExternalStoreIds > 0) {
-      throw new Error(
-        `Store ID integrity check failed: source contains ${result.validation.duplicateExternalStoreIds} duplicate Store ID row(s)`,
-      );
-    }
-    if (result.connectedOaSync.storeIdConflicts > 0) {
-      throw new Error(
-        `Store ID reconciliation stopped with ${result.connectedOaSync.storeIdConflicts} Store ID conflict(s)`,
-      );
-    }
-    if (result.connectedOaSync.failed > 0) {
-      throw new Error(
-        `Store ID reconciliation had ${result.connectedOaSync.failed} failed record(s)`,
-      );
-    }
-
-    const stores = await prisma.store.findMany({
-      where: { archivedAt: null, isActive: true, storeMasterId: { not: null } },
-      select: {
-        id: true,
-        code: true,
-        name: true,
-        region: true,
-        area: true,
-        storeMaster: {
-          select: {
-            externalStoreId: true,
-            storeName: true,
-            region: true,
-            province: true,
-          },
-        },
-      },
-    });
-
-    const mismatches = stores.filter((store) => {
-      const master = store.storeMaster;
-      if (!master?.externalStoreId) return false;
-      return (
-        store.code?.trim() !== master.externalStoreId.trim() ||
-        store.name !== master.storeName ||
-        store.region !== master.region ||
-        store.area !== master.province
-      );
-    });
-
-    if (mismatches.length > 0) {
-      throw new Error(
-        `Post-sync Store ID verification failed for ${mismatches.length} linked store(s)`,
-      );
-    }
-
-    console.log(JSON.stringify({
-      event: "store_id_canonical_sync_verified",
-      sourceRows: sourceRows.length,
-      validation: result.validation,
-      sync: result.connectedOaSync,
-      verifiedLinkedStores: stores.length,
-    }));
   } finally {
     await prisma.$disconnect();
   }
 }
 
-void main().catch((error) => {
-  console.error(
-    JSON.stringify({
-      event: "store_id_canonical_sync_failed",
-      message: error instanceof Error ? error.message : String(error),
-    }),
-  );
+void main().catch((error: unknown) => {
+  process.stderr.write(`${JSON.stringify({
+    event: "store_master_sync_failed",
+    message: error instanceof Error ? error.message : "Store Master sync failed",
+  })}\n`);
   process.exitCode = 1;
 });

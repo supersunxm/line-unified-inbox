@@ -19,7 +19,9 @@ export type MessageTranslationResult = {
   cached: boolean;
 };
 export type StoreMasterSyncResult = {
-  source: { type: string; sheetName: string; fetchedAt: string; rows: number };
+  mode: "PREVIEW" | "APPLIED";
+  applied: boolean;
+  source: { type: string; sheetName: string; fetchedAt: string; rows: number; sha256: string };
   validation: {
     total: number;
     complete: number;
@@ -38,7 +40,9 @@ export type StoreMasterSyncResult = {
     missingGoogleMapsUrls: number;
     invalidGoogleMapsUrls: number;
   };
-  import: {
+  preview?: { creates: number; updates: number; unchanged: number; lifecycleChanges: number };
+  lifecycleReview?: Array<{ externalStoreId: string; storeName: string; sourceRowNumber: number; operation: "CLOSE" | "REOPEN"; previousStoreMasterActive: boolean | null; nextStoreMasterActive: boolean }>;
+  import?: {
     validation: {
       total: number;
       complete?: number;
@@ -53,7 +57,7 @@ export type StoreMasterSyncResult = {
     };
     failed: number;
   };
-  connectedOaSync: { processed: number; updated: number; unchanged: number; missingStoreMaster: number; failed: number };
+  connectedOaSync?: { processed: number; updated: number; unchanged: number; missingStoreMaster: number; failed: number };
 };
 
 export type PendingRegistration = {

@@ -1,20 +1,30 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { StoreMasterController } from "./store-master.controller";
+import { BadRequestException } from "@nestjs/common";
 import { StoreMasterService } from "./store-master.service";
+import { StoreMasterController } from "./store-master.controller";
 
-void test("search delegates a valid query with the default limit", async () => {
-  const calls: Array<{ query: string; limit: number }> = [];
-  const service = { search: (query: string, limit: number) => { calls.push({ query, limit }); return Promise.resolve([]); } } as unknown as StoreMasterService;
-  const result = await new StoreMasterController(service).search("OPPO Siam TV Lumphun");
-  assert.deepEqual(result, []);
-  assert.deepEqual(calls, [{ query: "OPPO Siam TV Lumphun", limit: 10 }]);
+void test("ADMIN sync controller defaults to preview and does not authorize apply", async () => {
+  const requests: unknown[] = [];
+  const service = {
+    syncFromGoogleSheet: async (snapshot: unknown, options: unknown) => {
+      requests.push({ snapshot, options });
+      return { mode: "PREVIEW" };
+    },
+  };
+  const controller = new StoreMasterController(service as unknown as StoreMasterService);
+
+  await controller.sync();
+  assert.deepEqual(requests, [{
+    snapshot: undefined,
+    options: { apply: false, expectedSha256: undefined, approvedChangeSet: [] },
+  }]);
 });
 
-void test("missing q returns an empty search and limit is capped at 50", async () => {
-  const calls: Array<{ query: string; limit: number }> = [];
-  const service = { search: (query: string, limit: number) => { calls.push({ query, limit }); return Promise.resolve([]); } } as unknown as StoreMasterService;
-  const result = await new StoreMasterController(service).search("", "500");
-  assert.deepEqual(result, []);
-  assert.deepEqual(calls, [{ query: "", limit: 50 }]);
+void test("ADMIN sync controller rejects unsupported or malformed approval payloads", () => {
+  const service = { syncFromGoogleSheet: async () => ({ mode: "PREVIEW" }) };
+  const controller = new StoreMasterController(service as unknown as StoreMasterService);
+
+  assert.throws(() => controller.sync({ force: true }), BadRequestException);
+  assert.throws(() => controller.sync({ apply: true, approvedChangeSet: [{ kind: "STORE_LIFECYCLE" }] }), BadRequestException);
 });

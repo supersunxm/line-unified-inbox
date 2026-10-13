@@ -145,6 +145,14 @@ function normalizedHeader(value: string) {
   return value.normalize("NFKC").replace(/\s+/gu, " ").trim().toLocaleLowerCase();
 }
 
+export function hasRequiredStoreMasterCsvHeaders(csv: string): boolean {
+  const [headers] = parseCsv(csv);
+  if (!headers) return false;
+  const normalized = headers.map(normalizedHeader);
+  const required = ["store id", "store name", "account name"];
+  return required.every((header) => normalized.filter((candidate) => candidate === header).length === 1);
+}
+
 function clean(value?: string | null) {
   const result = value?.trim();
   return result && result !== "#REF!" ? result : null;

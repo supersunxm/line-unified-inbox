@@ -273,3 +273,31 @@ void test("dry run reports metadata repairs without changing any data", async ()
   assert.deepEqual(value.accountWrites, []);
   assert.deepEqual(value.conversationWrites, []);
 });
+
+void test("LINE OA and conversation reassignment require the exact approved change set", async () => {
+  const value = fixture();
+  value.accounts[0].store = {
+    id: "legacy-store",
+    code: "",
+    name: "Legacy Store",
+    region: "",
+    area: "",
+    storeMasterId: "master-12140",
+    storeMaster: { externalStoreId: "" },
+  };
+
+  const plan = await syncConnectedLineOaMetadata(value.prisma, true);
+  assert.equal(plan.changeSet.length, 2);
+  assert.equal(plan.changeSet[0].kind, "LINE_OA_REASSIGNMENT");
+  assert.equal(plan.changeSet[1].kind, "CONVERSATION_REASSIGNMENT");
+  await assert.rejects(syncConnectedLineOaMetadata(value.prisma, false), /do not match the approved change set/);
+  assert.deepEqual(value.accountWrites, []);
+  assert.deepEqual(value.conversationWrites, []);
+
+  await syncConnectedLineOaMetadata(value.prisma, false, plan.changeSet);
+  assert.deepEqual(value.accountWrites, [{ storeId: "store-12140" }]);
+  assert.deepEqual(value.conversationWrites, [{
+    where: { lineOfficialAccountId: "oa-12140" },
+    data: { storeId: "store-12140" },
+  }]);
+});
