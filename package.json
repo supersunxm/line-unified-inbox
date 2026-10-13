@@ -18,6 +18,9 @@
     "line-chat:diagnose": "npm --prefix backend run line-chat:diagnose --",
     "seed:line-chat-test": "npm --prefix backend run seed:line-chat-test",
     "worker:line-chat-nickname": "npm --prefix backend run worker:line-chat-nickname",
-    "line-chat:mapping:import": "npm --prefix backend run line-chat:mapping:import --"
+    "line-chat:mapping:import": "npm --prefix backend run line-chat:mapping:import --",
+    "ci:local": "node tools/codex-ci/local-gate.mjs run",
+    "ci:local:check": "node tools/codex-ci/local-gate.mjs check",
+    "hooks:install": "node tools/codex-ci/local-gate.mjs install-hooks"
   }
 }

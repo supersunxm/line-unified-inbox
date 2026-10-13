@@ -42,3 +42,22 @@ Maintain `AI_PROGRESS.md` with the current task, completed work, checks run/pass
 - The Local CI policy does not create GitHub Checks or bypass GitHub protections. Inspect and satisfy all rules enforced at merge time.
 - Owner authorization is still required for each merge and each production release. Never auto-merge or deploy from a green Local CI result.
 - Preserve the approved disposable runner's isolation, credential boundary, network allowlist, and cleanup behavior. If any boundary cannot be verified, stop instead of weakening it.
+
+### Owner decisions D1–D4 (final)
+
+- D1. GitHub Actions stay `workflow_dispatch`-only permanently. There is no hosted "final check". Agents never trigger a workflow, and an absent, pending or skipped GitHub check is never "green".
+- D2. Railway configuration stays unchanged (`checkSuites=false`). The release gate is the owner's manual merge, made only on verified Local CI evidence. Agents do not touch Railway.
+- D3. Merge-commit identity: a PR is mergeable only if its HEAD contains the current `origin/main` tip and its Local CI evidence was verified with base = that tip and head = PR HEAD, so the merge commit's tree equals the tested tree. If `main` advances, merge `origin/main` into the branch (merge commit) and rerun full Local CI.
+- D4. Agents may push a branch and open a PR. Agents never merge, enable auto-merge, or deploy.
+
+### Push gate
+
+- No push without verified Local CI evidence for the exact HEAD being pushed: run `npm run ci:local` (all mandatory jobs plus `evidence.py verify`, base = current `origin/main`). `npm run ci:local:check` re-checks the recorded evidence without running tests.
+- Install the hook once per clone with `npm run hooks:install`; `.githooks/pre-push` blocks pushes without that evidence. It never replaces an existing developer `core.hooksPath`.
+- Never use `--no-verify` and never force-push. The local hook can be bypassed and is not server-side protection; bypassing it is a policy violation.
+
+### Pre-merge checklist (owner)
+
+1. The PR HEAD contains the current `origin/main` tip (up to date with `main`).
+2. Local CI evidence for that exact HEAD is verified with `evidence.py` (base = current `origin/main`, all mandatory jobs and steps PASS, 0 skips, guests deleted, base stopped).
+3. List the Railway services whose watch paths match the diff, and state whether the backend pre-deploy migration will run.
