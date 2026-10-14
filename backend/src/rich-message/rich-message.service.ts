@@ -85,6 +85,23 @@ export class RichMessageService {
   async update(id: string, dto: UpdateRichMessageDto, user?: AuthUser) {
     const current = await this.requireRecord(id);
     const currentActions = this.parseActions(current.actionsJson);
+    const actions = dto.actions;
+    const actionsProvided = Array.isArray(actions);
+    const geometryChanged = actionsProvided && (
+      actions.length !== currentActions.length ||
+      actions.some((act, idx) => {
+        const cur = currentActions[idx];
+        if (!cur || !act?.area) return true;
+        return (
+          act.area.x !== cur.area.x ||
+          act.area.y !== cur.area.y ||
+          act.area.width !== cur.area.width ||
+          act.area.height !== cur.area.height
+        );
+      })
+    );
+    const allowLegacyOverlap = !geometryChanged;
+
     const normalized = this.validateAndNormalize({
       name: dto.name ?? current.name,
       description: dto.description !== undefined ? dto.description : current.description,
@@ -95,7 +112,7 @@ export class RichMessageService {
       baseHeight: dto.baseHeight ?? current.baseHeight,
       actions: dto.actions ?? currentActions,
       isActive: dto.isActive ?? current.isActive,
-    });
+    }, { allowLegacyOverlap });
     const actionsJson = JSON.stringify(normalized.actions);
     const now = new Date();
 
@@ -222,8 +239,8 @@ export class RichMessageService {
     if (Array.isArray(value)) return value as RichMessageAction[];
     if (typeof value === "string") {
       try {
-        const parsed = JSON.parse(value);
-        return Array.isArray(parsed) ? parsed as RichMessageAction[] : [];
+        const parsed: unknown = JSON.parse(value);
+        return Array.isArray(parsed) ? (parsed as RichMessageAction[]) : [];
       } catch {
         return [];
       }
@@ -231,7 +248,7 @@ export class RichMessageService {
     return [];
   }
 
-  private validateAndNormalize(dto: CreateRichMessageDto) {
+  private validateAndNormalize(dto: CreateRichMessageDto, options?: { allowLegacyOverlap?: boolean }) {
     const name = dto.name?.trim();
     const altText = dto.altText?.trim();
     const mediaObjectKey = dto.mediaObjectKey?.trim();
@@ -248,8 +265,8 @@ export class RichMessageService {
     if (baseWidth !== IMAGEMAP_WIDTH) {
       throw new BadRequestException("Rich Message base width must be 1040 pixels");
     }
-    if (!Number.isInteger(baseHeight) || baseHeight < 1 || baseHeight > 1040) {
-      throw new BadRequestException("Rich Message base height must be between 1 and 1040 pixels");
+    if (!Number.isInteger(baseHeight) || baseHeight < 1 || baseHeight > 2080) {
+      throw new BadRequestException("Rich Message base height must be between 1 and 2080 pixels");
     }
     if (actions.length < 1 || actions.length > 50) {
       throw new BadRequestException("Rich Message must contain between 1 and 50 tappable areas");
@@ -260,15 +277,20 @@ export class RichMessageService {
       if (!action || (action.type !== "URI" && action.type !== "MESSAGE") || !value) {
         throw new BadRequestException(`Rich Message action #${index + 1} is invalid`);
       }
+      if (action.type === "URI") {
+        if (/^javascript:/i.test(value) || /^(data|file|vbscript):/i.test(value) || !/^(https?:\/\/|line:\/\/|tel:)/i.test(value)) {
+          throw new BadRequestException(`Rich Message action #${index + 1} has an invalid or unsafe URL`);
+        }
+      }
+      if (action.type === "MESSAGE" && value.length > 400) {
+        throw new BadRequestException(`Rich Message action #${index + 1} message cannot exceed 400 characters`);
+      }
       const area = action.area;
       if (!area || ![area.x, area.y, area.width, area.height].every(Number.isInteger)) {
         throw new BadRequestException(`Rich Message action #${index + 1} has an invalid area`);
       }
       if (area.x < 0 || area.y < 0 || area.width < 1 || area.height < 1 || area.x + area.width > baseWidth || area.y + area.height > baseHeight) {
         throw new BadRequestException(`Rich Message action #${index + 1} exceeds the image bounds`);
-      }
-      if (action.type === "MESSAGE" && value.length > 400) {
-        throw new BadRequestException(`Rich Message action #${index + 1} message cannot exceed 400 characters`);
       }
       return {
         id: action.id?.trim() || randomUUID(),
@@ -278,6 +300,23 @@ export class RichMessageService {
         area: { ...area },
       } satisfies RichMessageAction;
     });
+
+    if (!options?.allowLegacyOverlap) {
+      for (let i = 0; i < normalizedActions.length; i++) {
+        const a = normalizedActions[i].area;
+        for (let j = i + 1; j < normalizedActions.length; j++) {
+          const b = normalizedActions[j].area;
+          const overlaps =
+            a.x < b.x + b.width &&
+            a.x + a.width > b.x &&
+            a.y < b.y + b.height &&
+            a.y + a.height > b.y;
+          if (overlaps) {
+            throw new BadRequestException(`Rich Message action #${i + 1} overlaps with action #${j + 1}`);
+          }
+        }
+      }
+    }
 
     return {
       name,

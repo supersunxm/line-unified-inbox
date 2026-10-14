@@ -1,3 +1,25 @@
+# 2026-10-14: LINE Rich Message Template Picker Architecture & Verification
+
+- **LINE Official Account Manager Template Standard Alignment**:
+  - Implemented visual template picker modal supporting Square (all 12 illustrated arrangements Templates A–L), Landscape (6 presets including 1040×520 and 1040×350 banner), Portrait (5 presets including 1040×1300, 1040×1850, and 1040×2080), and Custom (freeform manual coordinates).
+  - Deterministic non-overlapping integer coordinates covering 100% canvas area with edge rounding (e.g. 1040 divided into 3 rows as 347 + 347 + 346 = 1040 px; 1300 divided into 3 rows as 433 + 433 + 434 = 1300 px), preventing 1-pixel rounding gaps and overlaps.
+
+- **LINE Imagemap Technical Specification Compliance**:
+  - In alignment with LINE Messaging API specifications, `baseWidth` is strictly 1040 px while `baseHeight` supports 1 to 2080 px (previously clamped to 1040 px in backend validation).
+  - Validated LINE image delivery endpoint `renderImagemapImage` resizing behavior across all five standard delivery widths (240, 300, 460, 700, 1040) using proportional integer aspect scaling (`Math.max(1, Math.round((record.baseHeight / record.baseWidth) * size))`), confirming clean rendering for landscape banner (1040×350) and full portrait (1040×2080).
+
+- **Backward Compatibility & Safe Evolution**:
+  - Existing `RichMessage` database records with `actionsJson`, `baseWidth`, and `baseHeight` load without schema migration. Old records with 1 full square match `square-1`, 4 quadrants match `square-4-grid`, and arbitrary coordinates gracefully resolve to `custom`.
+  - Greeting Message references (`GreetingRichMessageBlock` referencing `richMessageId`) and `buildLineImagemap(id)` remain fully operational without breaking changes.
+  - Safe template switching: existing configured actions trigger a confirmation modal warning before replacement, preventing inadvertent draft loss.
+
+- **Security & Geometric Integrity**:
+  - Client-side and server-side URL scheme validation: allows safe schemes (`https://`, `http://`, `line://`, `tel:`) and rejects unsafe schemes (`javascript:`, `data:`, `file:`, `vbscript:`).
+  - Action count bounds (1 to 50 areas) and character limit (<= 400 characters per message action).
+- **Legacy Overlap Preservation & Rollback Resilience**:
+  - Legacy records created before overlap detection retain existing overlapping coordinates without validation failures during display or metadata-only updates (`allowLegacyOverlap: true`). Strict overlap rejection is enforced whenever action geometry is newly submitted or modified.
+  - Rollback Analysis for Portrait Dimensions (`baseHeight > 1040`): In the event of a rollback, older backend code safely reads (`get`/`list`), serves image sizes (`renderImagemapImage`), and builds outbound LINE Imagemap payloads (`buildLineImagemap`), but will reject editing or saving records with `baseHeight > 1040` due to historical `1..1040` validation bounds. Mitigation: Operators must refrain from editing tall portrait records during rollback or resize them to square/landscape prior to saving.
+
 ## 2026-10-06 — Store Chats month UX: fresh navigation current month default and operational All view
 
 - URL is the sole authority for non-default month selection (`/chats?month=YYYY-MM` or `/chats?month=all`). Do NOT persist month into localStorage or global UI preferences so fresh navigation from top/sidebar links always opens the current Bangkok month.
@@ -3446,3 +3468,28 @@ Reuse IGNORED WebhookEvent receipts with namespaced eventType states and a versi
 ## 2026-10-13 — Local CI policy uses manual workflows and the proven isolated runner
 
 Remove only the automatic GitHub Actions event triggers from the five audited workflows; keep each `workflow_dispatch`, all existing permissions, and every existing required test command. Local CI remains a local result and never creates GitHub Checks or bypasses protections. Preserve the existing eight-job runner and guest lifecycle. Add one mandatory enforcement step to test trigger policy, baseline command parity, runner boundaries, evidence tamper detection, and the fail-closed artifact-retention inventory. Use a pinned `js-yaml` parser under `tools/codex-ci` because Ruby is absent from the approved guest; do not add system packages or change runner isolation. Package evidence from unchanged original logs, with source/Git identity and cleanup verified before handoff. Owner approval remains required for each merge and production release.
+
+## 2026-10-14 — LINE Official Account Rich Message Template Picker Architecture & Imagemap Dimension Constraints
+
+### Context
+HQ admins needed a visual template picker modeled after LINE Official Account Manager to configure Rich Messages with standard tappable regions, while preserving manual area editing, Greeting Message integration, and data safety. Previously, the backend rejected `baseHeight > 1040` and the frontend clamped uploads to 1040.
+
+### Decisions
+1. **Imagemap Dimension Support Range (1 to 2080 px)**:
+   - LINE Messaging API Imagemap specification mandates `baseSize.width = 1040`, while `baseSize.height` may scale with the image aspect ratio up to 2080 px.
+   - Audited backend image serving (`renderImagemapImage`): sharp resizes based on `Math.round((record.baseHeight / record.baseWidth) * size)` for all five supported widths (240, 300, 460, 700, 1040). Because scaling is proportional, portrait dimensions up to 2080 px render correctly without aspect ratio distortion.
+   - Updated validation on client and server to accept `baseHeight` between 1 and 2080 px.
+   - Stored in the existing `baseHeight` column with zero Prisma migrations.
+
+2. **12 Illustrated Square Arrangements with Exact Edge Rounding**:
+   - Implemented the full set of 12 square layouts (Templates A through L).
+   - Because 1040 is not evenly divisible by 3, deterministic integer division is applied (e.g. heights 347, 347, 346 px) to ensure 0 px gaps, 0 px overlap, and exact 1,081,600 px² (100%) coverage of the 1040×1040 canvas.
+
+3. **URL Security Scheme Allowlist**:
+   - Enforced client and server URI scheme validation: allowed schemes are `https://`, `http://`, `line://`, and `tel:`.
+   - Explicitly blocked unsafe and scripting schemes including `javascript:`, `data:`, `file:`, and `vbscript:`.
+
+4. **Action Overwrite Protection & Greeting Message Compatibility**:
+   - Switching templates on an existing draft with configured action values warns the user with a confirmation modal before replacing actions.
+   - Untouched library records and existing IDs are preserved.
+   - Greeting Message Imagemap payload structure remains identical and fully backward-compatible.
