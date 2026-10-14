@@ -9,8 +9,8 @@ import {
   parseHandoverCsv,
   redactHandoverSecrets,
   webhookKeysetSha256,
-} from "./line-oa-handover-import";
-import { parseLineOaHandoverCliArgs } from "./line-oa-handover-import-cli-args";
+} from "../line-official-accounts/line-oa-handover-import";
+import { parseLineOaHandoverCliArgs } from "../line-official-accounts/line-oa-handover-import-cli-args";
 
 const HOST = "inbox.example.test";
 
@@ -53,7 +53,7 @@ function snapshot(overrides: Partial<HandoverSnapshot> = {}): HandoverSnapshot {
 const none = { updateLines: new Set<number>(), allowClosedStoreCodes: new Set<string>() };
 
 void test("parses handover rows, strips the spreadsheet apostrophe and keeps credentials wrapped", () => {
-  const { rows, issues } = parseHandoverCsv(`﻿${csv([{ store: "200", basic: "@200bbbb", channel: "2000000001", key: key("new200") }])}`, HOST);
+  const { rows, issues } = parseHandoverCsv(`${String.fromCharCode(0xfeff)}${csv([{ store: "200", basic: "@200bbbb", channel: "2000000001", key: key("new200") }])}`, HOST);
   assert.equal(issues.length, 0);
   assert.equal(rows[0].line, 2);
   assert.equal(rows[0].basicId, "@200bbbb");

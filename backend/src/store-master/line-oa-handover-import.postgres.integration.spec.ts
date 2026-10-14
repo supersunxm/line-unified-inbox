@@ -3,7 +3,7 @@ import test from "node:test";
 import { PrismaClient } from "@prisma/client";
 import { CredentialEncryptionService } from "../credentials/credential-encryption.service";
 import type { PrismaService } from "../prisma.service";
-import { LineOfficialAccountsService } from "./line-official-accounts.service";
+import { LineOfficialAccountsService } from "../line-official-accounts/line-official-accounts.service";
 import {
   activateHandoverAccounts,
   applyHandoverPlan,
@@ -13,16 +13,17 @@ import {
   loadHandoverSnapshot,
   parseHandoverCsv,
   webhookKeysetSha256,
-} from "./line-oa-handover-import";
+} from "../line-official-accounts/line-oa-handover-import";
 
-const testDatabaseUrl = process.env.LINE_OA_HANDOVER_TEST_DATABASE_URL?.trim();
-if (!testDatabaseUrl) throw new Error("LINE_OA_HANDOVER_TEST_DATABASE_URL must point to an isolated LINE OA handover CI database");
+// Runs inside the isolated Store Master CI database created by scripts/test-store-master-postgres.cjs.
+const testDatabaseUrl = process.env.STORE_MASTER_TEST_DATABASE_URL?.trim();
+if (!testDatabaseUrl) throw new Error("STORE_MASTER_TEST_DATABASE_URL must point to an isolated Store Master CI database");
 const testDatabase = new URL(testDatabaseUrl);
 if (
   (testDatabase.protocol !== "postgresql:" && testDatabase.protocol !== "postgres:") ||
   !["localhost", "127.0.0.1", "::1", "[::1]", "postgres"].includes(testDatabase.hostname) ||
   testDatabase.username !== "ci" ||
-  !/^line_oa_handover_ci_[0-9]+$/u.test(decodeURIComponent(testDatabase.pathname.slice(1)))
+  !/^store_master_ci_[0-9]+$/u.test(decodeURIComponent(testDatabase.pathname.slice(1)))
 ) {
   throw new Error("LINE OA handover PostgreSQL tests require a dedicated local CI database");
 }
@@ -74,8 +75,17 @@ async function plan(text: string, options = none) {
   return { rows, issues, snapshot, plan: buildHandoverPlan(rows, issues, snapshot, options) };
 }
 
+const TEST_STORE_CODES = ["910001", "910002", "910003", "910004", "910005", "920001", "920002"];
+
 test.after(async () => {
-  await prisma.$disconnect();
+  // The Store Master CI database is shared with the other Store Master suites; remove every row this file created.
+  try {
+    await prisma.lineOfficialAccount.deleteMany({ where: { store: { code: { in: TEST_STORE_CODES } } } });
+    await prisma.store.deleteMany({ where: { code: { in: TEST_STORE_CODES } } });
+    await prisma.storeMaster.deleteMany({ where: { externalStoreId: { in: TEST_STORE_CODES } } });
+  } finally {
+    await prisma.$disconnect();
+  }
 });
 
 void test("handover import creates only new disabled OAs, applies the named update and leaves restored rows untouched", async () => {
@@ -91,6 +101,7 @@ void test("handover import creates only new disabled OAs, applies the named upda
     { store: "910005", key: key("nomaster") },
   ]);
   const options = { updateLines: new Set([3]), allowClosedStoreCodes: new Set(["910004"]) };
+  const oaCountBefore = await prisma.lineOfficialAccount.count();
   const prepared = await plan(text, options);
   assert.deepEqual(prepared.plan.summary, { PRESENT: 1, CREATE: 2, UPDATE_EXISTING: 1, SKIP_NO_STORE_MASTER: 1, CONFLICT: 0 });
   const keyset = webhookKeysetSha256(prepared.snapshot.oas);
@@ -99,7 +110,7 @@ void test("handover import creates only new disabled OAs, applies the named upda
     applyHandoverPlan({ prisma, service, encryption, rows: prepared.rows, issues: prepared.issues, options: { ...options, expectedPlanSha256: "0".repeat(64), expectedExistingKeysetSha256: keyset } }),
     /--expected-plan-sha256/u,
   );
-  assert.equal(await prisma.lineOfficialAccount.count(), 2);
+  assert.equal(await prisma.lineOfficialAccount.count(), oaCountBefore);
 
   const result = await applyHandoverPlan({
     prisma, service, encryption, rows: prepared.rows, issues: prepared.issues,
