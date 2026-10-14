@@ -8,6 +8,7 @@ import { isValidLineOaUrl } from "../store-master/store-master.utils";
 import { LatestManagerUrlMap, loadLatestManagerUrls, resolveLineOaManagerUrl } from "../store-master/line-oa-manager-url";
 import { getStoreGoogleMapsReadiness } from "../store-master/template-variable-resolver";
 import { storeClosedException } from "../store-master/store-lifecycle.service";
+import { upsertStoreFromStoreMaster } from "../store-master/store-from-store-master";
 import { FollowerInsightsService } from "../follower-insights/follower-insights.service";
 import { SECRETARY_CREDENTIAL_RECORD_ID } from "../ai/sunn-secretary/sunn-secretary-credentials.service";
 
@@ -386,135 +387,7 @@ export class LineOfficialAccountsService {
       const webhookKey = this.generateWebhookKey();
       if (!this.webhookConfiguration(webhookKey).configured) throw new InternalServerErrorException("PUBLIC_WEBHOOK_BASE_URL is not configured for LINE OA creation");
       try {
-        const item = await this.prisma.$transaction(async (tx) => {
-          const basicId = this.clean(dto.basicId);
-          const channelId = this.clean(dto.channelId);
-          const destinationId = this.clean(dto.destinationId);
-          const master = dto.storeMasterId
-            ? await tx.storeMaster.findUnique({
-                where: { id: dto.storeMasterId },
-                include: { stores: { select: { id: true, code: true, storeMasterId: true, isActive: true, archivedAt: true } } },
-              })
-            : null;
-          if (dto.storeMasterId && !master) throw new NotFoundException("Store Master record not found");
-          if (master?.isActive === false) throw storeClosedException(master.externalStoreId);
-
-          const selectedStore = dto.storeId
-            ? await tx.store.findUnique({ where: { id: dto.storeId }, select: { id: true, code: true, storeMasterId: true, isActive: true, archivedAt: true, storeMaster: { select: { isActive: true, externalStoreId: true } } } })
-            : null;
-          if (dto.storeId && !selectedStore) throw new NotFoundException("Store not found");
-          if (selectedStore?.storeMaster?.isActive === false) throw storeClosedException(selectedStore.storeMaster.externalStoreId ?? selectedStore.code);
-
-          const requestedStoreCode = master?.externalStoreId ?? this.clean(dto.newStore?.code);
-          const storeWithMatchingCode = requestedStoreCode
-            ? await tx.store.findUnique({ where: { code: requestedStoreCode }, select: { id: true, code: true, storeMasterId: true, isActive: true, archivedAt: true, storeMaster: { select: { isActive: true, externalStoreId: true } } } })
-            : null;
-          if (storeWithMatchingCode?.storeMaster?.isActive === false) throw storeClosedException(storeWithMatchingCode.storeMaster.externalStoreId ?? storeWithMatchingCode.code);
-          const masterStore = master?.stores[0] ?? null;
-
-          if (masterStore && storeWithMatchingCode && masterStore.id !== storeWithMatchingCode.id) {
-            throw this.duplicateException({ channelId: false, basicId: false, destinationId: false, storeCode: true });
-          }
-          if (selectedStore && storeWithMatchingCode && selectedStore.id !== storeWithMatchingCode.id) {
-            if (master) throw this.storeMasterIdentityException({ storeId: true, basicId: false, activeStoreOa: false });
-            throw this.duplicateException({ channelId: false, basicId: false, destinationId: false, storeCode: true });
-          }
-          if (!master && !selectedStore && storeWithMatchingCode?.isActive && !storeWithMatchingCode.archivedAt) {
-            throw this.duplicateException({ channelId: false, basicId: false, destinationId: false, storeCode: true });
-          }
-
-          let storeId: string;
-          const existingTargetStore = masterStore
-            ?? selectedStore
-            ?? (storeWithMatchingCode && (!storeWithMatchingCode.isActive || Boolean(storeWithMatchingCode.archivedAt)) ? storeWithMatchingCode : null);
-          if (master) {
-            await this.assertStoreMasterIdentity(tx, {
-              master,
-              basicId,
-              store: existingTargetStore ?? storeWithMatchingCode,
-            });
-          } else if (existingTargetStore && dto.isActive && await this.hasAnotherActiveStoreOa(tx, existingTargetStore.id)) {
-            throw this.duplicateException({ channelId: false, basicId: false, destinationId: false, storeCode: true });
-          }
-          if (master) {
-            if (existingTargetStore?.storeMasterId && existingTargetStore.storeMasterId !== master.id) {
-              throw this.duplicateException({ channelId: false, basicId: false, destinationId: false, storeCode: true });
-            }
-            storeId = existingTargetStore?.id ?? (await tx.store.create({
-              data: {
-                name: master.storeName,
-                code: master.externalStoreId,
-                region: master.region,
-                area: master.province,
-                storeMasterId: master.id,
-                provinceSource: "MASTER",
-                regionSource: master.region ? "MASTER" : "PROVINCE_MAPPING",
-              },
-            })).id;
-            await tx.store.update({
-              where: { id: storeId },
-              data: {
-                name: master.storeName,
-                code: master.externalStoreId,
-                region: master.region,
-                area: master.province,
-                storeMasterId: master.id,
-                provinceSource: "MASTER",
-                regionSource: master.region ? "MASTER" : "PROVINCE_MAPPING",
-                isActive: true,
-                archivedAt: null,
-              },
-            });
-          } else if (existingTargetStore) {
-            if (!existingTargetStore.isActive || existingTargetStore.archivedAt) {
-              await tx.store.update({ where: { id: existingTargetStore.id }, data: { isActive: true, archivedAt: null } });
-            }
-            storeId = existingTargetStore.id;
-          } else if (dto.newStore) {
-            storeId = (await tx.store.create({
-              data: {
-                name: dto.newStore.name.trim(),
-                code: this.clean(dto.newStore.code),
-                region: this.clean(dto.newStore.region),
-                area: this.clean(dto.newStore.area),
-              },
-            })).id;
-          } else {
-            storeId = (await tx.store.create({ data: { name: dto.name.trim() } })).id;
-          }
-
-          const conflicts = await this.findActiveDuplicateConflicts(tx, { basicId, channelId, destinationId }, requestedStoreCode, storeId);
-          if (this.hasDuplicate(conflicts)) throw this.duplicateException(conflicts);
-
-          const reusable = this.identifierFilters({ basicId, channelId, destinationId }).length
-            ? await tx.lineOfficialAccount.findMany({
-                where: {
-                  accountType: "STORE",
-                  OR: this.identifierFilters({ basicId, channelId, destinationId }),
-                  NOT: { isActive: true, archivedAt: null },
-                },
-                select: { id: true, storeId: true },
-                orderBy: { updatedAt: "desc" },
-              })
-            : [];
-          const retiredSameStore = reusable.find((account) => account.storeId === storeId);
-          const lineData = {
-            storeId,
-            webhookKey,
-            name: dto.name.trim(),
-            basicId: basicId ?? null,
-            channelId: channelId ?? null,
-            destinationId: destinationId ?? null,
-            encryptedChannelSecret: this.encryption.encrypt(dto.channelSecret.trim()),
-            encryptedChannelAccessToken: this.encryption.encrypt(dto.channelAccessToken.trim()),
-            isActive: dto.isActive,
-            archivedAt: null,
-            connectionStatus: dto.isActive && this.webhookConfiguration("pending-key").configured ? "READY" as const : dto.isActive ? "NOT_CONFIGURED" as const : "DISABLED" as const,
-          };
-          return retiredSameStore
-            ? tx.lineOfficialAccount.update({ where: { id: retiredSameStore.id }, data: lineData, include: safeInclude })
-            : tx.lineOfficialAccount.create({ data: lineData, include: safeInclude });
-        });
+        const item = await this.prisma.$transaction((tx) => this.createInTransaction(tx, dto, webhookKey));
         if (!item.webhookKey || item.webhookKey !== webhookKey) throw new InternalServerErrorException("LINE OA creation did not persist its webhook key");
         const response = this.safe(item, await loadLatestManagerUrls(this.prisma, item.store ? [item.store.code] : []));
         if (!response.webhookUrl || !response.webhookConfigured) throw new InternalServerErrorException("LINE OA creation could not produce a canonical webhook URL");
@@ -522,26 +395,164 @@ export class LineOfficialAccountsService {
         return response;
       } catch (error) {
         if (this.isWebhookKeyCollision(error) && attempt < 2) continue;
-        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-          const target = error.meta?.target;
-          const targetText = Array.isArray(target) ? target.join(",") : typeof target === "string" ? target : "";
-          if (targetText.includes("one_active_store_oa_per_store")) {
-            if (dto.storeMasterId) throw this.storeMasterIdentityException({ storeId: false, basicId: false, activeStoreOa: true });
-            throw this.duplicateException({ channelId: false, basicId: false, destinationId: false, storeCode: true });
-          }
-          const inferred = this.conflictsFromPersistenceError(error);
-          if (this.hasDuplicate(inferred)) throw this.duplicateException(inferred);
-          throw this.duplicateException({
-            channelId: Boolean(this.clean(dto.channelId)),
-            basicId: Boolean(this.clean(dto.basicId)),
-            destinationId: Boolean(this.clean(dto.destinationId)),
-            storeCode: Boolean(this.clean(dto.newStore?.code)),
-          });
-        }
-        throw error;
+        throw this.translateCreateError(error, dto);
       }
     }
     throw new InternalServerErrorException("Unable to allocate a unique webhook key");
+  }
+
+  /**
+   * Creates a LINE OA that already has a webhook key registered in the LINE Developers Console
+   * (handover recovery). Runs inside the caller's transaction and applies exactly the same Store
+   * Master, Store and duplicate rules as {@link create}. A closed Store Master record is rejected
+   * unless its Store ID is explicitly listed in `allowClosedStoreCodes`.
+   */
+  async createWithExistingWebhookKeyInTransaction(
+    tx: Prisma.TransactionClient,
+    dto: CreateLineOfficialAccountDto,
+    webhookKey: string,
+    options: { allowClosedStoreCodes?: ReadonlySet<string> } = {},
+  ) {
+    if (!/^[A-Za-z0-9_-]{16,128}$/u.test(webhookKey)) throw new InternalServerErrorException("Handover webhook key has an invalid format");
+    try {
+      const item = await this.createInTransaction(tx, dto, webhookKey, options);
+      if (item.webhookKey !== webhookKey) throw new InternalServerErrorException("LINE OA creation did not persist its webhook key");
+      return item;
+    } catch (error) {
+      throw this.translateCreateError(error, dto);
+    }
+  }
+
+  private translateCreateError(error: unknown, dto: CreateLineOfficialAccountDto) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      const target = error.meta?.target;
+      const targetText = Array.isArray(target) ? target.join(",") : typeof target === "string" ? target : "";
+      if (targetText.includes("one_active_store_oa_per_store")) {
+        if (dto.storeMasterId) return this.storeMasterIdentityException({ storeId: false, basicId: false, activeStoreOa: true });
+        return this.duplicateException({ channelId: false, basicId: false, destinationId: false, storeCode: true });
+      }
+      const inferred = this.conflictsFromPersistenceError(error);
+      if (this.hasDuplicate(inferred)) return this.duplicateException(inferred);
+      return this.duplicateException({
+        channelId: Boolean(this.clean(dto.channelId)),
+        basicId: Boolean(this.clean(dto.basicId)),
+        destinationId: Boolean(this.clean(dto.destinationId)),
+        storeCode: Boolean(this.clean(dto.newStore?.code)),
+      });
+    }
+    return error;
+  }
+
+  private async createInTransaction(
+    tx: Prisma.TransactionClient,
+    dto: CreateLineOfficialAccountDto,
+    webhookKey: string,
+    options: { allowClosedStoreCodes?: ReadonlySet<string> } = {},
+  ) {
+    const closedAllowed = (storeCode: string | null | undefined) => Boolean(storeCode && options.allowClosedStoreCodes?.has(storeCode));
+    const basicId = this.clean(dto.basicId);
+    const channelId = this.clean(dto.channelId);
+    const destinationId = this.clean(dto.destinationId);
+    const master = dto.storeMasterId
+      ? await tx.storeMaster.findUnique({
+          where: { id: dto.storeMasterId },
+          include: { stores: { select: { id: true, code: true, storeMasterId: true, isActive: true, archivedAt: true } } },
+        })
+      : null;
+    if (dto.storeMasterId && !master) throw new NotFoundException("Store Master record not found");
+    if (master?.isActive === false && !closedAllowed(master.externalStoreId)) throw storeClosedException(master.externalStoreId);
+
+    const selectedStore = dto.storeId
+      ? await tx.store.findUnique({ where: { id: dto.storeId }, select: { id: true, code: true, storeMasterId: true, isActive: true, archivedAt: true, storeMaster: { select: { isActive: true, externalStoreId: true } } } })
+      : null;
+    if (dto.storeId && !selectedStore) throw new NotFoundException("Store not found");
+    if (selectedStore?.storeMaster?.isActive === false && !closedAllowed(selectedStore.storeMaster.externalStoreId)) throw storeClosedException(selectedStore.storeMaster.externalStoreId ?? selectedStore.code);
+
+    const requestedStoreCode = master?.externalStoreId ?? this.clean(dto.newStore?.code);
+    const storeWithMatchingCode = requestedStoreCode
+      ? await tx.store.findUnique({ where: { code: requestedStoreCode }, select: { id: true, code: true, storeMasterId: true, isActive: true, archivedAt: true, storeMaster: { select: { isActive: true, externalStoreId: true } } } })
+      : null;
+    if (storeWithMatchingCode?.storeMaster?.isActive === false && !closedAllowed(storeWithMatchingCode.storeMaster.externalStoreId)) throw storeClosedException(storeWithMatchingCode.storeMaster.externalStoreId ?? storeWithMatchingCode.code);
+    const masterStore = master?.stores[0] ?? null;
+
+    if (masterStore && storeWithMatchingCode && masterStore.id !== storeWithMatchingCode.id) {
+      throw this.duplicateException({ channelId: false, basicId: false, destinationId: false, storeCode: true });
+    }
+    if (selectedStore && storeWithMatchingCode && selectedStore.id !== storeWithMatchingCode.id) {
+      if (master) throw this.storeMasterIdentityException({ storeId: true, basicId: false, activeStoreOa: false });
+      throw this.duplicateException({ channelId: false, basicId: false, destinationId: false, storeCode: true });
+    }
+    if (!master && !selectedStore && storeWithMatchingCode?.isActive && !storeWithMatchingCode.archivedAt) {
+      throw this.duplicateException({ channelId: false, basicId: false, destinationId: false, storeCode: true });
+    }
+
+    let storeId: string;
+    const existingTargetStore = masterStore
+      ?? selectedStore
+      ?? (storeWithMatchingCode && (!storeWithMatchingCode.isActive || Boolean(storeWithMatchingCode.archivedAt)) ? storeWithMatchingCode : null);
+    if (master) {
+      await this.assertStoreMasterIdentity(tx, {
+        master,
+        basicId,
+        store: existingTargetStore ?? storeWithMatchingCode,
+      });
+    } else if (existingTargetStore && dto.isActive && await this.hasAnotherActiveStoreOa(tx, existingTargetStore.id)) {
+      throw this.duplicateException({ channelId: false, basicId: false, destinationId: false, storeCode: true });
+    }
+    if (master) {
+      if (existingTargetStore?.storeMasterId && existingTargetStore.storeMasterId !== master.id) {
+        throw this.duplicateException({ channelId: false, basicId: false, destinationId: false, storeCode: true });
+      }
+      storeId = await upsertStoreFromStoreMaster(tx, master, existingTargetStore?.id ?? null);
+    } else if (existingTargetStore) {
+      if (!existingTargetStore.isActive || existingTargetStore.archivedAt) {
+        await tx.store.update({ where: { id: existingTargetStore.id }, data: { isActive: true, archivedAt: null } });
+      }
+      storeId = existingTargetStore.id;
+    } else if (dto.newStore) {
+      storeId = (await tx.store.create({
+        data: {
+          name: dto.newStore.name.trim(),
+          code: this.clean(dto.newStore.code),
+          region: this.clean(dto.newStore.region),
+          area: this.clean(dto.newStore.area),
+        },
+      })).id;
+    } else {
+      storeId = (await tx.store.create({ data: { name: dto.name.trim() } })).id;
+    }
+
+    const conflicts = await this.findActiveDuplicateConflicts(tx, { basicId, channelId, destinationId }, requestedStoreCode, storeId);
+    if (this.hasDuplicate(conflicts)) throw this.duplicateException(conflicts);
+
+    const reusable = this.identifierFilters({ basicId, channelId, destinationId }).length
+      ? await tx.lineOfficialAccount.findMany({
+          where: {
+            accountType: "STORE",
+            OR: this.identifierFilters({ basicId, channelId, destinationId }),
+            NOT: { isActive: true, archivedAt: null },
+          },
+          select: { id: true, storeId: true },
+          orderBy: { updatedAt: "desc" },
+        })
+      : [];
+    const retiredSameStore = reusable.find((account) => account.storeId === storeId);
+    const lineData = {
+      storeId,
+      webhookKey,
+      name: dto.name.trim(),
+      basicId: basicId ?? null,
+      channelId: channelId ?? null,
+      destinationId: destinationId ?? null,
+      encryptedChannelSecret: this.encryption.encrypt(dto.channelSecret.trim()),
+      encryptedChannelAccessToken: this.encryption.encrypt(dto.channelAccessToken.trim()),
+      isActive: dto.isActive,
+      archivedAt: null,
+      connectionStatus: dto.isActive && this.webhookConfiguration("pending-key").configured ? "READY" as const : dto.isActive ? "NOT_CONFIGURED" as const : "DISABLED" as const,
+    };
+    return retiredSameStore
+      ? tx.lineOfficialAccount.update({ where: { id: retiredSameStore.id }, data: lineData, include: safeInclude })
+      : tx.lineOfficialAccount.create({ data: lineData, include: safeInclude });
   }
 
   private isWebhookKeyCollision(error: unknown) {
