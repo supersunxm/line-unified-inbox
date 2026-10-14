@@ -177,6 +177,13 @@ jobs:
           node --check scripts/test-store-master-postgres.cjs
           node scripts/test-store-master-postgres.cjs
 
+      - name: LINE OA handover importer lint and PostgreSQL regression
+        run: |
+          npx eslint src/line-official-accounts/line-oa-handover-import*.ts src/store-master/store-from-store-master.ts
+          npx tsx --test src/line-official-accounts/line-official-accounts.service.spec.ts src/line-official-accounts/line-official-accounts.reconnect.spec.ts
+          node --check scripts/test-line-oa-handover-postgres.cjs
+          node scripts/test-line-oa-handover-postgres.cjs
+
       - name: Build
         run: npm run build
 

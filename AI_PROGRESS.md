@@ -1,3 +1,11 @@
+# 2026-10-14: DR LINE OA handover importer PR prepared
+
+- Current task: after the 2026-10-14 production database restore (July baseline), add an owner-approved importer that re-creates LINE OAs missing from the restored database from the handover CSV export. Branch `fix/dr-line-oa-handover-importer` in a separate clone; the primary checkout was not touched.
+- Implemented `line-oa-handover-import.cli.ts` (`preview` / `apply` / `activate`). Preview is a read-only transaction. Apply requires the CSV SHA-256, the previewed plan SHA-256 and the existing webhook-keyset SHA-256, runs in one Serializable transaction, creates only new OAs (original webhook key, existing credential encryption, `isActive=false`), applies only explicitly named `--update-line` exceptions, and rolls back if any protected existing OA or Store row changes. Activation reuses `setStatus` with an exact expected count. Output carries counts, line numbers, Store IDs, OA IDs and 8-character key prefixes only.
+- Store creation is shared, not copied: `upsertStoreFromStoreMaster` is used by OA onboarding, and the importer goes through the same `createInTransaction` body as `create()`. Closed Store Master rows are still rejected unless named with `--allow-closed-store`.
+- Checks: new unit + PostgreSQL integration suite 12/12 (including a trigger-driven rollback test); existing OA service suites 32/32; build TypeScript and targeted ESLint clean; local CLI end-to-end preview/apply/refusal/activation on synthetic data; local signed webhooks for imported keys: valid 200, invalid 401, unknown and replaced old key 404, disabled imported OA 410. New CI step added to `backend-ci.yml`.
+- Production: no importer run. Store Master apply (separate, owner-approved) already ran once. Next: Local CI, push, PR; owner merge; deploy; importer preview for owner approval.
+
 # 2026-10-12: Store Master Safety PR #547 prepared
 
 - Current task: fix and verify Store Master Safety on `codex/store-master-source-parity`; the primary checkout was left untouched. Commit `54dbda8f1560c802e7445f5652b5161aada4f275` is PR #547 against main `428f04bafc7572b25e619e7a91226ba17cd2bbe2`.
