@@ -15,7 +15,7 @@ import { ChatSearchService } from "./chat-search.service";
  * CHAT_SEARCH_TEST_DATABASE_URL is set; CI must provide it.
  */
 const testDatabaseUrl = process.env.CHAT_SEARCH_TEST_DATABASE_URL;
-const ADMIN = { id: "admin-it", role: "ADMIN" } as unknown as AuthUser;
+const ADMIN = { id: "admin-it", role: "ADMIN", isActive: true, status: "ACTIVE" } as unknown as AuthUser;
 const THAI_SARA_AM_DECOMPOSED = "ํา";
 const RANGE = { startDate: "2026-09-01", endDate: "2026-09-30" };
 

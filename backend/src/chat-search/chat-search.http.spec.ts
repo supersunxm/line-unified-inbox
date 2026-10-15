@@ -22,8 +22,8 @@ import { ChatSearchService } from "./chat-search.service";
 Reflect.defineMetadata("design:paramtypes", [ChatSearchService], ChatSearchController);
 Reflect.defineMetadata("design:paramtypes", [ChatMessageSearchQueryDto, Object], ChatSearchController.prototype, "messages");
 Reflect.defineMetadata("design:paramtypes", [PrismaService, StoreAccessService], ChatSearchService);
-const ADMIN = { id: "admin-http", role: "ADMIN" } as unknown as AuthUser;
-const VIEWER = { id: "viewer-http", role: "VIEWER", authorization: { workspaces: { hq: false }, scope: { allStores: false } } } as unknown as AuthUser;
+const ADMIN = { id: "admin-http", role: "ADMIN", isActive: true, status: "ACTIVE" } as unknown as AuthUser;
+const VIEWER = { id: "viewer-http", role: "VIEWER", isActive: true, status: "ACTIVE", authorization: { workspaces: { hq: false }, scope: { allStores: false } } } as unknown as AuthUser;
 
 const SAMPLE_ROW = {
   messageId: "msg-http",

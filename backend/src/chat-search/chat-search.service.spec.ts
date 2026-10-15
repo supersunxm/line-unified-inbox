@@ -8,20 +8,24 @@ import type { PrismaService } from "../prisma.service";
 import { chatSearchFingerprint, decodeChatSearchCursor } from "./chat-search-query";
 import { ChatSearchService, isChatMessageSearchEnabled, type ChatMessageSearchRow } from "./chat-search.service";
 
-const ADMIN = { id: "admin-1", role: "ADMIN" } as unknown as AuthUser;
+const ACTIVE = { isActive: true, status: "ACTIVE" };
+const ADMIN = { id: "admin-1", role: "ADMIN", ...ACTIVE } as unknown as AuthUser;
 const HQ_ALL_STORES = {
   id: "hq-1",
   role: "ASSISTANT",
+  ...ACTIVE,
   authorization: { workspaces: { hq: true }, scope: { allStores: true, storeIds: [] } },
 } as unknown as AuthUser;
 const HQ_WITHOUT_ALL_STORES = {
   id: "hq-2",
   role: "ASSISTANT",
+  ...ACTIVE,
   authorization: { workspaces: { hq: true }, scope: { allStores: false, storeIds: ["store-a"] } },
 } as unknown as AuthUser;
 const STORE_VIEWER = {
   id: "viewer-1",
   role: "VIEWER",
+  ...ACTIVE,
   authorization: { workspaces: { hq: false, store: true }, scope: { allStores: false, storeIds: ["store-a"] } },
 } as unknown as AuthUser;
 
@@ -372,5 +376,55 @@ void test("the configured statement timeout is the value applied to the search t
     service.limits.statementTimeoutMs = 1234;
     await service.search(ADMIN, BASE_INPUT);
     assert.deepEqual(prisma.statements[1].values, ["1234"]);
+  });
+});
+
+void test("role matrix: only ADMIN and HQ all-store ASSISTANT may search; every other account is refused before any query", async () => {
+  await withFlag("true", async () => {
+    const hqAssistantNoAllStores = { id: "hq-x", role: "ASSISTANT", ...ACTIVE, authorization: { workspaces: { hq: true }, scope: { allStores: false } } } as unknown as AuthUser;
+    const allStoresNoHq = { id: "as-x", role: "ASSISTANT", ...ACTIVE, authorization: { workspaces: { hq: false }, scope: { allStores: true } } } as unknown as AuthUser;
+    const viewerWithHqAttributes = { id: "vw-x", role: "VIEWER", ...ACTIVE, authorization: { workspaces: { hq: true }, scope: { allStores: true } } } as unknown as AuthUser;
+    const storeAssistant = { id: "sa-x", role: "ASSISTANT", ...ACTIVE, authorization: { workspaces: { hq: false, store: true }, scope: { allStores: false, storeIds: ["store-a"] } } } as unknown as AuthUser;
+
+    for (const [label, user] of [
+      ["ADMIN", ADMIN],
+      ["ASSISTANT with HQ and all-store scope", HQ_ALL_STORES],
+    ] as const) {
+      const prisma = fakePrisma({ rows: [row()] });
+      const result = await serviceWith(null, prisma).search(user, BASE_INPUT);
+      assert.equal(result.items.length, 1, `${label} must be allowed`);
+    }
+
+    const refused: Array<[string, AuthUser | undefined]> = [
+      ["ASSISTANT with HQ but no all-store scope", hqAssistantNoAllStores],
+      ["ASSISTANT with all-store scope but no HQ workspace", allStoresNoHq],
+      ["VIEWER with HQ and all-store attributes", viewerWithHqAttributes],
+      ["VIEWER store-scoped", STORE_VIEWER],
+      ["ASSISTANT store-scoped without HQ", storeAssistant],
+      ["inactive ADMIN", { ...ADMIN, isActive: false }],
+      ["suspended ADMIN", { ...ADMIN, status: "SUSPENDED" }],
+      ["pending-approval ADMIN", { ...ADMIN, status: "PENDING_APPROVAL" }],
+      ["no authenticated user", undefined],
+    ];
+    for (const [label, user] of refused) {
+      const prisma = fakePrisma({ rows: [row()] });
+      const error = await rejectionOf(serviceWith(null, prisma).search(user, BASE_INPUT));
+      assert.ok(error instanceof ForbiddenException, `${label} must be refused`);
+      assert.equal(codeOf(error), "CHAT_SEARCH_HQ_REQUIRED", label);
+      assert.equal(prisma.statements.length, 0, `${label} must not reach the database`);
+    }
+  });
+});
+
+void test("an HQ account acting as one store cannot widen its scope with an explicit other-store selection", async () => {
+  await withFlag("true", async () => {
+    const storeContextAdmin = { ...ADMIN, storeContext: { mode: "STORE", storeId: "store-a", storeName: "Store A", storeCode: null } } as unknown as AuthUser;
+    const prisma = fakePrisma({ rows: [row()] });
+    const error = await rejectionOf(serviceWith(["store-a"], prisma).search(storeContextAdmin, { ...BASE_INPUT, storeIds: ["store-b"] }));
+    assert.ok(error instanceof ForbiddenException);
+    assert.equal(codeOf(error), "CHAT_SEARCH_STORE_FORBIDDEN");
+    assert.equal(prisma.statements.length, 0);
+    const scoped = await serviceWith(["store-a"], fakePrisma({ rows: [row()] })).search(storeContextAdmin, BASE_INPUT);
+    assert.deepEqual(scoped.scope.stores, { mode: "ALL_AUTHORIZED" });
   });
 });

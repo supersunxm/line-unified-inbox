@@ -81,13 +81,18 @@ export type ChatMessageSearchResponse = {
   };
 };
 
-/** HQ/back-office only: platform admins, or accounts holding the HQ workspace with all-store scope. */
+/**
+ * Global message search is an HQ operational capability. ADMIN is allowed; ASSISTANT is allowed only
+ * with HQ workspace and all-store scope. VIEWER stays a store/BM/PC role and is refused even when
+ * HQ attributes are present. Inactive or non-ACTIVE accounts are refused for every role.
+ */
 function assertHqSearchUser(user: AuthUser | undefined): AuthUser {
-  if (!user) throw new ForbiddenException({ code: "CHAT_SEARCH_HQ_REQUIRED", message: "Global chat search is available to HQ accounts only" });
+  const denied = () => new ForbiddenException({ code: "CHAT_SEARCH_HQ_REQUIRED", message: "Global chat search is available to HQ accounts only" });
+  if (!user || user.isActive !== true || user.status !== "ACTIVE") throw denied();
+  if (user.role === UserRole.ADMIN) return user;
+  if (user.role !== UserRole.ASSISTANT) throw denied();
   const hqWorkspace = user.authorization?.workspaces?.hq === true && user.authorization.scope?.allStores === true;
-  if (user.role !== UserRole.ADMIN && !hqWorkspace) {
-    throw new ForbiddenException({ code: "CHAT_SEARCH_HQ_REQUIRED", message: "Global chat search is available to HQ accounts only" });
-  }
+  if (!hqWorkspace) throw denied();
   return user;
 }
 
