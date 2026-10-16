@@ -8,10 +8,9 @@ const actionCode = readFileSync(new URL("../src/app/message-translation-action.t
 const apiCode = readFileSync(new URL("../src/lib/api.ts", import.meta.url), "utf8");
 const pageCode = readFileSync(new URL("../src/app/page.tsx", import.meta.url), "utf8");
 
-test("translation action is limited to ADMIN inbound non-empty text messages", () => {
+test("translation action is available to authorized website roles for inbound non-empty text messages", () => {
   const inboundText = { direction: "INBOUND" as const, messageType: "TEXT" as const, originalText: "ข้อความ" };
-  assert.equal(isMessageTranslationEligible(inboundText, "ADMIN"), true);
-  assert.equal(isMessageTranslationEligible(inboundText, "VIEWER"), false);
+  for (const role of ["ADMIN", "ASSISTANT", "VIEWER"] as const) assert.equal(isMessageTranslationEligible(inboundText, role), true);
   assert.equal(isMessageTranslationEligible({ ...inboundText, direction: "OUTBOUND" }, "ADMIN"), false);
   assert.equal(isMessageTranslationEligible({ ...inboundText, messageType: "IMAGE" }, "ADMIN"), false);
   assert.equal(isMessageTranslationEligible({ ...inboundText, originalText: "  " }, "ADMIN"), false);

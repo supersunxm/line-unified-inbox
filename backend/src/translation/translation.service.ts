@@ -1,4 +1,4 @@
-import { BadGatewayException, ForbiddenException, HttpException, HttpStatus, Inject, Injectable, ServiceUnavailableException, UnprocessableEntityException } from "@nestjs/common";
+import { BadGatewayException, HttpException, HttpStatus, Inject, Injectable, ServiceUnavailableException, UnprocessableEntityException } from "@nestjs/common";
 import { PrismaService } from "../prisma.service";
 import { TranslationTargetLanguage } from "./dto/create-message-translation.dto";
 import { TranslationConfig } from "./translation.config";
@@ -44,12 +44,6 @@ export class TranslationService {
       await this.logResult(messageId, actingUserId, targetLanguage, "UNAVAILABLE", startedAt, "PILOT_DISABLED");
       throw new ServiceUnavailableException("Message translation is unavailable");
     }
-    if (!this.config.allowedAdminIds.includes(actingUserId)) {
-      this.auditLogger.recordPilotAccessBlocked(actingUserId);
-      await this.recordEvent(messageId, actingUserId, targetLanguage, "FAILED", startedAt, "ADMIN_NOT_ALLOWLISTED");
-      throw new ForbiddenException("Message translation pilot access denied");
-    }
-
     const message = await this.prisma.message.findUnique({
       where: { id: messageId },
       select: {

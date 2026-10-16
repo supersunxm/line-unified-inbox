@@ -6679,3 +6679,14 @@ Current task: enforce the Local CI gate on push. Added `ci:local`, `ci:local:che
   - Backend WP1 `chat-search` tests (`backend/src/chat-search/*.spec.ts`) remain outside the locked `backend-ci.yml` step inventory pending a separately authorized `repository-policy.test.mjs` and workflow update; Frontend WP3 tests (`frontend/test/chat-message-search-*.test.mts`) are automatically executed by `npm run test` in the Frontend Local CI job.
   - Production database trigram/compound index and timeout validation for large 30–90 day ranges remain gated before enabling `CHAT_MESSAGE_SEARCH_ENABLED` in production.
 - Next action: complete 8/8 Agent-Operated Local CI (`npm run ci:local`), verify Independent QA review, push `codex/chat-search-ui-wp3` via `.githooks/pre-push`, and open a Draft PR without triggering GitHub Actions, merging, or deploying.
+
+# Current task: PR #561 translation access production fix
+
+- Confirmed PR #561 head `467e438302b6736a8cf554cb703bced5d1adb025` on `fix/translation-access-all-authorized-20261016`; work is isolated from the modified primary checkout.
+- Expanded translation and feedback route roles to ADMIN, ASSISTANT, and VIEWER; added a narrow non-reply route marker and per-message conversation/store authorization; removed the per-admin allowlist requirement from request and readiness gating while retaining feature/pilot flags, Google provider checks, rate limits, and character budget.
+- Updated frontend visibility for all authorized website roles and added English/Chinese, feedback-language, role, session, invalid-message, store-scope, and HEAD_OFFICE tests.
+- Focused backend authorization/translation/feedback tests: 60/60 PASS, including ADMIN, ASSISTANT, VIEWER, unauthorized role/session, invalid message, inaccessible and cross-store/HEAD_OFFICE conversations, en/zh selection, selected-language feedback, rate/budget/provider behavior, and unrelated POST reply-permission regression. Frontend translation tests: 5/5 PASS.
+- Runner ownership check: the prior PR #559 lock and guest are absent; `oppo-ci` is stopped. A separate active `agent-ci.mjs` run (PID 60758, working directory `/private/tmp/agent-ci-policy-migration-20261016`) is using a Docker job container. It was left untouched; do not start the shared Local CI gate until that run finishes.
+- PR head remains `467e438302b6736a8cf554cb703bced5d1adb025`; current `origin/main` is `208ba40d79dbf4999d5fc5f36dfa61a23dfa6b33`, which is not yet an ancestor of this branch.
+- Blockers: latest-main integration, full backend/frontend validation, production build, all eight mandatory Local CI jobs, commit/push/merge, Railway deployment, and production verification remain outstanding.
+- Next action: safely integrate current `origin/main`, validate the resulting exact commit, then wait for the unrelated runner to become idle before the mandatory Local CI gate.

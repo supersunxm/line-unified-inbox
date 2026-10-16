@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { BadGatewayException, BadRequestException, ForbiddenException, HttpException, ServiceUnavailableException, UnprocessableEntityException, ValidationPipe } from "@nestjs/common";
+import { BadGatewayException, BadRequestException, HttpException, ServiceUnavailableException, UnprocessableEntityException, ValidationPipe } from "@nestjs/common";
 import { Reflector } from "@nestjs/core";
 import { AuthGuard, AuthUser } from "../auth/auth.guard";
 import { REQUIRED_ROLES } from "../auth/auth.decorators";
@@ -100,41 +100,25 @@ test("pilot mode disabled ignores the allowlist and preserves the unavailable re
   assert.equal(blockedAuditEntries.length, 0);
 });
 
-test("pilot mode rejects a non-allowlisted ADMIN before database or provider access", async () => {
-  let providerCalls = 0;
-  const provider: TranslationProvider = { async translate() { providerCalls += 1; return { translatedText: "unused", characterCount: 16, provider: "google" }; } };
-  const { service, findCount, updateCount, blockedAuditEntries } = serviceFor(eligibleMessage, true, provider, { allowedAdminIds: ["admin-1"] });
-  await assert.rejects(service.translateMessage("message-1", "en", "admin-2"), (error: unknown) => {
-    assert.ok(error instanceof ForbiddenException);
-    assert.equal(error.message, "Message translation pilot access denied");
-    return true;
-  });
-  assert.equal(findCount(), 0);
-  assert.equal(updateCount(), 0);
-  assert.equal(providerCalls, 0);
-  assert.deepEqual(Object.keys(blockedAuditEntries[0]).sort(), ["actingUserId", "reasonCategory", "timestamp"]);
-  assert.equal(blockedAuditEntries[0]?.actingUserId, "admin-2");
-  assert.equal(blockedAuditEntries[0]?.reasonCategory, "ADMIN_NOT_ALLOWLISTED");
-});
+test("translation requests do not require a pilot allowlist and retain the selected target", async () => {
+  const allowedAdminIds = readTranslationPilotAllowedAdminIds({ TRANSLATION_PILOT_ALLOWED_ADMIN_IDS: "pilot-admin" });
+  const provider: TranslationProvider = {
+    async translate(_text, targetLanguage) {
+      return { translatedText: targetLanguage === "en" ? "English result" : "中文结果", characterCount: 14, provider: "google" };
+    },
+  };
 
-test("pilot allowlist accepts admin and admin2 while rejecting an unknown admin", async () => {
-  const allowedAdminIds = readTranslationPilotAllowedAdminIds({ TRANSLATION_PILOT_ALLOWED_ADMIN_IDS: "admin,admin2" });
-  for (const actingUserId of ["admin", "admin2"]) {
-    const { service, findCount } = serviceFor({ ...eligibleMessage, translatedEnglish: "Cached English" }, true, null, { allowedAdminIds });
-    const result = await service.translateMessage("message-1", "en", actingUserId);
-    assert.equal(result.status, "CACHED");
-    assert.equal(findCount(), 1);
+  for (const [actingUserId, targetLanguage, translatedText, allowedIds] of [
+    ["admin-2", "en", "English result", allowedAdminIds],
+    ["assistant-1", "zh", "中文结果", []],
+    ["viewer-1", "en", "English result", []],
+  ] as const) {
+    const fixture = serviceFor(eligibleMessage, true, provider, { allowedAdminIds: [...allowedIds] });
+    const result = await fixture.service.translateMessage("message-1", targetLanguage, actingUserId);
+    assert.equal(result.targetLanguage, targetLanguage);
+    assert.equal(result.translatedText, translatedText);
+    assert.equal(fixture.updateCount(), 1);
   }
-
-  const blocked = serviceFor(eligibleMessage, true, null, { allowedAdminIds });
-  await assert.rejects(blocked.service.translateMessage("message-1", "en", "unknown-admin"), ForbiddenException);
-  assert.equal(blocked.findCount(), 0);
-});
-
-test("missing pilot allowlist configuration safely denies every ADMIN", async () => {
-  const { service, findCount } = serviceFor(eligibleMessage, true, null, { allowedAdminIds: [] });
-  await assert.rejects(service.translateMessage("message-1", "en", "admin-1"), ForbiddenException);
-  assert.equal(findCount(), 0);
 });
 
 test("disabled translation returns a controlled unavailable response before database or provider access", async () => {
@@ -319,17 +303,13 @@ function authContext(user: AuthUser) {
   };
 }
 
-test("translation endpoint is ADMIN-only: ADMIN passes and VIEWER is rejected", async () => {
+test("translation endpoint declares all authorized website roles", async () => {
   const roles = Reflect.getMetadata(REQUIRED_ROLES, TranslationController.prototype.translate) as string[];
-  assert.deepEqual(roles, ["ADMIN"]);
+  assert.deepEqual(roles, ["ADMIN", "ASSISTANT", "VIEWER"]);
 
-  const admin = { id: "admin-1", email: "admin@example.test", displayName: "Admin", role: "ADMIN", isActive: true } as AuthUser;
-  const adminContext = authContext(admin);
-  const adminGuard = new AuthGuard(new Reflector(), { authenticate: async () => admin } as never);
-  assert.equal(await adminGuard.canActivate(adminContext as never), true);
-
-  const viewer = { ...admin, id: "viewer-1", role: "VIEWER" } as AuthUser;
-  const viewerContext = authContext(viewer);
-  const viewerGuard = new AuthGuard(new Reflector(), { authenticate: async () => viewer } as never);
-  await assert.rejects(viewerGuard.canActivate(viewerContext as never), ForbiddenException);
+  for (const role of roles) {
+    const user = { id: `${role.toLowerCase()}-1`, email: `${role.toLowerCase()}@example.test`, displayName: role, role, isActive: true } as AuthUser;
+    const guard = new AuthGuard(new Reflector(), { authenticate: async () => user } as never);
+    assert.equal(await guard.canActivate(authContext(user) as never), true);
+  }
 });

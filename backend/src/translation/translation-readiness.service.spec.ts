@@ -25,7 +25,6 @@ test("complete validated pilot configuration is ready", () => {
       featureEnabled: true,
       providerConfigured: true,
       pilotModeEnabled: true,
-      allowlistConfigured: true,
       rateLimitConfigured: true,
       budgetConfigured: true,
       feedbackMetricsAvailable: true,
@@ -43,8 +42,8 @@ test("missing Google credentials makes readiness false without exposing configur
   assert.equal(serialized.includes("private-secret"), false);
 });
 
-test("pilot mode without an allowlist is not ready", () => {
+test("pilot mode without an allowlist remains ready for authorized users", () => {
   const response = readinessFor({ allowedAdminIds: [] });
-  assert.equal(response.ready, false);
-  assert.equal(response.checks.allowlistConfigured, false);
+  assert.equal(response.ready, true);
+  assert.equal(response.checks.pilotModeEnabled, true);
 });

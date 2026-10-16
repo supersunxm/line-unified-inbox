@@ -19,7 +19,7 @@ export class TranslationPilotStatusService {
     const readiness = this.readiness.check();
     return {
       ready: readiness.ready,
-      active: readiness.checks.featureEnabled && readiness.checks.providerConfigured && readiness.checks.pilotModeEnabled && readiness.checks.allowlistConfigured,
+      active: readiness.checks.featureEnabled && readiness.checks.providerConfigured && readiness.checks.pilotModeEnabled,
       allowlistedAdminCount: this.config.allowedAdminIds.length,
       rateLimitConfigured: readiness.checks.rateLimitConfigured,
       dailyBudgetConfigured: readiness.checks.budgetConfigured,

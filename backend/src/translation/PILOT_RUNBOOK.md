@@ -2,20 +2,21 @@
 
 ## 1. Purpose and scope
 
-This runbook is the operator procedure for a controlled internal OPPO LINE OA translation pilot. The pilot provides manual Thai-to-English or Thai-to-Simplified-Chinese translation for eligible inbound text messages. It is restricted to explicitly allowlisted `ADMIN` users.
+This runbook is the operator procedure for a controlled internal OPPO LINE OA translation pilot. It provides manual Thai-to-English or Thai-to-Simplified-Chinese translation for eligible inbound text messages to authenticated, active `ADMIN`, `ASSISTANT`, and `VIEWER` users within their authorized store scope.
 
 The pilot is manual only. It does not translate during webhook ingestion, polling, classification, or conversation loading. It never replaces `Message.originalText`. Production activation, rollback, credential provisioning, and allowlist changes are manual operator actions.
 
-This runbook covers configuration, deployment, verification, monitoring, troubleshooting, and shutdown. It does not authorize expanding the allowlist or enabling automatic translation.
+This runbook covers configuration, deployment, verification, monitoring, troubleshooting, and shutdown. It does not authorize automatic translation.
 
 ## 2. Architecture overview
 
 The request path is:
 
 ```text
-Store Chats ADMIN action
+Store Chats authorized-user action
   -> POST /messages/:messageId/translations
-  -> authentication, ADMIN role, pilot allowlist, message eligibility
+  -> authentication, active account, supported role, message conversation and store authorization
+  -> enabled feature, pilot mode, and message eligibility
   -> durable translation cache check
   -> rate limit and daily character budget
   -> OPPO glossary provider decorator
@@ -27,7 +28,7 @@ Store Chats ADMIN action
   -> return the translated result
 ```
 
-Feedback uses the separate ADMIN-only `POST /messages/:messageId/translations/feedback` route. It never calls Google. Feedback stores message/admin references, language, rating, issue category, and a translation fingerprint; it does not duplicate translated text.
+Feedback uses the separate `POST /messages/:messageId/translations/feedback` route for the same authorized roles and conversation scope. It never calls Google. Feedback stores message/user references, selected language, rating, issue category, and a translation fingerprint; it does not duplicate translated text.
 
 Observability has two scopes:
 
@@ -38,7 +39,7 @@ The runtime glossary protects: `OPPO`, `Reno16`, `ColorOS`, `SUPERVOOC`, `AI Era
 
 ## 3. Enable and disable configuration
 
-Translation is disabled unless all pilot controls are deliberately configured.
+Translation is disabled unless `MESSAGE_TRANSLATION_ENABLED` and `TRANSLATION_PILOT_MODE` are true and the Google provider, credentials, limits, and daily budget are configured. A per-admin allowlist is not required for translation or feedback access.
 
 ### Enable a controlled pilot
 
@@ -48,14 +49,14 @@ Configure these backend environment variables through the approved secrets/confi
 MESSAGE_TRANSLATION_ENABLED=true
 TRANSLATION_PROVIDER=google
 TRANSLATION_PILOT_MODE=true
-TRANSLATION_PILOT_ALLOWED_ADMIN_IDS=<user-id-1>,<user-id-2>
+TRANSLATION_PILOT_ALLOWED_ADMIN_IDS=<optional legacy pilot reporting IDs>
 TRANSLATION_RATE_LIMIT_PER_MINUTE=<positive-integer>
 TRANSLATION_DAILY_CHARACTER_LIMIT=<positive-integer>
 GOOGLE_TRANSLATION_PROJECT_ID=<google-project-id>
 GOOGLE_TRANSLATION_CREDENTIALS_JSON=<service-account-json-secret>
 ```
 
-Allowlist entries must be authenticated `User.id` values for active ADMIN users, not display names, email addresses, or assumed usernames. Never print the credential JSON or store it in source control.
+`TRANSLATION_PILOT_ALLOWED_ADMIN_IDS` is optional legacy pilot reporting metadata and does not authorize translation requests. Never print the credential JSON or store it in source control.
 
 ### Disable or roll back
 
@@ -77,8 +78,7 @@ After the backend restarts, readiness must be false and pilot status must be ina
 
 ## 4. Pre-launch checklist
 
-- [ ] The intended pilot users are active ADMIN users and their exact database user IDs were independently reviewed.
-- [ ] The allowlist contains only the approved pilot administrators.
+- [ ] Intended users are active ADMIN, ASSISTANT, or VIEWER accounts and their conversation store scope is correct.
 - [ ] The Google service account belongs to the intended project and has only the required Cloud Translation permission.
 - [ ] Cloud Translation API v3 is enabled for the configured project.
 - [ ] Credential JSON is stored only in the approved secrets manager/Railway variable.
@@ -108,7 +108,7 @@ The check must expose booleans only. Do not proceed if any check is false.
 1. Deploy the reviewed backend revision with translation still disabled.
 2. Apply pending Prisma migrations through the normal deployment process. Confirm migration status before enabling the pilot.
 3. Confirm backend startup, health, and readiness while translation remains disabled.
-4. Add the reviewed Google project, credential, limits, and ADMIN allowlist through the backend service configuration.
+4. Add the reviewed Google project, credential, rate limit, and daily budget through the backend service configuration. The legacy pilot allowlist is optional and does not gate access.
 5. Set the feature and pilot switches in the same reviewed configuration change.
 6. Allow the backend to restart normally. Do not manually redeploy unrelated frontend or worker services.
 7. Run the production configuration check:

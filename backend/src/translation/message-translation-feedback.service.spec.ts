@@ -9,11 +9,11 @@ import { TranslationFeedbackService } from "./translation-feedback";
 
 const translatedText = "OPPO Reno16 is available.";
 
-function fixture(translation: string | null = translatedText, duplicate = false) {
+function fixture(translation: string | null = translatedText, duplicate = false, targetLanguage: "en" | "zh" = "en") {
   const createData: Array<Record<string, unknown>> = [];
   const prisma = {
     message: {
-      findUnique: async () => ({ translatedEnglish: translation, translatedChinese: null }),
+      findUnique: async () => ({ translatedEnglish: targetLanguage === "en" ? translation : null, translatedChinese: targetLanguage === "zh" ? translation : null }),
     },
     messageTranslationFeedback: {
       create: async ({ data }: { data: Record<string, unknown> }) => {
@@ -72,6 +72,15 @@ test("helpful feedback stores a safe link to the exact existing translation", as
   });
   assert.equal(JSON.stringify(createData).includes(translatedText), false);
   assert.equal(aggregates.snapshot().positiveFeedbackCount, 1);
+});
+
+test("Chinese feedback uses the stored Chinese result and records target language zh", async () => {
+  const chineseTranslation = "OPPO Reno16 已发布。";
+  const { service, createData } = fixture(chineseTranslation, false, "zh");
+  const response = await service.submit("message-1", { targetLanguage: "zh", rating: "HELPFUL" }, "viewer-1");
+  assert.equal(response.targetLanguage, "zh");
+  assert.equal(createData[0].targetLanguage, "zh");
+  assert.equal(createData[0].translationHash, createHash("sha256").update(chineseTranslation, "utf8").digest("hex"));
 });
 
 test("incorrect feedback requires and maps an approved issue category", async () => {

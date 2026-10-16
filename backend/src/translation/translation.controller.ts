@@ -2,7 +2,7 @@ import { Body, Controller, NotFoundException, Param, Post, Req } from "@nestjs/c
 import { AuthRequest } from "../auth/auth.guard";
 import { StoreAccessService } from "../auth/store-access.service";
 import { PrismaService } from "../prisma.service";
-import { Roles } from "../auth/auth.decorators";
+import { AllowScopedNonReplyAction, Roles } from "../auth/auth.decorators";
 import { CreateMessageTranslationDto } from "./dto/create-message-translation.dto";
 import { CreateTranslationFeedbackDto } from "./dto/create-translation-feedback.dto";
 import { MessageTranslationFeedbackService } from "./message-translation-feedback.service";
@@ -19,6 +19,7 @@ export class TranslationController {
 
   @Post(":messageId/translations")
   @Roles("ADMIN", "ASSISTANT", "VIEWER")
+  @AllowScopedNonReplyAction()
   async translate(@Param("messageId") messageId: string, @Body() dto: CreateMessageTranslationDto, @Req() request: AuthRequest) {
     await this.assertMessageAccess(messageId, request);
     return this.service.translateMessage(messageId, dto.targetLanguage, request.user!.id);
@@ -26,6 +27,7 @@ export class TranslationController {
 
   @Post(":messageId/translations/feedback")
   @Roles("ADMIN", "ASSISTANT", "VIEWER")
+  @AllowScopedNonReplyAction()
   async submitFeedback(@Param("messageId") messageId: string, @Body() dto: CreateTranslationFeedbackDto, @Req() request: AuthRequest) {
     await this.assertMessageAccess(messageId, request);
     return this.feedback.submit(messageId, dto, request.user!.id);

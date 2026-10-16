@@ -3462,6 +3462,12 @@ Decision: use the existing message-translation endpoint with an explicit `en` or
 
 Rationale: the backend contract already supports both targets, so the feature needs no backend or database change. A separate local field preserves both results while the operator switches targets. No production data or external translation service is used by local interaction checks.
 
+## 2026-10-16 — Translation access uses scoped role authorization
+
+Decision: allow authenticated, active `ADMIN`, `ASSISTANT`, and `VIEWER` users to request translations and submit feedback. Translation endpoints use a narrow non-reply action marker, then verify the message's actual conversation and store with `StoreAccessService` before reading cached output, translating, or recording feedback. The per-admin pilot allowlist remains optional reporting metadata.
+
+Rationale: translation and feedback are message actions rather than conversation-reply permissions. Keeping the controller's message-to-conversation lookup and store-scope check preserves cross-store and HEAD_OFFICE protections while permitting authorized read-only roles. The global enable flag, pilot switch, provider configuration, rate limit, and daily character budget remain intact. No schema or customer-data changes are needed.
+
 ## 2026-10-16 — Global Chat Search WP3 synthetic mode restricted to local non-production
 
 Decision: refuse the synthetic message-search adapter whenever `NODE_ENV === "production"`, `NEXT_PUBLIC_APP_ENV === "production"`, or the browser hostname is not a local loopback address (`127.0.0.1`, `localhost`, `::1`, `[::1]`). When refused, `selectMessageSearchAdapterKind` returns `null` and `/chats/search` calls `notFound()`.
