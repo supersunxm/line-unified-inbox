@@ -1506,7 +1506,7 @@ export default function Home() {
   return <PublicLandingPage />;
 }
 
-type WorkspaceAuthUser = { id: string; email: string; displayName: string; role: "ADMIN" | "ASSISTANT" | "VIEWER"; permissions?: { canAccessMainOa?: boolean } };
+type WorkspaceAuthUser = { id: string; email: string; displayName: string; role: "ADMIN" | "ASSISTANT" | "VIEWER"; permissions?: { canAccessMainOa?: boolean }; authorization?: { workspaces?: { hq?: boolean }; scope?: { allStores?: boolean } } };
 
 /** `initialAuthUser` is the user AuthorizedSection already resolved; /login passes none and runs the full setup check. */
 function ApplicationWorkspaceContent({ initialSection, initialAuthUser }: { initialSection: PrimarySection; initialAuthUser?: WorkspaceAuthUser | null }) {
