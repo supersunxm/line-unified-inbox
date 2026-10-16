@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { chooseKeywordRule, matchKeyword, parseKeywordConfig, targetsLineOa } from "./auto-response-keyword";
+import { chooseKeywordRule, keywordPatternsOverlap, matchKeyword, parseKeywordConfig, targetsLineOa } from "./auto-response-keyword";
 
 const oa = "11111111-1111-1111-1111-111111111111";
 const config = (overrides: Record<string, unknown> = {}) => parseKeywordConfig({
@@ -11,6 +11,15 @@ const config = (overrides: Record<string, unknown> = {}) => parseKeywordConfig({
 
 describe("Keyword Auto Response", () => {
   it("normalizes Thai + English and white space", () => assert.equal(matchKeyword("สนใจ   FIND   X10 ครับ", config()).matched, true));
+  it("matches Thai keywords in continuous Thai text", () => {
+    assert.equal(matchKeyword("สนใจซื้อสินค้า", config({keywords:["สนใจ"]})).matched, true);
+    assert.equal(matchKeyword("สนใจFind X10", config()).matched, true);
+  });
+  it("matches one of several Thai and English aliases", () => {
+    const aliases = config({keywords:["สนใจ", "Find X10"]});
+    assert.equal(matchKeyword("สนใจซื้อสินค้า", aliases).matched, true);
+    assert.equal(matchKeyword("Please find x10", aliases).matched, true);
+  });
   it("does not confuse X10 and X100", () => assert.equal(matchKeyword("สนใจ Find X100", config()).matched, false));
   it("exact prevents prefix/suffix text", () => {
     assert.equal(matchKeyword("find x10", config({matchMode:"EXACT"})).matched, true);
@@ -29,5 +38,23 @@ describe("Keyword Auto Response", () => {
   it("fails closed for equal priority conflict", () => {
     const items=[{id:"a",triggerConfig:config()},{id:"b",triggerConfig:config()}];
     assert.deepEqual(chooseKeywordRule("Find X10",items),{rule:null,ambiguous:true});
+  });
+  it("fails closed when equal-priority contains rules overlap in one message", () => {
+    const items = [
+      {id:"short", triggerConfig:config({keywords:["Find"]})},
+      {id:"specific", triggerConfig:config({keywords:["Find X10"]})},
+    ];
+    assert.deepEqual(chooseKeywordRule("Find X10", items), {rule:null, ambiguous:true});
+  });
+  it("detects direct phrase overlap without confusing adjacent product numbers", () => {
+    assert.equal(keywordPatternsOverlap("CONTAINS", "Find X10", "Find"), true);
+    assert.equal(keywordPatternsOverlap("CONTAINS", "Find X10", "Find X100"), false);
+  });
+  it("uses the higher priority for same-specificity matches", () => {
+    const items = [
+      {id:"lower", triggerConfig:config({priority:2})},
+      {id:"higher", triggerConfig:config({priority:20})},
+    ];
+    assert.equal(chooseKeywordRule("Find X10", items).rule?.id, "higher");
   });
 });

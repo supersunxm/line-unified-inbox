@@ -47,7 +47,7 @@ import {
   normalizeAutoResponseMessages,
   validateAutoResponseMessages,
 } from "./auto-response.utils";
-import { parseKeywordConfig, targetsLineOa } from "./auto-response-keyword";
+import { keywordPatternsOverlap, parseKeywordConfig, targetsLineOa } from "./auto-response-keyword";
 import {
   getAutoResponsePilotMode,
   PILOT_MATCHER_VERSION,
@@ -114,7 +114,8 @@ export class AutoResponseService {
         if (candidate.id === excludeRuleId) continue;
         const other = parseKeywordConfig(candidate.triggerConfig);
         if (!other || other.priority !== config.priority || other.matchMode !== config.matchMode) continue;
-        if (!other.keywords.some((keyword) => config.keywords.includes(keyword))) continue;
+        if (!other.keywords.some((otherKeyword) =>
+          config.keywords.some((keyword) => keywordPatternsOverlap(config.matchMode, keyword, otherKeyword)))) continue;
         if (eligible.some((store) => targetsLineOa(other, store.lineOfficialAccountId))) {
           throw new BadRequestException("A keyword with the same mode and priority is already active for a selected LINE OA");
         }

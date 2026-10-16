@@ -76,6 +76,7 @@ export type AutoResponseDict = {
   previewNoStore: string;
   previewMissingMaps: string;
   previewMissingImage: string;
+  previewMissingRichMessage: string;
 
   // Modals & Confirmation
   deactivateConfirmTitle: string;
@@ -199,6 +200,7 @@ export const autoResponseI18n: Record<"th" | "en" | "zh", AutoResponseDict> = {
     previewNoStore: "ไม่มีข้อมูลสาขาสำหรับการแสดงตัวอย่าง",
     previewMissingMaps: "ไม่มีลิงก์ Google Maps ใน Store Master",
     previewMissingImage: "ยังไม่ได้อัปโหลดรูปภาพ",
+    previewMissingRichMessage: "กรุณาเลือก Rich Message",
 
     deactivateConfirmTitle: "ยืนยันการปิดใช้งานข้อความตอบกลับ",
     deactivateConfirmDesc: (name, count) =>
@@ -323,6 +325,7 @@ export const autoResponseI18n: Record<"th" | "en" | "zh", AutoResponseDict> = {
     previewNoStore: "No store data available for preview",
     previewMissingMaps: "Missing Google Maps URL in Store Master",
     previewMissingImage: "No image uploaded",
+    previewMissingRichMessage: "Choose a Rich Message",
 
     deactivateConfirmTitle: "Confirm Deactivation",
     deactivateConfirmDesc: (name, count) =>
@@ -447,6 +450,7 @@ export const autoResponseI18n: Record<"th" | "en" | "zh", AutoResponseDict> = {
     previewNoStore: "暂无门店数据可供预览",
     previewMissingMaps: "Store Master 中缺少 Google Maps 链接",
     previewMissingImage: "尚未上传图片",
+    previewMissingRichMessage: "请选择富媒体消息",
 
     deactivateConfirmTitle: "确认停用自动回复",
     deactivateConfirmDesc: (name, count) =>

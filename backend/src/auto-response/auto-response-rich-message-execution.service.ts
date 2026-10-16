@@ -122,7 +122,7 @@ export class AutoResponseRichMessageExecutionService extends AutoResponseExecuti
     }
 
     const blocks = normalizeAutoResponseMessages(match.rule);
-    const messages: any[] = [];
+    const messages: unknown[] = [];
     const types: string[] = [];
     const storeContext: StoreVariableContext = {
       storeName: oa.store.name,
@@ -244,7 +244,7 @@ export class AutoResponseRichMessageExecutionService extends AutoResponseExecuti
       googleMapsUrl: oa.store?.storeMaster?.googleMapsUrl ?? null,
     };
 
-    const lineMessages: any[] = [];
+    const lineMessages: unknown[] = [];
     const messageTypes: string[] = [];
     const usedVarsSet = new Set<string>();
 

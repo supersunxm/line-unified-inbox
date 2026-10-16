@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useCallback, useEffect, useState, useMemo } from "react";
 import { api } from "@/lib/api";
 import type {
   AutoResponseRule,
@@ -12,6 +12,7 @@ import type {
   AutoResponseIntent,
   ApiStore,
   AutoResponseKeywordStore,
+  ResolvedAutoResponseBlock,
 } from "@/types/api";
 import { autoResponseI18n } from "./auto-response-i18n";
 import { AutoResponseMessageBuilder } from "./auto-response-message-builder";
@@ -21,6 +22,20 @@ type AutoResponsesViewProps = {
   language: "th" | "en" | "zh";
   userRole: "ADMIN" | "ASSISTANT" | "VIEWER";
 };
+
+function getErrorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error ? error.message : fallback;
+}
+
+async function fetchAutoResponsePageData(isAdmin: boolean) {
+  const [rules, stores, keywordStores, pilotSummary] = await Promise.all([
+    api.listAutoResponses(),
+    api.stores().catch(() => []),
+    isAdmin ? api.getAutoResponseKeywordStores() : Promise.resolve([]),
+    api.getAutoResponsePilotSummary().catch(() => null),
+  ]);
+  return { rules, stores, keywordStores, pilotSummary };
+}
 
 export function AutoResponsesView({ language, userRole }: AutoResponsesViewProps) {
   const t = autoResponseI18n[language] || autoResponseI18n.th;
@@ -69,7 +84,7 @@ export function AutoResponsesView({ language, userRole }: AutoResponsesViewProps
   // Preview State
   const [previewStoreId, setPreviewStoreId] = useState<string>("");
   const [previewData, setPreviewData] = useState<AutoResponsePreviewResult | null>(null);
-  const [loadingPreview, setLoadingPreview] = useState(false);
+  const [completedPreviewKey, setCompletedPreviewKey] = useState<string | null>(null);
 
   // Modals
   const [confirmAction, setConfirmAction] = useState<{
@@ -79,170 +94,217 @@ export function AutoResponsesView({ language, userRole }: AutoResponsesViewProps
   const [usageModalRule, setUsageModalRule] = useState<AutoResponseRule | null>(null);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
-  const showToast = (message: string, type: "success" | "error" = "success") => {
+  const showToast = useCallback((message: string, type: "success" | "error" = "success") => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 4000);
-  };
+  }, []);
 
   // Load Rules & Stores
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       setLoading(true);
-      const [rulesData, storesData] = await Promise.all([
-        api.listAutoResponses(),
-        api.stores().catch(() => []),
-      ]);
-      setRules(rulesData);
-      setStores(storesData);
-      if (isAdmin) {
-        const keywordTargets = await api.getAutoResponseKeywordStores();
-        setKeywordStores(keywordTargets);
+      const data = await fetchAutoResponsePageData(isAdmin);
+      setRules(data.rules);
+      setStores(data.stores);
+      setKeywordStores(data.keywordStores);
+      setPilotSummary(data.pilotSummary);
+      if (data.stores.length > 0) {
+        setPreviewStoreId((current) => current || data.stores[0].id);
       }
-      setPilotSummary(await api.getAutoResponsePilotSummary().catch(() => null));
-      if (storesData.length > 0 && !previewStoreId) {
-        setPreviewStoreId(storesData[0].id);
-      }
-    } catch (err: any) {
-      showToast(err?.message || "Failed to load auto-responses", "error");
+    } catch (err: unknown) {
+      showToast(getErrorMessage(err, "Failed to load auto-responses"), "error");
     } finally {
       setLoading(false);
     }
-  };
+  }, [isAdmin, showToast]);
 
   useEffect(() => {
-    void loadData();
-  }, []);
+    let cancelled = false;
+    void fetchAutoResponsePageData(isAdmin)
+      .then((data) => {
+        if (cancelled) return;
+        setRules(data.rules);
+        setStores(data.stores);
+        setKeywordStores(data.keywordStores);
+        setPilotSummary(data.pilotSummary);
+        if (data.stores.length > 0) {
+          setPreviewStoreId((current) => current || data.stores[0].id);
+        }
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) showToast(getErrorMessage(error, "Failed to load auto-responses"), "error");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isAdmin, showToast]);
 
   const selectedRule = useMemo(() => {
     return rules.find((r) => r.id === selectedRuleId) || null;
   }, [rules, selectedRuleId]);
+  const savedPreviewKey = selectedRule && previewStoreId
+    ? `${selectedRule.id}:${selectedRule.version}:${previewStoreId}`
+    : null;
+  const localPreviewData = useMemo<AutoResponsePreviewResult | null>(() => {
+    if (!isEditing && !isCreating) return null;
 
-  // Handle Preview
-  useEffect(() => {
-    if (!selectedRule && !isCreating) {
-      setPreviewData(null);
-      return;
-    }
+    const selectedStore = stores.find((s) => s.id === previewStoreId);
+    const storeName = selectedStore?.name || "OPPO Store";
+    const mapsUrl = selectedStore?.googleMapsUrl || "";
+    const lineOaLink = "https://line.me/R/ti/p/@oppostore";
+    const tiktokUrl = "";
 
-    if (isEditing || isCreating) {
-      // Local live evaluation preview
-      const selectedStore = stores.find((s) => s.id === previewStoreId);
-      const storeName = selectedStore?.name || "OPPO Store";
-      const mapsUrl = selectedStore?.googleMapsUrl || "";
-      const lineOaLink = "https://line.me/R/ti/p/@oppostore";
-      const tiktokUrl = "";
+    const resolvedBlocks: ResolvedAutoResponseBlock[] = [];
+    const usedVarsSet = new Set<string>();
+    const unresVarsSet = new Set<string>();
+    let allReady = true;
+    let firstReason: string | null = null;
 
-      const resolvedBlocks: any[] = [];
-      const usedVarsSet = new Set<string>();
-      const unresVarsSet = new Set<string>();
-      let allReady = true;
-      let firstReason: string | null = null;
+    for (const block of formMessages) {
+      if (block.type === "TEXT") {
+        const text = block.textTemplate || "";
+        const resolved = text
+          .replace(/\{\{\s*store\.storeName\s*\}\}/g, storeName)
+          .replace(/\{\{\s*storeName\s*\}\}/g, storeName)
+          .replace(/\{\{\s*store\.googleMapsUrl\s*\}\}/g, mapsUrl)
+          .replace(/\{\{\s*googleMapsUrl\s*\}\}/g, mapsUrl)
+          .replace(/\{\{\s*store\.lineOaLink\s*\}\}/g, lineOaLink)
+          .replace(/\{\{\s*lineOaLink\s*\}\}/g, lineOaLink)
+          .replace(/\{\{\s*store\.tiktokProfileUrl\s*\}\}/g, tiktokUrl)
+          .replace(/\{\{\s*tiktokProfileUrl\s*\}\}/g, tiktokUrl);
 
-      for (const block of formMessages) {
-        if (block.type === "TEXT") {
-          const text = block.textTemplate || "";
-          let resolved = text
-            .replace(/\{\{\s*store\.storeName\s*\}\}/g, storeName)
-            .replace(/\{\{\s*storeName\s*\}\}/g, storeName)
-            .replace(/\{\{\s*store\.googleMapsUrl\s*\}\}/g, mapsUrl)
-            .replace(/\{\{\s*googleMapsUrl\s*\}\}/g, mapsUrl)
-            .replace(/\{\{\s*store\.lineOaLink\s*\}\}/g, lineOaLink)
-            .replace(/\{\{\s*lineOaLink\s*\}\}/g, lineOaLink)
-            .replace(/\{\{\s*store\.tiktokProfileUrl\s*\}\}/g, tiktokUrl)
-            .replace(/\{\{\s*tiktokProfileUrl\s*\}\}/g, tiktokUrl);
+        const unres = resolved.match(/\{\{([^}]+)\}\}/g) || [];
+        unres.forEach((u) => unresVarsSet.add(u));
+        const needsMaps = text.includes("store.googleMapsUrl") || text.includes("googleMapsUrl");
+        const blockReady = !unres.length && (!needsMaps || Boolean(mapsUrl));
+        let blockError: string | undefined;
 
-          const unres = resolved.match(/\{\{([^}]+)\}\}/g) || [];
-          unres.forEach((u) => unresVarsSet.add(u));
-          const needsMaps = text.includes("store.googleMapsUrl") || text.includes("googleMapsUrl");
-          const blockReady = !unres.length && (!needsMaps || Boolean(mapsUrl));
-          let blockError: string | undefined;
-
-          if (unres.length) {
-            blockError = `Unresolved variables: ${unres.join(", ")}`;
-            if (allReady) {
-              allReady = false;
-              firstReason = blockError;
-            }
-          } else if (needsMaps && !mapsUrl) {
-            blockError = t.previewMissingMaps;
-            if (allReady) {
-              allReady = false;
-              firstReason = blockError;
-            }
+        if (unres.length) {
+          blockError = `Unresolved variables: ${unres.join(", ")}`;
+          if (allReady) {
+            allReady = false;
+            firstReason = blockError;
           }
-
-          resolvedBlocks.push({
-            id: block.id,
-            type: "TEXT",
-            resolvedText: resolved,
-            usedVariables: [],
-            unresolvedVariables: unres,
-            isValid: blockReady,
-            validationError: blockError,
-          });
-        } else if (block.type === "IMAGE") {
-          const hasImg = Boolean(block.mediaObjectKey || block.imageUrl);
-          let blockError: string | undefined;
-          if (!hasImg) {
-            blockError = t.previewMissingImage;
-            if (allReady) {
-              allReady = false;
-              firstReason = blockError;
-            }
+        } else if (needsMaps && !mapsUrl) {
+          blockError = t.previewMissingMaps;
+          if (allReady) {
+            allReady = false;
+            firstReason = blockError;
           }
-
-          resolvedBlocks.push({
-            id: block.id,
-            type: "IMAGE",
-            imageUrl: block.imageUrl || "",
-            previewUrl: block.previewUrl || block.imageUrl || "",
-            mediaObjectKey: block.mediaObjectKey,
-            isValid: hasImg,
-            validationError: blockError,
-          });
         }
+
+        resolvedBlocks.push({
+          id: block.id,
+          type: "TEXT",
+          resolvedText: resolved,
+          usedVariables: [],
+          unresolvedVariables: unres,
+          isValid: blockReady,
+          validationError: blockError,
+        });
+      } else if (block.type === "IMAGE") {
+        const hasImg = Boolean(block.mediaObjectKey || block.imageUrl);
+        let blockError: string | undefined;
+        if (!hasImg) {
+          blockError = t.previewMissingImage;
+          if (allReady) {
+            allReady = false;
+            firstReason = blockError;
+          }
+        }
+
+        resolvedBlocks.push({
+          id: block.id,
+          type: "IMAGE",
+          imageUrl: block.imageUrl || "",
+          previewUrl: block.previewUrl || block.imageUrl || "",
+          mediaObjectKey: block.mediaObjectKey,
+          isValid: hasImg,
+          validationError: blockError,
+        });
       }
-
-      setPreviewData({
-        ruleId: selectedRule?.id || "draft",
-        ruleName: formName || "Preview",
-        store: {
-          lineOfficialAccountId: "",
-          lineOfficialAccountName: storeName,
-          storeId: selectedStore?.id || null,
-          storeName,
-          externalStoreId: selectedStore?.code || selectedStore?.storeId || null,
-          googleMapsUrl: mapsUrl || null,
-        },
-        usedVariables: Array.from(usedVarsSet),
-        resolvedText: resolvedBlocks.find((b) => b.type === "TEXT")?.resolvedText || "",
-        unresolvedVariables: Array.from(unresVarsSet),
-        messages: resolvedBlocks,
-        ready: allReady && formMessages.length > 0,
-        reason: firstReason,
-      });
-      return;
+      if (block.type === "RICH_MESSAGE") {
+        const hasRichMessage = Boolean(block.richMessageId.trim());
+        const blockError = hasRichMessage ? undefined : t.previewMissingRichMessage;
+        if (!hasRichMessage && allReady) {
+          allReady = false;
+          firstReason = blockError ?? null;
+        }
+        resolvedBlocks.push({
+          id: block.id,
+          type: "RICH_MESSAGE",
+          richMessageId: block.richMessageId,
+          richMessageName: block.richMessageName || t.richMessageFallback,
+          previewUrl: block.previewUrl || "",
+          altText: block.altText || block.richMessageName || t.richMessageFallback,
+          isValid: hasRichMessage,
+          validationError: blockError,
+        });
+      }
     }
 
-    if (selectedRule && previewStoreId) {
-      setLoadingPreview(true);
-      api
-        .previewAutoResponse(selectedRule.id, { storeId: previewStoreId })
-        .then((data) => setPreviewData(data))
-        .catch(() => setPreviewData(null))
-        .finally(() => setLoadingPreview(false));
-    }
+    return {
+      ruleId: selectedRule?.id || "draft",
+      ruleName: formName || "Preview",
+      store: {
+        lineOfficialAccountId: "",
+        lineOfficialAccountName: storeName,
+        storeId: selectedStore?.id || null,
+        storeName,
+        externalStoreId: selectedStore?.code || selectedStore?.storeId || null,
+        googleMapsUrl: mapsUrl || null,
+      },
+      usedVariables: Array.from(usedVarsSet),
+      resolvedText: resolvedBlocks.find((block) => block.type === "TEXT")?.resolvedText || "",
+      unresolvedVariables: Array.from(unresVarsSet),
+      messages: resolvedBlocks,
+      ready: allReady && formMessages.length > 0,
+      reason: firstReason,
+    };
   }, [
-    selectedRule,
     isEditing,
     isCreating,
+    selectedRule?.id,
+    stores,
+    previewStoreId,
     formMessages,
     formName,
-    previewStoreId,
-    stores,
     t.previewMissingMaps,
     t.previewMissingImage,
+    t.previewMissingRichMessage,
+    t.richMessageFallback,
   ]);
+  const visiblePreviewData = isEditing || isCreating
+    ? localPreviewData
+    : savedPreviewKey && completedPreviewKey === savedPreviewKey ? previewData : null;
+  const isSavedPreviewLoading = Boolean(savedPreviewKey && completedPreviewKey !== savedPreviewKey);
+
+  // Saved rules use the server's store-specific preview. Drafts derive their preview during render.
+  useEffect(() => {
+    if (selectedRule && !isEditing && !isCreating && previewStoreId) {
+      const requestKey = `${selectedRule.id}:${selectedRule.version}:${previewStoreId}`;
+      let cancelled = false;
+      api
+        .previewAutoResponse(selectedRule.id, { storeId: previewStoreId })
+        .then((data) => {
+          if (!cancelled) {
+            setPreviewData(data);
+            setCompletedPreviewKey(requestKey);
+          }
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setPreviewData(null);
+            setCompletedPreviewKey(requestKey);
+          }
+        });
+      return () => { cancelled = true; };
+    }
+    return undefined;
+  }, [selectedRule, isEditing, isCreating, previewStoreId]);
 
   // Filtered Rules
   const filteredRules = useMemo(() => {
@@ -413,7 +475,7 @@ export function AutoResponsesView({ language, userRole }: AutoResponsesViewProps
           triggerConfig: formTriggerType === "INBOUND_TEXT" ? { matcherVersion: 1 } : formTriggerType === "KEYWORD" ? keywordConfig : null,
         });
         if (activateImmediately && updated.status !== "ACTIVE") {
-          const activated = await api.activateAutoResponse(updated.id);
+          await api.activateAutoResponse(updated.id);
           showToast(t.activateSuccess);
         } else {
           showToast(t.updateSuccess);
@@ -423,8 +485,8 @@ export function AutoResponsesView({ language, userRole }: AutoResponsesViewProps
       setIsEditing(false);
       setIsCreating(false);
       await loadData();
-    } catch (err: any) {
-      showToast(err?.message || "Save failed", "error");
+    } catch (err: unknown) {
+      showToast(getErrorMessage(err, "Save failed"), "error");
     } finally {
       setSaving(false);
     }
@@ -451,8 +513,8 @@ export function AutoResponsesView({ language, userRole }: AutoResponsesViewProps
       }
       setConfirmAction(null);
       await loadData();
-    } catch (err: any) {
-      showToast(err?.message || "Action failed", "error");
+    } catch (err: unknown) {
+      showToast(getErrorMessage(err, "Action failed"), "error");
     } finally {
       setSaving(false);
     }
@@ -737,7 +799,7 @@ export function AutoResponsesView({ language, userRole }: AutoResponsesViewProps
                         title={s.readinessReasons.join(", ")}
                         className="flex items-center justify-between gap-3 rounded-lg p-2 text-xs hover:bg-[var(--app-surface-hover)]">
                         <span className="flex min-w-0 items-center gap-2">
-                          <input type="checkbox" disabled={!ready} checked={ready && checked}
+                          <input type="checkbox" disabled={!ready} checked={checked}
                             onChange={(e) => {
                               if (formTargetMode === "ALL_ELIGIBLE") {
                                 setExcludedLineOaIds((prev) => { const next = new Set(prev);
@@ -809,20 +871,20 @@ export function AutoResponsesView({ language, userRole }: AutoResponsesViewProps
                 <h3 className="text-sm font-bold text-[var(--app-text-primary)]">
                   {t.previewTitle}
                 </h3>
-                {previewData && (
+                {visiblePreviewData && (
                   <span
                     className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${
-                      previewData.ready
+                      visiblePreviewData.ready
                         ? "bg-emerald-500/10 text-emerald-500"
                         : "bg-amber-500/10 text-amber-500"
                     }`}
                   >
                     <span
                       className={`h-1.5 w-1.5 rounded-full ${
-                        previewData.ready ? "bg-emerald-500" : "bg-amber-500"
+                        visiblePreviewData.ready ? "bg-emerald-500" : "bg-amber-500"
                       }`}
                     />
-                    {previewData.ready ? t.previewReady : t.previewBlocked}
+                    {visiblePreviewData.ready ? t.previewReady : t.previewBlocked}
                   </span>
                 )}
               </div>
@@ -847,8 +909,8 @@ export function AutoResponsesView({ language, userRole }: AutoResponsesViewProps
 
               {/* Live Simulated Chat Stream */}
               <AutoResponsePreviewStream
-                previewData={previewData}
-                loading={loadingPreview}
+                previewData={visiblePreviewData}
+                loading={!isEditing && !isCreating && isSavedPreviewLoading}
                 t={t}
               />
             </div>

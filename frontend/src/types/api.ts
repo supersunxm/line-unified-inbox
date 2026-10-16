@@ -1711,6 +1711,16 @@ export type ResolvedAutoResponseBlock =
       previewObjectKey?: string;
       isValid: boolean;
       validationError?: string;
+    }
+  | {
+      id: string;
+      type: "RICH_MESSAGE";
+      richMessageId: string;
+      richMessageName: string;
+      previewUrl: string;
+      altText: string;
+      isValid: boolean;
+      validationError?: string;
     };
 
 export type AutoResponsePreviewResult = {

@@ -14,7 +14,11 @@ export type KeywordConfig = {
 export const normalizeKeyword = (text: string): string =>
   text.normalize("NFKC").toLocaleLowerCase("en").replace(/\s+/gu, " ").trim();
 
-const wordChar = (char: string | undefined) => Boolean(char && /[\p{L}\p{N}_]/u.test(char));
+// Latin words and numbers need boundaries (so "X10" does not match "X100").
+// Thai is commonly written without spaces between words, so Thai letters must
+// not prevent a literal CONTAINS match at a Thai substring boundary.
+const wordChar = (char: string | undefined) =>
+  Boolean(char && /[\p{Script=Latin}\p{M}\p{N}_]/u.test(char));
 
 export function parseKeywordConfig(value: unknown): KeywordConfig | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
@@ -37,7 +41,7 @@ export function parseKeywordConfig(value: unknown): KeywordConfig | null {
     matcherVersion: 1,
     matchMode: data.matchMode,
     keywords,
-    priority: data.priority as number,
+    priority: data.priority,
     targetMode: data.targetMode,
     targetLineOaIds: data.targetLineOaIds as string[],
     excludedLineOaIds: data.excludedLineOaIds as string[],
@@ -50,6 +54,27 @@ export function targetsLineOa(config: KeywordConfig, lineOaId: string): boolean 
     : config.targetLineOaIds.includes(lineOaId);
 }
 
+function containsKeyword(incoming: string, keyword: string): boolean {
+  let at = incoming.indexOf(keyword);
+  while (at >= 0) {
+    const before = incoming[at - 1];
+    const after = incoming[at + keyword.length];
+    const left = at === 0 || !wordChar(before) || !wordChar(keyword[0]);
+    const right = at + keyword.length === incoming.length || !wordChar(after) || !wordChar(keyword[keyword.length - 1]);
+    if (left && right) return true;
+    at = incoming.indexOf(keyword, at + 1);
+  }
+  return false;
+}
+
+/** Whether two aliases can match the same exact input or phrase. */
+export function keywordPatternsOverlap(mode: KeywordMatchMode, first: string, second: string): boolean {
+  const a = normalizeKeyword(first);
+  const b = normalizeKeyword(second);
+  if (!a || !b) return false;
+  return mode === "EXACT" ? a === b : containsKeyword(a, b) || containsKeyword(b, a);
+}
+
 /** Literal (not regex) contains, with only alphanumeric word boundaries. */
 export function matchKeyword(text: string, config: KeywordConfig): { matched: boolean; specificity: number } {
   const incoming = normalizeKeyword(text);
@@ -59,15 +84,7 @@ export function matchKeyword(text: string, config: KeywordConfig): { matched: bo
       if (incoming === keyword) return { matched: true, specificity: 2 };
       continue;
     }
-    let at = incoming.indexOf(keyword);
-    while (at >= 0) {
-      const before = incoming[at - 1];
-      const after = incoming[at + keyword.length];
-      const left = at === 0 || !wordChar(before) || !wordChar(keyword[0]);
-      const right = at + keyword.length === incoming.length || !wordChar(after) || !wordChar(keyword[keyword.length - 1]);
-      if (left && right) return { matched: true, specificity: 1 };
-      at = incoming.indexOf(keyword, at + 1);
-    }
+    if (containsKeyword(incoming, keyword)) return { matched: true, specificity: 1 };
   }
   return { matched: false, specificity: 0 };
 }
