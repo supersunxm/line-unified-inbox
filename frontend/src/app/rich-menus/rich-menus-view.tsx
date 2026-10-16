@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/lib/api";
+import { OAStoreCandidatesPreview } from "../oa-store-candidates-preview";
 import type {
   AutoResponseRule,
   RichMenuArea,
@@ -211,6 +212,7 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
 
   // Readiness / Target Stores state
   const [readinessData, setReadinessData] = useState<RichMenuReadinessResponse | null>(null);
+  const [readinessError, setReadinessError] = useState<string | null>(null);
   const [loadingReadiness, setLoadingReadiness] = useState(false);
   const [readinessFilter, setReadinessFilter] = useState<"all" | "ready" | "blocked">("all");
   const [storeSearch, setStoreSearch] = useState("");
@@ -365,6 +367,7 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
     setFormAreas(presetAreas);
     setActiveAreaId("area-1");
     setReadinessData(null);
+    setReadinessError(null);
     setPreviewData(null);
     setPublishSelectedOaIds(new Set());
     setActiveJob(null);
@@ -398,6 +401,7 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
   const loadReadiness = async (templateId: string) => {
     if (templateId === "new") return;
     setLoadingReadiness(true);
+    setReadinessError(null);
     try {
       const data = await api.getRichMenuReadiness(templateId);
       setReadinessData(data);
@@ -412,8 +416,9 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
       if (defaultPreview) {
         setPreviewStoreOaId(defaultPreview.lineOfficialAccountId);
       }
-    } catch {
-      // readiness failure handled gracefully
+    } catch (error: unknown) {
+      setReadinessData(null);
+      setReadinessError(error instanceof Error ? error.message : "Failed to load Rich Menu readiness");
     } finally {
       setLoadingReadiness(false);
     }
@@ -1579,6 +1584,18 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
             </div>
           </div>
 
+          {!readinessData && !loadingReadiness && (
+            <div className="space-y-2">
+              {readinessError && <p role="alert" className="text-xs font-medium text-red-600">{readinessError}</p>}
+              <OAStoreCandidatesPreview
+                language={language}
+                selectedOaIds={publishSelectedOaIds}
+                onSelectionChange={(ids) => setPublishSelectedOaIds(new Set(ids))}
+              />
+            </div>
+          )}
+          {(readinessData || loadingReadiness) && (
+            <>
           {/* Table Toolbar */}
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2">
@@ -1889,6 +1906,8 @@ export function RichMenusView({ language = "th", userRole = "ADMIN" }: RichMenus
               </tbody>
             </table>
           </div>
+            </>
+          )}
           <div className="p-3 bg-gray-50 dark:bg-[var(--app-surface-subtle)] border-t border-[#e5e7eb] dark:border-[var(--app-border)] text-[11px] text-gray-500 flex items-center gap-1.5">
             <span>💡</span>
             <span>{t.clearDefaultOaManagerNotice}</span>
