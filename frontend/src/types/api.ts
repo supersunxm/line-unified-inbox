@@ -1598,7 +1598,7 @@ export type RichMenuArea = {
 };
 
 export type AutoResponseStatus = "DRAFT" | "ACTIVE" | "INACTIVE" | "ARCHIVED";
-export type AutoResponseTriggerType = "POSTBACK" | "INBOUND_TEXT";
+export type AutoResponseTriggerType = "POSTBACK" | "INBOUND_TEXT" | "KEYWORD";
 export type AutoResponseIntent = "STORE_LOCATION" | "FINANCE_INFO";
 export type AutoResponsePilotMode = "OFF" | "SHADOW" | "LIVE";
 export type AutoResponseExecutionOutcome = "MATCHED_SHADOW" | "SENT" | "NO_MATCH" | "EXCLUDED" | "AMBIGUOUS" | "DUPLICATE" | "FAILED";
@@ -1623,7 +1623,8 @@ export type AutoResponseImageBlock = {
   height?: number;
 };
 
-export type AutoResponseMessageBlock = AutoResponseTextBlock | AutoResponseImageBlock;
+export type AutoResponseRichMessageBlock = { id: string; type: "RICH_MESSAGE"; richMessageId: string; richMessageName?: string; previewUrl?: string; altText?: string };
+export type AutoResponseMessageBlock = AutoResponseTextBlock | AutoResponseImageBlock | AutoResponseRichMessageBlock;
 
 export type AutoResponseContentJson = {
   version: number;
@@ -1633,6 +1634,12 @@ export type AutoResponseContentJson = {
 export type AutoResponseTextTriggerConfig = {
   matcherVersion: number;
   reviewedAliases?: string[];
+  matchMode?: "EXACT" | "CONTAINS";
+  keywords?: string[];
+  priority?: number;
+  targetMode?: "SELECTED" | "ALL_ELIGIBLE";
+  targetLineOaIds?: string[];
+  excludedLineOaIds?: string[];
 };
 
 export type AutoResponseUploadMediaResult = {
