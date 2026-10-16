@@ -6,6 +6,7 @@ import type { MessageSearchItem } from "./message-search-adapter.ts";
 import { createHttpChatMessageSearchAdapter } from "./message-search-http-adapter.ts";
 import { bangkokTodayIso, type MessageSearchPeriod } from "./message-search-period.ts";
 import { formatMessageSearchTimestamp } from "./message-search-format.ts";
+import { highlightedSearchText } from "./highlight-search-text.tsx";
 import { useChatMessageSearch } from "./use-chat-message-search.ts";
 
 /**
@@ -102,7 +103,7 @@ export function EmbeddedChatMessageResults({
             <span className="min-w-0 truncate text-sm font-semibold text-[var(--app-text-primary)]">{first.customerDisplayName || first.storeName}</span>
             <span className="shrink-0 text-[10px] text-[var(--app-text-tertiary)]">{formatMessageSearchTimestamp(first.sentAt, language)}</span>
           </div>
-          <p className="mt-1 line-clamp-2 break-words text-xs text-[var(--app-text-primary)]">{first.snippet}</p>
+          <p className="mt-1 line-clamp-2 break-words text-xs text-[var(--app-text-primary)]">{highlightedSearchText(first.snippet, keyword)}</p>
           <div className="mt-2 flex items-center gap-2 text-[10px] text-[var(--app-text-secondary)]">
             <span className="min-w-0 truncate">{first.storeName}</span>
             {count > 1 && <span className="shrink-0 rounded-md bg-[var(--app-accent-soft)] px-1.5 text-[var(--app-accent)]">{count}</span>}
