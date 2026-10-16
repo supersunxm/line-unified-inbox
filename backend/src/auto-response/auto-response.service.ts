@@ -47,6 +47,7 @@ import {
   normalizeAutoResponseMessages,
   validateAutoResponseMessages,
 } from "./auto-response.utils";
+import { keywordPatternsOverlap, parseKeywordConfig, targetsLineOa } from "./auto-response-keyword";
 import {
   getAutoResponsePilotMode,
   PILOT_MATCHER_VERSION,
@@ -62,6 +63,66 @@ export class AutoResponseService {
     @Optional() private readonly auditLog?: AuditLogService,
     @Optional() private readonly media?: MediaStorageService,
   ) {}
+
+
+  /** The account, not the store label, is the delivery target. */
+  async listKeywordStores() {
+    const accounts = await this.prisma.lineOfficialAccount.findMany({
+      where: { accountType: "STORE" },
+      include: { store: { include: { storeMaster: true } } },
+      orderBy: [{ name: "asc" }],
+    });
+    return accounts.map((oa) => {
+      const store = oa.store;
+      const externalId = store?.storeMaster?.externalStoreId?.trim() || null;
+      const reasons: string[] = [];
+      if (!oa.isActive || oa.archivedAt) reasons.push("LINE_OA_INACTIVE");
+      if (!store || !store.isActive || store.archivedAt) reasons.push("STORE_INACTIVE_OR_MISSING");
+      if (!store?.storeMaster || !externalId || store.code?.trim() !== externalId) reasons.push("STORE_MASTER_NOT_MATCHED");
+      if (!oa.encryptedChannelAccessToken || !oa.encryptedChannelSecret) reasons.push("CHANNEL_CREDENTIALS_MISSING");
+      if (oa.connectionStatus !== "READY" && oa.connectionStatus !== "CONNECTED") reasons.push("OA_CONNECTION_NOT_READY");
+      return {
+        lineOfficialAccountId: oa.id,
+        lineOfficialAccountName: oa.name,
+        storeId: store?.id ?? null,
+        storeName: store?.name ?? oa.name,
+        storeCode: externalId ?? store?.code ?? null,
+        readinessStatus: reasons.length ? "BLOCKED" as const : "READY" as const,
+        readinessReasons: reasons,
+      };
+    });
+  }
+
+  private async validateKeywordRuleConfig(value: unknown, activation = false, excludeRuleId?: string) {
+    const config = parseKeywordConfig(value);
+    if (!config) throw new BadRequestException("Invalid keyword, priority or target selection");
+    const stores = await this.listKeywordStores();
+    const allIds = new Set(stores.map((store) => store.lineOfficialAccountId));
+    const references = [...config.targetLineOaIds, ...config.excludedLineOaIds];
+    if (references.some((id) => !allIds.has(id))) {
+      throw new BadRequestException("Keyword rule references an unknown or non-STORE LINE OA");
+    }
+    if (activation) {
+      const eligible = stores.filter((store) =>
+        store.readinessStatus === "READY" && targetsLineOa(config, store.lineOfficialAccountId));
+      if (!eligible.length) throw new BadRequestException("No eligible LINE OA available for keyword rule");
+      const active = await this.prisma.autoResponseRule.findMany({
+        where: { triggerType: AutoResponseTriggerType.KEYWORD, status: AutoResponseStatus.ACTIVE },
+        select: { id: true, triggerConfig: true },
+      });
+      for (const candidate of active) {
+        if (candidate.id === excludeRuleId) continue;
+        const other = parseKeywordConfig(candidate.triggerConfig);
+        if (!other || other.priority !== config.priority || other.matchMode !== config.matchMode) continue;
+        if (!other.keywords.some((otherKeyword) =>
+          config.keywords.some((keyword) => keywordPatternsOverlap(config.matchMode, keyword, otherKeyword)))) continue;
+        if (eligible.some((store) => targetsLineOa(other, store.lineOfficialAccountId))) {
+          throw new BadRequestException("A keyword with the same mode and priority is already active for a selected LINE OA");
+        }
+      }
+    }
+    return config;
+  }
 
   private async validateInboundTextRuleConfig(
     scopeStoreId: string | null | undefined,
@@ -490,6 +551,9 @@ export class AutoResponseService {
     if (triggerType === AutoResponseTriggerType.INBOUND_TEXT) {
       await this.validateInboundTextRuleConfig(scopeStoreId, intent);
     }
+    const keywordConfig = triggerType === AutoResponseTriggerType.KEYWORD
+      ? await this.validateKeywordRuleConfig(dto.triggerConfig)
+      : null;
 
     const rule = await this.prisma.autoResponseRule.create({
       data: {
@@ -501,7 +565,7 @@ export class AutoResponseService {
         triggerConfig:
           triggerType === AutoResponseTriggerType.INBOUND_TEXT
             ? dto.triggerConfig ?? { matcherVersion: PILOT_MATCHER_VERSION }
-            : undefined,
+            : keywordConfig ?? undefined,
         contentType,
         textTemplate,
         contentJson: { version: 1, messages },
@@ -551,6 +615,21 @@ export class AutoResponseService {
     if (nextTriggerType === AutoResponseTriggerType.INBOUND_TEXT) {
       await this.validateInboundTextRuleConfig(nextScopeStoreId, nextIntent);
     }
+    const nextKeywordConfig = nextTriggerType === AutoResponseTriggerType.KEYWORD
+      ? await this.validateKeywordRuleConfig(dto.triggerConfig !== undefined ? dto.triggerConfig : existing.triggerConfig)
+      : null;
+    if (
+      (nextTriggerType === AutoResponseTriggerType.KEYWORD || existing.triggerType === AutoResponseTriggerType.KEYWORD) &&
+      dto.status === AutoResponseStatus.ACTIVE
+    ) {
+      throw new BadRequestException("Use the activate endpoint to enable a keyword rule");
+    }
+    const keywordRuleAffected =
+      nextTriggerType === AutoResponseTriggerType.KEYWORD || existing.triggerType === AutoResponseTriggerType.KEYWORD;
+    if (keywordRuleAffected && existing.status === AutoResponseStatus.ACTIVE) {
+      // Any edit involving a live keyword rule requires deliberate re-activation.
+      updates.status = AutoResponseStatus.DRAFT;
+    }
 
     if (dto.triggerType !== undefined) updates.triggerType = dto.triggerType;
     if (dto.intent !== undefined) updates.intent = dto.intent;
@@ -560,7 +639,7 @@ export class AutoResponseService {
         : { connect: { id: dto.scopeStoreId } };
     }
     if (dto.triggerConfig !== undefined) {
-      updates.triggerConfig = dto.triggerConfig === null ? Prisma.JsonNull : dto.triggerConfig;
+      updates.triggerConfig = nextKeywordConfig ?? (dto.triggerConfig === null ? Prisma.JsonNull : dto.triggerConfig);
     }
 
     if (dto.name !== undefined) {
@@ -676,6 +755,8 @@ export class AutoResponseService {
 
     if (existing.triggerType === AutoResponseTriggerType.INBOUND_TEXT) {
       await this.validateInboundTextRuleConfig(existing.scopeStoreId, existing.intent);
+    } else if (existing.triggerType === AutoResponseTriggerType.KEYWORD) {
+      await this.validateKeywordRuleConfig(existing.triggerConfig, true, existing.id);
     }
 
     const updated = await this.prisma.autoResponseRule.update({

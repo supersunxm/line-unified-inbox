@@ -13,17 +13,6 @@ type AutoResponsePreviewStreamProps = {
   t: AutoResponseDict;
 };
 
-type RichPreviewBlock = {
-  id: string;
-  type: "RICH_MESSAGE";
-  richMessageId: string;
-  richMessageName: string;
-  previewUrl: string;
-  altText: string;
-  isValid: boolean;
-  validationError?: string;
-};
-
 export function AutoResponsePreviewStream({
   previewData,
   loading = false,
@@ -48,13 +37,13 @@ export function AutoResponsePreviewStream({
     );
   }
 
-  const messages = (
+  const messages: ResolvedAutoResponseBlock[] = (
     previewData.messages && previewData.messages.length > 0
       ? previewData.messages
       : [
           {
             id: "default-text",
-            type: "TEXT",
+            type: "TEXT" as const,
             resolvedText: previewData.resolvedText || "",
             usedVariables: previewData.usedVariables || [],
             unresolvedVariables: previewData.unresolvedVariables || [],
@@ -62,7 +51,7 @@ export function AutoResponsePreviewStream({
             validationError: previewData.reason || undefined,
           },
         ]
-  ) as Array<ResolvedAutoResponseBlock | RichPreviewBlock>;
+  );
 
   return (
     <div className="overflow-hidden rounded-2xl border border-[var(--app-border)] bg-[var(--app-bg)] shadow-inner">
@@ -76,8 +65,8 @@ export function AutoResponsePreviewStream({
 
       <div className="space-y-3 p-4">
         {messages.map((msg, idx) => {
-          if ((msg as { type?: string }).type === "RICH_MESSAGE") {
-            const rich = msg as RichPreviewBlock;
+          if (msg.type === "RICH_MESSAGE") {
+            const rich = msg;
             return (
               <div key={rich.id || `msg-rich-${idx}`} className="flex flex-col items-start">
                 <div className="relative max-w-[260px] overflow-hidden rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] shadow-md">
