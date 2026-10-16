@@ -6648,3 +6648,25 @@ Current task: enforce the Local CI gate on push. Added `ci:local`, `ci:local:che
 - Evidence verification: `VERIFIED` for 8 mandatory jobs, 54 steps, zero skips, and 54 per-step logs; the 2,071-entry source manifest matches the tested commit. Portable bundle with published-head verification: `/private/tmp/pr558-local-ci-final-20261016-published-head-evidence.tar.gz` with SHA-256 sidecar.
 - The tested source commit `83c37d39ecfa9f6d3f2c5e0bf7c94dd380ad93a3` is a direct child of the unchanged remote PR head. The local branch can be advanced by fast-forward; no push, merge, or deployment is authorized. Local evidence does not create GitHub Required Checks.
 - Next: ChatGPT review of the verified evidence and coordination of GitHub publication; production release remains with the owner.
+
+## 2026-10-16: Global Chat Search WP3 frontend UI, runtime verification, and Agent-Operated Local CI (codex/chat-search-ui-wp3)
+
+- Current task: verify and harden the WP3 Global Chat Search frontend route (`/chats/search`) on top of WP1 (`ca9bb843928214cd318362b7b38ca4df2b069a0b`), integrate current `origin/main` (`30ab520b1c8c13b86c1f4ec4bbe707788ebc5b65`), complete local runtime/browser and production-build verification, run Agent-Operated Local CI (`npm run ci:local`) in isolated Lima Linux guests without using GitHub Actions, push `codex/chat-search-ui-wp3`, and open a Draft PR targeting `main`.
+- Completed work:
+  - Added `/chats/search` route, message-search components, pure period/query/store/state/format modules, synthetic local adapter, and HTTP backend adapter behind `NEXT_PUBLIC_CHAT_MESSAGE_SEARCH_UI` (default disabled, returning 404).
+  - Hardened `selectMessageSearchAdapterKind` and `isSyntheticMessageSearchAllowed` so synthetic mode (which bypasses `AuthorizedSection` to avoid `/auth/me` calls during local synthetic testing) is strictly refused when `NODE_ENV=production`, `NEXT_PUBLIC_APP_ENV=production`, or the browser hostname is not a local loopback host (`127.0.0.1`, `localhost`, `::1`, `[::1]`). Production builds only permit `/chats/search` when `NEXT_PUBLIC_CHAT_MESSAGE_SEARCH_UI=true` and `NEXT_PUBLIC_CHAT_MESSAGE_SEARCH_DATA=backend`, which always wraps the panel in `<AuthorizedSection section="chats">`.
+  - Updated timestamp, store code, and footer notice text tokens to `--app-text-secondary` / `--app-text-primary` so both light and dark themes exceed 3:1 contrast on `/chats/search`.
+  - Merged `origin/main` (`30ab520b1c8c13b86c1f4ec4bbe707788ebc5b65`, PR #556) and aligned `frontend/test/shell-navigation.test.mts` with PR #556's removal of the header `title={updatedLabel}` attribute.
+- Checks run and passed:
+  - WP3 frontend unit tests: 61/61 PASS.
+  - WP1 backend unit/HTTP/service tests (`chat-search-query.spec.ts`, `chat-search.http.spec.ts`, `chat-search.service.spec.ts`): 41/41 PASS.
+  - Full frontend test suite: 1,035/1,035 PASS.
+  - Scoped ESLint on all touched/new WP3 and test files: PASS (0 errors, 0 warnings).
+  - Localization classified audit (`npm run audit:localization:classified`): PASS.
+  - TypeScript baseline check (`npm run typecheck:baseline`): PASS (49 errors, unchanged baseline 49).
+  - Next.js production builds (`npm run build`): PASS with flag OFF (verified HTTP 404 on `/chats/search`), PASS with `DATA=synthetic` in production build (verified HTTP 404 fail-closed), and PASS with `UI=true DATA=backend`.
+  - Headless Google Chrome CDP runtime verification on `http://127.0.0.1:3000/chats/search`: PASS (desktop/mobile layouts, Thai/English search, 7/14/30-day presets, two-month custom calendar with Apply/Cancel, store multi-select and All-stores reset, URL query restore, Bangkok midnight boundary `2026-09-30` vs `2026-10-01`, light/dark 32-node contrast check with 0 failures, 0 backend/Railway/LINE network requests, 0 console errors).
+- Blockers:
+  - Backend WP1 `chat-search` tests (`backend/src/chat-search/*.spec.ts`) remain outside the locked `backend-ci.yml` step inventory pending a separately authorized `repository-policy.test.mjs` and workflow update; Frontend WP3 tests (`frontend/test/chat-message-search-*.test.mts`) are automatically executed by `npm run test` in the Frontend Local CI job.
+  - Production database trigram/compound index and timeout validation for large 30–90 day ranges remain gated before enabling `CHAT_MESSAGE_SEARCH_ENABLED` in production.
+- Next action: complete 8/8 Agent-Operated Local CI (`npm run ci:local`), verify Independent QA review, push `codex/chat-search-ui-wp3` via `.githooks/pre-push`, and open a Draft PR without triggering GitHub Actions, merging, or deploying.

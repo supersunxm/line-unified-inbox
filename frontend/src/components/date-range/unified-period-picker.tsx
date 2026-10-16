@@ -23,6 +23,8 @@ interface UnifiedPeriodPickerProps {
   defaultOpen?: boolean;
   deferQuickRanges?: boolean;
   showOutsideQuickRanges?: boolean;
+  /** Optional localized preset label; defaults to the existing `{days}D` text so current callers are unchanged. */
+  presetLabel?: (days: number) => string;
 }
 
 export function UnifiedPeriodPicker({
@@ -38,6 +40,7 @@ export function UnifiedPeriodPicker({
   defaultOpen = false,
   deferQuickRanges = false,
   showOutsideQuickRanges = true,
+  presetLabel,
 }: UnifiedPeriodPickerProps) {
   const t = getFollowerInsightsText(language);
   const [isOpen, setIsOpen] = useState(defaultOpen);
@@ -70,7 +73,7 @@ export function UnifiedPeriodPicker({
   const presetButtons = (draft = false) => PERIOD_PRESETS.map((days) => (
     <button key={days} type="button" disabled={disabled} aria-pressed={matchesPreset(presetRangeForButton(draft), days, todayIso)}
       onClick={() => { onQuickRange(days); if (draft && !deferQuickRanges) triggerRef.current?.focus(); }}
-      className={`rounded-lg px-3 py-2 text-xs font-semibold focus-visible:outline-2 focus-visible:outline-[var(--app-accent)] disabled:opacity-40 ${matchesPreset(presetRangeForButton(draft), days, todayIso) ? "bg-[var(--app-accent)] text-white" : "text-[var(--app-text-secondary)] hover:bg-[var(--app-surface-hover)]"}`}>{days}D</button>
+      className={`rounded-lg px-3 py-2 text-xs font-semibold focus-visible:outline-2 focus-visible:outline-[var(--app-accent)] disabled:opacity-40 ${matchesPreset(presetRangeForButton(draft), days, todayIso) ? "bg-[var(--app-accent)] text-white" : "text-[var(--app-text-secondary)] hover:bg-[var(--app-surface-hover)]"}`}>{presetLabel ? presetLabel(days) : `${days}D`}</button>
   ));
 
   const handleOpenPopover = () => {

@@ -436,6 +436,25 @@ export type StorePrioritySummaryResponse = {
 export type GoogleMapsReadinessStatus = "CONFIGURED" | "MISSING" | "INVALID";
 export type GoogleMapsReadiness = { status: GoogleMapsReadinessStatus; ready: boolean; reason: string | null };
 
+/** Response of GET /chat-search/messages (WP1 backend). Only interface fields are consumed. */
+export type ChatMessageSearchApiItem = {
+  source: "LIVE" | "HISTORICAL";
+  messageId: string;
+  conversationId: string;
+  storeId: string;
+  storeName: string;
+  customerDisplayName: string | null;
+  direction: "INBOUND" | "OUTBOUND" | "SYSTEM";
+  sentAt: string;
+  snippet: string;
+};
+export type ChatMessageSearchApiResponse = {
+  items: ChatMessageSearchApiItem[];
+  hasMore: boolean;
+  nextCursor: string | null;
+  limit: number;
+};
+
 export type ApiStore = { id: string; storeId?: string | null; name: string; code: string | null; googleMapsUrl?: string | null; googleMapsStatus?: GoogleMapsReadinessStatus; googleMapsStatusReason?: string | null; isActive?: boolean; archivedAt?: string | null; _count?: { conversations: number; lineOfficialAccounts?: number; operationalConversationCount?: number; operationalNotRepliedCount?: number } };
 export type StoreInsightsMetric = { count: number; percentage: number | null };
 export type StoreInsightsDailyTrendPoint = { date: string; customers: number; salesTaggedCustomers: number; replyRate: number | null };

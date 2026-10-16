@@ -3461,3 +3461,12 @@ Decision: re-create LINE OAs missing after the database restore through the same
 Decision: use the existing message-translation endpoint with an explicit `en` or `zh` target. Keep the selected target as per-message UI state, send that target with feedback, and store successful translations in the corresponding `translatedEnglish` or `translatedChinese` conversation field.
 
 Rationale: the backend contract already supports both targets, so the feature needs no backend or database change. A separate local field preserves both results while the operator switches targets. No production data or external translation service is used by local interaction checks.
+
+## 2026-10-16 — Global Chat Search WP3 synthetic mode restricted to local non-production
+
+Decision: refuse the synthetic message-search adapter whenever `NODE_ENV === "production"`, `NEXT_PUBLIC_APP_ENV === "production"`, or the browser hostname is not a local loopback address (`127.0.0.1`, `localhost`, `::1`, `[::1]`). When refused, `selectMessageSearchAdapterKind` returns `null` and `/chats/search` calls `notFound()`.
+
+Rationale:
+- Synthetic mode intentionally bypasses `AuthorizedSection` so local UI verification makes zero requests to `/auth/me` or any backend service.
+- Allowing `resolveMessageSearchDataMode` to default to `"synthetic"` without an environment and loopback guard would let `NEXT_PUBLIC_CHAT_MESSAGE_SEARCH_UI=true` expose an unauthenticated route in a production build if `NEXT_PUBLIC_CHAT_MESSAGE_SEARCH_DATA=backend` were omitted or set to `synthetic`.
+- Failing closed to 404 in production builds and non-loopback hosts guarantees that any active `/chats/search` route in a deployed environment must explicitly select `"backend"` mode and pass through `AuthorizedSection` plus backend HQ/store-scope authorization.
