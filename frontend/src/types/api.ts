@@ -1597,6 +1597,15 @@ export type RichMenuArea = {
   label?: string | null;
 };
 
+export type AutoResponseKeywordStore = {
+  lineOfficialAccountId: string;
+  lineOfficialAccountName: string;
+  storeId: string | null;
+  storeName: string;
+  storeCode: string | null;
+  readinessStatus: "READY" | "BLOCKED";
+  readinessReasons: string[];
+};
 export type AutoResponseStatus = "DRAFT" | "ACTIVE" | "INACTIVE" | "ARCHIVED";
 export type AutoResponseTriggerType = "POSTBACK" | "INBOUND_TEXT" | "KEYWORD";
 export type AutoResponseIntent = "STORE_LOCATION" | "FINANCE_INFO";
