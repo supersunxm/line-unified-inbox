@@ -67,8 +67,8 @@ export function AutoResponseImageBlock({
         width: res.width,
         height: res.height,
       });
-    } catch (err: any) {
-      setError(err?.message || t.uploadFailed);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : t.uploadFailed);
     } finally {
       setUploading(false);
     }

@@ -1,3 +1,35 @@
+# 2026-10-16: PR #560 Keyword Auto Response + Multi-Store Local CI
+
+- Current task: integrate `feature/keyword-auto-response-multistore-20261016` with the latest `origin/main`, verify the keyword auto-response implementation, complete the repository's mandatory Local CI, and publish verified evidence while keeping PR #560 Draft.
+- Final code integration before this progress entry: merge commit `c8072342c40a2ad3b66cb6e0a13a3b4d8da5a328`, with `origin/main` `a3364445a5fa123b6abc65f27a81084b13b2d9d1` as a parent. The merge completed without conflicts. The branch was pushed through the normal `.githooks/pre-push` gate; GitHub reports PR #560 open, Draft, unmerged, with head `c8072342` and current base `a3364445`.
+- Local CI run `20261016100345-30991b7b4c`: all 8 mandatory jobs and 54/54 steps PASS; 0 skips. Source fingerprint `0cc40d33293f630af78aa5a233eb8d4155d6b7870f2117d65cb5a6ccdd468cdb`. Evidence verifier status VERIFIED; 8/8 disposable guests removed; `oppo-ci` base Stopped. `npm run ci:local:check` passed for this exact HEAD.
+- Evidence bundle: `/private/tmp/pr560-local-ci-c8072342-evidence.tar.gz`, SHA-256 `ae33a1aa6561f72d857a0059cd29a3c826d1339ada75e9ac9d15503dbd62a22c`. Sanitized summary posted to PR #560. No GitHub Actions, Production writes, merge, or deployment.
+- Runner investigation: read-only trusted-host checks found the previously reported PID 6416 absent and the supervisor lock/job record absent; `oppo-ci` was Stopped. No process was killed, no lock removed, and no Lima reset/deletion was performed. The earlier blocker was the sandbox's inability to read macOS boot-session metadata and Docker socket permissions; the approved trusted-host runner plan and normal CI invocation worked.
+- Baseline comparison on isolated `origin/main` snapshot `248ae53e96c34c260a18f0777896176af85b7c74` reproduced the five unrelated unit-test failures in Mobile Nickname wiring (2), Review15 layout (2), and TikTok controller auth (1). The required backend job passed on the feature integration, including its disposable PostgreSQL 16 regression and smoke checks.
+- Next: owner review of the still-Draft PR. Local CI evidence is not a GitHub Required Check and does not authorize merge, staging canary, LIVE keyword mode, or deployment.
+
+# 2026-10-16: PR #559 Embedded Global Chat Search QA and Integration Gate
+
+- Current task: Final integration, QA, and release gate for PR #559 (`codex/embedded-chat-message-search-20261016`). Embedded global message-level search into the canonical 3-column `/chats` layout.
+- Worktree: `/Users/chutisoa.nup/Projects/line-unified-inbox-pr559`. Reconciled cleanly with latest `origin/main` (commit `248ae53e96c34c260a18f0777896176af85b7c74`).
+- Contract & Boundary Validation:
+  - Backend parameters verified against disposable PostgreSQL 16 + NestJS: `q`, `startDate`, `endDate`, repeated `storeIds`, `cursor`, `limit`.
+  - Asia/Bangkok date boundaries: midnight cutoff verified; Oct 14 in UTC+7 included, Oct 13 excluded.
+  - Cross-month search verified across September and October.
+  - Store scope: HQ user queries multi-store; non-HQ user rejected with 403 Forbidden.
+- Browser E2E Suite (Playwright Chromium):
+  - Desktop 3-column layout and embedded results grouping verified.
+  - Store filtering (CW vs SP) and date range presets (7D, 14D, 30D) verified.
+  - Page 1 target message highlighted (`<mark>`) and focused (`ring-2 ring-amber-400`).
+  - Page 9 deep target message auto-paginated and located under pending banner.
+  - Page 10 target message bound at 8 auto-page limit; guidance rendered and manual continuation verified.
+  - Rapid conversation switching and polling race conditions prevented by conversation scope keys.
+  - Reversion to legacy conversation list verified.
+  - Mobile viewport (390x844) responsive layout verified.
+  - Non-HQ user access denied (toggle hidden in UI; API returns 403 Forbidden).
+  - Screenshots recorded: `01_desktop_search_with_filters.png` through `07_store_user_denial.png`.
+- Full Frontend Suite: 1,041/1,041 tests passed (100%). TypeScript baseline clean (0 delta). Next.js production build succeeded.
+
 # 2026-10-14: DR LINE OA handover importer PR prepared
 
 - Current task: after the 2026-10-14 production database restore (July baseline), add an owner-approved importer that re-creates LINE OAs missing from the restored database from the handover CSV export. Branch `fix/dr-line-oa-handover-importer` in a separate clone; the primary checkout was not touched.
@@ -6679,3 +6711,14 @@ Current task: enforce the Local CI gate on push. Added `ci:local`, `ci:local:che
   - Backend WP1 `chat-search` tests (`backend/src/chat-search/*.spec.ts`) remain outside the locked `backend-ci.yml` step inventory pending a separately authorized `repository-policy.test.mjs` and workflow update; Frontend WP3 tests (`frontend/test/chat-message-search-*.test.mts`) are automatically executed by `npm run test` in the Frontend Local CI job.
   - Production database trigram/compound index and timeout validation for large 30–90 day ranges remain gated before enabling `CHAT_MESSAGE_SEARCH_ENABLED` in production.
 - Next action: complete 8/8 Agent-Operated Local CI (`npm run ci:local`), verify Independent QA review, push `codex/chat-search-ui-wp3` via `.githooks/pre-push`, and open a Draft PR without triggering GitHub Actions, merging, or deploying.
+
+## 2026-10-16: PR #560 Keyword Auto Response multi-store integration
+
+- Current task: integrate PR #560 with latest `origin/main` in isolated worktree `/Users/chutisoa.nup/.codex/worktrees/pr560-final-integration/line-unified-inbox`, independently review keyword matching, multi-store targeting, message preview and webhook safety, and run required Local CI before any publication.
+- Branch integration: fetched feature branch and `origin/main` (`248ae53e96c34c260a18f0777896176af85b7c74`), then merged main using merge commit `4b13d673e7e944fea517a2a6ba76ffdf8e1627ce`; no conflicts. `origin/main` is an ancestor of the merge commit. PR #560 remains open, Draft, and unmerged; remote head remains `8cffdc39a091346f579a4b45e6f830683c02d545`.
+- Implementation updates in the isolated worktree: allow Thai substring matching without spaces while preserving Latin/number boundaries (`Find X10` does not match `Find X100`); detect direct equal-priority alias overlaps during activation; verify persisted inbound source-message identity and single-winner atomic source-message claim; add concurrent duplicate and matching tests; type and display Rich Message preview blocks; preserve blocked store assignments visibly when editing; derive draft previews during render and key saved previews by rule version and store; remove new `any` usage in touched execution/UI code.
+- Checks passed: focused keyword/webhook tests 44/44; frontend suite 1,036/1,036 after final TSX changes; backend build; frontend production build; TypeScript baseline 47/47; scoped lint for all changed frontend files and keyword/execution backend files; `git diff --check`. Frontend build emitted existing Next workspace-root, `metadataBase`, and dynamic-font warnings.
+- Checks with failures: full backend suite failed in unrelated existing line-chat DI, Review15 vision-layout, TikTok authorization, and PostgreSQL integration coverage; isolated PostgreSQL jobs could not run on the host. Full project lint remains red (backend 894 errors/2 warnings; frontend 61 errors/97 warnings); touched service/view files also contain existing lint findings outside the added lines. Focused lint passed for the changed matcher/execution files.
+- Blocker: Local CI was not started. The CI supervisor lock refers to `oppo-job-88e309427525320a`, PID 6416, whose ownership/liveness cannot be verified in this sandbox (`EPERM`); Lima reports the `oppo-ci` base as `Broken` because boot-session inspection is denied. Host reports 28 GiB free at 93% capacity. Do not stop/remove or clean any guest or lock without verified ownership. All 8 mandatory jobs and evidence verification remain unrun.
+- Publication/evidence: implementation and progress/decision updates are recorded in local-only commit `58a5d11f` after the main merge; this commit is unpushed. No PR comment, GitHub Actions, Production, Railway, or database operation occurred. Evidence is `NOT_VERIFIED`; no Local CI evidence bundle was created, and the pre-push hook has not been run. The dirty primary checkout and existing feature worktree were preserved.
+- Next action: restore/verifiably identify the shared Local CI supervisor and disposable Lima base, then run the repository's exact eight-job Local CI and evidence verifier on the final source SHA. Push only if every required gate passes; keep PR #560 Draft and stop before merge/deployment.

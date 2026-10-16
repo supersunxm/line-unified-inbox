@@ -45,6 +45,12 @@ export type AutoResponseContentJson = {
 export type AutoResponseTextTriggerConfig = {
   matcherVersion: number;
   reviewedAliases?: string[];
+  matchMode?: "EXACT" | "CONTAINS";
+  keywords?: string[];
+  priority?: number;
+  targetMode?: "SELECTED" | "ALL_ELIGIBLE";
+  targetLineOaIds?: string[];
+  excludedLineOaIds?: string[];
 };
 
 export type CreateAutoResponseDto = {

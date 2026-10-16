@@ -1,7 +1,9 @@
 import { Injectable, Logger } from "@nestjs/common";
 import {
+  AutoResponseExecutionOutcome,
   AutoResponseExecutionStatus,
   AutoResponseStatus,
+  AutoResponseTriggerType,
   Prisma,
 } from "@prisma/client";
 import { CredentialEncryptionService } from "../credentials/credential-encryption.service";
@@ -15,7 +17,9 @@ import {
   resolveTemplateVariables,
   type StoreVariableContext,
 } from "../store-master/template-variable-resolver";
-import { AutoResponseExecutionService, type PostbackExecutionResult } from "./auto-response-execution.service";
+import { AutoResponseExecutionService, type PostbackExecutionResult, type InboundTextExecutionResult } from "./auto-response-execution.service";
+import { chooseKeywordRule, parseKeywordConfig, targetsLineOa } from "./auto-response-keyword";
+import { getAutoResponsePilotMode, PILOT_STORE_EXTERNAL_ID } from "./auto-response-pilot.config";
 import {
   normalizeAutoResponseMessages,
   parseAutoResponsePostbackData,
@@ -32,6 +36,142 @@ export class AutoResponseRichMessageExecutionService extends AutoResponseExecuti
     private readonly richMessages: RichMessageService,
   ) {
     super(richPrisma, richEncryption, richLineMessaging);
+  }
+
+
+  override async handleWebhookInboundText(params: {
+    text: string;
+    messageId: string;
+    conversationId: string;
+    lineOfficialAccountId: string;
+    replyToken?: string;
+    webhookEventId?: string;
+  }): Promise<InboundTextExecutionResult> {
+    const mode = process.env.AUTO_REPLY_KEYWORD_MODE;
+    if (mode !== "SHADOW" && mode !== "LIVE") return super.handleWebhookInboundText(params);
+
+    // Preserve the separately approved legacy LIVE pilot and its existing rules.
+    const oa = await this.richPrisma.lineOfficialAccount.findUnique({
+      where: { id: params.lineOfficialAccountId },
+      include: { store: { include: { storeMaster: true } } },
+    });
+    if (oa?.store?.code === PILOT_STORE_EXTERNAL_ID && getAutoResponsePilotMode() === "LIVE") {
+      return super.handleWebhookInboundText(params);
+    }
+
+    if (!oa || oa.accountType !== "STORE" || !oa.isActive || oa.archivedAt ||
+        !oa.store || !oa.store.isActive || oa.store.archivedAt ||
+        !oa.store.storeMaster ||
+        !oa.store.storeMaster.externalStoreId?.trim() ||
+        oa.store.code?.trim() !== oa.store.storeMaster.externalStoreId?.trim() ||
+        !oa.encryptedChannelSecret || !oa.encryptedChannelAccessToken ||
+        (oa.connectionStatus !== "READY" && oa.connectionStatus !== "CONNECTED")) {
+      return super.handleWebhookInboundText(params);
+    }
+
+    const source = await this.richPrisma.message.findUnique({
+      where: { id: params.messageId },
+      select: { direction: true, messageType: true, conversationId: true,
+        conversation: { select: { lineOfficialAccountId: true, isQa: true } } },
+    });
+    if (!source || source.direction !== "INBOUND" || source.messageType !== "TEXT" ||
+        source.conversationId !== params.conversationId ||
+        source.conversation.lineOfficialAccountId !== oa.id || source.conversation.isQa) {
+      return { handled: false, success: false, reason: "KEYWORD_SOURCE_NOT_ELIGIBLE" };
+    }
+
+    const rules = await this.richPrisma.autoResponseRule.findMany({
+      where: { triggerType: AutoResponseTriggerType.KEYWORD, status: AutoResponseStatus.ACTIVE },
+    });
+    const eligible = rules.filter((rule) => {
+      const config = parseKeywordConfig(rule.triggerConfig);
+      return config && targetsLineOa(config, oa.id);
+    });
+    const match = chooseKeywordRule(params.text, eligible);
+    if (!match.rule && !match.ambiguous) return super.handleWebhookInboundText(params);
+
+    // Atomic claim before any customer-facing API calls.
+    let executionId: string;
+    try {
+      const claim = await this.richPrisma.autoResponseExecution.create({
+        data: {
+          ruleId: match.rule?.id ?? null,
+          lineOfficialAccountId: oa.id,
+          webhookEventId: params.webhookEventId ?? null,
+          sourceMessageId: params.messageId,
+          conversationId: params.conversationId,
+          matcherVersion: 1,
+          mode,
+          status: match.ambiguous || mode === "SHADOW"
+            ? AutoResponseExecutionStatus.SKIPPED : AutoResponseExecutionStatus.PENDING,
+          outcome: match.ambiguous ? AutoResponseExecutionOutcome.AMBIGUOUS
+            : mode === "SHADOW" ? AutoResponseExecutionOutcome.MATCHED_SHADOW : null,
+          reason: match.ambiguous ? "KEYWORD_PRIORITY_CONFLICT" : null,
+        },
+      });
+      executionId = claim.id;
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+        return { handled: true, success: true, outcome: AutoResponseExecutionOutcome.DUPLICATE, reason: "DUPLICATE_SOURCE_MESSAGE" };
+      }
+      throw error;
+    }
+    if (match.ambiguous || mode === "SHADOW" || !match.rule) {
+      return { handled: true, success: true, executionId,
+        outcome: match.ambiguous ? AutoResponseExecutionOutcome.AMBIGUOUS : AutoResponseExecutionOutcome.MATCHED_SHADOW };
+    }
+
+    const blocks = normalizeAutoResponseMessages(match.rule);
+    const messages: unknown[] = [];
+    const types: string[] = [];
+    const storeContext: StoreVariableContext = {
+      storeName: oa.store.name,
+      externalStoreId: oa.store.storeMaster.externalStoreId,
+      accountName: oa.name,
+      googleMapsUrl: oa.store.storeMaster.googleMapsUrl ?? null,
+    };
+    try {
+      if (!params.replyToken?.trim()) throw new Error("MISSING_REPLY_TOKEN");
+      if (!blocks.length || blocks.length > 5) throw new Error("INVALID_MESSAGE_COUNT");
+      for (const block of blocks) {
+        if (block.type === "TEXT") {
+          const text = resolveTemplateVariables(block.textTemplate, storeContext);
+          if (!text.trim() || text.length > 5000 || /\{\{\s*[a-zA-Z0-9_.]+\s*\}\}/.test(text)) {
+            throw new Error("INVALID_TEXT_OR_UNRESOLVED_VARIABLE");
+          }
+          if (extractTemplateVariables(block.textTemplate).some((name) => name.includes("googleMapsUrl")) &&
+              !getStoreGoogleMapsReadiness(storeContext.googleMapsUrl).ready) throw new Error("GOOGLE_MAPS_NOT_READY");
+          messages.push({ type: "text", text });
+        } else if (block.type === "IMAGE") {
+          if (!block.mediaObjectKey) throw new Error("MISSING_IMAGE");
+          messages.push({ type: "image",
+            originalContentUrl: createMediaPublicUrl(block.mediaObjectKey),
+            previewImageUrl: createMediaPublicUrl(block.previewObjectKey || block.mediaObjectKey) });
+        } else if (block.type === "RICH_MESSAGE") {
+          if (!block.richMessageId) throw new Error("MISSING_RICH_MESSAGE");
+          const rich = await this.richMessages.get(block.richMessageId);
+          if (!rich.isActive) throw new Error("RICH_MESSAGE_INACTIVE");
+          messages.push(await this.richMessages.buildLineImagemap(block.richMessageId));
+        }
+        types.push(block.type);
+      }
+      const token = this.richEncryption.decrypt(oa.encryptedChannelAccessToken);
+      await this.richLineMessaging.replyMessages(token, params.replyToken, messages, {
+        storeId: oa.store.id, storeName: oa.store.name, messageType: "AUTO_RESPONSE",
+      });
+      await this.richPrisma.autoResponseExecution.update({ where: { id: executionId },
+        data: { status: AutoResponseExecutionStatus.SUCCESS, outcome: AutoResponseExecutionOutcome.SENT,
+          messageCount: messages.length, messageTypesJson: types } });
+      return { handled: true, success: true, outcome: AutoResponseExecutionOutcome.SENT, executionId };
+    } catch (error) {
+      const reason = error instanceof Error ? error.message.slice(0, 180) : "KEYWORD_SEND_FAILED";
+      await this.richPrisma.autoResponseExecution.update({ where: { id: executionId },
+        data: { status: AutoResponseExecutionStatus.FAILED, outcome: AutoResponseExecutionOutcome.FAILED,
+          reason, messageCount: messages.length, messageTypesJson: types } });
+      this.richLogger.warn(`[AutoResponse] Keyword execution failed ruleId=${match.rule.id} reason=${reason}`);
+      return { handled: true, success: false, outcome: AutoResponseExecutionOutcome.FAILED,
+        reason, executionId };
+    }
   }
 
   override async handleWebhookPostback(params: {
@@ -104,7 +244,7 @@ export class AutoResponseRichMessageExecutionService extends AutoResponseExecuti
       googleMapsUrl: oa.store?.storeMaster?.googleMapsUrl ?? null,
     };
 
-    const lineMessages: any[] = [];
+    const lineMessages: unknown[] = [];
     const messageTypes: string[] = [];
     const usedVarsSet = new Set<string>();
 
