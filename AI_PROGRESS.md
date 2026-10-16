@@ -6633,3 +6633,14 @@ Added the Local CI policy, repository instructions, locked parser, baseline work
 ## 2026-10-13 Local-CI enforcement (codex/local-ci-enforcement)
 
 Current task: enforce the Local CI gate on push. Added `ci:local`, `ci:local:check`, `hooks:install` (wrapping the existing `local-ci.mjs` and `evidence.py`), `.githooks/pre-push`, owner decisions D1-D4 and the pre-merge checklist in `AGENTS.md`/`docs/LOCAL_CI_POLICY.md`, CLAUDE.md deferral to AGENTS.md for CI/merge/deploy, and policy tests for automatic workflow triggers and auto-merge language. Checks: Local CI tool suites pass on the host (59 Node tests, evidence verifier tests). Blockers: none recorded here; full Local CI and push results are recorded in the PR. Next: full Local CI on the final commit, push via the hook, open PR to main. No merge, deploy, Railway or GitHub Actions use.
+
+## 2026-10-16 — PR #558 English/Chinese translation validation
+
+- Task: validate PR #558 on `codex/chat-translate-chinese-20261016`; verified GitHub head `e5b1f7a264837e3f43648f7e461bcc4a6c2a8b75`.
+- Review: the UI passes the selected `en` or `zh` to the existing translation API, feedback uses the current target, and the conversation state stores English and Chinese text in separate fields.
+- Test maintenance: update the translation contract tests for both targets and repair one stale shell-navigation assertion that made the existing full frontend suite fail.
+- Checks so far: TypeScript baseline 49/49; frontend tests 975/975; changed-file ESLint 0 errors (17 existing warnings in `page.tsx`); production build passed with a generated-font HTTP 400 warning and the existing `metadataBase` warning. Mandatory Local CI pending.
+- Runtime: the isolated frontend interaction harness confirmed English failure/retry/loading/success, Chinese success, selected-language feedback, localized Chinese UI, and `/api/health` HTTP 200. Translation/feedback calls used in-browser local stubs only.
+- Safety: no GitHub Actions, production calls/data, merge, or deploy. Primary checkout and unrelated CI processes remain untouched.
+- Local dev caveat: the public landing page attempted its configured local backend proxy on port 3001, which was not running; the isolated translation harness and frontend health route worked without it. No production endpoint was contacted.
+- Next: run all mandatory Local CI jobs against the final local commit, then record the result.

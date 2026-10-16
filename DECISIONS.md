@@ -3455,3 +3455,9 @@ Decision: enforce owner decisions D1-D4 with a local pre-push gate that reuses t
 ## 2026-10-14 DR handover importer reuses onboarding and guards restored rows
 
 Decision: re-create LINE OAs missing after the database restore through the same transaction body as interactive OA creation (`createInTransaction`, including the shared `upsertStoreFromStoreMaster`) instead of a parallel insert path, so Store Master identity, duplicate and one-active-OA rules stay identical. Keep the webhook key already registered in LINE, start imported OAs disabled, and activate later through `setStatus`. Apply is bound to the exact CSV, previewed plan and existing keyset hashes, and fails closed (whole transaction rolls back) if any pre-existing OA or Store row changes; the only permitted write to an existing OA is an owner-named `--update-line`. Rationale: production recovery must not alter the 73 restored OAs, and every write must match what the owner approved in preview.
+
+## 2026-10-16 — Message translation selects English or Chinese
+
+Decision: use the existing message-translation endpoint with an explicit `en` or `zh` target. Keep the selected target as per-message UI state, send that target with feedback, and store successful translations in the corresponding `translatedEnglish` or `translatedChinese` conversation field.
+
+Rationale: the backend contract already supports both targets, so the feature needs no backend or database change. A separate local field preserves both results while the operator switches targets. No production data or external translation service is used by local interaction checks.
