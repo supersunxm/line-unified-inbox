@@ -1,3 +1,31 @@
+# 2026-10-14: LINE Rich Message Template Picker Implementation & Readiness Review
+
+- Current task: Implement and verify LINE Official Account Manager-style Rich Message Template Picker in `feat/rich-message-template-picker`.
+- Completed work:
+  - Frontend:
+    - Created `frontend/src/app/rich-messages/rich-message-templates.ts`: All 12 Square presets (A–L), 6 Landscape presets (520h, 350h banner), 5 Portrait presets (1300h, 1850h, 2080h), Custom layout, preset matcher, URL safety checker, geometry/overlap validator.
+    - Created `frontend/src/app/rich-messages/rich-message-template-modal.tsx`: Interactive modal with category tabs, dynamic SVG wireframe tiles with letter badges (A, B, C...), dimensions, and action count badges.
+    - Updated `frontend/src/app/rich-messages/rich-messages-view.tsx`: Template modal integration, live overlay highlight & scroll sync, collapsible Advanced Coordinates (X, Y, W, H) editor, template overwrite confirmation dialog, 2080h upload aspect ratio calculation, and client-side validation.
+    - Updated `frontend/src/app/rich-messages/rich-messages-i18n.ts`: Added TH, EN, ZH translations for all template names, categories, modal controls, and validation errors; type safety verified with `Record<RichMessageTranslationKey, string>`.
+  - Backend:
+    - Updated `backend/src/rich-message/rich-message.service.ts`: Expanded `baseHeight` validation from 1040 to 2080 px; added URI scheme allowlist (`https://`, `http://`, `line://`, `tel:`) and dangerous scheme rejection (`javascript:`, `data:`, `file:`, `vbscript:`); added 2D rectangle overlap detection.
+    - Created `backend/src/rich-message/rich-message-validation.spec.ts`: 8 test suites covering dimensions, action counts, URI schemes, character limits, overlap rejection, adjacent areas, and bounding boxes.
+  - Verification:
+    - Full frontend test suite passed: 982/982 tests (`npm run test`).
+    - Focused template picker tests passed: 8/8 suites (`frontend/test/rich-message-template-picker.test.mts`).
+    - Dark mode design token regression passed: 4/4 tests (`frontend/test/dark-mode-tokens.test.mts`).
+    - Localization coverage passed: 42/42 tests (`frontend/test/localization-coverage.test.mts`).
+    - TypeScript baseline check passed: 49 errors (baseline 49) with 0 errors in changed files (`npm run typecheck:baseline`).
+    - Backend rich message tests passed: 11/11 tests (`npx tsx --test src/rich-message/*.spec.ts`), including legacy overlap preservation and rollback analysis regressions.
+    - Visual QA: Executed automated Playwright QA across Desktop (1280×800) and Mobile (375×812) viewports, capturing 12 verified screenshots covering Square, Landscape, Portrait, Custom tabs, active overlays, advanced coordinate editor, and switch warning modal. Template E in `desktop-08` verified as `square-3-top1-bottom2` (3 areas: 1 top 1040×520 + 2 bottom 520×520).
+    - Local CI Full Suite Passed: Run `20261014064227-582d239450` passed all 8/8 mandatory required jobs (54/54 steps) with zero failures (`localRequiredChecks: "PASS"`). All 8 isolated Lima guests were created and disposed cleanly. Rootless PostgreSQL container cleanup verified PASS. Evidence directory: `/tmp/rich-message-local-ci-all-green`.
+    - Pre-Publication Compatibility Verifications:
+      - Legacy Overlapping Actions: Preserved reading/displaying via `serialize`; metadata-only updates (name/description) succeed without altering action geometry (`allowLegacyOverlap: true`); new overlapping geometry is strictly rejected (`BadRequestException`).
+      - Rollback Compatibility: Evaluated `baseHeight > 1040`. Previous backend versions can read (`get`/`list`), serve images (`renderImagemapImage`), and send LINE Imagemap payloads (`buildLineImagemap`), but will reject editing/saving records with `baseHeight > 1040` until height is reduced or code restored.
+- Safety: Dedicated local branch `feat/rich-message-template-picker` in dedicated worktree. No database migrations, no production access, no Railway deployment, no outbound messages, no GitHub Actions triggered.
+- Blockers: None. All requirements, visual QA, unit/integration tests, and mandatory Local CI checks pass 100%.
+- Next action: Present final readiness review packet and await owner review before publishing or merging.
+
 # 2026-10-14: DR LINE OA handover importer PR prepared
 
 - Current task: after the 2026-10-14 production database restore (July baseline), add an owner-approved importer that re-creates LINE OAs missing from the restored database from the handover CSV export. Branch `fix/dr-line-oa-handover-importer` in a separate clone; the primary checkout was not touched.
@@ -6629,7 +6657,36 @@ Working in isolated branch `codex/permanent-local-ci-policy` from main baseline 
 
 Added the Local CI policy, repository instructions, locked parser, baseline workflow-command hashes, and portable source/log evidence verifier. Focused host checks passed: Node policy and guest lifecycle 29/29, Python evidence tamper tests 6/6, `node --check` for both runner/parser modules, and actionlint 1.7.12 for all five workflows. Fresh Local CI run `20261013143053-599d67edfe` on commit `0303b50c681f683f7576ab825646e84ae1401f35` passed all 8 mandatory jobs and 54/54 steps, with zero required skips and 8/8 guest disposals. Both PostgreSQL jobs used disposable PostgreSQL 16; the final base is stopped. Source-tree SHA-256: `ddf73c9924102fb0d500157f7c3e96e34f61f6521a25a2ae3006ef3929dfdc50`; all 2,062 manifest entries and 54 log hashes verified against the tested Git tree. The portable bundle at `/private/tmp/local-ci-policy-20261013/local-ci-policy-evidence.tar.gz` passed independent extraction and verification; SHA-256 `e88957bbfdc2024ef33e646c202ce3850d07b856cf8d331f7f0e42fe7c74f074`. Local evidence is unsigned and does not create GitHub Checks. Next: owner review of the separate policy PR; merge and production release still need explicit owner authorization. No GitHub Actions, production services, Railway settings, or production data were changed.
 
-
 ## 2026-10-13 Local-CI enforcement (codex/local-ci-enforcement)
 
 Current task: enforce the Local CI gate on push. Added `ci:local`, `ci:local:check`, `hooks:install` (wrapping the existing `local-ci.mjs` and `evidence.py`), `.githooks/pre-push`, owner decisions D1-D4 and the pre-merge checklist in `AGENTS.md`/`docs/LOCAL_CI_POLICY.md`, CLAUDE.md deferral to AGENTS.md for CI/merge/deploy, and policy tests for automatic workflow triggers and auto-merge language. Checks: Local CI tool suites pass on the host (59 Node tests, evidence verifier tests). Blockers: none recorded here; full Local CI and push results are recorded in the PR. Next: full Local CI on the final commit, push via the hook, open PR to main. No merge, deploy, Railway or GitHub Actions use.
+
+## LINE OA Manager-style Rich Message Template Picker — 2026-10-14
+
+Working in dedicated branch `feat/rich-message-template-picker` from baseline `origin/main` (7ea87c71). Implemented LINE Official Account Manager-style Rich Message Template Picker with zero schema migrations, zero production data access, and full backward compatibility.
+
+### Completed Work
+1. **Rich Message Template Preset Engine**:
+   - Implemented `SQUARE` category featuring the 12 illustrated square arrangements (Templates A–L: 1 full area, 2 vertical columns, 2 horizontal rows, 3 rows, 4 grid quadrants, top 1 + bottom 2 columns, top 1 + bottom 2 rows, 6 grid items 2x3, top 2/3 + bottom 1/3, top 2/3 + bottom 2 columns, left 1 + right 2 rows, left 2 rows + right 1).
+   - Implemented `LANDSCAPE` category (1040x520 1 area, 2 vertical, 2 horizontal, 3 vertical; 1040x350 1 banner, 2 banner columns).
+   - Implemented `PORTRAIT` category (1040x1300 1 area, 2 rows, 3 rows; 1040x1850 tall; 1040x2080 max height).
+   - Implemented `CUSTOM` category allowing freeform dimensions and manual area editing.
+   - Guaranteed deterministic integer coordinates, 100% canvas coverage, and zero overlap with integer edge-rounding.
+2. **Visual Template Modal & Wireframes**:
+   - Built `RichMessageTemplateModal` with category navigation tabs, responsive SVG wireframe previews for every preset, dimension badges, action counts, and selection indicators.
+3. **Interactive Live Preview & Highlighting**:
+   - Connected live preview overlays to action cards: tapping regions on the image highlights that region with prominent green border/tint and scrolls the corresponding action card into view.
+   - Letter badges (A, B, C...) and region numbers synchronize between preview overlays and action cards.
+4. **Action Configuration Protection**:
+   - Added `hasConfiguredActions` detection. When changing templates on an active draft with configured URLs or messages, a confirmation warning dialog alerts the user before replacing actions.
+   - Untouched library records and existing IDs are preserved.
+5. **Dimensions & Security Audit**:
+   - Audited LINE imagemap dimensions: expanded baseHeight support from [1..1040] to [1..2080] on client and server per LINE Messaging API Imagemap specification, preserving 1040 base width and aspect ratio scaling.
+   - Enforced safe URI schemes (`https://`, `http://`, `line://`, `tel:`) and rejected dangerous schemes (`javascript:`, `data:`, `file:`, `vbscript:`).
+   - Server and client overlap rejection: rejects overlapping areas with descriptive errors.
+6. **Localization**:
+   - Complete `th`, `en`, and `zh` translations in `richMessagesText` for all categories, template names, dialogs, coordinate tools, and validation messages.
+7. **Verification & Tests**:
+   - Added `backend/src/rich-message/rich-message-validation.spec.ts` (8 passing suites) covering dimensions, action limits, overlap detection, out-of-bounds, and URI safety.
+   - Added `frontend/test/rich-message-template-picker.test.mts` (8 passing suites) covering 12 square presets, edge rounding, landscape/portrait geometries, URL safety, non-square uploads, template switching, and backward compatibility.
+   - All 982 frontend tests passing; backend compiles cleanly.
