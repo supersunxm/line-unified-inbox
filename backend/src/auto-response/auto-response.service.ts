@@ -93,7 +93,7 @@ export class AutoResponseService {
     });
   }
 
-  private async validateKeywordRuleConfig(value: unknown, activation = false) {
+  private async validateKeywordRuleConfig(value: unknown, activation = false, excludeRuleId?: string) {
     const config = parseKeywordConfig(value);
     if (!config) throw new BadRequestException("Invalid keyword, priority or target selection");
     const stores = await this.listKeywordStores();
@@ -106,6 +106,19 @@ export class AutoResponseService {
       const eligible = stores.filter((store) =>
         store.readinessStatus === "READY" && targetsLineOa(config, store.lineOfficialAccountId));
       if (!eligible.length) throw new BadRequestException("No eligible LINE OA available for keyword rule");
+      const active = await this.prisma.autoResponseRule.findMany({
+        where: { triggerType: AutoResponseTriggerType.KEYWORD, status: AutoResponseStatus.ACTIVE },
+        select: { id: true, triggerConfig: true },
+      });
+      for (const candidate of active) {
+        if (candidate.id === excludeRuleId) continue;
+        const other = parseKeywordConfig(candidate.triggerConfig);
+        if (!other || other.priority !== config.priority || other.matchMode !== config.matchMode) continue;
+        if (!other.keywords.some((keyword) => config.keywords.includes(keyword))) continue;
+        if (eligible.some((store) => targetsLineOa(other, store.lineOfficialAccountId))) {
+          throw new BadRequestException("A keyword with the same mode and priority is already active for a selected LINE OA");
+        }
+      }
     }
     return config;
   }
@@ -737,7 +750,7 @@ export class AutoResponseService {
     if (existing.triggerType === AutoResponseTriggerType.INBOUND_TEXT) {
       await this.validateInboundTextRuleConfig(existing.scopeStoreId, existing.intent);
     } else if (existing.triggerType === AutoResponseTriggerType.KEYWORD) {
-      await this.validateKeywordRuleConfig(existing.triggerConfig, true);
+      await this.validateKeywordRuleConfig(existing.triggerConfig, true, existing.id);
     }
 
     const updated = await this.prisma.autoResponseRule.update({
