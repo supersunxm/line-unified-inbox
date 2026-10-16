@@ -181,12 +181,14 @@ export function extractManagerMediaUrlCandidates(value: unknown): string[] {
       return;
     }
     for (const [key, child] of Object.entries(current as JsonRecord)) {
+      const trimmedCandidate = typeof child === "string" ? child.trim() : "";
+      const looksLikeUrl = trimmedCandidate.startsWith("https://") || trimmedCandidate.startsWith("/");
       if (
-        typeof child === "string"
+        looksLikeUrl
         && /(url|uri|download|content|original|preview|thumbnail)/i.test(key)
       ) {
         try {
-          const parsed = new URL(child, "https://chat.line.biz");
+          const parsed = new URL(trimmedCandidate, "https://chat.line.biz");
           if (
             parsed.protocol === "https:"
             && (
@@ -1023,16 +1025,35 @@ export class LineChatManagerMediaMaterializerService implements OnModuleInit, On
       };
     }
 
+    const payloadRecord = jsonRecord(payload);
+    const contentProvider = payloadRecord?.contentProvider;
+    const contentHashSegments = contentHash ? contentHash.split("/").filter(Boolean) : [];
     this.logger.warn(JSON.stringify({
       event: "line_chat_manager_media_binary_not_found",
       messageType,
       infoStatus: infoResponse?.status() ?? null,
       payloadKeys: safeJsonKeyNames(payload),
       infoKeys: safeJsonKeyNames(info),
+      payloadExpired: typeof payloadRecord?.expired === "boolean" ? payloadRecord.expired : null,
+      payloadExpiredAt: typeof payloadRecord?.expiredAt === "string"
+        ? payloadRecord.expiredAt.slice(0, 64)
+        : null,
+      payloadContentProvider: typeof contentProvider === "string" && /^[A-Za-z0-9_-]{1,32}$/u.test(contentProvider)
+        ? contentProvider
+        : null,
       payloadContentHashPresent: Boolean(extractManagerContentHash(payload)),
       infoContentHashPresent: Boolean(extractManagerContentHash(info)),
+      contentHashLength: contentHash?.length ?? 0,
+      contentHashSegmentCount: contentHashSegments.length,
       payloadUrlCandidateCount: extractManagerMediaUrlCandidates(payload).length,
       infoUrlCandidateCount: extractManagerMediaUrlCandidates(info).length,
+      candidateOrigins: [...new Set(deduped.flatMap((url) => {
+        try {
+          return [new URL(url).origin];
+        } catch {
+          return [];
+        }
+      }))],
       attempts,
     }));
     throw new Error("MANAGER_MEDIA_BINARY_NOT_FOUND");

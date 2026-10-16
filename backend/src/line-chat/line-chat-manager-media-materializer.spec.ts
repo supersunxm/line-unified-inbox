@@ -42,11 +42,22 @@ test("accepts only LINE-owned media URL candidates", () => {
       originalUrl: "https://chat-content.line-scdn.net/bot/U123/hash",
       previewUrl: "https://chat.line.biz/api/v1/media/preview",
       maliciousUrl: "https://example.com/customer-data",
+      contentProvider: "line",
     }),
     [
       "https://chat-content.line-scdn.net/bot/U123/hash",
       "https://chat.line.biz/api/v1/media/preview",
     ],
+  );
+});
+
+test("rejects enum-like content provider values as media URLs", () => {
+  assert.deepEqual(
+    extractManagerMediaUrlCandidates({
+      contentProvider: "line",
+      nested: { providerContent: "external" },
+    }),
+    [],
   );
 });
 
