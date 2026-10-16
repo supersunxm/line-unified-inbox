@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -50,4 +50,34 @@ test('rendered wrapper preserves a child failure in its exact exit marker', asyn
   const child = spawnSync('bash', ['--noprofile', '--norc'], { input: rendered.wrapper, encoding: 'utf8', timeout: 10_000 });
   assert.equal(child.status, 0, child.stderr);
   assert.match(child.stdout, /__CODEX_STEP_RC__7\s*$/);
+});
+
+
+test('actual database fixture predicates allow only the flagged exact disposable PostgreSQL alias', async () => {
+  const files = [
+    'backend/scripts/test-sunn-secretary-owner-http.cjs',
+    'backend/src/ai/sunn-secretary/sunn-secretary-credentials.integration.spec.ts',
+    'backend/src/ai/sunn-secretary/sunn-secretary-event-receipt.spec.ts',
+  ];
+  for (const file of files) {
+    const source = await readFile(join(root, file), 'utf8');
+    const expression = source.match(/const agentCiDatabaseAlias = ([^;]+);/);
+    assert.ok(expression, `${file}: missing explicit disposable-alias predicate`);
+    const evaluate = new Function('url', 'process', `const hostname=url.hostname.toLowerCase();return (${expression[1]});`);
+    const allowed = 'postgresql://ci:ci@postgres:5432/ci';
+    assert.equal(evaluate(new URL(allowed), { env: { CODEX_AGENT_CI_POSTGRES: 'true' } }), true, file);
+    for (const value of [undefined, '', 'false', 'TRUE']) {
+      assert.equal(evaluate(new URL(allowed), { env: { CODEX_AGENT_CI_POSTGRES: value } }), false, file);
+    }
+    for (const value of [
+      'postgresql://ci:ci@other.invalid:5432/ci',
+      'https://ci:ci@postgres:5432/ci',
+      'postgresql://other:ci@postgres:5432/ci',
+      'postgresql://ci:other@postgres:5432/ci',
+      'postgresql://ci:ci@postgres:5433/ci',
+      'postgresql://ci:ci@postgres:5432/production',
+      'postgresql://ci:ci@postgres:5432/ci?schema=public',
+      'postgresql://ci:ci@postgres:5432/ci#fragment',
+    ]) assert.equal(evaluate(new URL(value), { env: { CODEX_AGENT_CI_POSTGRES: 'true' } }), false, `${file}: unsafe alias allowed`);
+  }
 });

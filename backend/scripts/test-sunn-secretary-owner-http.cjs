@@ -8,7 +8,9 @@ const { PrismaClient } = require('@prisma/client');
 // Real compiled application and sessions. This script refuses non-local databases.
 async function run() {
   const url = new URL(process.env.SECRETARY_SETTINGS_TEST_DATABASE_URL);
-  assert.ok(['localhost', '127.0.0.1'].includes(url.hostname));
+  const hostname = url.hostname.toLowerCase();
+  const agentCiDatabaseAlias = hostname === 'postgres' && process.env.CODEX_AGENT_CI_POSTGRES === 'true' && ['postgres:', 'postgresql:'].includes(url.protocol) && url.username === 'ci' && url.password === 'ci' && url.port === '5432' && url.pathname === '/ci' && url.search === '' && url.hash === '';
+  assert.ok(['localhost', '127.0.0.1'].includes(hostname) || agentCiDatabaseAlias);
   assert.ok(['/ci', '/sunn_owner_credentials_test_20261008'].includes(url.pathname));
   const portCheck = createServer();
   await new Promise((resolve, reject) => portCheck.once('error', reject).listen(3001, resolve));

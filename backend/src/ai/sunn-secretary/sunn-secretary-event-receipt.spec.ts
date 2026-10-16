@@ -138,9 +138,11 @@ function safeDisposableTestUrl(value: string): URL {
   }
 
   const allowedHosts = new Set(["localhost", "127.0.0.1", "::1"]);
+  const hostname = url.hostname.toLowerCase();
+  const agentCiDatabaseAlias = hostname === "postgres" && process.env.CODEX_AGENT_CI_POSTGRES === "true" && ["postgres:", "postgresql:"].includes(url.protocol) && url.username === "ci" && url.password === "ci" && url.port === "5432" && url.pathname === "/ci" && url.search === "" && url.hash === "";
   if (
     (url.protocol !== "postgresql:" && url.protocol !== "postgres:") ||
-    !allowedHosts.has(url.hostname.toLowerCase()) ||
+    (!allowedHosts.has(hostname) && !agentCiDatabaseAlias) ||
     url.username !== "ci" || decodeURIComponent(url.pathname.slice(1)) !== "ci"
   ) {
     throw new Error("Sunn receipt PostgreSQL test requires the isolated local CI database (ci user/database)");
