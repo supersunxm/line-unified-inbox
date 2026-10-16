@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { StoreAccessService } from "../auth/store-access.service";
 import { TranslationConfig } from "./translation.config";
 import { TranslationController } from "./translation.controller";
 import { TranslationService } from "./translation.service";
@@ -22,6 +23,7 @@ import { TranslationGlossaryService } from "./glossary/translation-glossary.serv
   controllers: [TranslationController, TranslationMetricsController],
   providers: [
     TranslationConfig,
+    StoreAccessService,
     TranslationGlossaryService,
     {
       provide: TRANSLATION_PROVIDER,
