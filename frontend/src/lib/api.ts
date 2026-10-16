@@ -3,6 +3,7 @@ import { AUTH_UNAUTHORIZED_EVENT, redirectToPasswordChange, shouldRedirectToPass
 import { authUserStore } from "@/lib/auth-user-store";
 import type { AuthUser } from "@/lib/authorization";
 import { API_BASE_URL } from "@/lib/runtime-config";
+import type { ChatMessageSearchApiResponse } from "@/types/api";
 
 export function messageMediaUrl(messageId: string) {
   const isBrowser = typeof window !== "undefined";
@@ -479,6 +480,14 @@ export const api = {
   updatePilotChecklist: (lineOaId: string, itemKey: string, status: "NOT_TESTED" | "PASSED" | "FAILED" | "NOT_APPLICABLE", note?: string) => request(`/operations/pilot-checklist/${lineOaId}/${itemKey}`, { method: "PUT", body: JSON.stringify({ status, note }) }),
   health: () => request<{ status: string }>("/health"),
   searchStoreMaster: (query: string, limit = 10, options?: ApiRequestOptions) => request<StoreMasterSuggestion[]>(`/store-master/search?q=${encodeURIComponent(query)}&limit=${limit}`, options),
+  /** Global message search (WP1 backend). Requests are made only by the HTTP adapter, which the UI selects behind a flag. */
+  searchChatMessages: (params: { q: string; startDate: string; endDate: string; storeIds?: string[]; cursor?: string | null; limit?: number }, options?: ApiRequestOptions) => {
+    const query = new URLSearchParams({ q: params.q, startDate: params.startDate, endDate: params.endDate });
+    for (const storeId of params.storeIds ?? []) query.append("storeIds", storeId);
+    if (params.cursor) query.set("cursor", params.cursor);
+    if (params.limit !== undefined) query.set("limit", String(params.limit));
+    return request<ChatMessageSearchApiResponse>(`/chat-search/messages?${query.toString()}`, options);
+  },
   syncStoreMaster: () => request<StoreMasterSyncResult>("/store-master/sync", { method: "POST" }),
   conversations: (params?: Record<string, string | number | boolean | undefined>, options?: ApiRequestOptions) => {
     const query = new URLSearchParams();
