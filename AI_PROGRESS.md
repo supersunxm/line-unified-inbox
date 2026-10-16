@@ -1,3 +1,13 @@
+# 2026-10-16: PR #560 Keyword Auto Response + Multi-Store Local CI
+
+- Current task: integrate `feature/keyword-auto-response-multistore-20261016` with the latest `origin/main`, verify the keyword auto-response implementation, complete the repository's mandatory Local CI, and publish verified evidence while keeping PR #560 Draft.
+- Final code integration before this progress entry: merge commit `c8072342c40a2ad3b66cb6e0a13a3b4d8da5a328`, with `origin/main` `a3364445a5fa123b6abc65f27a81084b13b2d9d1` as a parent. The merge completed without conflicts. The branch was pushed through the normal `.githooks/pre-push` gate; GitHub reports PR #560 open, Draft, unmerged, with head `c8072342` and current base `a3364445`.
+- Local CI run `20261016100345-30991b7b4c`: all 8 mandatory jobs and 54/54 steps PASS; 0 skips. Source fingerprint `0cc40d33293f630af78aa5a233eb8d4155d6b7870f2117d65cb5a6ccdd468cdb`. Evidence verifier status VERIFIED; 8/8 disposable guests removed; `oppo-ci` base Stopped. `npm run ci:local:check` passed for this exact HEAD.
+- Evidence bundle: `/private/tmp/pr560-local-ci-c8072342-evidence.tar.gz`, SHA-256 `ae33a1aa6561f72d857a0059cd29a3c826d1339ada75e9ac9d15503dbd62a22c`. Sanitized summary posted to PR #560. No GitHub Actions, Production writes, merge, or deployment.
+- Runner investigation: read-only trusted-host checks found the previously reported PID 6416 absent and the supervisor lock/job record absent; `oppo-ci` was Stopped. No process was killed, no lock removed, and no Lima reset/deletion was performed. The earlier blocker was the sandbox's inability to read macOS boot-session metadata and Docker socket permissions; the approved trusted-host runner plan and normal CI invocation worked.
+- Baseline comparison on isolated `origin/main` snapshot `248ae53e96c34c260a18f0777896176af85b7c74` reproduced the five unrelated unit-test failures in Mobile Nickname wiring (2), Review15 layout (2), and TikTok controller auth (1). The required backend job passed on the feature integration, including its disposable PostgreSQL 16 regression and smoke checks.
+- Next: owner review of the still-Draft PR. Local CI evidence is not a GitHub Required Check and does not authorize merge, staging canary, LIVE keyword mode, or deployment.
+
 # 2026-10-16: PR #559 Embedded Global Chat Search QA and Integration Gate
 
 - Current task: Final integration, QA, and release gate for PR #559 (`codex/embedded-chat-message-search-20261016`). Embedded global message-level search into the canonical 3-column `/chats` layout.
