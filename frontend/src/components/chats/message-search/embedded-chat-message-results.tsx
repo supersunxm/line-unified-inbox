@@ -45,14 +45,17 @@ export function EmbeddedChatMessageResults({
     error: "ค้นหาไม่สำเร็จ กรุณาลองอีกครั้ง", retry: "ลองอีกครั้ง",
     more: "โหลดเพิ่มเติม", loadingMore: "กำลังโหลดเพิ่มเติม…",
     matches: "ข้อความที่ตรงกับคำค้น", current: "ข้อความปัจจุบัน",
+    filterScopeNote: "ค้นหาจากคำ วันที่ และร้านค้า ตัวกรองสถานะหรือสินค้าใช้กับรายการบทสนทนาแบบเดิม",
   } : language === "zh" ? {
     loading: "正在搜索消息…", empty: "选定日期内没有匹配消息",
     error: "搜索失败，请重试", retry: "重试", more: "加载更多",
     loadingMore: "正在加载…", matches: "匹配消息", current: "当前消息",
+    filterScopeNote: "按关键词、日期、门店搜索；状态和商品筛选仅适用于旧会话列表",
   } : {
     loading: "Searching messages…", empty: "No matching messages in this date range",
     error: "Search failed. Please retry.", retry: "Retry", more: "Load more",
     loadingMore: "Loading more…", matches: "Matching messages", current: "Current messages",
+    filterScopeNote: "Search uses keyword, date and store; status/product filters apply only to the legacy conversation list.",
   };
   const search = useChatMessageSearch({
     adapter: BACKEND_ADAPTER,
@@ -88,7 +91,7 @@ export function EmbeddedChatMessageResults({
       <p className="border-b border-[var(--app-border)] px-3 py-2 text-xs text-[var(--app-text-secondary)]">
         {copy.matches}: {rows.length} · {copy.current}
         <span className="block mt-1 text-[10px]">
-          {language === "th" ? "ค้นหาจากคำ วันที่ และร้านค้า ตัวกรองสถานะหรือสินค้าใช้กับรายการบทสนทนาแบบเดิม" : language === "zh" ? "按关键词、日期、门店搜索；状态和商品筛选仅适用于旧会话列表" : "Search uses keyword, date and store; status/product filters apply only to the legacy conversation list."}
+          {copy.filterScopeNote}
         </span>
       </p>
       {rows.map(({ first, count }) => (

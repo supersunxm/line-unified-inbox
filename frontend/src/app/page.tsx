@@ -237,6 +237,13 @@ const translations = {
       "เลือกการสนทนาจากรายการเพื่อดูข้อความและรายละเอียดลูกค้า",
     searchFilter: "ค้นหา",
     searchResults: "ผลลัพธ์",
+    searchByDate: "ค้นหาข้อความตามวันที่ส่ง",
+    searchMessageContent: "ค้นหาในเนื้อหาข้อความ (ปิดเพื่อค้นหาบทสนทนาแบบเดิม)",
+    messageDateRange: "ช่วงวันที่ส่งข้อความ (สูงสุด 90 วัน)",
+    messageDateRangeScopeNote: "วันที่นี้ใช้กับการค้นหาข้อความเท่านั้น ไม่เปลี่ยนตัวกรองเดือนของรายการแชท",
+    dateFilterTag: "วันที่",
+    locatingMatchingMessage: "กำลังค้นหาตำแหน่งข้อความที่ตรงกันในบทสนทนา",
+    loadEarlierMessagesToContinue: " · กดโหลดข้อความก่อนหน้าเพื่อดูเพิ่มเติม",
     topicFilter: "หัวข้อ",
     allTopics: "ทุกหัวข้อ",
     allLineOa: "LINE OA ทั้งหมด",
@@ -605,6 +612,13 @@ const translations = {
       "Choose a conversation from the list to view messages and customer details.",
     searchFilter: "Search",
     searchResults: "results",
+    searchByDate: "Search by message date",
+    searchMessageContent: "Search message content (uncheck for legacy conversation search)",
+    messageDateRange: "Message send date (up to 90 days)",
+    messageDateRangeScopeNote: "Only message search uses this date range; the conversation month stays unchanged.",
+    dateFilterTag: "Date",
+    locatingMatchingMessage: "Locating the matching message in conversation",
+    loadEarlierMessagesToContinue: " · Load earlier messages to continue",
     topicFilter: "Topic",
     allTopics: "All Topics",
     allLineOa: "All LINE OA",
@@ -972,6 +986,13 @@ const translations = {
       "从列表中选择一个对话以查看消息和客户详情。",
     searchFilter: "搜索",
     searchResults: "个结果",
+    searchByDate: "按发送日期搜索消息",
+    searchMessageContent: "搜索消息内容（关闭后搜索会话）",
+    messageDateRange: "消息发送日期（最多90天）",
+    messageDateRangeScopeNote: "此日期仅用于消息搜索，不会更改会话月份筛选",
+    dateFilterTag: "日期",
+    locatingMatchingMessage: "正在定位匹配消息",
+    loadEarlierMessagesToContinue: " · 请加载更早的消息",
     topicFilter: "主题",
     allTopics: "所有主题",
     allLineOa: "所有 LINE OA",
@@ -1991,7 +2012,8 @@ function ApplicationWorkspaceContent({ initialSection, initialAuthUser }: { init
   }, [text.connectionError]);
 
   useEffect(() => {
-    if (!authUser || initialSection !== "chats" || showEmbeddedMessageResults) return;
+    if (!authUser || initialSection !== "chats") return;
+    if (showEmbeddedMessageResults) return;
     if (previousConversationFilterShape.current !== conversationFilterShapeKey) {
       previousConversationFilterShape.current = conversationFilterShapeKey;
       if (chatPage !== 1) {
@@ -4645,8 +4667,8 @@ function ApplicationWorkspaceContent({ initialSection, initialAuthUser }: { init
                       </h2>
                       <p className="app-muted mt-0.5 text-xs text-[var(--app-text-tertiary)] font-tabular">
                         {showEmbeddedMessageResults
-                          ? (language === "th" ? "ค้นหาข้อความตามวันที่ส่ง" : language === "zh" ? "按发送日期搜索消息" : "Search by message date")
-                          : chatTotalCount + " " + text.searchResults}
+                          ? text.searchByDate
+                          : <>{chatTotalCount} {text.searchResults}</>}
                       </p>
                     </div>
 
@@ -4671,7 +4693,7 @@ function ApplicationWorkspaceContent({ initialSection, initialAuthUser }: { init
                             setSearchWithinMessages(e.target.checked);
                             setSelectedSearchHit(null);
                           }} />
-                          {language === "th" ? "ค้นหาในเนื้อหาข้อความ (ปิดเพื่อค้นหาบทสนทนาแบบเดิม)" : language === "zh" ? "搜索消息内容（关闭后搜索会话）" : "Search message content (uncheck for legacy conversation search)"}
+                          {text.searchMessageContent}
                         </label>
                       )}
                       <label className="text-[var(--app-text-secondary)] text-xs font-medium">
@@ -4726,7 +4748,7 @@ function ApplicationWorkspaceContent({ initialSection, initialAuthUser }: { init
                       {messageSearchMode && (
                         <div data-embedded-message-search-date className="col-span-2 space-y-2 rounded-lg border border-[var(--app-border)] bg-[var(--app-surface)] p-2">
                           <p className="text-xs font-semibold text-[var(--app-text-primary)]">
-                            {language === "th" ? "ช่วงวันที่ส่งข้อความ (สูงสุด 90 วัน)" : language === "zh" ? "消息发送日期（最多90天）" : "Message send date (up to 90 days)"}
+                            {text.messageDateRange}
                           </p>
                           <UnifiedPeriodPicker
                             dateFrom={messageSearchPeriod.dateFrom}
@@ -4742,7 +4764,7 @@ function ApplicationWorkspaceContent({ initialSection, initialAuthUser }: { init
                             <p role="alert" className="text-xs text-[var(--app-danger)]">{validateMessageSearchPeriod(messageSearchPeriod, bangkokTodayIso(), language)}</p>
                           )}
                           <p className="text-[10px] text-[var(--app-text-tertiary)]">
-                            {language === "th" ? "วันที่นี้ใช้กับการค้นหาข้อความเท่านั้น ไม่เปลี่ยนตัวกรองเดือนของรายการแชท" : language === "zh" ? "此日期仅用于消息搜索，不会更改会话月份筛选" : "Only message search uses this date range; the conversation month stays unchanged."}
+                            {text.messageDateRangeScopeNote}
                           </p>
                         </div>
                       )}
@@ -4763,7 +4785,7 @@ function ApplicationWorkspaceContent({ initialSection, initialAuthUser }: { init
                       {messageSearchMode && !isSameMessageSearchPeriod(messageSearchPeriod, defaultMessageSearchPeriod(bangkokTodayIso())) && (
                         <button type="button" onClick={() => setMessageSearchPeriod(defaultMessageSearchPeriod(bangkokTodayIso()))}
                           className="rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface-subtle)] px-2 py-0.5 text-[11px]">
-                          {language === "th" ? "วันที่" : language === "zh" ? "日期" : "Date"}: {messageSearchPeriod.dateFrom} – {messageSearchPeriod.dateTo} ×
+                          {text.dateFilterTag}: {messageSearchPeriod.dateFrom} – {messageSearchPeriod.dateTo} ×
                         </button>
                       )}
                       <button onClick={clearAllFilters} className="text-[11px] font-medium text-[var(--app-danger)] hover:underline">{text.clearAll}</button>
@@ -5136,8 +5158,8 @@ function ApplicationWorkspaceContent({ initialSection, initialAuthUser }: { init
                         <div data-chat-message-scroll className="flex-1 min-h-0 space-y-2.5 overflow-y-auto overscroll-contain bg-[var(--app-surface-subtle)]/40 px-4 py-3">
                           {selectedSearchHit?.conversationId === selectedConversationId && !chatHistory.items.some((message) => message.id === selectedSearchHit.messageId) && (
                             <p data-chat-search-target-pending className="rounded-lg border border-amber-200 bg-amber-50 p-2 text-xs text-amber-950">
-                              {language === "th" ? "กำลังค้นหาตำแหน่งข้อความที่ตรงกันในบทสนทนา" : language === "zh" ? "正在定位匹配消息" : "Locating the matching message"}
-                              {targetAutoPageRef.current >= 8 && (language === "th" ? " · กดโหลดข้อความก่อนหน้าเพื่อดูเพิ่มเติม" : language === "zh" ? " · 请加载更早的消息" : " · Load earlier messages to continue")}
+                              {text.locatingMatchingMessage}
+                              {targetAutoPageRef.current >= 8 && text.loadEarlierMessagesToContinue}
                             </p>
                           )}
                           {chatHistory.hasEarlier && <div className="pb-2 text-center"><button disabled={chatLoading} onClick={() => void loadEarlierMessages()} className="rounded-full border border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-text-secondary)] hover:text-[var(--app-text-primary)] px-3 py-1 text-xs shadow-[var(--app-shadow-card)] transition-colors">{text.loadEarlierMessages}</button></div>}
