@@ -3,6 +3,12 @@ import type { AppLanguage } from "./language-utils";
 export const messageTranslationText = {
   th: {
     translateToEnglish: "แปลข้อความเป็นภาษาอังกฤษ",
+    translateToChinese: "แปลข้อความเป็นภาษาจีน",
+    targetLanguageLabel: "เลือกภาษาที่ต้องการแปล",
+    english: "อังกฤษ",
+    chinese: "中文",
+    translationTitleEnglish: "แปลด้วย AI · ภาษาอังกฤษ",
+    translationTitleChinese: "แปลด้วย AI · ภาษาจีน",
     translate: "แปล",
     translating: "กำลังแปล...",
     translationTitle: "แปลด้วย AI · ภาษาอังกฤษ",
@@ -21,6 +27,12 @@ export const messageTranslationText = {
   },
   en: {
     translateToEnglish: "Translate message to English",
+    translateToChinese: "Translate message to Chinese",
+    targetLanguageLabel: "Translation target language",
+    english: "English",
+    chinese: "中文",
+    translationTitleEnglish: "AI Translation · English",
+    translationTitleChinese: "AI Translation · Chinese",
     translate: "Translate",
     translating: "Translating...",
     translationTitle: "AI Translation · English",
@@ -39,6 +51,12 @@ export const messageTranslationText = {
   },
   zh: {
     translateToEnglish: "将消息翻译成英语",
+    translateToChinese: "将消息翻译成中文",
+    targetLanguageLabel: "选择翻译目标语言",
+    english: "英语",
+    chinese: "中文",
+    translationTitleEnglish: "AI 翻译 · 英语",
+    translationTitleChinese: "AI 翻译 · 中文",
     translate: "翻译",
     translating: "正在翻译...",
     translationTitle: "AI 翻译 · 英语",
