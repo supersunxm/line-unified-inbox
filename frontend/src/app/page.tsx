@@ -3296,11 +3296,11 @@ function ApplicationWorkspaceContent({ initialSection, initialAuthUser }: { init
     }
   }
 
-  function updateMessageEnglishTranslation(messageId: string, translatedText: string) {
+  function updateMessageTranslation(messageId: string, targetLanguage: "en" | "zh", translatedText: string) {
     setChatHistoryState((current) => updateScopedConversationMessagePage(current, conversationMessageScopeKey, (history) => ({
       ...history,
       items: history.items.map((message) => message.id === messageId
-        ? { ...message, translatedEnglish: translatedText }
+        ? { ...message, ...(targetLanguage === "en" ? { translatedEnglish: translatedText } : { translatedChinese: translatedText }) }
         : message),
     }), activeConversationMessageScope.current));
   }
@@ -5052,7 +5052,7 @@ function ApplicationWorkspaceContent({ initialSection, initialAuthUser }: { init
                                       <p className="whitespace-pre-wrap text-sm leading-relaxed">{content}</p>
                                     )}
                                     {message.fileName && <p className="mt-1 text-xs font-medium">📎 {message.fileName}</p>}
-                                    <MessageTranslationAction message={message} userRole={authUser.role} onTranslated={(translatedText) => updateMessageEnglishTranslation(message.id, translatedText)} />
+                                    <MessageTranslationAction message={message} userRole={authUser.role} onTranslated={(targetLanguage, translatedText) => updateMessageTranslation(message.id, targetLanguage, translatedText)} />
                                     <p className={`mt-1 text-[10px] font-tabular ${isFailed ? "text-red-300" : "text-[var(--app-text-tertiary)]"} ${inbound ? "" : "text-right"}`}>
                                       {new Intl.DateTimeFormat(language, { timeStyle: "short" }).format(date)}
                                     </p>
