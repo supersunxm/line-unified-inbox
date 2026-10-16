@@ -23,7 +23,7 @@ export function parseKeywordConfig(value: unknown): KeywordConfig | null {
   if (data.targetMode !== "SELECTED" && data.targetMode !== "ALL_ELIGIBLE") return null;
   if (!Array.isArray(data.keywords) || !data.keywords.length || data.keywords.length > 30) return null;
   if (!data.keywords.every((s) => typeof s === "string" && s.length > 0 && s.length <= 120 && normalizeKeyword(s).length > 0)) return null;
-  if (!Number.isSafeInteger(data.priority) || (data.priority as number) < 0 || (data.priority as number) > 1000) return null;
+  if (typeof data.priority !== "number" || !Number.isSafeInteger(data.priority) || data.priority < 0 || data.priority > 1000) return null;
   if (!Array.isArray(data.targetLineOaIds) || !Array.isArray(data.excludedLineOaIds)) return null;
   for (const key of ["targetLineOaIds", "excludedLineOaIds"] as const) {
     const arr = data[key] as unknown[];
