@@ -617,11 +617,16 @@ export class AutoResponseService {
     const nextKeywordConfig = nextTriggerType === AutoResponseTriggerType.KEYWORD
       ? await this.validateKeywordRuleConfig(dto.triggerConfig !== undefined ? dto.triggerConfig : existing.triggerConfig)
       : null;
-    if (nextTriggerType === AutoResponseTriggerType.KEYWORD && dto.status === AutoResponseStatus.ACTIVE) {
+    if (
+      (nextTriggerType === AutoResponseTriggerType.KEYWORD || existing.triggerType === AutoResponseTriggerType.KEYWORD) &&
+      dto.status === AutoResponseStatus.ACTIVE
+    ) {
       throw new BadRequestException("Use the activate endpoint to enable a keyword rule");
     }
-    if (nextTriggerType === AutoResponseTriggerType.KEYWORD && existing.status === AutoResponseStatus.ACTIVE) {
-      // Edits to live keywords require explicit re-activation.
+    const keywordRuleAffected =
+      nextTriggerType === AutoResponseTriggerType.KEYWORD || existing.triggerType === AutoResponseTriggerType.KEYWORD;
+    if (keywordRuleAffected && existing.status === AutoResponseStatus.ACTIVE) {
+      // Any edit involving a live keyword rule requires deliberate re-activation.
       updates.status = AutoResponseStatus.DRAFT;
     }
 
