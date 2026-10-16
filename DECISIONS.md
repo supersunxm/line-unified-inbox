@@ -3455,3 +3455,12 @@ Decision: enforce owner decisions D1-D4 with a local pre-push gate that reuses t
 ## 2026-10-14 DR handover importer reuses onboarding and guards restored rows
 
 Decision: re-create LINE OAs missing after the database restore through the same transaction body as interactive OA creation (`createInTransaction`, including the shared `upsertStoreFromStoreMaster`) instead of a parallel insert path, so Store Master identity, duplicate and one-active-OA rules stay identical. Keep the webhook key already registered in LINE, start imported OAs disabled, and activate later through `setStatus`. Apply is bound to the exact CSV, previewed plan and existing keyset hashes, and fails closed (whole transaction rolls back) if any pre-existing OA or Store row changes; the only permitted write to an existing OA is an owner-named `--update-line`. Rationale: production recovery must not alter the 73 restored OAs, and every write must match what the owner approved in preview.
+
+## 2026-10-16 — Global Chat Search WP3 synthetic mode restricted to local non-production
+
+Decision: refuse the synthetic message-search adapter whenever `NODE_ENV === "production"`, `NEXT_PUBLIC_APP_ENV === "production"`, or the browser hostname is not a local loopback address (`127.0.0.1`, `localhost`, `::1`, `[::1]`). When refused, `selectMessageSearchAdapterKind` returns `null` and `/chats/search` calls `notFound()`.
+
+Rationale:
+- Synthetic mode intentionally bypasses `AuthorizedSection` so local UI verification makes zero requests to `/auth/me` or any backend service.
+- Allowing `resolveMessageSearchDataMode` to default to `"synthetic"` without an environment and loopback guard would let `NEXT_PUBLIC_CHAT_MESSAGE_SEARCH_UI=true` expose an unauthenticated route in a production build if `NEXT_PUBLIC_CHAT_MESSAGE_SEARCH_DATA=backend` were omitted or set to `synthetic`.
+- Failing closed to 404 in production builds and non-loopback hosts guarantees that any active `/chats/search` route in a deployed environment must explicitly select `"backend"` mode and pass through `AuthorizedSection` plus backend HQ/store-scope authorization.
