@@ -25,10 +25,10 @@ type AutoResponsesViewProps = {
 export function AutoResponsesView({ language, userRole }: AutoResponsesViewProps) {
   const t = autoResponseI18n[language] || autoResponseI18n.th;
   const k = language === "zh"
-    ? { trigger: "关键词自动回复", keywords: "关键词（每行一个）", match: "匹配模式", exact: "完全匹配", contains: "包含关键词", stores: "选择 LINE OA 门店", search: "搜索门店名称/代码", selectAll: "全选就绪门店", deselectAll: "取消全选", future: "自动包含未来新增的就绪门店", priority: "优先级", ready: "就绪", blocked: "不可用", selection: "已选", none: "请填写关键词并选择至少一个门店" }
+    ? { trigger: "关键词自动回复", keywords: "关键词（每行一个）", match: "匹配模式", exact: "完全匹配", contains: "包含关键词", stores: "选择 LINE OA 门店", search: "搜索门店名称/代码", selectAll: "全选就绪门店", deselectAll: "取消全选", future: "使用所有就绪门店，并自动包含未来新增门店", priority: "优先级", ready: "就绪", blocked: "不可用", selection: "已选", none: "请填写关键词并选择至少一个门店" }
     : language === "en"
-      ? { trigger: "Keyword", keywords: "Keywords (one per line)", match: "Match mode", exact: "Exact", contains: "Contains", stores: "Choose LINE OA stores", search: "Search store name / code", selectAll: "Select all ready", deselectAll: "Clear selection", future: "Include future eligible stores automatically", priority: "Priority", ready: "Ready", blocked: "Blocked", selection: "Selected", none: "Enter keywords and select at least one store" }
-      : { trigger: "ตอบกลับด้วย Keyword", keywords: "คำกระตุ้น (บรรทัดละ 1 คำ)", match: "การตรวจจับ", exact: "ตรงทั้งหมด", contains: "มีคำนี้อยู่", stores: "เลือกสาขา LINE OA", search: "ค้นหาชื่อร้านหรือรหัสร้าน", selectAll: "เลือกทุกร้านที่พร้อม", deselectAll: "ยกเลิกทั้งหมด", future: "รวมสาขาใหม่ที่พร้อมใช้งานโดยอัตโนมัติ", priority: "ลำดับความสำคัญ", ready: "พร้อม", blocked: "ยังไม่พร้อม", selection: "เลือกแล้ว", none: "กรุณากำหนด Keyword และเลือกร้านอย่างน้อย 1 ร้าน" };
+      ? { trigger: "Keyword", keywords: "Keywords (one per line)", match: "Match mode", exact: "Exact", contains: "Contains", stores: "Choose LINE OA stores", search: "Search store name / code", selectAll: "Select all ready", deselectAll: "Clear selection", future: "Use all ready stores, including future eligible stores", priority: "Priority", ready: "Ready", blocked: "Blocked", selection: "Selected", none: "Enter keywords and select at least one store" }
+      : { trigger: "ตอบกลับด้วย Keyword", keywords: "คำกระตุ้น (บรรทัดละ 1 คำ)", match: "การตรวจจับ", exact: "ตรงทั้งหมด", contains: "มีคำนี้อยู่", stores: "เลือกสาขา LINE OA", search: "ค้นหาชื่อร้านหรือรหัสร้าน", selectAll: "เลือกทุกร้านที่พร้อม", deselectAll: "ยกเลิกทั้งหมด", future: "ใช้ทุกร้านที่พร้อม และรวมร้านใหม่ในอนาคตโดยอัตโนมัติ", priority: "ลำดับความสำคัญ", ready: "พร้อม", blocked: "ยังไม่พร้อม", selection: "เลือกแล้ว", none: "กรุณากำหนด Keyword และเลือกร้านอย่างน้อย 1 ร้าน" };
   const isAdmin = userRole === "ADMIN";
 
   const [rules, setRules] = useState<AutoResponseRule[]>([]);
@@ -721,7 +721,7 @@ export function AutoResponsesView({ language, userRole }: AutoResponsesViewProps
                     <input type="checkbox" checked={formTargetMode === "ALL_ELIGIBLE"}
                       onChange={(e) => { setFormTargetMode(e.target.checked ? "ALL_ELIGIBLE" : "SELECTED");
                         if (e.target.checked) setExcludedLineOaIds(new Set());
-                        else setSelectedLineOaIds(new Set(keywordStores.filter((s) => s.readinessStatus === "READY").map((s) => s.lineOfficialAccountId))); }} />
+                        else setSelectedLineOaIds(new Set(keywordStores.filter((s) => s.readinessStatus === "READY" && !excludedLineOaIds.has(s.lineOfficialAccountId)).map((s) => s.lineOfficialAccountId))); }} />
                     {k.future}
                   </label>
                   <input type="search" value={keywordStoreSearch} onChange={(e) => setKeywordStoreSearch(e.target.value)}
@@ -751,7 +751,7 @@ export function AutoResponsesView({ language, userRole }: AutoResponsesViewProps
                             }} />
                           <span className="truncate">{s.storeName} ({s.storeCode || "-"})</span>
                         </span>
-                        <span className={ready ? "text-emerald-600" : "text-amber-600"}>{ready ? k.ready : k.blocked}</span>
+                        <span className={ready ? "text-emerald-600" : "text-amber-600"}>{ready ? k.ready : `${k.blocked}: ${s.readinessReasons.join(", ")}`}</span>
                       </label>;
                     })}
                   </div>
