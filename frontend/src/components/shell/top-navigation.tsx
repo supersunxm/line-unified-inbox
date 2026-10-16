@@ -227,10 +227,7 @@ function MobileBottomNavigation({ authUser, currentSection, language, changeLang
 }
 
 export function TopNavigation(props: TopNavigationProps) {
-  const { authUser, changeLanguage, currentSection, language, lastUpdatedAt, logout, pilotMode, searchText, setSearchText, showGlobalHeader = true, text } = props;
-  const updatedLabel = lastUpdatedAt
-    ? `${text.lastUpdated || "Last updated"} ${new Intl.DateTimeFormat(language, { dateStyle: "medium", timeStyle: "short" }).format(lastUpdatedAt)}`
-    : (text.lastUpdated || "Last updated");
+  const { authUser, changeLanguage, currentSection, language, logout, pilotMode, searchText, setSearchText, showGlobalHeader = true, text } = props;
   const defaultRoute = authUser ? defaultRouteForUser(authUser) : "/login";
   const pathname = usePathname() || "/";
 
@@ -268,11 +265,6 @@ export function TopNavigation(props: TopNavigationProps) {
         <div className="flex shrink-0 items-center justify-end gap-2">
           <ResponsiveSearch searchText={searchText} setSearchText={setSearchText} text={text} />
           <ThemeToggleButton language={language} />
-          {lastUpdatedAt && (
-            <button type="button" aria-label={updatedLabel} title={updatedLabel} className={`${focusRing} hidden h-9 items-center gap-1.5 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] px-2.5 text-[11px] font-medium text-[var(--app-text-secondary)] hover:bg-[var(--app-surface-hover)] md:flex`}>
-              <span className="h-1.5 w-1.5 rounded-full bg-[var(--app-success)]" /><span>{sidebarLabels(language).live}</span>
-            </button>
-          )}
           {authUser && <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--app-accent)] text-[10px] font-bold text-white md:hidden">{authUser.displayName.charAt(0).toUpperCase()}</span>}
         </div>
       </header>}
