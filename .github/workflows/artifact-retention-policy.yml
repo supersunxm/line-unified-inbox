@@ -83,3 +83,4 @@ jobs:
           npm ci --prefix tools/codex-ci --ignore-scripts --no-audit --no-fund
           node --test tools/codex-ci/*.test.mjs tools/ci-runner/disposable-guest.test.mjs
           python3 tools/codex-ci/evidence-verifier-test.py
+          python3 tools/codex-ci/agent-evidence-test.py

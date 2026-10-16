@@ -33,31 +33,35 @@ For authentication work, verify migrations, User and OTP tables, setup-status, l
 
 Maintain `AI_PROGRESS.md` with the current task, completed work, checks run/passed, blockers, and next action. Maintain `DECISIONS.md` for meaningful architectural choices and rationale. Never put raw logs or secrets in either file.
 
-## Permanent Local CI policy
+## Permanent Agent-operated CI policy
 
-- Local CI is the default mandatory merge verification mechanism.
-- Run all eight mandatory Local CI jobs and every recorded step in isolated disposable guests. Use PostgreSQL test databases, never Production.
-- Record the tested base, final HEAD, source fingerprint, workflow hashes, per-step log hashes, and guest cleanup. Verify them with `tools/codex-ci/evidence.py` before presenting a pass.
-- Any application, test, workflow, runner, evidence-verifier, or policy change requires a fresh complete Local CI run. Do not reclassify failed or unavailable GitHub-hosted checks as passed.
-- The Local CI policy does not create GitHub Checks or bypass GitHub protections. Inspect and satisfy all rules enforced at merge time.
-- Owner authorization is still required for each merge and each production release. Never auto-merge or deploy from a green Local CI result.
-- Preserve the approved disposable runner's isolation, credential boundary, network allowlist, and cleanup behavior. If any boundary cannot be verified, stop instead of weakening it.
+- Agent-operated CI is the mandatory push and merge verification mechanism after the owner explicitly approves this amendment and its matching hook migration. Until approval, the existing Local CI policy and hook remain in force; a draft does not activate itself.
+- Run all eight mandatory jobs and every required step derived independently from the current trusted workflow inventory with `npm run ci:agent`. Use the reviewed Docker Desktop ARM64 environment, immutable pinned images, restricted package egress, disposable isolated PostgreSQL, and no forwarded host credentials, host binds, Docker socket, Production access or deployment capability in jobs.
+- Require exact workflow hashes, ordered step names and per-job/aggregate counts, zero required skips, positive allowlist network checks, explicitly false direct IPv4 route/TCP, direct IPv6 TCP and host-proxy checks, complete sanitized log checksums, unchanged source, and confirmed container/network/volume cleanup. Missing, failed, ambiguous or unverifiable evidence is BLOCKED.
+- Evidence must identify the exact clean committed HEAD and source fingerprint, with base equal to a freshly fetched `origin/main` ancestor. If main advances, integrate it with a merge commit and rerun all eight jobs. Old dirty-tree development evidence is never a push record.
+- Agent CI does not create GitHub Checks or bypass repository protections. Evidence and checksum sidecars are unsigned and depend on the trusted workstation; hashes prove consistency, not cryptographic host attestation.
+- Owner authorization is still required for each merge and each production release. A green result never authorizes publication, merge, deployment, original Volume access, Manager authentication or production data operations.
+- Diagnose a failure, make a narrow fix, run focused adversarial regressions, then rerun the full suite for the exact final changed source. Never skip failures, reduce required coverage silently, or alter isolation to obtain PASS.
+- Independent QA may be performed by ChatGPT or another owner-designated reviewer. No particular reviewer is mandatory. QA does not change technical test results or authorize publication or release.
+- Keep CI evidence local and private. Do not include credentials, authenticated profiles, customer data, original Railway Volume content or Production logs. The advisory public probe remains BLOCKED without separate approval and a non-production target.
 
-### Owner decisions D1–D4 (final)
+### Owner decisions D1–D4
 
-- D1. GitHub Actions stay `workflow_dispatch`-only permanently. There is no hosted "final check". Agents never trigger a workflow, and an absent, pending or skipped GitHub check is never "green".
-- D2. Railway configuration stays unchanged (`checkSuites=false`). The release gate is the owner's manual merge, made only on verified Local CI evidence. Agents do not touch Railway.
-- D3. Merge-commit identity: a PR is mergeable only if its HEAD contains the current `origin/main` tip and its Local CI evidence was verified with base = that tip and head = PR HEAD, so the merge commit's tree equals the tested tree. If `main` advances, merge `origin/main` into the branch (merge commit) and rerun full Local CI.
-- D4. Agents may push a branch and open a PR. Agents never merge, enable auto-merge, or deploy.
+- D1. GitHub Actions are not used for project CI. Existing dormant workflows stay `workflow_dispatch`-only with read-only permissions as a command inventory; agents never dispatch them or register hosted runners.
+- D2. Railway configuration stays unchanged (`checkSuites=false` is historical evidence, not a freshly verified setting). Agents do not change Railway as part of CI. Publication and merge effects require a separate current watch-path and environment review.
+- D3. Merge-commit identity: the PR HEAD must contain the current `origin/main` tip, and full verified evidence must identify that exact base and PR HEAD. If main advances, merge it and rerun the complete suite. A passing local result is not a GitHub Required Check or proof of mergeability.
+- D4. Agents may prepare branches locally. Explicit owner permission is required for publication. Agents never merge, enable auto-merge or deploy under CI authority.
 
 ### Push gate
 
-- No push without verified Local CI evidence for the exact HEAD being pushed: run `npm run ci:local` (all mandatory jobs plus `evidence.py verify`, base = current `origin/main`). `npm run ci:local:check` re-checks the recorded evidence without running tests.
-- Install the hook once per clone with `npm run hooks:install`; `.githooks/pre-push` blocks pushes without that evidence. It never replaces an existing developer `core.hooksPath`.
-- Never use `--no-verify` and never force-push. The local hook can be bypassed and is not server-side protection; bypassing it is a policy violation.
+- No push without verified Agent CI evidence for the exact HEAD. After explicit migration approval, `.githooks/pre-push` invokes `agent-pre-push-gate.mjs hook` with Git's remote name, URL and update input; `npm run ci:agent:check` re-verifies evidence without running tests.
+- `tools/codex-ci/push-policy.json` is the committed, owner-reviewed policy: exact canonical origin URL, main base and an explicit allowlist of feature-branch refs. Initially only `refs/heads/codex/agent-ci-policy-migration-20261016` is allowed. Future work requires a reviewed allowlist amendment; environment variables, local Git configuration, CLI overrides, wildcard patterns and the obsolete Live Mirror prefix cannot widen it.
+- Permit exactly one matching local/remote branch update, equal to clean checked-out HEAD. Reject protected branches, tags, deletions, multiple updates, non-fast-forward/unverifiable changes, changed targets, missing evidence, stale main, tampering, skipped steps, or uncertain cleanup. Fetch current main at check time; fail closed if unavailable. A check-time fetch cannot freeze the remote after the check; the owner must recheck base and evidence at merge.
+- `npm run hooks:install` sets `.githooks` only when unset or already selected; it refuses a different developer hook path. Keep the old hook effective until the owner approves the exact migration diff and its bootstrap procedure in `docs/AGENT_CI_POLICY.md`.
+- Never use `--no-verify` and never force-push. A local hook is not server-side protection and cannot prevent a workstation owner from tampering with the local verifier or unsigned evidence.
 
 ### Pre-merge checklist (owner)
 
-1. The PR HEAD contains the current `origin/main` tip (up to date with `main`).
-2. Local CI evidence for that exact HEAD is verified with `evidence.py` (base = current `origin/main`, all mandatory jobs and steps PASS, 0 skips, guests deleted, base stopped).
-3. List the Railway services whose watch paths match the diff, and state whether the backend pre-deploy migration will run.
+1. Current origin/main is contained in the exact clean PR HEAD; evidence records both identities and the matching source fingerprint.
+2. All eight jobs and every trusted workflow step pass, zero required skips, denied direct egress, complete log checksums and confirmed resource cleanup; current repository protections are independently satisfied.
+3. Review the public file manifest and privacy report, list Railway services whose watch paths match the diff, and state whether the backend pre-deploy migration could run. Unknown effective deployment rules block publication/merge authorization until resolved.

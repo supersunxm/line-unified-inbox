@@ -8,7 +8,9 @@ import { SunnSecretaryCredentialsService, SECRETARY_CREDENTIAL_RECORD_ID } from 
 const databaseUrl = process.env.SECRETARY_SETTINGS_TEST_DATABASE_URL;
 test("durable isolated credentials: database encryption, concurrent partial changes, reload and token rotation race", {skip:!databaseUrl}, async () => {
   const url = new URL(databaseUrl!);
-  assert.ok(["127.0.0.1","localhost"].includes(url.hostname),"Only a local fixture database is allowed");
+  const hostname = url.hostname.toLowerCase();
+  const agentCiDatabaseAlias = hostname === "postgres" && process.env.CODEX_AGENT_CI_POSTGRES === "true" && ["postgres:", "postgresql:"].includes(url.protocol) && url.username === "ci" && url.password === "ci" && url.port === "5432" && url.pathname === "/ci" && url.search === "" && url.hash === "";
+  assert.ok(["127.0.0.1","localhost"].includes(hostname) || agentCiDatabaseAlias,"Only a local fixture database is allowed");
   assert.ok(["/ci","/sunn_owner_credentials_test_20261008"].includes(url.pathname),"Only an explicit fixture database is allowed");
   const oldKey=process.env.CREDENTIAL_ENCRYPTION_KEY;
   process.env.CREDENTIAL_ENCRYPTION_KEY=randomBytes(32).toString("base64");

@@ -1,8 +1,7 @@
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { chmod, copyFile, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { copyFile, mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import test from 'node:test';
 import { evaluateEvidence, hooksInstallDecision, recordSchemaVersion } from './local-gate.mjs';
@@ -70,31 +69,22 @@ test('hooks:install never replaces a developer hook path', () => {
   assert.equal(hooksInstallDecision('.husky').action, 'refuse');
 });
 
-test('pre-push hook allows deletions and blocks commits without verified evidence', async (t) => {
-  const directory = await mkdtemp(join(tmpdir(), 'local-gate-hook-test-'));
+test('legacy checker remains fail-closed without a record after the hook migration', async (t) => {
+  // An executable fixture needs the canonical workspace path on macOS;
+  // /var aliases can prevent the direct-entrypoint guard from running.
+  const directory = await mkdtemp(join(root, '.legacy-gate-check-'));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const git = (...args) => execFileSync('git', ['-C', directory, ...args], { encoding: 'utf8' }).trim();
   git('init', '-q');
-  git('config', 'user.name', 'Local Gate Test');
-  git('config', 'user.email', 'local-gate-test@example.invalid');
+  git('config', 'user.name', 'Legacy Gate Test');
+  git('config', 'user.email', 'legacy-gate@example.invalid');
   await mkdir(join(directory, 'tools/codex-ci'), { recursive: true });
-  await mkdir(join(directory, '.githooks'), { recursive: true });
   await copyFile(join(root, 'tools/codex-ci/local-gate.mjs'), join(directory, 'tools/codex-ci/local-gate.mjs'));
-  await copyFile(join(root, '.githooks/pre-push'), join(directory, '.githooks/pre-push'));
-  await chmod(join(directory, '.githooks/pre-push'), 0o755);
-  await writeFile(join(directory, 'file.txt'), 'one\n');
   git('add', '.');
   git('commit', '-qm', 'fixture');
   const sha = git('rev-parse', 'HEAD');
   git('update-ref', 'refs/remotes/origin/main', sha);
-  const hook = (input) => spawnSync(join(directory, '.githooks/pre-push'), ['origin', 'file:///unused'], { cwd: directory, input, encoding: 'utf8' });
-
-  const missing = hook(`refs/heads/topic ${sha} refs/heads/topic ${'0'.repeat(40)}\n`);
-  assert.equal(missing.status, 1);
-  assert.match(missing.stderr, /ถูกบล็อก/);
-  assert.match(missing.stderr, /BLOCKED/);
+  const missing = spawnSync(process.execPath, [join(directory, 'tools/codex-ci/local-gate.mjs'), 'check', `--sha=${sha}`], { cwd: directory, encoding: 'utf8', timeout: 10_000 });
+  assert.equal(missing.status, 1, missing.stderr);
   assert.match(missing.stderr, /No verified Local CI evidence/);
-
-  const deletion = hook(`(delete) ${'0'.repeat(40)} refs/heads/topic ${sha}\n`);
-  assert.equal(deletion.status, 0, deletion.stderr);
 });

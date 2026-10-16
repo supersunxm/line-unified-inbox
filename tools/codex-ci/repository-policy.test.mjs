@@ -21,7 +21,7 @@ test('all five workflows are valid YAML, manual-only, read-only, with all eight 
   const inventory = await inspectWorkflowInventory(root);
   assert.deepEqual(inventory.errors, []);
   assert.equal(inventory.jobs.filter(job => job.required).length, 8);
-  assert.equal(inventory.jobs.filter(job => job.required).reduce((n, job) => n + job.steps.length, 0), 54);
+  assert.equal(inventory.jobs.filter(job => job.required).reduce((n, job) => n + job.steps.length, 0), 55);
   assert.deepEqual(inventory.jobs.filter(job => job.required).map(job => job.id), expectedJobs.filter(job => job.required).map(job => job.id));
   for (const job of inventory.jobs.filter(job => job.required)) assert.equal(job.steps.length > 0, true);
 });
@@ -33,9 +33,10 @@ test('baseline coverage preserves all original 53 commands, plus a mandatory pol
   for (const job of inventory.jobs.filter(job => job.required)) {
     const original = baseline.jobs[job.id];
     assert.equal(original.workflow, job.workflow);
-    assert.equal(job.steps.length, original.steps.length + (job.id === 'enforce' ? 1 : 0));
+    const comparable = job.steps.filter(step => !(job.id === 'auth-foundation' && step.name === 'Generate Prisma client'));
+    assert.equal(comparable.length, original.steps.length + (job.id === 'enforce' ? 1 : 0));
     for (let index = 0; index < original.steps.length; index++) {
-      let command = job.steps[index].run;
+      let command = comparable[index].run;
       if (job.id === 'enforce') {
         const guard = 'workflows = sorted(Path(".github/workflows").glob("*.y*ml"))\nif not workflows:\n    sys.exit("Artifact retention policy requires the checked-out workflow files")\nfor path in workflows:';
         assert.ok(command.includes(guard), 'retention must fail closed on absent workflow files');
@@ -82,10 +83,10 @@ test('unknown automatic workflow is rejected rather than silently omitted', asyn
 });
 
 test('repository policy keeps owner approval separate from Local CI and GitHub Checks', async () => {
-  const policy = await readFile(join(root, 'docs/LOCAL_CI_POLICY.md'), 'utf8');
+  const policy = await readFile(join(root, 'docs/AGENT_CI_POLICY.md'), 'utf8');
   const agents = await readFile(join(root, 'AGENTS.md'), 'utf8');
   for (const text of [policy, agents]) {
-    assert.match(text, /Local CI is the default mandatory merge verification mechanism/);
+    assert.match(text, /Agent-operated CI is the mandatory push and merge verification mechanism/);
     assert.match(text, /Owner authorization is still required for each merge and each production release/);
   }
   assert.match(policy, /does not.*GitHub Checks/);
@@ -119,7 +120,7 @@ test('CLAUDE.md defers CI, merge and deploy to AGENTS.md and never reintroduces 
   assert.match(claude, /except for CI, merge, push, and deploy rules:\s+there `AGENTS\.md`/);
   assert.match(claude, /Agents never merge/);
   assert.match(claude, /agents never merge, enable auto-merge, or deploy/);
-  assert.match(claude, /\*\*Local CI evidence is the gate\*\*/);
+  assert.match(claude, /\*\*Agent CI evidence is the gate\*\*/);
   assert.match(claude, /never a merge\s+signal/);
   assert.match(claude, /never\s+"green"/);
   assert.match(claude, /Never use\s+`--no-verify`/);
@@ -128,14 +129,14 @@ test('CLAUDE.md defers CI, merge and deploy to AGENTS.md and never reintroduces 
 });
 
 test('AGENTS.md and the policy record owner decisions D1-D4, the push gate and the pre-merge checklist', async () => {
-  const policy = await readFile(join(root, 'docs/LOCAL_CI_POLICY.md'), 'utf8');
+  const policy = await readFile(join(root, 'docs/AGENT_CI_POLICY.md'), 'utf8');
   const agents = await readFile(join(root, 'AGENTS.md'), 'utf8');
   for (const text of [policy, agents]) {
-    assert.match(text, /D1\.\*{0,2} GitHub Actions stay `workflow_dispatch`-only permanently/);
-    assert.match(text, /D2\.\*{0,2} Railway configuration stays unchanged \(`checkSuites=false`\)/);
+    assert.match(text, /D1\.\*{0,2} GitHub Actions are not used for project CI/);
+    assert.match(text, /D2\.\*{0,2} Railway configuration stays unchanged/);
     assert.match(text, /D3\.\*{0,2} Merge-commit identity/);
-    assert.match(text, /D4\.\*{0,2} Agents may push a branch and open a PR\. Agents never merge/);
-    assert.match(text, /No push without verified (?:Local CI )?evidence for the exact HEAD/);
+    assert.match(text, /D4\.\*{0,2} Agents may prepare branches locally/);
+    assert.match(text, /No push without verified Agent CI evidence for the exact HEAD/);
     assert.match(text, /Never use `--no-verify`/);
     assert.match(text, /Pre-merge checklist/);
     assert.match(text, /Railway services whose watch paths match the diff/);
@@ -147,9 +148,27 @@ test('root package exposes the Local CI gate scripts and the pre-push hook exist
   const pkg = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'));
   assert.equal(pkg.scripts['ci:local'], 'node tools/codex-ci/local-gate.mjs run');
   assert.equal(pkg.scripts['ci:local:check'], 'node tools/codex-ci/local-gate.mjs check');
-  assert.equal(pkg.scripts['hooks:install'], 'node tools/codex-ci/local-gate.mjs install-hooks');
+  assert.equal(pkg.scripts['hooks:install'], 'node tools/codex-ci/agent-pre-push-gate.mjs install-hooks');
+  assert.equal(pkg.scripts['ci:agent'], 'node tools/codex-ci/agent-ci.mjs run');
+  assert.equal(pkg.scripts['ci:agent:check'], 'node tools/codex-ci/agent-pre-push-gate.mjs check');
   const hook = await readFile(join(root, '.githooks/pre-push'), 'utf8');
   assert.match(hook, /^#!\/bin\/sh\n/);
-  assert.match(hook, /local-gate\.mjs/);
+  assert.match(hook, /agent-pre-push-gate\.mjs/);
+  assert.match(hook, /exec node "\$gate" hook "\$@"/);
   assert.equal((await stat(join(root, '.githooks/pre-push'))).mode & 0o111, 0o111);
+});
+
+
+test('Prisma client generation precedes auth lint and all current-main workflow coverage is preserved', async () => {
+  const inventory = await inspectWorkflowInventory(root);
+  const names = inventory.jobs.find(job => job.id === 'auth-foundation').steps.map(step => step.name);
+  for (const name of ['Apply migrations to clean PostgreSQL', 'Lint unified auth scope', 'Unified auth regression tests']) {
+    assert.ok(names.indexOf('Generate Prisma client') > names.indexOf('Prisma validate'));
+    assert.ok(names.indexOf('Generate Prisma client') < names.indexOf(name));
+  }
+  const enforce = inventory.jobs.find(job => job.id === 'enforce');
+  assert.match(enforce.steps.at(-1).run, /python3 tools\/codex-ci\/agent-evidence-test\.py/);
+  const p = JSON.parse(await readFile(join(root, 'tools/codex-ci/push-policy.json'), 'utf8'));
+  assert.deepEqual(p.allowedBranchRefs, ['refs/heads/codex/agent-ci-policy-migration-20261016']);
+  assert.equal(p.remoteUrl, 'https://github.com/supersunxm/line-unified-inbox.git');
 });

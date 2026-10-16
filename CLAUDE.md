@@ -3,7 +3,7 @@
 Persistent working agreement for Claude Code in this repository.
 `AGENTS.md` also applies. Where the two conflict during the current UI phase,
 this file takes precedence — except for CI, merge, push, and deploy rules:
-there `AGENTS.md` ("Permanent Local CI policy") and `docs/LOCAL_CI_POLICY.md`
+there `AGENTS.md` ("Permanent Agent-operated CI policy") and `docs/AGENT_CI_POLICY.md`
 always win.
 
 ## Project context
@@ -118,25 +118,25 @@ the dependency, show exactly what change would be required, and wait.
   on each other: branch each task from the latest `origin/main`, and if a task
   depends on an unmerged PR, wait for that PR to merge into `main` first.
 - **Merging:** agents never merge, enable auto-merge, or deploy. The owner
-  merges manually, only on verified Local CI evidence for the PR's exact HEAD,
-  as defined in `AGENTS.md`. Before pushing, run `npm run ci:local` on a branch
+  merges manually, only on verified Agent CI evidence for the PR's exact HEAD,
+  as defined in `AGENTS.md`. Before pushing, run `npm run ci:agent` on a branch
   that contains the current `origin/main`; the `pre-push` hook
   (`npm run hooks:install`) blocks pushes without that evidence. Never use
-  `--no-verify` and never force-push unless instructed.
+  `--no-verify` and never force-push.
 
 ## Validation
 
-**Local CI evidence is the gate** (`AGENTS.md`, `docs/LOCAL_CI_POLICY.md`):
-`npm run ci:local` runs all mandatory jobs in disposable guests and records
-evidence verified by `tools/codex-ci/evidence.py` for the exact HEAD. GitHub
+**Agent CI evidence is the gate** (`AGENTS.md`, `docs/AGENT_CI_POLICY.md`):
+`npm run ci:agent` runs all mandatory jobs in isolated disposable Docker containers and records
+evidence verified by `tools/codex-ci/agent-evidence.py` for the exact HEAD. GitHub
 Actions workflows are manual (`workflow_dispatch`) only and are never a merge
 signal; do not trigger them. An absent, pending, or skipped check is never
 "green". Do not disable, skip, or loosen a check to make it pass; fix the
-cause. A passing local build or Local CI run does not by itself prove
+cause. A passing local build or Agent CI run does not by itself prove
 production safety.
 
 The frontend commands below are for fast feedback while working; they do not
-replace `npm run ci:local`.
+replace `npm run ci:agent`.
 
 Run from `frontend/`:
 
@@ -158,7 +158,7 @@ not as the comparison target.
 **Do not run** root `npm run verify`, `dev:up`, `dev:restart`, `deploy:check`,
 or other root scripts. They touch backend Prisma, start the full dev stack,
 send webhook smoke tests, and auto-install dependencies. The exceptions are
-the Local CI scripts `ci:local`, `ci:local:check`, and `hooks:install`.
+the Agent CI scripts `ci:agent`, `ci:agent:plan`, `ci:agent:check`, and `hooks:install`.
 
 For UI work also verify: no console/runtime errors, desktop and mobile layouts,
 loading/empty/error states, and that displayed data has not changed.
@@ -182,7 +182,7 @@ confirming none exists.
 3. Key implementation decisions
 4. Validation commands actually run
 5. Result of each
-6. What could not be validated locally, and the Local CI evidence for the final
+6. What could not be validated locally, and the Agent CI evidence for the final
    HEAD (head SHA, base SHA, verified job/step counts). GitHub Actions results
    are not a merge signal.
 7. Remaining risks

@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "remoteName": "origin",
+  "remoteUrl": "https://github.com/supersunxm/line-unified-inbox.git",
+  "baseRef": "refs/heads/main",
+  "allowedBranchRefs": [
+    "refs/heads/codex/agent-ci-policy-migration-20261016"
+  ]
+}
