@@ -8,6 +8,7 @@ import type { ApiCustomerEvent } from "@/types/api";
 import { ApiError, api, isAbortError } from "@/lib/api";
 import { AUTH_UNAUTHORIZED_EVENT, getAuthState, resolveAuthRedirect, routeAfterLogin, redirectToLogin } from "@/lib/auth-session";
 import { initialWorkspaceAuth } from "./workspace-auth-bootstrap";
+import type { AuthorizationContext } from "@/lib/authorization";
 import { ThemeControl } from "./theme";
 import { PublicLandingPage } from "./public-landing-page";
 import type { PrimarySection } from "./primary-navigation";
@@ -61,6 +62,12 @@ import {
 } from "@/components/ui";
 import type { SidebarView } from "@/components/shell";
 import { StoreChatsOverflowMenu } from "@/components/chats/store-chats-overflow-menu";
+import { EmbeddedChatMessageResults, type EmbeddedMessageSearchSelection } from "@/components/chats/message-search/embedded-chat-message-results";
+import { highlightedSearchText } from "@/components/chats/message-search/highlight-search-text";
+import { defaultMessageSearchPeriod, bangkokTodayIso, isSameMessageSearchPeriod, validateMessageSearchPeriod } from "@/components/chats/message-search/message-search-period";
+import { validateMessageSearchKeyword } from "@/components/chats/message-search/message-search-query";
+import { isChatMessageSearchUiEnabled } from "@/components/chats/message-search/message-search-config";
+import { UnifiedPeriodPicker } from "@/components/date-range/unified-period-picker";
 import { ResizableSeparator } from "./resizable-separator";
 import { CHAT_PANE_LIMITS } from "./resizable-panes";
 import { useResizablePanes } from "./use-resizable-panes";
@@ -230,6 +237,13 @@ const translations = {
       "เลือกการสนทนาจากรายการเพื่อดูข้อความและรายละเอียดลูกค้า",
     searchFilter: "ค้นหา",
     searchResults: "ผลลัพธ์",
+    searchByDate: "ค้นหาข้อความตามวันที่ส่ง",
+    searchMessageContent: "ค้นหาในเนื้อหาข้อความ (ปิดเพื่อค้นหาบทสนทนาแบบเดิม)",
+    messageDateRange: "ช่วงวันที่ส่งข้อความ (สูงสุด 90 วัน)",
+    messageDateRangeScopeNote: "วันที่นี้ใช้กับการค้นหาข้อความเท่านั้น ไม่เปลี่ยนตัวกรองเดือนของรายการแชท",
+    dateFilterTag: "วันที่",
+    locatingMatchingMessage: "กำลังค้นหาตำแหน่งข้อความที่ตรงกันในบทสนทนา",
+    loadEarlierMessagesToContinue: " · กดโหลดข้อความก่อนหน้าเพื่อดูเพิ่มเติม",
     topicFilter: "หัวข้อ",
     allTopics: "ทุกหัวข้อ",
     allLineOa: "LINE OA ทั้งหมด",
@@ -598,6 +612,13 @@ const translations = {
       "Choose a conversation from the list to view messages and customer details.",
     searchFilter: "Search",
     searchResults: "results",
+    searchByDate: "Search by message date",
+    searchMessageContent: "Search message content (uncheck for legacy conversation search)",
+    messageDateRange: "Message send date (up to 90 days)",
+    messageDateRangeScopeNote: "Only message search uses this date range; the conversation month stays unchanged.",
+    dateFilterTag: "Date",
+    locatingMatchingMessage: "Locating the matching message in conversation",
+    loadEarlierMessagesToContinue: " · Load earlier messages to continue",
     topicFilter: "Topic",
     allTopics: "All Topics",
     allLineOa: "All LINE OA",
@@ -965,6 +986,13 @@ const translations = {
       "从列表中选择一个对话以查看消息和客户详情。",
     searchFilter: "搜索",
     searchResults: "个结果",
+    searchByDate: "按发送日期搜索消息",
+    searchMessageContent: "搜索消息内容（关闭后搜索会话）",
+    messageDateRange: "消息发送日期（最多90天）",
+    messageDateRangeScopeNote: "此日期仅用于消息搜索，不会更改会话月份筛选",
+    dateFilterTag: "日期",
+    locatingMatchingMessage: "正在定位匹配消息",
+    loadEarlierMessagesToContinue: " · 请加载更早的消息",
     topicFilter: "主题",
     allTopics: "所有主题",
     allLineOa: "所有 LINE OA",
@@ -1500,7 +1528,7 @@ export default function Home() {
   return <PublicLandingPage />;
 }
 
-type WorkspaceAuthUser = { id: string; email: string; displayName: string; role: "ADMIN" | "ASSISTANT" | "VIEWER"; permissions?: { canAccessMainOa?: boolean } };
+type WorkspaceAuthUser = { id: string; email: string; displayName: string; role: "ADMIN" | "ASSISTANT" | "VIEWER"; permissions?: { canAccessMainOa?: boolean }; authorization?: AuthorizationContext };
 
 /** `initialAuthUser` is the user AuthorizedSection already resolved; /login passes none and runs the full setup check. */
 function ApplicationWorkspaceContent({ initialSection, initialAuthUser }: { initialSection: PrimarySection; initialAuthUser?: WorkspaceAuthUser | null }) {
@@ -1618,6 +1646,10 @@ function ApplicationWorkspaceContent({ initialSection, initialAuthUser }: { init
   const [topicFilter, setTopicFilter] = useState("all");
   const [lineOaFilter, setLineOaFilter] = useState("all");
   const [showFilterPanel, setShowFilterPanel] = useState(false);
+  const [messageSearchPeriod, setMessageSearchPeriod] = useState(() => defaultMessageSearchPeriod(bangkokTodayIso()));
+  const [searchWithinMessages, setSearchWithinMessages] = useState(true);
+  const [selectedSearchHit, setSelectedSearchHit] = useState<EmbeddedMessageSearchSelection | null>(null);
+  const targetAutoPageRef = useRef(0);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [managerLinkMissing, setManagerLinkMissing] = useState(false);
   const [selectedConversationId, setSelectedConversationId] = useState("");
@@ -1878,11 +1910,24 @@ function ApplicationWorkspaceContent({ initialSection, initialAuthUser }: { init
   const topicId = topicFilter === "all"
     ? undefined
     : availableTopics.find(({ name }) => name === topicFilter)?.id;
+  // Message-level search uses Message.sentAt and does not inherit chatMonth.
+  // Legacy conversation search remains available when the toggle is off.
+  const hqCanSearchMessages = authUser?.role === "ADMIN"
+    || (authUser?.role === "ASSISTANT"
+      && authUser.authorization?.workspaces?.hq === true
+      && authUser.authorization?.scope?.allStores === true);
+  const messageSearchMode = initialSection === "chats"
+    && Boolean(hqCanSearchMessages)
+    && isChatMessageSearchUiEnabled(process.env.NEXT_PUBLIC_CHAT_MESSAGE_SEARCH_UI)
+    && process.env.NEXT_PUBLIC_CHAT_MESSAGE_SEARCH_DATA === "backend"
+    && searchWithinMessages;
+  const showEmbeddedMessageResults = messageSearchMode && validateMessageSearchKeyword(searchText).valid;
+
   const activeConversationQuery = useMemo(
     () => buildConversationListQuery({
       page: chatPage,
       pageSize: chatPageSize,
-      search: initialSection === "chats" ? searchText : "",
+      search: initialSection === "chats" && !showEmbeddedMessageResults ? searchText : "",
       storeId: initialSection === "chats" ? selectedStore : "all",
       lineOaId: initialSection === "chats" ? lineOaFilter : "all",
       followUpStatus: initialSection === "chats" ? activeConversationStatus : undefined,
@@ -1895,7 +1940,7 @@ function ApplicationWorkspaceContent({ initialSection, initialAuthUser }: { init
       topicId: initialSection === "chats" ? topicId : undefined,
       month: initialSection === "chats" ? chatMonth : undefined,
     }),
-    [activeConversationReplyState, activeConversationStatus, chatMonth, chatPage, chatPageSize, initialSection, lineOaFilter, priorityFilter, productModelId, productSeriesId, searchText, selectedStore, topicId],
+    [activeConversationReplyState, activeConversationStatus, chatMonth, chatPage, chatPageSize, initialSection, lineOaFilter, priorityFilter, productModelId, productSeriesId, searchText, selectedStore, topicId, showEmbeddedMessageResults],
   );
   const activeConversationQueryKey = conversationListQueryKey(activeConversationQuery);
   const conversationQueryRef = useRef(activeConversationQuery);
@@ -1968,6 +2013,7 @@ function ApplicationWorkspaceContent({ initialSection, initialAuthUser }: { init
 
   useEffect(() => {
     if (!authUser || initialSection !== "chats") return;
+    if (showEmbeddedMessageResults) return;
     if (previousConversationFilterShape.current !== conversationFilterShapeKey) {
       previousConversationFilterShape.current = conversationFilterShapeKey;
       if (chatPage !== 1) {
@@ -1976,7 +2022,7 @@ function ApplicationWorkspaceContent({ initialSection, initialAuthUser }: { init
       }
     }
     void loadConversations(activeConversationQuery);
-  }, [activeConversationQuery, activeConversationQueryKey, authUser, chatPage, conversationFilterShapeKey, initialSection, loadConversations]);
+  }, [activeConversationQuery, activeConversationQueryKey, authUser, chatPage, conversationFilterShapeKey, initialSection, loadConversations, showEmbeddedMessageResults]);
 
   const loadSupportingData = useCallback(async (silent = false, includeWebhookInfo = !silent, mode: SupportingDataMode = "full") => {
     const isChatsSection = initialSection === "chats";
@@ -2596,9 +2642,44 @@ function ApplicationWorkspaceContent({ initialSection, initialAuthUser }: { init
     const newestId = chatHistory.items.at(-1)?.id ?? null;
     if (newestId && newestId !== newestChatMessageRef.current) {
       newestChatMessageRef.current = newestId;
-      window.requestAnimationFrame(() => chatEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" }));
+      if (!selectedSearchHit || selectedSearchHit.conversationId !== selectedConversationId) {
+        window.requestAnimationFrame(() => chatEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" }));
+      }
     }
-  }, [chatHistory.items]);
+  }, [chatHistory.items, selectedSearchHit, selectedConversationId]);
+
+  useEffect(() => {
+    const hit = selectedSearchHit;
+    if (!hit || hit.conversationId !== selectedConversationId) return;
+    if (chatHistory.items.some((message) => message.id === hit.messageId)) {
+      window.requestAnimationFrame(() => {
+        const container = document.querySelector("[data-chat-message-scroll]");
+        const matches = container?.querySelectorAll("[data-chat-message-id]");
+        for (const element of matches ?? []) {
+          if (element.getAttribute("data-chat-message-id") === hit.messageId) {
+            element.scrollIntoView({ behavior: "smooth", block: "center" });
+            break;
+          }
+        }
+      });
+      return;
+    }
+    if (!chatHistory.items.length || !chatHistory.hasEarlier || chatLoading || targetAutoPageRef.current >= 8) return;
+    const nextPage = chatHistory.page + 1;
+    const scopeKey = conversationMessageScopeKey;
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => {
+      targetAutoPageRef.current += 1;
+      void api.conversationMessages(selectedConversationId, nextPage, { signal: controller.signal })
+        .then((response) => {
+          if (!controller.signal.aborted) {
+            setChatHistoryState((current) => mergeScopedConversationMessagePage(current, scopeKey, response, activeConversationMessageScope.current));
+          }
+        })
+        .catch(() => { /* The load-earlier button remains available. */ });
+    }, 180);
+    return () => { window.clearTimeout(timeout); controller.abort(); };
+  }, [selectedSearchHit, selectedConversationId, chatHistory.items, chatHistory.hasEarlier, chatHistory.page, chatLoading, conversationMessageScopeKey]);
 
 
   const storeBmCounts = useMemo(() => {
@@ -2609,6 +2690,7 @@ function ApplicationWorkspaceContent({ initialSection, initialAuthUser }: { init
     return countsMap;
   }, [bmSummaryData.stores]);
   const hasActiveFilters =
+    (messageSearchMode && !isSameMessageSearchPeriod(messageSearchPeriod, defaultMessageSearchPeriod(bangkokTodayIso()))) ||
     searchText.trim() !== "" || selectedStore !== "all" ||
     statusFilter !== "all" || priorityFilter !== "all" ||
     seriesFilter !== "all" || modelFilter !== "all" ||
@@ -2919,6 +3001,8 @@ function ApplicationWorkspaceContent({ initialSection, initialAuthUser }: { init
   function clearAllFilters() {
     clearRequestedRouteConversation();
     setSearchText("");
+    setSelectedSearchHit(null);
+    setMessageSearchPeriod(defaultMessageSearchPeriod(bangkokTodayIso()));
     setSelectedStore("all");
     setStatusFilter("all");
     setPriorityFilter("all");
@@ -3406,7 +3490,10 @@ function ApplicationWorkspaceContent({ initialSection, initialAuthUser }: { init
       language={language}
       changeLanguage={changeLanguage}
       searchText={searchText}
-      setSearchText={setSearchText}
+      setSearchText={(value) => {
+        setSearchText(value);
+        setSelectedSearchHit(null);
+      }}
       pilotMode={systemStatus?.pilotMode}
       lastUpdatedAt={lastUpdatedAt}
       logout={logout}
@@ -4579,7 +4666,9 @@ function ApplicationWorkspaceContent({ initialSection, initialAuthUser }: { init
                         {conversationListTitle}
                       </h2>
                       <p className="app-muted mt-0.5 text-xs text-[var(--app-text-tertiary)] font-tabular">
-                        {chatTotalCount} {text.searchResults}
+                        {showEmbeddedMessageResults
+                          ? text.searchByDate
+                          : <>{chatTotalCount} {text.searchResults}</>}
                       </p>
                     </div>
 
@@ -4598,6 +4687,15 @@ function ApplicationWorkspaceContent({ initialSection, initialAuthUser }: { init
 
                   {showFilterPanel && (
                     <div className="app-filter-panel mt-3 grid grid-cols-2 gap-2 rounded-[var(--app-radius-md)] border border-[var(--app-border)] bg-[var(--app-surface-subtle)] p-2.5 shadow-[var(--app-shadow-card)]">
+                      {hqCanSearchMessages && (
+                        <label className="col-span-2 flex items-center gap-2 text-xs text-[var(--app-text-secondary)]">
+                          <input type="checkbox" checked={searchWithinMessages} onChange={(e) => {
+                            setSearchWithinMessages(e.target.checked);
+                            setSelectedSearchHit(null);
+                          }} />
+                          {text.searchMessageContent}
+                        </label>
+                      )}
                       <label className="text-[var(--app-text-secondary)] text-xs font-medium">
                         {text.storeFilter}
                         <select value={selectedStore} onChange={(event) => changeStoreFilter(event.target.value)} className="mt-1 w-full rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface)] px-2 py-1 text-xs text-[var(--app-text-primary)] focus:border-[var(--app-accent)] focus:outline-none">
@@ -4647,12 +4745,35 @@ function ApplicationWorkspaceContent({ initialSection, initialAuthUser }: { init
                           {lineOas.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
                         </select>
                       </label>
+                      {messageSearchMode && (
+                        <div data-embedded-message-search-date className="col-span-2 space-y-2 rounded-lg border border-[var(--app-border)] bg-[var(--app-surface)] p-2">
+                          <p className="text-xs font-semibold text-[var(--app-text-primary)]">
+                            {text.messageDateRange}
+                          </p>
+                          <UnifiedPeriodPicker
+                            dateFrom={messageSearchPeriod.dateFrom}
+                            dateTo={messageSearchPeriod.dateTo}
+                            language={language}
+                            presetLabel={(days) => language === "th" ? days + " วัน" : language === "zh" ? days + "天" : days + "D"}
+                            onApply={(dateFrom, dateTo) => {
+                              setMessageSearchPeriod({ dateFrom, dateTo });
+                              setSelectedSearchHit(null);
+                            }}
+                          />
+                          {validateMessageSearchPeriod(messageSearchPeriod, bangkokTodayIso(), language) && (
+                            <p role="alert" className="text-xs text-[var(--app-danger)]">{validateMessageSearchPeriod(messageSearchPeriod, bangkokTodayIso(), language)}</p>
+                          )}
+                          <p className="text-[10px] text-[var(--app-text-tertiary)]">
+                            {text.messageDateRangeScopeNote}
+                          </p>
+                        </div>
+                      )}
                     </div>
                   )}
 
                   {hasActiveFilters && (
                     <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-                      {searchText.trim() && <button onClick={() => setSearchText("")} className="rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface-subtle)] text-[var(--app-text-primary)] px-2 py-0.5 text-[11px] font-medium">{text.searchFilter}: {searchText.trim()} ×</button>}
+                      {searchText.trim() && <button onClick={() => { setSearchText(""); setSelectedSearchHit(null); }} className="rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface-subtle)] text-[var(--app-text-primary)] px-2 py-0.5 text-[11px] font-medium">{text.searchFilter}: {searchText.trim()} ×</button>}
                       {selectedStore !== "all" && <button onClick={() => changeStoreFilter("all")} className="rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface-subtle)] text-[var(--app-text-primary)] px-2 py-0.5 text-[11px] font-medium">{text.storeFilter}: {getStoreDisplayName(availableStores.find(({ id }) => id === selectedStore)?.name ?? selectedStore)} ×</button>}
                       {statusFilter !== "all" && <button onClick={() => setStatusFilter("all")} className="rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface-subtle)] text-[var(--app-text-primary)] px-2 py-0.5 text-[11px] font-medium">{text.statusFilter}: {getStatusLabel(language, statusFilter)} ×</button>}
                       {priorityFilter !== "all" && <button onClick={() => setPriorityFilter("all")} className="rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface-subtle)] text-[var(--app-text-primary)] px-2 py-0.5 text-[11px] font-medium">{text.priorityFilter}: {priorityFilter === "High" ? text.highPriority : text.normalPriority} ×</button>}
@@ -4661,6 +4782,12 @@ function ApplicationWorkspaceContent({ initialSection, initialAuthUser }: { init
                       {topicFilter !== "all" && <button onClick={() => setTopicFilter("all")} className="rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface-subtle)] text-[var(--app-text-primary)] px-2 py-0.5 text-[11px] font-medium">{text.topicFilter}: {topicFilter} ×</button>}
                       {lineOaFilter !== "all" && <button onClick={() => changeLineOaFilter("all")} className="rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface-subtle)] text-[var(--app-text-primary)] px-2 py-0.5 text-[11px] font-medium">{text.lineOaManagement}: {lineOas.find(({ id }) => id === lineOaFilter)?.name ?? lineOaFilter} ×</button>}
                       {(sidebarView === "replied" || sidebarView === "notReplied") && <button onClick={() => setSidebarView("all")} className="rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface-subtle)] text-[var(--app-text-primary)] px-2 py-0.5 text-[11px] font-medium">{text.bmReplyStatus}: {bmReplyStatusLabels[language][sidebarView === "replied" ? "REPLIED" : "NOT_REPLIED"]} ×</button>}
+                      {messageSearchMode && !isSameMessageSearchPeriod(messageSearchPeriod, defaultMessageSearchPeriod(bangkokTodayIso())) && (
+                        <button type="button" onClick={() => setMessageSearchPeriod(defaultMessageSearchPeriod(bangkokTodayIso()))}
+                          className="rounded-[var(--app-radius-sm)] border border-[var(--app-border)] bg-[var(--app-surface-subtle)] px-2 py-0.5 text-[11px]">
+                          {text.dateFilterTag}: {messageSearchPeriod.dateFrom} – {messageSearchPeriod.dateTo} ×
+                        </button>
+                      )}
                       <button onClick={clearAllFilters} className="text-[11px] font-medium text-[var(--app-danger)] hover:underline">{text.clearAll}</button>
                     </div>
                   )}
@@ -4699,7 +4826,26 @@ function ApplicationWorkspaceContent({ initialSection, initialAuthUser }: { init
                 )}
 
                 <div className="flex-1 overflow-y-auto">
-                  {isChatPageLoading ? (
+                  {showEmbeddedMessageResults ? (
+                    <EmbeddedChatMessageResults
+                      keyword={searchText}
+                      period={messageSearchPeriod}
+                      storeId={selectedStore}
+                      language={language}
+                      selectedMessageId={selectedSearchHit?.messageId ?? null}
+                      onSelect={(hit) => {
+                        targetAutoPageRef.current = 0;
+                        requestedRouteConversationIdRef.current = hit.conversationId;
+                        const lookup = { id: hit.conversationId, status: "pending" as const };
+                        routeConversationLookupRef.current = lookup;
+                        setRouteConversationLookup(lookup);
+                        setSelectedSearchHit(hit);
+                        setSelectedConversationId(hit.conversationId);
+                        setSelectedApiConversation(null);
+                        setShowTranslation(false);
+                      }}
+                    />
+                  ) : isChatPageLoading ? (
                     <ConversationRowSkeleton count={chatPageSize} />
                   ) : chatPageError ? (
                     <div className="p-8 text-center text-sm text-red-600">
@@ -4890,7 +5036,7 @@ function ApplicationWorkspaceContent({ initialSection, initialAuthUser }: { init
                   )}
                 </div>
 
-                <div className="shrink-0">
+                {!showEmbeddedMessageResults && <div className="shrink-0">
                   <ConversationPaginationFooter
                     currentPage={chatPage}
                     pageSize={chatPageSize}
@@ -4903,7 +5049,7 @@ function ApplicationWorkspaceContent({ initialSection, initialAuthUser }: { init
                       setChatPage(1);
                     }}
                   />
-                </div>
+                </div>}
               </section>
 
               <ResizableSeparator separator="conversations" value={chatPaneWidths.conversations} minimum={CHAT_PANE_LIMITS.conversations.min} maximum={CHAT_PANE_LIMITS.conversations.max} onResize={resizeChatPanes} />
@@ -5010,6 +5156,12 @@ function ApplicationWorkspaceContent({ initialSection, initialAuthUser }: { init
                           </button>
                         </div>
                         <div data-chat-message-scroll className="flex-1 min-h-0 space-y-2.5 overflow-y-auto overscroll-contain bg-[var(--app-surface-subtle)]/40 px-4 py-3">
+                          {selectedSearchHit?.conversationId === selectedConversationId && !chatHistory.items.some((message) => message.id === selectedSearchHit.messageId) && (
+                            <p data-chat-search-target-pending className="rounded-lg border border-amber-200 bg-amber-50 p-2 text-xs text-amber-950">
+                              {text.locatingMatchingMessage}
+                              {targetAutoPageRef.current >= 8 && text.loadEarlierMessagesToContinue}
+                            </p>
+                          )}
                           {chatHistory.hasEarlier && <div className="pb-2 text-center"><button disabled={chatLoading} onClick={() => void loadEarlierMessages()} className="rounded-full border border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-text-secondary)] hover:text-[var(--app-text-primary)] px-3 py-1 text-xs shadow-[var(--app-shadow-card)] transition-colors">{text.loadEarlierMessages}</button></div>}
                           {chatHistory.items.map((message, index) => {
                             const previous = chatHistory.items[index - 1];
@@ -5021,7 +5173,11 @@ function ApplicationWorkspaceContent({ initialSection, initialAuthUser }: { init
                             const isFailed = !inbound && message.deliveryStatus === "FAILED";
                             const senderName = getMessageSenderName(message);
                             return (
-                              <div key={message.id}>
+                              <div
+                                key={message.id}
+                                data-chat-message-id={message.id}
+                                className={selectedSearchHit?.conversationId === selectedConversationId && selectedSearchHit?.messageId === message.id ? "rounded-lg ring-2 ring-amber-400 ring-offset-2" : undefined}
+                              >
                                 {showDate && (
                                   <div data-chat-date-separator className="my-3 text-center text-xs text-[var(--app-text-tertiary)] font-tabular">
                                     {new Intl.DateTimeFormat(language, { dateStyle: "medium" }).format(date)}
@@ -5049,7 +5205,11 @@ function ApplicationWorkspaceContent({ initialSection, initialAuthUser }: { init
                                   >
                                     {senderName && <p data-message-sender className={`mb-1 text-[11px] font-semibold ${isFailed ? "text-red-200" : "text-[var(--app-text-secondary)]"}`}>{senderName}</p>}
                                     {message.messageType === "IMAGE" ? <MessageImage messageId={message.id} media={message.media} alt={text.customerImage} unavailableLabel={text.imageUnavailable} errorLabel={text.imageLoadError} retryLabel={text.retryImage} /> : message.messageType === "STICKER" ? <MessageSticker sticker={message.sticker} language={language} /> : (
-                                      <p className="whitespace-pre-wrap text-sm leading-relaxed">{content}</p>
+                                      <p className="whitespace-pre-wrap text-sm leading-relaxed">
+                                        {selectedSearchHit?.conversationId === selectedConversationId && selectedSearchHit?.messageId === message.id
+                                          ? highlightedSearchText(message.originalText, selectedSearchHit.keyword)
+                                          : content}
+                                      </p>
                                     )}
                                     {message.fileName && <p className="mt-1 text-xs font-medium">📎 {message.fileName}</p>}
                                     <MessageTranslationAction message={message} userRole={authUser.role} onTranslated={(targetLanguage, translatedText) => updateMessageTranslation(message.id, targetLanguage, translatedText)} />
