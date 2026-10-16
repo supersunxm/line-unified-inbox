@@ -63,7 +63,7 @@ import type { SidebarView } from "@/components/shell";
 import { StoreChatsOverflowMenu } from "@/components/chats/store-chats-overflow-menu";
 import { EmbeddedChatMessageResults, type EmbeddedMessageSearchSelection } from "@/components/chats/message-search/embedded-chat-message-results";
 import { highlightedSearchText } from "@/components/chats/message-search/highlight-search-text";
-import { defaultMessageSearchPeriod, bangkokTodayIso, isSameMessageSearchPeriod } from "@/components/chats/message-search/message-search-period";
+import { defaultMessageSearchPeriod, bangkokTodayIso, isSameMessageSearchPeriod, validateMessageSearchPeriod } from "@/components/chats/message-search/message-search-period";
 import { validateMessageSearchKeyword } from "@/components/chats/message-search/message-search-query";
 import { isChatMessageSearchUiEnabled } from "@/components/chats/message-search/message-search-config";
 import { UnifiedPeriodPicker } from "@/components/date-range/unified-period-picker";
@@ -1888,11 +1888,24 @@ function ApplicationWorkspaceContent({ initialSection, initialAuthUser }: { init
   const topicId = topicFilter === "all"
     ? undefined
     : availableTopics.find(({ name }) => name === topicFilter)?.id;
+  // Message-level search uses Message.sentAt and does not inherit chatMonth.
+  // Legacy conversation search remains available when the toggle is off.
+  const hqCanSearchMessages = authUser?.role === "ADMIN"
+    || (authUser?.role === "ASSISTANT"
+      && authUser.authorization?.workspaces?.hq === true
+      && authUser.authorization?.scope?.allStores === true);
+  const messageSearchMode = initialSection === "chats"
+    && Boolean(hqCanSearchMessages)
+    && isChatMessageSearchUiEnabled(process.env.NEXT_PUBLIC_CHAT_MESSAGE_SEARCH_UI)
+    && process.env.NEXT_PUBLIC_CHAT_MESSAGE_SEARCH_DATA === "backend"
+    && searchWithinMessages;
+  const showEmbeddedMessageResults = messageSearchMode && validateMessageSearchKeyword(searchText).valid;
+
   const activeConversationQuery = useMemo(
     () => buildConversationListQuery({
       page: chatPage,
       pageSize: chatPageSize,
-      search: initialSection === "chats" ? searchText : "",
+      search: initialSection === "chats" && !showEmbeddedMessageResults ? searchText : "",
       storeId: initialSection === "chats" ? selectedStore : "all",
       lineOaId: initialSection === "chats" ? lineOaFilter : "all",
       followUpStatus: initialSection === "chats" ? activeConversationStatus : undefined,
@@ -1905,7 +1918,7 @@ function ApplicationWorkspaceContent({ initialSection, initialAuthUser }: { init
       topicId: initialSection === "chats" ? topicId : undefined,
       month: initialSection === "chats" ? chatMonth : undefined,
     }),
-    [activeConversationReplyState, activeConversationStatus, chatMonth, chatPage, chatPageSize, initialSection, lineOaFilter, priorityFilter, productModelId, productSeriesId, searchText, selectedStore, topicId],
+    [activeConversationReplyState, activeConversationStatus, chatMonth, chatPage, chatPageSize, initialSection, lineOaFilter, priorityFilter, productModelId, productSeriesId, searchText, selectedStore, topicId, showEmbeddedMessageResults],
   );
   const activeConversationQueryKey = conversationListQueryKey(activeConversationQuery);
   const conversationQueryRef = useRef(activeConversationQuery);
@@ -2361,19 +2374,6 @@ function ApplicationWorkspaceContent({ initialSection, initialAuthUser }: { init
     topicOptions,
     lineOaOptions,
   ]);
-
-  // Message-level search uses Message.sentAt and does not inherit chatMonth.
-  // Legacy conversation search remains available when the toggle is off.
-  const hqCanSearchMessages = authUser?.role === "ADMIN"
-    || (authUser?.role === "ASSISTANT"
-      && authUser.authorization?.workspaces?.hq === true
-      && authUser.authorization?.scope?.allStores === true);
-  const messageSearchMode = initialSection === "chats"
-    && Boolean(hqCanSearchMessages)
-    && isChatMessageSearchUiEnabled(process.env.NEXT_PUBLIC_CHAT_MESSAGE_SEARCH_UI)
-    && process.env.NEXT_PUBLIC_CHAT_MESSAGE_SEARCH_DATA === "backend"
-    && searchWithinMessages;
-  const showEmbeddedMessageResults = messageSearchMode && validateMessageSearchKeyword(searchText).valid;
 
   const filteredConversations = conversations;
 
@@ -4664,26 +4664,6 @@ function ApplicationWorkspaceContent({ initialSection, initialAuthUser }: { init
 
                   {showFilterPanel && (
                     <div className="app-filter-panel mt-3 grid grid-cols-2 gap-2 rounded-[var(--app-radius-md)] border border-[var(--app-border)] bg-[var(--app-surface-subtle)] p-2.5 shadow-[var(--app-shadow-card)]">
-                      {messageSearchMode && (
-                        <div data-embedded-message-search-date className="col-span-2 space-y-2 rounded-lg border border-[var(--app-border)] bg-[var(--app-surface)] p-2">
-                          <p className="text-xs font-semibold text-[var(--app-text-primary)]">
-                            {language === "th" ? "ช่วงวันที่ส่งข้อความ (สูงสุด 90 วัน)" : language === "zh" ? "消息发送日期（最多90天）" : "Message send date (up to 90 days)"}
-                          </p>
-                          <UnifiedPeriodPicker
-                            dateFrom={messageSearchPeriod.dateFrom}
-                            dateTo={messageSearchPeriod.dateTo}
-                            language={language}
-                            presetLabel={(days) => language === "th" ? days + " วัน" : language === "zh" ? days + "天" : days + "D"}
-                            onApply={(dateFrom, dateTo) => {
-                              setMessageSearchPeriod({ dateFrom, dateTo });
-                              setSelectedSearchHit(null);
-                            }}
-                          />
-                          <p className="text-[10px] text-[var(--app-text-tertiary)]">
-                            {language === "th" ? "วันที่นี้ใช้กับการค้นหาข้อความเท่านั้น ไม่เปลี่ยนตัวกรองเดือนของรายการแชท" : language === "zh" ? "此日期仅用于消息搜索，不会更改会话月份筛选" : "Only message search uses this date range; the conversation month stays unchanged."}
-                          </p>
-                        </div>
-                      )}
                       {hqCanSearchMessages && (
                         <label className="col-span-2 flex items-center gap-2 text-xs text-[var(--app-text-secondary)]">
                           <input type="checkbox" checked={searchWithinMessages} onChange={(e) => {
@@ -4742,6 +4722,29 @@ function ApplicationWorkspaceContent({ initialSection, initialAuthUser }: { init
                           {lineOas.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
                         </select>
                       </label>
+                      {messageSearchMode && (
+                        <div data-embedded-message-search-date className="col-span-2 space-y-2 rounded-lg border border-[var(--app-border)] bg-[var(--app-surface)] p-2">
+                          <p className="text-xs font-semibold text-[var(--app-text-primary)]">
+                            {language === "th" ? "ช่วงวันที่ส่งข้อความ (สูงสุด 90 วัน)" : language === "zh" ? "消息发送日期（最多90天）" : "Message send date (up to 90 days)"}
+                          </p>
+                          <UnifiedPeriodPicker
+                            dateFrom={messageSearchPeriod.dateFrom}
+                            dateTo={messageSearchPeriod.dateTo}
+                            language={language}
+                            presetLabel={(days) => language === "th" ? days + " วัน" : language === "zh" ? days + "天" : days + "D"}
+                            onApply={(dateFrom, dateTo) => {
+                              setMessageSearchPeriod({ dateFrom, dateTo });
+                              setSelectedSearchHit(null);
+                            }}
+                          />
+                          {validateMessageSearchPeriod(messageSearchPeriod, bangkokTodayIso(), language) && (
+                            <p role="alert" className="text-xs text-[var(--app-danger)]">{validateMessageSearchPeriod(messageSearchPeriod, bangkokTodayIso(), language)}</p>
+                          )}
+                          <p className="text-[10px] text-[var(--app-text-tertiary)]">
+                            {language === "th" ? "วันที่นี้ใช้กับการค้นหาข้อความเท่านั้น ไม่เปลี่ยนตัวกรองเดือนของรายการแชท" : language === "zh" ? "此日期仅用于消息搜索，不会更改会话月份筛选" : "Only message search uses this date range; the conversation month stays unchanged."}
+                          </p>
+                        </div>
+                      )}
                     </div>
                   )}
 
