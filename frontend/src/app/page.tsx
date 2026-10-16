@@ -8,6 +8,7 @@ import type { ApiCustomerEvent } from "@/types/api";
 import { ApiError, api, isAbortError } from "@/lib/api";
 import { AUTH_UNAUTHORIZED_EVENT, getAuthState, resolveAuthRedirect, routeAfterLogin, redirectToLogin } from "@/lib/auth-session";
 import { initialWorkspaceAuth } from "./workspace-auth-bootstrap";
+import type { AuthorizationContext } from "@/lib/authorization";
 import { ThemeControl } from "./theme";
 import { PublicLandingPage } from "./public-landing-page";
 import type { PrimarySection } from "./primary-navigation";
@@ -1506,7 +1507,7 @@ export default function Home() {
   return <PublicLandingPage />;
 }
 
-type WorkspaceAuthUser = { id: string; email: string; displayName: string; role: "ADMIN" | "ASSISTANT" | "VIEWER"; permissions?: { canAccessMainOa?: boolean }; authorization?: { workspaces?: { hq?: boolean }; scope?: { allStores?: boolean } } };
+type WorkspaceAuthUser = { id: string; email: string; displayName: string; role: "ADMIN" | "ASSISTANT" | "VIEWER"; permissions?: { canAccessMainOa?: boolean }; authorization?: AuthorizationContext };
 
 /** `initialAuthUser` is the user AuthorizedSection already resolved; /login passes none and runs the full setup check. */
 function ApplicationWorkspaceContent({ initialSection, initialAuthUser }: { initialSection: PrimarySection; initialAuthUser?: WorkspaceAuthUser | null }) {
