@@ -38,7 +38,7 @@ export function EmbeddedChatMessageResults({
     keyword,
     period,
     storeIds: storeId === "all" ? [] : [storeId],
-  }), [keyword, period.dateFrom, period.dateTo, storeId]);
+  }), [keyword, period, storeId]);
   const copy = language === "th" ? {
     loading: "กำลังค้นหาข้อความ…", empty: "ไม่พบข้อความในช่วงวันที่นี้",
     error: "ค้นหาไม่สำเร็จ กรุณาลองอีกครั้ง", retry: "ลองอีกครั้ง",
@@ -86,6 +86,9 @@ export function EmbeddedChatMessageResults({
     <div data-embedded-chat-search-results className="flex min-h-0 flex-col">
       <p className="border-b border-[var(--app-border)] px-3 py-2 text-xs text-[var(--app-text-secondary)]">
         {copy.matches}: {rows.length} · {copy.current}
+        <span className="block mt-1 text-[10px]">
+          {language === "th" ? "ค้นหาจากคำ วันที่ และร้านค้า ตัวกรองสถานะหรือสินค้าใช้กับรายการบทสนทนาแบบเดิม" : language === "zh" ? "按关键词、日期、门店搜索；状态和商品筛选仅适用于旧会话列表" : "Search uses keyword, date and store; status/product filters apply only to the legacy conversation list."}
+        </span>
       </p>
       {rows.map(({ first, count }) => (
         <button
