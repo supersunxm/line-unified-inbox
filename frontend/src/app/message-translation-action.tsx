@@ -8,6 +8,7 @@ import { useAppLanguage } from "./language";
 import { messageTranslationText } from "./message-translation-i18n";
 
 type Message = ApiConversation["messages"][number];
+type TargetLanguage = "en" | "zh";
 type TranslationState =
   | { status: "idle" }
   | { status: "loading" }
@@ -22,10 +23,11 @@ export function MessageTranslationAction({
 }: {
   message: Message;
   userRole: "ADMIN" | "ASSISTANT" | "VIEWER";
-  onTranslated: (translatedText: string) => void;
+  onTranslated: (targetLanguage: TargetLanguage, translatedText: string) => void;
 }) {
   const { language } = useAppLanguage();
   const text = messageTranslationText[language];
+  const [targetLanguage, setTargetLanguage] = useState<TargetLanguage>("en");
   const [state, setState] = useState<TranslationState>({ status: "idle" });
   const [feedbackState, setFeedbackState] = useState<FeedbackState>("idle");
   const [incorrectReason, setIncorrectReason] = useState<TranslationFeedbackIssueCategory | null>(null);
@@ -41,9 +43,9 @@ export function MessageTranslationAction({
     if (state.status === "loading") return;
     setState({ status: "loading" });
     try {
-      const result = await api.translateMessage(message.id, "en");
+      const result = await api.translateMessage(message.id, targetLanguage);
       setState({ status: "success", translatedText: result.translatedText });
-      onTranslated(result.translatedText);
+      onTranslated(targetLanguage, result.translatedText);
     } catch {
       setState({ status: "error" });
     }
@@ -57,7 +59,7 @@ export function MessageTranslationAction({
     setFeedbackState("submitting");
     try {
       await api.submitTranslationFeedback(message.id, {
-        targetLanguage: "en",
+        targetLanguage,
         rating,
         ...(issueCategory ? { issueCategory } : {}),
       });
@@ -69,13 +71,33 @@ export function MessageTranslationAction({
 
   return (
     <div className="mt-2 border-t border-slate-200 pt-2 dark:border-slate-700">
+      <div className="mb-1 flex items-center gap-1.5" role="group" aria-label={text.targetLanguageLabel}>
+        {(["en", "zh"] as const).map((target) => (
+          <button
+            key={target}
+            type="button"
+            disabled={state.status === "loading" || feedbackState === "submitting"}
+            aria-pressed={targetLanguage === target}
+            onClick={() => {
+              if (target === targetLanguage) return;
+              setTargetLanguage(target);
+              setState({ status: "idle" });
+              setFeedbackState("idle");
+              setIncorrectReason(null);
+            }}
+            className={`rounded border px-2 py-0.5 text-[11px] font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:opacity-50 ${targetLanguage === target ? "border-blue-600 bg-blue-50 text-blue-800 dark:bg-blue-950 dark:text-blue-200" : "border-slate-200 text-slate-600 dark:border-slate-700 dark:text-slate-300"}`}
+          >
+            {target === "en" ? text.english : text.chinese}
+          </button>
+        ))}
+      </div>
       {state.status !== "success" && (
         <button
           type="button"
           disabled={state.status === "loading"}
           onClick={() => void translate()}
           className="rounded px-1 py-0.5 text-xs font-semibold text-blue-700 underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-wait disabled:text-slate-500 dark:text-blue-300"
-          aria-label={text.translateToEnglish}
+          aria-label={targetLanguage === "en" ? text.translateToEnglish : text.translateToChinese}
         >
           {state.status === "loading" ? text.translating : text.translate}
         </button>
@@ -85,7 +107,7 @@ export function MessageTranslationAction({
           <div>
             <div className="rounded-lg bg-blue-50 px-2.5 py-2 text-left dark:bg-blue-950/50">
               <p className="text-[10px] font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">
-                {text.translationTitle}
+                {targetLanguage === "en" ? text.translationTitleEnglish : text.translationTitleChinese}
               </p>
               <p className="mt-1 whitespace-pre-wrap text-sm text-slate-800 dark:text-slate-100">
                 {state.translatedText}
