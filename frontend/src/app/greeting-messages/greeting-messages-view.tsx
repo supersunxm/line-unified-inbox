@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/lib/api";
+import { OAStoreCandidatesPreview } from "../oa-store-candidates-preview";
 import type {
   GreetingMessageBlock,
   GreetingReadinessResponse,
@@ -182,6 +183,7 @@ export function GreetingMessagesView({
 
   // Store Assignment & Table State
   const [readinessData, setReadinessData] = useState<GreetingReadinessResponse | null>(null);
+  const pendingDraftStoreSelection = useRef<string[] | null>(null);
   const [selectedStoreOaIds, setSelectedStoreOaIds] = useState<string[]>([]);
   const [lastSelectedStoreOaId, setLastSelectedStoreOaId] = useState<string | null>(null);
   const [savingAssignments, setSavingAssignments] = useState(false);
@@ -267,11 +269,17 @@ export function GreetingMessagesView({
       const assigned = response.stores
         .filter((store) => store.currentTemplateId === targetId)
         .map((store) => store.lineOfficialAccountId);
-      setSelectedStoreOaIds(assigned);
-      if (assigned.length > 0) {
-        setLastSelectedStoreOaId(assigned[0]);
-      }
+      // Preserve a new template's provisional choices, but retain only stores
+      // that pass the actual template-specific readiness after save.
+      const pending = pendingDraftStoreSelection.current;
+      pendingDraftStoreSelection.current = null;
+      const readyIds = new Set(response.stores.filter((store) => store.readinessStatus === "READY")
+        .map((store) => store.lineOfficialAccountId));
+      const selected = pending ? pending.filter((id) => readyIds.has(id)) : assigned;
+      setSelectedStoreOaIds(selected);
+      setLastSelectedStoreOaId(selected[0] || null);
     } catch (reason: unknown) {
+      setReadinessData(null);
       setError(reason instanceof Error ? reason.message : "Failed to load store readiness");
     }
   };
@@ -283,6 +291,7 @@ export function GreetingMessagesView({
   }, [currentTemplate?.id]);
 
   const handleStartNew = () => {
+    pendingDraftStoreSelection.current = null;
     setIsCreatingNew(true);
     setSelectedTemplateId(null);
     setFormName("ข้อความต้อนรับใหม่");
@@ -437,6 +446,8 @@ export function GreetingMessagesView({
           sendPolicy: formSendPolicy,
           messages: formMessages,
         });
+        // Keep only a local selection until the user explicitly applies stores.
+        pendingDraftStoreSelection.current = [...selectedStoreOaIds];
         setSuccessMessage("บันทึกเทมเพลตสำเร็จ");
         await fetchTemplates();
         loadTemplateIntoForm(created);
@@ -1022,8 +1033,16 @@ export function GreetingMessagesView({
               <h2 className="text-base font-bold">{ui.storeUsage}</h2>
               <div className="mt-2 flex flex-wrap gap-2">
                 <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">{ui.assigned} {assignedCount}</span>
-                <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700">{ui.ready} {readyCount}</span>
-                <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700">{ui.blocked} {blockedCount}</span>
+                {readinessData ? (
+                  <>
+                    <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700">{ui.ready} {readyCount}</span>
+                    <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700">{ui.blocked} {blockedCount}</span>
+                  </>
+                ) : (
+                  <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-800">
+                    {language === "en" ? "Readiness not evaluated" : language === "zh" ? "尚未验证门店状态" : "ยังไม่ได้ตรวจความพร้อม"}
+                  </span>
+                )}
                 <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700">{ui.selected} {selectedStoreOaIds.length}</span>
               </div>
             </div>
@@ -1061,10 +1080,12 @@ export function GreetingMessagesView({
             )}
           </div>
 
-          {!currentTemplate && (
-            <div className="rounded-md border border-gray-200 bg-gray-50 p-4 text-xs text-gray-500">
-              {t.storeAssignmentDesc}
-            </div>
+          {!readinessData && (
+            <OAStoreCandidatesPreview
+              language={language}
+              selectedOaIds={selectedStoreOaIds}
+              onSelectionChange={setSelectedStoreOaIds}
+            />
           )}
 
           {currentTemplate && readinessData && (
