@@ -6,6 +6,7 @@ import { messageTranslationText } from "../src/app/message-translation-i18n.ts";
 
 const actionCode = readFileSync(new URL("../src/app/message-translation-action.tsx", import.meta.url), "utf8");
 const apiCode = readFileSync(new URL("../src/lib/api.ts", import.meta.url), "utf8");
+const pageCode = readFileSync(new URL("../src/app/page.tsx", import.meta.url), "utf8");
 
 test("translation action is limited to ADMIN inbound non-empty text messages", () => {
   const inboundText = { direction: "INBOUND" as const, messageType: "TEXT" as const, originalText: "ข้อความ" };
@@ -16,8 +17,17 @@ test("translation action is limited to ADMIN inbound non-empty text messages", (
   assert.equal(isMessageTranslationEligible({ ...inboundText, originalText: "  " }, "ADMIN"), false);
 });
 
-test("manual action posts English target through the authenticated API helper", () => {
-  assert.match(actionCode, /api\.translateMessage\(message\.id, "en"\)/);
+test("manual action posts the selected English or Chinese target through the authenticated API helper", () => {
+  assert.match(actionCode, /type TargetLanguage = "en" \| "zh"/);
+  assert.match(actionCode, /\(\["en", "zh"\] as const\)\.map/);
+  assert.match(actionCode, /setTargetLanguage\(target\)/);
+  assert.match(actionCode, /api\.translateMessage\(message\.id, targetLanguage\)/);
+  assert.match(actionCode, /onTranslated\(targetLanguage, result\.translatedText\)/);
+  assert.match(pageCode, /function updateMessageTranslation\(messageId: string, targetLanguage: "en" \| "zh", translatedText: string\)/);
+  assert.match(pageCode, /targetLanguage === "en" \? \{ translatedEnglish: translatedText \} : \{ translatedChinese: translatedText \}/);
+  assert.match(actionCode, /setState\(\{ status: "idle" \}\)/);
+  assert.match(actionCode, /setFeedbackState\("idle"\)/);
+  assert.match(apiCode, /translateMessage: \(messageId: string, targetLanguage: "en" \| "zh"\)/);
   assert.match(apiCode, /`\/messages\/\$\{encodeURIComponent\(messageId\)\}\/translations`/);
   assert.match(apiCode, /method: "POST"/);
   assert.match(apiCode, /body: JSON\.stringify\(\{ targetLanguage \}\)/);
@@ -45,8 +55,24 @@ test("successful translation exposes helpful and categorized incorrect feedback"
     assert.match(actionCode, new RegExp(reason));
   }
   assert.match(actionCode, /api\.submitTranslationFeedback\(message\.id/);
-  assert.match(actionCode, /targetLanguage: "en"/);
+  assert.match(actionCode, /api\.submitTranslationFeedback\(message\.id,\s*\{\s*targetLanguage,\s*rating,/);
+  assert.doesNotMatch(actionCode, /targetLanguage: "en"/);
+  assert.match(actionCode, /targetLanguage === "en" \? text\.translationTitleEnglish : text\.translationTitleChinese/);
   assert.match(apiCode, /\/translations\/feedback/);
   assert.match(actionCode, /text\.feedbackRecorded/);
   assert.equal(messageTranslationText.en.feedbackRecorded, "Feedback recorded");
+});
+
+test("English and Chinese target labels and result titles exist in every UI language", () => {
+  const expectedLabels = {
+    th: { english: "อังกฤษ", chinese: "中文", translationTitleChinese: "แปลด้วย AI · ภาษาจีน" },
+    en: { english: "English", chinese: "中文", translationTitleChinese: "AI Translation · Chinese" },
+    zh: { english: "英语", chinese: "中文", translationTitleChinese: "AI 翻译 · 中文" },
+  } as const;
+
+  for (const [language, expected] of Object.entries(expectedLabels)) {
+    assert.equal(messageTranslationText[language as keyof typeof messageTranslationText].english, expected.english);
+    assert.equal(messageTranslationText[language as keyof typeof messageTranslationText].chinese, expected.chinese);
+    assert.equal(messageTranslationText[language as keyof typeof messageTranslationText].translationTitleChinese, expected.translationTitleChinese);
+  }
 });

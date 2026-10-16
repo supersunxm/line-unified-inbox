@@ -146,6 +146,7 @@ test("header responsiveness and menus preserve accessible controls", () => {
   assert.match(topNavCode, /aria-expanded=\{isOpen\}/);
   assert.match(topNavCode, /aria-label=\{label\}/);
   assert.match(topNavCode, /event\.key === "Escape"/);
+  assert.match(topNavCode, /title=\{label\}/);
   assert.doesNotMatch(topNavCode, /title=\{updatedLabel\}/);
   assert.match(topNavCode, /focus-visible:ring-2/);
 });
