@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useCallback, useEffect, useState, useMemo } from "react";
 import { api } from "@/lib/api";
 import type {
   AutoResponseRule,
@@ -11,6 +11,8 @@ import type {
   AutoResponseTriggerType,
   AutoResponseIntent,
   ApiStore,
+  AutoResponseKeywordStore,
+  ResolvedAutoResponseBlock,
 } from "@/types/api";
 import { autoResponseI18n } from "./auto-response-i18n";
 import { AutoResponseMessageBuilder } from "./auto-response-message-builder";
@@ -21,12 +23,39 @@ type AutoResponsesViewProps = {
   userRole: "ADMIN" | "ASSISTANT" | "VIEWER";
 };
 
+function getErrorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error ? error.message : fallback;
+}
+
+async function fetchAutoResponsePageData(isAdmin: boolean) {
+  const [rules, stores, keywordStores, pilotSummary] = await Promise.all([
+    api.listAutoResponses(),
+    api.stores().catch(() => []),
+    isAdmin ? api.getAutoResponseKeywordStores() : Promise.resolve([]),
+    api.getAutoResponsePilotSummary().catch(() => null),
+  ]);
+  return { rules, stores, keywordStores, pilotSummary };
+}
+
 export function AutoResponsesView({ language, userRole }: AutoResponsesViewProps) {
   const t = autoResponseI18n[language] || autoResponseI18n.th;
+  const k = language === "zh"
+    ? { trigger: "关键词自动回复", keywords: "关键词（每行一个）", match: "匹配模式", exact: "完全匹配", contains: "包含关键词", stores: "选择 LINE OA 门店", search: "搜索门店名称/代码", selectAll: "全选就绪门店", deselectAll: "取消全选", future: "使用所有就绪门店，并自动包含未来新增门店", priority: "优先级", ready: "就绪", blocked: "不可用", selection: "已选", none: "请填写关键词并选择至少一个门店" }
+    : language === "en"
+      ? { trigger: "Keyword", keywords: "Keywords (one per line)", match: "Match mode", exact: "Exact", contains: "Contains", stores: "Choose LINE OA stores", search: "Search store name / code", selectAll: "Select all ready", deselectAll: "Clear selection", future: "Use all ready stores, including future eligible stores", priority: "Priority", ready: "Ready", blocked: "Blocked", selection: "Selected", none: "Enter keywords and select at least one store" }
+      : { trigger: "ตอบกลับด้วย Keyword", keywords: "คำกระตุ้น (บรรทัดละ 1 คำ)", match: "การตรวจจับ", exact: "ตรงทั้งหมด", contains: "มีคำนี้อยู่", stores: "เลือกสาขา LINE OA", search: "ค้นหาชื่อร้านหรือรหัสร้าน", selectAll: "เลือกทุกร้านที่พร้อม", deselectAll: "ยกเลิกทั้งหมด", future: "ใช้ทุกร้านที่พร้อม และรวมร้านใหม่ในอนาคตโดยอัตโนมัติ", priority: "ลำดับความสำคัญ", ready: "พร้อม", blocked: "ยังไม่พร้อม", selection: "เลือกแล้ว", none: "กรุณากำหนด Keyword และเลือกร้านอย่างน้อย 1 ร้าน" };
   const isAdmin = userRole === "ADMIN";
 
   const [rules, setRules] = useState<AutoResponseRule[]>([]);
   const [stores, setStores] = useState<ApiStore[]>([]);
+  const [keywordStores, setKeywordStores] = useState<AutoResponseKeywordStore[]>([]);
+  const [keywordStoreSearch, setKeywordStoreSearch] = useState("");
+  const [formKeywords, setFormKeywords] = useState("");
+  const [formMatchMode, setFormMatchMode] = useState<"EXACT" | "CONTAINS">("CONTAINS");
+  const [formPriority, setFormPriority] = useState(10);
+  const [formTargetMode, setFormTargetMode] = useState<"SELECTED" | "ALL_ELIGIBLE">("SELECTED");
+  const [selectedLineOaIds, setSelectedLineOaIds] = useState<Set<string>>(new Set());
+  const [excludedLineOaIds, setExcludedLineOaIds] = useState<Set<string>>(new Set());
   const [pilotSummary, setPilotSummary] = useState<AutoResponsePilotSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -55,7 +84,7 @@ export function AutoResponsesView({ language, userRole }: AutoResponsesViewProps
   // Preview State
   const [previewStoreId, setPreviewStoreId] = useState<string>("");
   const [previewData, setPreviewData] = useState<AutoResponsePreviewResult | null>(null);
-  const [loadingPreview, setLoadingPreview] = useState(false);
+  const [completedPreviewKey, setCompletedPreviewKey] = useState<string | null>(null);
 
   // Modals
   const [confirmAction, setConfirmAction] = useState<{
@@ -65,166 +94,217 @@ export function AutoResponsesView({ language, userRole }: AutoResponsesViewProps
   const [usageModalRule, setUsageModalRule] = useState<AutoResponseRule | null>(null);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
-  const showToast = (message: string, type: "success" | "error" = "success") => {
+  const showToast = useCallback((message: string, type: "success" | "error" = "success") => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 4000);
-  };
+  }, []);
 
   // Load Rules & Stores
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       setLoading(true);
-      const [rulesData, storesData] = await Promise.all([
-        api.listAutoResponses(),
-        api.stores().catch(() => []),
-      ]);
-      setRules(rulesData);
-      setStores(storesData);
-      setPilotSummary(await api.getAutoResponsePilotSummary().catch(() => null));
-      if (storesData.length > 0 && !previewStoreId) {
-        setPreviewStoreId(storesData[0].id);
+      const data = await fetchAutoResponsePageData(isAdmin);
+      setRules(data.rules);
+      setStores(data.stores);
+      setKeywordStores(data.keywordStores);
+      setPilotSummary(data.pilotSummary);
+      if (data.stores.length > 0) {
+        setPreviewStoreId((current) => current || data.stores[0].id);
       }
-    } catch (err: any) {
-      showToast(err?.message || "Failed to load auto-responses", "error");
+    } catch (err: unknown) {
+      showToast(getErrorMessage(err, "Failed to load auto-responses"), "error");
     } finally {
       setLoading(false);
     }
-  };
+  }, [isAdmin, showToast]);
 
   useEffect(() => {
-    void loadData();
-  }, []);
+    let cancelled = false;
+    void fetchAutoResponsePageData(isAdmin)
+      .then((data) => {
+        if (cancelled) return;
+        setRules(data.rules);
+        setStores(data.stores);
+        setKeywordStores(data.keywordStores);
+        setPilotSummary(data.pilotSummary);
+        if (data.stores.length > 0) {
+          setPreviewStoreId((current) => current || data.stores[0].id);
+        }
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) showToast(getErrorMessage(error, "Failed to load auto-responses"), "error");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isAdmin, showToast]);
 
   const selectedRule = useMemo(() => {
     return rules.find((r) => r.id === selectedRuleId) || null;
   }, [rules, selectedRuleId]);
+  const savedPreviewKey = selectedRule && previewStoreId
+    ? `${selectedRule.id}:${selectedRule.version}:${previewStoreId}`
+    : null;
+  const localPreviewData = useMemo<AutoResponsePreviewResult | null>(() => {
+    if (!isEditing && !isCreating) return null;
 
-  // Handle Preview
-  useEffect(() => {
-    if (!selectedRule && !isCreating) {
-      setPreviewData(null);
-      return;
-    }
+    const selectedStore = stores.find((s) => s.id === previewStoreId);
+    const storeName = selectedStore?.name || "OPPO Store";
+    const mapsUrl = selectedStore?.googleMapsUrl || "";
+    const lineOaLink = "https://line.me/R/ti/p/@oppostore";
+    const tiktokUrl = "";
 
-    if (isEditing || isCreating) {
-      // Local live evaluation preview
-      const selectedStore = stores.find((s) => s.id === previewStoreId);
-      const storeName = selectedStore?.name || "OPPO Store";
-      const mapsUrl = selectedStore?.googleMapsUrl || "";
-      const lineOaLink = "https://line.me/R/ti/p/@oppostore";
-      const tiktokUrl = "";
+    const resolvedBlocks: ResolvedAutoResponseBlock[] = [];
+    const usedVarsSet = new Set<string>();
+    const unresVarsSet = new Set<string>();
+    let allReady = true;
+    let firstReason: string | null = null;
 
-      const resolvedBlocks: any[] = [];
-      const usedVarsSet = new Set<string>();
-      const unresVarsSet = new Set<string>();
-      let allReady = true;
-      let firstReason: string | null = null;
+    for (const block of formMessages) {
+      if (block.type === "TEXT") {
+        const text = block.textTemplate || "";
+        const resolved = text
+          .replace(/\{\{\s*store\.storeName\s*\}\}/g, storeName)
+          .replace(/\{\{\s*storeName\s*\}\}/g, storeName)
+          .replace(/\{\{\s*store\.googleMapsUrl\s*\}\}/g, mapsUrl)
+          .replace(/\{\{\s*googleMapsUrl\s*\}\}/g, mapsUrl)
+          .replace(/\{\{\s*store\.lineOaLink\s*\}\}/g, lineOaLink)
+          .replace(/\{\{\s*lineOaLink\s*\}\}/g, lineOaLink)
+          .replace(/\{\{\s*store\.tiktokProfileUrl\s*\}\}/g, tiktokUrl)
+          .replace(/\{\{\s*tiktokProfileUrl\s*\}\}/g, tiktokUrl);
 
-      for (const block of formMessages) {
-        if (block.type === "TEXT") {
-          const text = block.textTemplate || "";
-          let resolved = text
-            .replace(/\{\{\s*store\.storeName\s*\}\}/g, storeName)
-            .replace(/\{\{\s*storeName\s*\}\}/g, storeName)
-            .replace(/\{\{\s*store\.googleMapsUrl\s*\}\}/g, mapsUrl)
-            .replace(/\{\{\s*googleMapsUrl\s*\}\}/g, mapsUrl)
-            .replace(/\{\{\s*store\.lineOaLink\s*\}\}/g, lineOaLink)
-            .replace(/\{\{\s*lineOaLink\s*\}\}/g, lineOaLink)
-            .replace(/\{\{\s*store\.tiktokProfileUrl\s*\}\}/g, tiktokUrl)
-            .replace(/\{\{\s*tiktokProfileUrl\s*\}\}/g, tiktokUrl);
+        const unres = resolved.match(/\{\{([^}]+)\}\}/g) || [];
+        unres.forEach((u) => unresVarsSet.add(u));
+        const needsMaps = text.includes("store.googleMapsUrl") || text.includes("googleMapsUrl");
+        const blockReady = !unres.length && (!needsMaps || Boolean(mapsUrl));
+        let blockError: string | undefined;
 
-          const unres = resolved.match(/\{\{([^}]+)\}\}/g) || [];
-          unres.forEach((u) => unresVarsSet.add(u));
-          const needsMaps = text.includes("store.googleMapsUrl") || text.includes("googleMapsUrl");
-          const blockReady = !unres.length && (!needsMaps || Boolean(mapsUrl));
-          let blockError: string | undefined;
-
-          if (unres.length) {
-            blockError = `Unresolved variables: ${unres.join(", ")}`;
-            if (allReady) {
-              allReady = false;
-              firstReason = blockError;
-            }
-          } else if (needsMaps && !mapsUrl) {
-            blockError = t.previewMissingMaps;
-            if (allReady) {
-              allReady = false;
-              firstReason = blockError;
-            }
+        if (unres.length) {
+          blockError = `Unresolved variables: ${unres.join(", ")}`;
+          if (allReady) {
+            allReady = false;
+            firstReason = blockError;
           }
-
-          resolvedBlocks.push({
-            id: block.id,
-            type: "TEXT",
-            resolvedText: resolved,
-            usedVariables: [],
-            unresolvedVariables: unres,
-            isValid: blockReady,
-            validationError: blockError,
-          });
-        } else if (block.type === "IMAGE") {
-          const hasImg = Boolean(block.mediaObjectKey || block.imageUrl);
-          let blockError: string | undefined;
-          if (!hasImg) {
-            blockError = t.previewMissingImage;
-            if (allReady) {
-              allReady = false;
-              firstReason = blockError;
-            }
+        } else if (needsMaps && !mapsUrl) {
+          blockError = t.previewMissingMaps;
+          if (allReady) {
+            allReady = false;
+            firstReason = blockError;
           }
-
-          resolvedBlocks.push({
-            id: block.id,
-            type: "IMAGE",
-            imageUrl: block.imageUrl || "",
-            previewUrl: block.previewUrl || block.imageUrl || "",
-            mediaObjectKey: block.mediaObjectKey,
-            isValid: hasImg,
-            validationError: blockError,
-          });
         }
+
+        resolvedBlocks.push({
+          id: block.id,
+          type: "TEXT",
+          resolvedText: resolved,
+          usedVariables: [],
+          unresolvedVariables: unres,
+          isValid: blockReady,
+          validationError: blockError,
+        });
+      } else if (block.type === "IMAGE") {
+        const hasImg = Boolean(block.mediaObjectKey || block.imageUrl);
+        let blockError: string | undefined;
+        if (!hasImg) {
+          blockError = t.previewMissingImage;
+          if (allReady) {
+            allReady = false;
+            firstReason = blockError;
+          }
+        }
+
+        resolvedBlocks.push({
+          id: block.id,
+          type: "IMAGE",
+          imageUrl: block.imageUrl || "",
+          previewUrl: block.previewUrl || block.imageUrl || "",
+          mediaObjectKey: block.mediaObjectKey,
+          isValid: hasImg,
+          validationError: blockError,
+        });
       }
-
-      setPreviewData({
-        ruleId: selectedRule?.id || "draft",
-        ruleName: formName || "Preview",
-        store: {
-          lineOfficialAccountId: "",
-          lineOfficialAccountName: storeName,
-          storeId: selectedStore?.id || null,
-          storeName,
-          externalStoreId: selectedStore?.code || selectedStore?.storeId || null,
-          googleMapsUrl: mapsUrl || null,
-        },
-        usedVariables: Array.from(usedVarsSet),
-        resolvedText: resolvedBlocks.find((b) => b.type === "TEXT")?.resolvedText || "",
-        unresolvedVariables: Array.from(unresVarsSet),
-        messages: resolvedBlocks,
-        ready: allReady && formMessages.length > 0,
-        reason: firstReason,
-      });
-      return;
+      if (block.type === "RICH_MESSAGE") {
+        const hasRichMessage = Boolean(block.richMessageId.trim());
+        const blockError = hasRichMessage ? undefined : t.previewMissingRichMessage;
+        if (!hasRichMessage && allReady) {
+          allReady = false;
+          firstReason = blockError ?? null;
+        }
+        resolvedBlocks.push({
+          id: block.id,
+          type: "RICH_MESSAGE",
+          richMessageId: block.richMessageId,
+          richMessageName: block.richMessageName || t.richMessageFallback,
+          previewUrl: block.previewUrl || "",
+          altText: block.altText || block.richMessageName || t.richMessageFallback,
+          isValid: hasRichMessage,
+          validationError: blockError,
+        });
+      }
     }
 
-    if (selectedRule && previewStoreId) {
-      setLoadingPreview(true);
-      api
-        .previewAutoResponse(selectedRule.id, { storeId: previewStoreId })
-        .then((data) => setPreviewData(data))
-        .catch(() => setPreviewData(null))
-        .finally(() => setLoadingPreview(false));
-    }
+    return {
+      ruleId: selectedRule?.id || "draft",
+      ruleName: formName || "Preview",
+      store: {
+        lineOfficialAccountId: "",
+        lineOfficialAccountName: storeName,
+        storeId: selectedStore?.id || null,
+        storeName,
+        externalStoreId: selectedStore?.code || selectedStore?.storeId || null,
+        googleMapsUrl: mapsUrl || null,
+      },
+      usedVariables: Array.from(usedVarsSet),
+      resolvedText: resolvedBlocks.find((block) => block.type === "TEXT")?.resolvedText || "",
+      unresolvedVariables: Array.from(unresVarsSet),
+      messages: resolvedBlocks,
+      ready: allReady && formMessages.length > 0,
+      reason: firstReason,
+    };
   }, [
-    selectedRule,
     isEditing,
     isCreating,
+    selectedRule?.id,
+    stores,
+    previewStoreId,
     formMessages,
     formName,
-    previewStoreId,
-    stores,
     t.previewMissingMaps,
     t.previewMissingImage,
+    t.previewMissingRichMessage,
+    t.richMessageFallback,
   ]);
+  const visiblePreviewData = isEditing || isCreating
+    ? localPreviewData
+    : savedPreviewKey && completedPreviewKey === savedPreviewKey ? previewData : null;
+  const isSavedPreviewLoading = Boolean(savedPreviewKey && completedPreviewKey !== savedPreviewKey);
+
+  // Saved rules use the server's store-specific preview. Drafts derive their preview during render.
+  useEffect(() => {
+    if (selectedRule && !isEditing && !isCreating && previewStoreId) {
+      const requestKey = `${selectedRule.id}:${selectedRule.version}:${previewStoreId}`;
+      let cancelled = false;
+      api
+        .previewAutoResponse(selectedRule.id, { storeId: previewStoreId })
+        .then((data) => {
+          if (!cancelled) {
+            setPreviewData(data);
+            setCompletedPreviewKey(requestKey);
+          }
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setPreviewData(null);
+            setCompletedPreviewKey(requestKey);
+          }
+        });
+      return () => { cancelled = true; };
+    }
+    return undefined;
+  }, [selectedRule, isEditing, isCreating, previewStoreId]);
 
   // Filtered Rules
   const filteredRules = useMemo(() => {
@@ -253,6 +333,12 @@ export function AutoResponsesView({ language, userRole }: AutoResponsesViewProps
       },
     ]);
     setFormTriggerType("POSTBACK");
+    setFormKeywords("");
+    setFormMatchMode("CONTAINS");
+    setFormPriority(10);
+    setFormTargetMode("SELECTED");
+    setSelectedLineOaIds(new Set());
+    setExcludedLineOaIds(new Set());
     setFormIntent("");
     setFormScopeStoreId(stores.find((store) => (store.code || store.storeId) === "28375")?.id || "");
     setIsCreating(true);
@@ -276,6 +362,12 @@ export function AutoResponsesView({ language, userRole }: AutoResponsesViewProps
 
     setFormMessages(msgs);
     setFormTriggerType(rule.triggerType || "POSTBACK");
+    setFormKeywords((rule.triggerConfig?.keywords || []).join("\n"));
+    setFormMatchMode(rule.triggerConfig?.matchMode || "CONTAINS");
+    setFormPriority(rule.triggerConfig?.priority ?? 10);
+    setFormTargetMode(rule.triggerConfig?.targetMode || "SELECTED");
+    setSelectedLineOaIds(new Set(rule.triggerConfig?.targetLineOaIds || []));
+    setExcludedLineOaIds(new Set(rule.triggerConfig?.excludedLineOaIds || []));
     setFormIntent(rule.intent || "");
     setFormScopeStoreId(rule.scopeStoreId || "");
     setIsEditing(true);
@@ -335,6 +427,23 @@ export function AutoResponsesView({ language, userRole }: AutoResponsesViewProps
       }
     }
 
+    const keywordAliases = formKeywords.split(/[\n,]+/u).map((s) => s.trim()).filter(Boolean);
+    const keywordConfig = {
+      matcherVersion: 1,
+      matchMode: formMatchMode,
+      keywords: keywordAliases,
+      priority: formPriority,
+      targetMode: formTargetMode,
+      targetLineOaIds: Array.from(selectedLineOaIds),
+      excludedLineOaIds: Array.from(excludedLineOaIds),
+    };
+    if (formTriggerType === "KEYWORD" &&
+        (!keywordAliases.length || keywordAliases.length > 30 ||
+         (formTargetMode === "SELECTED" && !selectedLineOaIds.size))) {
+      showToast(k.none, "error");
+      return;
+    }
+
     try {
       setSaving(true);
       if (isCreating) {
@@ -345,7 +454,7 @@ export function AutoResponsesView({ language, userRole }: AutoResponsesViewProps
           triggerType: formTriggerType,
           intent: formTriggerType === "INBOUND_TEXT" ? (formIntent || null) : null,
           scopeStoreId: formTriggerType === "INBOUND_TEXT" ? (formScopeStoreId || null) : null,
-          triggerConfig: formTriggerType === "INBOUND_TEXT" ? { matcherVersion: 1 } : null,
+          triggerConfig: formTriggerType === "INBOUND_TEXT" ? { matcherVersion: 1 } : formTriggerType === "KEYWORD" ? keywordConfig : null,
         });
         if (activateImmediately) {
           const activated = await api.activateAutoResponse(created.id);
@@ -363,10 +472,10 @@ export function AutoResponsesView({ language, userRole }: AutoResponsesViewProps
           triggerType: formTriggerType,
           intent: formTriggerType === "INBOUND_TEXT" ? (formIntent || null) : null,
           scopeStoreId: formTriggerType === "INBOUND_TEXT" ? (formScopeStoreId || null) : null,
-          triggerConfig: formTriggerType === "INBOUND_TEXT" ? { matcherVersion: 1 } : null,
+          triggerConfig: formTriggerType === "INBOUND_TEXT" ? { matcherVersion: 1 } : formTriggerType === "KEYWORD" ? keywordConfig : null,
         });
         if (activateImmediately && updated.status !== "ACTIVE") {
-          const activated = await api.activateAutoResponse(updated.id);
+          await api.activateAutoResponse(updated.id);
           showToast(t.activateSuccess);
         } else {
           showToast(t.updateSuccess);
@@ -376,8 +485,8 @@ export function AutoResponsesView({ language, userRole }: AutoResponsesViewProps
       setIsEditing(false);
       setIsCreating(false);
       await loadData();
-    } catch (err: any) {
-      showToast(err?.message || "Save failed", "error");
+    } catch (err: unknown) {
+      showToast(getErrorMessage(err, "Save failed"), "error");
     } finally {
       setSaving(false);
     }
@@ -404,8 +513,8 @@ export function AutoResponsesView({ language, userRole }: AutoResponsesViewProps
       }
       setConfirmAction(null);
       await loadData();
-    } catch (err: any) {
-      showToast(err?.message || "Action failed", "error");
+    } catch (err: unknown) {
+      showToast(getErrorMessage(err, "Action failed"), "error");
     } finally {
       setSaving(false);
     }
@@ -587,6 +696,7 @@ export function AutoResponsesView({ language, userRole }: AutoResponsesViewProps
                   >
                     <option value="POSTBACK">{t.triggerPostback}</option>
                     <option value="INBOUND_TEXT">{t.triggerInboundText}</option>
+                    <option value="KEYWORD">{k.trigger}</option>
                   </select>
                 </div>
                 {formTriggerType === "INBOUND_TEXT" && (
@@ -628,6 +738,84 @@ export function AutoResponsesView({ language, userRole }: AutoResponsesViewProps
                   <div className="mt-2 space-y-1 text-[11px] leading-relaxed text-blue-500/90">
                     <div>{t.pilotTriggerPatterns}</div>
                     <div>{t.pilotExclusions}</div>
+                  </div>
+                </div>
+              )}
+
+              {formTriggerType === "KEYWORD" && (
+                <div className="space-y-4 rounded-2xl border border-[var(--app-border)] bg-[var(--app-bg)] p-4">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div className="sm:col-span-2">
+                      <label className="mb-1 block text-xs font-semibold">{k.keywords}</label>
+                      <textarea rows={3} value={formKeywords} onChange={(e) => setFormKeywords(e.target.value)}
+                        placeholder={"สนใจ Find X10\nFind X10"} maxLength={3600}
+                        className="w-full rounded-lg border border-[var(--app-border)] bg-[var(--app-surface)] p-3 text-sm" />
+                    </div>
+                    <label className="text-xs font-semibold">{k.match}
+                      <select value={formMatchMode} onChange={(e) => setFormMatchMode(e.target.value as "EXACT" | "CONTAINS")}
+                        className="mt-1 w-full rounded-lg border border-[var(--app-border)] bg-[var(--app-surface)] p-2">
+                        <option value="EXACT">{k.exact}</option>
+                        <option value="CONTAINS">{k.contains}</option>
+                      </select>
+                    </label>
+                    <label className="text-xs font-semibold">{k.priority}
+                      <input type="number" min={0} max={1000} value={formPriority}
+                        onChange={(e) => setFormPriority(Number(e.target.value))}
+                        className="mt-1 w-full rounded-lg border border-[var(--app-border)] bg-[var(--app-surface)] p-2" />
+                    </label>
+                  </div>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="text-sm font-semibold">{k.stores} — {k.selection} {
+                      keywordStores.filter((s) => s.readinessStatus === "READY" &&
+                        (formTargetMode === "ALL_ELIGIBLE"
+                          ? !excludedLineOaIds.has(s.lineOfficialAccountId)
+                          : selectedLineOaIds.has(s.lineOfficialAccountId))).length
+                    } / {keywordStores.filter((s) => s.readinessStatus === "READY").length}</div>
+                    <div className="flex gap-2">
+                      <button type="button" className="rounded-lg border px-3 py-1 text-xs"
+                        onClick={() => { setFormTargetMode("SELECTED");
+                          setSelectedLineOaIds(new Set(keywordStores.filter((s) => s.readinessStatus === "READY").map((s) => s.lineOfficialAccountId))); }}>{k.selectAll}</button>
+                      <button type="button" className="rounded-lg border px-3 py-1 text-xs"
+                        onClick={() => { setFormTargetMode("SELECTED"); setSelectedLineOaIds(new Set()); setExcludedLineOaIds(new Set()); }}>{k.deselectAll}</button>
+                    </div>
+                  </div>
+                  <label className="flex items-center gap-2 text-xs">
+                    <input type="checkbox" checked={formTargetMode === "ALL_ELIGIBLE"}
+                      onChange={(e) => { setFormTargetMode(e.target.checked ? "ALL_ELIGIBLE" : "SELECTED");
+                        if (e.target.checked) setExcludedLineOaIds(new Set());
+                        else setSelectedLineOaIds(new Set(keywordStores.filter((s) => s.readinessStatus === "READY" && !excludedLineOaIds.has(s.lineOfficialAccountId)).map((s) => s.lineOfficialAccountId))); }} />
+                    {k.future}
+                  </label>
+                  <input type="search" value={keywordStoreSearch} onChange={(e) => setKeywordStoreSearch(e.target.value)}
+                    placeholder={k.search} className="w-full rounded-lg border border-[var(--app-border)] bg-[var(--app-surface)] p-2 text-sm" />
+                  <div className="max-h-56 space-y-1 overflow-y-auto rounded-lg border border-[var(--app-border)] p-2">
+                    {keywordStores.filter((s) => (s.storeName + " " + (s.storeCode || "") + " " + s.lineOfficialAccountName)
+                        .toLocaleLowerCase().includes(keywordStoreSearch.toLocaleLowerCase())).map((s) => {
+                      const ready = s.readinessStatus === "READY";
+                      const checked = formTargetMode === "ALL_ELIGIBLE"
+                        ? !excludedLineOaIds.has(s.lineOfficialAccountId) && ready
+                        : selectedLineOaIds.has(s.lineOfficialAccountId);
+                      return <label key={s.lineOfficialAccountId}
+                        title={s.readinessReasons.join(", ")}
+                        className="flex items-center justify-between gap-3 rounded-lg p-2 text-xs hover:bg-[var(--app-surface-hover)]">
+                        <span className="flex min-w-0 items-center gap-2">
+                          <input type="checkbox" disabled={!ready} checked={checked}
+                            onChange={(e) => {
+                              if (formTargetMode === "ALL_ELIGIBLE") {
+                                setExcludedLineOaIds((prev) => { const next = new Set(prev);
+                                  if (e.target.checked) next.delete(s.lineOfficialAccountId); else next.add(s.lineOfficialAccountId);
+                                  return next; });
+                              } else {
+                                setSelectedLineOaIds((prev) => { const next = new Set(prev);
+                                  if (e.target.checked) next.add(s.lineOfficialAccountId); else next.delete(s.lineOfficialAccountId);
+                                  return next; });
+                              }
+                            }} />
+                          <span className="truncate">{s.storeName} ({s.storeCode || "-"})</span>
+                        </span>
+                        <span className={ready ? "text-emerald-600" : "text-amber-600"}>{ready ? k.ready : `${k.blocked}: ${s.readinessReasons.join(", ")}`}</span>
+                      </label>;
+                    })}
                   </div>
                 </div>
               )}
@@ -683,20 +871,20 @@ export function AutoResponsesView({ language, userRole }: AutoResponsesViewProps
                 <h3 className="text-sm font-bold text-[var(--app-text-primary)]">
                   {t.previewTitle}
                 </h3>
-                {previewData && (
+                {visiblePreviewData && (
                   <span
                     className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${
-                      previewData.ready
+                      visiblePreviewData.ready
                         ? "bg-emerald-500/10 text-emerald-500"
                         : "bg-amber-500/10 text-amber-500"
                     }`}
                   >
                     <span
                       className={`h-1.5 w-1.5 rounded-full ${
-                        previewData.ready ? "bg-emerald-500" : "bg-amber-500"
+                        visiblePreviewData.ready ? "bg-emerald-500" : "bg-amber-500"
                       }`}
                     />
-                    {previewData.ready ? t.previewReady : t.previewBlocked}
+                    {visiblePreviewData.ready ? t.previewReady : t.previewBlocked}
                   </span>
                 )}
               </div>
@@ -721,8 +909,8 @@ export function AutoResponsesView({ language, userRole }: AutoResponsesViewProps
 
               {/* Live Simulated Chat Stream */}
               <AutoResponsePreviewStream
-                previewData={previewData}
-                loading={loadingPreview}
+                previewData={visiblePreviewData}
+                loading={!isEditing && !isCreating && isSavedPreviewLoading}
                 t={t}
               />
             </div>
@@ -833,7 +1021,7 @@ export function AutoResponsesView({ language, userRole }: AutoResponsesViewProps
 
                       <div className="mt-2 flex flex-wrap gap-1.5 text-[10px] font-semibold text-[var(--app-text-secondary)]">
                         <span className="rounded-lg border border-[var(--app-border)] px-2 py-1">
-                          {rule.triggerType === "INBOUND_TEXT" ? t.triggerInboundText : t.triggerPostback}
+                          {rule.triggerType === "KEYWORD" ? k.trigger : rule.triggerType === "INBOUND_TEXT" ? t.triggerInboundText : t.triggerPostback}
                         </span>
                         {rule.triggerType === "INBOUND_TEXT" && rule.intent && (
                           <span className="rounded-lg border border-blue-500/20 bg-blue-500/10 px-2 py-1 text-blue-500">

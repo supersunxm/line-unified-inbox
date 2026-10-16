@@ -1,3 +1,16 @@
+# 2026-10-16 — Embedded Global Chat Search inside /chats (PR #559)
+
+- Preserved the canonical 3-column /chats workspace while seamlessly embedding message-content search directly into the existing middle pane.
+- Added "ค้นหาในเนื้อหาข้อความ" toggle checkbox when search input has text (default checked for HQ users, hidden for non-HQ store users).
+- Integrated `UnifiedPeriodPicker` inside "กรองเพิ่มเติม" with presets (7 วัน, 14 วัน, 30 วัน) and custom date boundary enforcement using Asia/Bangkok calendar semantics.
+- Exact-message navigation:
+  - Clicking a match card opens the conversation in the right detail pane.
+  - Highlights the search keyword with safe `<mark data-chat-search-highlight>`.
+  - Focuses the targeted message bubble with `ring-2 ring-amber-400`.
+  - Automatic pagination bounds seeking at 8 page loads (up to page 9); when a target is further back, seeking pauses and guides the operator to click "โหลดข้อความก่อนหน้าเพื่อดูเพิ่มเติม" to continue loading.
+  - Safe conversation message scoping (`activeConversationMessageScope` + `conversationMessageScopeKey`) prevents race conditions and stale message overwrites during rapid switching or background polling.
+- Reverting: Unchecking "ค้นหาในเนื้อหาข้อความ" or clearing filters cleanly restores the legacy conversation list without state loss.
+
 ## 2026-10-06 — Store Chats month UX: fresh navigation current month default and operational All view
 
 - URL is the sole authority for non-default month selection (`/chats?month=YYYY-MM` or `/chats?month=all`). Do NOT persist month into localStorage or global UI preferences so fresh navigation from top/sidebar links always opens the current Bangkok month.
@@ -3476,3 +3489,9 @@ Rationale:
 - Synthetic mode intentionally bypasses `AuthorizedSection` so local UI verification makes zero requests to `/auth/me` or any backend service.
 - Allowing `resolveMessageSearchDataMode` to default to `"synthetic"` without an environment and loopback guard would let `NEXT_PUBLIC_CHAT_MESSAGE_SEARCH_UI=true` expose an unauthenticated route in a production build if `NEXT_PUBLIC_CHAT_MESSAGE_SEARCH_DATA=backend` were omitted or set to `synthetic`.
 - Failing closed to 404 in production builds and non-loopback hosts guarantees that any active `/chats/search` route in a deployed environment must explicitly select `"backend"` mode and pass through `AuthorizedSection` plus backend HQ/store-scope authorization.
+
+## 2026-10-16 — PR #560 keyword matching and multi-store safety
+
+Decision: keep keyword dispatch independently gated by `AUTO_REPLY_KEYWORD_MODE` (unset/invalid values do not enable keyword sends), require an active rule and exact LINE OA target eligibility, and claim each persisted inbound text through the existing unique `AutoResponseExecution.sourceMessageId` constraint before calling LINE. SHADOW creates audit state without sending; LIVE validates the reply token, store/config readiness, and complete message sequence before one reply call. Preserve Thai substring behavior by treating Latin letters, combining marks, numbers, and underscore as word-boundary characters while allowing Thai script adjacency; keep runtime ambiguity fail-closed and reject direct equal-priority alias overlap during activation.
+
+Rationale: Thai words are commonly concatenated without spaces, while Latin model identifiers such as `Find X10` need boundaries so they do not match `Find X100`. Persisted source-message identity provides the concurrency gate, and comparing canonical OA IDs keeps store labels from becoming delivery authority. These host checks do not authorize LIVE production configuration, publication, deployment, or customer-facing sends; PR #560 remains Draft pending verified eight-job Local CI.

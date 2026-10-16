@@ -2010,6 +2010,7 @@ enum AutoResponseStatus {
 enum AutoResponseTriggerType {
   POSTBACK
   INBOUND_TEXT
+  KEYWORD
 }
 
 enum AutoResponseIntent {

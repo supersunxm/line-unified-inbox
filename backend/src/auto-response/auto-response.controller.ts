@@ -80,6 +80,12 @@ export class AutoResponseController {
   }
 
   @OperationalRead()
+  @Get("keyword/stores")
+  async listKeywordStores() {
+    return this.service.listKeywordStores();
+  }
+
+  @OperationalRead()
   @Get(":id")
   async getRule(@Param("id") id: string) {
     return this.service.getRule(id);

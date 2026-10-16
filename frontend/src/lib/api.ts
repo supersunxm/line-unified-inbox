@@ -957,6 +957,8 @@ export const api = {
   },
   getAutoResponse: (id: string) =>
     request<import("@/types/api").AutoResponseRule>(`/auto-responses/${encodeURIComponent(id)}`),
+  getAutoResponseKeywordStores: () =>
+    request<import("@/types/api").AutoResponseKeywordStore[]>("/auto-responses/keyword/stores"),
   getAutoResponsePilotSummary: () =>
     request<import("@/types/api").AutoResponsePilotSummary>("/auto-responses/pilot/summary"),
   uploadAutoResponseMedia: (file: File) => {
