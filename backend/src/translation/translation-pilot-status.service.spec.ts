@@ -26,10 +26,10 @@ test("disabled pilot is inactive and not ready", () => {
   assert.equal(status.ready, false);
 });
 
-test("pilot without an allowlist is inactive and not ready", () => {
+test("translation remains active and ready without a pilot allowlist", () => {
   const status = statusFor({ allowedAdminIds: [] });
-  assert.equal(status.active, false);
-  assert.equal(status.ready, false);
+  assert.equal(status.active, true);
+  assert.equal(status.ready, true);
   assert.equal(status.allowlistedAdminCount, 0);
 });
 

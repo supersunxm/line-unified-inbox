@@ -3,7 +3,7 @@ import { Reflector } from "@nestjs/core";
 import { SessionType, UserRole } from "@prisma/client";
 import { Request } from "express";
 import { AuthService } from "./auth.service";
-import { IS_PUBLIC, OPERATIONAL_READ, REQUIRED_ROLES } from "./auth.decorators";
+import { ALLOW_SCOPED_NON_REPLY_ACTION, IS_PUBLIC, OPERATIONAL_READ, REQUIRED_ROLES } from "./auth.decorators";
 import type { PermissionContext } from "./permission-context";
 import { StoreAccessService } from "./store-access.service";
 
@@ -88,7 +88,8 @@ export class AuthGuard implements CanActivate {
       }
       await this.storeAccess.applyStoreContext(user, storeId);
     }
-    if ((user.role === UserRole.VIEWER || user.role === UserRole.ASSISTANT) && request.method !== "GET" && request.path !== "/auth/logout" && (!this.storeAccess || !(await this.storeAccess.canWriteAsStoreUser(user)))) throw new ForbiddenException("Reply permission is required");
+    const allowScopedNonReplyAction = this.reflector.getAllAndOverride<boolean>(ALLOW_SCOPED_NON_REPLY_ACTION, [context.getHandler(), context.getClass()]);
+    if ((user.role === UserRole.VIEWER || user.role === UserRole.ASSISTANT) && request.method !== "GET" && request.path !== "/auth/logout" && !allowScopedNonReplyAction && (!this.storeAccess || !(await this.storeAccess.canWriteAsStoreUser(user)))) throw new ForbiddenException("Reply permission is required");
     const roles = this.reflector.getAllAndOverride<UserRole[]>(REQUIRED_ROLES, [context.getHandler(), context.getClass()]);
     const assistantRead = user.role === UserRole.ASSISTANT
       && request.method === "GET"
