@@ -1,3 +1,25 @@
+# 2026-10-16: PR #559 Embedded Global Chat Search QA and Integration Gate
+
+- Current task: Final integration, QA, and release gate for PR #559 (`codex/embedded-chat-message-search-20261016`). Embedded global message-level search into the canonical 3-column `/chats` layout.
+- Worktree: `/Users/chutisoa.nup/Projects/line-unified-inbox-pr559`. Reconciled cleanly with latest `origin/main` (commit `248ae53e96c34c260a18f0777896176af85b7c74`).
+- Contract & Boundary Validation:
+  - Backend parameters verified against disposable PostgreSQL 16 + NestJS: `q`, `startDate`, `endDate`, repeated `storeIds`, `cursor`, `limit`.
+  - Asia/Bangkok date boundaries: midnight cutoff verified; Oct 14 in UTC+7 included, Oct 13 excluded.
+  - Cross-month search verified across September and October.
+  - Store scope: HQ user queries multi-store; non-HQ user rejected with 403 Forbidden.
+- Browser E2E Suite (Playwright Chromium):
+  - Desktop 3-column layout and embedded results grouping verified.
+  - Store filtering (CW vs SP) and date range presets (7D, 14D, 30D) verified.
+  - Page 1 target message highlighted (`<mark>`) and focused (`ring-2 ring-amber-400`).
+  - Page 9 deep target message auto-paginated and located under pending banner.
+  - Page 10 target message bound at 8 auto-page limit; guidance rendered and manual continuation verified.
+  - Rapid conversation switching and polling race conditions prevented by conversation scope keys.
+  - Reversion to legacy conversation list verified.
+  - Mobile viewport (390x844) responsive layout verified.
+  - Non-HQ user access denied (toggle hidden in UI; API returns 403 Forbidden).
+  - Screenshots recorded: `01_desktop_search_with_filters.png` through `07_store_user_denial.png`.
+- Full Frontend Suite: 1,041/1,041 tests passed (100%). TypeScript baseline clean (0 delta). Next.js production build succeeded.
+
 # 2026-10-14: DR LINE OA handover importer PR prepared
 
 - Current task: after the 2026-10-14 production database restore (July baseline), add an owner-approved importer that re-creates LINE OAs missing from the restored database from the handover CSV export. Branch `fix/dr-line-oa-handover-importer` in a separate clone; the primary checkout was not touched.
