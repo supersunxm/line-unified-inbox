@@ -1990,7 +1990,7 @@ function ApplicationWorkspaceContent({ initialSection, initialAuthUser }: { init
   }, [text.connectionError]);
 
   useEffect(() => {
-    if (!authUser || initialSection !== "chats") return;
+    if (!authUser || initialSection !== "chats" || showEmbeddedMessageResults) return;
     if (previousConversationFilterShape.current !== conversationFilterShapeKey) {
       previousConversationFilterShape.current = conversationFilterShapeKey;
       if (chatPage !== 1) {
@@ -1999,7 +1999,7 @@ function ApplicationWorkspaceContent({ initialSection, initialAuthUser }: { init
       }
     }
     void loadConversations(activeConversationQuery);
-  }, [activeConversationQuery, activeConversationQueryKey, authUser, chatPage, conversationFilterShapeKey, initialSection, loadConversations]);
+  }, [activeConversationQuery, activeConversationQueryKey, authUser, chatPage, conversationFilterShapeKey, initialSection, loadConversations, showEmbeddedMessageResults]);
 
   const loadSupportingData = useCallback(async (silent = false, includeWebhookInfo = !silent, mode: SupportingDataMode = "full") => {
     const isChatsSection = initialSection === "chats";
