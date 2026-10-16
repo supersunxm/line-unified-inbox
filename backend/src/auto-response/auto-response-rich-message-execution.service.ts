@@ -136,7 +136,7 @@ export class AutoResponseRichMessageExecutionService extends AutoResponseExecuti
       for (const block of blocks) {
         if (block.type === "TEXT") {
           const text = resolveTemplateVariables(block.textTemplate, storeContext);
-          if (!text.trim() || text.length > 5000 || /\\{\\{\\s*[a-zA-Z0-9_.]+\\s*\\}\\}/.test(text)) {
+          if (!text.trim() || text.length > 5000 || /\{\{\s*[a-zA-Z0-9_.]+\s*\}\}/.test(text)) {
             throw new Error("INVALID_TEXT_OR_UNRESOLVED_VARIABLE");
           }
           if (extractTemplateVariables(block.textTemplate).some((name) => name.includes("googleMapsUrl")) &&
