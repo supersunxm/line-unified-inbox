@@ -1,35 +1,12 @@
 #!/bin/sh
-# Local CI push gate. Every pushed commit must have verified, passing, complete
-# Local CI evidence for that exact SHA (npm run ci:local). Branch deletions are
-# allowed. This is a local hook: it can be bypassed and is not server-side
-# protection. Never use --no-verify.
-zero=0000000000000000000000000000000000000000
+# Agent CI gate proposed for explicit owner-approved policy migration.
+# Exact committed source, reviewed target/branch allowlist and full evidence only.
+# Never use --no-verify; this local safeguard is not server-side protection.
+set -eu
 root=$(git rev-parse --show-toplevel) || exit 1
-gate="$root/tools/codex-ci/local-gate.mjs"
-status=0
-
-block() {
-  echo "" >&2
-  echo "pre-push: ถูกบล็อก — ไม่มีหลักฐาน Local CI ที่ตรวจสอบแล้วสำหรับ commit $1" >&2
-  echo "pre-push: BLOCKED — no verified Local CI evidence for commit $1 ($2)" >&2
-  echo "  แก้ไข / Fix: git merge origin/main (ถ้าจำเป็น / if needed) แล้ว / then: npm run ci:local" >&2
-  echo "  ห้ามใช้ --no-verify / Never use --no-verify." >&2
-}
-
-while read -r local_ref local_sha remote_ref remote_sha; do
-  [ -z "$local_ref" ] && continue
-  if [ "$local_sha" = "$zero" ]; then
-    continue
-  fi
-  if ! command -v node >/dev/null 2>&1 || [ ! -f "$gate" ]; then
-    block "$local_sha" "$remote_ref: node or tools/codex-ci/local-gate.mjs unavailable"
-    status=1
-    continue
-  fi
-  if ! node "$gate" check "--sha=$local_sha"; then
-    block "$local_sha" "$remote_ref"
-    status=1
-  fi
-done
-
-exit $status
+gate="$root/tools/codex-ci/agent-pre-push-gate.mjs"
+if ! command -v node >/dev/null 2>&1 || [ ! -f "$gate" ]; then
+  echo "pre-push: BLOCKED — Node or the reviewed Agent CI gate is unavailable" >&2
+  exit 1
+fi
+exec node "$gate" hook "$@"

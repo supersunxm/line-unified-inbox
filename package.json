@@ -21,6 +21,9 @@
     "line-chat:mapping:import": "npm --prefix backend run line-chat:mapping:import --",
     "ci:local": "node tools/codex-ci/local-gate.mjs run",
     "ci:local:check": "node tools/codex-ci/local-gate.mjs check",
-    "hooks:install": "node tools/codex-ci/local-gate.mjs install-hooks"
+    "hooks:install": "node tools/codex-ci/agent-pre-push-gate.mjs install-hooks",
+    "ci:agent": "node tools/codex-ci/agent-ci.mjs run",
+    "ci:agent:plan": "node tools/codex-ci/agent-ci.mjs plan",
+    "ci:agent:check": "node tools/codex-ci/agent-pre-push-gate.mjs check"
   }
 }

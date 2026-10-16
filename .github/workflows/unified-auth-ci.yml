@@ -49,6 +49,9 @@ jobs:
       - name: Prisma validate
         run: npx prisma validate
 
+      - name: Generate Prisma client
+        run: npx prisma generate
+
       - name: Apply migrations to clean PostgreSQL
         run: npx prisma migrate deploy
 

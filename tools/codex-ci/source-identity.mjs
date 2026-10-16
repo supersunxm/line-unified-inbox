@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { lstat, readFile, readlink, rm, writeFile } from 'node:fs/promises';
-import { join, resolve, sep } from 'node:path';
+import { dirname, resolve, sep } from 'node:path';
 
 const omittedDirectories = new Set([
   '.git', 'node_modules', '.next', 'dist', 'coverage', '.turbo', '.cache',
@@ -73,6 +73,8 @@ export async function inspectSourceTree(rootPath) {
     }
     if (stat.isSymbolicLink()) {
       const target = await readlink(absolute);
+      const resolvedTarget = resolve(dirname(absolute), target);
+      if (!resolvedTarget.startsWith(`${root}${sep}`)) throw new Error('Source symlink escapes the repository snapshot');
       entries.push({ path, type: 'symlink', mode: stat.mode & 0o777, sha256: hash(target) });
       continue;
     }
