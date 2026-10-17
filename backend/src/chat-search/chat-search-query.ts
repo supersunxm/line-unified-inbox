@@ -78,6 +78,22 @@ export function chatSearchContainsPattern(keyword: string): string {
   return `%${escapeLikeLiteral(keyword)}%`;
 }
 
+/**
+ * Optional spelling-tolerant fallback for Latin product/model terms.
+ * "find x10", "findx10", "Find-X 10" and "find_x10" share one
+ * compact spelling. This is intentionally NOT general-purpose semantic or
+ * typo search: keep Thai phrases and literal wildcards on the existing path.
+ * A short query must not silently become a broad match.
+ */
+export function chatSearchCompactProductKeyword(keyword: string): string | null {
+  const folded = normalizeChatSearchKeyword(keyword).toLocaleLowerCase("en-US");
+  if (!/^[a-z0-9][a-z0-9\s._-]*$/u.test(folded)) return null;
+  const compact = folded.replace(/[\s._-]+/gu, "");
+  if (compact.length < 3 || compact.length > CHAT_MESSAGE_SEARCH_MAX_KEYWORD_LENGTH) return null;
+  if (!/[a-z]/u.test(compact) || !/[0-9]/u.test(compact)) return null;
+  return compact;
+}
+
 function calendarDateToUtcMs(value: string): number | null {
   const match = DATE_PATTERN.exec(value);
   if (!match) return null;
@@ -239,10 +255,19 @@ export function buildChatMessageSearchSql(input: {
   cursor: ChatMessageSearchCursor | null;
   limit: number;
 }): Prisma.Sql {
-  const textMatch = Prisma.join(
-    input.keywordVariants.map((variant) => Prisma.sql`m."originalText" ILIKE ${chatSearchContainsPattern(variant)} ESCAPE '!'`),
-    " OR ",
+  const exactMatches = input.keywordVariants.map((variant) =>
+    Prisma.sql`m."originalText" ILIKE ${chatSearchContainsPattern(variant)} ESCAPE '!'`,
   );
+  const compact = chatSearchCompactProductKeyword(input.keywordVariants[0] ?? "");
+  // Product spelling fallback strips spaces, dots, underscores and hyphens on
+  // both sides. All query data stays parameterized. Existing store/date/HQ
+  // predicates, ordering, timeout and cursor semantics remain unchanged.
+  const textMatch = Prisma.join(compact
+    ? [
+        ...exactMatches,
+        Prisma.sql`regexp_replace(lower(m."originalText"), '[[:space:]._-]+', '', 'g') LIKE ${chatSearchContainsPattern(compact)} ESCAPE '!'`,
+      ]
+    : exactMatches, " OR ");
   const conditions: Prisma.Sql[] = [
     Prisma.sql`m."sentAt" >= ${input.range.gte}`,
     Prisma.sql`m."sentAt" < ${input.range.lt}`,
