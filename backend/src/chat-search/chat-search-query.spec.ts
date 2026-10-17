@@ -69,6 +69,13 @@ void test("product/model keywords compact only safe Latin spacing variants", () 
   assert.equal(chatSearchCompactProductKeyword("Find"), null, "do not normalize broad non-model terms");
 });
 
+void test("long message excerpts include spacing-equivalent product hits", () => {
+  const original = "A".repeat(200) + " สอบถาม Find_X 10 Ultra วันนี้";
+  const snippet = buildMessageSnippet(original, ["find x10"]);
+  assert.ok(snippet.includes("Find_X 10"), "matching compact product must remain visible in the 160-character preview");
+  assert.ok(snippet.startsWith("…"), "snippet should begin near the hit, not at the first character");
+});
+
 void test("compiled search SQL retains store/date/cursor restrictions when matching flexible product spellings", () => {
   const range = resolveChatSearchRange("2026-10-01", "2026-10-14");
   const cursor = { sentAt: new Date("2026-10-05T02:00:00.000Z"), messageId: "msg-1" };
