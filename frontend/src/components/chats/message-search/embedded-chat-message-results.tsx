@@ -99,11 +99,12 @@ export function EmbeddedChatMessageResults({
       <p className="border-b border-[var(--app-border)] px-3 py-2 text-xs text-[var(--app-text-secondary)]">
         {copy.matches}: {rows.length} · {copy.messages}: {search.state.items.length}
         <span data-chat-search-completeness role="status" className="block mt-1 text-[10px]">
-          {search.state.hasMore
-            ? search.state.items.length >= EMBEDDED_SEARCH_MAX_AUTOMATIC_ITEMS
-              ? copy.limitReached
-              : copy.gathering
-            : search.state.error ? copy.error : copy.complete}
+          {search.state.error ? copy.error
+            : search.state.hasMore
+              ? search.state.items.length >= EMBEDDED_SEARCH_MAX_AUTOMATIC_ITEMS || !search.state.nextCursor
+                ? copy.limitReached
+                : copy.gathering
+              : copy.complete}
         </span>
         <span className="block mt-1 text-[10px]">
           {copy.filterScopeNote}
