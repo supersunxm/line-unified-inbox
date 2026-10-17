@@ -2,6 +2,10 @@
 
 import { useCallback, useEffect, useReducer, useRef } from "react";
 import { MESSAGE_SEARCH_DEBOUNCE_MS, MESSAGE_SEARCH_PAGE_SIZE } from "./message-search-config.ts";
+
+export const EMBEDDED_SEARCH_PAGE_SIZE = 50;
+export const EMBEDDED_SEARCH_MAX_AUTOMATIC_ITEMS = 5000;
+const AUTO_LOAD_PAGE_DELAY_MS = 220;
 import type { ChatMessageSearchAdapter, MessageSearchAdapterRequest } from "./message-search-adapter.ts";
 import { buildMessageSearchRequest, type MessageSearchFilters } from "./message-search-query.ts";
 import { initialMessageSearchState, messageSearchReducer, type MessageSearchState } from "./message-search-state.ts";
@@ -14,6 +18,10 @@ export type UseChatMessageSearchOptions = {
   errorMessage: string;
   /** Changing this value re-runs the current search (used by the retry button). */
   retryNonce: number;
+  /** Embedded /chats search only; standalone search keeps manual pagination. */
+  autoLoadAll?: boolean;
+  pageSize?: number;
+  maxAutoItems?: number;
 };
 
 export type UseChatMessageSearchResult = {
@@ -28,7 +36,8 @@ export type UseChatMessageSearchResult = {
  * - A response is applied only if its request is still the latest one (see messageSearchReducer).
  */
 export function useChatMessageSearch(options: UseChatMessageSearchOptions): UseChatMessageSearchResult {
-  const { adapter, filters, todayIso, errorMessage, retryNonce } = options;
+  const { adapter, filters, todayIso, errorMessage, retryNonce, autoLoadAll = false,
+    pageSize = MESSAGE_SEARCH_PAGE_SIZE, maxAutoItems = EMBEDDED_SEARCH_MAX_AUTOMATIC_ITEMS } = options;
   const [state, dispatch] = useReducer(messageSearchReducer, initialMessageSearchState);
   const stateRef = useRef(state);
   const requestRef = useRef<MessageSearchAdapterRequest | null>(null);
@@ -66,7 +75,7 @@ export function useChatMessageSearch(options: UseChatMessageSearchOptions): UseC
       const requestId = sequenceRef.current;
       dispatch({ type: "search-started", requestId });
       adapter
-        .search({ ...request, limit: MESSAGE_SEARCH_PAGE_SIZE }, { signal: controller.signal })
+        .search({ ...request, limit: pageSize }, { signal: controller.signal })
         .then((page) => {
           if (!controller.signal.aborted) dispatch({ type: "page-received", requestId, page, append: false });
         })
@@ -76,7 +85,7 @@ export function useChatMessageSearch(options: UseChatMessageSearchOptions): UseC
     }, MESSAGE_SEARCH_DEBOUNCE_MS);
 
     return () => window.clearTimeout(timer);
-  }, [adapter, filters, todayIso, errorMessage, retryNonce, cancelInFlight]);
+  }, [adapter, filters, todayIso, errorMessage, retryNonce, cancelInFlight, pageSize]);
 
   const loadMore = useCallback(() => {
     const current = stateRef.current;
@@ -88,14 +97,27 @@ export function useChatMessageSearch(options: UseChatMessageSearchOptions): UseC
     const requestId = current.requestId;
     dispatch({ type: "load-more-started", requestId });
     adapter
-      .search({ ...request, cursor: current.nextCursor, limit: MESSAGE_SEARCH_PAGE_SIZE }, { signal: controller.signal })
+      .search({ ...request, cursor: current.nextCursor, limit: pageSize }, { signal: controller.signal })
       .then((page) => {
         if (!controller.signal.aborted) dispatch({ type: "page-received", requestId, page, append: true });
       })
       .catch(() => {
         if (!controller.signal.aborted) dispatch({ type: "failed", requestId, message: errorMessage, append: true });
       });
-  }, [adapter, errorMessage]);
+  }, [adapter, errorMessage, pageSize]);
+
+  // An embedded search should never require scrolling down to click "Load more".
+  // Fetch one bounded backend page at a time; every filter change cancels the
+  // outstanding request and the next scheduled page. Do not retry a failed page
+  // indefinitely or silently claim the displayed subset is complete.
+  useEffect(() => {
+    if (!autoLoadAll || state.status !== "loaded" || !state.hasMore ||
+        !state.nextCursor || state.loadingMore || state.error ||
+        state.items.length >= maxAutoItems) return;
+    const timer = window.setTimeout(loadMore, AUTO_LOAD_PAGE_DELAY_MS);
+    return () => window.clearTimeout(timer);
+  }, [autoLoadAll, maxAutoItems, state.status, state.hasMore,
+      state.nextCursor, state.loadingMore, state.error, state.items.length, loadMore]);
 
   return { state, loadMore };
 }
