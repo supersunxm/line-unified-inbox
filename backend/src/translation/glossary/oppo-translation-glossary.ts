@@ -5,7 +5,13 @@ export type TranslationGlossaryRule = {
   variants: readonly string[];
 };
 
-export const OPPO_PROTECTED_SOURCE_TERMS = ["SUPERVOOC", "AI Eraser", "AI Studio", "Find Series", "ColorOS", "Reno16", "OPPO"] as const;
+// Keep exact product names and payment abbreviations intact through translation.
+export const OPPO_PROTECTED_SOURCE_TERMS = [
+  "OPPO Pad Mini", "OPPO Find X10 Series", "Reno16 F 5G", "Reno16 Pro",
+  "Reno16 5G", "Find X9 Ultra", "Find X9 Pro",
+  "SUPERVOOC", "AI Eraser", "AI Studio", "Find Series",
+  "ColorOS", "UFund", "Reno16", "OPPO", "SG", "SL",
+] as const;
 
 export const OPPO_TRANSLATION_GLOSSARY: Record<TranslationTargetLanguage, readonly TranslationGlossaryRule[]> = {
   en: [
