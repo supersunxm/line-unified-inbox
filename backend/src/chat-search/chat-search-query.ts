@@ -243,6 +243,23 @@ export function buildMessageSnippet(text: string, keywordVariants: string[]): st
       if (matchAt >= 0) break;
     }
   }
+  // Related product spelling may match only after removing separators.
+  // Keep excerpts centred on that real match even when text is >160 chars.
+  if (matchAt < 0) {
+    const compact = chatSearchCompactProductKeyword(keywordVariants[0] ?? "");
+    if (compact) {
+      let folded = "";
+      const positions: number[] = [];
+      for (let index = 0; index < text.length; index += 1) {
+        const char = text[index];
+        if (/[\s._-]/u.test(char)) continue;
+        folded += /[A-Z]/u.test(char) ? char.toLowerCase() : char;
+        positions.push(index);
+      }
+      const found = folded.indexOf(compact);
+      if (found >= 0) matchAt = positions[found];
+    }
+  }
   const start = matchAt < 0 ? 0 : Math.max(0, matchAt - SNIPPET_LEAD_LENGTH);
   const end = Math.min(text.length, start + SNIPPET_MAX_LENGTH);
   return `${start > 0 ? "…" : ""}${text.slice(start, end)}${end < text.length ? "…" : ""}`;
