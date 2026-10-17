@@ -49,3 +49,20 @@ test("results group by conversation and select exact target without HTML injecti
   assert.match(highlight, /<mark data-chat-search-highlight/);
   assert.doesNotMatch(highlight, /dangerouslySetInnerHTML|innerHTML/);
 });
+
+test("embedded search automatically loads result pages and labels provisional counts accurately", () => {
+  assert.match(results, /autoLoadAll: true/);
+  assert.match(results, /pageSize: EMBEDDED_SEARCH_PAGE_SIZE/);
+  assert.match(results, /maxAutoItems: EMBEDDED_SEARCH_MAX_AUTOMATIC_ITEMS/);
+  assert.match(results, /data-chat-search-completeness/);
+  assert.match(results, /search\.state\.items\.length/);
+  assert.match(results, /copy\.gathering/);
+  assert.match(results, /copy\.limitReached/);
+  assert.doesNotMatch(results, /onClick=\{search\.loadMore\}/, "successful searches must not require clicking a Load More button");
+});
+
+test("spacing-equivalent product names are highlighted without HTML injection", () => {
+  assert.match(highlight, /compactProductRange/);
+  assert.match(highlight, /data-chat-search-highlight/);
+  assert.doesNotMatch(highlight, /dangerouslySetInnerHTML|innerHTML/);
+});
