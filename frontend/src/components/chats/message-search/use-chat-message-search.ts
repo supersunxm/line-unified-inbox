@@ -9,6 +9,7 @@ const AUTO_LOAD_PAGE_DELAY_MS = 220;
 import type { ChatMessageSearchAdapter, MessageSearchAdapterRequest } from "./message-search-adapter.ts";
 import { buildMessageSearchRequest, type MessageSearchFilters } from "./message-search-query.ts";
 import { initialMessageSearchState, messageSearchReducer, type MessageSearchState } from "./message-search-state.ts";
+import { shouldAutoLoadNextMessagePage } from "./message-search-autoload-policy.ts";
 
 export type UseChatMessageSearchOptions = {
   adapter: ChatMessageSearchAdapter;
@@ -111,9 +112,7 @@ export function useChatMessageSearch(options: UseChatMessageSearchOptions): UseC
   // outstanding request and the next scheduled page. Do not retry a failed page
   // indefinitely or silently claim the displayed subset is complete.
   useEffect(() => {
-    if (!autoLoadAll || state.status !== "loaded" || !state.hasMore ||
-        !state.nextCursor || state.loadingMore || state.error ||
-        state.items.length >= maxAutoItems) return;
+    if (!autoLoadAll || !shouldAutoLoadNextMessagePage(state, maxAutoItems)) return;
     const timer = window.setTimeout(loadMore, AUTO_LOAD_PAGE_DELAY_MS);
     return () => window.clearTimeout(timer);
   }, [autoLoadAll, maxAutoItems, state.status, state.hasMore,
