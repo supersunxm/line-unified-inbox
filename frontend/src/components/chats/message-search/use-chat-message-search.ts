@@ -3,13 +3,14 @@
 import { useCallback, useEffect, useReducer, useRef } from "react";
 import { MESSAGE_SEARCH_DEBOUNCE_MS, MESSAGE_SEARCH_PAGE_SIZE } from "./message-search-config.ts";
 
-export const EMBEDDED_SEARCH_PAGE_SIZE = 50;
-export const EMBEDDED_SEARCH_MAX_AUTOMATIC_ITEMS = 5000;
-const AUTO_LOAD_PAGE_DELAY_MS = 220;
 import type { ChatMessageSearchAdapter, MessageSearchAdapterRequest } from "./message-search-adapter.ts";
 import { buildMessageSearchRequest, type MessageSearchFilters } from "./message-search-query.ts";
 import { initialMessageSearchState, messageSearchReducer, type MessageSearchState } from "./message-search-state.ts";
 import { shouldAutoLoadNextMessagePage } from "./message-search-autoload-policy.ts";
+
+export const EMBEDDED_SEARCH_PAGE_SIZE = 50;
+export const EMBEDDED_SEARCH_MAX_AUTOMATIC_ITEMS = 5000;
+const AUTO_LOAD_PAGE_DELAY_MS = 220;
 
 export type UseChatMessageSearchOptions = {
   adapter: ChatMessageSearchAdapter;
