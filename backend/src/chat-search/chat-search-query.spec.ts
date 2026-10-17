@@ -4,6 +4,7 @@ import {
   buildChatMessageSearchSql,
   buildMessageSnippet,
   chatSearchContainsPattern,
+  chatSearchCompactProductKeyword,
   chatSearchFingerprint,
   chatSearchKeywordVariants,
   decodeChatSearchCursor,
@@ -55,6 +56,39 @@ void test("LIKE wildcards and the escape character are matched literally", () =>
   assert.equal(escapeLikeLiteral("100%_!"), "100!%!_!!");
   assert.equal(chatSearchContainsPattern("a%b"), "%a!%b%");
   assert.equal(chatSearchContainsPattern("a_b"), "%a!_b%");
+});
+
+void test("product/model keywords compact only safe Latin spacing variants", () => {
+  assert.equal(chatSearchCompactProductKeyword("Find X10"), "findx10");
+  assert.equal(chatSearchCompactProductKeyword("findx10"), "findx10");
+  assert.equal(chatSearchCompactProductKeyword("Find-X 10"), "findx10");
+  assert.equal(chatSearchCompactProductKeyword("OPPO Find_X10"), "oppofindx10");
+  assert.equal(chatSearchCompactProductKeyword("Reno 16 Pro"), "reno16pro");
+  assert.equal(chatSearchCompactProductKeyword("สวัสดี Find X10"), null, "Thai text must stay on the literal path");
+  assert.equal(chatSearchCompactProductKeyword("100%"), null, "LIKE metacharacters must remain literal");
+  assert.equal(chatSearchCompactProductKeyword("Find"), null, "do not normalize broad non-model terms");
+});
+
+void test("long message excerpts include spacing-equivalent product hits", () => {
+  const original = "A".repeat(200) + " สอบถาม Find_X 10 Ultra วันนี้";
+  const snippet = buildMessageSnippet(original, ["find x10"]);
+  assert.ok(snippet.includes("Find_X 10"), "matching compact product must remain visible in the 160-character preview");
+  assert.ok(snippet.startsWith("…"), "snippet should begin near the hit, not at the first character");
+});
+
+void test("compiled search SQL retains store/date/cursor restrictions when matching flexible product spellings", () => {
+  const range = resolveChatSearchRange("2026-10-01", "2026-10-14");
+  const cursor = { sentAt: new Date("2026-10-05T02:00:00.000Z"), messageId: "msg-1" };
+  const sql = buildChatMessageSearchSql({
+    keywordVariants: ["Find X10"], range, storeIds: ["store-1"], cursor, limit: 20,
+  });
+  assert.match(sql.sql, /regexp_replace\(lower\(m\."originalText"\)/u);
+  assert.match(sql.sql, /c\."storeId" IN/u);
+  assert.match(sql.sql, /m\."sentAt"/u);
+  assert.match(sql.sql, /ORDER BY m\."sentAt" DESC/u);
+  assert.ok(sql.values.includes("%findx10%"), "compact form must be a bound SQL value");
+  assert.ok(sql.values.includes("%Find X10%"), "original case-insensitive substring remains supported");
+  assert.ok(!sql.sql.includes("findx10"), "keyword must not be interpolated into SQL source");
 });
 
 void test("Bangkok inclusive dates map to a half-open UTC window that ends at the next Bangkok midnight", () => {
