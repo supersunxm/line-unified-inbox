@@ -110,6 +110,10 @@ async function seedMessages(prisma: PrismaService, c: Seeded["conversations"]): 
   await add("english", c.a, "2026-09-10T04:00:00.000Z", "Hello, what's the price of the 100% model?");
   await add("composed", c.a, "2026-09-11T05:00:00.000Z", "ขอบคุณคำแนะนำ");
   await add("decomposed", c.a, "2026-09-11T06:00:00.000Z", `ขอบคุณค${THAI_SARA_AM_DECOMPOSED}แนะนำ`);
+  await add("findCompact", c.a, "2026-09-13T01:00:00.000Z", "สนใจ OPPO findx10 Series");
+  await add("findSpaced", c.a, "2026-09-13T02:00:00.000Z", "อยากจอง OPPO Find X 10 Pro");
+  await add("findHyphenated", c.a, "2026-09-13T03:00:00.000Z", "สอบถาม OPPO Find-X10 Ultra");
+  await add("renoUnrelated", c.a, "2026-09-13T04:00:00.000Z", "ต้องการ Reno 16 Pro");
   await add("underscore", c.a, "2026-09-12T02:00:00.000Z", "model_X2 ready");
   await add("noUnderscore", c.a, "2026-09-12T03:00:00.000Z", "modelXX2 ready");
   await add("startBoundary", c.a, "2026-08-31T17:00:00.000Z", "boundary start");
@@ -180,6 +184,14 @@ void test("chat message search against disposable PostgreSQL with synthetic data
     await t.test("Thai composed and decomposed SARA AM spellings match the same keyword", async () => {
       assert.deepEqual(keys(await hq.search(ADMIN, { q: "คำ", ...RANGE, limit: 50 })), expected("composed", "decomposed"));
       assert.deepEqual(keys(await hq.search(ADMIN, { q: `ค${THAI_SARA_AM_DECOMPOSED}`, ...RANGE, limit: 50 })), expected("composed", "decomposed"));
+    });
+
+    await t.test("Find X10 family spelling variants match across whitespace and punctuation, not unrelated models", async () => {
+      for (const q of ["find x10", "findx10", "FIND-X 10", "Find_X10"]) {
+        const result = await hq.search(ADMIN, { q, ...RANGE, limit: 50 });
+        assert.deepEqual(keys(result), expected("findCompact", "findSpaced", "findHyphenated"), q);
+        assert.ok(!keys(result).includes(ids.renoUnrelated), "unrelated Reno product must stay excluded");
+      }
     });
 
     await t.test("English matching is case-insensitive and LIKE wildcards are literal", async () => {

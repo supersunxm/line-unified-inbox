@@ -7,7 +7,7 @@ import { createHttpChatMessageSearchAdapter } from "./message-search-http-adapte
 import { bangkokTodayIso, type MessageSearchPeriod } from "./message-search-period.ts";
 import { formatMessageSearchTimestamp } from "./message-search-format.ts";
 import { highlightedSearchText } from "./highlight-search-text.tsx";
-import { useChatMessageSearch } from "./use-chat-message-search.ts";
+import { EMBEDDED_SEARCH_MAX_AUTOMATIC_ITEMS, EMBEDDED_SEARCH_PAGE_SIZE, useChatMessageSearch } from "./use-chat-message-search.ts";
 
 /**
  * Embedded message-level search in the existing /chats middle column.
@@ -44,17 +44,22 @@ export function EmbeddedChatMessageResults({
     loading: "กำลังค้นหาข้อความ…", empty: "ไม่พบข้อความในช่วงวันที่นี้",
     error: "ค้นหาไม่สำเร็จ กรุณาลองอีกครั้ง", retry: "ลองอีกครั้ง",
     more: "โหลดเพิ่มเติม", loadingMore: "กำลังโหลดเพิ่มเติม…",
-    matches: "ข้อความที่ตรงกับคำค้น", current: "ข้อความปัจจุบัน",
+    matches: "บทสนทนาที่พบ", messages: "ข้อความที่พบ", gathering: "กำลังรวบรวมผลให้ครบอัตโนมัติ…",
+    complete: "โหลดผลครบแล้ว", limitReached: "มีผลลัพธ์มากกว่าเกณฑ์แสดงอัตโนมัติ โปรดจำกัดช่วงวันที่หรือเลือกร้านค้า",
     filterScopeNote: "ค้นหาจากคำ วันที่ และร้านค้า ตัวกรองสถานะหรือสินค้าใช้กับรายการบทสนทนาแบบเดิม",
   } : language === "zh" ? {
     loading: "正在搜索消息…", empty: "选定日期内没有匹配消息",
     error: "搜索失败，请重试", retry: "重试", more: "加载更多",
-    loadingMore: "正在加载…", matches: "匹配消息", current: "当前消息",
+    loadingMore: "正在加载…", matches: "匹配会话", messages: "匹配消息",
+    gathering: "正在自动加载全部结果…", complete: "结果已全部加载",
+    limitReached: "结果过多，请缩小日期范围或选择门店",
     filterScopeNote: "按关键词、日期、门店搜索；状态和商品筛选仅适用于旧会话列表",
   } : {
     loading: "Searching messages…", empty: "No matching messages in this date range",
     error: "Search failed. Please retry.", retry: "Retry", more: "Load more",
-    loadingMore: "Loading more…", matches: "Matching messages", current: "Current messages",
+    loadingMore: "Loading more…", matches: "Matching conversations", messages: "Matching messages",
+    gathering: "Collecting the remaining results automatically…", complete: "All results loaded",
+    limitReached: "Too many results to load automatically. Narrow the date range or select a store.",
     filterScopeNote: "Search uses keyword, date and store; status/product filters apply only to the legacy conversation list.",
   };
   const search = useChatMessageSearch({
@@ -63,6 +68,9 @@ export function EmbeddedChatMessageResults({
     todayIso,
     retryNonce,
     errorMessage: copy.error,
+    autoLoadAll: true,
+    pageSize: EMBEDDED_SEARCH_PAGE_SIZE,
+    maxAutoItems: EMBEDDED_SEARCH_MAX_AUTOMATIC_ITEMS,
   });
   const rows = useMemo(() => {
     // One conversation per row, newest matching message first, like /chats.
@@ -89,7 +97,15 @@ export function EmbeddedChatMessageResults({
   return (
     <div data-embedded-chat-search-results className="flex min-h-0 flex-col">
       <p className="border-b border-[var(--app-border)] px-3 py-2 text-xs text-[var(--app-text-secondary)]">
-        {copy.matches}: {rows.length} · {copy.current}
+        {copy.matches}: {rows.length} · {copy.messages}: {search.state.items.length}
+        <span data-chat-search-completeness role="status" className="block mt-1 text-[10px]">
+          {search.state.error ? copy.error
+            : search.state.hasMore
+              ? search.state.items.length >= EMBEDDED_SEARCH_MAX_AUTOMATIC_ITEMS || !search.state.nextCursor
+                ? copy.limitReached
+                : copy.gathering
+              : copy.complete}
+        </span>
         <span className="block mt-1 text-[10px]">
           {copy.filterScopeNote}
         </span>
@@ -113,12 +129,14 @@ export function EmbeddedChatMessageResults({
           </div>
         </button>
       ))}
-      {search.state.error && <p role="alert" className="p-2 text-xs text-[var(--app-danger)]">{search.state.error}</p>}
-      {search.state.hasMore && (
-        <button type="button" disabled={search.state.loadingMore} onClick={search.loadMore}
-          className="m-3 rounded-lg border border-[var(--app-border)] px-3 py-2 text-xs font-semibold text-[var(--app-text-primary)] disabled:opacity-40">
-          {search.state.loadingMore ? copy.loadingMore : copy.more}
-        </button>
+      {search.state.error && (
+        <div role="alert" className="p-3 text-xs text-[var(--app-danger)]">
+          <p>{search.state.error}</p>
+          <button type="button" onClick={() => setRetryNonce((n) => n + 1)}
+            className="mt-2 rounded-lg border border-[var(--app-border)] px-3 py-1.5">
+            {copy.retry}
+          </button>
+        </div>
       )}
     </div>
   );
